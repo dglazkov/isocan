@@ -53,6 +53,32 @@ export function googleDocExportUrl(id: string): string {
   return `https://docs.google.com/document/d/${id}/export?format=md`;
 }
 
+/**
+ * **The credentialed half** (stage 3): the Drive API, for a doc the
+ * anonymous export refuses. `files.export` hands back the same markdown
+ * with a bearer token; `files.get` with `modifiedTime` is the one metadata
+ * call a sync makes before deciding whether to read the words again. The
+ * token lives on the machine that syncs (`~/.isocan/google.json`), never on
+ * the canvas — core only knows the addresses.
+ */
+export function googleDriveExportUrl(id: string): string {
+  return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=${encodeURIComponent(DOC_MIME)}`;
+}
+
+export function googleDriveMetaUrl(id: string): string {
+  return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=modifiedTime,name`;
+}
+
+/** Who a token speaks for — what `isocan gdoc auth` prints to say it works. */
+export const GOOGLE_DRIVE_ABOUT_URL = "https://www.googleapis.com/drive/v3/about?fields=user";
+
+/** Has the doc moved since the snapshot? Both ISO stamps; an item that never
+ *  said when it synced is always stale. */
+export function docStale(syncedAt: string | null, modifiedTime: string): boolean {
+  if (!syncedAt) return true;
+  return Date.parse(modifiedTime) > Date.parse(syncedAt);
+}
+
 /** The framed, read-only form — the live mode the note designs (stage 4). */
 export function googleDocPreviewUrl(id: string): string {
   return `https://docs.google.com/document/d/${id}/preview`;

@@ -12,6 +12,18 @@ export { FileStore } from "./file-store.ts";
 export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.ts";
 export { FileDesk } from "./file-desk.ts";
 export { readConfigFile, resolveHomeUrl } from "./config.ts";
+export {
+  DocRefusal,
+  clearGoogleToken,
+  driveAccount,
+  driveModifiedTime,
+  fetchGoogleDoc,
+  googleTokenFile,
+  readGoogleToken,
+  writeGoogleToken,
+  type FetchedDoc,
+  type GoogleToken,
+} from "./google.ts";
 export type { HomeConfig } from "./config.ts";
 export { askTheDoor, bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
 export type { DoorAnswer, StoredBadge } from "./badge-store.ts";

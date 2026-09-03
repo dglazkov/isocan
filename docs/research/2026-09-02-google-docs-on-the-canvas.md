@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: standing-agents, on-demand
-note: stages 1–3 built 2 Sep — the ↗ on anything with a source (with inception), `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `isocan gdoc sync` stacking a version only where the bytes changed; public docs only. Stage 3's Drive token and changes feed, stage 4's live mode, and stage 5's folder watch are designed and not built
+note: stages 1–3 built 2–3 Sep — the ↗ on anything with a source, `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `gdoc sync` stacking a version only where the doc changed, and on 3 Sep `gdoc auth`: a Drive access token on the machine for docs not shared by link, with sync asking Drive for modifiedTime first. Stage 4's live mode and stage 5's folder watch are designed and not built
 ---
 
 # Google Docs on the canvas
@@ -162,10 +162,23 @@ origins and the daemon can — for an address core recognises as a doc and
 nothing else. A doc that is not shared by link answers a sign-in page, which
 both fetchers refuse by its content type, in words. `isocan gdoc sync`
 re-exports every doc item on the canvas and lands a new version only when
-the daemon's hash of the bytes changed, moving `synced` with it. Not built:
-the Drive token and the changes feed (a private doc, and knowing it moved
-without re-reading it), images pulled into blobs, live mode, the folder
-watch.
+the daemon's hash of the bytes changed, moving `synced` with it.
+
+**3 September 2026, stage 3, the credentialed half.** `isocan gdoc auth`
+saves a Drive access token on the machine — `~/.isocan/google.json`, mode
+600, never on a canvas — after asking Drive whose it is. One fetcher
+(`server/google.ts`) now serves both the CLI and the daemon's route: the
+anonymous export first, so a doc shared by link spends no credential, then
+`files.export` with the bearer token; a sign-in page is still a refusal,
+and a refused token says how old it is, because Google's access tokens
+last about an hour and that is the usual reason. With a token, `gdoc sync`
+makes one `files.get` for `modifiedTime` per doc and leaves the unchanged
+ones unread — the changes feed's job, done per document rather than per
+Drive. An access token rather than an OAuth flow of isocan's own, on
+purpose: a refresh flow is a registered Google application, a consent
+screen and a review, and this stage needed to prove private docs work,
+not to ship a Google integration. Not built: `changes.list`, images pulled
+into blobs, live mode, the folder watch.
 
 ## Sources
 
