@@ -8,7 +8,7 @@
  * what does it COST (turns, tokens, dollars, seconds). A skill with +3%
  * quality and +80% cost is a bad trade that a quality-only score hides.
  *
- *   node scripts/lift.mjs --skill isocan-collab [--tasks a,b,c] [--model m] [--max-turns 25] [--out dir] [--page docs/lift/x.md]
+ *   node scripts/lift.mjs --skill isocan-collab [--tasks a,b,c] [--blind] [--runs 3] [--model m] [--max-turns 25] [--out dir] [--page docs/lift/x.md]
  *   node scripts/lift.mjs --skill sprint [--model m]
  *   node scripts/lift.mjs --skill isocan-collab --dry-run       # the plumbing, no model
  *
@@ -51,6 +51,19 @@ const skill = arg("--skill");
 const dry = argv.includes("--dry-run");
 const model = arg("--model");
 const maxTurns = Number(arg("--max-turns") ?? 25);
+/**
+ * **`--blind`: the prompt does not say where the work is.** The first
+ * readings (3 Sep) named the canvas and the item in the prompt, and every
+ * run — skill or not — found `isocan` unaided, so "fires" could not
+ * separate the conditions. The fixture that can is the one the collab
+ * skill exists for: a standing agent woken with nothing but "something on
+ * your canvas needs you", where finding the comment IS the work. The ask
+ * still lands as a comment on the item; only the prompt changes.
+ */
+const blind = argv.includes("--blind");
+/** `--runs N`: every cell N times. A lift worth acting on is a delta that
+ *  survives three; one run is an anecdote. */
+const runs = Math.max(1, Number(arg("--runs") ?? 1));
 const out = arg("--out") ?? mkdtempSync(path.join(tmpdir(), "lift-"));
 const page = arg("--page");
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
@@ -111,10 +124,10 @@ if (skill === "isocan-collab") {
     const task = suite.tasks.find((t) => t.id === id);
     if (!task) { console.error(`no golden task ${id}`); process.exit(2); }
     if (task.type === "markdown") { console.error(`${id}: a markdown task has no item to version — skipped`); continue; }
-    for (const cond of ["without", "with"]) {
-      const label = `${id} · ${cond}`;
-      const { canvasId } = isoJson(["canvas", "create", `lift · ${id} · ${cond}`]);
-      const workdir = path.join(out, `${id}-${cond}`);
+    for (const run of Array.from({ length: runs }, (_, i) => i + 1)) for (const cond of ["without", "with"]) {
+      const label = `${id} · ${cond}${runs > 1 ? ` · run ${run}` : ""}`;
+      const { canvasId } = isoJson(["canvas", "create", `lift · ${id} · ${cond}${runs > 1 ? ` · ${run}` : ""}`]);
+      const workdir = path.join(out, `${id}-${cond}${runs > 1 ? `-${run}` : ""}`);
       mkdirSync(workdir, { recursive: true });
       const fileName = path.basename(task.fixture);
       cpSync(task.fixturePath, path.join(workdir, fileName));
@@ -122,8 +135,10 @@ if (skill === "isocan-collab") {
       const itemId = added.itemId ?? added.id;
       iso(["comment", "add", "--canvas", canvasId, "--item", itemId, task.ask]);
       iso(["use", canvasId], { cwd: workdir });
-      const prompt = `This directory is bound to an isocan canvas. The item ${itemId} ("${task.id}") on it has a comment asking for a change: "${task.ask}". ` +
-        `Make the change. The item's file is also here as ./${fileName}. The deliverable is the changed screen on the canvas, as a new version of that item. ` +
+      const prompt = (blind
+        ? `You are an agent working from this directory. Something on the canvas it belongs to needs you — find out what, do it, and reply where it was asked. `
+        : `This directory is bound to an isocan canvas. The item ${itemId} ("${task.id}") on it has a comment asking for a change: "${task.ask}". ` +
+          `Make the change. The item's file is also here as ./${fileName}. The deliverable is the changed screen on the canvas, as a new version of that item. `) +
         // Said to BOTH conditions, because the collab skill's lap ends by
         // parking on `isocan wait` for the next comment — right for a
         // session, and in a one-shot run it waited out the whole budget
@@ -143,7 +158,7 @@ if (skill === "isocan-collab") {
       const threads = isoJson(["comment", "list", "--canvas", canvasId]);
       const replies = (Array.isArray(threads) ? threads : threads.threads ?? []).reduce((s, t) => s + Math.max(0, (t.comments?.length ?? 1) - 1), 0);
       const row = {
-        skill, task: id, kind: task.kind, cond, canvasId, itemId,
+        skill, task: id, kind: task.kind, cond, run, blind, canvasId, itemId,
         fires: versions > 1,
         replied: replies > 0,
         canvas: grade(id, versions > 1 ? fromCanvas : null),
@@ -214,7 +229,7 @@ for (const cond of ["without", "with"]) {
 }
 const fmt = (n, d = 2) => (n === null || n === undefined ? "—" : typeof n === "number" ? n.toFixed(d) : String(n));
 const lines = [];
-lines.push(`# Skill lift — ${skill}`, "", `Measured ${new Date().toISOString().slice(0, 10)}${model ? `, model asked for: ${model}` : ""}. Same fixtures, same prompt, same tools and turn budget (${maxTurns}); the skill is the only difference. Not a score.`, "");
+lines.push(`# Skill lift — ${skill}${blind ? " (blind)" : ""}`, "", `Measured ${new Date().toISOString().slice(0, 10)}${model ? `, model asked for: ${model}` : ""}. Same fixtures, same prompt, same tools and turn budget (${maxTurns}); the skill is the only difference. ${blind ? "**Blind**: the prompt does not say where the work is — the agent has to find the comment on its canvas. " : ""}${runs > 1 ? `Every cell ${runs} times. ` : ""}Not a score.`, "");
 lines.push("| | without | with |", "| --- | --- | --- |");
 lines.push(`| runs | ${summary.without.runs} | ${summary.with.runs} |`);
 lines.push(`| **fires** — ${skill === "sprint" ? "eleven sheets laid" : "the item gained a version"} | ${summary.without.fires} | ${summary.with.fires} |`);
@@ -229,13 +244,13 @@ if (skill === "sprint") {
   lines.push("| condition | sheets | phases named | brief | pass | turns | $ | s | stop |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const r of results) lines.push(`| ${r.cond} | ${r.areas} | ${r.phasesLaid}/9 | ${r.brief ? "yes" : "no"} | ${r.pass ? "yes" : "no"} | ${fmt(r.turns, 0)} | ${fmt(r.usd)} | ${r.secs} | ${r.stop} |`);
 } else {
-  lines.push("| task | kind | condition | landed | replied | canvas | file | turns | $ | s | stop |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
-  for (const r of results) lines.push(`| ${r.task} | ${r.kind} | ${r.cond} | ${r.fires ? "yes" : "no"} | ${r.replied ? "yes" : "no"} | ${r.canvas.n}/${r.canvas.of}${r.canvas.pass ? " ✓" : ""} | ${r.file.n}/${r.file.of}${r.file.pass ? " ✓" : ""} | ${fmt(r.turns, 0)} | ${fmt(r.usd)} | ${r.secs} | ${r.stop} |`);
+  lines.push("| task | kind | condition | run | landed | replied | canvas | file | turns | $ | s | stop |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+  for (const r of results) lines.push(`| ${r.task} | ${r.kind} | ${r.cond} | ${r.run} | ${r.fires ? "yes" : "no"} | ${r.replied ? "yes" : "no"} | ${r.canvas.n}/${r.canvas.of}${r.canvas.pass ? " ✓" : ""} | ${r.file.n}/${r.file.of}${r.file.pass ? " ✓" : ""} | ${fmt(r.turns, 0)} | ${fmt(r.usd)} | ${r.secs} | ${r.stop} |`);
   const failed = results.flatMap((r) => (r.canvas.failed ?? []).map((f) => `${r.task} · ${r.cond}: ${f}`));
   if (failed.length) lines.push("", "Checks the canvas version failed:", "", ...failed.map((f) => `- ${f}`));
 }
 const md = lines.join("\n") + "\n";
-writeFileSync(path.join(out, "lift.json"), JSON.stringify({ skill, model: model ?? null, maxTurns, summary, results }, null, 2));
+writeFileSync(path.join(out, "lift.json"), JSON.stringify({ skill, blind, runs, model: model ?? null, maxTurns, summary, results }, null, 2));
 writeFileSync(path.join(out, "lift.md"), md);
 if (page) { mkdirSync(path.dirname(page), { recursive: true }); writeFileSync(page, md); }
 console.log(`\n${md}\nwritten to ${out}${page ? ` and ${page}` : ""}`);

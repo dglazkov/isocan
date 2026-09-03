@@ -41,6 +41,14 @@ describe("the lift harness holds the conditions equal", () => {
     expect(lift).toContain("canvas: grade(id, versions > 1 ? fromCanvas : null)");
   });
 
+  it("can run blind — a prompt that does not say where the work is — and repeat every cell", () => {
+    expect(lift).toContain('const blind = argv.includes("--blind");');
+    expect(lift).toContain("Something on the canvas it belongs to needs you");
+    // Blind changes the prompt and nothing else: the ask still lands as a comment on the item.
+    expect(lift).toContain('iso(["comment", "add", "--canvas", canvasId, "--item", itemId, task.ask]);');
+    expect(lift).toContain('const runs = Math.max(1, Number(arg("--runs") ?? 1));');
+  });
+
   it("cleans up its scratch canvases and never touches the skills it measures", () => {
     expect(lift).toContain('iso(["canvas", "delete", canvasId, "--force"])');
     expect(lift).not.toMatch(/writeFileSync\([^)]*\.agents/);
