@@ -5,6 +5,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { describe, facesFor, unreadByAuthor, type Face } from "../lib/facepile.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
@@ -119,7 +120,7 @@ export function Presence({ actor }: { actor: Actor }) {
         >
           {/* The disc, not the button, carries the dimming — a badge on an
               absent author still has to read at full strength. */}
-          <span className="face-mark" style={{ background: actorColorIn(colors, face.actor.id) }}>
+          <span className={faceMarkClass(marks, face.actor)} style={faceMarkStyle(colors, face.actor)}>
             {initial(face.label, marks, face.actor)}
           </span>
           {face.unread > 0 && <span className="face-badge">{face.unread}</span>}
@@ -165,7 +166,7 @@ function FaceCard({
   return (
     <div className="hover-card face-card" onPointerDown={(e) => e.stopPropagation()}>
       <div className="face-card-head">
-        <span className="face-mark" style={{ background: actorColorIn(colors, face.actor.id) }}>
+        <span className={faceMarkClass(marks, face.actor)} style={faceMarkStyle(colors, face.actor)}>
           {initial(face.label, marks, face.actor)}
         </span>
         <span className="face-card-who">

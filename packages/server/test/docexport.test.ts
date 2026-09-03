@@ -30,7 +30,7 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   badge = await mintTestBadge(base);
-  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+  vi.stubGlobal("fetch", (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     if (url === googleDocExportUrl(ID)) {
       return Promise.resolve(

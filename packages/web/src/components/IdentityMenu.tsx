@@ -9,6 +9,7 @@ import {
   signOut,
 } from "../lib/identity.ts";
 import { IDENTITY_COLORS, actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
+import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { setActorColor, setActorMark } from "../lib/identitycolor.ts";
 import { invalidateOwnActors, useOwnActors } from "../lib/ownactors.ts";
 import { refreshActorMarks, useActorMarks } from "../lib/marks.ts";
@@ -208,8 +209,8 @@ export function IdentityMenu({
         <button
           type="button"
           ref={markButton}
-          className="identity-mark face-mark"
-          style={{ background: actorColorIn(colors, actor.id) }}
+          className={faceMarkClass(marks, actor, "identity-mark")}
+          style={faceMarkStyle(colors, actor)}
           title={mine ? "Change or remove your emoji" : "Wear an emoji instead of your initial"}
           aria-label="Your emoji"
           onClick={() => setPicking((was) => !was)}
@@ -263,7 +264,7 @@ export function IdentityMenu({
                   title={`Continue as ${other.name} — the same you as before`}
                   onClick={() => attempt(adoptIdentity(other), other.name)}
                 >
-                  <span className="face-mark" style={{ background: actorColorIn(colors, other.id) }}>
+                  <span className={faceMarkClass(marks, other)} style={faceMarkStyle(colors, other)}>
                     {faceMark(marks, other)}
                   </span>
                   {other.name}

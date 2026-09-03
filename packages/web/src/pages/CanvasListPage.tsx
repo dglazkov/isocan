@@ -30,6 +30,7 @@ import {
 import { ShareDialog } from "../components/ShareDialog.tsx";
 import { GroupsPanel } from "../components/GroupsPanel.tsx";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";
 import { CardPeek } from "../components/CardPeek.tsx";
@@ -684,7 +685,7 @@ export function CanvasListPage({
             title="You — rename yourself, or enter as someone else"
             onClick={() => setIdentityOpen(!identityOpen)}
           >
-            <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
+            <span className={faceMarkClass(marks, actor)} style={faceMarkStyle(colors, actor)}>
               {faceMark(marks, actor)}
             </span>
             {actor.name}
