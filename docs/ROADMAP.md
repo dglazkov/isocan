@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**14 built · 29 still open** — of which 18 partly
-built, 11 designed, 0 blocked, and
+**14 built · 30 still open** — of which 18 partly
+built, 12 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -39,7 +39,7 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>11</sub>
+## Designed, not built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -50,6 +50,7 @@ and the done column should not be flattered by either.
 | research | [Google Docs on the canvas](docs/research/2026-09-02-google-docs-on-the-canvas.md) | 2026-09-02 | researched 2 Sep — a link-shared doc already frames (measured: no X-Frame-Options, no frame-ancestors on /preview or /edit), and anonymous markdown export works for a public doc; the recommendation is one item per doc that holds the markdown snapshot AND the link, kept current by a standing agent over the Drive changes feed. Nothing built · see standing-agents, on-demand |
 | **project** | [inception](docs/projects/inception/design.md) | 2026-09-02 | designed 2 Sep — a canvas placed on a canvas as an item that shows the other canvas small and opens it in a tab; a popup to search your canvases or paste an address; no new op. Nothing built; phase 0 is next once the evals write-up is done · see on-demand, standing-agents |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
+| **project** | [memory](docs/projects/memory/design.md) | 2026-09-02 | designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Nothing built · see context, inception, standing-agents |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
 | research | [Roles: a ladder, not a matrix](docs/research/2026-09-01-roles.md) | 2026-09-01 | four rungs on one ladder — Owner, Editor, Canvas Viewer, Presentation Viewer; today's `view` already IS the presentation rung, so the work is one new rung in the middle and one decision about Owner · see multiuser |
