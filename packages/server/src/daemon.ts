@@ -17,6 +17,7 @@ import { runMigrations } from "./migrations.ts";
 import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
+import { readGoogleToken } from "./google.ts";
 import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
 import { startBlobKeeper } from "./blobkeeper.ts";
 import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
@@ -413,6 +414,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     auth,
     sweeps,
     contentBase: null as string | null,
+    // This machine's Drive token, if `isocan gdoc auth` saved one — read per
+    // request, so saving one needs no restart. Never sent anywhere.
+    googleToken: () => readGoogleToken(home),
     // The durable park cursor (on-demand phase 1) — a machine-local fact
     // beside homes.json, never behind the Store seam. See park.ts.
     park: new ParkCursors(home),

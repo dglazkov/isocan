@@ -762,10 +762,16 @@ export is the item's content — readable, searchable, thumbed in the lens,
 versioned, context an agent reads — and the doc's address is its `source`,
 the ↗ on its strip. `synced` says when the words were taken. `isocan gdoc sync`
 re-exports every doc item on the canvas (`--in <sheet>` for one shelf) and
-lands a new version only where the document changed. Public docs only
-for now: a doc must be shared by link, and a private one is refused in
-words. The words are on the canvas once added — everyone admitted can read
-them — so say so before adding somebody's private document.
+lands a new version only where the document changed. A doc shared by link
+needs nothing; for one that is not, `isocan gdoc auth --token <token>` saves
+a Drive access token on this machine (mode 600, never on a canvas; Google's
+last about an hour — `gcloud auth print-access-token | isocan gdoc auth
+--stdin` refreshes it), and `gdoc add`, `gdoc sync` and the app's Add-site
+dialog through this daemon use it only where the anonymous export refused.
+With a token, `sync` asks Drive when each doc last moved and leaves the
+unchanged ones unread. The words are on the canvas once added — everyone
+admitted can read them — so say so before adding somebody's private
+document.
 
 ## A canvas on a canvas
 

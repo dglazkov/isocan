@@ -6,6 +6,7 @@ export { FileStore } from "./file-store.js";
 export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.js";
 export { FileDesk } from "./file-desk.js";
 export { readConfigFile, resolveHomeUrl } from "./config.js";
+export { DocRefusal, clearGoogleToken, driveAccount, driveModifiedTime, fetchGoogleDoc, googleTokenFile, readGoogleToken, writeGoogleToken, type FetchedDoc, type GoogleToken, } from "./google.js";
 export type { HomeConfig } from "./config.js";
 export { askTheDoor, bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.js";
 export type { DoorAnswer, StoredBadge } from "./badge-store.js";

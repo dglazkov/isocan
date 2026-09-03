@@ -158,10 +158,9 @@ import {
   harvestConverge,
   docFilenameFrom,
   docProperties,
-  docTitleFrom,
-  googleDocExportUrl,
+  docStale,
+  docSyncedAt,
   googleDocId,
-  googleDocUrl,
   isGoogleDocItem,
   sourceOf,
   areaInner,
@@ -282,7 +281,21 @@ import {
   tally,
   wallFor,
 } from "@isocan/core";
-import { buildStamp, describeBuild, paths, plausibleSha, readConfigFile, stalenessOf } from "@isocan/server";
+import {
+  buildStamp,
+  clearGoogleToken,
+  describeBuild,
+  driveAccount,
+  driveModifiedTime,
+  fetchGoogleDoc as fetchDocThroughDoors,
+  paths,
+  plausibleSha,
+  readConfigFile,
+  readGoogleToken,
+  stalenessOf,
+  writeGoogleToken,
+  type FetchedDoc,
+} from "@isocan/server";
 import { canvasRefOf, makeCtx, metaPatch, readConfig, writeConfig, type Ctx } from "./ctx.ts";
 import {
   type HomeRecord,
@@ -5880,21 +5893,62 @@ program
  * item here and lands a new version only when the bytes changed — the
  * daemon's own hash says so, so an unchanged doc stacks nothing.
  */
-async function fetchGoogleDoc(id: string): Promise<{ markdown: string; source: string; title: string; fetchedAt: string }> {
-  const res = await fetch(googleDocExportUrl(id), { redirect: "follow", signal: AbortSignal.timeout(20_000) });
-  const type = res.headers.get("content-type") ?? "";
-  if (!res.ok || /text\/html/i.test(type)) {
-    throw new Error(
-      "Google would not hand this document over anonymously — share it by link (Anyone with the link), or add it from a machine with a Drive token (not built yet)",
-    );
-  }
-  const markdown = await res.text();
-  return { markdown, source: googleDocUrl(id), title: docTitleFrom(markdown, id), fetchedAt: new Date().toISOString() };
+/** The two doors, in order: anonymous, then this machine's Drive token
+ *  (`isocan gdoc auth`). Stage 3 of the research note; `server/google.ts`
+ *  is the one implementation, shared with the daemon's route. */
+async function fetchGoogleDoc(ctx: Ctx, id: string): Promise<FetchedDoc> {
+  return fetchDocThroughDoors(id, await readGoogleToken(ctx.home));
 }
 
 const gdocCmd = program
   .command("gdoc")
   .description("Google Docs on the canvas — a doc's markdown as an item that keeps its link, and a sync that keeps it current");
+
+gdocCmd
+  .command("auth")
+  .description("Save a Drive access token on this machine, for docs that are not shared by link — or show, or clear, the one saved")
+  .option("--token <token>", "the access token (an OAuth playground, or `gcloud auth print-access-token`)")
+  .option("--stdin", "read the token from standard input")
+  .option("--clear", "forget the saved token")
+  .addHelpText(
+    "after",
+    `
+The token lives in ~/.isocan/google.json, mode 600, and never on a canvas. It
+is an ACCESS token — Google's last about an hour — so save a fresh one when
+Drive refuses: \`gcloud auth print-access-token | isocan gdoc auth --stdin\`.
+A doc shared by link needs none; the token is spent only where the anonymous
+export refused. The daemon on this machine reads the same file, so the app's
+Add-site dialog can bring a private doc in too.`,
+  )
+  .action(
+    run(async (opts: { token?: string; stdin?: boolean; clear?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.clear) {
+        const gone = await clearGoogleToken(ctx.home);
+        if (ctx.json) return printJson({ cleared: gone });
+        return console.log(gone ? "forgotten — the Drive token is gone from this machine" : "nothing to clear");
+      }
+      let token = opts.token;
+      if (opts.stdin) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+        token = Buffer.concat(chunks).toString("utf8");
+      }
+      if (token === undefined) {
+        const saved = await readGoogleToken(ctx.home);
+        if (ctx.json) return printJson(saved ? { savedAt: saved.savedAt, account: saved.account ?? null } : null);
+        if (!saved) return console.log("no Drive token on this machine — `isocan gdoc auth --token <token>` saves one; docs shared by link need none");
+        const age = Math.round((Date.now() - Date.parse(saved.savedAt)) / 60_000);
+        return console.log(`a Drive token${saved.account ? ` for ${saved.account}` : ""}, saved ${age} minutes ago${age > 55 ? " — likely expired; Google's last about an hour" : ""}`);
+      }
+      if (!token.trim()) throw new Error("the token is empty");
+      const account = await driveAccount(token).catch(() => null);
+      if (!account) throw new Error("Drive did not accept that token — it must carry the Drive read-only scope, and be less than an hour old");
+      const record = await writeGoogleToken(ctx.home, token, account);
+      if (ctx.json) return printJson({ savedAt: record.savedAt, account });
+      console.log(`saved — Drive opens for ${account} from this machine, for about an hour. \`isocan gdoc add\` and \`gdoc sync\` use it where a doc is not shared by link.`);
+    }),
+  );
 
 gdocCmd
   .command("add <url>")
@@ -5916,7 +5970,7 @@ gdocCmd
         if (!id) throw new Error(`not a Google Doc address: ${url} — it looks like https://docs.google.com/document/d/<id>/edit`);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
         await narrate(ctx, p.id, { status: "fetching the document…" });
-        const doc = await fetchGoogleDoc(id);
+        const doc = await fetchGoogleDoc(ctx, id);
         const title = opts.title ?? doc.title;
         const filename = docFilenameFrom(title);
         const upload = await ctx.client.uploadBlob(p.id, Buffer.from(doc.markdown, "utf8"), DOC_MIME, filename);
@@ -5932,8 +5986,8 @@ gdocCmd
           properties: docProperties(doc.source, doc.fetchedAt),
         });
         const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
-        if (ctx.json) return printJson({ itemId, title, source: doc.source, syncedAt: doc.fetchedAt, placement: placed });
-        console.log(`added "${title}" (${itemId}) at ${placed.x},${placed.y} — its ↗ opens ${doc.source}; \`isocan gdoc sync\` refreshes it`);
+        if (ctx.json) return printJson({ itemId, title, source: doc.source, syncedAt: doc.fetchedAt, via: doc.via, placement: placed });
+        console.log(`added "${title}" (${itemId}) at ${placed.x},${placed.y}${doc.via === "drive" ? " — read with this machine's Drive token" : ""} — its ↗ opens ${doc.source}; \`isocan gdoc sync\` refreshes it`);
         console.log("note: the words are on the canvas now, readable by everyone admitted to it");
       },
     ),
@@ -5957,10 +6011,19 @@ gdocCmd
       const synced: string[] = [];
       const unchanged: string[] = [];
       const failed: { itemId: string; error: string }[] = [];
+      const token = await readGoogleToken(ctx.home);
       for (const item of docs) {
         const id = googleDocId(sourceOf(item) ?? "")!;
         try {
-          const doc = await fetchGoogleDoc(id);
+          // With a token, one metadata call says whether the doc moved since
+          // the snapshot — and a doc that has not is left alone without
+          // reading its words again. Without one, the bytes decide, as before.
+          const modified = await driveModifiedTime(id, token).catch(() => null);
+          if (modified !== null && !docStale(docSyncedAt(item), modified)) {
+            unchanged.push(item.id);
+            continue;
+          }
+          const doc = await fetchGoogleDoc(ctx, id);
           const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
           const upload = await ctx.client.uploadBlob(p.id, Buffer.from(doc.markdown, "utf8"), DOC_MIME, current.filename);
           if (upload.blobHash === current.blobHash) {

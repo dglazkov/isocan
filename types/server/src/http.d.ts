@@ -7,6 +7,7 @@ import type { BadgeRecord, Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
 import type { HomeLinks } from "./home-links.js";
 import type { ParkCursors } from "./park.js";
+import { type GoogleToken } from "./google.js";
 import { RcHolds } from "./rc-holds.js";
 declare module "fastify" {
     interface FastifyRequest {
@@ -73,6 +74,13 @@ interface RouteOptions {
      * what `GET /api/serving` reports and nothing else reads it.
      */
     contentBase?: string | null;
+    /**
+     * The Drive token on THIS machine, read fresh per request so `isocan gdoc
+     * auth` takes effect without a restart — or null, which is every hosted
+     * home and most local ones. Only `/api/docs/export` reads it, and only
+     * after the anonymous export has refused. See `google.ts`.
+     */
+    googleToken?: () => Promise<GoogleToken | null>;
     /**
      * **The attester this home has borrowed**, or null when it has borrowed
      * none — which is every local daemon and is not a defect.

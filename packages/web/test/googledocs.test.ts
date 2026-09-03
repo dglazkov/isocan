@@ -28,13 +28,18 @@ describe("a Google Doc typed into Add site becomes a document that keeps its lin
 });
 
 describe("the daemon fetches only what core recognises as a doc, and refuses a sign-in page", () => {
-  it("answers 400 for a non-doc, 403 for a private doc, in words", () => {
+  it("answers 400 for a non-doc, and refuses a private doc in words through the one fetcher", () => {
     const route = server.slice(server.indexOf("app.get(DOC_EXPORT_ROUTE"), server.indexOf('app.get("/api/colors"'));
     expect(route).toContain("const id = googleDocId(raw);");
     expect(route).toContain("reply.code(400)");
-    expect(route).toContain('/text\\/html/i.test(type)');
-    expect(route).toContain("reply.code(403)");
-    expect(route).toContain("share it by link");
+    // One implementation for the daemon and the CLI: anonymous first, then
+    // this machine's Drive token; a sign-in page is a refusal there.
+    expect(route).toContain("const doc = await fetchGoogleDoc(id, token);");
+    expect(route).toContain("err instanceof DocRefusal");
+    const fetcher = read("../../server/src/google.ts");
+    expect(fetcher).toContain('/text\\/html/i.test(type)');
+    expect(fetcher).toContain("share it by link");
+    expect(fetcher).toContain("isocan gdoc auth");
   });
 });
 

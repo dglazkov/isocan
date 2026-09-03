@@ -122,9 +122,6 @@ import {
   ACTOR_KINDS_ROUTE,
   DOC_EXPORT_ROUTE,
   googleDocId,
-  googleDocExportUrl,
-  googleDocUrl,
-  docTitleFrom,
   staleClientRefusal,
   STALE_CLIENT_STATUS,
   CANVASES_REACH_PARAM,
@@ -183,6 +180,7 @@ import { buildRoot, buildStamp } from "./build.ts";
 import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
 import type { ParkCursors } from "./park.ts";
+import { DocRefusal, fetchGoogleDoc, type GoogleToken } from "./google.ts";
 import { RcHolds } from "./rc-holds.ts";
 import { registerContentRoutes } from "./content.ts";
 import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
@@ -376,6 +374,13 @@ interface RouteOptions {
    * what `GET /api/serving` reports and nothing else reads it.
    */
   contentBase?: string | null;
+  /**
+   * The Drive token on THIS machine, read fresh per request so `isocan gdoc
+   * auth` takes effect without a restart — or null, which is every hosted
+   * home and most local ones. Only `/api/docs/export` reads it, and only
+   * after the anonymous export has refused. See `google.ts`.
+   */
+  googleToken?: () => Promise<GoogleToken | null>;
   /**
    * **The attester this home has borrowed**, or null when it has borrowed
    * none — which is every local daemon and is not a defect.
@@ -1194,19 +1199,17 @@ export function registerRoutes(
       reply.code(400);
       return { error: "not a Google Doc address", code: "not-a-doc" };
     }
+    // Anonymous first; then this machine's Drive token, if `isocan gdoc auth`
+    // saved one here (stage 3). A hosted home has no token and says so.
+    const token = options.googleToken ? await options.googleToken() : null;
     try {
-      const res = await fetch(googleDocExportUrl(id), { redirect: "follow", signal: AbortSignal.timeout(15_000) });
-      const type = res.headers.get("content-type") ?? "";
-      if (!res.ok || /text\/html/i.test(type)) {
-        reply.code(403);
-        return {
-          error: "Google would not hand this document over anonymously — share it by link, or add it from a machine with a Drive token",
-          code: "doc-not-public",
-        };
-      }
-      const markdown = await res.text();
-      return { id, source: googleDocUrl(id), markdown, title: docTitleFrom(markdown, id), fetchedAt: new Date().toISOString() };
+      const doc = await fetchGoogleDoc(id, token);
+      return { id, source: doc.source, markdown: doc.markdown, title: doc.title, fetchedAt: doc.fetchedAt, via: doc.via };
     } catch (err) {
+      if (err instanceof DocRefusal) {
+        reply.code(err.code === "doc-unreachable" ? 502 : 403);
+        return { error: err.message, code: err.code };
+      }
       reply.code(502);
       return { error: `could not reach Google: ${(err as Error).message}`, code: "doc-unreachable" };
     }

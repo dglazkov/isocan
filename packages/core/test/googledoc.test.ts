@@ -4,8 +4,11 @@ import {
   DOC_SYNCED_PROP,
   docFilenameFrom,
   docProperties,
+  docStale,
   docSyncedAt,
   docTitleFrom,
+  googleDriveExportUrl,
+  googleDriveMetaUrl,
   googleDocExportUrl,
   googleDocId,
   googleDocPreviewUrl,
@@ -39,6 +42,16 @@ describe("recognising a doc's address", () => {
     expect(googleDocUrl(ID)).toBe(`https://docs.google.com/document/d/${ID}/edit`);
     expect(googleDocExportUrl(ID)).toBe(`https://docs.google.com/document/d/${ID}/export?format=md`);
     expect(googleDocPreviewUrl(ID)).toBe(`https://docs.google.com/document/d/${ID}/preview`);
+  });
+});
+
+describe("the credentialed half's addresses", () => {
+  it("derives the Drive export and metadata addresses, and knows when a snapshot is stale", () => {
+    expect(googleDriveExportUrl(ID)).toBe(`https://www.googleapis.com/drive/v3/files/${ID}/export?mimeType=text%2Fmarkdown`);
+    expect(googleDriveMetaUrl(ID)).toBe(`https://www.googleapis.com/drive/v3/files/${ID}?fields=modifiedTime,name`);
+    expect(docStale(null, "2026-09-03T10:00:00.000Z")).toBe(true);
+    expect(docStale("2026-09-03T10:00:00.000Z", "2026-09-03T09:00:00.000Z")).toBe(false);
+    expect(docStale("2026-09-03T10:00:00.000Z", "2026-09-03T11:00:00.000Z")).toBe(true);
   });
 });
 
