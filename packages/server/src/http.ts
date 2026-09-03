@@ -119,6 +119,11 @@ import {
   PASS_REDEEM_ROUTE,
   RUNGS,
   SERVING_ROUTE,
+  DOC_EXPORT_ROUTE,
+  googleDocId,
+  googleDocExportUrl,
+  googleDocUrl,
+  docTitleFrom,
   staleClientRefusal,
   STALE_CLIENT_STATUS,
   CANVASES_REACH_PARAM,
@@ -1169,6 +1174,40 @@ export function registerRoutes(
     } catch {
       // Unreachable, too slow, refused the probe: not our verdict to give.
       return { ok: true, unchecked: "could not be reached to check" };
+    }
+  });
+
+  /**
+   * **A Google Doc's markdown, fetched for the app**
+   * (`docs/research/2026-09-02-google-docs-on-the-canvas.md`, stage 2). A
+   * browser cannot read docs.google.com across origins, so the daemon does,
+   * the way it reads framing headers for `/api/frameable` — and only for an
+   * address core recognises as a doc, never as a general proxy. A doc that is
+   * not shared by link answers with a sign-in page; that is refused by its
+   * content type rather than handed back as if it were the document.
+   */
+  app.get(DOC_EXPORT_ROUTE, async (req, reply) => {
+    const raw = (req.query as { url?: string }).url ?? "";
+    const id = googleDocId(raw);
+    if (!id) {
+      reply.code(400);
+      return { error: "not a Google Doc address", code: "not-a-doc" };
+    }
+    try {
+      const res = await fetch(googleDocExportUrl(id), { redirect: "follow", signal: AbortSignal.timeout(15_000) });
+      const type = res.headers.get("content-type") ?? "";
+      if (!res.ok || /text\/html/i.test(type)) {
+        reply.code(403);
+        return {
+          error: "Google would not hand this document over anonymously — share it by link, or add it from a machine with a Drive token",
+          code: "doc-not-public",
+        };
+      }
+      const markdown = await res.text();
+      return { id, source: googleDocUrl(id), markdown, title: docTitleFrom(markdown, id), fetchedAt: new Date().toISOString() };
+    } catch (err) {
+      reply.code(502);
+      return { error: `could not reach Google: ${(err as Error).message}`, code: "doc-unreachable" };
     }
   });
 

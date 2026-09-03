@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**14 built · 30 still open** — of which 19 partly
-built, 11 designed, 0 blocked, and
+**14 built · 30 still open** — of which 20 partly
+built, 10 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -16,7 +16,7 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>19</sub>
+## Partly built <sub>20</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -27,6 +27,7 @@ and the done column should not be flattered by either.
 | **project** | [context](docs/projects/context/design.md) | 2026-08-30 | stages 1 and 2 built; the MCP surface is not · see context |
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
 | **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stages 1 and 2 are built; stage 1's join key was not the one this plan named · see evals |
+| research | [Google Docs on the canvas](docs/research/2026-09-02-google-docs-on-the-canvas.md) | 2026-09-02 | stages 1–3 built 2 Sep — the ↗ on anything with a source (with inception), `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `isocan gdoc sync` stacking a version only where the bytes changed; public docs only. Stage 3's Drive token and changes feed, stage 4's live mode, and stage 5's folder watch are designed and not built · see standing-agents, on-demand |
 | **project** | [inception](docs/projects/inception/design.md) | 2026-09-02 | phases 0–3 built 2 Sep, and phase 4's half — the card drawn live one level deep, ↗ and double-click open a tab, `isocan canvas place`, the popup from the rail and ⌘K, `isocan canvas shot --into` as the picture that survives a refused pull, the miniature wherever thumbnails are, and "lives at another home" said on the card; pulling a picture across homes is not built · see on-demand, standing-agents |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |
 | **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand · see mindmap |
@@ -40,7 +41,7 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | step 1 built: nightly grades · see evals, personas |
 
-## Designed, not built <sub>11</sub>
+## Designed, not built <sub>10</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -48,7 +49,6 @@ and the done column should not be flattered by either.
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | research | [Chrome you can turn off](docs/research/2026-09-02-chrome-you-can-turn-off.md) | 2026-09-02 | designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Nothing built · see ui-refresh |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
-| research | [Google Docs on the canvas](docs/research/2026-09-02-google-docs-on-the-canvas.md) | 2026-09-02 | researched 2 Sep — a link-shared doc already frames (measured: no X-Frame-Options, no frame-ancestors on /preview or /edit), and anonymous markdown export works for a public doc; the recommendation is one item per doc that holds the markdown snapshot AND the link, kept current by a standing agent over the Drive changes feed. Nothing built · see standing-agents, on-demand |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | **project** | [memory](docs/projects/memory/design.md) | 2026-09-02 | designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Nothing built · see context, inception, standing-agents |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
