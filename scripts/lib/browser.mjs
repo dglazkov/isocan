@@ -116,6 +116,45 @@ async function devtoolsEndpoint(dir, proc) {
   }
 }
 
+/** Poll an expression in the page until it is true, or say what was waited for. */
+export async function until(b, expression, what, ms = 15_000) {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    if (await b.ev(expression).catch(() => false)) return;
+    await sleep(200);
+  }
+  throw new Error(`timed out waiting for ${what}`);
+}
+
+/**
+ * **Through the identity door, as a named actor.**
+ *
+ * A canvas page is behind the door, so a headless browser has to claim an
+ * identity before it can look. The claim is made INSIDE the page — the
+ * `/api/` strings below are the web client's own speech, evaluated in its
+ * origin, not a Node-side client — and written to the key the app reads.
+ * One copy here, shared by the journeys runner and the canvas screenshot,
+ * because two copies of a door-crossing would be two doors.
+ *
+ * The page must already be AT `origin`: relative fetches from `about:blank`
+ * fail with "Failed to fetch", which reads as a daemon that is down and is
+ * nothing of the kind.
+ */
+export async function throughTheDoor(b, origin, name, clientId = "browser") {
+  await until(b, `location.origin === ${JSON.stringify(origin)}`, `the page to be at ${origin}`);
+  await b.ev(`(async () => {
+    await fetch("/api/door", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ carrier: "cookie" }) });
+    const r = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ canvasId: null, clientId: ${JSON.stringify(clientId)},
+        op: { type: "actor.claim", name: ${JSON.stringify(name)} } }) });
+    const j = await r.json();
+    if (!j.envelope) throw new Error("the door did not hand out an identity: " + JSON.stringify(j).slice(0, 200));
+    localStorage.setItem("isocan.identity", JSON.stringify(j.envelope.actor));
+    return true;
+  })()`);
+}
+
 export async function browser() {
   const dir = mkdtempSync(path.join(tmpdir(), "isocan-cdp-"));
   const proc = spawn(chromeOrDie(), ["--headless=new", "--remote-debugging-port=0",

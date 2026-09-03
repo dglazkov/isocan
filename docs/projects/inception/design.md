@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-09-02
 see: on-demand, standing-agents
-note: designed 2 Sep — a canvas placed on a canvas as an item that shows the other canvas small and opens it in a tab; a popup to search your canvases or paste an address; no new op. Nothing built; phase 0 is next once the evals write-up is done
+note: phases 0–3 built 2 Sep, and phase 4's half — the card drawn live one level deep, ↗ and double-click open a tab, `isocan canvas place`, the popup from the rail and ⌘K, `isocan canvas shot --into` as the picture that survives a refused pull, the miniature wherever thumbnails are, and "lives at another home" said on the card; pulling a picture across homes is not built
 ---
 # Canvas Inception
 
@@ -162,6 +162,50 @@ thumbnails are drawn.
 4. **Another home.** Resolving an address at a home that is not this one for
    title and, when admitted, the picture — the `homeOf` walk the CLI already
    makes. Proof: scene 2 across homes.
+
+## What was built
+
+**Phase 0, 2 September 2026.** `core/canvasitem.ts` — `kind=canvas`,
+`canvas=<id>`, `source=<address>`, and `canvasItemOf(origin, id)` as the one
+spelling both surfaces write; `itemKind` answers `canvas` above the mime
+tests, the way it answers `text`. The card (`web/components/CanvasCard.tsx`)
+pulls the other canvas's snapshot on mount and every thirty seconds while on
+screen and draws it as a picture of a place — every item a block at its
+position in its kind's colour, images as themselves, sheets as washes, up to
+a hundred and twenty of them — under a head with the title, the count and
+who is there; one level deep, a canvas inside the picture is a block; a
+refused pull says so in words. Double-click and the ↗ on the strip open the
+address in a new tab, and the ↗ is general: any item with a `source` wears
+one. `isocan canvas place <ref|address>` places one by id, title prefix or
+address, refuses the canvas itself, and takes `--in` and `--cell` like
+everything else. Proved in `core/test/canvasitem.test.ts`,
+`web/test/inception.test.ts`, `cli/test/place.test.ts` over a real daemon,
+and by eye: *Lake House · 16 items · 1 here*, its screens and photos where
+they are, opened in a tab on a double-click.
+
+**Phase 1, the same day.** The popup (`web/components/PlaceCanvas.tsx`): a
+button on the rail beside Add site and *Place a canvas…* in ⌘K open one
+popover through one shared state; type and the list narrows over your
+canvases, most recent first, each with its last act; paste a `/p/<id>`
+address at any origin and it is the one row offered, with the home's title
+when it knows one. Placing lands the card where there is room in view,
+through `addCanvasItem`, which reads the same contract the terminal does.
+The third door the design named — pasting an address straight onto the
+canvas — is not built: the app's ⌘V reads its own clipboard, not the
+system's, and reaching the system clipboard is a permission question worth
+its own decision.
+
+**Phases 2 to 4, the same day, smaller than designed.** `scripts/canvas-shot.mjs`
+takes a real PNG of a canvas as the app renders it — through the door as
+*Camera*, fitted with ⇧1, captured by the graders' headless browser — and
+`isocan canvas shot <ref> --into <item>` lands it as a version of the card;
+the card shows it **under the words when its own pull is refused**, and never
+instead of a live picture it can draw. `ItemThumb` draws a canvas item as its
+miniature, so the lens, the files panel and the card peek show one the way
+the card does. A canvas at another home is recognised from its address and
+the card says *lives at …* with the ↗ still there, rather than asking a door
+this home cannot answer for; pulling its picture across homes, the rest of
+phase 4, waits on the same homes walk the CLI makes and is not built.
 
 **Zero new op types**, the target every project here has met so far; the one
 place that might want one is none. **Both surfaces**, held by the tests that

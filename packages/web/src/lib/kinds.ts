@@ -33,6 +33,7 @@ export const KIND_LABEL: Record<ItemKind, string> = {
   video: "Video",
   document: "Documents",
   site: "Sites",
+  canvas: "Canvases",
   other: "Files",
 };
 
@@ -46,6 +47,7 @@ export const ICON_NOUN: Record<IconKind, string> = {
   video: "video",
   document: "document",
   site: "live site",
+  canvas: "canvas",
   other: "file",
 };
 

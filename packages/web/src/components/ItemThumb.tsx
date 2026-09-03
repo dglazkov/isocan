@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { itemKind, isTextItem, type Item } from "@isocan/core";
+import { canvasIdOf, itemKind, isTextItem, type Item } from "@isocan/core";
 import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -73,6 +73,11 @@ export function ItemThumb({
           filename={current.filename}
           entered={false}
           textNode={isTextItem(item)}
+          // A canvas item's thumbnail is its miniature — the lens, the files
+          // panel and the card peek draw a canvas the way the card does
+          // (inception phase 3).
+          canvasOf={canvasIdOf(item)}
+          size={{ width: item.width, height: item.height }}
         />
       </span>
     </span>
