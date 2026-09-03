@@ -3259,6 +3259,22 @@ button.mt-card:hover { border-color: var(--accent); }
   box-shadow: var(--shadow-pop); white-space: nowrap;
 }
 .site-popover .text-input { width: 220px; }
+/* Place a canvas: the site popover's shape with a list under the field —
+   your canvases, most recent first, narrowed as you type; or the one row an
+   address names. */
+.place-canvas { position: relative; }
+.canvas-picker { flex-direction: column; align-items: stretch; gap: 8px; }
+.canvas-picker .text-input { width: 300px; }
+.canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow: auto; }
+.canvas-picker-row {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 6px 8px; border: none; border-radius: 6px; background: none; cursor: pointer;
+  color: var(--ink); text-align: left; font: inherit;
+}
+.canvas-picker-row:hover, .canvas-picker-row:focus-visible { background: var(--chip); outline: none; }
+.canvas-picker-title { font-size: 12.5px; font-weight: 600; }
+.canvas-picker-meta { font-size: 10.5px; color: var(--ink-muted); }
+.canvas-picker-note { padding: 6px 8px; font-size: 11px; color: var(--ink-muted); white-space: normal; }
 .site-error {
   position: absolute; top: calc(100% + 4px); right: 10px;
   font-size: 10.5px; color: var(--danger); white-space: nowrap;
@@ -4410,6 +4426,44 @@ button.mt-card:hover { border-color: var(--accent); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .item.area.dragging .area-title { cursor: grabbing; }
+
+/* ---------- a canvas on a canvas ----------
+   `core/canvasitem.ts`: a picture of a place, drawn live and small from the
+   other canvas's snapshot. A head with its title and how much is on it, then
+   the miniature — blocks at their places in the kind's colour, images as
+   themselves, sheets as washes. No pointer inside: the card is the thing you
+   grab, double-click, or open with its ↗. */
+.canvas-embed { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; background: var(--card); }
+.canvas-embed-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  height: 40px; padding: 0 12px; box-sizing: border-box;
+  border-bottom: 1px solid var(--line-soft);
+}
+.canvas-embed-title { font-size: 13px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-embed-meta { flex: none; font-size: 11px; color: var(--ink-muted); }
+.canvas-embed-note { padding: 12px; font-size: 12px; color: var(--ink-muted); }
+/* The screenshot, when the live picture cannot be drawn: fills the card,
+   cropped from the top, the way a thumbnail is. */
+.canvas-embed-picture { flex: 1; min-height: 0; width: 100%; object-fit: cover; object-position: top; }
+.canvas-mini { position: relative; flex: 1; overflow: hidden; pointer-events: none; }
+.canvas-mini-item {
+  position: absolute; box-sizing: border-box; overflow: hidden;
+  border-radius: 2px; border: 1px solid var(--line-soft); background: var(--chip);
+  background-size: cover; background-position: top;
+  font-size: 9.5px; line-height: 1.2; padding: 1px 3px; color: var(--ink-muted); white-space: nowrap; text-overflow: ellipsis;
+}
+.canvas-mini-item.kind-area { background: color-mix(in srgb, var(--paper-yellow) 35%, transparent); border-style: dashed; }
+.canvas-mini-item.kind-screen { background: var(--card); border-color: var(--line); }
+.canvas-mini-item.kind-text { border-color: transparent; background: transparent; color: var(--ink); }
+.canvas-mini-item.kind-drawing { border-color: transparent; background: transparent; }
+.canvas-mini-item.nested { border-style: double; }
+/* The ↗ on the strip of anything with a `source`: a place you can open. */
+.item-open-source {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 4px;
+  color: var(--ink-muted); text-decoration: none; font-size: 12px; line-height: 1;
+}
+.item-open-source:hover { background: var(--chip); color: var(--ink); }
 /* A grid on the sheet (sprint phase 5): hairlines between cells and a
    name per row and column, in world units so they hold their place at
    every zoom. Drawn under the contents and taking no pointer. */

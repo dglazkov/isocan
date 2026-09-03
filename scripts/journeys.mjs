@@ -36,7 +36,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { browser } from "./lib/browser.mjs";
+import { browser, throughTheDoor } from "./lib/browser.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
@@ -133,17 +133,8 @@ async function rig() {
   const loaded = b.once("Page.loadEventFired");
   await b.send("Page.navigate", { url: origin });
   await Promise.race([loaded, sleep(15_000)]);
-  await until(b, `location.origin === ${JSON.stringify(origin)}`, `the page to be at ${origin}`);
-  await b.ev(`(async () => {
-    await fetch("/api/door", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ carrier: "cookie" }) });
-    const r = await fetch("/api/ops", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ canvasId: null, clientId: "journeys",
-        op: { type: "actor.claim", name: "Journey" } }) });
-    const j = await r.json();
-    localStorage.setItem("isocan.identity", JSON.stringify(j.envelope.actor));
-    return true;
-  })()`);
+  // One door-crossing, shared with the canvas screenshot (`lib/browser.mjs`).
+  await throughTheDoor(b, origin, "Journey", "journeys");
     /**
    * **A real click, on whatever is actually on top at that point.**
    *

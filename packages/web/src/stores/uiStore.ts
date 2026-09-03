@@ -133,6 +133,9 @@ interface UiStore {
    *  this emoji where the click landed (sprint phase 4's heat map). Local,
    *  like a tool; Escape clears it. Null is the ordinary pointer. */
   stamp: string | null;
+  /** The place-a-canvas popup is open (inception phase 1) — shared, so ⌘K
+   *  can open the same popover the rail's button does. */
+  placingCanvas: boolean;
   trashOpen: boolean;
   /** The identity menu, opened by clicking your own face in the pile. */
   identityOpen: boolean;
@@ -232,6 +235,7 @@ interface UiStore {
   clearSketch: () => void;
   setActiveTool: (tool: Tool) => void;
   setStamp: (stamp: string | null) => void;
+  setPlacingCanvas: (open: boolean) => void;
   setCommentMode: (on: boolean) => void;
   setTrashOpen: (open: boolean) => void;
   setIdentityOpen: (open: boolean) => void;
@@ -486,6 +490,7 @@ export const useUiStore = create<UiStore>((set) => {
     activeTool: "select",
     commentMode: false,
     stamp: null,
+    placingCanvas: false,
     trashOpen: false,
     identityOpen: false,
     shareOpen: false,
@@ -562,6 +567,7 @@ export const useUiStore = create<UiStore>((set) => {
     // set together so the two can never drift.
     setActiveTool: (activeTool) => set({ activeTool, commentMode: activeTool === "comment" }),
     setStamp: (stamp) => set({ stamp }),
+    setPlacingCanvas: (placingCanvas) => set({ placingCanvas }),
     setCommentMode: (commentMode) =>
       set((s) => ({
         commentMode,

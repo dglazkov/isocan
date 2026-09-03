@@ -14,6 +14,7 @@ export * from "./claims.js";
 export * from "./invert.js";
 export * from "./placement.js";
 export * from "./area.js";
+export * from "./canvasitem.js";
 export * from "./titleroom.js";
 export * from "./whatsnew.js";
 export * from "./protocol.js";

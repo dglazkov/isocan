@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -151,6 +151,8 @@ import {
   areaGrid,
   cellSpot,
   gridPatch,
+  canvasItemOf,
+  CANVAS_ITEM_SIZE,
   areaInner,
   areasOf,
   findArea,
@@ -4379,6 +4381,113 @@ const canvas = program
   // help (phase 13.5's rename): `isocan project list` still runs, nothing
   // scripted breaks, and the help and the agent guide advertise `canvas` only.
   .alias("project");
+
+/**
+ * **A canvas placed on a canvas** (`docs/projects/inception/design.md`,
+ * phase 0). An ordinary item whose blob is the other canvas's address and
+ * whose properties say which canvas it is — `core/canvasitem.ts` is the one
+ * spelling, so the app's popup and this verb cannot disagree. The card draws
+ * the other canvas live; a screenshot is a later, optional version.
+ */
+canvas
+  .command("place <canvas>")
+  .description("Put a canvas on this canvas — by id, title prefix, or address; it draws live and opens in a tab")
+  .option("--at <x,y>", "place at world coordinates")
+  .option("--anchor <item>", "place to the left of this item")
+  .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
+  .option("--size <WxH>", `display size (default ${CANVAS_ITEM_SIZE.width}x${CANVAS_ITEM_SIZE.height})`)
+  .option("--title <title>", "what it is called (default: the canvas's own title)")
+  .action(
+    run(
+      async (
+        ref: string,
+        opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+        /**
+         * Two doors, one item: an address names a canvas at some home and is
+         * taken as written; anything else is a ref among the canvases this
+         * machine knows — an id or a title prefix — and its address is the
+         * home the canvas lives at, or this daemon when it lives here.
+         */
+        const address = parseCanvasAddress(ref);
+        let target: { id: string; title: string };
+        let origin: string;
+        if (address) {
+          origin = address.origin;
+          const known = (await ctx.client.listCanvases()).find((one) => one.id === address.canvasId);
+          target = known ?? { id: address.canvasId, title: opts.title ?? address.canvasId };
+        } else {
+          const known = matchRef(await ctx.client.listCanvases(), ref);
+          target = known;
+          origin = (await ctx.homeOf(known.id)) ?? ctx.client.base;
+        }
+        if (target.id === p.id) throw new Error("a canvas cannot be placed on itself — that is the canvas you are on");
+        const made = canvasItemOf(origin, target.id);
+        await narrate(ctx, p.id, { status: `placing ${truncate(target.title, 32)}…` });
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(made.blob), made.mimeType, made.filename);
+        const { width, height } = sizeFor(opts.size, CANVAS_ITEM_SIZE);
+        const itemId = newItemId();
+        const result = await sendOp(ctx, p.id, {
+          type: "item.add",
+          itemId,
+          version: {
+            id: newVersionId(),
+            blobHash: upload.blobHash,
+            mimeType: made.mimeType,
+            filename: made.filename,
+            size: upload.size,
+          },
+          width,
+          height,
+          placement: placementFor(snapshot, opts, { width, height }),
+          title: opts.title ?? target.title,
+          properties: made.properties,
+        });
+        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+        if (ctx.json) return printJson({ itemId, canvasId: target.id, address: made.properties.source, placement: placed });
+        console.log(`placed "${target.title}" (${target.id}) as ${itemId} at ${placed.x},${placed.y} — double-click it, or its ↗, to open ${made.properties.source}`);
+      },
+    ),
+  );
+
+/**
+ * **A real screenshot of a canvas** (inception phase 2), through the headless
+ * browser the graders run — `scripts/canvas-shot.mjs`, which needs the
+ * repository checkout and Chrome. `--into` lands it as a new version of a
+ * canvas item, the picture the card shows when its own live pull is refused.
+ */
+canvas
+  .command("shot <ref>")
+  .description("Screenshot a canvas as the app renders it — a PNG, or with --into a version of a canvas item")
+  .option("--out <file>", "where to write the PNG (default: a temp file, printed)")
+  .option("--into <item>", "add the PNG as a new version of this canvas item on the current canvas")
+  .option("--size <WxH>", "the browser's viewport (default 1600x1000)")
+  .action(
+    run(async (ref: string, opts: { out?: string; into?: string; size?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const target = matchRef(await ctx.client.listCanvases(), ref);
+      const script = fileURLToPath(new URL("../../../scripts/canvas-shot.mjs", import.meta.url));
+      if (!existsSync(script)) {
+        throw new Error("canvas shot needs the repository checkout (scripts/canvas-shot.mjs) and Chrome — run it from a clone of isocan");
+      }
+      const { width, height } = sizeFor(opts.size, { width: 1600, height: 1000 });
+      // The address, whole, built here by `canvasUrl` — so the script never
+      // spells the one shape this repo refuses to write twice.
+      const origin = (await ctx.homeOf(target.id)) ?? ctx.client.base;
+      const args = [script, "--url", canvasUrl(origin, target.id), "--width", String(width), "--height", String(height)];
+      if (opts.out) args.push("--out", opts.out);
+      if (opts.into) {
+        const { canvas: p } = await canvasAndSnapshot(ctx);
+        args.push("--into", opts.into, "--on", p.id);
+      }
+      const child = spawnSync(process.execPath, args, { stdio: "inherit" });
+      if (child.status !== 0) throw new Error(`the screenshot did not land (exit ${child.status ?? "?"})`);
+    }),
+  );
 
 canvas
   .command("create <title>")

@@ -9,6 +9,7 @@
  */
 
 import { BROWSER_MIME } from "./browseritem.ts";
+import { isCanvasItem } from "./canvasitem.ts";
 import { isDrawingItem } from "./drawing.ts";
 import { isTextItem } from "./textnode.ts";
 import type { Item } from "./model.ts";
@@ -21,6 +22,7 @@ export type ItemKind =
   | "video"
   | "document"
   | "site"
+  | "canvas"
   | "other";
 
 /** In the order a list should show them: what you made, then what you brought. */
@@ -32,6 +34,7 @@ export const ITEM_KINDS: readonly ItemKind[] = [
   "video",
   "document",
   "site",
+  "canvas",
   "other",
 ];
 
@@ -44,6 +47,10 @@ export function itemKind(item: Item): ItemKind {
   // that reason: a text node is markdown, and "document" is what markdown
   // somebody UPLOADED is.
   if (isTextItem(item)) return "text";
+  // A canvas placed on a canvas carries the same blob a site does — an
+  // address — and is told apart the way a text node is: by `kind`. Above the
+  // mime tests for that reason (`core/canvasitem.ts`).
+  if (isCanvasItem(item)) return "canvas";
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
   const mime = current?.mimeType ?? "";
   if (mime === BROWSER_MIME) return "site";

@@ -8,7 +8,7 @@
  * is worse than no kinds at all.
  */
 import type { Item } from "./model.js";
-export type ItemKind = "drawing" | "text" | "screen" | "image" | "video" | "document" | "site" | "other";
+export type ItemKind = "drawing" | "text" | "screen" | "image" | "video" | "document" | "site" | "canvas" | "other";
 /** In the order a list should show them: what you made, then what you brought. */
 export declare const ITEM_KINDS: readonly ItemKind[];
 export declare function itemKind(item: Item): ItemKind;
