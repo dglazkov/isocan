@@ -199,7 +199,11 @@ cannot forget what it paid for.
    standing — and the accept rate. First night in `docs/converge/`.
 
 The four are done. What the numbers now say is in the sections above, and
-what they ask for next is written where each was measured: a fixture where
-the prompt does not say where the work is (lift), three runs before a delta
-is believed (lift), Stage 4's autoraters calibrated against the pairs the
-morning ritual is beginning to produce (converge).
+what they ask for next is written where each was measured. The lift's two
+open asks were answered the same day: blind, three runs per cell, the
+collab skill's lift is **14.7 turns against 23.2**, every pair in the same
+direction, and "fires" is 6/6 either way — an agent with the CLI installed
+finds the work unaided, so the skill's value is the shape of its lap, not
+its discoverability ([page](lift/2026-09-03-isocan-collab-blind.md)). What
+remains is Stage 4's autoraters, calibrated against the pairs the morning
+ritual is beginning to produce.
