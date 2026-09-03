@@ -451,7 +451,7 @@ existed before the deploy and records the commit sha the home reported.
 - **2026-09-02 — Open, phase 3's: a pre-phase-1 home accepts `bars: true`
   as an ordinary invitation.** The field is dropped and the row admits.
   A new CLI's `--bar` against an old home invites instead of keeping out;
-  the CLI could check the echoed row for `bars` and revoke.
+  the CLI could check the echoed row for `bars` and revoke. #119.
 - **2026-09-02 — An old replica lists a home canvas only after its badge is
   admitted**; `use <id>` before that says no match. Not new to this project.
 - **2026-09-02 — The old CLI nudges to upgrade** when its home runs a newer
