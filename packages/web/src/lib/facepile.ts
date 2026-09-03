@@ -1,4 +1,4 @@
-import type { Actor, ActorJoins, CommentThread, PresenceSession } from "@isocan/core";
+import type { Actor, ActorJoins, Capability, CommentThread, PresenceSession } from "@isocan/core";
 import { resolveActor, sameActor } from "@isocan/core";
 import { quietFor, statusLine } from "./presence.ts";
 
@@ -43,6 +43,10 @@ export interface Face {
    * presence being honest. A boolean had nowhere to put that.
    */
   presence: "here" | "available" | "away";
+  /** The rung their connection holds, when the server said one — `read`
+   * for somebody looking over your shoulder (roles design, "Presence says
+   * the rung"). Null for an editor, and for anyone without a session. */
+  capability: Capability | null;
   kind: PresenceSession["kind"] | null;
   /** Which agent this is — `claude-code`, `codex` — or null for a person. */
   harness: string | null;
@@ -124,6 +128,7 @@ export function facesFor(
       sessionId: session.sessionId,
       label: session.label ?? session.actor.name,
       presence: "here",
+      capability: session.capability ?? null,
       kind: session.kind,
       harness: session.harness,
       status: describe(session),
@@ -147,6 +152,7 @@ export function facesFor(
       sessionId: null,
       label: session.label ?? session.actor.name,
       presence: "available",
+      capability: null,
       kind: "rc",
       harness: session.harness,
       status: "standing by — not here yet",
@@ -162,6 +168,7 @@ export function facesFor(
       sessionId: null,
       label: author.name,
       presence: "away",
+      capability: null,
       kind: null,
       harness: null,
       status: "not here — left a comment",
@@ -181,6 +188,7 @@ export function facesFor(
       sessionId: null,
       label: self.name,
       presence: "here",
+      capability: null,
       kind: "web",
       harness: null,
       status: null,

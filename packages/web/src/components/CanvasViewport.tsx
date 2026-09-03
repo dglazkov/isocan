@@ -15,6 +15,7 @@ import { glideToBox } from "../lib/zoomactions.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
 import { isTyping } from "../lib/keys.ts";
 import { TextComposer } from "./TextComposer.tsx";
+import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
 import { canvasMenu, itemMenu } from "../lib/menuentries.tsx";
 import { ItemView } from "./ItemView.tsx";
@@ -66,6 +67,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
   const activeTool = useUiStore((s) => s.activeTool);
+  const canEdit = useCanEdit();
   const railPanning = useUiStore((s) => s.railPanning);
   const menu = useUiStore((s) => s.contextMenu);
   const navigate = useNavigate();
@@ -265,7 +267,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         spacePrevTool.current = ui.activeTool; // capture once; keydown repeats while held
         ui.setActiveTool("hand");
       }
-      if (e.code === "KeyP" && !e.metaKey && !e.ctrlKey && !e.repeat) {
+      if (e.code === "KeyP" && !e.metaKey && !e.ctrlKey && !e.repeat && canEditNow()) {
         const ui = useUiStore.getState();
         penPrevTool.current = ui.activeTool;
         penDownAt.current = Date.now();
@@ -614,6 +616,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     e.preventDefault();
     if (droppingTimer.current) clearTimeout(droppingTimer.current);
     setDropping(false);
+    if (!canEditNow()) return; // a reader has nowhere to put a file
     const files = Array.from(e.dataTransfer.files);
     const ui = useUiStore.getState();
     const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
@@ -725,7 +728,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
           <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />
         )}
         <InkLayer />
-        <TextComposer canvasId={canvasId} actor={actor} />
+        {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}
       </div>
       <CommentLayer canvasId={canvasId} actor={actor} />
       <CursorLayer />

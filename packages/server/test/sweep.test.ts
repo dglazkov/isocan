@@ -284,11 +284,109 @@ describe("re-rooting: the half that stops a revocation being a purge", () => {
     // not a way in. The door says so, and so does the sweep, because they are
     // the same function.
     expect(await admittingGrant(desk, CANVAS, (await desk.badge(jordan))!)).toMatchObject({
-      subject: LINK,
+      grant: { subject: LINK },
     });
     await desk.revokeGrant(link.id, new Date().toISOString(), "bdg_owner");
     expect(await admittingGrant(desk, CANVAS, (await desk.badge(jordan))!)).toBeNull();
     expect(await sweepCanvas(desk, CANVAS)).toEqual({ expelled: 1, rerooted: 0 });
+  });
+});
+
+/**
+ * **The creator's floor** (roles design, "Who holds what"; journey 1 step 2).
+ *
+ * The creator holds `own` and cannot lose it, and it is not a row. Until the
+ * ladder, a creator whose BROWSER had entered by the link — the canvas made
+ * from a terminal, the tab opened afterwards — was swept out with the
+ * strangers the moment they turned the link off, because the door read rows
+ * and nothing else. The floor is asked when no row answers, and it answers
+ * with `created`: the one root the sweep never disturbs again.
+ */
+describe("the creator's floor", () => {
+  const creatorId = "usr_priya";
+  const claimOf = (actorId: string) => [{ actorId, boundAt: new Date().toISOString() }];
+
+  it("re-roots the creator's link-admitted badge at `created` when the link goes", async () => {
+    const link = await grantOn(LINK);
+    const tab = await badge();
+    await desk.setClaims(tab, claimOf(creatorId));
+    await admit(tab, { root: "grant", grantId: link.id });
+    const stranger = await badge();
+    await admit(stranger, { root: "grant", grantId: link.id });
+
+    await desk.revokeGrant(link.id, new Date().toISOString(), "bdg_owner");
+    expect(await sweepCanvas(desk, CANVAS, creatorId)).toEqual({ expelled: 1, rerooted: 1 });
+    expect(await inRooms(tab)).toEqual([CANVAS]);
+    expect(await rootOf(tab)).toEqual({ root: "created" });
+    // The floor is `own`, and it is written, so a later reader of the
+    // admission sees the rung the creator actually holds.
+    const admission = (await desk.badge(tab))!.admissions.find((a) => a.canvasId === CANVAS);
+    expect(admission!.capability).toBe("own");
+    expect(await inRooms(stranger)).toEqual([]);
+  });
+
+  it("is asked only when no row admits — a row still names the root", async () => {
+    const link = await grantOn(LINK);
+    const tab = await badge();
+    await desk.setClaims(tab, claimOf(creatorId));
+    const answer = await admittingGrant(desk, CANVAS, (await desk.badge(tab))!, creatorId);
+    expect(answer).toMatchObject({ grant: { id: link.id }, provenance: { root: "grant" } });
+  });
+
+  it("does not apply without the creator — a caller that cannot say gets rows only", async () => {
+    const tab = await badge();
+    await desk.setClaims(tab, claimOf(creatorId));
+    expect(await admittingGrant(desk, CANVAS, (await desk.badge(tab))!)).toBeNull();
+    expect(await admittingGrant(desk, CANVAS, (await desk.badge(tab))!, "usr_somebody_else")).toBeNull();
+  });
+});
+
+/**
+ * **The ladder decides the root** (roles design, "The ladder"): rows sort by
+ * rung, highest first, then by age. A badge that two rows admit is rooted at
+ * the higher one, whichever is older.
+ */
+describe("the door picks the highest rung", () => {
+  it("roots an attested badge at its `edit` invitation over an older `read` link", async () => {
+    const link = await grantOn(LINK);
+    await desk.putGrant({ ...link, capability: "read" });
+    const invite: Grant = {
+      id: "gnt_invite",
+      canvasId: CANVAS,
+      subject: "email:jordan@acme.test",
+      grantedBy: "bdg_owner",
+      at: new Date(Date.UTC(2026, 5, 1)).toISOString(),
+    };
+    await desk.putGrant(invite);
+    const jordan = await badge();
+    await desk.attest(jordan, {
+      attribute: "email:jordan@acme.test",
+      verifiedVia: "magic-link",
+      at: new Date().toISOString(),
+    });
+    const answer = await admittingGrant(desk, CANVAS, (await desk.badge(jordan))!);
+    expect(answer).toMatchObject({ grant: { id: "gnt_invite" }, capability: "edit" });
+  });
+
+  it("roots at the older row among rows of one rung", async () => {
+    const link = await grantOn(LINK);
+    await desk.putGrant({ ...link, capability: "own" });
+    await desk.putGrant({
+      id: "gnt_owner_invite",
+      canvasId: CANVAS,
+      subject: "email:jordan@acme.test",
+      grantedBy: "bdg_owner",
+      at: new Date(Date.UTC(2026, 5, 1)).toISOString(),
+      capability: "own",
+    });
+    const jordan = await badge();
+    await desk.attest(jordan, {
+      attribute: "email:jordan@acme.test",
+      verifiedVia: "magic-link",
+      at: new Date().toISOString(),
+    });
+    const answer = await admittingGrant(desk, CANVAS, (await desk.badge(jordan))!);
+    expect(answer).toMatchObject({ grant: { id: link.id }, capability: "own" });
   });
 });
 

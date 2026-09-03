@@ -121,10 +121,10 @@ export interface Admission {
    * admissions` and never consults the grant again: a capability that lived
    * only on the grant row would be read once and then never enforced.
    *
-   * Written only when it NARROWS (`view`); absent is `edit`, which is what
-   * every admission written before the field meant. `created` and `pass`
-   * roots never narrow — making a canvas is editing it, and a pass endows
-   * what its minter had.
+   * Written whenever it is not `edit` (`narrowed` in core); absent is
+   * `edit`, which is what every admission written before the field meant.
+   * A `created` root is the creator's floor and never narrows; a `pass` root
+   * endows what its minter had.
    */
   capability?: Capability;
 }
@@ -305,7 +305,8 @@ export interface Desk {
   /** Record that this badge has been in this canvas. No longer policy-free:
    * from phase 7 the door decides whether this is called at all, and the
    * provenance it passes is what phase 9's sweep grips. `capability` is
-   * stored only when it narrows (`view`, #88); omitted means edit. */
+   * stored whenever it is not edit (`narrowed`, #88 widened by the roles
+   * ladder); omitted means edit. */
   admit(
     badgeId: string,
     canvasId: string,

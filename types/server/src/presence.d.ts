@@ -1,4 +1,4 @@
-import type { Actor, CanvasContents, Operation, PresenceActivity, PresenceSession } from "../../core/src/index.js";
+import type { Actor, CanvasContents, Capability, Operation, PresenceActivity, PresenceSession } from "../../core/src/index.js";
 export declare const SESSION_TTL_MS: number;
 export declare class PresenceHub {
     private readonly ttlMs;
@@ -14,6 +14,7 @@ export declare class PresenceHub {
         label?: string;
         sessionId?: string;
         harness?: string;
+        capability?: Capability;
     }): PresenceSession;
     /** Update + heartbeat. Returns false if the session is gone (expired). */
     touch(canvasId: string, sessionId: string, patch?: {

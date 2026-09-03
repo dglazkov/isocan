@@ -44,6 +44,7 @@ import {
   grantRoute,
   grantsRoute,
   HOMES_ROUTE,
+  narrowed,
   NEWS_ROUTE,
   PRESENCE_WHERE_ROUTE,
   newClientId,
@@ -747,8 +748,9 @@ export function createGrant(
 ): Promise<GrantResponse> {
   return request("POST", grantsRoute(canvasId), {
     subject,
-    // Sent only when it narrows (#88), so an older home never meets the field.
-    ...(capability === "view" ? { capability } : {}),
+    // Sent whenever it is not edit (#88, `narrowed`), so an older home never
+    // meets the field for the one value it has always meant by omission.
+    ...(narrowed(capability) ? { capability } : {}),
   });
 }
 

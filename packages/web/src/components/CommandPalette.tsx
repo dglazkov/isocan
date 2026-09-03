@@ -4,6 +4,7 @@ import type { Actor, SlashCommand } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useCommands } from "../lib/commands.ts";
 import { availableActions, type Action, type ActionContext } from "../lib/actions.ts";
+import { useCanEdit } from "../lib/capability.ts";
 
 /**
  * **⌘K: a launcher for anything, not a second composer.**
@@ -41,6 +42,7 @@ export function CommandPalette({
   const navigate = useNavigate();
   const commands = useCommands();
   const selection = useUiStore((s) => s.selectedItemIds);
+  const canEdit = useCanEdit();
   const [query, setQuery] = useState("");
   const [at, setAt] = useState(0);
   const field = useRef<HTMLInputElement>(null);
@@ -65,14 +67,15 @@ export function CommandPalette({
     const actions = availableActions(ctx).filter((a) => hits(`${a.name} ${a.hint ?? ""} ${a.group}`));
     // A canvas is where a message can be posted; there is no thread on the
     // home screen, so offering to post one would be an entry that cannot work.
-    const asks = canvasId
-      ? commands.filter((c) => hits(`/${c.name} ${c.description}`))
-      : [];
+    // Nor can a reader post one: a slash command is a comment, and a comment
+    // is a write (roles phase 1).
+    const asks =
+      canvasId && canEdit ? commands.filter((c) => hits(`/${c.name} ${c.description}`)) : [];
     return [
       ...actions.map((action) => ({ kind: "action" as const, action })),
       ...asks.map((command) => ({ kind: "ask" as const, command })),
     ];
-  }, [query, ctx, commands, canvasId]);
+  }, [query, ctx, commands, canvasId, canEdit]);
 
   useEffect(() => setAt(0), [query]);
 

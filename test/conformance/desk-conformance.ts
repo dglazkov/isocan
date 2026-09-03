@@ -194,6 +194,30 @@ export function deskConformance(
     );
 
     test(
+      "every rung that is not edit round-trips on an admission (roles phase 1)",
+      withDesk(async ({ desk }) => {
+        // The rule is "written whenever it is not edit", not "written when it
+        // is view": a backing that tested the one literal would store `read`
+        // and `own` as absent, which reads back as EDIT — a reader promoted
+        // and an owner demoted by a storage detail. Both directions, both
+        // rungs, on both backings.
+        await desk.put(mint("bdg_r"));
+        await desk.admit("bdg_r", "prj_a", { root: "grant", grantId: "gnt_r" }, "read");
+        expect((await desk.badge("bdg_r"))!.admissions[0]!.capability).toBe("read");
+        await desk.reroot("bdg_r", "prj_a", { root: "grant", grantId: "gnt_o" }, "own");
+        expect((await desk.badge("bdg_r"))!.admissions[0]!.capability).toBe("own");
+        await desk.reroot("bdg_r", "prj_a", { root: "created" }, "edit");
+        expect((await desk.badge("bdg_r"))!.admissions[0]!.capability).toBeUndefined();
+
+        await desk.put(mint("bdg_o"));
+        await desk.admit("bdg_o", "prj_a", { root: "created" }, "own");
+        expect((await desk.badge("bdg_o"))!.admissions[0]!.capability).toBe("own");
+        await desk.reroot("bdg_o", "prj_a", { root: "grant", grantId: "gnt_r" }, "read");
+        expect((await desk.badge("bdg_o"))!.admissions[0]!.capability).toBe("read");
+      }),
+    );
+
+    test(
       "grants: written per canvas, read back by canvas, and nothing else's",
       withDesk(async ({ desk }) => {
         // A canvas nobody has granted anything admits NOBODY. This is the
@@ -225,6 +249,12 @@ export function deskConformance(
         expect(onC[0]!.capability).toBe("view");
         // And a row written without one stays without one: absent means edit.
         expect(onA[0]!.capability).toBeUndefined();
+        // The ladder's other two rungs round-trip the same way (roles phase
+        // 1): the read-back guard is "is it a rung", never "is it `view`".
+        await desk.putGrant({ ...grant("gnt_4", "prj_d", "bdg_1"), capability: "read" });
+        await desk.putGrant({ ...grant("gnt_5", "prj_e", "bdg_1"), capability: "own" });
+        expect((await desk.grantsFor("prj_d"))[0]!.capability).toBe("read");
+        expect((await desk.grantsFor("prj_e"))[0]!.capability).toBe("own");
       }),
     );
 

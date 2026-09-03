@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, Capability, Grant, SweepReport } from "@isocan/core";
-import { canvasUrl, capabilityOf, ownsCanvas, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark} from "@isocan/core";
-import type { RowState } from "@isocan/core";
+import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark} from "@isocan/core";
+import type { PresenceSession, RowState } from "@isocan/core";
+import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
 import { createGrant, listGrants, revokeGrant, ApiError } from "../lib/api.ts";
 import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
@@ -47,9 +48,13 @@ import { useActorMarks } from "../lib/marks.ts";
  * the sweep's re-rooting visible for the first time: turn the link off with an
  * email grant standing, and the person invited by name stays.
  *
- * **There is no owner, either.** Any admitted badge may share or un-share.
- * The desk design leaves roles open, and inventing an owner in the dialog
- * would imply a rule the door does not have.
+ * **The rung is a ladder** (roles design). The link's setting is three words
+ * — Editor, Canvas Viewer, Presentation Viewer — and the invite field puts
+ * a person on one of the same rungs. Every word comes from core's one map,
+ * so this dialog and `isocan share` name a rung the same way. A reader gets
+ * this dialog with its controls gone and the address kept: who may be here
+ * is worth knowing whoever you are, and the address is the one thing a
+ * reader can hand on.
  */
 export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => void }) {
   const record = useCanvasStore((s) => s.project);
@@ -86,6 +91,9 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
    * answers with an empty `attesters` and the field never appears. */
   const [offer, setOffer] = useState<AttestOffer | null>(null);
   const [who, setWho] = useState("");
+  /** The rung an invitation goes out at — Editor until somebody says otherwise. */
+  const [inviteRung, setInviteRung] = useState<Capability>("edit");
+  const canEdit = useCanEdit();
 
   const canvasId = record?.id ?? null;
 
@@ -115,7 +123,8 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const address = canvasUrl(location.origin, record.id);
   const link = grants?.find((g) => g.subject === LINK) ?? null;
   const linkOn = link !== null;
-  const linkView = link !== null && capabilityOf(link) === "view";
+  const linkRung: Capability = link ? capabilityOf(link) : "edit";
+  const linkReads = !atLeast(linkRung, "edit");
   // The canvas is the owner's, and the owner is whoever made it — a fact it
   // has carried since it was made, so nothing had to be stored for this.
   const owned = record !== null && ownsCanvas(record, actor.id);
@@ -201,7 +210,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
     setBusy(true);
     setError(null);
     try {
-      await createGrant(canvasId, grantSubjectOf(who));
+      await createGrant(canvasId, grantSubjectOf(who), inviteRung);
       setWho("");
       setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
@@ -279,7 +288,9 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
         </button>
       </div>
 
-      {/* The link grant, as the toggle everybody already knows. */}
+      {canEdit && (
+        <>
+          {/* The link grant, as the toggle everybody already knows. */}
       <button
         className={`share-link-row${linkOn ? " on" : ""}`}
         role="switch"
@@ -305,8 +316,8 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
                   // landed on said "ask whoever shared it" to the person who
                   // had just shared it. Saying so here costs one sentence and
                   // needs no new mechanism.
-                  linkView
-                  ? "anyone who has the address can look — a presentation included — and change nothing. Turning it off removes everyone who came in that way."
+                  linkReads
+                  ? `anyone who has the address can ${linkRung === "view" ? "look at the deck" : "see the canvas"}, and change nothing. Turning it off removes everyone who came in that way.`
                   : "anyone who has the address can open this canvas. Turning it off removes everyone who came in that way — including you, unless you made this canvas."
                 : // Say what revocation actually did — and since phase 9 it
                   // does expel, so the count is read off the answer rather
@@ -319,7 +330,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
       </button>
 
       {/* What the link admits to — shown only while there is a link to speak
-          for. Two words rather than a second switch: "on but read-only" and
+          for. Three rungs rather than a second switch: "on but read-only" and
           "off" must not look like neighbouring positions of one control.
 
           **Only the owner may move it**, and the daemon is what enforces that
@@ -329,27 +340,22 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
           setting went. The title says whose it is. */}
       {linkOn && (
         <div className="share-link-mode" role="radiogroup" aria-label="What the link allows">
-          <button
-            className={`btn${linkView ? "" : " primary"}`}
-            role="radio"
-            aria-checked={!linkView}
-            disabled={busy || !owned}
-            title={owned ? "Anyone with the link can change things" : ownerNote}
-            onClick={() => void setLinkCapability("edit")}
-          >
-            Can edit
-          </button>
-          <button
-            className={`btn${linkView ? " primary" : ""}`}
-            role="radio"
-            aria-checked={linkView}
-            disabled={busy || !owned}
-            title={owned ? "Anyone with the link can look, and change nothing" : ownerNote}
-            onClick={() => void setLinkCapability("view")}
-          >
-            Can view
-          </button>
+          {LINK_RUNGS.map((rung) => (
+            <button
+              key={rung}
+              className={`btn${linkRung === rung ? " primary" : ""}`}
+              role="radio"
+              aria-checked={linkRung === rung}
+              disabled={busy || !owned}
+              title={owned ? RUNG_HINT[rung] : ownerNote}
+              onClick={() => void setLinkCapability(rung)}
+            >
+              {capabilityWord.dialog[rung]}
+            </button>
+          ))}
         </div>
+      )}
+        </>
       )}
       {/* Who made it. Worth saying on its own — it is the answer to "why can I
           not change that", and on a shared canvas it is simply useful to know
@@ -362,8 +368,9 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
 
       {error && <div className="identity-warning">{error}</div>}
 
-      {/* The "who" field — on a home that can verify one. */}
-      {offer && canVerifyEmail(offer) ? (
+      {/* The "who" field — on a home that can verify one, for somebody who
+          may invite. */}
+      {!canEdit ? null : offer && canVerifyEmail(offer) ? (
         <>
           <form
             className="share-address"
@@ -380,6 +387,21 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
               value={who}
               onChange={(e) => setWho(e.target.value)}
             />
+            {/* The rung, in the dialog's words. Editor first and selected,
+                because that is what an invitation has always meant here;
+                Owner joins the list in roles phase 2. */}
+            <select
+              className="text-input share-rung"
+              aria-label="What they may do"
+              value={inviteRung}
+              onChange={(e) => setInviteRung(e.target.value as Capability)}
+            >
+              {LINK_RUNGS.map((rung) => (
+                <option key={rung} value={rung}>
+                  {capabilityWord.dialog[rung]}
+                </option>
+              ))}
+            </select>
             {/* The action this form exists for, so it wears the accent — and
                 for the same reason as the reply button: disabled is an
                 opacity, and grey-on-grey cannot say which of the two states
@@ -425,12 +447,14 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
                 <span className="surface-what">
                   <b>{grant.subject.replace(/^email:/, "")}</b>
                   <span className="share-roster-kind">
-                    invited {grant.at.slice(0, 10)} · gets in by proving it
+                    {capabilityWord.dialog[capabilityOf(grant)]} · invited {grant.at.slice(0, 10)} · gets in by proving it
                   </span>
                 </span>
-                <button className="btn" disabled={busy} onClick={() => void uninvite(grant)}>
-                  Un-invite
-                </button>
+                {canEdit && (
+                  <button className="btn" disabled={busy} onClick={() => void uninvite(grant)}>
+                    Un-invite
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -462,6 +486,18 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
     </div>
   );
 }
+
+/** The rungs a link, or an invitation, can be set to here. `own` is phase
+ * 2's, and a link at `own` would be a link that could revoke itself. */
+const LINK_RUNGS: readonly Capability[] = ["edit", "read", "view"];
+
+/** What each rung means, as a title on its radio. */
+const RUNG_HINT: Record<Capability, string> = {
+  own: "Anyone with the link owns this canvas",
+  edit: "Anyone with the link can change things",
+  read: "Anyone with the link can see the canvas, and change nothing",
+  view: "Anyone with the link can look at the deck, and change nothing",
+};
 
 /**
  * What turning the link off did, in the dialog's own voice.
@@ -530,6 +566,16 @@ function rosterRows(
       kind: KIND_WORD[row.state],
     });
   }
+  /* People at browsers, whom core's roster leaves to the facepile. They are
+     here because this dialog is about who can REACH the canvas, and a person
+     reading it over your shoulder is exactly the fact a Share dialog owes
+     you: a `read` connection says *reading*, from the same map the facepile
+     and `isocan who` read (roles design, "Presence says the rung"). */
+  for (const session of sessions) {
+    if (session.kind !== "web") continue;
+    if (rows.some((r) => r.actor.id === session.actor.id)) continue;
+    rows.push({ actor: session.actor, state: "here", kind: rungWord(session) ?? KIND_WORD.here });
+  }
   /* Core's roster caps its away half at six — a room, not a list. This dialog
      is about who can REACH the canvas, so it names everyone the canvas
      remembers; the cap belongs to the panel that has to fit on a screen. */
@@ -538,6 +584,13 @@ function rosterRows(
     rows.push({ actor: who, state: "away", kind: "away" });
   }
   return rows;
+}
+
+/** *reading* for a connection below `edit`; null for an editor, who is
+ * simply here. */
+function rungWord(session: PresenceSession): string | null {
+  if (session.capability === undefined || atLeast(session.capability, "edit")) return null;
+  return capabilityWord.presence[session.capability];
 }
 
 /** One word per state, in this dialog's voice. */

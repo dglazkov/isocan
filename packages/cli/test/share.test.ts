@@ -162,11 +162,51 @@ describe("isocan share", () => {
     expect(again.stdout).toMatch(/link\s+off —/);
   }, 60_000);
 
-  it("refuses --link with anything that is not on, off or view", async () => {
+  it("refuses --link with anything that is not a rung, off, or on", async () => {
     await bornCanvas();
     const bad = await cli("share", "--link", "maybe");
     expect(bad.code).toBe(1);
-    expect(bad.stderr).toMatch(/on, off or view/);
+    expect(bad.stderr).toMatch(/on, off, edit, read or view/);
+    // `own` is a rung and not a link setting: a link that made owners of
+    // strangers would be a link that could revoke itself.
+    const owned = await cli("share", "--link", "own");
+    expect(owned.code).toBe(1);
+  }, 60_000);
+
+  /** The roles ladder's verb half (roles phase 1): the same link row, at the
+   * canvas rung. The mechanism is the home's (`view-only.test.ts` pins it);
+   * what the CLI owes is the round trip and a status line that says which
+   * rung the link is at — and that the rung reaches the home's own rows. */
+  it("turns the link read-only with --link read, and edit is on by its ladder name", async () => {
+    const canvasId = await bornCanvas();
+    const reading = await cli("share", "--link", "read");
+    expect(reading.code, reading.stderr).toBe(0);
+    expect(reading.stdout).toMatch(/link\s+read-only —/);
+    expect(reading.stdout).toMatch(/see the canvas/);
+    const rows = await grantsAtHome(canvasId);
+    expect(rows.find((g) => g.subject === "link")?.capability).toBe("read");
+    // And the door at the home admits a stranger to read — 200, not 403.
+    expect(await strangerCanRead(canvasId)).toBe(200);
+    const widened = await cli("share", "--link", "edit");
+    expect(widened.code, widened.stderr).toBe(0);
+    expect(widened.stdout).toMatch(/link\s+on —/);
+    expect((await grantsAtHome(canvasId)).find((g) => g.subject === "link")?.capability).toBeUndefined();
+  }, 60_000);
+
+  it("--as puts an invitation on a rung, and checks the word before asking the home", async () => {
+    await bornCanvas();
+    const typo = await cli("share", "jordan@example.com", "--as", "reader");
+    expect(typo.code).toBe(1);
+    expect(typo.stderr).toMatch(/own, edit, read or view/);
+    // A rung with nobody to invite is a flag with nothing to say.
+    const alone = await cli("share", "--as", "read");
+    expect(alone.code).toBe(1);
+    expect(alone.stderr).toMatch(/name somebody/);
+    // A well-formed rung goes up: this home has no attester, so the refusal
+    // is the home's about the ADDRESS and not the CLI's about the rung.
+    const asked = await cli("share", "jordan@example.com", "--as", "read");
+    expect(asked.code).toBe(1);
+    expect(asked.stderr).toMatch(/verify an email/);
   }, 60_000);
 
   /** The #88 verb: the same link row, narrowed. The mechanism is the home's

@@ -1,6 +1,6 @@
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
 import type { ActorClaim, Attestation, Capability, Grant } from "@isocan/core";
-import { SHELF, upsertAttestation } from "@isocan/core";
+import { isCapability, narrowed, SHELF, upsertAttestation } from "@isocan/core";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
@@ -200,13 +200,13 @@ export class CloudDesk implements Desk {
   ): Promise<void> {
     await this.mutate(badgeId, (badge) => {
       if (badge.admissions.some((a) => a.canvasId === canvasId)) return null;
-      // Spread-in only when it narrows: absent means edit everywhere, and
-      // Firestore refuses an explicit `undefined` besides.
+      // Spread-in whenever it is not edit (`narrowed`): absent means edit
+      // everywhere, and Firestore refuses an explicit `undefined` besides.
       const admission: Admission = {
         canvasId,
         provenance,
         at: new Date().toISOString(),
-        ...(capability === "view" ? { capability } : {}),
+        ...(narrowed(capability) ? { capability } : {}),
       };
       return { ...badge, admissions: [...badge.admissions, admission] };
     });
@@ -252,7 +252,7 @@ export class CloudDesk implements Desk {
                 canvasId: a.canvasId,
                 at: a.at,
                 provenance,
-                ...(capability === "view" ? { capability } : {}),
+                ...(narrowed(capability) ? { capability } : {}),
               }
             : a,
         ),
@@ -544,12 +544,16 @@ function toGrant(data: DocumentData): Grant {
     at: data["at"] as string,
     ...(typeof data["revokedAt"] === "string" ? { revokedAt: data["revokedAt"] } : {}),
     ...(typeof data["revokedBy"] === "string" ? { revokedBy: data["revokedBy"] } : {}),
-    // Written only when it narrows (#88), and it MUST come back: this
-    // field-picking rebuild is exactly where a stored `view` silently became
-    // `edit` on the hosted home — the write kept it, every read dropped it,
-    // and the flip "took" in the response while the door went on admitting
-    // editors. Absent stays absent, which reads as edit.
-    ...(data["capability"] === "view" ? { capability: "view" as const } : {}),
+    // Written whenever it is not edit (#88, `narrowed`), and it MUST come
+    // back: this field-picking rebuild is exactly where a stored `view`
+    // silently became `edit` on the hosted home — the write kept it, every
+    // read dropped it, and the flip "took" in the response while the door
+    // went on admitting editors. A literal test for `view` would do the same
+    // to `read` and `own`, so the guard is "is it a rung", not "is it that
+    // one". Absent stays absent, which reads as edit.
+    ...(isCapability(data["capability"]) && narrowed(data["capability"])
+      ? { capability: data["capability"] }
+      : {}),
   };
 }
 

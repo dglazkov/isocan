@@ -50,6 +50,7 @@ import {
   grantRoute,
   grantsRoute,
   healthPath,
+  narrowed,
   HOME_GC_ROUTE,
   HOME_JOIN_ROUTE,
   HOMES_ROUTE,
@@ -434,8 +435,9 @@ export class DaemonRoutes {
   ): Promise<GrantResponse> {
     return this.request("POST", grantsRoute(canvasId), {
       subject,
-      // Sent only when it narrows, so an older home never meets the field.
-      ...(capability === "view" ? { capability } : {}),
+      // Sent whenever it is not edit (`narrowed`), so an older home never
+      // meets the field for the one value it has always meant by omission.
+      ...(narrowed(capability) ? { capability } : {}),
     });
   }
 

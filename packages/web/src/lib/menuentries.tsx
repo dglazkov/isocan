@@ -21,6 +21,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { type Panel, openPanel } from "./panels.ts";
 import { glideToBox } from "./zoomactions.ts";
 import { handIn, handable } from "./sprint.ts";
+import { canEditNow } from "./capability.ts";
 
 /**
  * **What the right-click menu offers, and why each thing is on it.**
@@ -44,6 +45,24 @@ interface MenuContext {
   navigate: (to: string) => void;
 }
 
+/**
+ * **The read-only canvas's menu** (roles phase 1): the entries marked
+ * `writes` are dropped for a reader, and a separator left with nothing on
+ * either side goes with them. Dropped rather than dimmed, because dimmed
+ * says "not right now" and a reader's answer is "not at this rung" — and
+ * because a menu of eleven grey rows and three live ones is a menu that
+ * teaches people to stop reading it.
+ */
+function offered(entries: MenuEntry[]): MenuEntry[] {
+  if (canEditNow()) return entries;
+  const kept = entries.filter((entry) => "separator" in entry || !entry.writes);
+  return kept.filter(
+    (entry, i) =>
+      !("separator" in entry) ||
+      (i > 0 && i < kept.length - 1 && !("separator" in kept[i - 1]!)),
+  );
+}
+
 /** The menu for one or more selected items. */
 export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
   const one = items.length === 1 ? items[0]! : null;
@@ -51,7 +70,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
   const many = items.length > 1;
   const version = one?.versions.find((v) => v.id === one.currentVersionId) ?? null;
 
-  return [
+  return offered([
     {
       label: many ? `Copy ${items.length} items` : "Copy",
       shortcutFor: "Copy the selection",
@@ -62,10 +81,12 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
     },
     {
       label: "Cut",
+      writes: true,
       run: () => void cutItems(ctx.canvasId, ctx.actor, ids),
     },
     {
       label: "Duplicate",
+      writes: true,
       run: () => {
         // The clipboard is not disturbed: duplicating something should not
         // cost you what you had copied a minute ago.
@@ -98,6 +119,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
     {
       label: "Rename",
       shortcutFor: "Rename",
+      writes: true,
       disabled: !one,
       run: () => one && useUiStore.getState().setRenaming(one.id),
     },
@@ -154,6 +176,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
      */
     {
       label: contextMark(items[0]!) === "pinned" ? "Unpin from context" : "Pin into context",
+      writes: true,
       disabled: many,
       run: () => {
         const item = items[0];
@@ -171,6 +194,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       // Excluded is not deleted: the item stays, its versions stay, its
       // comments stay. Only what a reader assembling context is told changes.
       label: contextMark(items[0]!) === "excluded" ? "Put back in context" : "Keep out of context",
+      writes: true,
       disabled: many,
       run: () => {
         const item = items[0];
@@ -207,6 +231,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
        * everything off" would throw away marks somebody meant.
        */
       label: slideLabel(items),
+      writes: true,
       run: () => {
         const { on, changing } = slideIntent(items);
         if (changing.length === 0) return;
@@ -243,9 +268,10 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       label: many ? `Delete ${items.length} items` : "Delete",
       shortcutFor: "Move the selection to the trash",
       danger: true,
+      writes: true,
       run: () => void deleteItems(ctx.canvasId, ctx.actor, ids),
     },
-  ];
+  ]);
 }
 
 /**
@@ -282,6 +308,7 @@ function sprintHandIn(items: readonly Item[], ctx: MenuContext): MenuEntry[] {
   return [
     {
       label: `Hand ${what} in for ${state.phase.label}`,
+      writes: true,
       // The same act the clock chip's button does — one helper, so a hand-in
       // from the menu and from the chip land the same way (on the sheet).
       run: () => {
@@ -294,10 +321,11 @@ function sprintHandIn(items: readonly Item[], ctx: MenuContext): MenuEntry[] {
 /** The menu for the canvas itself — a right-click on open ground. */
 export function canvasMenu(ctx: MenuContext): MenuEntry[] {
   const held = useUiStore.getState().clipboard;
-  return [
+  return offered([
     {
       label: held ? `Paste ${held.items.length} item${held.items.length === 1 ? "" : "s"}` : "Paste",
       shortcutFor: "Paste",
+      writes: true,
       disabled: !held,
       run: () => {
         if (!held) return;
@@ -309,6 +337,7 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
     { separator: "" },
     {
       label: "Write text here",
+      writes: true,
       run: () => {
         const ui = useUiStore.getState();
         ui.setPendingText({
@@ -338,7 +367,7 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
         });
       },
     },
-  ];
+  ]);
 }
 
 /** Only used to keep the import honest when a kind-specific entry is added. */
@@ -389,6 +418,10 @@ export function chromeMenu(ctx: {
   /** Days of release notes this reader has not seen — 0 hides the count. */
   unreadNews: number;
   minimapOpen: boolean;
+  /** Whether this tab may write (roles phase 1). The trash is a write's
+   *  aftermath and a way to undo one, so a reader is not offered it. Absent
+   *  means yes, so a caller from before the rung sees the drawer it had. */
+  canEdit?: boolean;
   /** Navigation belongs to the caller: this module builds entries and has no
    *  business holding a router. */
   toWorkbench: () => void;
@@ -446,11 +479,15 @@ export function chromeMenu(ctx: {
       icon: <HistoryGlyph size={14} />,
       run: () => ui().setHistoryOpen(!ctx.historyOpen),
     },
-    {
-      label: `${ctx.trashOpen ? "Hide trash" : "Trash"}${ctx.trashCount > 0 ? ` (${ctx.trashCount})` : ""}`,
-      icon: <TrashGlyph size={14} />,
-      run: () => ui().setTrashOpen(!ctx.trashOpen),
-    },
+    ...(ctx.canEdit === false
+      ? []
+      : [
+          {
+            label: `${ctx.trashOpen ? "Hide trash" : "Trash"}${ctx.trashCount > 0 ? ` (${ctx.trashCount})` : ""}`,
+            icon: <TrashGlyph size={14} />,
+            run: () => ui().setTrashOpen(!ctx.trashOpen),
+          },
+        ]),
     {
       label: ctx.minimapOpen ? "Hide minimap" : "Show minimap",
       icon: <MinimapGlyph size={14} />,

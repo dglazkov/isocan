@@ -1,3 +1,4 @@
+import type { Capability } from "./grants.js";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.js";
 import type { Actor, Canvas, CanvasContents } from "./model.js";
 import type { NewsDay } from "./whatsnew.js";
@@ -66,11 +67,13 @@ export type ServerMessage =
      * Names, colours and marks already arrive resolved; this is for the
      * comparisons a name cannot answer. Absent from an older home. */
     joined?: ActorJoins;
-    /** Present only when this connection's admission is view-only (#88), so
-     * the client can wear the viewer face instead of discovering the fact
-     * as a refusal per gesture. Absent means edit — every hello from before
-     * the field, and every editing admission since. */
-    capability?: "view";
+    /** Present whenever this connection's admission is not `edit` (#88,
+     * widened by the roles ladder), so the client can pick its surface —
+     * the deck for `view`, the read-only canvas for `read` — instead of
+     * discovering the fact as a refusal per gesture. Absent means edit —
+     * every hello from before the field, and every editing admission
+     * since. */
+    capability?: Capability;
 }
 /**
  * The other half of the connect handshake: "you already have through
@@ -102,8 +105,8 @@ export type ServerMessage =
     names: ActorNames;
     /** As on `snapshot`. */
     joined?: ActorJoins;
-    /** As on `snapshot`: present only for a view-only admission (#88). */
-    capability?: "view";
+    /** As on `snapshot`: present whenever the admission is not `edit`. */
+    capability?: Capability;
 } | {
     type: "op-applied";
     entry: LogEntry;
@@ -192,6 +195,15 @@ export type ClientMessage = {
 export interface PresenceSession {
     sessionId: string;
     actor: Actor;
+    /**
+     * The rung this connection's admission holds, set by the server from the
+     * admission and never by the client (roles design, "Presence says the
+     * rung"). Absent for `edit`, so a roster from before the field reads as it
+     * always did. The facepile's hover card and the Share roster say
+     * *reading* for `read`, the way they say *standing by* for an available
+     * agent; `view` connections never reach presence at all.
+     */
+    capability?: Capability;
     /**
      * "web" is a person at a browser; "cli" an agent (or bare terminal) on the
      * canvas; "rc" a parked `isocan rc` (agents-on-demand phase 2.5) — a
@@ -708,10 +720,11 @@ export interface CanvasSnapshotResponse {
     /** Actors folded into others (`actor.join`, multi-identity phase 5) — see
      * the `snapshot` message. Absent from an older home. */
     joined?: ActorJoins;
-    /** Present only when the CALLER's admission is view-only (#88) — the one
-     * fact about the reader that rides on the read, so a client can wear the
-     * viewer face before its first refused write. Absent means edit. */
-    capability?: "view";
+    /** Present whenever the CALLER's admission is not `edit` (#88, widened by
+     * the roles ladder) — the one fact about the reader that rides on the
+     * read, so a client can pick its surface before its first refused write.
+     * Absent means edit. */
+    capability?: Capability;
 }
 /**
  * **Does this copy of isocan disagree with the home it is talking to?**

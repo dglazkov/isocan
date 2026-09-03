@@ -1,5 +1,5 @@
 import type { Capability, Grant } from "../../core/src/index.js";
-import type { BadgeRecord, Desk } from "./desk.js";
+import type { BadgeRecord, Desk, Provenance } from "./desk.js";
 /**
  * The door's test over the desk's grant rows (identity desk, mechanisms 3 + 2).
  *
@@ -60,14 +60,37 @@ export declare class NotAdmittedError extends Error {
  * were invited by name, arriving as a consequence of two lines rather than as
  * a special case.
  *
- * **Since #88, capability outranks age.** An edit grant beats a view grant
- * however young it is, because "which row let you in" now also decides what
- * you may do — a person invited by name to edit, entering a canvas whose link
- * can only view, must be rooted at her invitation and not at the link that
- * would demote her. Among grants of one capability the old ordering stands
- * unchanged, which is every canvas that predates the field.
+ * **Since #88, capability outranks age**, and since the roles ladder the
+ * comparator is the ladder itself: rows sort by rung, highest first, and by
+ * age within a rung. An edit grant beats a view grant however young it is,
+ * because "which row let you in" also decides what you may do — a person
+ * invited by name to edit, entering a canvas whose link can only view, must
+ * be rooted at her invitation and not at the link that would demote her.
+ * Among grants of one rung the old ordering stands unchanged, which is every
+ * canvas that predates the field.
+ *
+ * **The creator's floor** (roles design, "Who holds what"). The creator holds
+ * `own` and cannot lose it, and that is not a row: it is `project.createdBy`
+ * checked against the badge's claims, exactly as `ownsThisCanvas` reads it.
+ * It is applied HERE, at the door, and not only on owner routes, because
+ * journey 1 step 2 says the creator stays when the link is turned off —
+ * and until this the revoker of a link was expelled with everyone else who
+ * came in on it, if their browser happened to enter by the link. Asked only
+ * when no row answers, so its cost (one `claimsOf` read) stays off the
+ * common path. A badge admitted by the floor is admitted with
+ * `{root: "created"}`, the provenance the sweep already keeps without a door
+ * test. `creator` is the canvas's `createdBy.id`; callers that do not hold
+ * the snapshot pass null and get rows only.
  */
-export declare function admittingGrant(desk: Desk, canvasId: string, badge: BadgeRecord): Promise<Grant | null>;
+export interface DoorAnswer {
+    /** The row that admits, or null when the creator's floor did. */
+    grant: Grant | null;
+    /** What the admission is written with: the row, or `created`. */
+    provenance: Provenance;
+    /** The rung the admission holds. */
+    capability: Capability;
+}
+export declare function admittingGrant(desk: Desk, canvasId: string, badge: BadgeRecord, creator?: string | null): Promise<DoorAnswer | null>;
 /** The refusal when somebody who did not make the canvas tries to change what
  *  its link admits to. Its own code, so a client can say the useful sentence
  *  rather than "no". */
@@ -98,11 +121,14 @@ export declare function ownsThisCanvas(desk: Desk, project: {
     };
 }, badge: BadgeRecord): Promise<boolean>;
 /**
- * A write met a view admission (#88). 403 with its own code, for
- * `NotAdmittedError`'s reason moved one notch: this caller is badged AND
- * admitted, so neither "go to the door" nor "ask for the link" helps — the
- * remedy is to be shared with for editing, and only a distinguishable refusal
- * lets a client say that.
+ * A write met an admission below `edit` (#88, widened by the roles ladder to
+ * `read`). 403 with its own code, for `NotAdmittedError`'s reason moved one
+ * notch: this caller is badged AND admitted, so neither "go to the door" nor
+ * "ask for the link" helps — the remedy is to be shared with for editing,
+ * and only a distinguishable refusal lets a client say that.
+ *
+ * The code did not change when `read` arrived; the message did. Old clients
+ * branch on the code and keep working.
  */
 export declare class ViewOnlyError extends Error {
     readonly canvasId: string;
@@ -119,21 +145,25 @@ export declare class ViewOnlyError extends Error {
  */
 export declare function capabilityIn(badge: BadgeRecord, canvasId: string): Capability | null;
 /**
- * The held capability, RE-ASKED when it is `view` — the upgrade path.
+ * The held capability, RE-ASKED when it is below `edit` — the upgrade path.
  *
  * An admitted badge is answered by its admission and the grants are never
- * consulted again, which is right for an editor (nothing above edit exists)
- * and a trap for a viewer: prove your email after entering by a view link and
- * the invitation that names you would never take effect, because the door
- * stopped asking. So a view admission re-runs the door test on every ask, and
- * an edit grant that now admits re-roots the badge there — the same motion
- * the sweep makes, in the other direction. Costs one desk read per request,
- * for viewers only; editors stay on the short-circuit.
+ * consulted again, which is right for an editor and a trap for a viewer or a
+ * reader: prove your email after entering by a view link and the invitation
+ * that names you would never take effect, because the door stopped asking.
+ * So an admission below `edit` re-runs the door test on every ask, and when
+ * the door now gives a DIFFERENT rung the badge is re-rooted there — up to
+ * whatever the door gives (an invitation at `read` raises a viewer to the
+ * canvas; one at `edit` raises them to editing), the same motion the sweep
+ * makes for a grant that changed. This exists for the one case the sweep
+ * cannot see: a badge that changed, not a grant that changed. Costs one desk
+ * read per request, for viewers and readers only; editors and owners stay
+ * on the short-circuit.
  *
  * The in-memory record is updated too, so the rest of THIS request sees what
  * the desk now says.
  */
-export declare function heldCapability(desk: Desk, canvasId: string, badge: BadgeRecord): Promise<Capability | null>;
+export declare function heldCapability(desk: Desk, canvasId: string, badge: BadgeRecord, creator?: string | null): Promise<Capability | null>;
 /**
  * The standing link grant a canvas is born with — "the status quo demoted to
  * data".

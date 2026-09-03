@@ -1,5 +1,12 @@
-import type { Actor, CanvasContents, Operation, PresenceActivity, PresenceSession } from "@isocan/core";
-import { newId } from "@isocan/core";
+import type {
+  Actor,
+  CanvasContents,
+  Capability,
+  Operation,
+  PresenceActivity,
+  PresenceSession,
+} from "@isocan/core";
+import { narrowed, newId } from "@isocan/core";
 
 /**
  * The ephemeral plane. Presence lives in daemon memory and WS fan-out only —
@@ -78,7 +85,7 @@ export class PresenceHub {
     canvasId: string,
     actor: Actor,
     kind: PresenceSession["kind"],
-    options: { label?: string; sessionId?: string; harness?: string } = {},
+    options: { label?: string; sessionId?: string; harness?: string; capability?: Capability } = {},
   ): PresenceSession {
     const session = blankSession(actor, kind, options);
     this.room(canvasId).set(session.sessionId, session);
@@ -326,7 +333,7 @@ function stripped(session: SessionState): PresenceSession {
 function blankSession(
   actor: Actor,
   kind: PresenceSession["kind"],
-  options: { label?: string; sessionId?: string; harness?: string },
+  options: { label?: string; sessionId?: string; harness?: string; capability?: Capability },
 ): SessionState {
   return {
     origin: null,
@@ -335,6 +342,10 @@ function blankSession(
     kind,
     harness: options.harness ?? null,
     label: options.label ?? null,
+    // The rung, from the connection's admission and never from a beat: a
+    // client asserting its own rung would be a client deciding what it may
+    // do. Carried only when it is not edit, like everywhere else.
+    ...(narrowed(options.capability) ? { capability: options.capability } : {}),
     cursor: null,
     selection: [],
     status: null,

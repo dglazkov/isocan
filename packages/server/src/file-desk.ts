@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import type { ActorClaim, Attestation, Capability, Grant } from "@isocan/core";
-import { SHELF, upsertAttestation } from "@isocan/core";
+import { narrowed, SHELF, upsertAttestation } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./desk.ts";
@@ -231,9 +231,10 @@ export class FileDesk implements Desk {
       canvasId,
       provenance,
       at: new Date().toISOString(),
-      // Stored only when it narrows: absent has meant "edit" since before the
-      // field existed, and both backings keep that reading.
-      ...(capability === "view" ? { capability } : {}),
+      // Stored whenever it is not edit (`narrowed`, the one place that
+      // decides): absent has meant "edit" since before the field existed, and
+      // both backings keep that reading.
+      ...(narrowed(capability) ? { capability } : {}),
     };
     badge.admissions = [...badge.admissions, admission];
     await this.enqueue(() => this.writeSnapshot());
@@ -269,7 +270,7 @@ export class FileDesk implements Desk {
               canvasId: a.canvasId,
               at: a.at,
               provenance,
-              ...(capability === "view" ? { capability } : {}),
+              ...(narrowed(capability) ? { capability } : {}),
             }
           : a,
       );

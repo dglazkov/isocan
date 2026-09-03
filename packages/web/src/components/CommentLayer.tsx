@@ -18,6 +18,7 @@ import { catapultToItem, useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { submitOnCmdEnter, submitOnEnter } from "../lib/submit.ts";
 import { pastSlop } from "../lib/gesture.ts";
+import { useCanEdit } from "../lib/capability.ts";
 import { MentionField } from "./MentionField.tsx";
 import { openMainPanel } from "./MainThreadPanel.tsx";
 import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts";
@@ -61,6 +62,9 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
   const pendingComment = useUiStore((s) => s.pendingComment);
   const seen = useUnreadStore((s) => s.seen);
   const joined = useCanvasStore((s) => s.actorJoins);
+  // A reader cannot comment, by the decision the roles journey records:
+  // comments reach agents, and a rung that can start work is not a viewer.
+  const canEdit = useCanEdit();
 
   if (!canvas) return null;
 
@@ -109,7 +113,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
             actor={actor}
           />
         )}
-        {pendingComment && (
+        {pendingComment && canEdit && (
           <ComposePopover canvasId={canvasId} actor={actor} pending={pendingComment} />
         )}
       </div>
@@ -334,6 +338,7 @@ function ThreadPopover({
     [candidates, actor.id, itemRoster.candidates],
   );
   const { ref, style } = usePopoverPlacement(screen, 30, -16);
+  const canEdit = useCanEdit();
   // Open is read — including replies that land while you are looking at it.
   useEffect(() => markRead(thread.id), [thread.id, thread.comments.length]);
   // Item chips come out of rehype as plain elements, so their clicks are
@@ -383,7 +388,8 @@ function ThreadPopover({
                 actor={actor}
               />
       </div>
-      <form
+      {canEdit && (
+        <form
         /**
          * The same two keys the Chat takes, because these are the same
          * gesture in two places. Reported as "I hit ENTER expecting to get a
@@ -431,6 +437,7 @@ function ThreadPopover({
           ↑
         </button>
       </form>
+      )}
       <div className="thread-actions">
         <button
           className="promote"

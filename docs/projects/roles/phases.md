@@ -16,8 +16,9 @@ that moves in the same change as "where we are".
 
 ---
 
-**Where we are: NOTHING BUILT.** Journeys written 2 Sep 2026; design and
-phases the same day.
+**Where we are: roles phase 1 CLOSED 2 Sep 2026; roles phase 2 is next.**
+Journeys, design and phases written 2 Sep 2026; phase 1 built and walked
+the same day.
 
 The order is dependency order and it is also scope order: phases 1 to 3 are
 one canvas and change no storage shape; phase 4 adds the space and the first
@@ -48,7 +49,19 @@ instead of improvising mid-task:
 
 ## Phase 1 — The ladder, and the read-only canvas
 
-**Status: not started.**
+**Status: CLOSED** 2 Sep 2026. Journey 1 walked by the conductor on a scratch
+daemon borrowing dev's attester, with the CLI as the creator and two Chrome
+origins as two people: the link turned off from the Share dialog and the
+creator stayed; a second address invited at **Canvas Viewer**, proved from
+the identity menu, entered with no tool rail, and a dragged item did not
+move; the same badge's `POST /api/ops`, `…/passes` and `…/grants` were
+refused with `view-only`; the facepile hover, the Share roster and
+`isocan who` said *reading*; a bearer badge that proved the same address
+from the terminal was admitted at `read`, refused an op with `view-only`,
+and still read the oplog watch; `--link view` from the CLI opened the deck
+for a stranger while the invitee kept `read`. `--as read`, a bad rung
+refused, and `--link read` walked from the CLI. Suite 279 files, 3084
+tests; typecheck clean.
 
 **Closes journey 1.**
 
@@ -102,6 +115,26 @@ browser, `--link view` on the CLI and the second profile's next visit opens
 the deck, proving the old value still means what it meant. Suite and
 typecheck green; `server/test/view-only.test.ts` grows the `read` cases and
 a test walks the hidden-writes list.
+
+**Findings:**
+
+- **2026-09-02 — Open: the door offers no proof to a refused invitee.** A
+  named invitee with the link off lands on *this canvas will not have you*
+  with no attester; proving runs through the identity menu. Journey 1 step
+  4 says the door asks.
+- **2026-09-02 — The refusal cannot name the owner yet.** `ViewOnlyError`
+  is thrown from the hook, which holds no snapshot; *ask Priya, who owns it*
+  waits for phase 2's owner-naming refusal.
+- **2026-09-02 — A bootstrap admission stores no rung; a floor admission
+  stores `own`.** Phase 2's `heldRung` must raise by claims, not by the
+  stored rung.
+- **2026-09-02 — `home-link.ts` carries a `\x00` in a key, so `grep` calls
+  it binary.** The eleventh literal `"view"` was found with `grep -a`.
+- **2026-09-02 — The terminal half of a proof is `curl`.** The `isocan`
+  binary carries its daemon's badge, so a lower badge is a bearer badge from
+  the door against the same routes.
+- **2026-09-02 — Firebase invalidates an earlier sign-in link when a second
+  is sent to the same address.** One link per badge, in sequence.
 
 ## Phase 2 — Owners, and a change that reaches the room
 

@@ -10,7 +10,14 @@ import type { BadgeRecord, Desk } from "./desk.js";
  * the revoked grant would invite an implementation that only looked for it,
  * which is the version that misses chains and cycles.
  */
-export declare function sweepCanvas(desk: Desk, canvasId: string): Promise<SweepReport>;
+/**
+ * `creator` is the canvas's `createdBy.id`, handed in by the routes that hold
+ * the snapshot so the door test can apply the creator's floor (roles design):
+ * a creator whose browser entered by the link is re-rooted at `created` when
+ * the link goes, not expelled. Null when the caller cannot say, in which case
+ * the floor is simply not asked — rows only.
+ */
+export declare function sweepCanvas(desk: Desk, canvasId: string, creator?: string | null): Promise<SweepReport>;
 /**
  * **Kill a badge, then sweep every room it had been in.**
  *
@@ -35,7 +42,10 @@ export declare function sweepCanvas(desk: Desk, canvasId: string): Promise<Sweep
  * not an error (two people can end one laptop) and there is nothing left to
  * sweep, because the first kill swept it.
  */
-export declare function killAndSweep(desk: Desk, badgeId: string, by: string, now?: string): Promise<{
+export declare function killAndSweep(desk: Desk, badgeId: string, by: string, now?: string, 
+/** The creator of each canvas swept, for the floor — a kill sweeps rooms
+ * whose snapshots the route does not hold, so it asks per canvas. */
+creatorOf?: (canvasId: string) => Promise<string | null>): Promise<{
     killed: BadgeRecord;
     swept: SweepReport;
 } | null>;
