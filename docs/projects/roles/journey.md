@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-09-02
 see: multiuser, multi-identity
-note: journeys, design and six phases written 2 Sep 2026; phases 1 to 5 built and walked the same day — the four-rung ladder compared in core, the creator's floor at the door, the read-only canvas, `own` as a grantable row with every grant write owner-gated, a rung change that reaches an open socket as `standing` or `withdrawn`, the bar as a row that says no, the space as a desk row whose grants the door reads beside the canvas's, and the group as a subject whose membership is read at the door; journeys 1 to 7 play, and journey 8's compatibility cases were walked on dev.isocan.io and against a pre-phase-1 build. What is left is the prod deploy and the walk on isocan.io after it. Starts from the 1 Sep roles research (a four-rung ladder on one canvas) and adds the space, the group, and the bar, because the journeys need a scope wider than one canvas and a subject wider than one address
+note: journeys, design and six phases written 2 Sep 2026; phases 1 to 5 built and walked the same day — the four-rung ladder compared in core, the creator's floor at the door, the read-only canvas, `own` as a grantable row with every grant write owner-gated, a rung change that reaches an open socket as `standing` or `withdrawn`, the bar as a row that says no, the space as a desk row whose grants the door reads beside the canvas's, and the group as a subject whose membership is read at the door; journeys 1 to 7 play; journey 8 walked on isocan.io on 3 Sep after the deploy of 5475a35, and against a pre-phase-1 build for the old-client and old-home cases. Every phase closed. Starts from the 1 Sep roles research (a four-rung ladder on one canvas) and adds the space, the group, and the bar, because the journeys need a scope wider than one canvas and a subject wider than one address
 ---
 
 # Roles — the journeys

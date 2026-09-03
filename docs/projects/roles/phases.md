@@ -16,12 +16,9 @@ that moves in the same change as "where we are".
 
 ---
 
-**Where we are: roles phases 1 to 5 CLOSED 2 Sep 2026; phase 6 PART-DONE.**
-Journeys, design and phases written 2 Sep 2026; phases 1 to 5 built and
-walked the same day; the compatibility cases walked on dev.isocan.io and
-against a pre-phase-1 build. What is left of phase 6 is the prod deploy
-(`git tag -f prod green && git push -f origin prod`, Dimitri's call) and
-the walk on isocan.io with a canvas from before it.
+**Where we are: ALL SIX PHASES CLOSED 3 Sep 2026.** Journeys, design and
+phases written 2 Sep 2026; phases 1 to 5 built and walked the same day;
+phase 6 walked on isocan.io on 3 Sep after the deploy of `5475a35`.
 
 The order is dependency order and it is also scope order: phases 1 to 3 are
 one canvas and change no storage shape; phase 4 adds the space and the first
@@ -416,20 +413,20 @@ group's returns the name and size and no members.
 
 ## Phase 6 — Nothing changed for anyone else
 
-**Status: PART-DONE** 2 Sep 2026. The compatibility cases walked by the
-conductor: on dev.isocan.io at `e2fbab8` (the phase 4 build), a canvas
-from before the deploy whose link row carries no rung admitted Dimitri's
-badge with no capability on the wire, an editor; a `view` link gave a
-fresh door badge `view`; a canvas in no space printed no space line and
-dev's canvas list drew no heading. A CLI from before phase 1 (`75ebcdb`,
-installed from the release branch) run as a replica of dev joined a
-canvas whose link was `read`, printed the link as *on — anyone with the
-address can enter*, and was refused a write with `view-only` naming the
-owner. A new client against a pre-phase-1 home (the same build's daemon)
-had `capability: read` refused with `bad-grant` and `/api/spaces` refused
-as an unknown route. The suite, every multiuser and multi-identity test
-included, is green at `1e7325b`. **Left:** the prod deploy, and the walk
-on isocan.io with a canvas that existed before it, recording the sha.
+**Status: CLOSED** 3 Sep 2026. Journey 8 walked by the conductor on isocan.io
+after the deploy of `5475a35` (main at the time, roles phases 1 to 6
+included; deployed 08:32 UTC), with Dimitri's prod badge and a fresh door
+badge as the stranger: eighteen canvases from before the deploy; three
+whose link row carries no rung admitted the badge with no capability on
+the wire, editors; the one whose link was `view` before the deploy gave
+the stranger `view`; `GET /api/spaces` and `/api/groups` answered empty
+and the canvas list drew no heading. The day before, on dev.isocan.io at
+`e2fbab8` and against a pre-phase-1 build (`75ebcdb`) run from the release
+branch: a CLI from before phase 1 as a replica of dev joined a `read`-link
+canvas, printed the link as *on*, and was refused a write with `view-only`
+naming the owner; the new client against the old build's daemon had
+`read` refused with `bad-grant` and the spaces route refused as unknown.
+Every multiuser and multi-identity test passes at `b68035a`.
 
 **Closes journey 8.**
 

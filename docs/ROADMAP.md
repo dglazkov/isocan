@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**15 built · 30 still open** — of which 20 partly
+**16 built · 29 still open** — of which 19 partly
 built, 10 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -16,7 +16,7 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>20</sub>
+## Partly built <sub>19</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -33,7 +33,6 @@ and the done column should not be flattered by either.
 | **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand · see mindmap |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 | the same-machine half answered 1 Sep by standing-agents phase 1 — the enrolment key is the name, so one badge holds one actor across canvases; the cross-machine credential (shape A) is not built and stays a vouch · see standing-agents, personas |
 | **project** | [personas](docs/projects/personas/design.md) | 2026-08-29 | steps 1-5 built; 6 waits on a second editor · see personas |
-| **project** | [roles](docs/projects/roles/journey.md) | 2026-09-02 | journeys, design and six phases written 2 Sep 2026; phases 1 to 5 built and walked the same day — the four-rung ladder compared in core, the creator's floor at the door, the read-only canvas, `own` as a grantable row with every grant write owner-gated, a rung change that reaches an open socket as `standing` or `withdrawn`, the bar as a row that says no, the space as a desk row whose grants the door reads beside the canvas's, and the group as a subject whose membership is read at the door; journeys 1 to 7 play, and journey 8's compatibility cases were walked on dev.isocan.io and against a pre-phase-1 build. What is left is the prod deploy and the walk on isocan.io after it. Starts from the 1 Sep roles research (a four-rung ladder on one canvas) and adds the space, the group, and the bar, because the journeys need a scope wider than one canvas and a subject wider than one address · see multiuser, multi-identity |
 | **project** | [sprint](docs/projects/sprint/journey.md) | 2026-09-02 | phases 0–5 built 2 Sep, the day of the design — areas, the board and the brief, the walk, desks, the wall as the Vote sheet with placed dots, grids; Scenes 0–3 and 5 play, and the one-hour cut is rehearsed end to end over the wire in cli/test/one-hour.test.ts. Still owed: phase 6's run with people, and Scene 7's rival rooms as practice · see on-demand, personas, mindmap, atlas |
 | research | [Standing agents: watching many canvases, woken into one](docs/research/2026-08-30-standing-agents.md) | 2026-08-30 | the wake was the hinge and on-demand built it 30 Aug; the project that followed is standing-agents — phase 1 (one name, one machine, many canvases) built 1 Sep, the multi-canvas rc and `available` not · see standing-agents, on-demand, personas |
 | **project** | [standing-agents](docs/projects/standing-agents/design.md) | 2026-09-01 | phase 1 built 1 Sep — one name on one machine stands on many canvases (the enrolment key is the name; the summons carries its canvas). The rc that parks on every canvas its rows name, `available` in the web roster, and `isocan history` are not built. · see standing-agents, on-demand, agent-custody |
@@ -56,7 +55,7 @@ and the done column should not be flattered by either.
 | research | [Roles: a ladder, not a matrix](docs/research/2026-09-01-roles.md) | 2026-09-01 | four rungs on one ladder — Owner, Editor, Canvas Viewer, Presentation Viewer; today's `view` already IS the presentation rung, so the work is one new rung in the middle and one decision about Owner · see multiuser |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
 
-## Built <sub>15</sub>
+## Built <sub>16</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -68,6 +67,7 @@ and the done column should not be flattered by either.
 | **project** | [multiuser](docs/projects/multiuser/journey.md) | 2026-08-30 | every phase closed or retired as of 30 Aug — 11 closed by Scene 6 played at dev (prj_hRulnNyXph), 12/12.5/12.7/13 retired, agent-on-demand moved to the on-demand project · see multiuser, on-demand |
 | **project** | [on-demand](docs/projects/on-demand/journey.md) | 2026-08-30 | every phase closed 30 Aug 2026 — `isocan rc` parks against the home, vends agent sessions over ACP, and a summoned agent replies in a thread with presence; journey 10 (a week on one canvas) is lived rather than built. Residue is personas and the web tray's answerable relay (the latter built 31 Aug by agent-custody). AUTHORITATIVE for the wake since 30 Aug. · see on-demand, launch |
 | research | [One gesture, one undo — grouping in the oplog](docs/research/2026-08-28-op-grouping.md) | 2026-08-29 |  · see ui-refresh |
+| **project** | [roles](docs/projects/roles/journey.md) | 2026-09-02 | journeys, design and six phases written 2 Sep 2026; phases 1 to 5 built and walked the same day — the four-rung ladder compared in core, the creator's floor at the door, the read-only canvas, `own` as a grantable row with every grant write owner-gated, a rung change that reaches an open socket as `standing` or `withdrawn`, the bar as a row that says no, the space as a desk row whose grants the door reads beside the canvas's, and the group as a subject whose membership is read at the door; journeys 1 to 7 play; journey 8 walked on isocan.io on 3 Sep after the deploy of 5475a35, and against a pre-phase-1 build for the old-client and old-home cases. Every phase closed. Starts from the 1 Sep roles research (a four-rung ladder on one canvas) and adds the space, the group, and the bar, because the journeys need a scope wider than one canvas and a subject wider than one address · see multiuser, multi-identity |
 | research | [Teleport: moving a canvas to another home](docs/research/2026-09-01-teleport.md) | 2026-09-01 | the move built 1 Sep as `isocan teleport --to <home> [--dry-run]`; keeping two homes writable is deliberately NOT built, because exactly one place assigns order · see multiuser, on-demand |
 | research | [The ask: what the field built for the moment an agent needs a person](docs/research/2026-08-24-the-ask.md) | 2026-08-29 |  · see context |
 | research | [The post-it, and which of three things it is](docs/research/2026-09-01-post-it-notes.md) | 2026-09-01 | built 1 Sep — `properties.paper` on a text node, a swatch row on the Text tool and `isocan text --paper`; option A as recommended, no new op and no new kind · see ui-refresh |
