@@ -30,7 +30,9 @@ const suite = loadSuite() as { version: number; tasks: Task[] };
 
 describe("the golden suite", () => {
   it("is twenty versioned tasks with distinct ids", () => {
-    expect(suite.version).toBe(1);
+    // Bumped whenever a task changes, so a comparison across time says which
+    // suite it compared; `history` in tasks.json says why.
+    expect(suite.version).toBe(2);
     expect(suite.tasks).toHaveLength(20);
     expect(new Set(suite.tasks.map((t) => t.id)).size).toBe(20);
   });
