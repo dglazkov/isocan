@@ -15,6 +15,7 @@ import {
   useSprint,
 } from "../lib/sprint.ts";
 import { useActorNames } from "../lib/names.ts";
+import { useCanEdit } from "../lib/capability.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
@@ -56,6 +57,10 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   const rang = useRef<string | null>(null);
   const selectedIds = useUiStore((s) => s.selectedItemIds);
   const stamp = useUiStore((s) => s.stamp);
+  // A reader (roles phase 1) sees the clock and may go there; every action
+  // that writes — a note, a hand-in, a placed mark — is offered only to
+  // somebody the daemon would let write.
+  const canEdit = useCanEdit();
   const canvas = useCanvasStore((s) => s.canvas);
   // A desk: no sprint of its own, and a canvas record that names the sprint
   // it belongs to. Its chip reads THAT sprint — pulled, since the store
@@ -177,7 +182,7 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
           Go there
         </button>
       )}
-      {vote && state.phase.mark && remaining !== 0 && (
+      {canEdit && vote && state.phase.mark && remaining !== 0 && (
         /* Place a mark: a mode, not an act — while it is on, a press on a
            sketch on the wall puts the mark where the press landed. Escape
            or a second press here takes the mode off. */
@@ -194,7 +199,7 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
           {stamp === state.phase.mark ? `Placing ${state.phase.mark}` : `Place a ${state.phase.mark}`}
         </button>
       )}
-      {phaseTakesNotes(state) && (
+      {canEdit && phaseTakesNotes(state) && (
         <button
           className="sprint-action"
           title={`A ${phasePaper(state.phase.name)} note${state.area ? ` in ${state.area.title}` : ""}`}
@@ -203,7 +208,7 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
           New note
         </button>
       )}
-      {pending.length > 0 && (
+      {canEdit && pending.length > 0 && (
         <button
           className="sprint-action primary"
           title={`Hand ${pending.length === 1 ? "this" : pending.length} in for ${state.phase.label}${state.area ? ` — it lands on ${state.area.title}` : ""}`}

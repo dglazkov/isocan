@@ -1107,17 +1107,27 @@ in the web app drives:
 - `isocan share --link on` — grant it again. (That writes a NEW grant row; the
   old one stays as a record of when it was switched off. It does not bring
   anybody back: they are re-admitted the next time they ask.)
-- `isocan share --link view` — anyone with the address can **look, and change
-  nothing**: they land on the canvas's slides full screen, flip with arrows,
-  and every write is refused by the home (`view-only`). The people already in
-  on the link are moved to view rather than expelled; `--link on` moves them
-  back. This is how you share a presentation (see `isocan slides`) without
-  letting the audience rearrange the canvas.
+- `isocan share --link read` — anyone with the address can **see the canvas,
+  and change nothing**: the whole canvas, pan and zoom, the panels and the
+  history, with no toolbar and nothing that moves under their hand. Every
+  write is refused by the home (`view-only` — the code kept its old name).
+  They appear in the facepile and in `isocan who`, marked *reading*.
+- `isocan share --link view` — anyone with the address can **look at the
+  deck, and change nothing**: they land on the canvas's slides full screen,
+  flip with arrows, and every write is refused by the home (`view-only`).
+  This is how you share a presentation (see `isocan slides`) without letting
+  the audience rearrange the canvas. `--link edit` is `--link on` by its
+  ladder name. The people already in on the link are moved to the new rung
+  rather than expelled, in every direction.
 - `isocan share <email>` — **invite one person by name.** They get in by
   proving they read that address, whether or not the link is on. Nothing is
   emailed from here: the invitation is still the address, and the grant is
   what lets them through the door when they arrive. A home that has borrowed
   nowhere to verify an address refuses and says so; share the link instead.
+- `isocan share <email> --as read` — invite them at a **rung**: `own`, `edit`
+  (the default), `read` or `view`. A named invitation is never less than what
+  the link gives: a person's rung is the highest of every grant that admits
+  them. The table `isocan share` prints has a `rung` column.
 - `isocan share --revoke <email>` — un-invite them, which **expels them**
   unless another grant still covers them. It takes the address, not the grant
   id.
@@ -1127,10 +1137,12 @@ Three things to know before you use it:
 - **Sharing is not a canvas op.** It changes who may knock, not what is on the
   canvas, so it never appears in the oplog and `undo` will not take it back.
   Turning the link off is undone by turning it on, and by nothing else.
-- **There is no owner.** Anyone admitted to a canvas may share or un-share it,
-  you included. That is a reason to be careful, not a licence: change who may
-  enter a canvas when the person asked you to, and say on the thread that you
-  did.
+- **The creator owns the canvas.** Changing what the link admits to — and
+  inviting at any rung but `edit` — is theirs alone; the home refuses everyone
+  else with `not-owner` and names them. Inviting at `edit`, and turning the
+  link off, are open to anyone who can edit. That is a reason to be careful,
+  not a licence: change who may enter a canvas when the person asked you to,
+  and say on the thread that you did.
 - **Turning the link off now removes people.** It used to be harmless. It is
   not any more, so it is a gesture to ask about rather than to try.
 

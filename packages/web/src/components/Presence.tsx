@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Actor, ActivityEntry, PresenceSession, ActorMarks} from "@isocan/core";
-import { elapsedLabel, recentActivity, sameActor } from "@isocan/core";
+import { atLeast, capabilityWord, elapsedLabel, recentActivity, sameActor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
@@ -176,9 +176,7 @@ function FaceCard({
               : face.presence === "available"
                 ? "standing by"
                 : face.presence === "here"
-                  ? face.kind === "cli"
-                    ? "terminal"
-                    : "here"
+                  ? rungWord(face) ?? (face.kind === "cli" ? "terminal" : "here")
                   : "away"}
           </span>
         </span>
@@ -245,9 +243,19 @@ function goToActivity(entry: ActivityEntry): void {
   else if (entry.itemId) ui.select(entry.itemId);
 }
 
+/** *reading*, for a face whose connection holds less than `edit` — the word
+ * comes from core's one map, so the Share roster and `isocan who` say the
+ * same thing. Null for an editor: being here is the whole of it. */
+function rungWord(face: Face): string | null {
+  if (face.capability === null || atLeast(face.capability, "edit")) return null;
+  return capabilityWord.presence[face.capability];
+}
+
 function tooltip(face: Face): string {
   if (face.self) return `${face.label} (you) · click to rename or switch`;
   const parts = [face.label];
+  const rung = rungWord(face);
+  if (rung) parts.push(rung);
   // Which agent, when we know — "terminal" is true of every one of them and
   // therefore the least useful thing this card could say about a row of three.
   if (face.harness) parts.push(face.harness);

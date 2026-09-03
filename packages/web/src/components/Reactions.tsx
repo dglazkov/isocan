@@ -6,6 +6,7 @@ import { EmojiPicker } from "./EmojiPicker.tsx";
 import { rememberEmoji } from "../lib/recentEmoji.ts";
 import { useActorNames } from "../lib/names.ts";
 import { useSprint, useVotesHiddenOn } from "../lib/sprint.ts";
+import { useCanEdit } from "../lib/capability.ts";
 
 /**
  * Smiley with a plus in the corner — the standard add-a-reaction mark.
@@ -55,7 +56,7 @@ export function Reactions({
   canvasId,
   item,
   actor,
-  visible,
+  visible: selected,
 }: {
   canvasId: string;
   item: Item;
@@ -79,6 +80,10 @@ export function Reactions({
   visible: boolean;
 }) {
   const names = useActorNames();
+  const canEdit = useCanEdit();
+  // The `+` is offered to a SELECTED item held by somebody who may write: a
+  // reader sees the marks an item wears and adds none (roles phase 1).
+  const visible = selected && canEdit;
   const [picking, setPicking] = useState(false);
   const addButton = useRef<HTMLButtonElement>(null);
   const reactions = reactionsOf(item, actor.id);
@@ -100,6 +105,7 @@ export function Reactions({
   if (reactions.length === 0 && !visible) return null;
 
   function toggle(emoji: string) {
+    if (!canEdit) return; // a mark is an op, and the daemon would refuse it
     // The op says what should be TRUE rather than "flip it", so a double
     // click and a race both land on the same answer.
     const op = {

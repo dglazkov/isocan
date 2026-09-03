@@ -26,6 +26,7 @@ import type {
   Placement,
   PresenceSession,
   Canvas,
+  Capability,
   SweepReport,
   UpgradeVerdict,
   WatchedLogEntry,
@@ -45,7 +46,10 @@ import {
   INSTALL_SPEC,
   LINK,
   grantSubjectOf,
+  atLeast,
   capabilityOf,
+  capabilityWord,
+  isCapability,
   normalizeSubject,
   PASS_TTL_MS,
   actorNameIn,
@@ -2436,8 +2440,10 @@ async function browserPass(ctx: Ctx, canvasId: string): Promise<string | null> {
  * only hand out the link would be handing out more access than it was asked
  * to. Seeing what a badge has proved is `isocan badges`.
  *
- * **There is no owner**, deliberately, and this verb does not imply one: any
- * admitted badge may share or un-share, which is what the door actually does.
+ * **The rung is a ladder** (roles design): `--link` takes `edit`, `read` or
+ * `view`, and `--as` puts an invitation on a rung. What the link admits to is
+ * the creator's to change; inviting, and turning the link off, stay with
+ * anyone who can edit until roles phase 2 makes every grant write an owner's.
  *
  * On a replica every one of these forwards to the home, because the row that
  * decides who may enter lives there. Nothing here has to know that — but it is
@@ -2449,16 +2455,22 @@ program
   .description("Who may enter this canvas: the address to send, the \"anyone with the link\" grant, and who was invited by name")
   .argument("[who]", "an email to invite by name — they get in by proving that address")
   .option(
-    "--link <on|off|view>",
-    "turn the link grant on (anyone with the address can edit), off — OFF EXPELS the badges " +
-      "that came in on it — or view: anyone with the address can look, and change nothing (#88)",
+    "--link <on|off|edit|read|view>",
+    "what the link grant admits to: on (or edit) — anyone with the address can edit; read — " +
+      "anyone with the address sees the canvas and changes nothing; view — anyone with the " +
+      "address sees the deck and changes nothing; off — OFF EXPELS the badges that came in on it",
+  )
+  .option(
+    "--as <own|edit|read|view>",
+    "the rung an invitation admits to (default edit): own, edit, read (the canvas, no writes) " +
+      "or view (the deck)",
   )
   .option(
     "--revoke <who>",
     "un-invite somebody granted by name — EXPELS them unless another grant still covers them",
   )
   .action(
-    run(async (who: string | undefined, opts: { link?: string; revoke?: string }, cmd: Command) => {
+    run(async (who: string | undefined, opts: { link?: string; as?: string; revoke?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const canvas = await resolveCanvas(ctx);
       // The one origin, per canvas: people always enter through the home that
@@ -2490,18 +2502,22 @@ program
 
       if (opts.link !== undefined) {
         const want = opts.link.toLowerCase();
-        if (want !== "on" && want !== "off" && want !== "view") {
-          throw new Error(`--link wants on, off or view, got: ${opts.link}`);
+        // `on` is `edit` by its older name, kept so a script from before the
+        // ladder still works; `own` is not a link setting — a link that made
+        // owners of strangers would be a link that could revoke itself.
+        const capability: Capability | null =
+          want === "on" ? "edit" : isCapability(want) && want !== "own" ? want : null;
+        if (want !== "off" && capability === null) {
+          throw new Error(`--link wants on, off, edit, read or view, got: ${opts.link}`);
         }
         const live = (await ctx.client.grants(canvas.id)).grants.find((g) => g.subject === LINK);
-        // `on` and `view` are the same POST with a different capability, and
-        // the home does the replacing when the link is already on the other
-        // way — one gesture, whose sweep re-roots the people inside rather
-        // than expelling them. Asking for what already stands does nothing,
-        // for the toggle's reason: two people flipping it at once must not
-        // turn one of them into a failure.
-        if (want !== "off") {
-          const capability = want === "view" ? ("view" as const) : ("edit" as const);
+        // Every rung is the same POST with a different capability, and the
+        // home does the replacing when the link is already on at another —
+        // one gesture, whose sweep re-roots the people inside rather than
+        // expelling them. Asking for what already stands does nothing, for
+        // the toggle's reason: two people flipping it at once must not turn
+        // one of them into a failure.
+        if (capability !== null) {
           if (!live || capabilityOf(live) !== capability) {
             sweepAlso((await ctx.client.createGrant(canvas.id, LINK, capability)).swept);
           }
@@ -2547,16 +2563,26 @@ program
         console.log(`revoked ${subject} on ${canvas.title}`);
       }
 
+      if (opts.as !== undefined && who === undefined) {
+        throw new Error("--as says what an invitation admits to; name somebody to invite");
+      }
       if (who !== undefined) {
+        // The rung is checked for SHAPE here, because a typo is the caller's
+        // to fix; whether the home knows the word is the home's answer
+        // (`bad-grant` from a home older than the rung).
+        const rung = opts.as?.toLowerCase();
+        if (rung !== undefined && !isCapability(rung)) {
+          throw new Error(`--as wants own, edit, read or view, got: ${opts.as}`);
+        }
         // Straight to the home: it owns whether it can verify this subject, and
         // a client-side "not yet" would be a second copy of a policy that
         // changes with a home's configuration. A home that has borrowed an
         // attester grants it; one that has not refuses with `no-attester` and
         // says what to do instead.
-        const { grant } = await ctx.client.createGrant(canvas.id, grantSubjectOf(who));
+        const { grant } = await ctx.client.createGrant(canvas.id, grantSubjectOf(who), rung);
         console.log(
-          `granted ${grant.subject} on ${canvas.title} (${grant.id}) — they get in by ` +
-            "proving that address; nothing was emailed from here",
+          `granted ${grant.subject} on ${canvas.title} as ${capabilityWord.dialog[capabilityOf(grant)]} ` +
+            `(${grant.id}) — they get in by proving that address; nothing was emailed from here`,
         );
       }
 
@@ -2580,9 +2606,7 @@ program
         // only in the error.
         owner,
         link: link
-          ? capabilityOf(link) === "view"
-            ? `view-only — anyone with the address can look, and change nothing (granted ${link.at.slice(0, 10)})`
-            : `on — anyone with the address can enter (granted ${link.at.slice(0, 10)})`
+          ? linkLine(capabilityOf(link), link.at)
           : // Phase 7's line here read "people already on this canvas keep
             // their access", and phase 9 made that false. Worse, with the
             // sweep's own count printed beside it the two lines contradicted
@@ -2595,11 +2619,34 @@ program
       const others = grants.filter((g) => g.subject !== LINK);
       if (others.length > 0) {
         printTable(
-          others.map((g) => ({ subject: g.subject, granted: g.at.slice(0, 10), by: g.grantedBy })),
+          others.map((g) => ({
+            subject: g.subject,
+            // The rung, in the dialog's words, so the table and the Share
+            // dialog name one thing one way.
+            rung: capabilityWord.dialog[capabilityOf(g)],
+            granted: g.at.slice(0, 10),
+            by: g.grantedBy,
+          })),
         );
       }
     }),
   );
+
+/** The link's status line, per rung. `own` on a link is not offered by this
+ * verb, but a home may hold one, and the line has to say something true. */
+function linkLine(capability: Capability, at: string): string {
+  const since = `(granted ${at.slice(0, 10)})`;
+  switch (capability) {
+    case "view":
+      return `view-only — anyone with the address can look at the deck, and change nothing ${since}`;
+    case "read":
+      return `read-only — anyone with the address can see the canvas, and change nothing ${since}`;
+    case "own":
+      return `on, as owner — anyone with the address can enter and share it on ${since}`;
+    case "edit":
+      return `on — anyone with the address can enter ${since}`;
+  }
+}
 
 /**
  * **`isocan pass` — the escalation credential, minted from a terminal.**
@@ -7852,8 +7899,12 @@ program
           // Derived, never asserted: blocked (an unanswered /ask), working,
           // parked (wait's lifecycle status, readable now that statusSource
           // crosses the wire), quiet, here. The workbench renders the same
-          // states from the same function.
-          state: sessionState(s, canvas, Date.now()),
+          // states from the same function. A session below edit says its
+          // rung instead — *reading* — from the same map the facepile uses.
+          state:
+            s.capability !== undefined && !atLeast(s.capability, "edit")
+              ? capabilityWord.presence[s.capability]
+              : sessionState(s, canvas, Date.now()),
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
           selection: String(s.selection.length || "—"),
           activity: describeActivity(s.activity),

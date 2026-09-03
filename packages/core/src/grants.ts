@@ -44,24 +44,6 @@ import type { Attestation, SweepReport } from "./badge.ts";
 export type GrantSubject = "link" | `email:${string}` | `repo:${string}`;
 
 /**
- * What a grant lets its holder DO once the door says yes — the roles question
- * `identity-desk.md` left open ("that waits for a scene that forces it"),
- * answered by the scene that forced it: a presentation (#87) whose viewers
- * must not walk in and start moving things (#88).
- *
- * Two words and not a matrix. `edit` is everything admission has always
- * meant; `view` is admission to READ — the snapshot, the oplog, the blobs,
- * the socket's fan-out — and nothing that writes. The refusal is server-side
- * at the op chokepoint, not a hidden toolbar: a capability that only a client
- * enforced would be what the scrubber's comment calls a habit rather than a
- * rule.
- *
- * **Absent means `edit`, everywhere.** Every grant row and every admission
- * written before this field existed meant full access, so the absent field
- * must go on meaning exactly that — and the wire, the desk and Firestore all
- * store the field only when it narrows.
- */
-/**
  * **Who owns a canvas: the actor who made it.**
  *
  * Not a new field. `project.createdBy` has been on every canvas since the
@@ -86,13 +68,122 @@ export function ownsCanvas(project: { createdBy: { id: string } }, actorId: stri
   return ownerOf(project) === actorId;
 }
 
-export type Capability = "edit" | "view";
+/**
+ * What a grant lets its holder DO once the door says yes — the roles question
+ * `identity-desk.md` left open ("that waits for a scene that forces it"),
+ * answered first by the scene that forced it (a presentation, #87, whose
+ * viewers must not walk in and start moving things, #88) and then widened by
+ * the roles project (`docs/projects/roles/design.md`) into a ladder.
+ *
+ * **A ladder, not a matrix.** Four rungs in a total order, and every
+ * question about them is one comparison — `atLeast(held, needed)`. From the
+ * bottom:
+ *
+ * - `view` — the deck. Admission to READ, rendered as the presentation: the
+ *   current slide full screen, arrows to flip. Stays out of presence.
+ * - `read` — the canvas with the writes hidden. The same admission to read,
+ *   rendered as the canvas itself; appears in presence, marked as reading.
+ *   The daemon enforces nothing between `view` and `read`: both may read the
+ *   oplog and neither may write. The difference is what the home tells the
+ *   client to render, and whether the connection appears in presence.
+ * - `edit` — everything admission has always meant.
+ * - `own` — what the creator holds; grantable, so a canvas can change hands
+ *   by adding an owner and leaving. What it gates beyond `edit` is built by
+ *   roles phase 2; phase 1 stores and carries it so it round-trips.
+ *
+ * The new rung is spelled `read` and not `view` so that nothing already
+ * written changes meaning: every `view` row in the wild still opens the deck.
+ *
+ * The refusal is server-side at the op chokepoint, not a hidden toolbar: a
+ * capability that only a client enforced would be what the scrubber's
+ * comment calls a habit rather than a rule.
+ *
+ * **Absent means `edit`, everywhere.** Every grant row and every admission
+ * written before this field existed meant full access, so the absent field
+ * must go on meaning exactly that. The wire rule is **written whenever it is
+ * not `edit`** (`narrowed`), which is the same rule for every row in the
+ * wild, because `view` is the only value that was ever written before the
+ * ladder.
+ */
+export type Capability = "view" | "read" | "edit" | "own";
+
+/** The ladder, lowest first. `atLeast` and `highest` compare positions in
+ * this list and nowhere else. */
+export const RUNGS: readonly Capability[] = ["view", "read", "edit", "own"];
+
+/** A word this home does not know is below every rung it does: an old client
+ * meeting a new rung renders it as an editor (the design's compatibility
+ * rule), and a NEW client meeting a word it cannot place must not be
+ * promoted by it. */
+function rungIndex(capability: Capability): number {
+  return RUNGS.indexOf(capability);
+}
+
+/** Is what is held at least what is needed — the one comparison the ladder
+ * exists to make. */
+export function atLeast(held: Capability, needed: Capability): boolean {
+  return rungIndex(held) >= rungIndex(needed);
+}
+
+/** The higher of two rungs: a person's rung on a canvas is the highest of
+ * every row that admits them. */
+export function highest(a: Capability, b: Capability): Capability {
+  return rungIndex(a) >= rungIndex(b) ? a : b;
+}
+
+/** Is this word a rung at all? The route's shape check, and the desks'
+ * read-back guard: a stored word from a newer home is not silently read as
+ * edit, and not silently read as anything else either. */
+export function isCapability(word: unknown): word is Capability {
+  return typeof word === "string" && (RUNGS as readonly string[]).includes(word);
+}
+
+/**
+ * **Whether the field is written** — the one place that decides, replacing
+ * the eleven literal `"view"` tests the roles design counted (both desks'
+ * `admit` and `reroot`, the cloud desk's `toGrant`, the grants route, the
+ * hello, the API client, the web client, the home link's forwarder).
+ *
+ * True whenever the rung is not `edit`. Any rung a call site has not met is
+ * then stored rather than dropped: the cloud desk's own comment records that
+ * a field-picking rebuild once escalated `view` to `edit` on the hosted home,
+ * and a literal test would do the same to `read` and `own`.
+ */
+export function narrowed(capability: Capability | undefined): capability is Capability {
+  return capability !== undefined && capability !== "edit";
+}
 
 /** The one reading of an absent field: a grant from before capabilities — or
  * one written without narrowing — admits to everything, as it always did. */
 export function capabilityOf(grant: { capability?: Capability }): Capability {
   return grant.capability ?? "edit";
 }
+
+/**
+ * The two vocabularies a rung is spoken in, from one map so the dialog, the
+ * CLI table, the facepile and the roster cannot drift apart.
+ *
+ * `dialog` is the Share dialog's picker and the CLI's rung column: the
+ * research's four names. `presence` is the word beside a face — what the
+ * facepile's hover card and the Share roster say about somebody who is here,
+ * the way they say *standing by* for an available agent. Only the rungs
+ * below `edit` are ever spoken there (an editor is simply *here*), but the
+ * map covers all four so a caller can index it without a case.
+ */
+export const capabilityWord: Record<"dialog" | "presence", Record<Capability, string>> = {
+  dialog: {
+    own: "Owner",
+    edit: "Editor",
+    read: "Canvas Viewer",
+    view: "Presentation Viewer",
+  },
+  presence: {
+    own: "editing",
+    edit: "editing",
+    read: "reading",
+    view: "viewing",
+  },
+};
 
 /** The one subject that needs no attester: presenting the address IS the
  * proof, which is why it is the subject a canvas is born with. */
@@ -137,8 +228,8 @@ export interface Grant {
    */
   revokedAt?: string;
   revokedBy?: string;
-  /** What this row admits its holder to do. Written only when it NARROWS
-   * (`view`); absent is `edit` — see {@link Capability}. */
+  /** What this row admits its holder to do. Written whenever it is not
+   * `edit` (see `narrowed`); absent is `edit` — see {@link Capability}. */
   capability?: Capability;
 }
 
@@ -363,8 +454,8 @@ export interface GrantResponse {
 export const NOT_ADMITTED = "not-admitted";
 
 /**
- * The door said yes and the ledger says LOOK, DON'T TOUCH — a view admission
- * meeting a write.
+ * The door said yes and the ledger says LOOK, DON'T TOUCH — an admission
+ * below `edit` (`view` or `read`) meeting a write.
  *
  * Its own code, for `not-admitted`'s reason turned one notch: this caller is
  * both badged AND admitted, so neither "go to the door" nor "ask for the
@@ -372,6 +463,10 @@ export const NOT_ADMITTED = "not-admitted";
  * editing, and a client can only say that sentence if the refusal is
  * distinguishable from the other two. 403, like `not-admitted`: the request
  * was understood and will not be honoured, and retrying cannot fix it.
+ *
+ * The code stayed `view-only` when the `read` rung arrived: old clients
+ * branch on the code and keep working. The message widened — *you may read
+ * this canvas but not change it* — see `ViewOnlyError` in the server.
  */
 export const VIEW_ONLY = "view-only";
 

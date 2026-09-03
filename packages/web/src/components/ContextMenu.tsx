@@ -33,6 +33,10 @@ export interface MenuAction {
    *  does not change under the pointer between one open and the next. */
   disabled?: boolean;
   danger?: boolean;
+  /** This entry changes the canvas. On the read-only canvas (roles phase 1)
+   *  it is not offered at all — not dimmed, because a reader is not "not
+   *  right now", they are never — see `offered` in menuentries. */
+  writes?: boolean;
 }
 
 export type MenuEntry = MenuAction | { separator: string };

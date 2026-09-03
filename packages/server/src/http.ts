@@ -69,8 +69,12 @@ import {
   PARK_ADOPTED_CODE,
   parseCommandFile,
   AMBIGUOUS_HOME,
+  atLeast,
+  isCapability,
+  narrowed,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
+  RUNGS,
   SERVING_ROUTE,
   staleClientRefusal,
   STALE_CLIENT_STATUS,
@@ -618,18 +622,20 @@ export function registerRoutes(
         const canvasId = decodeSegment(scoped);
         await admit(req, canvasId);
         /**
-         * The capability check, method-keyed and in the SAME hook (#88): a
-         * view admission reads everything and changes nothing, and "changes"
-         * on an HTTP surface is any verb but GET/HEAD. One line here covers
-         * undo, redo, blobs, gc, grants, passes, sessions, bind, write — and
-         * whatever canvas-scoped route gets added next month, which is this
-         * hook's whole argument about coverage by default. `/api/ops` carries
-         * its canvas in the body and takes the same test in its handler.
+         * The capability check, method-keyed and in the SAME hook (#88): an
+         * admission below `edit` (`view`, `read`) reads everything and
+         * changes nothing, and "changes" on an HTTP surface is any verb but
+         * GET/HEAD. One line here covers undo, redo, blobs, gc, grants,
+         * passes, sessions, bind, write — and whatever canvas-scoped route
+         * gets added next month, which is this hook's whole argument about
+         * coverage by default. `/api/ops` carries its canvas in the body and
+         * takes the same test in its handler. The ladder's one comparison,
+         * so `own` counts as editing and any rung below it does not.
          */
         if (
           req.method !== "GET" &&
           req.method !== "HEAD" &&
-          capabilityIn(req.badge, canvasId) === "view"
+          !atLeast(capabilityIn(req.badge, canvasId) ?? "edit", "edit")
         ) {
           throw new ViewOnlyError(canvasId);
         }
@@ -769,11 +775,16 @@ export function registerRoutes(
     // and this is the belt on `/api/ops`, whose canvas is in its body.
     if (!req.badge) return;
     if (req.badge.admissions.some((a) => a.canvasId === canvasId)) {
-      // Already in — but a VIEW admission re-asks the door, so proving an
-      // email after entering by a view link lets the invitation that names
-      // this person take effect (see `heldCapability`). Editors return on the
-      // short-circuit as they always have.
-      await heldCapability(desk, canvasId, req.badge);
+      // Already in — but an admission below `edit` re-asks the door, so
+      // proving an email after entering by a view link lets the invitation
+      // that names this person take effect (see `heldCapability`). Editors
+      // return on the short-circuit as they always have; the snapshot read
+      // for the creator's floor is paid only by the re-ask.
+      const held = capabilityIn(req.badge, canvasId);
+      if (held !== null && !atLeast(held, "edit")) {
+        const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
+        await heldCapability(desk, canvasId, req.badge, snapshot?.project.createdBy.id ?? null);
+      }
       return;
     }
 
@@ -808,18 +819,18 @@ export function registerRoutes(
     // making a canvas is editing it.
     let capability: Capability = "edit";
     if (!provenance) {
-      const grant = await admittingGrant(desk, canvasId, req.badge);
-      if (grant) {
-        provenance = { root: "grant", grantId: grant.id };
-        capability = capabilityOf(grant);
-      }
-    }
-
-    if (!provenance) {
       // No canvas here at all — let the route answer 404 for itself. On a
       // replica this is also the ordinary shape of "not replicated yet".
       if (!(await store.canvasExists(canvasId))) return;
-      throw new NotAdmittedError(canvasId);
+      // The snapshot is read for one field: the creator, so the door can
+      // apply the floor (roles design) when no row admits. Once per badge per
+      // canvas, which is what an admission costs.
+      const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
+      if (!snapshot) return;
+      const answer = await admittingGrant(desk, canvasId, req.badge, snapshot.project.createdBy.id);
+      if (!answer) throw new NotAdmittedError(canvasId);
+      provenance = answer.provenance;
+      capability = answer.capability;
     }
 
     await desk.admit(req.badge.badgeId, canvasId, provenance, capability);
@@ -829,7 +840,7 @@ export function registerRoutes(
         canvasId,
         provenance,
         at: new Date().toISOString(),
-        ...(capability === "view" ? { capability } : {}),
+        ...(narrowed(capability) ? { capability } : {}),
       },
     ];
   };
@@ -934,7 +945,7 @@ export function registerRoutes(
       // The capability check, at the one mutating route the hook cannot cover
       // (#88). BEFORE the submit for the door's own reason: a refusal that
       // arrives after the op has landed is not a refusal at all.
-      if (capabilityIn(req.badge!, body.canvasId) === "view") {
+      if (!atLeast(capabilityIn(req.badge!, body.canvasId) ?? "edit", "edit")) {
         throw new ViewOnlyError(body.canvasId);
       }
     }
@@ -1150,7 +1161,9 @@ export function registerRoutes(
     for (const canvas of await engine.listCanvases()) {
       if (hereOnly && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
       if (admitted.has(canvas.id)) visible.push(canvas);
-      else if (!narrow && (await admittingGrant(desk, canvas.id, badge))) visible.push(canvas);
+      else if (!narrow && (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id))) {
+        visible.push(canvas);
+      }
     }
     return visible;
   });
@@ -1350,16 +1363,21 @@ export function registerRoutes(
     const body = (req.body ?? {}) as Partial<CreateGrantRequest>;
     const refusal = grantSubjectRefusal(body.subject);
     if (refusal) return reply.status(400).send({ error: refusal, code: "bad-grant" });
-    // Shape-checked like the subject beside it: two words, and anything else
-    // is a caller sending something other than a capability (#88).
-    if (body.capability !== undefined && body.capability !== "edit" && body.capability !== "view") {
+    // Shape-checked like the subject beside it: the ladder's four words, and
+    // anything else is a caller sending something other than a rung (#88,
+    // widened by the roles ladder). A home from before a rung refuses it
+    // here, which is what lets a newer client tell "this home cannot" from
+    // "this row was not written".
+    if (body.capability !== undefined && !isCapability(body.capability)) {
       return reply.status(400).send({
-        error: `not a capability: ${String(body.capability)} (a grant admits to \`edit\` or \`view\`)`,
+        error:
+          `not a capability: ${String(body.capability)} (a grant admits to ` +
+          `${RUNGS.map((rung) => `\`${rung}\``).join(", ")})`,
         code: "bad-grant",
       });
     }
     const subject = normalizeSubject(body.subject!);
-    const capability: Capability = body.capability === "view" ? "view" : "edit";
+    const capability: Capability = body.capability ?? "edit";
     // A REPLICA forwards without asking its own opinion, and the order of
     // these two lines is that decision. Shape is universal and refused above;
     // "can anything here verify that" is a fact about the home that OWNS the
@@ -1389,7 +1407,7 @@ export function registerRoutes(
      * Checked here rather than in the client, and after the replica forward
      * above, so the home that owns the canvas is the one that answers.
      */
-    const changingCapability = live ? capabilityOf(live) !== capability : capability === "view";
+    const changingCapability = live ? capabilityOf(live) !== capability : capability !== "edit";
     if (changingCapability && !(await ownsThisCanvas(desk, snapshot.project, req.badge!))) {
       return reply.status(403).send({
         error:
@@ -1404,7 +1422,7 @@ export function registerRoutes(
       subject,
       grantedBy: req.badge!.badgeId,
       at: new Date().toISOString(),
-      ...(capability === "view" ? { capability } : {}),
+      ...(narrowed(capability) ? { capability } : {}),
     };
     /**
      * Same subject, different capability: a REPLACEMENT, in one gesture (#88).
@@ -1420,7 +1438,7 @@ export function registerRoutes(
     if (live) {
       await desk.revokeGrant(live.id, new Date().toISOString(), req.badge!.badgeId);
       await desk.putGrant(grant);
-      const swept = await sweepCanvas(desk, id);
+      const swept = await sweepCanvas(desk, id, snapshot.project.createdBy.id);
       return { grant, swept } satisfies GrantResponse;
     }
     await desk.putGrant(grant);
@@ -1457,7 +1475,7 @@ export function registerRoutes(
     const { id, grantId } = req.params as { id: string; grantId: string };
     const home = options.homes?.for(id) ?? null;
     if (home) return home.revokeGrant(id, grantId);
-    await engine.getSnapshot(id);
+    const snapshot = await engine.getSnapshot(id);
     // Read through this canvas's own rows, so a grant id belonging to another
     // canvas cannot be revoked through a canvas the caller happens to be in.
     const mine = (await desk.grantsFor(id)).find((g) => g.id === grantId);
@@ -1465,7 +1483,9 @@ export function registerRoutes(
       return reply.status(404).send({ error: `no grant ${grantId} on ${id}`, code: "unknown-grant" });
     }
     const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
-    const swept = await sweepCanvas(desk, id);
+    // The creator rides along for the floor: turning the link off must not
+    // expel the creator's own browser (roles journey 1, step 2).
+    const swept = await sweepCanvas(desk, id, snapshot.project.createdBy.id);
     return { grant: revoked ?? mine, swept } satisfies GrantResponse;
   });
 
@@ -1540,7 +1560,12 @@ export function registerRoutes(
         code: NOT_YOUR_BADGE,
       });
     }
-    const outcome = await killAndSweep(desk, badgeId, req.badge!.badgeId);
+    const outcome = await killAndSweep(desk, badgeId, req.badge!.badgeId, undefined, (canvasId) =>
+      engine.getSnapshot(canvasId).then(
+        (snapshot) => snapshot.project.createdBy.id,
+        () => null,
+      ),
+    );
     if (!outcome) {
       return reply
         .status(404)
@@ -1884,11 +1909,12 @@ export function registerRoutes(
     // for this route and every other one shaped like it.
     const snapshot = await engine.getSnapshot(id);
     // The one fact about the READER that rides on the read (#88): a client
-    // whose admission can only view learns it here, with the canvas, instead
-    // of discovering it as a refusal per gesture. Absent means edit, so a
-    // pre-capability client parsing this response sees nothing new.
-    if (req.badge && capabilityIn(req.badge, id) === "view") {
-      return { ...snapshot, capability: "view" as const };
+    // whose admission is not edit learns its rung here, with the canvas,
+    // instead of discovering it as a refusal per gesture. Absent means edit,
+    // so a pre-capability client parsing this response sees nothing new.
+    const held = req.badge ? capabilityIn(req.badge, id) : null;
+    if (held !== null && narrowed(held)) {
+      return { ...snapshot, capability: held };
     }
     return snapshot;
   });
@@ -1940,26 +1966,41 @@ export function registerRoutes(
    * long poll must be woken by ANY canvas's op, and a canvas born while it
    * waits is streamed from its first entry.
    *
-   * **Still home-wide, and it is the sibling of the leak `GET /api/projects`
-   * just closed.** "Canvases it has never opened" is the feature — a parked
-   * agent must hear a canvas it was summoned to — and at a multi-tenant home
-   * that same sentence reads as "hears everybody's". Narrowing it is the same
-   * per-canvas door test as the listing above; what stops it happening here
-   * is that a parked `isocan wait` is exactly the caller whose badge has no
-   * admissions yet, so the narrowing has to be designed WITH the wake-up
-   * (phase 11's thin agent and phase 12's dispatch), not bolted on the poll.
-   * Recorded here so the next person meets a decision rather than a surprise.
+   * **Home-wide, and no longer a leak** (roles phase 1). "Canvases it has
+   * never opened" is still the feature — a parked agent must hear a canvas
+   * it was summoned to — and at a multi-tenant home that sentence used to
+   * read as "hears everybody's": this route checked no admission at all, so
+   * any badge on the home could read any canvas's oplog. It now runs the
+   * same per-canvas door test as the listing above, per canvas in its list:
+   * a canvas the badge is admitted to, or that a live row would admit it to,
+   * is reported; any other is simply not in the answer. A summoned agent on
+   * a canvas whose link is on still hears it, because the link is the row
+   * that admits it. Nothing is written — hearing about a room is not
+   * entering it, the same rule the listing keeps.
    */
   app.post("/api/oplog/watch", async (req) => {
     const body = (req.body ?? {}) as import("@isocan/core").WatchLogRequest;
     const { cursors } = body;
     const only = body.only ? new Set(body.only) : null;
+    const badge = req.badge!;
+    const admitted = new Set(badge.admissions.map((a) => a.canvasId));
+    const judged = new Map<string, boolean>();
+    const mayHear = async (canvas: Canvas): Promise<boolean> => {
+      const known = judged.get(canvas.id);
+      if (known !== undefined) return known;
+      const allowed =
+        admitted.has(canvas.id) ||
+        Boolean(await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id));
+      judged.set(canvas.id, allowed);
+      return allowed;
+    };
 
     const collect = async (): Promise<import("@isocan/core").WatchLogResponse> => {
       const entries: import("@isocan/core").WatchedLogEntry[] = [];
       const next: Record<string, number> = {};
       for (const canvas of await engine.listCanvases()) {
         if (only && !only.has(canvas.id)) continue;
+        if (!(await mayHear(canvas))) continue;
         const since = cursors?.[canvas.id] ?? 0;
         // Seeding (no cursors at all) means "from now on" — tips, no entries.
         const log = cursors ? await engine.getLog(canvas.id, since) : [];

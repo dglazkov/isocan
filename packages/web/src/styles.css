@@ -527,6 +527,8 @@ img { height: auto; }
 .share-head { font-size: 13px; font-weight: 600; }
 .share-address { display: flex; gap: 6px; }
 .share-address .text-input { flex: 1; min-width: 0; font-size: 12px; }
+/* The invite's rung picker: a word wide, never the field's width. */
+.share-address .share-rung { flex: none; width: auto; }
 /* The toggle reads as one control: the switch, the label, and the sentence
    under it are all inside the same button, so there is no way to press the
    words and have nothing happen. */
@@ -550,7 +552,10 @@ img { height: auto; }
 .share-link-text { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
 /* The link's capability, indented under the toggle it qualifies: it is a
    property of the link, not a fourth sharing control. */
-.share-link-mode { display: flex; gap: 6px; padding-left: 8px; }
+/* Three rungs in a 340px popover: the row wraps rather than running past
+   the panel's edge, and each radio keeps its whole label on one line. */
+.share-link-mode { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 8px; }
+.share-link-mode .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; font-size: 12px; padding: 5px 10px; }
 /* Who made the canvas — the answer to "why can I not change that", and on a
    shared canvas simply useful. Quiet: it is a fact, not a control. */
 .share-owner { margin: 0; font-size: 11.5px; color: var(--ink-muted); }
@@ -953,6 +958,10 @@ img { height: auto; }
   .item.entered { animation: none; }
 }
 .item.dragging { opacity: 0.92; cursor: grabbing; z-index: 2; }
+/* The read-only canvas (roles phase 1): nothing here is a handle, so nothing
+   here wears a grab cursor. The daemon refuses the write; this stops the
+   pointer promising one. */
+.canvas-page.read-only .item, .canvas-page.read-only .item .item-titlebar { cursor: default; }
 /* A mark sits over what it marks. */
 .item.annotation { z-index: 3; }
 /* Drawings wear no chrome: the ink IS the item. The titlebar floats above the

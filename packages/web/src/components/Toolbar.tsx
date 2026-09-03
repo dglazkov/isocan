@@ -13,6 +13,7 @@ import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
+import { useCanEdit } from "../lib/capability.ts";
 
 /**
  * The top bar: where you are (canvas name, whether you're live, who's here) and
@@ -41,6 +42,7 @@ export function Toolbar({
   const identityOpen = useUiStore((s) => s.identityOpen);
   const shareOpen = useUiStore((s) => s.shareOpen);
   const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
+  const canEdit = useCanEdit();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
@@ -101,6 +103,7 @@ export function Toolbar({
                   historyOpen,
                   unreadNews,
                   minimapOpen,
+                  canEdit,
                   toWorkbench: () => navigate(workbenchPath(canvas.id)),
                 }),
               });

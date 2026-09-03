@@ -26,6 +26,7 @@ import type {
 } from "@isocan/core";
 import {
   ATTEST_ROUTE,
+  narrowed,
   BADGES_ROUTE,
   badgeRoute,
   encodeFilename,
@@ -1564,9 +1565,10 @@ export class HomeLink implements HomeConnection {
   ): Promise<GrantResponse> {
     return this.api<GrantResponse>("POST", grantsRoute(canvasId), {
       subject,
-      // Forwarded only when it narrows, so an older home never sees a field
-      // it would not know how to read.
-      ...(capability === "view" ? { capability } : {}),
+      // Forwarded whenever it is not edit (`narrowed`), so an older home never
+      // sees the field for the one value it has always meant by omission —
+      // and refuses, with `bad-grant`, a rung it does not know.
+      ...(narrowed(capability) ? { capability } : {}),
     });
   }
 

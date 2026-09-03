@@ -471,7 +471,7 @@ isocan identity [--session] [--name X] [--home|--new|--as <id>]|whoami
 isocan serve [--force]|status|stop|restart|upgrade · open
 isocan home [<url>|--clear]        # where each canvas here lives; set where
                                    # NEW ones are born (nothing already here moves)
-isocan share [<email>] [--link on|off] [--revoke <email>]
+isocan share [<email>] [--as own|edit|read|view] [--link on|off|edit|read|view] [--revoke <email>]
                                    # the address, and who may enter this canvas
 isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
