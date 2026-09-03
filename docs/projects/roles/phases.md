@@ -16,9 +16,9 @@ that moves in the same change as "where we are".
 
 ---
 
-**Where we are: roles phase 1 CLOSED 2 Sep 2026; roles phase 2 is next.**
-Journeys, design and phases written 2 Sep 2026; phase 1 built and walked
-the same day.
+**Where we are: roles phases 1 and 2 CLOSED 2 Sep 2026; roles phase 3 is
+next.** Journeys, design and phases written 2 Sep 2026; phases 1 and 2
+built and walked the same day.
 
 The order is dependency order and it is also scope order: phases 1 to 3 are
 one canvas and change no storage shape; phase 4 adds the space and the first
@@ -138,7 +138,18 @@ a test walks the hidden-writes list.
 
 ## Phase 2 — Owners, and a change that reaches the room
 
-**Status: not started.**
+**Status: CLOSED** 2 Sep 2026. Journey 2 walked by the conductor on the
+phase 1 scratch home, the CLI as the creator and a Chrome tab as the
+invitee: the invitee proved the address from the door itself and entered
+at `read`; the creator raised the row to `edit` from the CLI and the open
+tab grew its toolbar with no reload; the invitee's terminal badge, now an
+editor, was refused an invitation with `not-owner` naming the creator; the
+creator raised the row to `own` and the tab's Share dialog went live
+without a reload, invited a third address, and showed the creator's row
+with no control; the creator revoked the row and the tab rendered *your
+access to this canvas was withdrawn* while the terminal badge's oplog
+watch was refused with reason `withdrawn`. Suite 281 files, 3104 tests;
+typecheck clean.
 
 **Closes journeys 2 and 7.** Journey 7 is closed for the canvas; its space
 half is re-walked in phase 4.
@@ -179,6 +190,23 @@ dialog shows live controls and can invite a third address. That person
 cannot remove the creator. `server/test/sweep.test.ts` grows the rung-only
 re-root case; a socket test asserts the `standing` message reaches exactly
 the re-rooted badge's connections and no other.
+
+**Findings:**
+
+- **2026-09-02 — The door offers the proof to a nameless arrival.** The
+  welcome dialog has *Prove your address* and sends the link itself. Phase
+  1's open finding narrows to the named person's refusal page.
+- **2026-09-02 — A creator's agent holds `own` through a pass**, because a
+  `created` root reads as `own` and a pass adopts the minter's rung. An
+  owner's agent can invite. Agent-custody's question, not this project's.
+- **2026-09-02 — Open: a replica's parked `isocan wait` is not told
+  `withdrawn`.** The expulsion lands on the daemon's home link, not on the
+  local watch route.
+- **2026-09-02 — The watch route's `withdrawn` memory is in-process.** A
+  second home instance would forget it; one instance today. Phase 6 note.
+- **2026-09-02 — Keep the CLI's scratch-home entry in `~/.isocan/identity.json`
+  between phases.** Removing it makes the next phase's CLI a stranger,
+  admitted by whatever the link says.
 
 ## Phase 3 — Withdrawal, and the bar
 

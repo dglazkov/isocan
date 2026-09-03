@@ -45,6 +45,8 @@ import {
   IDENTITY_COLORS,
   INSTALL_SPEC,
   LINK,
+  NOT_ADMITTED,
+  WITHDRAWN,
   grantSubjectOf,
   atLeast,
   capabilityOf,
@@ -2441,9 +2443,11 @@ async function browserPass(ctx: Ctx, canvasId: string): Promise<string | null> {
  * to. Seeing what a badge has proved is `isocan badges`.
  *
  * **The rung is a ladder** (roles design): `--link` takes `edit`, `read` or
- * `view`, and `--as` puts an invitation on a rung. What the link admits to is
- * the creator's to change; inviting, and turning the link off, stay with
- * anyone who can edit until roles phase 2 makes every grant write an owner's.
+ * `view`, and `--as` puts an invitation on a rung, `own` included. Every
+ * change to who may enter — inviting, revoking, the link — is an owner's
+ * (roles phase 2): the creator, or anybody granted `own`. The home refuses
+ * everyone else with `not-owner` and names the owner. The table's first line
+ * is the creator's, **owner, made this**, because that standing is not a row.
  *
  * On a replica every one of these forwards to the home, because the row that
  * decides who may enter lives there. Nothing here has to know that — but it is
@@ -2519,7 +2523,7 @@ program
         // one of them into a failure.
         if (capability !== null) {
           if (!live || capabilityOf(live) !== capability) {
-            sweepAlso((await ctx.client.createGrant(canvas.id, LINK, capability)).swept);
+            sweepAlso((await ctx.client.createGrant(canvas.id, LINK, capability, ctx.actor.id)).swept);
           }
         }
         // Off with no live row is not an error either — the gesture is "the
@@ -2531,7 +2535,7 @@ program
           // BELOW the status lines, not above them, or the command opens with
           // a number nobody has been given a subject for yet. Absent from a
           // home that predates the sweep, which reads as nothing swept.
-          sweepAlso((await ctx.client.revokeGrant(canvas.id, live.id)).swept);
+          sweepAlso((await ctx.client.revokeGrant(canvas.id, live.id, ctx.actor.id)).swept);
         }
       }
 
@@ -2559,7 +2563,7 @@ program
             `nothing on ${canvas.title} is granted to ${subject} — \`isocan share\` lists what is`,
           );
         }
-        sweepAlso((await ctx.client.revokeGrant(canvas.id, live.id)).swept);
+        sweepAlso((await ctx.client.revokeGrant(canvas.id, live.id, ctx.actor.id)).swept);
         console.log(`revoked ${subject} on ${canvas.title}`);
       }
 
@@ -2579,7 +2583,7 @@ program
         // changes with a home's configuration. A home that has borrowed an
         // attester grants it; one that has not refuses with `no-attester` and
         // says what to do instead.
-        const { grant } = await ctx.client.createGrant(canvas.id, grantSubjectOf(who), rung);
+        const { grant } = await ctx.client.createGrant(canvas.id, grantSubjectOf(who), rung, ctx.actor.id);
         console.log(
           `granted ${grant.subject} on ${canvas.title} as ${capabilityWord.dialog[capabilityOf(grant)]} ` +
             `(${grant.id}) — they get in by proving that address; nothing was emailed from here`,
@@ -2617,18 +2621,19 @@ program
       // Below the status, where a number has a subject.
       if (swept) console.log(sweptLine(swept));
       const others = grants.filter((g) => g.subject !== LINK);
-      if (others.length > 0) {
-        printTable(
-          others.map((g) => ({
-            subject: g.subject,
-            // The rung, in the dialog's words, so the table and the Share
-            // dialog name one thing one way.
-            rung: capabilityWord.dialog[capabilityOf(g)],
-            granted: g.at.slice(0, 10),
-            by: g.grantedBy,
-          })),
-        );
-      }
+      printTable([
+        // The creator, first: their standing is the floor and not a row, so
+        // the table says so where the Share dialog's first row does.
+        { subject: owner, rung: "owner, made this", granted: canvas.createdAt.slice(0, 10), by: "" },
+        ...others.map((g) => ({
+          subject: g.subject,
+          // The rung, in the dialog's words, so the table and the Share
+          // dialog name one thing one way.
+          rung: capabilityWord.dialog[capabilityOf(g)],
+          granted: g.at.slice(0, 10),
+          by: g.grantedBy,
+        })),
+      ]);
     }),
   );
 
@@ -8367,7 +8372,28 @@ command or reply. No \`session start\` needed after a wake.`,
             // entirely and must not be retried into a loop — an `ApiError`
             // means somebody was there to say no. Only a connection that
             // never got an answer is a blip.
-            if (err instanceof ApiError) throw err;
+            if (err instanceof ApiError) {
+              /**
+               * **Withdrawn** (roles journey 3 step 2): an owner removed this
+               * badge from the canvas while it was parked, and the watch
+               * said so rather than falling silent. Exit 4, its own code
+               * beside 2 (silence) and 3 (displaced), because the answer to
+               * "what now?" is different again: do not park here again
+               * unless an owner lets you back in. Presence is retracted in
+               * the `finally` below, as on every other way out.
+               */
+              if (err.code === NOT_ADMITTED && err.reason === WITHDRAWN) {
+                if (upgraded) console.error(upgraded);
+                console.error(
+                  `wait: ${WITHDRAWN} — ${err.message}. This park is over; do not park on ` +
+                    "this canvas again unless an owner lets you back in.",
+                );
+                if (ctx.json) printJson({ reason: WITHDRAWN, canvasId: p.id });
+                process.exitCode = 4;
+                return;
+              }
+              throw err;
+            }
             /**
              * **A park that outlives its daemon brings it back.**
              *

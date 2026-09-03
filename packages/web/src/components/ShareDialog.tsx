@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, Capability, Grant, SweepReport } from "@isocan/core";
-import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark} from "@isocan/core";
+import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, collectCanvasActors, grantSubjectOf, LINK, roster, faceMark, RUNGS } from "@isocan/core";
 import type { PresenceSession, RowState } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
@@ -55,6 +55,15 @@ import { useActorMarks } from "../lib/marks.ts";
  * this dialog with its controls gone and the address kept: who may be here
  * is worth knowing whoever you are, and the address is the one thing a
  * reader can hand on.
+ *
+ * **Every control is an owner's** (roles phase 2). The daemon refuses
+ * anybody below `own` with `not-owner`; what this dialog owes is not to
+ * offer a control that will refuse — disabled, with a note naming the
+ * owner, rather than hidden, because what the link allows and who was
+ * invited are worth knowing whoever you are. `own` is a rung on a row, so an
+ * invited person can be raised to it here and then this dialog shows them
+ * the same controls; the creator's row reads **Owner, made this** and has no
+ * control, because the creator's standing is not a row.
  */
 export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => void }) {
   const record = useCanvasStore((s) => s.project);
@@ -94,6 +103,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   /** The rung an invitation goes out at — Editor until somebody says otherwise. */
   const [inviteRung, setInviteRung] = useState<Capability>("edit");
   const canEdit = useCanEdit();
+  const capability = useCanvasStore((s) => s.capability);
 
   const canvasId = record?.id ?? null;
 
@@ -112,7 +122,12 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
     return () => {
       cancelled = true;
     };
-  }, [canvasId]);
+    // `capability` too: a `standing` message means a row on this canvas
+    // changed — the one naming this tab's person — and the rows are read on
+    // open only. Re-read them, so the person's own row shows the new rung
+    // without closing and reopening the dialog (conductor's review, roles
+    // phase 2). The offer is cached by `signin.ts`, so it costs nothing.
+  }, [canvasId, capability]);
 
   if (!record) return null;
 
@@ -125,13 +140,19 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const linkOn = link !== null;
   const linkRung: Capability = link ? capabilityOf(link) : "edit";
   const linkReads = !atLeast(linkRung, "edit");
-  // The canvas is the owner's, and the owner is whoever made it — a fact it
-  // has carried since it was made, so nothing had to be stored for this.
-  const owned = record !== null && ownsCanvas(record, actor.id);
+  // Whoever made the canvas owns it — a fact it has carried since it was
+  // made, so nothing had to be stored for this — and so does anybody whose
+  // admission holds `own` (roles phase 2): the hello said so, and a
+  // `standing` message moves it without a reload.
+  const made = record !== null && ownsCanvas(record, actor.id);
+  const owned = made || atLeast(capability, "own");
+  const ownerName = record ? actorNameIn(names, record.createdBy) : "";
   const ownerNote = record
-    ? `only ${actorNameIn(names, record.createdBy)}, who made this canvas, can change what the link allows`
+    ? `only ${ownerName}, who owns this canvas, can change who may enter it or what the link allows`
     : "";
   const invited = (grants ?? []).filter((g) => g.subject !== LINK);
+  /** The title on a control somebody below `own` cannot press. */
+  const ownerTitle = owned ? undefined : ownerNote;
 
   async function toggleLink(): Promise<void> {
     if (!canvasId || busy) return;
@@ -143,13 +164,13 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
       // rather than patched, because the row that comes back is the desk's,
       // not one this dialog imagined.
       if (link) {
-        const answer = await revokeGrant(canvasId, link.id);
+        const answer = await revokeGrant(canvasId, link.id, actor.id);
         // A home from before the sweep answers without a count; zeroes are
         // the honest reading of that, and of a revocation that expelled
         // nobody.
         setSwept({ what: "link", report: answer.swept ?? { expelled: 0, rerooted: 0 } });
       } else {
-        await createGrant(canvasId, LINK);
+        await createGrant(canvasId, LINK, undefined, actor.id);
         setSwept(null);
       }
       setGrants((await listGrants(canvasId)).grants);
@@ -191,7 +212,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
     setBusy(true);
     setError(null);
     try {
-      const answer = await createGrant(canvasId, LINK, capability);
+      const answer = await createGrant(canvasId, LINK, capability, actor.id);
       if (answer.swept) setSwept({ what: "link", report: answer.swept });
       setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
@@ -210,7 +231,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
     setBusy(true);
     setError(null);
     try {
-      await createGrant(canvasId, grantSubjectOf(who), inviteRung);
+      await createGrant(canvasId, grantSubjectOf(who), inviteRung, actor.id);
       setWho("");
       setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
@@ -239,7 +260,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
     setBusy(true);
     setError(null);
     try {
-      const answer = await revokeGrant(canvasId, grant.id);
+      const answer = await revokeGrant(canvasId, grant.id, actor.id);
       setSwept({ what: grant.subject, report: answer.swept ?? { expelled: 0, rerooted: 0 } });
       setGrants((current) => (current ?? []).filter((row) => row.id !== grant.id));
       setGrants((await listGrants(canvasId)).grants);
@@ -250,6 +271,27 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
             "will not have you any more"
           : (err as Error).message,
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Change what an invited person may do — one POST, and the home replaces
+   * the row (roles journey 2: "every step is one change to one row"). The
+   * sweep that rides back is what reaches the person if they are on the
+   * canvas: their tab is told `standing` and redraws with no reload.
+   */
+  async function regrant(grant: Grant, rung: Capability): Promise<void> {
+    if (!canvasId || busy || capabilityOf(grant) === rung) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const answer = await createGrant(canvasId, grant.subject, rung, actor.id);
+      if (answer.swept) setSwept({ what: grant.subject, report: answer.swept });
+      setGrants((await listGrants(canvasId)).grants);
+    } catch (err) {
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -295,7 +337,8 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
         className={`share-link-row${linkOn ? " on" : ""}`}
         role="switch"
         aria-checked={linkOn}
-        disabled={busy || grants === null}
+        disabled={busy || grants === null || !owned}
+        title={ownerTitle}
         onClick={() => void toggleLink()}
       >
         <span className={`share-switch${linkOn ? " on" : ""}`} aria-hidden="true">
@@ -333,8 +376,8 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
           for. Three rungs rather than a second switch: "on but read-only" and
           "off" must not look like neighbouring positions of one control.
 
-          **Only the owner may move it**, and the daemon is what enforces that
-          (`ownsThisCanvas`). Disabled rather than hidden for everybody else:
+          **Only an owner may move it**, and the daemon is what enforces that
+          (`heldRung`). Disabled rather than hidden for everybody else:
           what the link currently admits to is worth knowing whoever you are,
           and a control that vanishes leaves somebody wondering where the
           setting went. The title says whose it is. */}
@@ -362,7 +405,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
           whose room you are in. */}
       {record && (
         <p className="share-owner">
-          Made by {owned ? "you" : actorNameIn(names, record.createdBy)}
+          Made by {made ? "you" : ownerName}
         </p>
       )}
 
@@ -385,18 +428,23 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
               aria-label="Invite somebody by email"
               placeholder="someone@example.com"
               value={who}
+              disabled={!owned}
+              title={ownerTitle}
               onChange={(e) => setWho(e.target.value)}
             />
-            {/* The rung, in the dialog's words. Editor first and selected,
-                because that is what an invitation has always meant here;
-                Owner joins the list in roles phase 2. */}
+            {/* The rung, in the dialog's words. Editor selected, because
+                that is what an invitation has always meant here; Owner is in
+                the list (roles phase 2), and a person raised to it gets these
+                controls. */}
             <select
               className="text-input share-rung"
               aria-label="What they may do"
               value={inviteRung}
+              disabled={!owned}
+              title={ownerTitle}
               onChange={(e) => setInviteRung(e.target.value as Capability)}
             >
-              {LINK_RUNGS.map((rung) => (
+              {INVITE_RUNGS.map((rung) => (
                 <option key={rung} value={rung}>
                   {capabilityWord.dialog[rung]}
                 </option>
@@ -406,7 +454,12 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
                 for the same reason as the reply button: disabled is an
                 opacity, and grey-on-grey cannot say which of the two states
                 it is in. */}
-            <button className="btn primary" type="submit" disabled={busy || !who.trim()}>
+            <button
+              className="btn primary"
+              type="submit"
+              disabled={busy || !who.trim() || !owned}
+              title={ownerTitle}
+            >
               Invite
             </button>
           </form>
@@ -438,22 +491,59 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
         </div>
       )}
 
-      {invited.length > 0 && (
+      {grants !== null && (
         <>
           <div className="identity-menu-head">Invited by name</div>
           <div className="share-roster">
+            {/* The creator's row, first and with no control: their standing
+                is the floor, not a row, so there is nothing here to change
+                or remove (roles journey 7). */}
+            <div className="surface-row">
+              <span className="surface-what">
+                <b>{ownerName}</b>
+                <span className="share-roster-kind">Owner, made this</span>
+              </span>
+            </div>
             {invited.map((grant) => (
-              <div key={grant.id} className="surface-row">
+              // `share-invited`: the address and its line take the full
+              // width, and the controls wrap to a second line, right-aligned
+              // — a picker beside a 340px popover's address squeezed the
+              // address to a word a line (conductor's review, roles phase 2).
+              <div key={grant.id} className="surface-row share-invited">
                 <span className="surface-what">
                   <b>{grant.subject.replace(/^email:/, "")}</b>
                   <span className="share-roster-kind">
-                    {capabilityWord.dialog[capabilityOf(grant)]} · invited {grant.at.slice(0, 10)} · gets in by proving it
+                    {canEdit ? "" : `${capabilityWord.dialog[capabilityOf(grant)]} · `}
+                    invited {grant.at.slice(0, 10)} · gets in by proving it
                   </span>
                 </span>
                 {canEdit && (
-                  <button className="btn" disabled={busy} onClick={() => void uninvite(grant)}>
-                    Un-invite
-                  </button>
+                  <span className="share-row-controls">
+                    {/* The row's rung as a picker: changing it is one POST
+                        that replaces the row (roles journey 2). */}
+                    <select
+                      className="text-input share-rung"
+                      aria-label={`What ${grant.subject.replace(/^email:/, "")} may do`}
+                      value={capabilityOf(grant)}
+                      disabled={busy || !owned}
+                      title={ownerTitle}
+                      onChange={(e) => void regrant(grant, e.target.value as Capability)}
+                    >
+                      {INVITE_RUNGS.map((rung) => (
+                        <option key={rung} value={rung}>
+                          {capabilityWord.dialog[rung]}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn"
+                      disabled={busy || !owned}
+                      title={ownerTitle}
+                      onClick={() => void uninvite(grant)}
+                    >
+                      Un-invite
+                    </button>
+                  </span>
                 )}
               </div>
             ))}
@@ -487,9 +577,13 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   );
 }
 
-/** The rungs a link, or an invitation, can be set to here. `own` is phase
- * 2's, and a link at `own` would be a link that could revoke itself. */
+/** The rungs the link can be set to. Not `own`: a link that made owners of
+ * strangers would be a link that could revoke itself. */
 const LINK_RUNGS: readonly Capability[] = ["edit", "read", "view"];
+
+/** The rungs an invitation can be on — the whole ladder, highest first,
+ * from core's one list (roles phase 2: **Owner** in both pickers). */
+const INVITE_RUNGS: readonly Capability[] = [...RUNGS].reverse();
 
 /** What each rung means, as a title on its radio. */
 const RUNG_HINT: Record<Capability, string> = {

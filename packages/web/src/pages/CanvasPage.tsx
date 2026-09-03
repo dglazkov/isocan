@@ -795,6 +795,12 @@ function CanvasSurface({
       note: "This canvas will not have you.",
       hint: "Its link has been switched off. Ask whoever shared it to turn it back on, or to let you in.",
     },
+    // Roles journey 3 step 2: the person was inside, and a sweep put them
+    // out. Nothing they did is undone; their name stays on what they made.
+    withdrawn: {
+      note: "Your access to this canvas was withdrawn.",
+      hint: "An owner removed you. Nothing you made is undone. Ask them if that was a mistake.",
+    },
     absent: {
       note: "There is no canvas at this address.",
       hint: "Check the link you were sent — the Share dialog's copy button always produces a working one.",

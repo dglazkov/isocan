@@ -534,13 +534,15 @@ describe("fetching one canvas from the home by name", () => {
   it("passes the home's refusal back, so a person is told rather than left watching an empty replica", async () => {
     await birthAtA();
     // The link off, and B was never let in by anything else: the door has
-    // nothing to admit it on.
+    // nothing to admit it on. Turned off from A, whose badge speaks as Priya,
+    // who made the canvas: turning the link off is an owner's (roles phase
+    // 2), and A's forwarded revoke names her to the home.
     const { grants } = (await get<GrantsResponse>(H, grantsRoute(CANVAS)));
-    const off = await fetch(`${H.base}${grantRoute(CANVAS, grants[0]!.id)}`, {
+    const off = await fetch(`${A.base}${grantRoute(CANVAS, grants[0]!.id)}`, {
       method: "DELETE",
-      headers: H.badge.headers,
+      headers: A.badge.headers,
     });
-    expect(off.status).toBe(200);
+    expect(off.status, await off.clone().text()).toBe(200);
 
     const asked = await post(B, HOME_JOIN_ROUTE, { canvasId: CANVAS });
     // The home's own status and code, unchanged by the hop — a replica is a

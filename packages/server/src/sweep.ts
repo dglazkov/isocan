@@ -1,6 +1,6 @@
-import type { SweepReport } from "@isocan/core";
-import { admittingGrant } from "./grants.ts";
-import type { BadgeRecord, Desk } from "./desk.ts";
+import type { Capability, SweepReport } from "@isocan/core";
+import { admittingGrant, rungOfAdmission } from "./grants.ts";
+import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
 
 /**
  * **The provenance sweep: revocation's grip** (identity desk, mechanism 4).
@@ -95,33 +95,132 @@ import type { BadgeRecord, Desk } from "./desk.ts";
  * a daemon that has stopped answering anybody.
  */
 
-/** What a round decided about one badge. `keep` covers both "its root stands"
- * and "its minter survived", which are the same fact about whether it is still
- * here — the counts distinguish what was WRITTEN, and nothing is written for a
- * badge whose chain still resolves. */
-type Decision = "keep" | "rerooted" | "expelled";
+/**
+ * **What a sweep did to one badge, told to whoever is listening** (roles
+ * design, "Reaching an open socket"). A re-rooted badge is told its new
+ * rung; an expelled one is put out. Reported per badge rather than as the
+ * count alone, because the count answers the person who pressed the control
+ * and this answers the people it reached.
+ */
+export type SweepOutcome =
+  | { outcome: "rerooted"; capability: Capability }
+  | { outcome: "expelled" };
+
+export type SweepListener = (canvasId: string, badgeId: string, outcome: SweepOutcome) => void;
+
+/**
+ * **Where the sweep's outcomes go, and what it remembers of them.**
+ *
+ * One hub per daemon, handed to the routes that sweep and to `ws.ts`, which
+ * subscribes once — the way it subscribes to `engine.onEvent`. Two jobs:
+ *
+ * - **Fan-out.** Every `(canvasId, badgeId, outcome)` a sweep produces
+ *   reaches every listener. A listener that throws does not stop the sweep,
+ *   which has a desk to finish writing.
+ * - **Memory of expulsion**, for `POST /api/oplog/watch`. A badge that was
+ *   swept out has no admission any more, and the door alone cannot tell
+ *   "never let in" from "put out" — but the difference is the whole message
+ *   to an agent parked in `isocan wait`. So an expulsion is remembered here,
+ *   by badge and canvas, until that badge is admitted to the canvas again.
+ *   In-process, like the rooms: a home runs as one instance, and a local
+ *   daemon is one process. Bounded, so a long-lived home does not grow a
+ *   list of every badge it ever put out.
+ */
+export class SweepHub {
+  private readonly listeners = new Set<SweepListener>();
+  /** `${badgeId} ${canvasId}` → when. Insertion-ordered, which is what
+   * makes the bound a FIFO. */
+  private readonly withdrawn = new Map<string, string>();
+  private static readonly REMEMBER = 10_000;
+
+  on(listener: SweepListener): () => void {
+    this.listeners.add(listener);
+    return () => void this.listeners.delete(listener);
+  }
+
+  /** The sweep's own callback — bound, so it can be handed over as is. */
+  readonly report: SweepListener = (canvasId, badgeId, outcome) => {
+    const key = `${badgeId} ${canvasId}`;
+    if (outcome.outcome === "expelled") {
+      this.withdrawn.delete(key);
+      this.withdrawn.set(key, new Date().toISOString());
+      while (this.withdrawn.size > SweepHub.REMEMBER) {
+        const oldest = this.withdrawn.keys().next().value;
+        if (oldest === undefined) break;
+        this.withdrawn.delete(oldest);
+      }
+    } else {
+      this.withdrawn.delete(key);
+    }
+    for (const listener of this.listeners) {
+      try {
+        listener(canvasId, badgeId, outcome);
+      } catch {
+        // A listener's failure is the listener's; the desk is already
+        // written and the next badge still has to be told.
+      }
+    }
+  };
+
+  /** Was this badge swept out of this canvas, and not admitted since? */
+  withdrew(badgeId: string, canvasId: string): boolean {
+    return this.withdrawn.has(`${badgeId} ${canvasId}`);
+  }
+
+  /** The badge is back in: the expulsion is no longer the last word. */
+  forget(badgeId: string, canvasId: string): void {
+    this.withdrawn.delete(`${badgeId} ${canvasId}`);
+  }
+}
+
+/**
+ * What a round decided about one badge, and the rung it now holds.
+ *
+ * `keep` covers "its root stands at the rung it held" and "its minter
+ * survived at the rung it held", which are the same fact about whether
+ * anything had to be written. The rung rides along because a pass-derived
+ * admission adopts its MINTER's rung (roles design, "Agents hold what their
+ * person holds"), and the minter's rung is whatever this round decided for
+ * it. Null for an expelled badge, which holds nothing.
+ */
+interface Decision {
+  fate: "keep" | "rerooted" | "expelled";
+  capability: Capability | null;
+}
 
 /**
  * Re-run the door on one canvas and act on the answers.
  *
- * Called after a grant is revoked, and after a badge is killed (once per
- * canvas it had been let into). It takes no grant id on purpose: the sweep is
- * not "undo this row", it is "this canvas's admissions have been disturbed,
- * ask the door about the ones that no longer stand". A signature that named
- * the revoked grant would invite an implementation that only looked for it,
- * which is the version that misses chains and cycles.
- */
-/**
+ * Called after a grant is revoked, after one is written over another, and
+ * after a badge is killed (once per canvas it had been let into). It takes
+ * no grant id on purpose: the sweep is not "undo this row", it is "this
+ * canvas's admissions have been disturbed, ask the door about every one of
+ * them". A signature that named the revoked grant would invite an
+ * implementation that only looked for it, which is the version that misses
+ * chains and cycles.
+ *
+ * **Since the roles ladder it recomputes RUNGS, not only roots.** A badge
+ * whose row still stands is asked what the door would give it now, and
+ * re-rooted when that differs — which is how raising Jordan's invitation
+ * from Canvas Viewer to Editor reaches the tab she has open (journey 2 step
+ * 1), and how a pass-enrolled agent is raised and lowered with the person who
+ * enrolled it. The cost is one door test per admitted badge per sweep, which
+ * the sweep already paid for every badge whose root fell.
+ *
  * `creator` is the canvas's `createdBy.id`, handed in by the routes that hold
  * the snapshot so the door test can apply the creator's floor (roles design):
  * a creator whose browser entered by the link is re-rooted at `created` when
  * the link goes, not expelled. Null when the caller cannot say, in which case
  * the floor is simply not asked — rows only.
+ *
+ * `report` hears every outcome, per badge — `SweepHub.report`, in the daemon;
+ * absent in a test that only wants the count.
  */
 export async function sweepCanvas(
   desk: Desk,
   canvasId: string,
   creator: string | null = null,
+  report: SweepListener = () => {},
 ): Promise<SweepReport> {
   let expelled = 0;
   let rerooted = 0;
@@ -146,6 +245,61 @@ export async function sweepCanvas(
       );
     }
 
+    const expel = async (badgeId: string): Promise<Decision> => {
+      await desk.expel(badgeId, canvasId);
+      expelled += 1;
+      changed = true;
+      report(canvasId, badgeId, { outcome: "expelled" });
+      return { fate: "expelled", capability: null };
+    };
+
+    const reroot = async (
+      badgeId: string,
+      provenance: Provenance,
+      capability: Capability,
+    ): Promise<Decision> => {
+      await desk.reroot(badgeId, canvasId, provenance, capability);
+      rerooted += 1;
+      changed = true;
+      report(canvasId, badgeId, { outcome: "rerooted", capability });
+      return { fate: "rerooted", capability };
+    };
+
+    /**
+     * **The door test, before the expulsion and not after it.** This is the
+     * line the design warns about: a badge whose attestations satisfy a grant
+     * that is still live belongs here for a NEW reason, and saying so is what
+     * keeps "turn off the link" from meaning "everybody out". It is a call to
+     * the same `admittingGrant` the door itself runs, rather than a
+     * re-implementation that happens to agree today.
+     *
+     * The new root's capability rides with the new provenance: a re-rooted
+     * badge is here for the surviving grant's reason and may do what THAT
+     * grant admits to — which is how replacing the edit link with a view link
+     * (#88) demotes the people inside instead of expelling them. The door may
+     * also answer with the creator's floor, in which case the badge is
+     * re-rooted at `created` — the root this sweep never disturbs again.
+     */
+    const door = async (badgeId: string): Promise<Decision> => {
+      const answer = await admittingGrant(desk, canvasId, byId.get(badgeId)!, creator);
+      if (!answer) return expel(badgeId);
+      return reroot(badgeId, answer.provenance, answer.capability);
+    };
+
+    /**
+     * A root that STANDS is still asked what rung the door would give now,
+     * and re-rooted only when that differs from what the admission holds. A
+     * row that stands but no longer admits — nothing today; a bar, in roles
+     * phase 3 — expels, because the door is the door.
+     */
+    const standing = async (badgeId: string, admission: Admission): Promise<Decision> => {
+      const held = rungOfAdmission(admission);
+      const answer = await admittingGrant(desk, canvasId, byId.get(badgeId)!, creator);
+      if (!answer) return expel(badgeId);
+      if (answer.capability === held) return { fate: "keep", capability: held };
+      return reroot(badgeId, answer.provenance, answer.capability);
+    };
+
     /**
      * What becomes of one badge, computed once and remembered.
      *
@@ -163,12 +317,13 @@ export async function sweepCanvas(
         const admission = badge.admissions.find((a) => a.canvasId === canvasId)!;
         const root = admission.provenance;
 
-        // Roots that answer for themselves.
-        if (root.root === "created") return "keep";
+        // Roots that answer for themselves. `created` is the creator's floor:
+        // `own`, whatever the field says (see `rungOfAdmission`).
+        if (root.root === "created") return { fate: "keep", capability: "own" };
         // Historical, from before grants existed. It names no row, so nothing
         // can revoke it and the sweep leaves it alone — see this file's header
         // and `Provenance` in `desk.ts`.
-        if (root.root === "link") return "keep";
+        if (root.root === "link") return { fate: "keep", capability: rungOfAdmission(admission) };
         if (root.root === "grant") {
           const grant = grants.find((row) => row.id === root.grantId);
           // A grant id pointing at nothing is why revocation is a TOMBSTONE
@@ -177,7 +332,7 @@ export async function sweepCanvas(
           // the root does not stand, so the door gets asked again rather than
           // the badge being trusted on the strength of a row nobody can
           // produce.
-          if (grant && grant.revokedAt === undefined) return "keep";
+          if (grant && grant.revokedAt === undefined) return standing(badge.badgeId, admission);
           return door(badge.badgeId);
         }
 
@@ -187,38 +342,18 @@ export async function sweepCanvas(
         const minter = byId.get(root.badgeId);
         if (!minter || walking.has(root.badgeId)) return door(badge.badgeId);
         const upstream = await decide(root.badgeId, new Set([...walking, badgeId]));
-        return upstream === "expelled" ? door(badge.badgeId) : "keep";
+        if (upstream.fate === "expelled") return door(badge.badgeId);
+        // The minter survived: this badge holds what the minter now holds,
+        // under the same root. Written only when it differs, so a chain whose
+        // rungs already agree is not rewritten link by link.
+        const held = rungOfAdmission(admission);
+        if (upstream.capability === null || upstream.capability === held) {
+          return { fate: "keep", capability: held };
+        }
+        return reroot(badge.badgeId, root, upstream.capability);
       })();
       decided.set(badgeId, work);
       return work;
-    };
-
-    /**
-     * **The door test, before the expulsion and not after it.** This is the
-     * line the design warns about: a badge whose attestations satisfy a grant
-     * that is still live belongs here for a NEW reason, and saying so is what
-     * keeps "turn off the link" from meaning "everybody out". It is a call to
-     * the same `admittingGrant` the door itself runs, rather than a
-     * re-implementation that happens to agree today.
-     */
-    const door = async (badgeId: string): Promise<Decision> => {
-      const answer = await admittingGrant(desk, canvasId, byId.get(badgeId)!, creator);
-      if (!answer) {
-        await desk.expel(badgeId, canvasId);
-        expelled += 1;
-        changed = true;
-        return "expelled";
-      }
-      // The new root's capability, with the new provenance: a re-rooted badge
-      // is here for the surviving grant's reason and may do what THAT grant
-      // admits to — which is how replacing the edit link with a view link
-      // (#88) demotes the people inside instead of expelling them. The door
-      // may also answer with the creator's floor, in which case the badge is
-      // re-rooted at `created` — the root this sweep never disturbs again.
-      await desk.reroot(badgeId, canvasId, answer.provenance, answer.capability);
-      rerooted += 1;
-      changed = true;
-      return "rerooted";
     };
 
     for (const badge of badges) {
@@ -262,15 +397,22 @@ export async function killAndSweep(
   /** The creator of each canvas swept, for the floor — a kill sweeps rooms
    * whose snapshots the route does not hold, so it asks per canvas. */
   creatorOf: (canvasId: string) => Promise<string | null> = async () => null,
+  /** Hears every outcome, per badge — see `sweepCanvas`. */
+  report: SweepListener = () => {},
 ): Promise<{ killed: BadgeRecord; swept: SweepReport } | null> {
   const killed = await desk.killBadge(badgeId, now, by);
   if (!killed) return null;
   let expelled = 0;
   let rerooted = 0;
   for (const admission of killed.admissions) {
-    const report = await sweepCanvas(desk, admission.canvasId, await creatorOf(admission.canvasId));
-    expelled += report.expelled;
-    rerooted += report.rerooted;
+    const swept = await sweepCanvas(
+      desk,
+      admission.canvasId,
+      await creatorOf(admission.canvasId),
+      report,
+    );
+    expelled += swept.expelled;
+    rerooted += swept.rerooted;
   }
   return { killed, swept: { expelled, rerooted } };
 }

@@ -317,7 +317,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   credential". Beside the toggle is **one field for one person**: invite an
   email address, and whoever proves that address is let in whether or not the
   link is on. `isocan share <email>` and `isocan share --revoke <email>` are the
-  same two gestures from a terminal.
+  same two gestures from a terminal. Every one of these is an **owner's**:
+  whoever made the canvas, or anybody invited as **Owner** — an invited
+  person's rung is a picker on their row, and raising it reaches the tab they
+  have open without a reload. Everyone else sees the controls disabled with
+  the owner's name, and the daemon refuses them with `403 not-owner`.
 - **Proving an address, which is not a login**: isocan has no accounts and does
   not want any. What a person can do is **borrow an attester they already
   have** — click your own face, pick **"Prove your address…"**, and a link

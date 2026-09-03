@@ -11,6 +11,7 @@ import {
   type PassRefusal,
 } from "@isocan/core";
 import { sha256, secretMatches } from "./badges.ts";
+import { rungOfAdmission } from "./grants.ts";
 import type { BadgeRecord, Desk, PassRecord } from "./desk.ts";
 
 /**
@@ -182,7 +183,25 @@ export async function redeemPass(
    * "Jordan's daemon kept working after her grant was revoked" is precisely
    * the failure the sweep exists to prevent.
    */
-  await desk.admit(redeemer.badgeId, held.canvasId, { root: "pass", badgeId: held.mintedBy });
+  /**
+   * **At the minter's rung** (roles design, "Agents hold what their person
+   * holds"). A pass-derived admission endows what its minter had, and until
+   * the ladder it was written with none — which read as edit whatever the
+   * minter held. The minter's admission is read now, at redemption, rather
+   * than a rung stored on the pass row at mint: the row's shape is unchanged
+   * and the answer is the minter's standing at the moment the badge arrives.
+   * A minter that is gone or no longer on the canvas endows edit, and the
+   * next sweep of the canvas resolves the chain the way it resolves any root
+   * that does not stand.
+   */
+  const minter = await desk.badge(held.mintedBy);
+  const minted = minter?.admissions.find((a) => a.canvasId === held.canvasId);
+  await desk.admit(
+    redeemer.badgeId,
+    held.canvasId,
+    { root: "pass", badgeId: held.mintedBy },
+    minted ? rungOfAdmission(minted) : undefined,
+  );
   return outcome.pass;
 }
 

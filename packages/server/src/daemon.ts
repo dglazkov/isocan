@@ -7,6 +7,7 @@ import { registerRoutes } from "./http.ts";
 import { ParkCursors } from "./park.ts";
 import { RcHolds } from "./rc-holds.ts";
 import { attachWebSockets } from "./ws.ts";
+import { SweepHub } from "./sweep.ts";
 import { buildStamp } from "./build.ts";
 import { FileStore } from "./file-store.ts";
 import type { Store } from "./store.ts";
@@ -186,6 +187,13 @@ export interface Daemon {
    * importantly, what a link did NOT do.
    */
   homes: HomeLinks;
+  /**
+   * The sweep's outcomes (roles design, "Reaching an open socket"), exposed
+   * for the reason `homes` is: a test that writes rows on the desk can run a
+   * sweep that reports into the daemon's own hub, and watch what reached
+   * the sockets.
+   */
+  sweeps: SweepHub;
   /**
    * The ephemeral plane, exposed for the same reason `homes` is: the questions
    * worth asking about presence are about what a daemon did NOT do. A test can
@@ -396,10 +404,14 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // listener stands (below), and the `/api/serving` route reads it at request
   // time — the advertisement is derived from a listener that exists, never
   // from configuration alone (content-origin plan, stage 2).
+  // One hub for the sweep's outcomes (roles design, "Reaching an open
+  // socket"): the routes report into it, the sockets listen to it.
+  const sweeps = new SweepHub();
   const routeOptions = {
     birthHome,
     homes,
     auth,
+    sweeps,
     contentBase: null as string | null,
     // The durable park cursor (on-demand phase 1) — a machine-local fact
     // beside homes.json, never behind the Store seam. See park.ts.
@@ -466,6 +478,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   const closeWebSockets = attachWebSockets(app.server, engine, desk, presence, rc, {
     ...(options.heartbeatMs !== undefined ? { heartbeatMs: options.heartbeatMs } : {}),
     ...(revision !== undefined ? { revision } : {}),
+    sweeps,
   });
 
   /**
@@ -648,6 +661,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     port,
     birthHome,
     homes,
+    sweeps,
     contentBase: routeOptions.contentBase,
     close,
   };

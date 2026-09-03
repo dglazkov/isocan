@@ -622,6 +622,14 @@ img { height: auto; }
   font-size: 12.5px; padding: 4px 0;
 }
 .surface-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+/* An invited row in the Share dialog: the address and its line own the first
+   line in full, and the rung picker with Un-invite sit on a second line,
+   right-aligned. Beside the address they squeezed it to a word a line in the
+   340px popover. The picker is a word wide, as in the invite field. */
+.share-invited { flex-wrap: wrap; row-gap: 4px; }
+.share-invited .surface-what { flex: 1 1 100%; }
+.share-row-controls { display: flex; gap: 6px; margin-left: auto; align-items: center; }
+.share-row-controls .share-rung { width: auto; font-size: 12px; }
 /* The surface you are reading this on. Not dimmed and not coloured like a
    warning — it is a fact about the row, and the warning is on the button that
    would end it. */

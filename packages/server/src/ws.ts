@@ -12,6 +12,7 @@ import {
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
   WS_STALE_CLIENT,
+  WITHDRAWN,
 } from "@isocan/core";
 import { Engine, CanvasNotFoundError } from "./engine.ts";
 import type { Desk } from "./desk.ts";
@@ -19,6 +20,7 @@ import { admittingGrant, heldCapability } from "./grants.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
 import { PresenceHub } from "./presence.ts";
 import type { RcHolds } from "./rc-holds.ts";
+import type { SweepHub } from "./sweep.ts";
 
 /**
  * Per-canvas rooms. Server→client: snapshot on connect, op-applied per
@@ -36,6 +38,26 @@ interface WebSocketOptions {
    * — stamped on the hello and the heartbeat so a client can tell which
    * instance it is talking to (#85). Absent means "do not say". */
   revision?: string;
+  /**
+   * The sweep's outcomes, per badge (roles design, "Reaching an open
+   * socket"). Subscribed to once, like `engine.onEvent`: a re-rooted badge's
+   * sockets on the canvas are sent `standing`, an expelled badge's are
+   * closed with `WS_NOT_ADMITTED` and the reason `withdrawn`. Absent means
+   * nothing reaches an open socket, which is every test that attaches
+   * sockets without a daemon.
+   */
+  sweeps?: SweepHub;
+}
+
+/**
+ * One socket in a room: whose it is, and what it may do. The room is a map
+ * from socket to this — "a canvas's sockets, each knowing whose it is" — and
+ * that is the whole index a rung change needs to find its person.
+ */
+interface Member {
+  badgeId: string;
+  /** Tell this connection its rung changed. */
+  standing: (capability: Capability) => void;
 }
 
 export function attachWebSockets(
@@ -47,7 +69,7 @@ export function attachWebSockets(
   options: WebSocketOptions = {},
 ): () => void {
   const wss = new WebSocketServer({ noServer: true });
-  const rooms = new Map<string, Set<WebSocket>>();
+  const rooms = new Map<string, Map<WebSocket, Member>>();
   const revision = options.revision !== undefined ? { revision: options.revision } : {};
 
   /**
@@ -101,7 +123,7 @@ export function attachWebSockets(
   const beat = async (): Promise<void> => {
     const beaten = new Set<WebSocket>();
     for (const [canvasId, room] of rooms) {
-      const open = [...room].filter((s) => s.readyState === WebSocket.OPEN);
+      const open = [...room.keys()].filter((s) => s.readyState === WebSocket.OPEN);
       if (open.length === 0) continue;
       const tip = await engine.tipSeq(canvasId);
       const payload =
@@ -147,10 +169,32 @@ export function attachWebSockets(
     const room = rooms.get(canvasId);
     if (!room) return;
     const payload = JSON.stringify(message);
-    for (const socket of room) {
+    for (const socket of room.keys()) {
       if (socket.readyState === WebSocket.OPEN) socket.send(payload);
     }
   }
+
+  /**
+   * **A change reaches the room** (roles design, "Reaching an open socket";
+   * journey 2 step 1, journey 3 step 2). The sweep says what it did to each
+   * badge; this finds that badge's sockets on the canvas — and only those —
+   * and tells them. Raised or lowered: `standing`, and the page re-picks its
+   * surface without a reload. Expelled: closed with the code the door uses
+   * and the one word that makes it a different sentence, because the person
+   * was inside.
+   */
+  options.sweeps?.on((canvasId, badgeId, outcome) => {
+    const room = rooms.get(canvasId);
+    if (!room) return;
+    for (const [socket, member] of room) {
+      if (member.badgeId !== badgeId) continue;
+      if (outcome.outcome === "expelled") {
+        if (socket.readyState === WebSocket.OPEN) socket.close(WS_NOT_ADMITTED, WITHDRAWN);
+      } else {
+        member.standing(outcome.capability);
+      }
+    }
+  });
 
   /**
    * **The instance hangs up on a room it has fallen behind on** (#85). Every
@@ -164,7 +208,7 @@ export function attachWebSockets(
   engine.onBehind((canvasId) => {
     const room = rooms.get(canvasId);
     if (!room) return;
-    for (const socket of room) {
+    for (const socket of room.keys()) {
       if (socket.readyState === WebSocket.OPEN) socket.close(WS_BEHIND, "behind the store — redial");
     }
   });
@@ -174,7 +218,7 @@ export function attachWebSockets(
     if (message.type === "canvas-deleted") {
       const room = rooms.get(canvasId);
       if (room) {
-        for (const socket of room) socket.close();
+        for (const socket of room.keys()) socket.close();
         rooms.delete(canvasId);
       }
     }
@@ -354,8 +398,15 @@ export function attachWebSockets(
     badgeId: string,
     since: number,
     bearer: boolean,
-    capability: Capability,
+    admittedAt: Capability,
   ): Promise<void> {
+    /**
+     * What this connection may do. Set by the admission on the way in and
+     * MOVED by the sweep listener below (`Member.standing`) when a grant
+     * changes under it — so a `view` socket raised to `read` starts accepting
+     * beats, and a `read` one lowered to `view` stops, on the same socket.
+     */
+    let capability: Capability = admittedAt;
     // Without a listener, an abrupt client death (ECONNRESET) raises an
     // unhandled 'error' event on the EventEmitter and would crash the daemon.
     // 'close' always follows, which is where cleanup lives.
@@ -454,16 +505,33 @@ export function attachWebSockets(
       ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
       return;
     }
-    let room = rooms.get(canvasId);
-    if (!room) {
-      room = new Set();
-      rooms.set(canvasId, room);
-    }
-    room.add(ws);
-
     // This connection's presence session, created lazily on its first
     // presence message and torn down with the socket.
     let sessionId: string | null = null;
+
+    let room = rooms.get(canvasId);
+    if (!room) {
+      room = new Map();
+      rooms.set(canvasId, room);
+    }
+    room.set(ws, {
+      badgeId,
+      standing: (next) => {
+        if (next === capability) return;
+        capability = next;
+        if (ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({ type: "standing", capability } satisfies ServerMessage));
+        // The presence session carries the rung it was made at, so a face
+        // marked *reading* would go on saying so after the toolbar appeared.
+        // Ended here; the next beat makes a new one at the new rung, which is
+        // also what puts a raised viewer INTO presence and takes a lowered
+        // reader out of it.
+        if (sessionId !== null) {
+          presence.endSession(canvasId, sessionId);
+          sessionId = null;
+        }
+      },
+    });
     /**
      * The actors this socket has already been shown to speak for.
      *

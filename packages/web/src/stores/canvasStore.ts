@@ -22,6 +22,7 @@ import {
   WS_NO_BADGE,
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
+  WITHDRAWN,
 } from "@isocan/core";
 import {
   ApiError,
@@ -83,6 +84,15 @@ export type Connection =
   | "gone"
   /** The door said no: a good badge, a canvas that will not have it. */
   | "refused"
+  /**
+   * The door said no to a badge that had been INSIDE (roles design,
+   * "Reaching an open socket"): a sweep put it out, and the socket was
+   * closed with `WS_NOT_ADMITTED` and the reason `withdrawn`. Its own state
+   * because it is a different sentence — *your access to this canvas was
+   * withdrawn* — and the difference is the whole message to somebody who
+   * was working a moment ago.
+   */
+  | "withdrawn"
   /** There is no canvas at this address here. */
   | "absent";
 
@@ -1103,6 +1113,11 @@ function openSocket(canvasId: string): void {
       if (next === null) return; // project.delete arrives as canvas-deleted too
       confirm(next, message.entry.seq);
       if (message.entry.seq > replayThrough) announceComment(message.entry.envelope);
+    } else if (message.type === "standing") {
+      // This connection's rung moved under it (roles journey 2 step 1): the
+      // page re-picks its surface off `capability`, and nothing reloads —
+      // the socket is the same one, and what changed is what it may do.
+      useCanvasStore.setState({ capability: message.capability });
     } else if (message.type === "canvas-deleted") {
       useCanvasStore.setState({ connection: "gone" });
       // A replica of a canvas that no longer exists is how a tab shows a
@@ -1137,7 +1152,14 @@ function openSocket(canvasId: string): void {
     // here does not appear because somebody asked twice.
     if (event.code === WS_NOT_ADMITTED || event.code === WS_NO_CANVAS) {
       useCanvasStore.setState({
-        connection: event.code === WS_NOT_ADMITTED ? "refused" : "absent",
+        connection:
+          event.code === WS_NO_CANVAS
+            ? "absent"
+            : // The reason is the one word that says this badge was inside
+              // and was put out, and it earns the other sentence.
+              event.reason === WITHDRAWN
+              ? "withdrawn"
+              : "refused",
       });
       disconnect();
       return;

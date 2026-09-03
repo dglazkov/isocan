@@ -12,9 +12,10 @@ import {
   ownerOf,
   RUNGS,
   VIEW_ONLY,
+  WITHDRAWN,
 } from "@isocan/core";
 import type { Capability, Grant } from "@isocan/core";
-import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
+import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
 
 /**
  * The door's test over the desk's grant rows (identity desk, mechanisms 3 + 2).
@@ -49,10 +50,23 @@ import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
  */
 export class NotAdmittedError extends Error {
   readonly code = NOT_ADMITTED;
-  constructor(readonly canvasId: string) {
+  /**
+   * `withdrawn` when this badge HAD been inside and a sweep put it out
+   * (roles design, "Reaching an open socket"): the same code, because an
+   * expelled badge is a badge that is not admitted, and a different
+   * sentence, because the person was in and the difference is the whole
+   * message. Absent for a badge that was never admitted.
+   */
+  constructor(
+    readonly canvasId: string,
+    readonly reason?: string,
+  ) {
     super(
-      `this badge is not admitted to ${canvasId} — ask whoever shared it for the ` +
-        "link, or have them grant you access",
+      reason === WITHDRAWN
+        ? `your access to ${canvasId} was withdrawn — whoever owns it removed you; ask them ` +
+            "if that was a mistake"
+        : `this badge is not admitted to ${canvasId} — ask whoever shared it for the ` +
+            "link, or have them grant you access",
     );
     this.name = "NotAdmittedError";
   }
@@ -94,7 +108,7 @@ export class NotAdmittedError extends Error {
  *
  * **The creator's floor** (roles design, "Who holds what"). The creator holds
  * `own` and cannot lose it, and that is not a row: it is `project.createdBy`
- * checked against the badge's claims, exactly as `ownsThisCanvas` reads it.
+ * checked against the badge's claims, exactly as `heldRung` reads it.
  * It is applied HERE, at the door, and not only on owner routes, because
  * journey 1 step 2 says the creator stays when the link is turned off —
  * and until this the revoker of a link was expelled with everyone else who
@@ -143,37 +157,73 @@ export async function admittingGrant(
   return null;
 }
 
-/** The refusal when somebody who did not make the canvas tries to change what
- *  its link admits to. Its own code, so a client can say the useful sentence
- *  rather than "no". */
+/** The refusal when somebody below `own` tries to change who may enter a
+ *  canvas — inviting, revoking, the link, its rung. Its own code, so a client
+ *  can say the useful sentence rather than "no". */
 export const NOT_OWNER = "not-owner";
 
 /**
- * **Only the person who made a canvas may change what its link admits to.**
- *
- * Reported the hard way: an account that was not the owner pressed "Can
- * view", and the sweep that re-roots everybody at the surviving grant took
- * THEM with it — into a canvas they could now only look at, with the control
- * that would undo it behind an edit they no longer had. Every editor could do
- * that, to everybody, including themselves.
- *
- * Ownership is `project.createdBy`, which every canvas has already, and it is
- * checked against the badge's CLAIMS rather than against one badge id. A
- * person is not a badge — the canvas may have been made from a terminal and
- * the link pressed in a browser, which is exactly the shape that produced the
- * report — so what counts is whether this caller may act as the owner, which
- * is the same question `item` ops ask before they let anybody write.
- *
- * Only the CAPABILITY is owner-only. Inviting somebody, and turning the link
- * off, stay with anyone who can edit: they are additive or reversible by the
- * person who did them, and neither can lock the room from the inside.
+ * The refusal's sentence: the remedy, which is a person (roles design, "What
+ * only an owner may do"). `owner` is the creator's name resolved the way the
+ * Share dialog resolves `createdBy` — through the registry, so a rename
+ * reaches it.
  */
-export async function ownsThisCanvas(
+export function notOwnerMessage(owner: string): string {
+  return (
+    `ask ${owner}, who owns this canvas — only an owner can change who may enter it ` +
+    "or what the link allows"
+  );
+}
+
+/**
+ * The rung an admission holds, read off the admission.
+ *
+ * `created` is the creator's floor and reads as `own` whatever the field
+ * says: a bootstrap admission (`project.create`) stores no rung and a floor
+ * admission stores `own`, and both are the creator (roles phase 1's finding).
+ * Every other root reads its field, absent meaning edit. This is what a
+ * pass-derived admission adopts from its minter, at mint and at every sweep —
+ * "agents hold what their person holds".
+ */
+export function rungOfAdmission(admission: Admission): Capability {
+  if (admission.provenance.root === "created") return "own";
+  return admission.capability ?? "edit";
+}
+
+/**
+ * **What this badge holds HERE, for a route that asks `own`** (roles design,
+ * "Who holds what"): the admission's rung, raised to `own` if the badge
+ * claims the creator.
+ *
+ * Raised by CLAIMS and not by the stored rung, because the creator's own
+ * admission is not a reliable record of the floor: a bootstrap admission
+ * stores no rung at all, and only a floor admission written by the door
+ * stores `own`. Ownership is `project.createdBy`, which every canvas has
+ * carried since the first one, checked against who this badge may speak as —
+ * a person is not a badge; the canvas may have been made from a terminal and
+ * the Share dialog opened in a browser, which is exactly the shape that once
+ * produced a report.
+ *
+ * `asActor` narrows the question to one person (`CreateGrantRequest.actorId`):
+ * a badge that claims several — a browser with two personas, a daemon
+ * relaying a whole machine — is raised only if THAT actor is the creator. The
+ * caller has already checked the actor is among the badge's claims
+ * (`engine.requireActor`); this reads the claims once more only to apply the
+ * floor. One `claimsOf` read, only on routes that ask for `own`. This is what
+ * `ownsThisCanvas` was, with a wider answer.
+ */
+export async function heldRung(
   desk: Desk,
-  project: { createdBy: { id: string } },
+  project: { id: string; createdBy: { id: string } },
   badge: BadgeRecord,
-): Promise<boolean> {
-  return claimsActor(await desk.claimsOf(badge.badgeId), ownerOf(project));
+  asActor: string | null = null,
+): Promise<Capability> {
+  const held = capabilityIn(badge, project.id) ?? "edit";
+  if (atLeast(held, "own")) return held;
+  const owner = ownerOf(project);
+  if (asActor !== null && asActor !== owner) return held;
+  const claims = await desk.claimsOf(badge.badgeId);
+  return claimsActor(claims, owner) ? "own" : held;
 }
 
 /**
@@ -188,10 +238,17 @@ export async function ownsThisCanvas(
  */
 export class ViewOnlyError extends Error {
   readonly code = VIEW_ONLY;
-  constructor(readonly canvasId: string) {
+  /** `owner` names the remedy — *ask Priya, who owns it* — when the caller
+   * could resolve the creator cheaply (roles journey 1 step 5); the hook's
+   * refusal without a snapshot says "whoever shared it". */
+  constructor(
+    readonly canvasId: string,
+    owner?: string,
+  ) {
     super(
-      `you may read this canvas (${canvasId}) but not change it — ask whoever shared it to ` +
-        "share it for editing",
+      `you may read this canvas (${canvasId}) but not change it — ask ` +
+        (owner ? `${owner}, who owns it,` : "whoever shared it") +
+        " to share it for editing",
     );
     this.name = "ViewOnlyError";
   }

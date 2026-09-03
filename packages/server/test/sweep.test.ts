@@ -6,7 +6,7 @@ import type { Grant, GrantSubject } from "@isocan/core";
 import { LINK } from "@isocan/core";
 import { FileDesk } from "../src/file-desk.ts";
 import { admittingGrant } from "../src/grants.ts";
-import { killAndSweep, sweepCanvas } from "../src/sweep.ts";
+import { killAndSweep, sweepCanvas, type SweepOutcome } from "../src/sweep.ts";
 import type { Provenance } from "../src/desk.ts";
 import { mintBadge } from "../src/badges.ts";
 
@@ -500,5 +500,112 @@ describe("kill-a-badge composes with revocation rather than duplicating it", () 
     expect(await killAndSweep(desk, laptop, "bdg_phone")).not.toBeNull();
     expect(await killAndSweep(desk, laptop, "bdg_phone")).toBeNull();
     expect(await killAndSweep(desk, "bdg_nobody", "bdg_phone")).toBeNull();
+  });
+});
+
+/**
+ * **The sweep recomputes rungs, not only roots** (roles design, "The sweep
+ * recomputes rungs"; phase 2). Journey 2 step 1 raises Jordan from Canvas
+ * Viewer to Editor while she is on the canvas, and nothing about her ROOT
+ * fell: her row stands. So a standing root is asked what the door would give
+ * now and re-rooted when that differs, a pass root adopts its minter's rung,
+ * and every outcome is told to a listener per badge — which is what `ws.ts`
+ * turns into the `standing` message.
+ */
+describe("the sweep recomputes rungs, and reports per badge", () => {
+  const heard: [string, string, SweepOutcome][] = [];
+  const listen = (canvasId: string, badgeId: string, outcome: SweepOutcome) =>
+    void heard.push([canvasId, badgeId, outcome]);
+  beforeEach(() => heard.splice(0));
+
+  it("re-roots a badge whose row still stands when the door would now give another rung", async () => {
+    const link = await grantOn(LINK); // edit
+    const jordan = await badge();
+    await desk.attest(jordan, {
+      attribute: "email:jordan@acme.test",
+      verifiedVia: "magic-link",
+      at: new Date().toISOString(),
+    });
+    await admit(jordan, { root: "grant", grantId: link.id });
+    // Nothing revoked. A row at `own` naming her arrives, and the door now
+    // gives more than her admission holds.
+    await desk.putGrant({
+      id: "gnt_jordan_own",
+      canvasId: CANVAS,
+      subject: "email:jordan@acme.test",
+      grantedBy: "bdg_owner",
+      at: new Date(Date.UTC(2026, 5, 1)).toISOString(),
+      capability: "own",
+    });
+
+    expect(await sweepCanvas(desk, CANVAS, null, listen)).toEqual({ expelled: 0, rerooted: 1 });
+    expect(await rootOf(jordan)).toEqual({ root: "grant", grantId: "gnt_jordan_own" });
+    const admission = (await desk.badge(jordan))!.admissions.find((a) => a.canvasId === CANVAS);
+    expect(admission!.capability).toBe("own");
+    expect(heard).toEqual([[CANVAS, jordan, { outcome: "rerooted", capability: "own" }]]);
+    // Settled: the next sweep has nothing to say.
+    heard.splice(0);
+    expect(await sweepCanvas(desk, CANVAS, null, listen)).toEqual({ expelled: 0, rerooted: 0 });
+    expect(heard).toEqual([]);
+  });
+
+  it("leaves a standing row alone when the door would give the same rung", async () => {
+    const link = await grantOn(LINK);
+    const jordan = await badge();
+    await admit(jordan, { root: "grant", grantId: link.id });
+    expect(await sweepCanvas(desk, CANVAS, null, listen)).toEqual({ expelled: 0, rerooted: 0 });
+    expect(heard).toEqual([]);
+  });
+
+  it("makes a pass root adopt its minter's rung, under the same root", async () => {
+    const link = await grantOn(LINK); // edit
+    const tab = await badge();
+    const agent = await badge();
+    await admit(tab, { root: "grant", grantId: link.id });
+    await admit(agent, { root: "pass", badgeId: tab });
+    // The link is replaced with a read link — the route's gesture, done by
+    // hand: tombstone the old row, write the new one, sweep.
+    await desk.revokeGrant(link.id, new Date().toISOString(), "bdg_owner");
+    await desk.putGrant({
+      ...link,
+      id: "gnt_link_read",
+      at: new Date(Date.UTC(2026, 5, 1)).toISOString(),
+      capability: "read",
+    });
+
+    expect(await sweepCanvas(desk, CANVAS, null, listen)).toEqual({ expelled: 0, rerooted: 2 });
+    // The tab moved to the new row; the agent kept its root and took the rung.
+    expect(await rootOf(tab)).toEqual({ root: "grant", grantId: "gnt_link_read" });
+    expect(await rootOf(agent)).toEqual({ root: "pass", badgeId: tab });
+    const held = async (id: string) =>
+      (await desk.badge(id))!.admissions.find((a) => a.canvasId === CANVAS)!.capability;
+    expect(await held(tab)).toBe("read");
+    expect(await held(agent)).toBe("read");
+    expect(heard).toEqual(
+      expect.arrayContaining([
+        [CANVAS, tab, { outcome: "rerooted", capability: "read" }],
+        [CANVAS, agent, { outcome: "rerooted", capability: "read" }],
+      ]),
+    );
+  });
+
+  it("reports an expulsion as such", async () => {
+    const link = await grantOn(LINK);
+    const stranger = await badge();
+    await admit(stranger, { root: "grant", grantId: link.id });
+    await desk.revokeGrant(link.id, new Date().toISOString(), "bdg_owner");
+    expect(await sweepCanvas(desk, CANVAS, null, listen)).toEqual({ expelled: 1, rerooted: 0 });
+    expect(heard).toEqual([[CANVAS, stranger, { outcome: "expelled" }]]);
+  });
+
+  it("reads a created root as own, so the creator's agent holds own", async () => {
+    const creator = await badge();
+    const agent = await badge();
+    await admit(creator, { root: "created" });
+    await admit(agent, { root: "pass", badgeId: creator });
+    expect(await sweepCanvas(desk, CANVAS, null, listen)).toEqual({ expelled: 0, rerooted: 1 });
+    const held = (await desk.badge(agent))!.admissions.find((a) => a.canvasId === CANVAS)!;
+    expect(held.capability).toBe("own");
+    expect(held.provenance).toEqual({ root: "pass", badgeId: creator });
   });
 });
