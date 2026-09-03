@@ -1,6 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
   "since": "2026-09-03",
+  "history": [
+    "v1 — 3 Sep 2026: twenty tasks.",
+    "v2 — 3 Sep 2026: create-empty-state no longer demands a [data-state=empty] hook or an untouched header. The first lift run had two agents build a good empty state, one disabling Filter and one removing it, and fail both checks — the ask had said neither. A check may only ask for what the ask asked for."
+  ],
   "about": "Twenty golden tasks, weighted by what people actually ask agents for (docs/research/2026-09-03-what-people-ask-agents-for.md): revise first, then create, then restyle and repair. A task is a synthetic starting screen, an ask in plain words, and checks a machine can make. `screen` checks are scripts/grade.mjs's; the rest read the file. Every answer here passes; every untouched fixture fails at least one — scripts/golden.mjs --selftest proves both. Change a task and bump the version.",
   "tasks": [
     {
@@ -88,10 +92,9 @@
       "answer": "create-empty-state.html",
       "ask": "Make the empty state: what this screen shows when there are no orders yet. Say so plainly, and offer the one thing to do next.",
       "checks": [
-        { "kind": "selector", "selector": "[data-state=empty]", "min": 1 },
         { "kind": "matches", "pattern": "no orders" },
         { "kind": "selector", "selector": "button", "min": 1 },
-        { "kind": "unchanged", "selector": "header" },
+        { "kind": "text", "text": "Orders" },
         { "kind": "screen", "names": ["renders", "no contrast failures", "every control named"] }
       ]
     },
