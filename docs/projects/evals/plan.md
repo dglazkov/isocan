@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 see: evals
-note: stages 1 and 2 are built; stage 1's join key was not the one this plan named
+note: stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stages 3–5 open
 ---
 # Evals
 
@@ -140,6 +140,30 @@ them, every task suite is a guess about our own users.
 **Success looks like** being able to finish this sentence with a number: "the
 most common thing anybody asks an agent on a canvas is ___, and it is ___% of
 all asks."
+
+### Built, 3 September 2026 — the labelling, and what it corrected
+
+Finished: *the most common thing anybody asks an agent on a canvas is to
+change something that already exists — 21% — and edits of every kind are
+39%, twice the 18% that ask for something new.* Every row at one home (414)
+was read and labelled by hand; 304 were agents' own prose, 12 were probes,
+and the 98 asks people made are the distribution in
+[`research/2026-09-03-what-people-ask-agents-for.md`](../../research/2026-09-03-what-people-ask-agents-for.md):
+revise, create, orchestrate, question, arrange, social, restyle, document,
+critique, repair, variation, converge, ops, cancel.
+
+Steps 3 and 4 of this stage as written: `categoriseAsk` in `core/evals.ts`
+classifies the rest and agrees with the hand labels on 84%; it ships in
+`isocan evals corpus` labelled as a reading, with the number. The
+distribution and the hypotheses it suggests for Stage 2 are in the note.
+
+**What the reading found that the report could not.** The 1 Sep headline —
+one ask in four silent — was agents' receipts nobody replied to; people's
+asks were 95% answered. And `buildCorpus` scored a `/cancel` against every
+earlier ask by that person in the thread, which in the Chat is all of them:
+16 cancels on one canvas were one. Fixed, with a test from the measured
+shape. The Stage 0 note that broadcast is an upper bound was true and did
+not help; a caveat on a number is not a correction to it.
 
 ---
 

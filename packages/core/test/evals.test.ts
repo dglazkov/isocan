@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCorpus,
+  categoriseAsk,
   harvestPreferences,
   type CanvasContents,
   type LogEntry,
@@ -241,6 +242,81 @@ describe("the request corpus", () => {
       },
     });
     expect(buildCorpus(othersCancel, []).summary.cancelled).toBe(0);
+  });
+
+  it("lets one /cancel call off the ask it follows, not every ask that person made in the Chat", () => {
+    // Measured 3 Sep 2026: one `/cancel` typed in the Chat after sixteen asks
+    // marked all sixteen cancelled, because the Chat is one thread and the
+    // first reading was "any later /cancel by the asker". The cancel belongs
+    // to the asker's most recent ask before it; the answered ones before that
+    // stay answered.
+    const state = canvas({
+      threads: {
+        main: thread(
+          "main",
+          [
+            comment("c1", "build the tracker", DI, "2026-08-01T10:00:00.000Z"),
+            comment("c2", "done", FABLE, "2026-08-01T10:05:00.000Z"),
+            comment("c3", "now a gallery", DI, "2026-08-01T10:10:00.000Z"),
+            comment("c4", "done", FABLE, "2026-08-01T10:15:00.000Z"),
+            comment("c5", "and grill me on it", DI, "2026-08-01T10:20:00.000Z"),
+            comment("c6", "/cancel", DI, "2026-08-01T10:21:00.000Z"),
+          ],
+          { main: true },
+        ),
+      },
+    });
+    const { summary, asks } = buildCorpus(state, []);
+    // Nobody is enrolled here, so Fable's "done"s are counted as asks too
+    // (the upper-bound case); the person's four are the ones under test.
+    const mine = asks.filter((a) => a.askedBy.id === DI.id);
+    // The `/cancel` row is itself counted (it is a Chat comment by a person)
+    // and nobody spoke after it, so it reads silent — which is right: it asked
+    // for nothing.
+    expect(mine.map((a) => a.outcome)).toEqual(["answered", "answered", "cancelled", "silent"]);
+    expect(summary.cancelled).toBe(1);
+  });
+
+  it("reads what kind of ask it is, and carries the caveat that it is a reading", () => {
+    // The categories came out of hand-labelling every human ask at one home
+    // (the research note); these are the shapes each one was named for, so a
+    // rewrite of the classifier that loses one of them fails here rather than
+    // in the next distribution.
+    const cases: [string, string | null, ReturnType<typeof categoriseAsk>][] = [
+      ["Can you build me a greeting card for Yu?", null, "create"],
+      ["sketch a picture of dion, line art like a 5 year old", null, "create"],
+      ["Can you replace the screenshot in slide 02 with the one selected here?", null, "revise"],
+      ["can we reorder the days so they show up sorted by recency", null, "revise"],
+      ["Can you redesign this as though it is a high end Airbnb listing?", null, "restyle"],
+      ["Can you give me 3 variations that just change the font?", null, "variation"],
+      ["Take the best of both and come up with a new version", null, "converge"],
+      ["Can you both critique each of your versions and tell me which one is superior?", null, "critique"],
+      ["When I full screen the slides they aren't taking the full width — can you fix that?", null, "repair"],
+      ["can you rearrange the screens so they are organized well?", null, "arrange"],
+      ["Can you create a README.md on the canvas that keeps an up to date spec?", null, "document"],
+      ["how did you build it? This is amazing.", null, "question"],
+      ["@Cana this one's for you", null, "orchestrate"],
+      ["@Canny 🤖", null, "orchestrate"],
+      ["Can we push the quiz to github pages so it can be hosted?", null, "ops"],
+      ["amazing", null, "social"],
+      ["/format grid", "format", "arrange"],
+      ["/variation very different styles", "variation", "variation"],
+      ["/design-audit", "design-audit", "critique"],
+      ["/cancel changed my mind", "cancel", "cancel"],
+      ["/sprint", "sprint", "orchestrate"],
+    ];
+    for (const [body, command, want] of cases) expect(categoriseAsk(body, command), body).toBe(want);
+
+    const state = canvas({
+      threads: {
+        t1: thread("t1", [
+          comment("c1", "@Fable build me a card", DI, "2026-08-01T10:00:00.000Z", { mentions: [FABLE.id] }),
+        ]),
+      },
+    });
+    const { summary, asks } = buildCorpus(state, []);
+    expect(asks[0]!.category).toBe("create");
+    expect(summary.categories).toEqual([{ name: "create", count: 1, silent: 1 }]);
   });
 
   it("reads the slash command an ask opens with, and only at the start", () => {

@@ -67,6 +67,37 @@ interface AttributedOp {
      * and would make this permanently false. */
     undone: boolean;
 }
+/**
+ * **What kind of ask this is** — Stage 1's taxonomy, the categories that came
+ * out of hand-labelling every human ask at one home on 3 September 2026
+ * (`docs/research/2026-09-03-what-people-ask-agents-for.md`), not ones
+ * brought to the data. Fifteen, and the first eleven are the work:
+ *
+ * - `create` — something that did not exist: a screen, an app, a deck, a
+ *   card, a diagram, a wireframe, a drawing.
+ * - `revise` — change a thing that exists: swap an image, reword, add a
+ *   bullet, reorder, animate, a hover state.
+ * - `restyle` — the look of a thing that exists: redesign, apply a design
+ *   system, "make it pop".
+ * - `variation` — several takes to choose between; diverge.
+ * - `converge` — pick one, merge two, apply the chosen version.
+ * - `critique` — compare, audit, judge, grill.
+ * - `repair` — it is broken, or the last answer missed.
+ * - `arrange` — tidy, format, rearrange, merge layers, delete.
+ * - `document` — write it down: a README, a spec, a design system, an IA.
+ * - `question` — explain, how does it work, what would happen.
+ * - `orchestrate` — point an agent at work: a bare mention, "this one's for
+ *   you", "are you there", running a sprint.
+ * - `ops`, `cancel`, `social`, `probe` — the rest: deploy it; call it off;
+ *   thanks and hello; a test canvas's echo.
+ *
+ * `categoriseAsk` is a classifier over words, calibrated against those hand
+ * labels and reported with its agreement rather than trusted — the research
+ * note carries the number. It exists so the distribution can be read for a
+ * canvas nobody has labelled, with that caveat attached.
+ */
+export type AskCategory = "create" | "revise" | "restyle" | "variation" | "converge" | "critique" | "repair" | "arrange" | "document" | "question" | "orchestrate" | "ops" | "cancel" | "social" | "probe";
+export declare function categoriseAsk(body: string, command: string | null): AskCategory;
 interface AskEntry {
     threadId: string;
     commentId: string;
@@ -86,6 +117,9 @@ interface AskEntry {
      * and `/format` are asks with a known shape, and knowing which is most of
      * Stage 1's taxonomy for free. */
     command: string | null;
+    /** What kind of ask, by `categoriseAsk` — a classifier's reading, not a
+     * label. The research note reports how often it agrees with a person. */
+    category: AskCategory;
     /** The words. Never leaves the machine: see `plan.md` Stage 6, which puts
      * comment text on the list of what is never sent on any setting. */
     body: string;
@@ -117,6 +151,13 @@ interface CorpusSummary {
     commands: {
         name: string;
         count: number;
+    }[];
+    /** Asks by category, commonest first — the classifier's reading of every
+     * row here, agent receipts included. Read with the caveat on `category`. */
+    categories: {
+        name: AskCategory;
+        count: number;
+        silent: number;
     }[];
 }
 interface Corpus {
