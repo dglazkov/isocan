@@ -9,6 +9,11 @@ note: stages 1 and 2 are built; stage 1's join key was not the one this plan nam
 How we find out whether isocan is any good at the thing it exists for — and
 then keep finding out, as the models, the skills and the product all move.
 
+[`../../evals.md`](../../evals.md) is the reader's map of this: what runs
+today, what the numbers said, and how a finding becomes a better skill or
+prompt. This document is the staged plan and the record of what each stage
+measured.
+
 This is a plan in stages. Each one is useful on its own and none of them
 requires the next, which is deliberate: eval programmes die when the first
 deliverable is nine months out.
