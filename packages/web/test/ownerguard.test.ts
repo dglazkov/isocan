@@ -21,11 +21,13 @@ describe("only the owner may change what the link allows", () => {
     expect(http).toContain("code: NOT_OWNER");
   });
 
-  it("is refused only for a CHANGE, so inviting and turning it off stay open", () => {
+  it("is refused only for a CHANGE, so inviting at edit and turning it off stay open", () => {
     // Additive or undoable-by-whoever-did-it. Capability is neither: it
-    // sweeps everybody, including the person who pressed it.
+    // sweeps everybody, including the person who pressed it. Any rung but
+    // `edit` on a fresh row is a change too (roles phase 1) — the ladder
+    // has more than one rung below edit now, and one above.
     expect(http).toContain(
-      'const changingCapability = live ? capabilityOf(live) !== capability : capability === "view";',
+      'const changingCapability = live ? capabilityOf(live) !== capability : capability !== "edit";',
     );
   });
 

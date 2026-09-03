@@ -228,6 +228,10 @@ function ViewerGate({
   useEffect(() => {
     let live = true;
     setStanding("asking");
+    // Only `view` skips the door. A `read` admission is the canvas itself,
+    // and a person on the canvas is somebody the facepile names — so a
+    // reader is sent to the door for a name like an editor is (roles phase
+    // 1), and the page picks the read-only surface once they are through.
     getSnapshot(canvasId)
       .then((s) => live && setStanding(s.capability === "view" ? "view" : "door"))
       .catch(() => live && setStanding("door"));

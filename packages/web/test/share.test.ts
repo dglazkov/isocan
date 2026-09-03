@@ -78,6 +78,19 @@ describe("the Share dialog's endpoint", () => {
     expect(JSON.parse(seen[0]!.body!)).toEqual({ subject: "link" });
   });
 
+  it("sends the rung whenever it is not edit, and never for edit (roles phase 1)", async () => {
+    // The wire rule is core's `narrowed`: an older home never meets the
+    // field for the one value it has always meant by omission, and a newer
+    // home meets `read` and `own` rather than having them dropped to edit.
+    answer = [200, { grant: { id: "gnt_3", subject: LINK, capability: "read" } }];
+    await createGrant("prj_acme", LINK, "read");
+    expect(JSON.parse(seen[0]!.body!)).toEqual({ subject: "link", capability: "read" });
+    await createGrant("prj_acme", LINK, "edit");
+    expect(JSON.parse(seen[1]!.body!)).toEqual({ subject: "link" });
+    await createGrant("prj_acme", "email:jordan@example.com", "own");
+    expect(JSON.parse(seen[2]!.body!)).toEqual({ subject: "email:jordan@example.com", capability: "own" });
+  });
+
   it("revokes with NO body and NO content-type (pinned)", async () => {
     answer = [200, { grant: { id: "gnt_1", subject: LINK, revokedAt: "now" } }];
     await revokeGrant("prj_acme", "gnt_1");

@@ -1,5 +1,4 @@
 import type { SweepReport } from "@isocan/core";
-import { capabilityOf } from "@isocan/core";
 import { admittingGrant } from "./grants.ts";
 import type { BadgeRecord, Desk } from "./desk.ts";
 
@@ -112,7 +111,18 @@ type Decision = "keep" | "rerooted" | "expelled";
  * the revoked grant would invite an implementation that only looked for it,
  * which is the version that misses chains and cycles.
  */
-export async function sweepCanvas(desk: Desk, canvasId: string): Promise<SweepReport> {
+/**
+ * `creator` is the canvas's `createdBy.id`, handed in by the routes that hold
+ * the snapshot so the door test can apply the creator's floor (roles design):
+ * a creator whose browser entered by the link is re-rooted at `created` when
+ * the link goes, not expelled. Null when the caller cannot say, in which case
+ * the floor is simply not asked — rows only.
+ */
+export async function sweepCanvas(
+  desk: Desk,
+  canvasId: string,
+  creator: string | null = null,
+): Promise<SweepReport> {
   let expelled = 0;
   let rerooted = 0;
   /** The tripwire described above. Generous on purpose: it is a bound on a
@@ -192,8 +202,8 @@ export async function sweepCanvas(desk: Desk, canvasId: string): Promise<SweepRe
      * re-implementation that happens to agree today.
      */
     const door = async (badgeId: string): Promise<Decision> => {
-      const grant = await admittingGrant(desk, canvasId, byId.get(badgeId)!);
-      if (!grant) {
+      const answer = await admittingGrant(desk, canvasId, byId.get(badgeId)!, creator);
+      if (!answer) {
         await desk.expel(badgeId, canvasId);
         expelled += 1;
         changed = true;
@@ -202,8 +212,10 @@ export async function sweepCanvas(desk: Desk, canvasId: string): Promise<SweepRe
       // The new root's capability, with the new provenance: a re-rooted badge
       // is here for the surviving grant's reason and may do what THAT grant
       // admits to — which is how replacing the edit link with a view link
-      // (#88) demotes the people inside instead of expelling them.
-      await desk.reroot(badgeId, canvasId, { root: "grant", grantId: grant.id }, capabilityOf(grant));
+      // (#88) demotes the people inside instead of expelling them. The door
+      // may also answer with the creator's floor, in which case the badge is
+      // re-rooted at `created` — the root this sweep never disturbs again.
+      await desk.reroot(badgeId, canvasId, answer.provenance, answer.capability);
       rerooted += 1;
       changed = true;
       return "rerooted";
@@ -247,13 +259,16 @@ export async function killAndSweep(
   badgeId: string,
   by: string,
   now = new Date().toISOString(),
+  /** The creator of each canvas swept, for the floor — a kill sweeps rooms
+   * whose snapshots the route does not hold, so it asks per canvas. */
+  creatorOf: (canvasId: string) => Promise<string | null> = async () => null,
 ): Promise<{ killed: BadgeRecord; swept: SweepReport } | null> {
   const killed = await desk.killBadge(badgeId, now, by);
   if (!killed) return null;
   let expelled = 0;
   let rerooted = 0;
   for (const admission of killed.admissions) {
-    const report = await sweepCanvas(desk, admission.canvasId);
+    const report = await sweepCanvas(desk, admission.canvasId, await creatorOf(admission.canvasId));
     expelled += report.expelled;
     rerooted += report.rerooted;
   }

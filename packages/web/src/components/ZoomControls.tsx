@@ -5,6 +5,7 @@ import { setNotice } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomactions.ts";
+import { useCanEdit } from "../lib/capability.ts";
 
 /**
  * Bottom-right navigation cluster (Stitch-style): undo/redo, then a zoom group
@@ -29,6 +30,7 @@ function sayWhy(err: unknown): void {
 export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const scale = useUiStore((s) => s.viewport.scale);
   const hasSelection = useUiStore((s) => s.selectedItemIds.length > 0);
+  const canEdit = useCanEdit();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useDismissOnOutside<HTMLDivElement>(menuOpen, () => setMenuOpen(false));
 
@@ -42,12 +44,18 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
 
   return (
     <div className="zoom-controls" onPointerDown={(e) => e.stopPropagation()}>
-      <button className="btn icon" title="Undo (⌘Z)" onClick={() => void undo(canvasId, actor).catch(sayWhy)}>
-        ↩︎
-      </button>
-      <button className="btn icon" title="Redo (⇧⌘Z)" onClick={() => void redo(canvasId, actor).catch(sayWhy)}>
-        ↪︎
-      </button>
+      {/* Undo and redo are writes — a reader keeps the zoom group and loses
+          these two (roles phase 1, `HIDDEN_WRITES`). */}
+      {canEdit && (
+        <>
+          <button className="btn icon" title="Undo (⌘Z)" onClick={() => void undo(canvasId, actor).catch(sayWhy)}>
+            ↩︎
+          </button>
+          <button className="btn icon" title="Redo (⇧⌘Z)" onClick={() => void redo(canvasId, actor).catch(sayWhy)}>
+            ↪︎
+          </button>
+        </>
+      )}
       <div className="zoom-group" ref={menuRef}>
         <button className="zoom-step" title="Zoom out" onClick={() => zoomBy(1 / 1.25)}>
           −

@@ -9,6 +9,7 @@ import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
 import { ShareGlyph } from "./Glyphs.tsx";
+import { useCanEdit } from "../lib/capability.ts";
 
 /**
  * **What is true wherever you are on a canvas.**
@@ -35,6 +36,7 @@ import { ShareGlyph } from "./Glyphs.tsx";
  */
 export function CanvasTitle({ actor }: { actor: Actor }) {
   const canvas = useCanvasStore((s) => s.project);
+  const canEdit = useCanEdit();
   const [editing, setEditing] = useState(false);
   const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
 
@@ -42,10 +44,11 @@ export function CanvasTitle({ actor }: { actor: Actor }) {
     <div className="canvas-name" ref={nameRef}>
       <button
         className="title"
-        disabled={!canvas}
+        // A reader reads the title; renaming is `project.update`, a write.
+        disabled={!canvas || !canEdit}
         title={
           canvas
-            ? `${canvas.description ? `${canvas.description}\n\n` : ""}Rename this canvas`
+            ? `${canvas.description ? `${canvas.description}\n\n` : ""}${canEdit ? "Rename this canvas" : "You may read this canvas but not change it"}`
             : undefined
         }
         onClick={() => setEditing(!editing)}

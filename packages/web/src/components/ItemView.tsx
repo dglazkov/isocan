@@ -46,6 +46,7 @@ import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useVotesHidden } from "../lib/sprint.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
+import { useCanEdit } from "../lib/capability.ts";
 
 /** Two presses this close together are one double-press. */
 const DOUBLE_PRESS_MS = 450;
@@ -107,6 +108,7 @@ function ItemViewInner({
   const peeked = useUiStore((s) => s.peekedItemId === item.id);
   const scale = useUiStore((s) => s.viewport.scale);
   const commentMode = useUiStore((s) => s.commentMode);
+  const canEdit = useCanEdit();
   // A remote session holding this item shows as an outline in their color.
   const remoteHolder = useCanvasStore((s) => {
     const holder = s.sessions.find((session) => session.selection.includes(item.id));
@@ -294,7 +296,7 @@ function ItemViewInner({
     // that follow to the frame — the label would never hear its own event.
     // The count is kept by hand: a pointerdown carries no click count (detail
     // is 0 on pointer events), so the pair has to be recognized by the clock.
-    if (target.closest(".item-titlebar")) {
+    if (canEdit && target.closest(".item-titlebar")) {
       const now = Date.now();
       if (now - labelPress.current < DOUBLE_PRESS_MS) {
         labelPress.current = 0;
@@ -311,6 +313,14 @@ function ItemViewInner({
     if (e.shiftKey) {
       // Shift-click toggles membership; no drag from a shift press.
       ui.toggleSelect(item.id);
+      return;
+    }
+
+    if (!canEdit) {
+      // A reader selects; nothing moves under their hand. Selection stays
+      // because it is how the context panel, the versions and full screen
+      // are reached, and none of those write.
+      ui.select(item.id);
       return;
     }
 
@@ -534,7 +544,9 @@ function ItemViewInner({
     // on what it says. Editing lands as `item.addVersion`, so every wording
     // is kept and the CLI sees the change like any other.
     if (isText) {
-      void openTextEditor();
+      // A reader cannot re-open the composer on a text node: the words are
+      // the whole of it, so there is nothing to step inside of either.
+      if (canEdit) void openTextEditor();
       return;
     }
     ui.setEntered(item.id);
@@ -870,7 +882,7 @@ function ItemViewInner({
           )}
         </div>
       )}
-      {soleSelection && !entered && (
+      {soleSelection && !entered && canEdit && (
         <>
           <span className="resize-handle resize-handle-nw" onPointerDown={(e) => onResizeDown("nw", e)} />
           <span className="resize-handle resize-handle-ne" onPointerDown={(e) => onResizeDown("ne", e)} />

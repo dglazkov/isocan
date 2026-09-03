@@ -7,6 +7,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "./panels.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
 import { formatMoves, mapOf, mapsOn, tidyMap } from "@isocan/core";
+import { canEditNow } from "./capability.ts";
 
 /**
  * **The things the app does itself.**
@@ -51,6 +52,9 @@ export interface Action {
   group: "View" | "Tools" | "Open" | "Canvas";
   /** Whether it makes sense at this moment. */
   available?: (ctx: ActionContext) => boolean;
+  /** This action changes the canvas — arming a tool that creates, a format,
+   *  a tidy. Not offered on the read-only canvas (roles phase 1). */
+  writes?: boolean;
   run: (ctx: ActionContext) => void | Promise<void>;
 }
 
@@ -134,6 +138,8 @@ export const ACTIONS: readonly Action[] = [
       keys: { select: "V", hand: "H", pen: "P", text: "T", comment: "C" }[tool],
       group: "Tools",
       available: onCanvas,
+      // Select and Hand read; the other three put something on the canvas.
+      ...(tool === "select" || tool === "hand" ? {} : { writes: true }),
       run: () => useUiStore.getState().setActiveTool(tool),
     }),
   ),
@@ -192,6 +198,7 @@ export const ACTIONS: readonly Action[] = [
     hint: "straighten the lines, decide nothing",
     group: "Canvas",
     available: onCanvas,
+    writes: true,
     run: (ctx) => runFormat(ctx, "grid"),
   },
   {
@@ -200,6 +207,7 @@ export const ACTIONS: readonly Action[] = [
     hint: "screens across, what came from each beneath it",
     group: "Canvas",
     available: onCanvas,
+    writes: true,
     run: (ctx) => runFormat(ctx, "smart"),
   },
   {
@@ -210,6 +218,7 @@ export const ACTIONS: readonly Action[] = [
     /* Offered only where there is one to tidy: a menu that lists what it
        cannot do teaches people to stop reading it. */
     available: (ctx) => onCanvas(ctx) && mapsHere().length > 0,
+    writes: true,
     run: (ctx) => runTidy(ctx),
   },
   {
@@ -299,7 +308,11 @@ async function runTidy(ctx: ActionContext): Promise<void> {
   await sendEchoed(ctx.canvasId, ctx.actor, { type: "items.move", moves });
 }
 
-/** What can be run right now, in the order the groups are declared. */
+/** What can be run right now, in the order the groups are declared. On the
+ * read-only canvas the actions that write are not in the list at all. */
 export function availableActions(ctx: ActionContext): Action[] {
-  return ACTIONS.filter((action) => action.available?.(ctx) ?? true);
+  return ACTIONS.filter((action) => {
+    if (!canEditNow() && action.writes) return false;
+    return action.available?.(ctx) ?? true;
+  });
 }

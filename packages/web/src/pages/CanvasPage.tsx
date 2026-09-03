@@ -80,6 +80,7 @@ import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { fitToContent } from "../lib/fititem.ts";
 import { useCanvasHome } from "../lib/homes.ts";
+import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { ElsewherePage } from "./ElsewherePage.tsx";
 
 /** Arrow keys → a world-space direction. */
@@ -92,6 +93,23 @@ const NUDGES: Record<string, [number, number]> = {
 
 /** Shift makes it a stride instead of a step. */
 const NUDGE_BIG = 10;
+
+/**
+ * The keys that write, for the read-only canvas: delete and backspace,
+ * paste, undo and redo, the arrow nudge, the tool letters (T, C — P is the
+ * viewport's), ⇧C (comment on the selection), ⇧F (fit the item to its
+ * content) and F2 (rename). Navigation keys are not here: a reader arrows
+ * between items with ⌘, fits, zooms and opens full screen like anyone.
+ */
+function writesByKey(e: KeyboardEvent): boolean {
+  const meta = e.metaKey || e.ctrlKey;
+  const key = e.key.toLowerCase();
+  if (meta) return key === "v" || key === "z";
+  if (e.key === "Delete" || e.key === "Backspace" || e.key === "F2") return true;
+  if (NUDGES[e.key]) return true;
+  if (e.shiftKey) return key === "c" || key === "f";
+  return key === "t" || key === "c";
+}
 
 /** How long after the last arrow press the move is written. */
 const NUDGE_FLUSH_MS = 350;
@@ -168,6 +186,7 @@ function CanvasSurface({
   const canvasTitle = useCanvasStore((s) => s.project?.title ?? null);
   const connection = useCanvasStore((s) => s.connection);
   const capability = useCanvasStore((s) => s.capability);
+  const canEdit = useCanEdit();
   const joined = useCanvasStore((s) => s.actorJoins);
   const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
@@ -466,6 +485,7 @@ function CanvasSurface({
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v" && !isTyping(e.target)) {
+        if (!canEditNow()) return; // a reader has nowhere to paste
         const held = useUiStore.getState().clipboard;
         if (!held || held.items.length === 0) return;
         e.preventDefault();
@@ -546,6 +566,10 @@ function CanvasSurface({
        * typing is not.
        */
       if (isTyping(e.target) || isTyping(document.activeElement)) return;
+      // The read-only canvas: the keys that write are not offered (see
+      // `HIDDEN_WRITES`). Courtesy, not enforcement — the daemon refuses
+      // whatever a missed key reaches.
+      if (!canEditNow() && writesByKey(e)) return;
       const ui = useUiStore.getState();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -787,11 +811,18 @@ function CanvasSurface({
   }
 
   /**
-   * A view admission gets the viewer face, whoever is holding it (#88). This
+   * **Three surfaces, one rung** (roles design, "The read-only canvas").
+   *
+   * A `view` admission gets the deck, whoever is holding it (#88). This
    * branch is what a NAMED person meets when they follow a view link — the
    * stranger's path never reaches this page (`Doorway` hands them to the
    * viewer before identity is asked). After the hooks, deliberately: the
    * socket above is the very connection whose hello said "view".
+   *
+   * A `read` admission gets the editor below with its writes hidden — the
+   * `read-only` class, `canEdit` on the surfaces that create, and the list
+   * in `lib/capability.ts` that a test walks. Everything at `edit` or above
+   * gets the editor.
    */
   if (capability === "view") {
     return <Viewer canvasId={canvasId} itemId={itemId ?? null} />;
@@ -801,7 +832,7 @@ function CanvasSurface({
     // `resizing-panel` while the panel's edge is being dragged: chrome that
     // steps aside for the panel eases to its new place, which is right for the
     // one step of opening and wrong for a width changing every frame.
-    <div className={`canvas-page${panelResizing ? " resizing-panel" : ""}`}>
+    <div className={`canvas-page${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}>
       {/* Covered, the canvas keeps its state and stops its paint:
           `visibility` preserves layout and the stores keep replaying, so Esc
           lands at the zoom you left without the covered surface spending
@@ -823,10 +854,10 @@ function CanvasSurface({
           Watching {followedLabel} — Esc to stop
         </button>
       )}
-      <CanvasTools canvasId={canvasId} actor={actor} />
+      {canEdit && <CanvasTools canvasId={canvasId} actor={actor} />}
       <ZoomControls canvasId={canvasId} actor={actor} />
       <Minimap />
-      <TrashPanel canvasId={canvasId} actor={actor} />
+      {canEdit && <TrashPanel canvasId={canvasId} actor={actor} />}
       <RailStrip canvasId={canvasId} actor={actor} />
       <MainThreadPanel canvasId={canvasId} actor={actor} />
       <FilesPanel canvasId={canvasId} actor={actor} />

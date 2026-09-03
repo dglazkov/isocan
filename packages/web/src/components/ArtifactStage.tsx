@@ -8,6 +8,7 @@ import { VersionContent } from "./ItemView.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { NeighbourPad } from "./NeighbourPad.tsx";
+import { useCanEdit } from "../lib/capability.ts";
 
 /** The editor is its own chunk inside the cover's chunk: CodeMirror is the
  * heaviest thing the workbench owns, and a folded editor must not pay for
@@ -172,6 +173,8 @@ export function ArtifactStage({
   // The whole canvas, for the deck walk that decides what to warm.
   const canvas = useCanvasStore((s) => s.canvas);
   const loaded = useCanvasStore((s) => s.canvas !== null);
+  // A reader gets the one-pane stage a png gets: no editor, no text edit.
+  const canEdit = useCanEdit();
   const [panes, setPanes] = useState<Panes>(() => readPanes(surface));
   const [split, setSplit] = useState<number | null>(readSplit);
   /**
@@ -223,7 +226,7 @@ export function ArtifactStage({
   }
 
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
-  const editable = editableText(current.mimeType);
+  const editable = editableText(current.mimeType) && canEdit;
   // Not a hook — a derivation, so it may live where it is used.
   const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
 

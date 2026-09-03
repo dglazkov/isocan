@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   Actor,
   ActorColors,
+  Capability,
   CanvasContents,
   ClientMessage,
   OpEnvelope,
@@ -164,13 +165,15 @@ interface CanvasStore {
    * built-ins stand in until it lands (lib/commands.ts). */
   commands: SlashCommand[] | null;
   /**
-   * What this tab's admission lets it do here (#88), read off the socket's
-   * hello. `edit` until the home says otherwise — which is what every home
-   * from before the field says by omission. The HOME enforces this; what the
-   * flag is for is wearing the viewer face instead of offering gestures that
-   * would each come back refused.
+   * The rung this tab's admission holds here (#88, widened by the roles
+   * ladder), read off the socket's hello. `edit` until the home says
+   * otherwise — which is what every home from before the field says by
+   * omission. The HOME enforces this; what the rung is for is picking the
+   * surface — the deck for `view`, the canvas with its writes hidden for
+   * `read`, the editor otherwise — instead of offering gestures that would
+   * each come back refused. Compared through `atLeast` in core, never here.
    */
-  capability: "edit" | "view";
+  capability: Capability;
 }
 
 /**
@@ -1034,7 +1037,7 @@ function openSocket(canvasId: string): void {
         actorColors: message.colors,
         actorNames: message.names,
         actorJoins: message.joined ?? {},
-        capability: message.capability === "view" ? "view" : "edit",
+        capability: message.capability ?? "edit",
       });
       // Through `confirm`, like every other move of the truth: the snapshot IS
       // the home's state at `lastSeq`, and anything this tab has queued past it
@@ -1063,7 +1066,7 @@ function openSocket(canvasId: string): void {
         actorColors: message.colors,
         actorNames: message.names,
         actorJoins: message.joined ?? {},
-        capability: message.capability === "view" ? "view" : "edit",
+        capability: message.capability ?? "edit",
       });
       schedulePresenceFlush();
     } else if (message.type === "presence-roster") {
