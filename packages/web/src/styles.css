@@ -2303,6 +2303,11 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   width: 26px; height: 26px; border-radius: 999px;
   border: 2px solid var(--card);
   color: var(--accent-ink); font-size: 11px; font-weight: 700; line-height: 1;
+  /* The actor's colour arrives as --face, set inline by lib/face.ts and
+     defaulting to the neutral chip; what it paints depends on what the disc
+     holds — see .ringed below. */
+  --face: var(--chip);
+  background: var(--face);
 }
 /* Here NOW — the same ring the pins wear. */
 .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
@@ -2319,6 +2324,16 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .face.self .face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
 /* Being watched: the camera is tethered to this face right now. */
 .face.followed .face-mark { box-shadow: 0 0 0 2px var(--accent); }
+/* **An emoji gets a ring, not a disc.** A letter reads in white on any of
+   the palette; an emoji is a picture with colours of its own, and on a
+   saturated disc — the blues especially — the two fight. So a face wearing
+   a mark keeps its colour as a ring around a neutral disc, and the small
+   rows that drop the border for an initial get it back for a mark. Declared
+   after those rows on purpose: same specificity, and the later rule wins. */
+.face-mark.ringed {
+  background: var(--card); border-width: 2px; border-color: var(--face);
+  color: var(--ink);
+}
 .face-more { background: var(--chip); color: var(--ink-muted); font-size: 10px; }
 .face-badge {
   position: absolute; top: -4px; right: -5px; min-width: 15px; height: 15px;

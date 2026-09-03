@@ -21,6 +21,7 @@ import {
 import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { useActorMarks } from "../lib/marks.ts";
 
@@ -810,8 +811,8 @@ export function ShareDialog({
             className={`share-roster-row ${who.state}`}
           >
             <span
-              className="face-mark"
-              style={{ background: actorColorIn(colors, who.actor.id) }}
+              className={faceMarkClass(marks, who.actor)}
+              style={faceMarkStyle(colors, who.actor)}
             >
               {faceMark(marks, who.actor, actorNameIn(names, who.actor))}
             </span>
