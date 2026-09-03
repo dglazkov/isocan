@@ -1155,6 +1155,11 @@ export interface PresenceWhere {
   lastSeen: string;
 }
 
+/** `GET /api/kinds` — actor id → "agent" for every actor whose last claim
+ *  came from a harness that is not a person's (`core/claims.ts`
+ *  `actorKinds`). People are absent, not "person". */
+export const ACTOR_KINDS_ROUTE = "/api/kinds";
+
 /** `GET /api/docs/export?url=` — a Google Doc's markdown, fetched by the
  *  daemon for the app (`core/googledoc.ts`). */
 export const DOC_EXPORT_ROUTE = "/api/docs/export";

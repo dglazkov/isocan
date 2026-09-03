@@ -265,9 +265,19 @@ function askKind(
  * `buildRecap` takes it — because an ask from three weeks ago is the
  * interesting kind and `gc` may have compacted it.
  */
-export function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus {
+export function buildCorpus(
+  canvas: CanvasContents,
+  log: LogEntry[],
+  /**
+   * Actors known to be agents beyond the roster — what `actorKinds` reads
+   * off the registry (every actor whose claim came from a harness). Until
+   * 3 Sep 2026 only `agent.enroll` marked anybody, so an interactive agent's
+   * "Done —" in the Chat was counted as an ask; with these, it is a reply.
+   */
+  knownAgents: Iterable<string> = [],
+): Corpus {
   const asks: AskEntry[] = [];
-  const agents = new Set(Object.keys(canvas.agents ?? {}));
+  const agents = new Set([...Object.keys(canvas.agents ?? {}), ...knownAgents]);
 
   // Ops that are worth attributing to an ask at all. Undo and redo entries are
   // excluded as SOURCES — an undo is a verdict on an op, and it is already

@@ -1611,6 +1611,10 @@ isocan fit <items...>                  # grow items to the size their content wa
   brought the previous version back — the accept rate that widens or narrows
   what the night may do unasked.
 
+  The home knows who is an agent — the harness you claimed your name from is
+  recorded with it — so your own "Done —" in the Chat counts as a reply here,
+  not as somebody asking; nothing to enrol by hand for that.
+
   Two things to hold when you read it. **The attribution says how it knows**,
   and one of its three labels is a guess: `anchor` and `reference` are
   recorded facts, `window` is "the agent that was asked did this before

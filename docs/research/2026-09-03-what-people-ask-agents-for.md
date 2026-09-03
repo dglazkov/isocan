@@ -166,11 +166,16 @@ And two things for the product, found on the way:
   almost nobody runs it. The roster should fill itself when an agent enters
   through `isocan identity --as` or `rc`, and a bot that posts on a timer
   should say so on its actor — so the next corpus does not need a person to
-  sort 414 rows by hand.
+  sort 414 rows by hand. **Built 3 Sep:** every claim's session key names
+  its harness, and the daemon now writes that into the actor registry
+  (`harnesses`) and serves it as `GET /api/kinds` — people claim from
+  `web:` and `home:`, everything else is an agent. The corpus reads it
+  beside the roster; the face card says "agent" for one, live or gone.
 - **A bot that posts 137 notifications into the Chat has made the Chat
   unusable as a channel.** The Repo Admin noticed this itself mid-run ("I have
   posted 80 of this thread's 96 messages") and quietened. Notifications want
-  their own thread, or a panel, not the room.
+  their own thread, or a panel, not the room. **Built 3 Sep:** the board's
+  notices go to one thread anchored to its own Tree status panel.
 
 ## Method, for the next time
 

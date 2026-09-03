@@ -10866,7 +10866,12 @@ evals
       const archived = await ctx.client.getArchivedLog(p.id);
       const live = await ctx.client.getLog(p.id, 0);
       const snap = await ctx.client.snapshot(p.id);
-      const corpus = buildCorpus(snap.canvas, [...archived, ...live]);
+      // Who is an agent, beyond the roster: the registry records the harness
+      // of every claim, so an interactive agent's receipts in the Chat are
+      // replies here, not asks. A daemon from before the route answers
+      // nothing, and the corpus falls back to the roster alone, as before.
+      const kinds = await ctx.client.actorKinds().catch(() => ({}) as Record<string, "agent">);
+      const corpus = buildCorpus(snap.canvas, [...archived, ...live], Object.keys(kinds));
       if (ctx.json) return printJson(corpus);
 
       const s = corpus.summary;
@@ -10883,7 +10888,7 @@ evals
           // enrolled, an agent's own receipt in the Chat is indistinguishable
           // from a question and is counted as one.
           (s.broadcastUnfiltered && s.broadcast > 0
-            ? " — an upper bound: nobody is enrolled here, so agents' own replies are in it (isocan agent add)"
+            ? " — an upper bound: the home knows no agent here, so agents' own replies may be in it"
             : ""),
       );
       console.log(

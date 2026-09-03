@@ -18,6 +18,7 @@ import type {
   HomesResponse,
   NewsResponse,
   PresenceWhereResponse,
+  ActorKinds,
   DocExportResponse,
   KillBadgeResponse,
   LogEntry,
@@ -66,6 +67,7 @@ import {
   narrowed,
   NEWS_ROUTE,
   PRESENCE_WHERE_ROUTE,
+  ACTOR_KINDS_ROUTE,
   DOC_EXPORT_ROUTE,
   newClientId,
   newOpId,
@@ -324,6 +326,11 @@ export function fetchActorMarks(): Promise<ActorMarks> {
 
 export function fetchActorNames(): Promise<ActorNames> {
   return request("GET", "/api/names");
+}
+
+/** Who is an agent — actor id → "agent", people absent. See `useActorKinds`. */
+export function fetchActorKinds(): Promise<ActorKinds> {
+  return request("GET", ACTOR_KINDS_ROUTE);
 }
 
 /** Every slash command available here — built-ins under this home's own. */

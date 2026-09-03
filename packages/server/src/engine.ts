@@ -8,6 +8,7 @@ import type {
   ActorJoinOp,
   ActorJoins,
   ActorMarks,
+  ActorKinds,
   ActorNames,
   ActorRegistry,
   ActorSetColorOp,
@@ -34,6 +35,7 @@ import {
   actorColors,
   actorJoins,
   actorMarks,
+  actorKinds,
   actorNames,
   allocateName,
   applyActorColor,
@@ -440,6 +442,14 @@ export class Engine {
   async actorMarks(): Promise<ActorMarks> {
     const { registry } = await this.actors();
     return actorMarks(registry);
+  }
+
+  /** Actor id → "agent" for everyone whose last claim came from a harness
+   *  that is not a person's — recorded at claim time, so it outlives the
+   *  session (`core/claims.ts` `actorKinds`). */
+  async actorKinds(): Promise<ActorKinds> {
+    const { registry } = await this.actors();
+    return actorKinds(registry);
   }
 
   /**
