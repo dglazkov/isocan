@@ -4,8 +4,10 @@ import {
   capabilityOf,
   claimsActor,
   GRANTED_BY_HOME,
+  groupIdOf,
   highest,
   isBar,
+  isGroupLive,
   isLive,
   LINK,
   narrowed,
@@ -16,7 +18,7 @@ import {
   VIEW_ONLY,
   WITHDRAWN,
 } from "@isocan/core";
-import type { Capability, Grant, Space } from "@isocan/core";
+import type { Attestation, Capability, Grant, GrantSubject, Group, Space } from "@isocan/core";
 import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
 
 /**
@@ -147,6 +149,55 @@ export interface DoorAnswer {
 export interface DoorLookup {
   spaceOf(canvasId: string): Promise<Space | null>;
   grantsForSpace(spaceId: string): Promise<Grant[]>;
+  /** The group behind a `group:` row (roles phase 5) — one document read per
+   * group row per door test, memoized by the test itself. */
+  group(groupId: string): Promise<Group | null>;
+}
+
+/**
+ * **Does this subject admit this holder?** — the door's one question, for
+ * every kind of subject (roles phase 5 made it a function because a third
+ * kind arrived that needs the desk).
+ *
+ * - `link`: yes. Presenting the address is the proof, a fact about the
+ *   request, which is why core's `attestationSatisfying` never answers it.
+ * - `email:` / `repo:`: an attestation of the same attribute, core's test.
+ * - `group:`: **membership, read at the door.** The group is fetched and the
+ *   question is whether any attribute this badge has proved is in
+ *   `members`. Nothing is copied anywhere, which is what makes removing a
+ *   member one write followed by a sweep. A group that is gone — deleted, or
+ *   never was — admits nobody: a row pointing at nothing is a row that says
+ *   nothing, loudly, rather than one that helpfully admits everybody.
+ *
+ * `groupOf` is the caller's memo: `admittingGrant` builds one per door test
+ * so a group named by a canvas row AND a space row costs one read.
+ */
+export async function subjectAdmits(
+  subject: GrantSubject,
+  attestations: readonly Attestation[],
+  groupOf: (groupId: string) => Promise<Group | null>,
+): Promise<boolean> {
+  if (subject === LINK) return true;
+  const groupId = groupIdOf(subject);
+  if (groupId !== null) {
+    const group = await groupOf(groupId);
+    if (!group || !isGroupLive(group)) return false;
+    return attestations.some((row) => group.members.includes(row.attribute));
+  }
+  return attestationSatisfying(subject, attestations) !== null;
+}
+
+/** One read per group per door test: the memo `subjectAdmits` is handed. */
+function groupMemo(via: Pick<DoorLookup, "group">): (groupId: string) => Promise<Group | null> {
+  const groups = new Map<string, Promise<Group | null>>();
+  return (groupId) => {
+    let found = groups.get(groupId);
+    if (!found) {
+      found = via.group(groupId);
+      groups.set(groupId, found);
+    }
+    return found;
+  };
 }
 
 export async function admittingGrant(
@@ -169,26 +220,34 @@ export async function admittingGrant(
     ...(space ? await via.grantsForSpace(space.id) : []),
   ];
   const live = grants.filter(isLive);
+  const attestations = badge.attestations ?? [];
+  // The group memo for THIS door test (roles phase 5): a `group:` row is one
+  // desk read, and the same group on the canvas and on its space is still
+  // one.
+  const groupOf = groupMemo(via);
   /**
    * **A bar wins over every rung** (roles design, "The bar"). Asked of the
    * live rows before any of them is allowed to admit: a bar is a row that
    * says no, and highest-wins over the rungs must never see it as a rung.
-   * `link` is never a bar's subject (`barSubjectRefusal`), so a bar matches
-   * only by attestation. When one matches, no row admits; the only thing
-   * left to ask is the floor, because the creator cannot be barred.
+   * `link` is never a bar's subject and neither is a group
+   * (`barSubjectRefusal`), so a bar matches only by attestation. When one
+   * matches, no row admits; the only thing left to ask is the floor, because
+   * the creator cannot be barred.
    */
-  const barred = live.some(
-    (grant) => isBar(grant) && attestationSatisfying(grant.subject, badge.attestations ?? []),
-  );
+  let barred = false;
+  for (const grant of live) {
+    if (isBar(grant) && (await subjectAdmits(grant.subject, attestations, groupOf))) {
+      barred = true;
+      break;
+    }
+  }
   if (!barred) {
     const rung = (grant: Grant) => RUNGS.indexOf(capabilityOf(grant));
     const rows = live
       .filter((grant) => !isBar(grant))
       .sort((a, b) => rung(b) - rung(a) || a.at.localeCompare(b.at));
     for (const grant of rows) {
-      const admits =
-        grant.subject === LINK || attestationSatisfying(grant.subject, badge.attestations ?? []);
-      if (admits) {
+      if (await subjectAdmits(grant.subject, attestations, groupOf)) {
         return { grant, provenance: { root: "grant", grantId: grant.id }, capability: capabilityOf(grant) };
       }
       // Anything else falls through, and falling through is the correct answer
@@ -317,11 +376,20 @@ export async function heldRungOnSpace(
 ): Promise<Capability | null> {
   const rows = (await desk.grantsForSpace(space.id)).filter(isLive);
   const attestations = badge.attestations ?? [];
-  const barred = rows.some((row) => isBar(row) && attestationSatisfying(row.subject, attestations));
+  // The same question the door asks, group rows included (roles phase 5),
+  // with one read per group for this call.
+  const groupOf = groupMemo(desk);
+  let barred = false;
+  for (const row of rows) {
+    if (isBar(row) && (await subjectAdmits(row.subject, attestations, groupOf))) {
+      barred = true;
+      break;
+    }
+  }
   let held: Capability | null = null;
   if (!barred) {
     for (const row of rows) {
-      if (isBar(row) || !attestationSatisfying(row.subject, attestations)) continue;
+      if (isBar(row) || !(await subjectAdmits(row.subject, attestations, groupOf))) continue;
       held = held === null ? capabilityOf(row) : highest(held, capabilityOf(row));
     }
   }

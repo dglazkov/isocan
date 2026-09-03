@@ -1,6 +1,15 @@
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
-import type { ActorClaim, Attestation, Capability, Grant, Space } from "@isocan/core";
-import { isCapability, isLive, isSpaceLive, narrowed, SHELF, upsertAttestation } from "@isocan/core";
+import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "@isocan/core";
+import {
+  groupSubject,
+  isCapability,
+  isGroupLive,
+  isLive,
+  isSpaceLive,
+  narrowed,
+  SHELF,
+  upsertAttestation,
+} from "@isocan/core";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
@@ -34,6 +43,17 @@ export const PASSES = "passes";
  * that needs it.
  */
 export const SPACES = "spaces";
+/**
+ * `groups/{id}` — the desk's fifth row (roles phase 5). Queried two ways,
+ * both single-field and served by the automatic indexes with nothing in
+ * `firestore.indexes.json`: `createdBy == <actorId>` (`groupsFor`) and
+ * `members array-contains <attribute>` (`spacesFor`'s group branch). A
+ * tombstone keeps its `members` — the row is the record of who was in it —
+ * and is dropped in memory by the one query that could meet it, from a list
+ * already bounded to one attribute's groups. The door never queries this
+ * collection: it reads one document per `group:` row, by id.
+ */
+export const GROUPS = "groups";
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -363,6 +383,18 @@ export class CloudDesk implements Desk {
     await this.db.collection(GRANTS).doc(grant.id).set(jsonSafe(grant));
   }
 
+  /**
+   * `where("subject", "==", subject)` — the query `spacesFor` has run per
+   * attribute since roles phase 4, now a method of its own for the group
+   * routes (roles phase 5): every live row naming one subject, in either
+   * scope, is what a change to a group has to reach. Single-field, automatic
+   * index, no fallback.
+   */
+  async grantsBySubject(subject: GrantSubject): Promise<Grant[]> {
+    const found = await this.db.collection(GRANTS).where("subject", "==", subject).get();
+    return found.docs.map((doc) => toGrant(doc.data())).filter(isLive);
+  }
+
   // ---- spaces (roles phase 4) ----
 
   /** THE ONE WRITER of a space document, like `writeBadge` for a badge: the
@@ -402,8 +434,11 @@ export class CloudDesk implements Desk {
    * automatic indexes serve them. Tombstones are dropped in memory from a
    * list already bounded to one actor's own spaces, which is not a scan.
    *
-   * Roles phase 5 adds the group branch here: rows whose subject is a group
-   * containing one of the attributes, one more bounded query.
+   * The group branch (roles phase 5): `where("members", "array-contains",
+   * attribute)` over the groups, per attribute, then `subject ==
+   * group:<id>` over the grants for each live group found. Two more
+   * single-field queries, and the tombstones are dropped from a list already
+   * bounded to one attribute's groups.
    */
   async spacesFor(badge: BadgeRecord): Promise<Space[]> {
     const seen = new Map<string, Space>();
@@ -415,8 +450,17 @@ export class CloudDesk implements Desk {
       for (const doc of found.docs) keep(toSpace(doc.data()));
     }
     const named = new Set<string>();
-    for (const attribute of unique((badge.attestations ?? []).map((row) => row.attribute))) {
-      const rows = await this.db.collection(GRANTS).where("subject", "==", attribute).get();
+    const attributes = unique((badge.attestations ?? []).map((row) => row.attribute));
+    const subjects = new Set<string>(attributes);
+    for (const attribute of attributes) {
+      const groups = await this.db.collection(GROUPS).where("members", "array-contains", attribute).get();
+      for (const doc of groups.docs) {
+        const group = toGroup(doc.data());
+        if (isGroupLive(group)) subjects.add(groupSubject(group.id));
+      }
+    }
+    for (const subject of subjects) {
+      const rows = await this.db.collection(GRANTS).where("subject", "==", subject).get();
       for (const doc of rows.docs) {
         const grant = toGrant(doc.data());
         if (isLive(grant) && "spaceId" in grant) named.add(grant.spaceId);
@@ -426,6 +470,33 @@ export class CloudDesk implements Desk {
       if (seen.has(spaceId)) continue;
       const space = await this.space(spaceId);
       if (space) keep(space);
+    }
+    return [...seen.values()];
+  }
+
+  // ---- groups (roles phase 5) ----
+
+  /** A plain document write: `members` is the array the query reads, so
+   * nothing is derived and there is nothing to forget. */
+  async putGroup(group: Group): Promise<void> {
+    await this.db.collection(GROUPS).doc(group.id).set(jsonSafe(group));
+  }
+
+  async group(groupId: string): Promise<Group | null> {
+    const doc = await this.db.collection(GROUPS).doc(groupId).get();
+    return doc.exists ? toGroup(doc.data()!) : null;
+  }
+
+  /** One `createdBy` equality per actor the badge claims; tombstones dropped
+   * from that bounded list. Never a scan. */
+  async groupsFor(badge: BadgeRecord): Promise<Group[]> {
+    const seen = new Map<string, Group>();
+    for (const actorId of unique(badge.claims.map((claim) => claim.actorId))) {
+      const found = await this.db.collection(GROUPS).where("createdBy", "==", actorId).get();
+      for (const doc of found.docs) {
+        const group = toGroup(doc.data());
+        if (isGroupLive(group) && !seen.has(group.id)) seen.set(group.id, group);
+      }
     }
     return [...seen.values()];
   }
@@ -694,6 +765,19 @@ function toSpace(data: DocumentData): Space {
     name: data["name"] as string,
     createdBy: data["createdBy"] as string,
     canvasIds: (data["canvasIds"] as string[] | undefined) ?? [],
+    at: data["at"] as string,
+    ...(typeof data["deletedAt"] === "string" ? { deletedAt: data["deletedAt"] } : {}),
+  };
+}
+
+/** A group document, back as a row. Nothing is derived: `members` is both
+ * the record and the array the query reads. */
+function toGroup(data: DocumentData): Group {
+  return {
+    id: data["id"] as string,
+    name: data["name"] as string,
+    createdBy: data["createdBy"] as string,
+    members: (data["members"] as string[] | undefined) ?? [],
     at: data["at"] as string,
     ...(typeof data["deletedAt"] === "string" ? { deletedAt: data["deletedAt"] } : {}),
   };

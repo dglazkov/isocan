@@ -1,4 +1,4 @@
-import type { Capability, Grant, Space } from "../../core/src/index.js";
+import type { Attestation, Capability, Grant, GrantSubject, Group, Space } from "../../core/src/index.js";
 import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.js";
 /**
  * The door's test over the desk's grant rows (identity desk, mechanisms 3 + 2).
@@ -115,7 +115,29 @@ export interface DoorAnswer {
 export interface DoorLookup {
     spaceOf(canvasId: string): Promise<Space | null>;
     grantsForSpace(spaceId: string): Promise<Grant[]>;
+    /** The group behind a `group:` row (roles phase 5) — one document read per
+     * group row per door test, memoized by the test itself. */
+    group(groupId: string): Promise<Group | null>;
 }
+/**
+ * **Does this subject admit this holder?** — the door's one question, for
+ * every kind of subject (roles phase 5 made it a function because a third
+ * kind arrived that needs the desk).
+ *
+ * - `link`: yes. Presenting the address is the proof, a fact about the
+ *   request, which is why core's `attestationSatisfying` never answers it.
+ * - `email:` / `repo:`: an attestation of the same attribute, core's test.
+ * - `group:`: **membership, read at the door.** The group is fetched and the
+ *   question is whether any attribute this badge has proved is in
+ *   `members`. Nothing is copied anywhere, which is what makes removing a
+ *   member one write followed by a sweep. A group that is gone — deleted, or
+ *   never was — admits nobody: a row pointing at nothing is a row that says
+ *   nothing, loudly, rather than one that helpfully admits everybody.
+ *
+ * `groupOf` is the caller's memo: `admittingGrant` builds one per door test
+ * so a group named by a canvas row AND a space row costs one read.
+ */
+export declare function subjectAdmits(subject: GrantSubject, attestations: readonly Attestation[], groupOf: (groupId: string) => Promise<Group | null>): Promise<boolean>;
 export declare function admittingGrant(desk: Desk, canvasId: string, badge: BadgeRecord, creator?: string | null, via?: DoorLookup): Promise<DoorAnswer | null>;
 /** The refusal when somebody below `own` tries to change who may enter a
  *  canvas — inviting, revoking, the link, its rung. Its own code, so a client

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ActorClaim, Grant, Space } from "@isocan/core";
-import { LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
+import type { ActorClaim, Grant, Group, Space } from "@isocan/core";
+import { groupSubject, LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
 import type { BadgeRecord, Desk, PassRecord } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
 
@@ -393,6 +393,103 @@ export function deskConformance(
       }),
     );
 
+    // ---- roles phase 5: the group, and the rows that name a subject ----
+
+    test(
+      "groups: written whole, read by id, listed for their maker, and a tombstone is read but not listed",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_priya"));
+        await desk.put(mint("bdg_nobody"));
+        await desk.setClaims("bdg_priya", [claim("usr_priya", "cli:priya")]);
+        expect(await desk.group("ppl_nope")).toBeNull();
+        expect(await desk.groupsFor((await desk.badge("bdg_priya"))!)).toEqual([]);
+
+        const team = group("ppl_design", "usr_priya", ["email:jordan@acme.test", "email:sam@acme.test"]);
+        await desk.putGroup(team);
+        await desk.putGroup(group("ppl_theirs", "usr_sam", ["email:jordan@acme.test"]));
+        expect(await desk.group("ppl_design")).toEqual(team);
+        // A write REPLACES: removing a member is the row written again
+        // without them, and the desk answers with the row as it now stands.
+        const smaller = { ...team, members: ["email:jordan@acme.test"] };
+        await desk.putGroup(smaller);
+        expect((await desk.group("ppl_design"))!.members).toEqual(["email:jordan@acme.test"]);
+
+        // The maker's list, and only the maker's: a group somebody is merely
+        // IN is not theirs to list. A badge that claims nobody owns none —
+        // no fallback, so a backing that scanned would hand a stranger every
+        // group on the home.
+        const priya = (await desk.groupsFor((await desk.badge("bdg_priya"))!)).map((g) => g.id);
+        expect(priya).toEqual(["ppl_design"]);
+        expect(await desk.groupsFor((await desk.badge("bdg_nobody"))!)).toEqual([]);
+
+        // The tombstone: read by id, so a route can tell "gone" from "never
+        // was", and out of the maker's list.
+        const gone = { ...smaller, deletedAt: "2026-08-23T12:00:00.000Z" };
+        await desk.putGroup(gone);
+        expect(await desk.group("ppl_design")).toEqual(gone);
+        expect(await desk.groupsFor((await desk.badge("bdg_priya"))!)).toEqual([]);
+      }),
+    );
+
+    test(
+      "grantsBySubject: every LIVE row naming a subject, in either scope, and nothing else",
+      withDesk(async ({ desk }) => {
+        const subject = groupSubject("ppl_design");
+        expect(await desk.grantsBySubject(subject)).toEqual([]);
+        await desk.putGrant({ ...grant("gnt_c", "prj_a", "bdg_1"), subject });
+        await desk.putGrant({ ...spaceGrant("gnt_s", "spc_a", "bdg_1"), subject, capability: "read" });
+        await desk.putGrant({ ...grant("gnt_other", "prj_b", "bdg_1"), subject: "email:jordan@acme.test" });
+        await desk.putGrant({ ...grant("gnt_dead", "prj_c", "bdg_1"), subject, revokedAt: "2026-01-02T00:00:00.000Z", revokedBy: "bdg_1" });
+        const rows = await desk.grantsBySubject(subject);
+        expect(rows.map((row) => row.id).sort()).toEqual(["gnt_c", "gnt_s"]);
+        // Both arms come back as written: the canvas row with its canvas,
+        // the space row with its space and its rung.
+        expect(rows.find((row) => row.id === "gnt_c")).toMatchObject({ canvasId: "prj_a" });
+        expect(rows.find((row) => row.id === "gnt_s")).toMatchObject({ spaceId: "spc_a", capability: "read" });
+        // A revoked row is not a row that reaches anything.
+        await desk.revokeGrant("gnt_c", "2026-01-03T00:00:00.000Z", "bdg_1");
+        expect((await desk.grantsBySubject(subject)).map((row) => row.id)).toEqual(["gnt_s"]);
+      }),
+    );
+
+    test(
+      "spacesFor: the group branch — a space named by a row on a live group holding what the badge proved",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_jordan"));
+        await desk.put(mint("bdg_sam"));
+        const at = "2026-01-02T00:00:00.000Z";
+        await desk.attest("bdg_jordan", { attribute: "email:jordan@acme.test", verifiedVia: "magic-link", at });
+        await desk.attest("bdg_sam", { attribute: "email:sam@acme.test", verifiedVia: "magic-link", at });
+        await desk.putSpace(space("spc_design", "usr_priya", ["prj_a"]));
+        await desk.putSpace(space("spc_old", "usr_priya", []));
+        await desk.putSpace(space("spc_dead", "usr_priya", []));
+        await desk.putGroup(group("ppl_team", "usr_priya", ["email:jordan@acme.test"]));
+        await desk.putGroup({ ...group("ppl_gone", "usr_priya", ["email:sam@acme.test"]), deletedAt: at });
+        await desk.putGrant({ ...spaceGrant("gnt_team", "spc_design", "bdg_priya"), subject: groupSubject("ppl_team") });
+        await desk.putGrant({
+          ...spaceGrant("gnt_team_gone", "spc_old", "bdg_priya"),
+          subject: groupSubject("ppl_team"),
+          revokedAt: at,
+          revokedBy: "bdg_priya",
+        });
+        await desk.putGrant({ ...spaceGrant("gnt_dead_group", "spc_dead", "bdg_priya"), subject: groupSubject("ppl_gone") });
+        // A canvas row on the group is not a space, and must not become one.
+        await desk.putGrant({ ...grant("gnt_canvas", "prj_z", "bdg_priya"), subject: groupSubject("ppl_team") });
+
+        // A member sees the space a live row on their group names — and not
+        // the one whose row was revoked.
+        const jordan = (await desk.spacesFor((await desk.badge("bdg_jordan"))!)).map((s) => s.id);
+        expect(jordan).toEqual(["spc_design"]);
+        // A deleted group's rows admit nobody: Sam, in the tombstone only,
+        // sees no space.
+        expect(await desk.spacesFor((await desk.badge("bdg_sam"))!)).toEqual([]);
+        // And removing Jordan from the group is one write: the space is gone
+        // from the list on the next ask, with no row touched.
+        await desk.putGroup(group("ppl_team", "usr_priya", []));
+        expect(await desk.spacesFor((await desk.badge("bdg_jordan"))!)).toEqual([]);
+      }),
+    );
+
     test(
       "passes: written by id, read back by id, and nothing else's",
       withDesk(async ({ desk }) => {
@@ -719,6 +816,17 @@ export function space(id: string, createdBy: string, canvasIds: string[]): Space
     name: `Space ${id}`,
     createdBy,
     canvasIds,
+    at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+  };
+}
+
+/** A group, as the desk holds it (roles phase 5). */
+export function group(id: string, createdBy: string, members: string[]): Group {
+  return {
+    id,
+    name: `Group ${id}`,
+    createdBy,
+    members,
     at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
   };
 }

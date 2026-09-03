@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Actor, AttestOffer, Canvas, Capability, Grant, GrantSubject, Space, SpaceLinkResponse, SweepReport } from "@isocan/core";
-import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, ownsSpace, collectCanvasActors, grantSubjectOf, isBar, LINK, roster, faceMark, RUNGS } from "@isocan/core";
+import type { Actor, AttestOffer, Canvas, Capability, Grant, GrantSubject, GroupView, Space, SpaceLinkResponse, SweepReport } from "@isocan/core";
+import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, ownsSpace, collectCanvasActors, grantSubjectOf, groupIdOf, groupSubject, isBar, LINK, roster, faceMark, RUNGS, sameGroupName } from "@isocan/core";
 import type { PresenceSession, RowState } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
@@ -9,8 +9,10 @@ import {
   createGrant,
   createSpaceGrant,
   listGrants,
+  listGroups,
   listSpaceGrants,
   listSpaces,
+  readGroup,
   revokeGrant,
   revokeSpaceGrant,
   setSpaceLink,
@@ -162,6 +164,13 @@ export function ShareDialog({
   /** Showing the space's Share in place, reached from the *from the space*
    * line. */
   const [showSpace, setShowSpace] = useState(false);
+  /** The groups this person made (roles phase 5) — the picker beside the
+   * address field, and what `group:<name>` typed there resolves through. */
+  const [groups, setGroups] = useState<GroupView[]>([]);
+  /** Name and size for every group row on this canvas and its space, from
+   * `GET /api/groups/:id`, so a row reads *Design team · group of 5* and
+   * never `group:ppl_…`. */
+  const views = useGroupViews([...(grants ?? []), ...(fromSpace?.grants ?? [])]);
 
   const canvasId = record?.id ?? null;
 
@@ -176,6 +185,11 @@ export function ShareDialog({
       // Deliberately silent: not knowing what this home can verify costs the
       // "who" field, and an error banner about it would sit above a working
       // link toggle saying something a person cannot act on.
+      .catch(() => {});
+    // The person's groups, silently, for the picker: a home from before
+    // groups has no route, and a person with none gets no picker.
+    void listGroups()
+      .then((answer) => !cancelled && setGroups(answer.groups))
       .catch(() => {});
     // The space's rows, silently: a home from before spaces has no route,
     // and a canvas in no space has nothing to say here.
@@ -313,7 +327,7 @@ export function ShareDialog({
     setBusy(true);
     setError(null);
     try {
-      await createGrant(canvasId, grantSubjectOf(who), inviteRung, actor.id);
+      await createGrant(canvasId, inviteSubject(who, groups), inviteRung, actor.id);
       setWho("");
       setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
@@ -542,14 +556,34 @@ export function ShareDialog({
           >
             <input
               className="text-input"
-              type="email"
-              aria-label="Invite somebody by email"
-              placeholder="someone@example.com"
+              type="text"
+              aria-label="Invite somebody by email, or a group"
+              placeholder={groups.length > 0 ? "someone@example.com, or group:<name>" : "someone@example.com"}
               value={who}
               disabled={!owned}
               title={ownerTitle}
               onChange={(e) => setWho(e.target.value)}
             />
+            {/* A group, from the person's own list (roles phase 5): choosing
+                one fills the field with `group:<name>`, and Invite sends the
+                group's id — one path for the picker and for a typed name. */}
+            {groups.length > 0 && (
+              <select
+                className="text-input share-rung"
+                aria-label="Invite a group"
+                value=""
+                disabled={!owned}
+                title={ownerTitle}
+                onChange={(e) => setWho(e.target.value ? `group:${e.target.value}` : "")}
+              >
+                <option value="">Group…</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.name}>
+                    {group.name} ({group.size})
+                  </option>
+                ))}
+              </select>
+            )}
             {/* The rung, in the dialog's words. Editor selected, because
                 that is what an invitation has always meant here; Owner is in
                 the list (roles phase 2), and a person raised to it gets these
@@ -584,6 +618,7 @@ export function ShareDialog({
           <div className="share-link-note">
             They get in by proving that address — nothing is emailed from here, and no account
             is made for them. Send them the link above; the door does the rest.
+            {groups.length > 0 && " A group's members get in by proving an address in it."}
           </div>
         </>
       ) : (
@@ -655,7 +690,7 @@ export function ShareDialog({
             {fromSpace.grants.map((grant) => (
               <div key={grant.id} className="surface-row">
                 <span className="surface-what">
-                  <b>{grant.subject.replace(/^email:/, "")}</b>
+                  <b>{subjectLabel(grant.subject, views)}</b>
                   <span className="share-roster-kind">
                     {isBar(grant) ? "kept out" : capabilityWord.dialog[capabilityOf(grant)]} · from the space
                   </span>
@@ -686,10 +721,11 @@ export function ShareDialog({
               // address to a word a line (conductor's review, roles phase 2).
               <div key={grant.id} className="surface-row share-invited">
                 <span className="surface-what">
-                  <b>{grant.subject.replace(/^email:/, "")}</b>
+                  <b>{subjectLabel(grant.subject, views)}</b>
                   <span className="share-roster-kind">
                     {canEdit ? "" : `${capabilityWord.dialog[capabilityOf(grant)]} · `}
-                    invited {grant.at.slice(0, 10)} · gets in by proving it
+                    invited {grant.at.slice(0, 10)} ·{" "}
+                    {groupIdOf(grant.subject) ? "its members get in by proving an address in it" : "gets in by proving it"}
                     {belowSpace(grant, fromSpace)}
                   </span>
                 </span>
@@ -699,7 +735,7 @@ export function ShareDialog({
                         that replaces the row (roles journey 2). */}
                     <select
                       className="text-input share-rung"
-                      aria-label={`What ${grant.subject.replace(/^email:/, "")} may do`}
+                      aria-label={`What ${subjectLabel(grant.subject, views)} may do`}
                       value={capabilityOf(grant)}
                       disabled={busy || !owned}
                       title={ownerTitle}
@@ -736,7 +772,7 @@ export function ShareDialog({
                 {keptOut.map((grant) => (
                   <div key={grant.id} className="surface-row share-invited">
                     <span className="surface-what">
-                      <b>{grant.subject.replace(/^email:/, "")}</b>
+                      <b>{subjectLabel(grant.subject, views)}</b>
                       <span className="share-roster-kind">
                         kept out {grant.at.slice(0, 10)} · by {grant.grantedBy} · refused at the door
                         whatever the link allows
@@ -893,6 +929,8 @@ function SpaceShare({
   /** Each canvas's own live rows, for the wider-than-the-space mark and the
    * every-canvas link's current reading. */
   const [rowsOf, setRowsOf] = useState<Map<string, Grant[]>>(new Map());
+  const [groups, setGroups] = useState<GroupView[]>([]);
+  const views = useGroupViews(grants ?? []);
 
   const reload = async (): Promise<void> => {
     setGrants((await listSpaceGrants(space.id)).grants);
@@ -917,6 +955,9 @@ function SpaceShare({
       .catch((err: Error) => !cancelled && setError(err.message));
     attesterOffer()
       .then((answer) => !cancelled && setOffer(answer))
+      .catch(() => {});
+    void listGroups()
+      .then((answer) => !cancelled && setGroups(answer.groups))
       .catch(() => {});
     void (async () => {
       const found = new Map<string, Grant[]>();
@@ -1054,7 +1095,7 @@ function SpaceShare({
               e.preventDefault();
               if (!who.trim()) return;
               void act(who, async () => {
-                const answer = await createSpaceGrant(space.id, grantSubjectOf(who), inviteRung, actor.id);
+                const answer = await createSpaceGrant(space.id, inviteSubject(who, groups), inviteRung, actor.id);
                 setWho("");
                 return answer;
               });
@@ -1062,14 +1103,31 @@ function SpaceShare({
           >
             <input
               className="text-input"
-              type="email"
-              aria-label="Invite somebody by email to every canvas in this space"
-              placeholder="someone@example.com"
+              type="text"
+              aria-label="Invite somebody by email, or a group, to every canvas in this space"
+              placeholder={groups.length > 0 ? "someone@example.com, or group:<name>" : "someone@example.com"}
               value={who}
               disabled={!owned}
               title={ownerTitle}
               onChange={(e) => setWho(e.target.value)}
             />
+            {groups.length > 0 && (
+              <select
+                className="text-input share-rung"
+                aria-label="Invite a group"
+                value=""
+                disabled={!owned}
+                title={ownerTitle}
+                onChange={(e) => setWho(e.target.value ? `group:${e.target.value}` : "")}
+              >
+                <option value="">Group…</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.name}>
+                    {group.name} ({group.size})
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               className="text-input share-rung"
               aria-label="What they may do"
@@ -1120,13 +1178,13 @@ function SpaceShare({
             {invited.map((grant) => (
               <div key={grant.id} className="surface-row share-invited">
                 <span className="surface-what">
-                  <b>{grant.subject.replace(/^email:/, "")}</b>
+                  <b>{subjectLabel(grant.subject, views)}</b>
                   <span className="share-roster-kind">invited {grant.at.slice(0, 10)} · on every canvas here</span>
                 </span>
                 <span className="share-row-controls">
                   <select
                     className="text-input share-rung"
-                    aria-label={`What ${grant.subject.replace(/^email:/, "")} may do`}
+                    aria-label={`What ${subjectLabel(grant.subject, views)} may do`}
                     value={capabilityOf(grant)}
                     disabled={busy || !owned}
                     title={ownerTitle}
@@ -1161,7 +1219,7 @@ function SpaceShare({
                 {keptOut.map((grant) => (
                   <div key={grant.id} className="surface-row share-invited">
                     <span className="surface-what">
-                      <b>{grant.subject.replace(/^email:/, "")}</b>
+                      <b>{subjectLabel(grant.subject, views)}</b>
                       <span className="share-roster-kind">
                         kept out {grant.at.slice(0, 10)} · by {grant.grantedBy} · refused on every canvas here
                       </span>
@@ -1206,6 +1264,69 @@ function SpaceShare({
       </div>
     </div>
   );
+}
+
+/**
+ * **What somebody typed, as the subject the home is sent** (roles phase 5):
+ * an address through core's `grantSubjectOf`, exactly as before; a
+ * `group:<name>` — typed, or put there by the picker — resolved through the
+ * person's own groups to `group:<id>`, because the wire carries ids and a
+ * route handed a name would have to guess whose. `isocan share group:<name>`
+ * resolves the same way through the same list.
+ */
+function inviteSubject(who: string, groups: readonly GroupView[]): GrantSubject {
+  const ref = groupIdOf(who.trim());
+  if (ref === null) return grantSubjectOf(who);
+  const found = groups.find((group) => group.id === ref || sameGroupName(group.name, ref));
+  if (!found) throw new Error(`no group called ${ref} that you made — Groups… on the canvas list makes one`);
+  return groupSubject(found.id);
+}
+
+/**
+ * Name and size for every group row in a list, from `GET /api/groups/:id`
+ * — which answers those two things to anybody a live row lets see the
+ * group, and nothing more (roles design, "Who sees the members"). One read
+ * per distinct group; a group the home will not show stays as its subject.
+ */
+function useGroupViews(rows: readonly Grant[]): Map<string, GroupView> {
+  const [views, setViews] = useState<Map<string, GroupView>>(new Map());
+  const wanted = [...new Set(rows.map((row) => groupIdOf(row.subject)).filter((id): id is string => id !== null))].filter(
+    (id) => !views.has(id),
+  );
+  const key = wanted.join(" ");
+  useEffect(() => {
+    if (!key) return;
+    let cancelled = false;
+    void Promise.all(
+      key.split(" ").map(async (id) => {
+        try {
+          return [id, (await readGroup(id)).group] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((found) => {
+      if (cancelled) return;
+      setViews((current) => {
+        const next = new Map(current);
+        for (const entry of found) if (entry) next.set(entry[0], entry[1]);
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return views;
+}
+
+/** A row's subject as a person reads it: the address without its prefix, or
+ * the group's name and size — *Design team · group of 5*. */
+function subjectLabel(subject: string, views: ReadonlyMap<string, GroupView>): string {
+  const groupId = groupIdOf(subject);
+  if (groupId === null) return subject.replace(/^email:/, "");
+  const view = views.get(groupId);
+  return view ? `${view.name} · group of ${view.size}` : subject;
 }
 
 interface RosterRow {

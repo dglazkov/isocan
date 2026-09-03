@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, Pass, Space } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, GrantSubject, Group, Pass, Space } from "../../core/src/index.js";
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
  * `BadgeSummary` puts it on the wire — see `core/badge.ts`. */
@@ -432,6 +432,16 @@ export interface Desk {
      * nobody but its creator.
      */
     grantsForSpace(spaceId: string): Promise<Grant[]>;
+    /**
+     * **Every LIVE row naming this subject, in either scope** (roles phase 5)
+     * — `where("subject", "==", subject)` over the grants, a single-field
+     * equality. What a change to a group has to reach: the server walks these
+     * rows, takes a canvas row's canvas and a space row's whole list, and
+     * sweeps each. Live rows only, because a revoked row reaches nobody and
+     * the caller would otherwise sweep canvases that have nothing to
+     * recompute. No fallback: a subject nobody granted reaches nothing.
+     */
+    grantsBySubject(subject: GrantSubject): Promise<Grant[]>;
     /** Write one, whole — creation and every change alike (a canvas added or
      * removed, the tombstone). The id is minted by the caller. */
     putSpace(space: Space): Promise<void>;
@@ -459,12 +469,29 @@ export interface Desk {
      * fetched), and nothing else. A badge that claims nobody and has proved
      * nothing sees no space, which is the truth about it.
      *
-     * Roles phase 5 adds the third branch here — spaces named by rows on a
-     * group whose `members` holds one of the attributes — beside the second,
-     * as one more bounded query. The seam is `spacesFor`'s body and nothing
-     * else changes shape.
+     * The third branch (roles phase 5): the live groups whose `members` holds
+     * one of the badge's attested attributes — Firestore `array-contains` on
+     * `members` — and then the live rows whose subject is `group:<id>` that
+     * name a space. One more bounded query per attribute, and nothing else
+     * changed shape.
      */
     spacesFor(badge: BadgeRecord): Promise<Space[]>;
+    /** Write one, whole — creation, a member added or removed, the tombstone.
+     * The id is minted by the caller. */
+    putGroup(group: Group): Promise<void>;
+    /** The group behind an id, tombstone included, or null for one this home
+     * does not know. Deleted groups come back so a route can tell "gone" from
+     * "never was"; the door and `spacesFor` skip them, so a deleted group's
+     * rows admit nobody. */
+    group(groupId: string): Promise<Group | null>;
+    /**
+     * **The live groups this badge OWNS**: made by an actor it claims. One
+     * `createdBy` equality per claimed actor and nothing else — a group a
+     * person is merely in is not listed here, because the list is the owner's
+     * (members and all) and a member sees a group only through the rows that
+     * name it. A badge that claims nobody owns no group.
+     */
+    groupsFor(badge: BadgeRecord): Promise<Group[]>;
     /**
      * Write a freshly minted pass. A plain document write at `passes/{id}`: the
      * id is minted by the caller and a pass is never edited except by being

@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, Capability, Grant, Space } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
@@ -41,6 +41,12 @@ export declare class FileDesk implements Desk {
     spacesFor(badge: BadgeRecord): Promise<Space[]>;
     /** The spaces ledger, which a desk from before roles phase 4 lacks. */
     private spaces;
+    putGroup(group: Group): Promise<void>;
+    group(groupId: string): Promise<Group | null>;
+    groupsFor(badge: BadgeRecord): Promise<Group[]>;
+    grantsBySubject(subject: GrantSubject): Promise<Grant[]>;
+    /** The groups ledger, which a desk from before roles phase 5 lacks. */
+    private groups;
     putGrant(grant: Grant): Promise<void>;
     revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null>;
     putPass(pass: PassRecord): Promise<void>;

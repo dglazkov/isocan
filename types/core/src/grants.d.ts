@@ -38,8 +38,13 @@ import type { Attestation, SweepReport } from "./badge.js";
  * - `repo:<host>/<owner>/<name>` — Scene 6's sentence made checkable:
  *   committing the marker was a grant to whoever can read the repo. Satisfied
  *   the same way, by an attestation that the holder can read it.
+ * - `group:<id>` — a named set of people (roles phase 5, "The group").
+ *   Satisfied when any of the badge's attested attributes is in the group's
+ *   `members` AT THE MOMENT THE DOOR ASKS: membership is read from the desk
+ *   by the door and never copied onto a row, which is what makes removing a
+ *   member one write.
  */
-export type GrantSubject = "link" | `email:${string}` | `repo:${string}`;
+export type GrantSubject = "link" | `email:${string}` | `repo:${string}` | `group:${string}`;
 /**
  * **Who owns a canvas: the actor who made it.**
  *
@@ -154,7 +159,26 @@ export declare const LINK: GrantSubject;
  * none. The one place the prefix is turned into a word, so the API refusal,
  * the door, and a home's configuration all name the same thing. */
 export type AttestedKind = "email" | "repo";
+/**
+ * Null for `link` AND for `group:` (roles phase 5). A group is not an
+ * attested kind: nobody proves "I am in the design team" to an attester,
+ * they prove an address and the door looks the address up in the group. And
+ * `normalizeAttribute` lowercases every attested kind, which an id must
+ * never be — `ppl_Ab` and `ppl_ab` are two rows. So a group subject is
+ * deliberately not folded here, and `attesterRefusal` in the server gets its
+ * own `group:` case rather than reading this null as "needs no attester".
+ */
 export declare function attestedKindOf(subject: string): AttestedKind | null;
+/** The prefix a group's id wears. `ppl_`, because `grp_` already names a
+ * gesture group in the oplog (`newGroupId`), and one prefix meaning two
+ * things is how an id ends up looked up in the wrong ledger. */
+export declare const GROUP_ID_PREFIX = "ppl";
+/** The subject a group is granted as: `group:<id>`. */
+export declare function groupSubject(groupId: string): GrantSubject;
+/** Is this a group subject? The shape check is `grantSubjectRefusal`'s. */
+export declare function isGroupSubject(subject: unknown): subject is `group:${string}`;
+/** The id behind a group subject, or null when it is not one. */
+export declare function groupIdOf(subject: string): string | null;
 /**
  * **What a grant names: one canvas, or one space** (roles design, "The
  * space"). A discriminated scope rather than two optional fields, so a row
@@ -268,9 +292,9 @@ export declare function grantSubjectRefusal(subject: unknown): string | null;
  * `link`, because "anyone with the address may not enter" is the link turned
  * off, and never a group, because barring a group is un-inviting it (roles
  * design, "The bar"). The two bar-only refusals come BEFORE the shape check
- * on purpose: `group:` is not a grant subject until roles phase 5 adds it,
- * and when it is, this must still refuse it as a bar without being
- * re-taught.
+ * on purpose: they were written before `group:` was a grant subject at all
+ * (roles phase 5 made it one), and they refuse it as a bar without having
+ * been re-taught.
  */
 export declare function barSubjectRefusal(subject: unknown): string | null;
 /**
@@ -555,6 +579,124 @@ export declare const BAD_SPACE = "bad-space";
 /** This actor already owns a space of that name. Names are unique per owner
  * because the CLI resolves them; the wire carries ids. */
 export declare const SPACE_NAME_TAKEN = "space-name-taken";
+/**
+ * **A group** (roles design, "The group"): desk state at the home, like a
+ * space and for the same reason — it is part of what a grant means.
+ *
+ * `members` are normalized attributes (`email:…`, `repo:…`), the same
+ * namespace a badge's attestations live in, so the door's question is
+ * "is any attribute this badge has proved in the list" — read at the door,
+ * on every test, and never copied onto a grant row. That is what makes
+ * removing a member one write (journey 6). A group whose members are
+ * `repo:` attributes rides the same rows; nothing here builds a repo
+ * attester.
+ *
+ * `createdBy` is an actor id and it is the floor: the creator owns the
+ * group, sees its members, and is the only one who may change them. A
+ * canvas or space owner who uses the group in a grant sees its name and its
+ * size and nothing more — a group is a private list until its owner says
+ * otherwise, and a directory is a different feature.
+ */
+export interface Group {
+    /** `ppl_…` (see {@link GROUP_ID_PREFIX}). */
+    id: string;
+    name: string;
+    /** The actor who made it — the floor. */
+    createdBy: string;
+    /** Normalized attributes: `email:…`, `repo:…`. Never `link`, never a group. */
+    members: string[];
+    at: string;
+    /** A tombstone, like a space's: the row stays so the id keeps meaning what
+     * it meant, and its grant rows stop admitting anybody. */
+    deletedAt?: string;
+}
+/** Is this actor the one who made the group? The same reading `ownsSpace`
+ * makes of `createdBy`. */
+export declare function ownsGroup(group: {
+    createdBy: string;
+}, actorId: string): boolean;
+/** Is this group still standing? */
+export declare function isGroupLive(group: Group): boolean;
+/** How long a group's name may be — a space's bound, for a space's reason. */
+export declare const GROUP_NAME_MAX = 80;
+/** Why this is not a group name, or null when it is one. A space's rules:
+ * trimmed by the caller, one line, bounded. Unique among the ones a person
+ * owns, which is the desk's fact and refused at the route (`GROUP_NAME_TAKEN`). */
+export declare function groupNameRefusal(name: unknown): string | null;
+/** The one spelling of "the same name" for the per-owner rule: trimmed and
+ * case-folded, as for a space. */
+export declare const sameGroupName: typeof sameSpaceName;
+/**
+ * Why this cannot be a group MEMBER, or null when it can: a member is an
+ * attested attribute — an address or a repo — because that is what the door
+ * compares against. Never `link` (a group that anybody with the address is
+ * in is the link), and never a group (no nesting: the door reads one list
+ * per row, and a list that pointed at lists would make membership a walk).
+ */
+export declare function groupMemberRefusal(attribute: unknown): string | null;
+/** `GET` lists the groups the badge's actor made; `POST {name}` makes one.
+ * All at the home; a replica forwards through its one home. */
+export declare const GROUPS_ROUTE = "/api/groups";
+/** `GET` reads one (members for its owner, name and size for anybody a live
+ * grant naming it lets see it); `DELETE` marks it deleted. */
+export declare const groupRoute: (groupId: string) => string;
+/** `PUT` adds the member; `DELETE` removes it. The attribute rides the path,
+ * encoded, so `email:jordan@acme.test` survives the `@` and the `:`. */
+export declare const groupMemberRoute: (groupId: string, attribute: string) => string;
+/**
+ * A group as the API hands it back. `size` for everybody who may see it;
+ * `members` only when the caller owns the group (roles design, "Who sees
+ * the members"). Absent members and an empty list are different answers on
+ * purpose: a canvas owner using somebody's group sees `size: 5` and no
+ * `members`, and the group's owner sees both.
+ */
+export interface GroupView {
+    id: string;
+    name: string;
+    createdBy: string;
+    at: string;
+    size: number;
+    members?: string[];
+    deletedAt?: string;
+}
+/** The view the owner gets: the row, with its size counted. */
+export declare function groupViewOf(group: Group, forOwner: boolean): GroupView;
+export interface GroupsResponse {
+    groups: GroupView[];
+}
+export interface CreateGroupRequest {
+    name: string;
+    /** Who is making it — the floor. A badge that claims one actor need not
+     * say; one that claims several must. */
+    actorId?: string;
+}
+export interface GroupResponse {
+    group: GroupView;
+    /**
+     * What a member write did to the people inside — the sweep over every
+     * canvas every live row on the group reaches, added up, and how many
+     * canvases that was. Absent on a create and on a read, which reach
+     * nobody.
+     */
+    swept?: SweepReport;
+    reached?: number;
+}
+/** `PUT …/members/:attribute` carries who is acting in its body; the DELETEs
+ * carry it on the query, as every bodiless DELETE here does. */
+export interface GroupMemberRequest {
+    actorId?: string;
+}
+/** The `DELETE`s carry who is acting on the query — `spaceActingRoute`'s
+ * spelling, which is the one spelling for every bodiless DELETE here. */
+export declare const groupActingRoute: (route: string, actorId?: string) => string;
+/** There is no such group, or it was deleted, or this badge may not see it —
+ * three answers alike, so a group stays a private list. */
+export declare const GROUP_NOT_FOUND = "group-not-found";
+/** A request about a group that is not one: no name, no actor, a member that
+ * is not an attested attribute. */
+export declare const BAD_GROUP = "bad-group";
+/** This actor already owns a group of that name. */
+export declare const GROUP_NAME_TAKEN = "group-name-taken";
 /**
  * The door said no, and the caller's badge is perfectly good.
  *

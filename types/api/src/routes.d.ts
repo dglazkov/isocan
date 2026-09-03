@@ -1,4 +1,4 @@
-import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse } from "../../core/src/index.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, GroupResponse, GroupsResponse } from "../../core/src/index.js";
 import type { UpgradeVerdict } from "../../core/src/index.js";
 import type { BuildStamp } from "../../server/src/index.js";
 /** The health route: who is holding the port, and which build they are. */
@@ -230,6 +230,16 @@ export declare class DaemonRoutes {
     /** **Every canvas in this space**: the link on each canvas set to a rung,
      * or turned off, in one request; the answer says how many it reached. */
     setSpaceLink(spaceId: string, capability: SpaceLinkRequest["capability"], actorId?: string): Promise<SpaceLinkResponse>;
+    /** The groups this badge's actors made, members and all. */
+    groups(): Promise<GroupsResponse>;
+    createGroup(name: string, actorId?: string): Promise<GroupResponse>;
+    /** One group: members for its maker; name and size for anybody a live
+     * row naming it lets see it. */
+    group(groupId: string): Promise<GroupResponse>;
+    addGroupMember(groupId: string, attribute: string, actorId?: string): Promise<GroupResponse>;
+    /** No body; the actor rides the query. */
+    removeGroupMember(groupId: string, attribute: string, actorId?: string): Promise<GroupResponse>;
+    deleteGroup(groupId: string, actorId?: string): Promise<GroupResponse>;
     badges(): Promise<BadgesResponse>;
     /** No body, for `revokeGrant`'s reason. */
     killBadge(badgeId: string): Promise<KillBadgeResponse>;

@@ -8,10 +8,19 @@ import {
   grantRoute,
   grantSubjectOf,
   grantSubjectRefusal,
+  groupIdOf,
+  groupMemberRefusal,
+  groupMemberRoute,
+  groupNameRefusal,
+  groupRoute,
+  groupSubject,
+  groupViewOf,
   isBar,
+  isGroupSubject,
   LINK,
   normalizeAttribute,
   normalizeSubject,
+  ownsGroup,
   upsertAttestation,
 } from "../src/index.ts";
 
@@ -68,6 +77,69 @@ describe("what is a grant subject at all", () => {
     expect(attestedKindOf(LINK)).toBeNull();
     expect(attestedKindOf("email:jordan@acme.test")).toBe("email");
     expect(attestedKindOf("repo:github.com/acme/widgets")).toBe("repo");
+  });
+
+  it("takes a group by id, and only by id (roles phase 5)", () => {
+    expect(grantSubjectRefusal(groupSubject("ppl_design"))).toBeNull();
+    expect(isGroupSubject("group:ppl_design")).toBe(true);
+    expect(groupIdOf("group:ppl_design")).toBe("ppl_design");
+    expect(groupIdOf("email:jordan@acme.test")).toBeNull();
+    // A name is what a person types and the CLI resolves; the wire carries
+    // ids, because a route handed "design team" would have to guess whose.
+    expect(grantSubjectRefusal("group:design team")).toMatch(/not a group id/);
+    expect(grantSubjectRefusal("group:")).toMatch(/not a group id/);
+    expect(grantSubjectRefusal("group:ppl_")).toMatch(/not a group id/);
+    // `grp_` is a gesture group in the oplog, not a group of people.
+    expect(grantSubjectRefusal("group:grp_1")).toMatch(/not a group id/);
+  });
+
+  it("is not an attested kind, so its id is never case-folded", () => {
+    // `normalizeAttribute` lowercases every attested kind; an id must not
+    // be, so `attestedKindOf` keeps answering null and the server's
+    // `attesterRefusal` has a case of its own instead of leaning on that.
+    expect(attestedKindOf("group:ppl_Ab")).toBeNull();
+    expect(normalizeSubject("group:ppl_Ab")).toBe("group:ppl_Ab");
+    // And core cannot answer it: membership needs the desk.
+    expect(attestationSatisfying("group:ppl_1", [proof("group:ppl_1")])).toBeNull();
+  });
+});
+
+describe("what a group may hold", () => {
+  it("takes an address or a repo, normalized like a subject", () => {
+    expect(groupMemberRefusal("email:jordan@acme.test")).toBeNull();
+    expect(groupMemberRefusal("repo:github.com/acme/widgets")).toBeNull();
+  });
+
+  it("never the link, never another group, never a non-subject", () => {
+    expect(groupMemberRefusal(LINK)).toMatch(/not the link/);
+    expect(groupMemberRefusal("group:ppl_1")).toMatch(/not other groups/);
+    expect(groupMemberRefusal("everyone")).toMatch(/not a grant subject/);
+    expect(groupMemberRefusal("email:Jordan")).toMatch(/not an email address/);
+  });
+
+  it("is named like a space, and viewed with its size for everybody and its members for its maker", () => {
+    expect(groupNameRefusal("")).toMatch(/needs a name/);
+    expect(groupNameRefusal("Design\nTeam")).toMatch(/one line/);
+    expect(groupNameRefusal("Design team")).toBeNull();
+    const group = {
+      id: "ppl_1",
+      name: "Design team",
+      createdBy: "usr_priya",
+      members: ["email:jordan@acme.test", "email:sam@acme.test"],
+      at: "2026-01-01T00:00:00.000Z",
+    };
+    expect(groupViewOf(group, false)).toEqual({ ...group, members: undefined, size: 2 });
+    expect("members" in groupViewOf(group, false)).toBe(false);
+    expect(groupViewOf(group, true)).toMatchObject({ size: 2, members: group.members });
+    expect(ownsGroup(group, "usr_priya")).toBe(true);
+    expect(ownsGroup(group, "usr_sam")).toBe(false);
+  });
+
+  it("spells the routes once, with the member encoded on the path", () => {
+    expect(groupRoute("ppl_1")).toBe("/api/groups/ppl_1");
+    expect(groupMemberRoute("ppl_1", "email:jordan@acme.test")).toBe(
+      "/api/groups/ppl_1/members/email%3Ajordan%40acme.test",
+    );
   });
 });
 
@@ -194,10 +266,13 @@ describe("what a bar may name", () => {
     expect(barSubjectRefusal(LINK)).toMatch(/link cannot be kept out/);
   });
 
-  it("never a group, before the shape check has an opinion about groups", () => {
-    // `group:` is not a grant subject until roles phase 5 adds it, and the
-    // bar's refusal must not lean on that: barring a group is un-inviting it.
+  it("never a group, whether or not the shape check likes it", () => {
+    // Barring a group is un-inviting it. The bar's refusal came before
+    // `group:` was a grant subject at all (roles phase 5) and never leaned
+    // on the shape check, so a well-formed id and a malformed one are
+    // refused alike.
     expect(barSubjectRefusal("group:ppl_1")).toMatch(/group cannot be kept out/);
+    expect(barSubjectRefusal("group:design team")).toMatch(/group cannot be kept out/);
   });
 
   it("still refuses what is not a subject at all", () => {

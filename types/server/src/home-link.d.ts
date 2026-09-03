@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, UndoRedoRequest } from "../../core/src/index.js";
+import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, GroupResponse, GroupsResponse, UndoRedoRequest } from "../../core/src/index.js";
 import type { Engine } from "./engine.js";
 import type { PresenceHub } from "./presence.js";
 import { type HomeBuild } from "./build.js";
@@ -111,6 +111,14 @@ export interface HomeConnection {
     createSpaceGrant(spaceId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, bars?: boolean): Promise<GrantResponse>;
     revokeSpaceGrant(spaceId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
     setSpaceLink(spaceId: string, capability: SpaceLinkRequest["capability"], actor?: Actor): Promise<SpaceLinkResponse>;
+    /** The group routes, forwarded (roles phase 5), for the space routes'
+     * reason. Every write carries the actor acting. */
+    groups(): Promise<GroupsResponse>;
+    createGroup(name: string, actor?: Actor): Promise<GroupResponse>;
+    group(groupId: string): Promise<GroupResponse>;
+    addGroupMember(groupId: string, attribute: string, actor?: Actor): Promise<GroupResponse>;
+    removeGroupMember(groupId: string, attribute: string, actor?: Actor): Promise<GroupResponse>;
+    deleteGroup(groupId: string, actor?: Actor): Promise<GroupResponse>;
     /**
      * The attest routes, forwarded — for the badge routes' reason, and it is the
      * same sentence one word further on.
@@ -645,6 +653,12 @@ export declare class HomeLink implements HomeConnection {
     createSpaceGrant(spaceId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, bars?: boolean): Promise<GrantResponse>;
     revokeSpaceGrant(spaceId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
     setSpaceLink(spaceId: string, capability: SpaceLinkRequest["capability"], actor?: Actor): Promise<SpaceLinkResponse>;
+    groups(): Promise<GroupsResponse>;
+    createGroup(name: string, actor?: Actor): Promise<GroupResponse>;
+    group(groupId: string): Promise<GroupResponse>;
+    addGroupMember(groupId: string, attribute: string, actor?: Actor): Promise<GroupResponse>;
+    removeGroupMember(groupId: string, attribute: string, actor?: Actor): Promise<GroupResponse>;
+    deleteGroup(groupId: string, actor?: Actor): Promise<GroupResponse>;
     /**
      * Mint a pass at the home, on this daemon's badge.
      *

@@ -38,9 +38,15 @@ import type {
   SpaceLinkResponse,
   SpaceResponse,
   SpacesResponse,
+  GroupResponse,
+  GroupsResponse,
 } from "@isocan/core";
 import {
   ATTEST_ROUTE,
+  groupActingRoute,
+  groupMemberRoute,
+  groupRoute,
+  GROUPS_ROUTE,
   spaceActingRoute,
   spaceCanvasRoute,
   spaceGrantRevokeRoute,
@@ -894,6 +900,40 @@ export function setSpaceLink(
     capability,
     ...(actorId ? { actorId } : {}),
   } satisfies SpaceLinkRequest);
+}
+
+// ---- the group: a named set of people access is given to once (roles phase 5) ----
+//
+// The Groups panel on the canvas list and the Share dialog's group picker
+// drive these; `isocan group` and `isocan share group:<name>` drive the same
+// routes, spelled once in core. A group is at the home, like a grant.
+
+/** The groups this badge's actors made, members and all — the owner's list. */
+export function listGroups(): Promise<GroupsResponse> {
+  return request("GET", GROUPS_ROUTE);
+}
+
+export function createGroup(name: string, actorId?: string): Promise<GroupResponse> {
+  return request("POST", GROUPS_ROUTE, { name, ...(actorId ? { actorId } : {}) });
+}
+
+/** One group: members for its maker; name and size for anybody a live row
+ * naming it lets see it — what a group row in the Share dialog shows. */
+export function readGroup(groupId: string): Promise<GroupResponse> {
+  return request("GET", groupRoute(groupId));
+}
+
+export function addGroupMember(groupId: string, attribute: string, actorId?: string): Promise<GroupResponse> {
+  return request("PUT", groupMemberRoute(groupId, attribute), actorId ? { actorId } : {});
+}
+
+/** No body, for `revokeGrant`'s reason; the actor rides the query. */
+export function removeGroupMember(groupId: string, attribute: string, actorId?: string): Promise<GroupResponse> {
+  return request("DELETE", groupActingRoute(groupMemberRoute(groupId, attribute), actorId));
+}
+
+export function deleteGroup(groupId: string, actorId?: string): Promise<GroupResponse> {
+  return request("DELETE", groupActingRoute(groupRoute(groupId), actorId));
 }
 
 // ---- what this holder has proved (phase 9 stage 2) ----

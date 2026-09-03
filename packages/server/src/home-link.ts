@@ -27,11 +27,17 @@ import type {
   SpaceLinkResponse,
   SpaceResponse,
   SpacesResponse,
+  GroupResponse,
+  GroupsResponse,
   UndoRedoRequest,
 } from "@isocan/core";
 import {
   ATTEST_ROUTE,
   narrowed,
+  groupActingRoute,
+  groupMemberRoute,
+  groupRoute,
+  GROUPS_ROUTE,
   spaceActingRoute,
   spaceCanvasRoute,
   spaceGrantRevokeRoute,
@@ -292,6 +298,14 @@ export interface HomeConnection {
   ): Promise<GrantResponse>;
   revokeSpaceGrant(spaceId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
   setSpaceLink(spaceId: string, capability: SpaceLinkRequest["capability"], actor?: Actor): Promise<SpaceLinkResponse>;
+  /** The group routes, forwarded (roles phase 5), for the space routes'
+   * reason. Every write carries the actor acting. */
+  groups(): Promise<GroupsResponse>;
+  createGroup(name: string, actor?: Actor): Promise<GroupResponse>;
+  group(groupId: string): Promise<GroupResponse>;
+  addGroupMember(groupId: string, attribute: string, actor?: Actor): Promise<GroupResponse>;
+  removeGroupMember(groupId: string, attribute: string, actor?: Actor): Promise<GroupResponse>;
+  deleteGroup(groupId: string, actor?: Actor): Promise<GroupResponse>;
   /**
    * The attest routes, forwarded — for the badge routes' reason, and it is the
    * same sentence one word further on.
@@ -1770,6 +1784,44 @@ export class HomeLink implements HomeConnection {
       capability,
       ...(actor ? { actorId: actor.id } : {}),
     } satisfies SpaceLinkRequest);
+  }
+
+  // ---- the group routes, forwarded (roles phase 5) ----
+
+  groups(): Promise<GroupsResponse> {
+    return this.api<GroupsResponse>("GET", GROUPS_ROUTE);
+  }
+
+  async createGroup(name: string, actor?: Actor): Promise<GroupResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<GroupResponse>("POST", GROUPS_ROUTE, {
+      name,
+      ...(actor ? { actorId: actor.id } : {}),
+    });
+  }
+
+  group(groupId: string): Promise<GroupResponse> {
+    return this.api<GroupResponse>("GET", groupRoute(groupId));
+  }
+
+  async addGroupMember(groupId: string, attribute: string, actor?: Actor): Promise<GroupResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<GroupResponse>("PUT", groupMemberRoute(groupId, attribute), {
+      ...(actor ? { actorId: actor.id } : {}),
+    });
+  }
+
+  async removeGroupMember(groupId: string, attribute: string, actor?: Actor): Promise<GroupResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<GroupResponse>(
+      "DELETE",
+      groupActingRoute(groupMemberRoute(groupId, attribute), actor?.id),
+    );
+  }
+
+  async deleteGroup(groupId: string, actor?: Actor): Promise<GroupResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<GroupResponse>("DELETE", groupActingRoute(groupRoute(groupId), actor?.id));
   }
 
   /**

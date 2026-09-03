@@ -40,6 +40,11 @@ import type {
   SpaceCanvasResponse,
   SpaceLinkRequest,
   SpaceLinkResponse,
+  Group,
+  GroupResponse,
+  GroupsResponse,
+  CreateGroupRequest,
+  GroupMemberRequest,
   UndoRedoRequest, LogEntry } from "@isocan/core";
 import {
   ATTEST_ROUTE,
@@ -53,6 +58,20 @@ import {
   SPACE_NOT_FOUND,
   spaceNameRefusal,
   SPACES_ROUTE,
+  BAD_GROUP,
+  claimsActor,
+  GROUP_NAME_TAKEN,
+  GROUP_NOT_FOUND,
+  groupIdOf,
+  groupMemberRefusal,
+  groupNameRefusal,
+  GROUPS_ROUTE,
+  groupSubject,
+  groupViewOf,
+  isGroupLive,
+  isSpaceGrant,
+  normalizeAttribute,
+  sameGroupName,
   BADGE_RESTART_HINT,
   BADGES_ROUTE,
   cancelledSince,
@@ -1274,6 +1293,7 @@ export function registerRoutes(
      */
     let canvasSpace: Map<string, Space> | null = null;
     const spaceRows = new Map<string, Promise<Grant[]>>();
+    const groupReads = new Map<string, Promise<Group | null>>();
     const via = {
       spaceOf: async (canvasId: string): Promise<Space | null> => {
         if (!canvasSpace) {
@@ -1291,6 +1311,16 @@ export function registerRoutes(
           spaceRows.set(spaceId, rows);
         }
         return rows;
+      },
+      // A group named on several canvases is one read for the whole list
+      // (roles phase 5), for the same reason the space's rows are.
+      group: (groupId: string): Promise<Group | null> => {
+        let found = groupReads.get(groupId);
+        if (!found) {
+          found = desk.group(groupId);
+          groupReads.set(groupId, found);
+        }
+        return found;
       },
     };
     for (const canvas of await engine.listCanvases()) {
@@ -1567,6 +1597,14 @@ export function registerRoutes(
     if (unverifiable) {
       return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
     }
+    // A group row names a LIVE group on this home (roles phase 5). Any
+    // actor may make one and the wire carries ids, so the gate is that the
+    // group exists and stands: a row pointing at a group nobody here can
+    // produce would admit nobody while the dialog claimed the team was
+    // invited. Its maker is not asked — handing a canvas owner the id is how
+    // a group is lent, and what they learn of it is its name and size.
+    const groupId = groupIdOf(subject);
+    if (groupId !== null && !(await liveGroup(groupId))) return groupNotFound(reply, groupId);
     const grant: Grant = bars
       ? barRow(id, subject, req.badge!.badgeId)
       : {
@@ -1724,6 +1762,106 @@ export function registerRoutes(
     const space = await desk.space(spaceId);
     if (!space || !isSpaceLive(space)) return null;
     return (await heldRungOnSpace(desk, space, req.badge!)) === null ? null : space;
+  };
+
+  const groupNotFound = (reply: FastifyReply, groupId: string): FastifyReply =>
+    reply.status(404).send({
+      error: `no group ${groupId} here that this badge may see`,
+      code: GROUP_NOT_FOUND,
+    });
+
+  /** A group that exists and stands — what a `group:` row may name. */
+  const liveGroup = async (groupId: string): Promise<Group | null> => {
+    const group = await desk.group(groupId);
+    return group && isGroupLive(group) ? group : null;
+  };
+
+  /**
+   * **A group this badge may SEE** (roles phase 5, "Who sees the members"),
+   * and whether it OWNS it. Its maker sees it whole. Anybody else sees it —
+   * name and size, never the members — only through a live grant naming it
+   * that they can already see: a canvas row on a canvas they are admitted
+   * to, or a space row on a space they may see. Otherwise null, which the
+   * routes answer as not found, so a group stays a private list: knowing an
+   * id is not knowing the group. `actorId` narrows the owner's question to
+   * one person, as `heldRung` narrows it.
+   */
+  const visibleGroup = async (
+    req: FastifyRequest,
+    groupId: string,
+    actorId?: string,
+  ): Promise<{ group: Group; owner: boolean } | null> => {
+    const group = await desk.group(groupId);
+    if (!group || !isGroupLive(group)) return null;
+    const claims = req.badge!.claims;
+    if ((actorId === undefined || actorId === group.createdBy) && claimsActor(claims, group.createdBy)) {
+      return { group, owner: true };
+    }
+    for (const row of await desk.grantsBySubject(groupSubject(groupId))) {
+      if (isSpaceGrant(row)) {
+        const space = await desk.space(row.spaceId);
+        if (space && isSpaceLive(space) && (await heldRungOnSpace(desk, space, req.badge!)) !== null) {
+          return { group, owner: false };
+        }
+      } else if (capabilityIn(req.badge!, row.canvasId) !== null) {
+        return { group, owner: false };
+      }
+    }
+    return null;
+  };
+
+  /** A group this badge may WRITE: its maker, narrowed to the acting actor.
+   * 404 for one it may not see at all; 403 `not-owner`, naming the maker,
+   * for one it sees through a row. */
+  const ownedGroup = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    groupId: string,
+    actorId: string | undefined,
+  ): Promise<{ group: Group } | { refused: FastifyReply }> => {
+    const seen = await visibleGroup(req, groupId, actorId);
+    if (!seen) return { refused: groupNotFound(reply, groupId) };
+    if (!seen.owner) {
+      return {
+        refused: reply.status(403).send({
+          error:
+            `ask ${await nameOf(seen.group.createdBy)}, who made the group ${seen.group.name} — only ` +
+            "its maker can change who is in it",
+          code: NOT_OWNER,
+        }),
+      };
+    }
+    return { group: seen.group };
+  };
+
+  /**
+   * **Every canvas a group's rows reach** (roles design, "Adding and removing
+   * a member both sweep"): a canvas row reaches its canvas, a space row
+   * reaches the space's whole list, read from the live rows by subject.
+   * De-duplicated, because a canvas can be named directly and through its
+   * space.
+   */
+  const groupReach = async (groupId: string): Promise<string[]> => {
+    const reached = new Set<string>();
+    for (const row of await desk.grantsBySubject(groupSubject(groupId))) {
+      if (isSpaceGrant(row)) {
+        const space = await desk.space(row.spaceId);
+        if (space && isSpaceLive(space)) for (const canvasId of space.canvasIds) reached.add(canvasId);
+      } else {
+        reached.add(row.canvasId);
+      }
+    }
+    return [...reached];
+  };
+
+  /** A route's `:attribute`, as sent: the router decodes the path, and a
+   * value that still carries an escape was encoded twice by a client. */
+  const attributeParam = (raw: string): string => {
+    try {
+      return raw.includes("%") ? decodeURIComponent(raw) : raw;
+    } catch {
+      return raw;
+    }
   };
 
   /**
@@ -2101,6 +2239,8 @@ export function registerRoutes(
     }
     const unverifiable = attesterRefusal(subject, attesters);
     if (unverifiable) return reply.status(400).send({ error: unverifiable, code: NO_ATTESTER });
+    const groupId = groupIdOf(subject);
+    if (groupId !== null && !(await liveGroup(groupId))) return groupNotFound(reply, groupId);
     const grant: Grant = {
       id: newId("gnt"),
       spaceId: id,
@@ -2230,6 +2370,160 @@ export function registerRoutes(
       canvasIds: [...owned.space.canvasIds],
       swept: { expelled, rerooted },
     } satisfies SpaceLinkResponse;
+  });
+
+  // ---- the group: a named set of people access is given to once (roles phase 5) ----
+  //
+  // All at the home, for the space's reason: a group is part of what a grant
+  // means. A REPLICA forwards through `homeScoped()`. Membership is read at
+  // the door and copied nowhere, so a member added or removed is one write
+  // here followed by a sweep of every canvas every live row on the group
+  // reaches — the same sweep a revoked link runs (journey 6).
+
+  /** The groups this badge's actors made, members and all — the owner's
+   * list. A group somebody is merely in is not listed; they meet it as a
+   * row's name and size on the canvases it opens. */
+  app.get(GROUPS_ROUTE, async (req, reply) => {
+    const stuck = refuseAmbiguousHome(reply, options.homes, "list groups");
+    if (stuck) return stuck;
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.groups();
+    const groups = (await desk.groupsFor(req.badge!)).map((group) => groupViewOf(group, true));
+    return { groups } satisfies GroupsResponse;
+  });
+
+  /** Make one. Any actor may; the maker is the floor. The name is unique
+   * among the groups THIS actor owns. */
+  app.post(GROUPS_ROUTE, async (req, reply) => {
+    const body = (req.body ?? {}) as Partial<CreateGroupRequest>;
+    const refusal = groupNameRefusal(body.name);
+    if (refusal) return reply.status(400).send({ error: refusal, code: BAD_GROUP });
+    const name = body.name!.trim();
+    const stuck = refuseAmbiguousHome(reply, options.homes, "make a group");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.createGroup(name, await actorNamed(actorId));
+    if (!actorId) {
+      return reply.status(400).send({
+        error:
+          "a group needs a maker, and this badge did not say who — claim an actor first, or name " +
+          "one of this badge's actors as `actorId`",
+        code: BAD_GROUP,
+      });
+    }
+    const mine = (await desk.groupsFor(req.badge!)).filter((group) => group.createdBy === actorId);
+    const taken = mine.find((group) => sameGroupName(group.name, name));
+    if (taken) {
+      return reply.status(409).send({
+        error: `you already have a group called ${taken.name} (${taken.id}) — names are unique among the groups you own`,
+        code: GROUP_NAME_TAKEN,
+      });
+    }
+    const group: Group = {
+      id: newId("ppl"),
+      name,
+      createdBy: actorId,
+      members: [],
+      at: new Date().toISOString(),
+    };
+    await desk.putGroup(group);
+    return { group: groupViewOf(group, true) } satisfies GroupResponse;
+  });
+
+  /** One group: whole for its maker; name and size for somebody a live row
+   * naming it lets see it; not found for everybody else. */
+  app.get(`${GROUPS_ROUTE}/:id`, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const stuck = refuseAmbiguousHome(reply, options.homes, "read a group");
+    if (stuck) return stuck;
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.group(id);
+    const seen = await visibleGroup(req, id);
+    if (!seen) return groupNotFound(reply, id);
+    return { group: groupViewOf(seen.group, seen.owner) } satisfies GroupResponse;
+  });
+
+  /**
+   * Add a member. The attribute is normalized the way a grant's subject is
+   * (`email:` lowercased), because the door compares it against a badge's
+   * attestations by equality. Then the sweep, for journey 2's reason: a
+   * change reaches an open socket — somebody already inside at `read` on a
+   * canvas row is raised by it, and somebody not inside is admitted at the
+   * door when they arrive. Idempotent: adding a member twice is one member.
+   */
+  app.put(`${GROUPS_ROUTE}/:id/members/:attribute`, async (req, reply) => {
+    const { id, attribute: raw } = req.params as { id: string; attribute: string };
+    const body = (req.body ?? {}) as Partial<GroupMemberRequest>;
+    const attribute = attributeParam(raw);
+    const refusal = groupMemberRefusal(attribute);
+    if (refusal) return reply.status(400).send({ error: refusal, code: BAD_GROUP });
+    const stuck = refuseAmbiguousHome(reply, options.homes, "add somebody to a group");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.addGroupMember(id, attribute, await actorNamed(actorId));
+    const owned = await ownedGroup(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    const member = normalizeAttribute(attribute);
+    if (owned.group.members.includes(member)) {
+      return { group: groupViewOf(owned.group, true), swept: { expelled: 0, rerooted: 0 }, reached: 0 } satisfies GroupResponse;
+    }
+    const next: Group = { ...owned.group, members: [...owned.group.members, member] };
+    await desk.putGroup(next);
+    const { expelled, rerooted, reached } = await sweepCanvases(desk, await groupReach(id), creatorOf, sweeps.report);
+    return { group: groupViewOf(next, true), swept: { expelled, rerooted }, reached } satisfies GroupResponse;
+  });
+
+  /** Remove a member: one write, then the sweep that puts them out of every
+   * canvas the group's rows reach — and their agents with them, since a pass
+   * root adopts its minter's outcome. Idempotent. */
+  app.delete(`${GROUPS_ROUTE}/:id/members/:attribute`, async (req, reply) => {
+    const { id, attribute: raw } = req.params as { id: string; attribute: string };
+    const query = req.query as { actorId?: unknown };
+    const attribute = attributeParam(raw);
+    const stuck = refuseAmbiguousHome(reply, options.homes, "remove somebody from a group");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, query.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.removeGroupMember(id, attribute, await actorNamed(actorId));
+    const owned = await ownedGroup(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    const member = normalizeAttribute(attribute);
+    if (!owned.group.members.includes(member)) {
+      return { group: groupViewOf(owned.group, true), swept: { expelled: 0, rerooted: 0 }, reached: 0 } satisfies GroupResponse;
+    }
+    const next: Group = { ...owned.group, members: owned.group.members.filter((held) => held !== member) };
+    await desk.putGroup(next);
+    const { expelled, rerooted, reached } = await sweepCanvases(desk, await groupReach(id), creatorOf, sweeps.report);
+    return { group: groupViewOf(next, true), swept: { expelled, rerooted }, reached } satisfies GroupResponse;
+  });
+
+  /** Delete one: a tombstone. Its rows stay and stop admitting — the door
+   * skips a deleted group — and the sweep puts out whoever was inside on
+   * them. Idempotent for its maker; not there for anybody else. */
+  app.delete(`${GROUPS_ROUTE}/:id`, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const query = req.query as { actorId?: unknown };
+    const stuck = refuseAmbiguousHome(reply, options.homes, "delete a group");
+    if (stuck) return stuck;
+    const actorId = await actingActor(req, query.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.deleteGroup(id, await actorNamed(actorId));
+    const existing = await desk.group(id);
+    if (!existing) return groupNotFound(reply, id);
+    if (!isGroupLive(existing)) {
+      const owner =
+        (actorId === undefined || actorId === existing.createdBy) && claimsActor(req.badge!.claims, existing.createdBy);
+      if (!owner) return groupNotFound(reply, id);
+      return { group: groupViewOf(existing, true), swept: { expelled: 0, rerooted: 0 }, reached: 0 } satisfies GroupResponse;
+    }
+    const owned = await ownedGroup(req, reply, id, actorId);
+    if ("refused" in owned) return owned.refused;
+    const gone: Group = { ...owned.group, deletedAt: new Date().toISOString() };
+    await desk.putGroup(gone);
+    const { expelled, rerooted, reached } = await sweepCanvases(desk, await groupReach(id), creatorOf, sweeps.report);
+    return { group: groupViewOf(gone, true), swept: { expelled, rerooted }, reached } satisfies GroupResponse;
   });
 
   // ---- your own surfaces: kill-a-badge (identity desk, mechanism 1) ----

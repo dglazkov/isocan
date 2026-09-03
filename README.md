@@ -341,6 +341,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the space's rows first, greyed, as *from the space*. `isocan space
   new|list|add|remove|delete` and `isocan share --space <name>` are the same
   routes from a terminal, and `isocan canvas list` groups by space.
+- **Groups**: a named set of people access is given to once. **Groups…** on
+  the canvas list makes one and edits who is in it; the Share dialog's invite
+  field takes a group from a picker or as `group:<name>`, and a group row
+  reads by its name and size. Who is in the group is read at the door, never
+  copied onto a row, so removing somebody from the group reaches every canvas
+  the group is shared with in one write — their agents with them — and adding
+  somebody raises them in the tab they have open. Only the group's maker sees
+  its members. `isocan group new|list|add|remove|delete` and `isocan share
+  group:<name>` are the same routes from a terminal.
 - **Proving an address, which is not a login**: isocan has no accounts and does
   not want any. What a person can do is **borrow an attester they already
   have** — click your own face, pick **"Prove your address…"**, and a link
