@@ -27,6 +27,9 @@ import type {
   PresenceSession,
   Canvas,
   Capability,
+  Grant,
+  GrantResponse,
+  Space,
   SweepReport,
   UpgradeVerdict,
   WatchedLogEntry,
@@ -54,6 +57,7 @@ import {
   isBar,
   isCapability,
   normalizeSubject,
+  sameSpaceName,
   PASS_TTL_MS,
   actorNameIn,
   canvasUrl,
@@ -2489,13 +2493,19 @@ program
       "writes the bar directly. They are refused at the door whatever the link allows, until --unbar",
   )
   .option("--unbar <who>", "let somebody back in — lift the bar; the link or an invitation then decides")
+  .option(
+    "--space <name>",
+    "the SPACE's share rather than this canvas's: every flag above applies to every canvas in it, " +
+      "and --link sets each canvas's link in one gesture (roles phase 4)",
+  )
   .action(
     run(async (
       who: string | undefined,
-      opts: { link?: string; as?: string; revoke?: string; bar?: string | boolean; unbar?: string },
+      opts: { link?: string; as?: string; revoke?: string; bar?: string | boolean; unbar?: string; space?: string },
       cmd: Command,
     ) => {
       const ctx = await ctxOf(cmd);
+      if (opts.space !== undefined) return shareSpace(ctx, await resolveSpace(ctx, opts.space), who, opts);
       const canvas = await resolveCanvas(ctx);
       // The one origin, per canvas: people always enter through the home that
       // holds THIS canvas, so the address handed out is that home's and never
@@ -2559,6 +2569,153 @@ program
         }
       }
 
+      // The four row gestures — un-invite, keep out, let back in, invite —
+      // are one function for a canvas and for a space (`shareRows`).
+      await shareRows(ctx, canvasScope(ctx, canvas), who, opts, sweepAlso);
+
+      const { grants } = await ctx.client.grants(canvas.id);
+      const link = grants.find((g) => g.subject === LINK) ?? null;
+      // Just the names, not a whole snapshot: this command needs one string,
+      // and the registry is what a rename reaches.
+      const names = await ctx.client.actorNames();
+      const owner = actorNameIn(names, canvas.createdBy);
+      /**
+       * The space this canvas is in, with its rows (roles phase 4) — from the
+       * spaces list joined on the canvas id, because the canvas record
+       * carries no space. Silent when the home predates spaces, and empty
+       * when this badge may not see the space: a canvas invitee learns
+       * nothing about the space around it.
+       */
+      const holder = (await ctx.client.spaces().catch(() => ({ spaces: [] as Space[] }))).spaces.find((s) =>
+        s.canvasIds.includes(canvas.id),
+      );
+      const spaceRows = holder ? (await ctx.client.spaceGrants(holder.id)).grants : [];
+      if (ctx.json) {
+        return printJson({
+          address,
+          owner: canvas.createdBy,
+          grants,
+          ...(holder ? { space: holder, spaceGrants: spaceRows } : {}),
+          ...(swept ? { swept } : {}),
+        });
+      }
+      printKeyValues({
+        address,
+        // Whose canvas this is. It is the answer to the refusal `--link view`
+        // gets from anybody else, so it belongs beside the link rather than
+        // only in the error.
+        owner,
+        link: link
+          ? linkLine(capabilityOf(link), link.at)
+          : // Phase 7's line here read "people already on this canvas keep
+            // their access", and phase 9 made that false. Worse, with the
+            // sweep's own count printed beside it the two lines contradicted
+            // each other in one screen — which a walk against a real daemon
+            // caught and no test would have.
+            "off — new arrivals are turned away, and the badges that came in on it were expelled",
+        ...(holder
+          ? {
+              space:
+                `${holder.name} (${holder.id}) — its rows apply to this canvas and cannot be changed ` +
+                `here; \`isocan share --space ${holder.name}\` changes them`,
+            }
+          : {}),
+      });
+      // Below the status, where a number has a subject.
+      if (swept) console.log(sweptLine(swept));
+      const others = grants.filter((g) => g.subject !== LINK);
+      const spaceGives = (subject: string): Capability | null => {
+        const row = spaceRows.find((g) => g.subject === subject && !isBar(g));
+        return row ? capabilityOf(row) : null;
+      };
+      printTable([
+        // The creator, first: their standing is the floor and not a row, so
+        // the table says so where the Share dialog's first row does.
+        { subject: owner, rung: "owner, made this", granted: canvas.createdAt.slice(0, 10), by: "", from: "" },
+        // The space's rows next, marked *from space* — read here, changed
+        // there (roles journey 5, step 1).
+        ...spaceRows.map((g) => ({
+          subject: g.subject,
+          rung: isBar(g) ? "kept out" : capabilityWord.dialog[capabilityOf(g)],
+          granted: g.at.slice(0, 10),
+          by: g.grantedBy,
+          from: `space ${holder!.name}`,
+        })),
+        // The invitations, then the bars — the dialog's order — each bar
+        // printed as **kept out** in the rung column, with who wrote it and
+        // when in the columns every row has (roles journey 3, step 4). A
+        // canvas row below what the space already gives says so: it is
+        // written, and takes effect if the canvas leaves the space.
+        ...[...others.filter((g) => !isBar(g)), ...others.filter(isBar)].map((g) => {
+          const above = spaceGives(g.subject);
+          const below = !isBar(g) && above !== null && !atLeast(capabilityOf(g), above);
+          return {
+            subject: g.subject,
+            // The rung, in the dialog's words, so the table and the Share
+            // dialog name one thing one way.
+            rung: isBar(g)
+              ? "kept out"
+              : capabilityWord.dialog[capabilityOf(g)] +
+                (below ? ` (below the space's ${capabilityWord.dialog[above!]})` : ""),
+            granted: g.at.slice(0, 10),
+            by: g.grantedBy,
+            from: "",
+          };
+        }),
+      ]);
+    }),
+  );
+
+/**
+ * **One scope for the four row gestures** (roles phase 4): a canvas's rows
+ * and a space's are the same rows one scope wider, so un-invite, keep out,
+ * let back in and invite are one function over this, and `isocan share` and
+ * `isocan share --space` cannot drift on what they say.
+ */
+interface ShareScope {
+  /** What the rows are on, for the sentences: the canvas's title, or *the
+   * space Design*. */
+  what: string;
+  grants(): Promise<Grant[]>;
+  invite(subject: GrantSubject, rung?: Capability): Promise<GrantResponse>;
+  bar(subject: GrantSubject): Promise<GrantResponse>;
+  revoke(grantId: string, bar?: boolean): Promise<GrantResponse>;
+}
+
+function canvasScope(ctx: Ctx, canvas: Canvas): ShareScope {
+  return {
+    what: canvas.title,
+    grants: async () => (await ctx.client.grants(canvas.id)).grants,
+    invite: (subject, rung) => ctx.client.createGrant(canvas.id, subject, rung, ctx.actor.id),
+    bar: (subject) => ctx.client.bar(canvas.id, subject, ctx.actor.id),
+    revoke: (grantId, bar) => ctx.client.revokeGrant(canvas.id, grantId, ctx.actor.id, bar),
+  };
+}
+
+function spaceScope(ctx: Ctx, space: Space): ShareScope {
+  return {
+    what: `the space ${space.name}`,
+    grants: async () => (await ctx.client.spaceGrants(space.id)).grants,
+    invite: (subject, rung) => ctx.client.createSpaceGrant(space.id, subject, rung, ctx.actor.id),
+    bar: (subject) => ctx.client.barOnSpace(space.id, subject, ctx.actor.id),
+    revoke: (grantId, bar) => ctx.client.revokeSpaceGrant(space.id, grantId, ctx.actor.id, bar),
+  };
+}
+
+/** The count a space write reached, said beside its sweep. */
+function reachedLine(answer: GrantResponse): string {
+  return answer.reached === undefined
+    ? ""
+    : ` — reached ${answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`}`;
+}
+
+async function shareRows(
+  ctx: Ctx,
+  scope: ShareScope,
+  who: string | undefined,
+  opts: { as?: string; revoke?: string; bar?: string | boolean; unbar?: string },
+  sweepAlso: (report: SweepReport | undefined) => void,
+): Promise<void> {
       /**
        * **Un-invite, by the sentence rather than by the row id.**
        *
@@ -2591,28 +2748,29 @@ program
 
       if (opts.revoke !== undefined) {
         const subject = normalizeSubject(grantSubjectOf(opts.revoke));
-        const live = (await ctx.client.grants(canvas.id)).grants.find(
-          (g) => g.subject === subject,
-        );
+        const live = (await scope.grants()).find((g) => g.subject === subject);
         if (!live) {
           throw new Error(
-            `nothing on ${canvas.title} is granted to ${subject} — \`isocan share\` lists what is`,
+            `nothing on ${scope.what} is granted to ${subject} — \`isocan share\` lists what is`,
           );
         }
         if (isBar(live)) {
-          throw new Error(`${subject} is kept out of ${canvas.title}, not invited — \`--unbar\` lets them back in`);
+          throw new Error(`${subject} is kept out of ${scope.what}, not invited — \`--unbar\` lets them back in`);
         }
-        const answer = await ctx.client.revokeGrant(canvas.id, live.id, ctx.actor.id, barWith);
+        const answer = await scope.revoke(live.id, barWith);
         sweepAlso(answer.swept);
         if (answer.bar) {
-          console.log(`revoked ${subject} on ${canvas.title}, and kept out — they are refused at the door until \`--unbar\``);
+          console.log(`revoked ${subject} on ${scope.what}, and kept out${reachedLine(answer)} — they are refused at the door until \`--unbar\``);
         } else {
-          console.log(`revoked ${subject} on ${canvas.title}`);
+          console.log(`revoked ${subject} on ${scope.what}${reachedLine(answer)}`);
           // The difference between withdrawing and barring, said where the
           // person can act on it (roles journey 3, step 3). From the home's
-          // answer, not from this verb's copy of the rows.
+          // answer, not from this verb's copy of the rows. Since roles
+          // phase 4 the answer can name the space, whose Share is the remedy.
           if (answer.stillAdmittedBy === "link") {
             console.log("they can still enter by the link; `--bar` to keep them out");
+          } else if (answer.stillAdmittedBy === "space") {
+            console.log("they can still enter by the space this canvas is in; `isocan share --space <name> --revoke` removes them from every canvas in it");
           }
         }
       }
@@ -2625,10 +2783,10 @@ program
        */
       if (barWho !== undefined) {
         const subject = normalizeSubject(grantSubjectOf(barWho));
-        const { grant, swept: report } = await ctx.client.bar(canvas.id, subject, ctx.actor.id);
-        sweepAlso(report);
+        const answer = await scope.bar(subject);
+        sweepAlso(answer.swept);
         console.log(
-          `kept out ${subject} on ${canvas.title} (${grant.id}) — they are refused at the door ` +
+          `kept out ${subject} on ${scope.what} (${answer.grant.id})${reachedLine(answer)} — they are refused at the door ` +
             "whatever the link allows, until `--unbar`",
         );
       }
@@ -2641,16 +2799,15 @@ program
        */
       if (opts.unbar !== undefined) {
         const subject = normalizeSubject(grantSubjectOf(opts.unbar));
-        const bar = (await ctx.client.grants(canvas.id)).grants.find(
-          (g) => g.subject === subject && isBar(g),
-        );
+        const bar = (await scope.grants()).find((g) => g.subject === subject && isBar(g));
         if (!bar) {
           throw new Error(
-            `nobody is kept out of ${canvas.title} as ${subject} — \`isocan share\` lists who is`,
+            `nobody is kept out of ${scope.what} as ${subject} — \`isocan share\` lists who is`,
           );
         }
-        await ctx.client.revokeGrant(canvas.id, bar.id, ctx.actor.id);
-        console.log(`let ${subject} back in to ${canvas.title} — the link or an invitation now decides`);
+        const answer = await scope.revoke(bar.id);
+        sweepAlso(answer.swept);
+        console.log(`let ${subject} back in to ${scope.what}${reachedLine(answer)} — the link or an invitation now decides`);
       }
 
       if (opts.as !== undefined && who === undefined) {
@@ -2669,60 +2826,201 @@ program
         // changes with a home's configuration. A home that has borrowed an
         // attester grants it; one that has not refuses with `no-attester` and
         // says what to do instead.
-        const { grant } = await ctx.client.createGrant(canvas.id, grantSubjectOf(who), rung, ctx.actor.id);
+        const answer = await scope.invite(grantSubjectOf(who), rung);
+        sweepAlso(answer.swept);
+        const { grant } = answer;
         console.log(
-          `granted ${grant.subject} on ${canvas.title} as ${capabilityWord.dialog[capabilityOf(grant)]} ` +
-            `(${grant.id}) — they get in by proving that address; nothing was emailed from here`,
+          `granted ${grant.subject} on ${scope.what} as ${capabilityWord.dialog[capabilityOf(grant)]} ` +
+            `(${grant.id})${reachedLine(answer)} — they get in by proving that address; nothing was emailed from here`,
         );
       }
 
-      const { grants } = await ctx.client.grants(canvas.id);
-      const link = grants.find((g) => g.subject === LINK) ?? null;
-      // Just the names, not a whole snapshot: this command needs one string,
-      // and the registry is what a rename reaches.
-      const owner = actorNameIn(await ctx.client.actorNames(), canvas.createdBy);
-      if (ctx.json) {
-        return printJson({
-          address,
-          owner: canvas.createdBy,
-          grants,
-          ...(swept ? { swept } : {}),
-        });
+
+}
+
+
+/**
+ * **`isocan share --space <name>`** (roles phase 4; journey 4): the space's
+ * share. `--link` is **Every canvas in this space** — each canvas's link row
+ * written or revoked at the home in a loop, and the count reached printed,
+ * because the floor is not the ceiling and a space has no link row of its
+ * own. Every other flag is `shareRows` over the space's rows, and each write
+ * sweeps every canvas in the space.
+ */
+async function shareSpace(
+  ctx: Ctx,
+  space: Space,
+  who: string | undefined,
+  opts: { link?: string; as?: string; revoke?: string; bar?: string | boolean; unbar?: string },
+): Promise<void> {
+  let swept: SweepReport | undefined;
+  const sweepAlso = (report: SweepReport | undefined): void => {
+    if (!report) return;
+    swept = swept
+      ? { expelled: swept.expelled + report.expelled, rerooted: swept.rerooted + report.rerooted }
+      : report;
+  };
+  if (opts.link !== undefined) {
+    const want = opts.link.toLowerCase();
+    const capability: Capability | "off" | null =
+      want === "off" ? "off" : want === "on" ? "edit" : isCapability(want) && want !== "own" ? want : null;
+    if (capability === null) {
+      throw new Error(`--link wants on, off, edit, read or view, got: ${opts.link}`);
+    }
+    const answer = await ctx.client.setSpaceLink(space.id, capability, ctx.actor.id);
+    sweepAlso(answer.swept);
+    const reached = answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`;
+    console.log(
+      `link ${capability === "edit" ? "on" : capability} on every canvas in ${space.name} — reached ${reached}` +
+        (answer.changed === answer.reached ? "" : ` (${answer.changed} changed; the rest already stood so)`) +
+        "; each canvas's own link can be set again with `isocan share --link`",
+    );
+  }
+  await shareRows(ctx, spaceScope(ctx, space), who, opts, sweepAlso);
+
+  const { grants } = await ctx.client.spaceGrants(space.id);
+  const names = await ctx.client.actorNames();
+  const owner = actorNameIn(names, { id: space.createdBy, name: space.createdBy });
+  if (ctx.json) return printJson({ space, owner: space.createdBy, grants, ...(swept ? { swept } : {}) });
+  printKeyValues({
+    space: `${space.name} (${space.id})`,
+    owner,
+    canvases: space.canvasIds.length === 1 ? "1 canvas" : `${space.canvasIds.length} canvases`,
+    link: "a space has no link of its own — `--link` sets every canvas's",
+  });
+  if (swept) console.log(sweptLine(swept));
+  printTable([
+    { subject: owner, rung: "owner, made this", granted: space.at.slice(0, 10), by: "" },
+    ...[...grants.filter((g) => !isBar(g)), ...grants.filter(isBar)].map((g) => ({
+      subject: g.subject,
+      rung: isBar(g) ? "kept out" : capabilityWord.dialog[capabilityOf(g)],
+      granted: g.at.slice(0, 10),
+      by: g.grantedBy,
+    })),
+  ]);
+}
+
+/**
+ * **A space by name, or by id** (roles design, "Names"): the wire carries
+ * ids, and a name is unique among the spaces one person owns — not across
+ * the home — so a name this badge sees twice (yours and one shared with you)
+ * is refused with both ids rather than guessed at.
+ */
+async function resolveSpace(ctx: Ctx, ref: string): Promise<Space> {
+  const { spaces } = await ctx.client.spaces();
+  const byId = spaces.find((space) => space.id === ref);
+  if (byId) return byId;
+  const named = spaces.filter((space) => sameSpaceName(space.name, ref));
+  if (named.length === 1) return named[0]!;
+  if (named.length === 0) {
+    throw new Error(
+      `no space called ${ref} that you may see — \`isocan space list\` shows them, ` +
+        `\`isocan space new ${ref}\` makes one`,
+    );
+  }
+  throw new Error(
+    `${named.length} spaces are called ${ref}: ` +
+      named.map((space) => `${space.id} (made by ${space.createdBy})`).join(", ") +
+      " — name the one you mean by id",
+  );
+}
+
+// ---------- spaces (roles phase 4) ----------
+//
+// A space is a named set of canvases access is set on once. These are the
+// verbs behind the canvas list's headings, **New space**, **Move to space…**
+// and the heading's Share: the same routes, at the home. A space is a private
+// thing until it is shared, so anybody with a name may make one.
+
+const spaceCommand = program
+  .command("space")
+  .description("A named set of canvases access is set on once — make one, put canvases in it, share it with `isocan share --space`");
+
+spaceCommand
+  .command("new <name>")
+  .description("Make a space. You own it; it holds nothing until `space add`")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { space } = await ctx.client.createSpace(name, ctx.actor.id);
+      if (ctx.json) return printJson(space);
+      console.log(
+        `made the space ${space.name} (${space.id}) — \`isocan space add ${space.name} <canvas>…\` puts ` +
+          "canvases in it, `isocan share --space " + space.name + "` shares it",
+      );
+    }),
+  );
+
+spaceCommand
+  .command("list")
+  .description("The spaces you may see — the ones you made, and the ones a row admits you to")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { spaces } = await ctx.client.spaces();
+      if (ctx.json) return printJson(spaces);
+      if (spaces.length === 0) return console.log("no spaces yet — `isocan space new <name>` makes one");
+      const names = await ctx.client.actorNames();
+      printTable(
+        [...spaces]
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((space) => ({
+            id: space.id,
+            name: space.name,
+            canvases: String(space.canvasIds.length),
+            owner: actorNameIn(names, { id: space.createdBy, name: space.createdBy }),
+            made: space.at.slice(0, 10),
+          })),
+      );
+    }),
+  );
+
+spaceCommand
+  .command("add <name> <canvas...>")
+  .description("Put canvases in a space — each by id or title. A canvas is in at most one space")
+  .action(
+    run(async (name: string, refs: string[], _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const space = await resolveSpace(ctx, name);
+      const canvases = await ctx.client.listCanvases();
+      for (const ref of refs) {
+        const canvas = matchRef(canvases, ref);
+        const answer = await ctx.client.addToSpace(space.id, canvas.id, ctx.actor.id);
+        if (ctx.json) printJson(answer);
+        else console.log(`${canvas.title} (${canvas.id}) is in ${space.name}${answer.reached === 0 ? " — it already was" : ""}`);
       }
-      printKeyValues({
-        address,
-        // Whose canvas this is. It is the answer to the refusal `--link view`
-        // gets from anybody else, so it belongs beside the link rather than
-        // only in the error.
-        owner,
-        link: link
-          ? linkLine(capabilityOf(link), link.at)
-          : // Phase 7's line here read "people already on this canvas keep
-            // their access", and phase 9 made that false. Worse, with the
-            // sweep's own count printed beside it the two lines contradicted
-            // each other in one screen — which a walk against a real daemon
-            // caught and no test would have.
-            "off — new arrivals are turned away, and the badges that came in on it were expelled",
-      });
-      // Below the status, where a number has a subject.
-      if (swept) console.log(sweptLine(swept));
-      const others = grants.filter((g) => g.subject !== LINK);
-      printTable([
-        // The creator, first: their standing is the floor and not a row, so
-        // the table says so where the Share dialog's first row does.
-        { subject: owner, rung: "owner, made this", granted: canvas.createdAt.slice(0, 10), by: "" },
-        // The invitations, then the bars — the dialog's order — each bar
-        // printed as **kept out** in the rung column, with who wrote it and
-        // when in the columns every row has (roles journey 3, step 4).
-        ...[...others.filter((g) => !isBar(g)), ...others.filter(isBar)].map((g) => ({
-          subject: g.subject,
-          // The rung, in the dialog's words, so the table and the Share
-          // dialog name one thing one way.
-          rung: isBar(g) ? "kept out" : capabilityWord.dialog[capabilityOf(g)],
-          granted: g.at.slice(0, 10),
-          by: g.grantedBy,
-        })),
-      ]);
+    }),
+  );
+
+spaceCommand
+  .command("remove <name> <canvas...>")
+  .description("Take canvases out of a space — each keeps its own sharing, and the space's rows stop reaching it")
+  .action(
+    run(async (name: string, refs: string[], _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const space = await resolveSpace(ctx, name);
+      const canvases = await ctx.client.listCanvases();
+      for (const ref of refs) {
+        const canvas = matchRef(canvases, ref);
+        const answer = await ctx.client.removeFromSpace(space.id, canvas.id, ctx.actor.id);
+        if (ctx.json) printJson(answer);
+        else if (answer.reached === 0) console.log(`${canvas.title} (${canvas.id}) was not in ${space.name}`);
+        else console.log(`${canvas.title} (${canvas.id}) is out of ${space.name} — ${sweptLine(answer.swept)}`);
+      }
+    }),
+  );
+
+spaceCommand
+  .command("delete <name>")
+  .description("Delete a space — every canvas stays, with its own sharing; the space's rows stop reaching them")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const space = await resolveSpace(ctx, name);
+      const answer = await ctx.client.deleteSpace(space.id, ctx.actor.id);
+      if (ctx.json) return printJson(answer);
+      const reached = answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`;
+      console.log(`deleted the space ${space.name} (${space.id}) — ${reached} kept, each with its own sharing; ${sweptLine(answer.swept)}`);
     }),
   );
 
@@ -3964,15 +4262,34 @@ canvas
          `updated` was a full ISO stamp, which is a machine's answer to a
          question a person asked — and it said nothing about WHAT happened. */
       const nowMs = Date.now();
-      printTable(
-        shown.map((p) => ({
+      const rows = (list: Canvas[]) =>
+        list.map((p) => ({
           id: p.id + (p.id === config.defaultProjectId ? " *" : ""),
           title: truncate(p.title, 30),
           description: truncate(p.description, 30),
           last: `${actorNameIn(names, p.updatedBy)} ${opWords(p.lastOp) ?? "did something"}`,
           when: ago(p.updatedAt, nowMs) || "just now",
-        })),
-      );
+        }));
+      /**
+       * **Grouped by space when the home has any** (roles phase 4): the same
+       * headings the app's canvas list draws — a space per heading, **No
+       * space** last — from the spaces this badge may see, joined here on
+       * the canvas id. A home with no spaces, or one from before them,
+       * prints the flat table it always did.
+       */
+      const spaces = (await ctx.client.spaces().catch(() => ({ spaces: [] as Space[] }))).spaces;
+      if (spaces.length === 0) return printTable(rows(shown));
+      const held = new Map<string, Space>();
+      for (const space of spaces) for (const id of space.canvasIds) held.set(id, space);
+      for (const space of [...spaces].sort((a, b) => a.name.localeCompare(b.name))) {
+        const inSpace = shown.filter((p) => held.get(p.id)?.id === space.id);
+        console.log(`\n${space.name} (${space.id}) — ${inSpace.length === 1 ? "1 canvas" : `${inSpace.length} canvases`}`);
+        if (inSpace.length > 0) printTable(rows(inSpace));
+        else console.log("(nothing yet — `isocan space add` puts canvases here)");
+      }
+      const loose = shown.filter((p) => !held.has(p.id));
+      console.log(`\nNo space — ${loose.length === 1 ? "1 canvas" : `${loose.length} canvases`}`);
+      if (loose.length > 0) printTable(rows(loose));
     }),
   );
 

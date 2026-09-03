@@ -415,6 +415,15 @@ two-ledger rule:
   door can satisfy today — `email:` and `repo:` are refused at the API
   until phase 9 gives a badge attestations, because a row that admits
   nobody while a dialog claims an invitation is worse than a refusal.
+- `spaces/{id}` — `{name, createdBy, canvasIds, at, deletedAt?}` (roles
+  phase 4): a named set of canvases access is set on once. The set lives
+  here and not on the canvas record, because the record replicates and a
+  laptop has no use for the id of a space it cannot see. A grant's scope is
+  `{canvasId}` or `{spaceId}`, and the door reads both; `holding` is the
+  derived array `spaceOf` queries (`array-contains`), emptied on the
+  tombstone so a deleted space is not in the index at all. Every query is
+  single-field — `holding`, `createdBy`, and `spaceId`/`subject` on grants
+  — so no composite index is needed.
 - `registrations/{id}` — frozen delegation's record; the scoped launch
   token is KMS-wrapped at write and unwrapped only at fire time.
 - `audit/` — append-only firing and admission ledger. The audit ledger

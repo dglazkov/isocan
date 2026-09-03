@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Actor, MetaPatch, Canvas } from "@isocan/core";
+import type { Actor, MetaPatch, Canvas, Space } from "@isocan/core";
 import {
   ago,
   CANVAS_SORTS,
@@ -10,11 +10,24 @@ import {
   isCanvasSort,
   newCanvasId,
   opWords,
+  ownsCanvas,
+  ownsSpace,
   sortCanvases,
   type CanvasSort,
   faceMark,
 } from "@isocan/core";
-import { fetchHomes, listCanvases, sendOp } from "../lib/api.ts";
+import {
+  addToSpace,
+  ApiError,
+  createSpace,
+  deleteSpace,
+  fetchHomes,
+  listCanvases,
+  listSpaces,
+  removeFromSpace,
+  sendOp,
+} from "../lib/api.ts";
+import { ShareDialog } from "../components/ShareDialog.tsx";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";
@@ -69,11 +82,29 @@ export function CanvasListPage({
    * be wrong, and it is the same silence the create below had.
    */
   const [listError, setListError] = useState<string | null>(null);
+  /**
+   * **The spaces this badge may see** (roles phase 4), from `GET /api/spaces`
+   * and joined to the canvas list here: `GET /api/projects` does not change
+   * its shape, because a space id is desk state and does not belong on the
+   * canvas record. A heading per space, the flat grid under **No space**
+   * last, and no heading at all on a home with none — journey 8's line.
+   * Read beside the canvases and never instead of them: a home from before
+   * spaces answers this with an unknown route, and that must cost nothing
+   * but the headings.
+   */
+  const [spaces, setSpaces] = useState<Space[]>([]);
   const refresh = useCallback(
     () =>
-      listCanvases().then(
-        (found) => {
+      Promise.all([
+        listCanvases(),
+        listSpaces().then(
+          (answer) => answer.spaces,
+          () => [] as Space[],
+        ),
+      ]).then(
+        ([found, seen]) => {
           setProjects(found);
+          setSpaces(seen);
           setListError(null);
           return found;
         },
@@ -190,6 +221,101 @@ export function CanvasListPage({
   const [createNote, setCreateNote] = useState<{ kind: "error" | "elsewhere"; text: string } | null>(
     null,
   );
+
+  /**
+   * **The groups** (roles design, "The Share dialog"): a heading per space the
+   * badge may see, in name order, and **No space** last with everything the
+   * spaces do not hold. A space with nothing under it still draws its heading
+   * — journey 4 step 1's *the list now shows Design as a heading with nothing
+   * under it* — because the heading is the thing a card is dragged onto.
+   * Empty when the home has no spaces, in which case the grid is the flat
+   * grid it always was.
+   */
+  const spaceOf = useMemo(() => {
+    const map = new Map<string, Space>();
+    for (const space of spaces) for (const id of space.canvasIds) map.set(id, space);
+    return map;
+  }, [spaces]);
+  const groups = useMemo(() => {
+    if (spaces.length === 0) return null;
+    const ordered = [...spaces].sort((a, b) => a.name.localeCompare(b.name));
+    const byGroup = new Map<string | null, Canvas[]>(ordered.map((space) => [space.id, []]));
+    byGroup.set(null, []);
+    for (const canvas of shown) byGroup.get(spaceOf.get(canvas.id)?.id ?? null)!.push(canvas);
+    return [...ordered.map((space) => ({ space, canvases: byGroup.get(space.id)! })), { space: null, canvases: byGroup.get(null)! }];
+  }, [spaces, shown, spaceOf]);
+  /** Something a space control said no to — the daemon's refusal, in its
+   * own words, because every space control is the daemon's to refuse. */
+  const [spaceNote, setSpaceNote] = useState<string | null>(null);
+  /** The card whose **Move to space…** picker is open. */
+  const [moving, setMoving] = useState<string | null>(null);
+  /** The space whose Share is open, from its heading. */
+  const [sharing, setSharing] = useState<string | null>(null);
+  const sharingRef = useDismissOnOutside<HTMLDivElement>(sharing !== null, () => setSharing(null));
+  /** The heading a dragged card is over. */
+  const [over, setOver] = useState<string | null | undefined>(undefined);
+  const [naming, setNaming] = useState(false);
+  const [spaceName, setSpaceName] = useState("");
+  /** The spaces this person may move a canvas into: the ones they made. A
+   * space owned through a row is the CLI's or the space's Share to reach —
+   * the list holds no rung to gate on. */
+  const mine = useMemo(() => spaces.filter((space) => ownsSpace(space, actor.id)), [spaces, actor.id]);
+
+  /**
+   * **Move to space…**, and dragging onto a heading, which is the same call.
+   * A canvas is in at most one space, so moving between two is a remove and
+   * an add — two desk writes, in that order, so the second cannot be refused
+   * with `canvas-in-space`. `null` is **No space**. The daemon asks `own` on
+   * the canvas and on the space; the refusal is shown, not predicted.
+   */
+  async function move(canvas: Canvas, to: Space | null): Promise<void> {
+    const from = spaceOf.get(canvas.id) ?? null;
+    setMoving(null);
+    setSpaceNote(null);
+    if ((from?.id ?? null) === (to?.id ?? null)) return;
+    try {
+      if (from) await removeFromSpace(from.id, canvas.id, actor.id);
+      if (to) await addToSpace(to.id, canvas.id, actor.id);
+    } catch (err) {
+      setSpaceNote(err instanceof ApiError ? err.message : `that canvas could not be moved`);
+    }
+    await refresh();
+  }
+
+  async function makeSpace(e: React.FormEvent): Promise<void> {
+    e.preventDefault();
+    const name = spaceName.trim();
+    if (!name) return;
+    setSpaceNote(null);
+    try {
+      await createSpace(name, actor.id);
+      setSpaceName("");
+      setNaming(false);
+    } catch (err) {
+      setSpaceNote(err instanceof Error ? err.message : "that space could not be made");
+    }
+    await refresh();
+  }
+
+  /** Delete a space: every canvas stays, with its own rows, under **No
+   * space**. The daemon sweeps each. */
+  async function removeSpace(space: Space): Promise<void> {
+    setSpaceNote(null);
+    try {
+      await deleteSpace(space.id, actor.id);
+    } catch (err) {
+      setSpaceNote(err instanceof Error ? err.message : "that space could not be deleted");
+    }
+    await refresh();
+  }
+
+  const dropOn = (space: Space | null) => (e: React.DragEvent) => {
+    e.preventDefault();
+    setOver(undefined);
+    const canvasId = e.dataTransfer.getData("text/isocan-canvas");
+    const canvas = canvases?.find((c) => c.id === canvasId);
+    if (canvas) void move(canvas, space);
+  };
 
   /**
    * **Walk to the new card.**
@@ -313,150 +439,22 @@ export function CanvasListPage({
     refresh();
   }
 
-  return (
-    <div className="canvases-page">
-      {/* **The same header the canvas wears.** A floating cluster on the
-          shared inset, not a page title with a name floating beside it — this
-          is the same product one screen earlier, and it was the last surface
-          still dressed the old way. */}
-      <div className="canvases-head">
-        {/**
-         * **No pill here, and that is the point of the difference.**
-         *
-         * The floating slab means "this chrome is sitting ON a canvas" — it
-         * exists so the rail and the toolbar read as hovering over a surface
-         * that runs edge to edge underneath them. This page has no canvas
-         * under it. A pill on a plain page is a frame around nothing: it drew
-         * a box tight around two words and made the wordmark look like a
-         * button nobody can press.
-         *
-         * So the mark and the name sit on the page, and what remains a
-         * control still looks like one — the identity button keeps its hover
-         * chip, because that says something the frame never did.
-         */}
-        <div className="head-mark">
-          <span className="home-mark" aria-hidden>
-            <HomeGlyph size={16} />
-          </span>
-          <h1>isocan</h1>
-        </div>
-        <span className="spacer" />
-        {/* The way to the lens. On the home screen because the question it
-            answers — what has this agent been doing — is asked ABOUT the
-            canvases rather than inside one, and there is nowhere else it
-            belongs. */}
-        <Link className="btn quiet" to="/lens">
-          Lens
-        </Link>
-        <div className="who" ref={whoRef}>
-          <button
-            className={`who-btn${identityOpen ? " active" : ""}`}
-            title="You — rename yourself, or enter as someone else"
-            onClick={() => setIdentityOpen(!identityOpen)}
-          >
-            <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
-              {faceMark(marks, actor)}
-            </span>
-            {actor.name}
-          </button>
-          {identityOpen && (
-            <div className="identity-popover">
-              <IdentityMenu
-                actor={actor}
-                /* No canvas here, so no pass to mint: escalation is onto one
-                   canvas, and this page is about all of them. */
-                canvasId={null}
-                onIdentity={onIdentity}
-                onClose={() => setIdentityOpen(false)}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-      {/**
-       * **Only when the list is big enough to need it.**
-       *
-       * Six canvases do not need a search box and a sort menu; a hundred are
-       * unusable without them. Chrome that appears when it becomes useful is
-       * the whole reason a home screen can serve both, and a filter above four
-       * cards is furniture that makes a small canvas list look like an admin
-       * console.
-       *
-       * The threshold is on the number the person HAS, not the number shown —
-       * otherwise typing a query that matches three canvases would remove the
-       * box you are typing into.
-       */}
-      {(canvases?.length ?? 0) > BROWSE_FROM && (
-        <div className="canvas-browse">
-          <input
-            className="text-input canvas-filter"
-            type="search"
-            placeholder={`Filter ${canvases!.length} canvases…`}
-            aria-label="Filter canvases by name"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div className="canvas-sorts" role="group" aria-label="Order">
-            {CANVAS_SORTS.map((option) => (
-              <button
-                key={option}
-                className={`btn quiet${option === sort ? " on" : ""}`}
-                aria-pressed={option === sort}
-                onClick={() => chooseSort(option)}
-              >
-                {CANVAS_SORT_LABEL[option]}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Said out loud rather than left as an empty grid: a filter that matches
-          nothing looks exactly like a home with no canvases, and one of those
-          is somebody's whole afternoon missing. */}
-      {query.trim() !== "" && shown.length === 0 && (
-        <p className="canvas-none">
-          Nothing matches “{query.trim()}”.{" "}
-          <button className="btn quiet" onClick={() => setQuery("")}>
-            Clear the filter
-          </button>
-        </p>
-      )}
-      <div className="canvas-grid">
-        {/* **Making one comes first**, because an empty home is somebody's
-            first screen and the one thing they need is the way in. It was
-            last, after every canvas, behind a dashed border that made the
-            only action on the page look like a placeholder. */}
-        <form className="canvas-card create" onSubmit={create}>
-          <input
-            className="text-input"
-            placeholder="Name a new canvas…"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
-            {creating ? "Creating…" : "Create"}
-          </button>
-          {/* **Say what happened.** A create that lands at another home, or is
-              refused outright, used to leave an empty field and no card — a
-              button that reads as broken. */}
-          {createNote && (
-            <p className={`create-note${createNote.kind === "error" ? " bad" : ""}`}>
-              {createNote.text}
-              {createNote.kind === "elsewhere" && birthHome && (
-                <>
-                  {" "}
-                  <a href={birthHome} target="_blank" rel="noreferrer">
-                    Open {new URL(birthHome).host}
-                  </a>
-                </>
-              )}
-            </p>
-          )}
-        </form>
-        {shown.map((canvas) => (
+  /**
+   * One card. A function rather than a component so the cards in every group
+   * share this page's state without a prop per control.
+   */
+  function card(canvas: Canvas) {
+    return (
           <div
             className={`canvas-card${justMade === canvas.id ? " just-made" : ""}`}
             key={canvas.id}
+            /* A card is dragged onto a heading (roles phase 4): the id rides
+               the drag, and the drop is `move`. */
+            draggable={groups !== null}
+            onDragStart={(e) => {
+              e.dataTransfer.setData("text/isocan-canvas", canvas.id);
+              e.dataTransfer.effectAllowed = "move";
+            }}
             /**
              * **Pointer AND focus**, because a hover-only affordance does not
              * exist for a keyboard or a touch screen — and this one holds the
@@ -543,6 +541,46 @@ export function CanvasListPage({
                       >
                         Rename
                       </button>
+                      {/* **Move to space…** (roles phase 4): a picker of the
+                          spaces this person made, and **No space** to take
+                          it out. The daemon asks `own` on both; the creator
+                          of the canvas is who the list can gate on. */}
+                      {groups !== null &&
+                        (moving === canvas.id ? (
+                          <select
+                            className="text-input share-rung"
+                            aria-label="Move to space"
+                            autoFocus
+                            value={spaceOf.get(canvas.id)?.id ?? ""}
+                            onBlur={() => setMoving(null)}
+                            onChange={(e) =>
+                              void move(canvas, mine.find((space) => space.id === e.target.value) ?? null)
+                            }
+                          >
+                            <option value="">No space</option>
+                            {mine.map((space) => (
+                              <option key={space.id} value={space.id}>
+                                {space.name}
+                              </option>
+                            ))}
+                            {spaceOf.get(canvas.id) && !mine.some((s) => s.id === spaceOf.get(canvas.id)!.id) && (
+                              <option value={spaceOf.get(canvas.id)!.id}>{spaceOf.get(canvas.id)!.name}</option>
+                            )}
+                          </select>
+                        ) : (
+                          <button
+                            className="btn card-act"
+                            disabled={!ownsCanvas(canvas, actor.id)}
+                            title={
+                              ownsCanvas(canvas, actor.id)
+                                ? "Put this canvas in a space, or take it out of one"
+                                : `only ${actorNameIn(names, canvas.createdBy)}, who owns this canvas, can move it into a space`
+                            }
+                            onClick={() => setMoving(canvas.id)}
+                          >
+                            Move to space…
+                          </button>
+                        ))}
                       <button
                         className="btn card-act danger"
                         title="Delete this canvas"
@@ -556,8 +594,271 @@ export function CanvasListPage({
               </>
             )}
           </div>
-        ))}
+
+    );
+  }
+
+  return (
+    <div className="canvases-page">
+      {/* **The same header the canvas wears.** A floating cluster on the
+          shared inset, not a page title with a name floating beside it — this
+          is the same product one screen earlier, and it was the last surface
+          still dressed the old way. */}
+      <div className="canvases-head">
+        {/**
+         * **No pill here, and that is the point of the difference.**
+         *
+         * The floating slab means "this chrome is sitting ON a canvas" — it
+         * exists so the rail and the toolbar read as hovering over a surface
+         * that runs edge to edge underneath them. This page has no canvas
+         * under it. A pill on a plain page is a frame around nothing: it drew
+         * a box tight around two words and made the wordmark look like a
+         * button nobody can press.
+         *
+         * So the mark and the name sit on the page, and what remains a
+         * control still looks like one — the identity button keeps its hover
+         * chip, because that says something the frame never did.
+         */}
+        <div className="head-mark">
+          <span className="home-mark" aria-hidden>
+            <HomeGlyph size={16} />
+          </span>
+          <h1>isocan</h1>
+        </div>
+        <span className="spacer" />
+        {/* The way to the lens. On the home screen because the question it
+            answers — what has this agent been doing — is asked ABOUT the
+            canvases rather than inside one, and there is nowhere else it
+            belongs. */}
+        <Link className="btn quiet" to="/lens">
+          Lens
+        </Link>
+        {/* **New space** (roles journey 4, step 1): a named set of canvases
+            access is set on once. A private act until it is shared, so
+            anybody with a name may make one. */}
+        {naming ? (
+          <form className="canvas-space-new" onSubmit={makeSpace}>
+            <input
+              className="text-input"
+              placeholder="Name a new space…"
+              aria-label="Name a new space"
+              value={spaceName}
+              autoFocus
+              onChange={(e) => setSpaceName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setNaming(false);
+              }}
+            />
+            <button className="btn primary" type="submit" disabled={!spaceName.trim()}>
+              Create
+            </button>
+          </form>
+        ) : (
+          <button className="btn quiet" onClick={() => setNaming(true)}>
+            New space
+          </button>
+        )}
+        <div className="who" ref={whoRef}>
+          <button
+            className={`who-btn${identityOpen ? " active" : ""}`}
+            title="You — rename yourself, or enter as someone else"
+            onClick={() => setIdentityOpen(!identityOpen)}
+          >
+            <span className="face-mark" style={{ background: actorColorIn(colors, actor.id) }}>
+              {faceMark(marks, actor)}
+            </span>
+            {actor.name}
+          </button>
+          {identityOpen && (
+            <div className="identity-popover">
+              <IdentityMenu
+                actor={actor}
+                /* No canvas here, so no pass to mint: escalation is onto one
+                   canvas, and this page is about all of them. */
+                canvasId={null}
+                onIdentity={onIdentity}
+                onClose={() => setIdentityOpen(false)}
+              />
+            </div>
+          )}
+        </div>
       </div>
+      {/**
+       * **Only when the list is big enough to need it.**
+       *
+       * Six canvases do not need a search box and a sort menu; a hundred are
+       * unusable without them. Chrome that appears when it becomes useful is
+       * the whole reason a home screen can serve both, and a filter above four
+       * cards is furniture that makes a small canvas list look like an admin
+       * console.
+       *
+       * The threshold is on the number the person HAS, not the number shown —
+       * otherwise typing a query that matches three canvases would remove the
+       * box you are typing into.
+       */}
+      {(canvases?.length ?? 0) > BROWSE_FROM && (
+        <div className="canvas-browse">
+          <input
+            className="text-input canvas-filter"
+            type="search"
+            placeholder={`Filter ${canvases!.length} canvases…`}
+            aria-label="Filter canvases by name"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="canvas-sorts" role="group" aria-label="Order">
+            {CANVAS_SORTS.map((option) => (
+              <button
+                key={option}
+                className={`btn quiet${option === sort ? " on" : ""}`}
+                aria-pressed={option === sort}
+                onClick={() => chooseSort(option)}
+              >
+                {CANVAS_SORT_LABEL[option]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Said out loud rather than left as an empty grid: a filter that matches
+          nothing looks exactly like a home with no canvases, and one of those
+          is somebody's whole afternoon missing. */}
+      {query.trim() !== "" && shown.length === 0 && (
+        <p className="canvas-none">
+          Nothing matches “{query.trim()}”.{" "}
+          <button className="btn quiet" onClick={() => setQuery("")}>
+            Clear the filter
+          </button>
+        </p>
+      )}
+      {spaceNote && <p className="canvases-error">{spaceNote}</p>}
+      {groups === null ? (
+        <div className="canvas-grid">
+          {/* **Making one comes first**, because an empty home is somebody's
+              first screen and the one thing they need is the way in. It was
+              last, after every canvas, behind a dashed border that made the
+              only action on the page look like a placeholder. */}
+        <form className="canvas-card create" onSubmit={create}>
+          <input
+            className="text-input"
+            placeholder="Name a new canvas…"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
+            {creating ? "Creating…" : "Create"}
+          </button>
+          {/* **Say what happened.** A create that lands at another home, or is
+              refused outright, used to leave an empty field and no card — a
+              button that reads as broken. */}
+          {createNote && (
+            <p className={`create-note${createNote.kind === "error" ? " bad" : ""}`}>
+              {createNote.text}
+              {createNote.kind === "elsewhere" && birthHome && (
+                <>
+                  {" "}
+                  <a href={birthHome} target="_blank" rel="noreferrer">
+                    Open {new URL(birthHome).host}
+                  </a>
+                </>
+              )}
+            </p>
+          )}
+        </form>
+          {shown.map(card)}
+        </div>
+      ) : (
+        <>
+          <div className="canvas-grid">
+        <form className="canvas-card create" onSubmit={create}>
+          <input
+            className="text-input"
+            placeholder="Name a new canvas…"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
+            {creating ? "Creating…" : "Create"}
+          </button>
+          {/* **Say what happened.** A create that lands at another home, or is
+              refused outright, used to leave an empty field and no card — a
+              button that reads as broken. */}
+          {createNote && (
+            <p className={`create-note${createNote.kind === "error" ? " bad" : ""}`}>
+              {createNote.text}
+              {createNote.kind === "elsewhere" && birthHome && (
+                <>
+                  {" "}
+                  <a href={birthHome} target="_blank" rel="noreferrer">
+                    Open {new URL(birthHome).host}
+                  </a>
+                </>
+              )}
+            </p>
+          )}
+        </form>
+          </div>
+          {/* A heading per space, and **No space** last. The heading is a
+              drop target: dragging a card onto it is **Move to space…**. */}
+          {groups.map(({ space, canvases: held }) => (
+            <section
+              key={space?.id ?? "none"}
+              className={`canvas-space${over === (space?.id ?? null) ? " over" : ""}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setOver(space?.id ?? null);
+              }}
+              onDragLeave={() => setOver(undefined)}
+              onDrop={dropOn(space)}
+            >
+              <div className="canvas-space-head">
+                <h2>{space ? space.name : "No space"}</h2>
+                <span className="canvas-space-count">
+                  {held.length === 1 ? "1 canvas" : `${held.length} canvases`}
+                </span>
+                {space && (
+                  <div className="identity-anchor" ref={sharing === space.id ? sharingRef : undefined}>
+                    {/* The space's Share, from its heading: the same dialog
+                        with a space scope (roles design). */}
+                    <button
+                      className={`btn quiet${sharing === space.id ? " active" : ""}`}
+                      title="Who may enter every canvas in this space"
+                      onClick={() => setSharing(sharing === space.id ? null : space.id)}
+                    >
+                      Share
+                    </button>
+                    {sharing === space.id && (
+                      <div className="identity-popover share-popover">
+                        <ShareDialog
+                          actor={actor}
+                          space={space}
+                          canvases={canvases ?? []}
+                          onClose={() => setSharing(null)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {space && (
+                  <button
+                    className="btn quiet card-act danger"
+                    disabled={!ownsSpace(space, actor.id)}
+                    title={
+                      ownsSpace(space, actor.id)
+                        ? "Delete this space — every canvas stays, with its own sharing"
+                        : "only the person who made this space can delete it"
+                    }
+                    onClick={() => void removeSpace(space)}
+                  >
+                    Delete space
+                  </button>
+                )}
+              </div>
+              <div className="canvas-grid">{held.map(card)}</div>
+            </section>
+          ))}
+        </>
+      )}
       {canvases === null && <p className="canvases-loading">Loading…</p>}
       {/* An unreadable list is not an empty one, and must not render as one. */}
       {listError && <p className="canvases-error">{listError}</p>}

@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
-import type { Actor, AttestOffer, Capability, Grant, GrantSubject, SweepReport } from "@isocan/core";
-import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, collectCanvasActors, grantSubjectOf, isBar, LINK, roster, faceMark, RUNGS } from "@isocan/core";
+import type { Actor, AttestOffer, Canvas, Capability, Grant, GrantSubject, Space, SpaceLinkResponse, SweepReport } from "@isocan/core";
+import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, ownsSpace, collectCanvasActors, grantSubjectOf, isBar, LINK, roster, faceMark, RUNGS } from "@isocan/core";
 import type { PresenceSession, RowState } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
-import { createBar, createGrant, listGrants, revokeGrant, ApiError } from "../lib/api.ts";
+import {
+  createBar,
+  createGrant,
+  createSpaceGrant,
+  listGrants,
+  listSpaceGrants,
+  listSpaces,
+  revokeGrant,
+  revokeSpaceGrant,
+  setSpaceLink,
+  ApiError,
+} from "../lib/api.ts";
 import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -74,7 +85,28 @@ import { useActorMarks } from "../lib/marks.ts";
  * the two gestures is the whole of journey 3 step 3, so the dialog names it
  * before the second one is taken.
  */
-export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => void }) {
+/**
+ * **The space** (roles phase 4). With `space`, this is the SPACE's Share —
+ * the same dialog with a space scope, see `SpaceShare` below. Without it, a
+ * canvas's, which now also renders the rows from the canvas's space first,
+ * greyed, under *from the space <name>, set by <who>*, and links to the
+ * space's Share in place. Those rows are read from `GET /api/spaces` joined
+ * on the canvas id — a badge that may not see the space sees no such rows,
+ * and learns nothing about the space around a canvas it was invited to.
+ */
+export function ShareDialog({
+  actor,
+  onClose,
+  space,
+  canvases = [],
+}: {
+  actor: Actor;
+  onClose: () => void;
+  /** The space scope: opened from a heading on the canvas list. */
+  space?: Space;
+  /** For the space scope, the canvases whose titles it lists. */
+  canvases?: readonly Canvas[];
+}) {
   const record = useCanvasStore((s) => s.project);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
@@ -110,7 +142,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
    * subject is held rather than the row, because the row is a tombstone now
    * and the bar is written by subject.
    */
-  const [stillIn, setStillIn] = useState<GrantSubject | null>(null);
+  const [stillIn, setStillIn] = useState<{ subject: GrantSubject; by: "link" | "space" } | null>(null);
   /** What this home can verify, which decides whether the "who" field is a
    * control or a lie. Null while asking; a home that has borrowed nothing
    * answers with an empty `attesters` and the field never appears. */
@@ -120,11 +152,21 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
   const [inviteRung, setInviteRung] = useState<Capability>("edit");
   const canEdit = useCanEdit();
   const capability = useCanvasStore((s) => s.capability);
+  /**
+   * The space this canvas is in, with its rows — null when it is in none, or
+   * when this badge may not see it. Read from the spaces list, because the
+   * canvas record carries no space id (it is desk state, and a laptop has no
+   * use for the id of a space it cannot see).
+   */
+  const [fromSpace, setFromSpace] = useState<{ space: Space; grants: Grant[] } | null>(null);
+  /** Showing the space's Share in place, reached from the *from the space*
+   * line. */
+  const [showSpace, setShowSpace] = useState(false);
 
   const canvasId = record?.id ?? null;
 
   useEffect(() => {
-    if (!canvasId) return;
+    if (!canvasId || space) return;
     let cancelled = false;
     listGrants(canvasId)
       .then((res) => !cancelled && setGrants(res.grants))
@@ -135,6 +177,16 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
       // "who" field, and an error banner about it would sit above a working
       // link toggle saying something a person cannot act on.
       .catch(() => {});
+    // The space's rows, silently: a home from before spaces has no route,
+    // and a canvas in no space has nothing to say here.
+    void listSpaces()
+      .then(async (answer) => {
+        const holder = answer.spaces.find((s) => s.canvasIds.includes(canvasId)) ?? null;
+        if (!holder) return null;
+        return { space: holder, grants: (await listSpaceGrants(holder.id)).grants };
+      })
+      .then((found) => !cancelled && setFromSpace(found))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -143,9 +195,21 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
     // open only. Re-read them, so the person's own row shows the new rung
     // without closing and reopening the dialog (conductor's review, roles
     // phase 2). The offer is cached by `signin.ts`, so it costs nothing.
-  }, [canvasId, capability]);
+  }, [canvasId, capability, space]);
 
+  if (space) return <SpaceShare actor={actor} space={space} canvases={canvases} onClose={onClose} />;
   if (!record) return null;
+  if (showSpace && fromSpace) {
+    return (
+      <SpaceShare
+        actor={actor}
+        space={fromSpace.space}
+        canvases={[record]}
+        onClose={onClose}
+        onBack={() => setShowSpace(false)}
+      />
+    );
+  }
 
   // The one origin. People always enter through the home's web app, and this
   // tab IS the home's web app — so the address to hand somebody is the address
@@ -292,7 +356,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
       setSwept(
         isBar(grant) ? null : { what: grant.subject, report: answer.swept ?? { expelled: 0, rerooted: 0 } },
       );
-      setStillIn(answer.stillAdmittedBy === "link" && !isBar(grant) ? grant.subject : null);
+      setStillIn(answer.stillAdmittedBy && !isBar(grant) ? { subject: grant.subject, by: answer.stillAdmittedBy } : null);
       setGrants((current) => (current ?? []).filter((row) => row.id !== grant.id));
       setGrants((await listGrants(canvasId)).grants);
     } catch (err) {
@@ -547,18 +611,59 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
       {/* The difference between withdrawing and barring, said where the
           person can act on it: the home's answer said the link would still
           admit them, so removing the row did not remove the person. */}
-      {stillIn && canEdit && (
+      {stillIn && canEdit && stillIn.by === "space" && fromSpace && (
         <div className="share-link-note">
-          {stillIn.replace(/^email:/, "")} can still enter by the link.{" "}
+          {stillIn.subject.replace(/^email:/, "")} can still enter by the space {fromSpace.space.name}
+          — removing them there removes them from every canvas in it.{" "}
+          <button className="btn" onClick={() => setShowSpace(true)}>
+            Share the space
+          </button>
+        </div>
+      )}
+      {stillIn && canEdit && stillIn.by === "link" && (
+        <div className="share-link-note">
+          {stillIn.subject.replace(/^email:/, "")} can still enter by the link.{" "}
           <button
             className="btn"
             disabled={busy || !owned}
             title={ownerTitle}
-            onClick={() => void keepOut(stillIn)}
+            onClick={() => void keepOut(stillIn.subject)}
           >
             and keep them out
           </button>
         </div>
+      )}
+
+      {/* The rows from the space, first and greyed (roles journey 5, step 1):
+          they cannot be edited here, and the line says where they can. A
+          canvas in no space, or a badge that may not see the space, shows no
+          such rows (journey 8). */}
+      {fromSpace && (
+        <>
+          <div className="identity-menu-head">From the space {fromSpace.space.name}</div>
+          <div className="share-link-note">
+            set by {actorNameIn(names, { id: fromSpace.space.createdBy, name: fromSpace.space.createdBy })} — these
+            apply to every canvas in it and cannot be changed here.{" "}
+            <button className="btn" onClick={() => setShowSpace(true)}>
+              Share the space
+            </button>
+          </div>
+          <div className="share-roster share-from-space">
+            {fromSpace.grants.length === 0 && (
+              <div className="share-link-note">Nobody is invited on the space yet.</div>
+            )}
+            {fromSpace.grants.map((grant) => (
+              <div key={grant.id} className="surface-row">
+                <span className="surface-what">
+                  <b>{grant.subject.replace(/^email:/, "")}</b>
+                  <span className="share-roster-kind">
+                    {isBar(grant) ? "kept out" : capabilityWord.dialog[capabilityOf(grant)]} · from the space
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {grants !== null && (
@@ -585,6 +690,7 @@ export function ShareDialog({ actor, onClose }: { actor: Actor; onClose: () => v
                   <span className="share-roster-kind">
                     {canEdit ? "" : `${capabilityWord.dialog[capabilityOf(grant)]} · `}
                     invited {grant.at.slice(0, 10)} · gets in by proving it
+                    {belowSpace(grant, fromSpace)}
                   </span>
                 </span>
                 {canEdit && (
@@ -727,6 +833,379 @@ function lost(swept: SweepReport): string {
       ? ` ${swept.rerooted === 1 ? "One" : String(swept.rerooted)} stayed — another grant still covers ${swept.rerooted === 1 ? "it" : "them"}.`
       : "";
   return `${who} lost this canvas.${kept}`;
+}
+
+/**
+ * A canvas row below the space's rung is written, and the dialog says it is
+ * below what the space already gives (roles design, "A canvas row below the
+ * space's rung"). It takes effect if the canvas leaves the space.
+ */
+function belowSpace(grant: Grant, fromSpace: { grants: Grant[] } | null): string {
+  if (!fromSpace) return "";
+  const onSpace = fromSpace.grants.find((g) => g.subject === grant.subject && !isBar(g));
+  if (!onSpace || atLeast(capabilityOf(grant), capabilityOf(onSpace))) return "";
+  return ` · below what the space already gives (${capabilityWord.dialog[capabilityOf(onSpace)]})`;
+}
+
+/**
+ * **The space's Share** (roles design, "The Share dialog"): the same dialog
+ * with a space scope, and one more row at the top — **Every canvas in this
+ * space**, whose one control is the link setting from journey 4 step 4.
+ * That control is not a row on the space: a space has no address and no
+ * link row, and the floor is not the ceiling, so it is the per-canvas link
+ * written or revoked on every canvas in a loop at the home, and the answer
+ * says how many canvases it reached. Below the rows it lists the canvases,
+ * each marked when its own rows go wider than the space (journey 5's
+ * *eleven-minus-ten*).
+ *
+ * Every control is an owner's, as on a canvas: the space's creator, or
+ * anybody a live row on the space admits at `own` — read off this badge's
+ * own attestations, since a space is not entered and carries no admission.
+ * Opened from the heading on the canvas list, and from a canvas's Share
+ * through the *from the space* line.
+ */
+function SpaceShare({
+  actor,
+  space,
+  canvases,
+  onClose,
+  onBack,
+}: {
+  actor: Actor;
+  space: Space;
+  canvases: readonly Canvas[];
+  onClose: () => void;
+  /** Back to the canvas's Share, when this was reached from one. */
+  onBack?: () => void;
+}) {
+  const names = useActorNames();
+  const [grants, setGrants] = useState<Grant[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [offer, setOffer] = useState<AttestOffer | null>(null);
+  const [who, setWho] = useState("");
+  const [inviteRung, setInviteRung] = useState<Capability>("edit");
+  /** What the last every-canvas link write reached — the count is the whole
+   * point of the gesture (journey 4 step 4), so it is shown as the home
+   * answered it. */
+  const [reached, setReached] = useState<SpaceLinkResponse | null>(null);
+  const [swept, setSwept] = useState<{ what: string; report: SweepReport } | null>(null);
+  /** Each canvas's own live rows, for the wider-than-the-space mark and the
+   * every-canvas link's current reading. */
+  const [rowsOf, setRowsOf] = useState<Map<string, Grant[]>>(new Map());
+
+  const reload = async (): Promise<void> => {
+    setGrants((await listSpaceGrants(space.id)).grants);
+    const found = new Map<string, Grant[]>();
+    await Promise.all(
+      space.canvasIds.map(async (canvasId) => {
+        try {
+          found.set(canvasId, (await listGrants(canvasId)).grants);
+        } catch {
+          // A canvas this badge cannot read has rows it cannot see; the mark
+          // says nothing rather than something wrong.
+        }
+      }),
+    );
+    setRowsOf(found);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void listSpaceGrants(space.id)
+      .then((res) => !cancelled && setGrants(res.grants))
+      .catch((err: Error) => !cancelled && setError(err.message));
+    attesterOffer()
+      .then((answer) => !cancelled && setOffer(answer))
+      .catch(() => {});
+    void (async () => {
+      const found = new Map<string, Grant[]>();
+      await Promise.all(
+        space.canvasIds.map(async (canvasId) => {
+          try {
+            found.set(canvasId, (await listGrants(canvasId)).grants);
+          } catch {
+            // see `reload`
+          }
+        }),
+      );
+      if (!cancelled) setRowsOf(found);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [space.id, space.canvasIds]);
+
+  const ownerName = actorNameIn(names, { id: space.createdBy, name: space.createdBy });
+  const proved = new Set((offer?.attestations ?? []).map((row) => row.attribute));
+  const owned =
+    ownsSpace(space, actor.id) ||
+    (grants ?? []).some((g) => !isBar(g) && atLeast(capabilityOf(g), "own") && proved.has(g.subject));
+  const ownerNote = `only ${ownerName}, who owns the space ${space.name}, can change what is in it or who may enter its canvases`;
+  const ownerTitle = owned ? undefined : ownerNote;
+  const invited = (grants ?? []).filter((g) => !isBar(g));
+  const keptOut = (grants ?? []).filter(isBar);
+
+  /**
+   * What the every-canvas link currently reads: one rung when every canvas's
+   * link agrees, `off` when none has one, and nothing when they differ — a
+   * mixed space is shown as mixed, never as whichever canvas came first.
+   */
+  const linkReadings = space.canvasIds.map((canvasId) => {
+    const link = rowsOf.get(canvasId)?.find((g) => g.subject === LINK);
+    return link ? capabilityOf(link) : "off";
+  });
+  const everyLink: Capability | "off" | null =
+    linkReadings.length > 0 && linkReadings.every((r) => r === linkReadings[0]) ? linkReadings[0]! : null;
+
+  async function act(what: string, work: () => Promise<{ swept?: SweepReport } | void>): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const answer = await work();
+      if (answer && answer.swept) setSwept({ what, report: answer.swept });
+      await reload();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setEveryLink(capability: Capability | "off"): Promise<void> {
+    await act("link", async () => {
+      const answer = await setSpaceLink(space.id, capability, actor.id);
+      setReached(answer);
+      return answer;
+    });
+  }
+
+  /** Is this canvas open wider than the space? A live link of its own, or a
+   * row of its own that the space does not give — a subject the space has no
+   * row for, or a rung above the space's row for that subject. */
+  function wider(canvasId: string): string | null {
+    const rows = (rowsOf.get(canvasId) ?? []).filter((g) => !isBar(g));
+    const link = rows.find((g) => g.subject === LINK);
+    if (link) return `link on at ${capabilityWord.dialog[capabilityOf(link)]}`;
+    const beyond = rows.filter((row) => {
+      const onSpace = invited.find((g) => g.subject === row.subject);
+      return !onSpace || !atLeast(capabilityOf(onSpace), capabilityOf(row));
+    });
+    if (beyond.length === 0) return null;
+    return `${beyond.length === 1 ? "1 invitation" : `${beyond.length} invitations`} of its own`;
+  }
+
+  return (
+    <div
+      className="share-menu"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div className="share-head">
+        {onBack && (
+          <button className="btn quiet share-back" onClick={onBack} title="Back to the canvas's Share">
+            ‹
+          </button>
+        )}
+        Share the space {space.name}
+      </div>
+
+      {/* **Every canvas in this space** — the row above the invitations. */}
+      <div className="share-every">
+        <b>Every canvas in this space</b>
+        <div className="share-link-mode" role="radiogroup" aria-label="What every canvas's link allows">
+          {[...LINK_RUNGS, "off" as const].map((rung) => (
+            <button
+              key={rung}
+              className={`btn${everyLink === rung ? " primary" : ""}`}
+              role="radio"
+              aria-checked={everyLink === rung}
+              disabled={busy || grants === null || !owned}
+              title={owned ? (rung === "off" ? "Turn the link off on every canvas in this space" : RUNG_HINT[rung]) : ownerNote}
+              onClick={() => void setEveryLink(rung)}
+            >
+              {rung === "off" ? "Off" : capabilityWord.dialog[rung]}
+            </button>
+          ))}
+        </div>
+        <span className="share-link-note">
+          {reached
+            ? `Reached ${reached.reached === 1 ? "1 canvas" : `${reached.reached} canvases`}` +
+              (reached.changed === reached.reached ? "" : ` and changed ${reached.changed}`) +
+              ". Each canvas's own link can be turned back on from its Share." +
+              (reached.swept.expelled > 0 || reached.swept.rerooted > 0 ? ` ${lost(reached.swept)}` : "")
+            : everyLink === null && space.canvasIds.length > 0
+              ? "The canvases' links differ. Choosing one sets it on every canvas here."
+              : "Sets the link on every canvas in this space, in one gesture. A canvas's own link can still be set wider afterwards."}
+        </span>
+      </div>
+
+      <p className="share-owner">Made by {ownsSpace(space, actor.id) ? "you" : ownerName}</p>
+
+      {error && <div className="identity-warning">{error}</div>}
+
+      {offer && canVerifyEmail(offer) ? (
+        <>
+          <form
+            className="share-address"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!who.trim()) return;
+              void act(who, async () => {
+                const answer = await createSpaceGrant(space.id, grantSubjectOf(who), inviteRung, actor.id);
+                setWho("");
+                return answer;
+              });
+            }}
+          >
+            <input
+              className="text-input"
+              type="email"
+              aria-label="Invite somebody by email to every canvas in this space"
+              placeholder="someone@example.com"
+              value={who}
+              disabled={!owned}
+              title={ownerTitle}
+              onChange={(e) => setWho(e.target.value)}
+            />
+            <select
+              className="text-input share-rung"
+              aria-label="What they may do"
+              value={inviteRung}
+              disabled={!owned}
+              title={ownerTitle}
+              onChange={(e) => setInviteRung(e.target.value as Capability)}
+            >
+              {INVITE_RUNGS.map((rung) => (
+                <option key={rung} value={rung}>
+                  {capabilityWord.dialog[rung]}
+                </option>
+              ))}
+            </select>
+            <button className="btn primary" type="submit" disabled={busy || !who.trim() || !owned} title={ownerTitle}>
+              Invite
+            </button>
+          </form>
+          <div className="share-link-note">
+            They get in to every canvas here by proving that address. A canvas's own rows can only
+            add to what the space gives, never take away.
+          </div>
+        </>
+      ) : (
+        offer && (
+          <div className="share-deferred">
+            Inviting by email needs somewhere to verify it, and this home has nowhere yet.
+          </div>
+        )
+      )}
+
+      {swept && swept.what !== "link" && (
+        <div className="share-link-note">
+          {swept.what.replace(/^email:/, "")} — {lost(swept.report)}
+        </div>
+      )}
+
+      {grants !== null && (
+        <>
+          <div className="identity-menu-head">Invited by name</div>
+          <div className="share-roster">
+            <div className="surface-row">
+              <span className="surface-what">
+                <b>{ownerName}</b>
+                <span className="share-roster-kind">Owner, made this</span>
+              </span>
+            </div>
+            {invited.map((grant) => (
+              <div key={grant.id} className="surface-row share-invited">
+                <span className="surface-what">
+                  <b>{grant.subject.replace(/^email:/, "")}</b>
+                  <span className="share-roster-kind">invited {grant.at.slice(0, 10)} · on every canvas here</span>
+                </span>
+                <span className="share-row-controls">
+                  <select
+                    className="text-input share-rung"
+                    aria-label={`What ${grant.subject.replace(/^email:/, "")} may do`}
+                    value={capabilityOf(grant)}
+                    disabled={busy || !owned}
+                    title={ownerTitle}
+                    onChange={(e) =>
+                      void act(grant.subject, () =>
+                        createSpaceGrant(space.id, grant.subject, e.target.value as Capability, actor.id),
+                      )
+                    }
+                  >
+                    {INVITE_RUNGS.map((rung) => (
+                      <option key={rung} value={rung}>
+                        {capabilityWord.dialog[rung]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn"
+                    disabled={busy || !owned}
+                    title={ownerTitle}
+                    onClick={() => void act(grant.subject, () => revokeSpaceGrant(space.id, grant.id, actor.id))}
+                  >
+                    Remove
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+          {keptOut.length > 0 && (
+            <>
+              <div className="identity-menu-head">Kept out</div>
+              <div className="share-roster">
+                {keptOut.map((grant) => (
+                  <div key={grant.id} className="surface-row share-invited">
+                    <span className="surface-what">
+                      <b>{grant.subject.replace(/^email:/, "")}</b>
+                      <span className="share-roster-kind">
+                        kept out {grant.at.slice(0, 10)} · by {grant.grantedBy} · refused on every canvas here
+                      </span>
+                    </span>
+                    <span className="share-row-controls">
+                      <button
+                        className="btn"
+                        disabled={busy || !owned}
+                        title={ownerTitle}
+                        onClick={() => void act(grant.subject, () => revokeSpaceGrant(space.id, grant.id, actor.id))}
+                      >
+                        Let back in
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* The canvases, each marked when its own rows go wider than the space
+          — the eleven-minus-ten an owner is looking for (journey 5). */}
+      <div className="identity-menu-head">In this space</div>
+      <div className="share-roster">
+        {space.canvasIds.length === 0 && <div className="share-link-note">Nothing yet — drag a canvas onto the heading.</div>}
+        {space.canvasIds.map((canvasId) => {
+          const title = canvases.find((c) => c.id === canvasId)?.title ?? canvasId;
+          const mark = wider(canvasId);
+          return (
+            <div key={canvasId} className="surface-row share-invited">
+              <span className="surface-what">
+                <b>{title}</b>
+                <span className={`share-roster-kind${mark ? " share-wider" : ""}`}>
+                  {mark ? `wider than the space: ${mark}` : "as the space gives"}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 interface RosterRow {

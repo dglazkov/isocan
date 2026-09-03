@@ -184,6 +184,21 @@ interface SubmitRequest {
    * refused and phase 10.3 goes on refusing.
    */
   home?: string;
+  /**
+   * **Born in a space** (roles phase 4) — carried UP with a forwarded
+   * `project.create` and nothing else. The route at the home reads it; this
+   * engine only forwards it, because the space is desk state at the home and
+   * a replica cannot check `own` on a row it does not hold.
+   */
+  spaceId?: string;
+  /**
+   * **Write no birth link grant** (roles phase 4) — the flag `createProject`
+   * takes for a canvas born in a space: the space's rows apply to it from
+   * birth and a locked space stays locked as it grows. Set by the route at
+   * the home after it has checked `own` on the space; never forwarded,
+   * because the home decides it for itself.
+   */
+  withoutLinkGrant?: boolean;
   op: Operation;
   /**
    * The badge that presented this request — resolved by the transport and
@@ -1755,6 +1770,9 @@ export class Engine {
       // — and passing it through is what lets a CLI's retry mean the same
       // thing at the home as a tab's does.
       ...(request.opId !== undefined ? { opId: request.opId } : {}),
+      // A birth in a space names the space to the home that holds it (roles
+      // phase 4); the home checks `own` there and writes no link grant.
+      ...(request.spaceId !== undefined ? { spaceId: request.spaceId } : {}),
     });
     const canvasId =
       request.op.type === "project.create" ? request.op.canvasId : request.canvasId;
@@ -2389,7 +2407,11 @@ export class Engine {
       entries: [entry],
       undo: UndoStacks.rebuild([entry]),
     });
-    await ensureLinkGrant(this.desk, op.canvasId, request.badgeId);
+    // Suppressed for a canvas born in a space (roles phase 4): the space's
+    // rows are what admit to it, and a link row here would open every canvas
+    // a locked space grows. The route that set the flag has already checked
+    // `own` on the space and adds the newborn to it once this returns.
+    if (!request.withoutLinkGrant) await ensureLinkGrant(this.desk, op.canvasId, request.badgeId);
     return entry;
   }
 

@@ -19,11 +19,12 @@ describe("only an owner may change who may enter", () => {
 
   it("is refused by the daemon, not merely hidden by the app", () => {
     // Both writes — the POST that invites or sets the link, and the DELETE
-    // that revokes — ask the same question of the same function.
+    // that revokes — ask the same question of the same function; and, since
+    // roles phase 4, so does putting a canvas into a space (`own` on both).
     const asks = http.match(
       /atLeast\(await heldRung\(desk, snapshot\.project, req\.badge!, actorId \?\? null\), "own"\)/g,
     );
-    expect(asks).toHaveLength(2);
+    expect(asks).toHaveLength(3);
     expect(http).toContain("code: NOT_OWNER");
   });
 

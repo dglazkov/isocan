@@ -16,8 +16,8 @@ that moves in the same change as "where we are".
 
 ---
 
-**Where we are: roles phases 1 to 3 CLOSED 2 Sep 2026; roles phase 4 is
-next.** Journeys, design and phases written 2 Sep 2026; phases 1 to 3
+**Where we are: roles phases 1 to 4 CLOSED 2 Sep 2026; roles phase 5 is
+next.** Journeys, design and phases written 2 Sep 2026; phases 1 to 4
 built and walked the same day.
 
 The order is dependency order and it is also scope order: phases 1 to 3 are
@@ -270,7 +270,20 @@ with who and when. `server/test/grants.test.ts` grows the bar cases.
 
 ## Phase 4 — The space
 
-**Status: not started.**
+**Status: CLOSED** 2 Sep 2026. Journeys 4 and 5 walked by the conductor with
+addresses in place of the group, on the scratch home with the CLI as the
+creator: a space made, three canvases moved in, `--space … --link off`
+reached three; two addresses invited at `edit` on the space, and one of
+them entered all three canvases with no canvas row on any; one canvas's
+own link at `view` showed a stranger that deck and refused them on the
+other two, and `GET /api/spaces` as that stranger named no space; removing
+a canvas from the space refused the space's invitee on it; the invitee
+raised to `own` on the space invited a third address on a canvas they held
+no row on. In Chrome the canvas list drew the space's heading and **No
+space** last, the space's Share showed **Every canvas in this space** and
+marked the two canvases wider than the space, and the canvas dialog showed
+the space's rows greyed under *from the space*. Suite 295 files, 3208
+tests; typecheck clean.
 
 **Closes journeys 4 and 5, with addresses in place of the group; re-walks
 journey 7 for the space.** Journey 4 step 5 is walked with five invitations
@@ -312,6 +325,26 @@ Removing a canvas from the space refuses the space's invitee on it. As a
 space owner granted at `own`, a second person invites on a canvas they never
 touched. From the CLI holding a badge admitted to one canvas only, `GET
 /api/spaces` names no space. Conformance runs green on both desks.
+
+**Findings:**
+
+- **2026-09-02 — A space creator's floor is a provenance, `{root: "space"}`**,
+  re-asked by every sweep because a canvas can leave a space; `created`
+  is never re-asked. `rungOfAdmission` reads both as `own`.
+- **2026-09-02 — The Firestore row holds `holding` beside `canvasIds`**: the
+  array-contains index, emptied on the tombstone. Single-field queries only,
+  so no composite index.
+- **2026-09-02 — A badge in on an older edit link stays rooted at the link**
+  when a same-rung space row arrives; a space revoke then re-roots rather
+  than expels.
+- **2026-09-02 — Open: `stillAdmittedBy` is by subject only.** A space row
+  for another attribute of the same person is not seen.
+- **2026-09-02 — Open: the list's Move to space… is gated on the canvas's
+  creator**; an owner by row moves a canvas from the CLI or the Share.
+- **2026-09-02 — `GET /api/spaces` runs one `grantsForSpace` per space** to
+  hide bar-only spaces. A query per space; fine today.
+- **2026-09-02 — A shell holding the scratch `ISOCAN_HOME` makes the CLI
+  read the scratch home's identity.** Start the daemon in a subshell.
 
 ## Phase 5 — The group
 

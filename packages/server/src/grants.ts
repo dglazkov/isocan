@@ -4,6 +4,7 @@ import {
   capabilityOf,
   claimsActor,
   GRANTED_BY_HOME,
+  highest,
   isBar,
   isLive,
   LINK,
@@ -15,7 +16,7 @@ import {
   VIEW_ONLY,
   WITHDRAWN,
 } from "@isocan/core";
-import type { Capability, Grant } from "@isocan/core";
+import type { Capability, Grant, Space } from "@isocan/core";
 import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
 
 /**
@@ -135,13 +136,38 @@ export interface DoorAnswer {
   capability: Capability;
 }
 
+/**
+ * **Where the door reads the space from** — the desk, unless a caller that
+ * runs many door tests at once hands it something memoized. The wide canvas
+ * list (`GET /api/projects`) runs one test per canvas the badge has not been
+ * in, and pays `spacesFor(badge)` once plus one `grantsForSpace` per visible
+ * space through this, rather than one `spaceOf` per canvas (roles design,
+ * "The door reads both").
+ */
+export interface DoorLookup {
+  spaceOf(canvasId: string): Promise<Space | null>;
+  grantsForSpace(spaceId: string): Promise<Grant[]>;
+}
+
 export async function admittingGrant(
   desk: Desk,
   canvasId: string,
   badge: BadgeRecord,
   creator: string | null = null,
+  via: DoorLookup = desk,
 ): Promise<DoorAnswer | null> {
-  const grants = await desk.grantsFor(canvasId);
+  /**
+   * **Both scopes** (roles design, "Who holds what"): the canvas's rows and
+   * its space's, merged into one list before anything is decided, so a bar
+   * on either refuses and the highest rung from either wins. One extra desk
+   * read on every door test — `spaceOf` — because a canvas in no space
+   * cannot be told apart without asking.
+   */
+  const space = await via.spaceOf(canvasId);
+  const grants = [
+    ...(await desk.grantsFor(canvasId)),
+    ...(space ? await via.grantsForSpace(space.id) : []),
+  ];
   const live = grants.filter(isLive);
   /**
    * **A bar wins over every rung** (roles design, "The bar"). Asked of the
@@ -175,8 +201,17 @@ export async function admittingGrant(
   // The floor, asked only when a bar matched or no row did: one `claimsOf`
   // read, off the common path where a row answers. A creator-claiming badge
   // is admitted here whatever the bars say — the creator cannot be barred.
-  if (creator !== null && claimsActor(await desk.claimsOf(badge.badgeId), creator)) {
-    return { grant: null, provenance: { root: "created" }, capability: "own" };
+  // The space's creator holds the same floor over every canvas in it (roles
+  // phase 4), under a root of its own that every sweep re-asks, because a
+  // canvas can leave a space and `created` is never re-asked.
+  if (creator !== null || space !== null) {
+    const claims = await desk.claimsOf(badge.badgeId);
+    if (creator !== null && claimsActor(claims, creator)) {
+      return { grant: null, provenance: { root: "created" }, capability: "own" };
+    }
+    if (space !== null && claimsActor(claims, space.createdBy)) {
+      return { grant: null, provenance: { root: "space", spaceId: space.id }, capability: "own" };
+    }
   }
   return null;
 }
@@ -210,7 +245,9 @@ export function notOwnerMessage(owner: string): string {
  * "agents hold what their person holds".
  */
 export function rungOfAdmission(admission: Admission): Capability {
-  if (admission.provenance.root === "created") return "own";
+  const root = admission.provenance.root;
+  // `space` is the space creator's floor (roles phase 4): `own`, like `created`.
+  if (root === "created" || root === "space") return "own";
   return admission.capability ?? "edit";
 }
 
@@ -245,9 +282,53 @@ export async function heldRung(
   const held = capabilityIn(badge, project.id) ?? "edit";
   if (atLeast(held, "own")) return held;
   const owner = ownerOf(project);
-  if (asActor !== null && asActor !== owner) return held;
   const claims = await desk.claimsOf(badge.badgeId);
-  return claimsActor(claims, owner) ? "own" : held;
+  if ((asActor === null || asActor === owner) && claimsActor(claims, owner)) return "own";
+  /**
+   * **The space's creator owns every canvas in it** (roles phase 4): the
+   * same floor, one scope wider. Asked last and only here, so a canvas in no
+   * space pays one `spaceOf` read on owner routes alone. A row at `own` on
+   * the space reaches this function through the admission, which the door
+   * wrote from the merged rows.
+   */
+  const space = await desk.spaceOf(project.id);
+  if (space && (asActor === null || asActor === space.createdBy) && claimsActor(claims, space.createdBy)) {
+    return "own";
+  }
+  return held;
+}
+
+/**
+ * **What this badge holds over a SPACE** (roles phase 4), for the space
+ * routes: the highest rung from the live rows on the space that its
+ * attestations satisfy, raised to `own` if it claims the space's creator;
+ * null when nothing admits it, or a bar names it — in which case the space
+ * is not one it may see, and the route answers as if there were none.
+ *
+ * A space has no link row, so every row is answered by attestation, and the
+ * admission is not consulted because a space is not entered: it is a fact
+ * about a set of canvases, and a badge holds standing on it directly.
+ */
+export async function heldRungOnSpace(
+  desk: Desk,
+  space: Space,
+  badge: BadgeRecord,
+  asActor: string | null = null,
+): Promise<Capability | null> {
+  const rows = (await desk.grantsForSpace(space.id)).filter(isLive);
+  const attestations = badge.attestations ?? [];
+  const barred = rows.some((row) => isBar(row) && attestationSatisfying(row.subject, attestations));
+  let held: Capability | null = null;
+  if (!barred) {
+    for (const row of rows) {
+      if (isBar(row) || !attestationSatisfying(row.subject, attestations)) continue;
+      held = held === null ? capabilityOf(row) : highest(held, capabilityOf(row));
+    }
+  }
+  if (held !== null && atLeast(held, "own")) return held;
+  if (asActor !== null && asActor !== space.createdBy) return held;
+  const claims = await desk.claimsOf(badge.badgeId);
+  return claimsActor(claims, space.createdBy) ? "own" : held;
 }
 
 /**

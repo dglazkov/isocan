@@ -39,9 +39,21 @@ import type {
   PresenceWhereResponse,
   ServingResponse,
   SlashCommand,
+  SpaceCanvasResponse,
+  SpaceLinkRequest,
+  SpaceLinkResponse,
+  SpaceResponse,
+  SpacesResponse,
 } from "@isocan/core";
 import {
   encodeFilename,
+  spaceActingRoute,
+  spaceCanvasRoute,
+  spaceGrantRevokeRoute,
+  spaceGrantsRoute,
+  spaceLinkRoute,
+  spaceRoute,
+  SPACES_ROUTE,
   FILENAME_HEADER,
   NEWS_ROUTE,
   PRESENCE_WHERE_ROUTE,
@@ -476,6 +488,83 @@ export class DaemonRoutes {
       "DELETE",
       grantRevokeRoute(canvasId, grantId, { ...(actorId ? { actorId } : {}), ...(bar ? { bar } : {}) }),
     );
+  }
+
+  // ---- the space: a named set of canvases access is set on once (roles phase 4) ----
+  //
+  // The same routes the canvas list's headings and the space's Share dialog
+  // drive, built from core's spellings. All at the home; on a replica the
+  // daemon forwards through its one home and refuses on a mixed rig.
+
+  spaces(): Promise<SpacesResponse> {
+    return this.request("GET", SPACES_ROUTE);
+  }
+
+  createSpace(name: string, actorId?: string): Promise<SpaceResponse> {
+    return this.request("POST", SPACES_ROUTE, { name, ...(actorId ? { actorId } : {}) });
+  }
+
+  /** No body, for `revokeGrant`'s reason; the actor rides the query. */
+  deleteSpace(spaceId: string, actorId?: string): Promise<SpaceCanvasResponse> {
+    return this.request("DELETE", spaceActingRoute(spaceRoute(spaceId), actorId));
+  }
+
+  addToSpace(spaceId: string, canvasId: string, actorId?: string): Promise<SpaceCanvasResponse> {
+    return this.request("PUT", spaceCanvasRoute(spaceId, canvasId), actorId ? { actorId } : {});
+  }
+
+  removeFromSpace(spaceId: string, canvasId: string, actorId?: string): Promise<SpaceCanvasResponse> {
+    return this.request("DELETE", spaceActingRoute(spaceCanvasRoute(spaceId, canvasId), actorId));
+  }
+
+  spaceGrants(spaceId: string): Promise<GrantsResponse> {
+    return this.request("GET", spaceGrantsRoute(spaceId));
+  }
+
+  createSpaceGrant(
+    spaceId: string,
+    subject: GrantSubject,
+    capability?: Capability,
+    actorId?: string,
+  ): Promise<GrantResponse> {
+    return this.request("POST", spaceGrantsRoute(spaceId), {
+      subject,
+      ...(narrowed(capability) ? { capability } : {}),
+      ...(actorId ? { actorId } : {}),
+    });
+  }
+
+  barOnSpace(spaceId: string, subject: GrantSubject, actorId?: string): Promise<GrantResponse> {
+    return this.request("POST", spaceGrantsRoute(spaceId), {
+      subject,
+      bars: true,
+      ...(actorId ? { actorId } : {}),
+    });
+  }
+
+  revokeSpaceGrant(
+    spaceId: string,
+    grantId: string,
+    actorId?: string,
+    bar?: boolean,
+  ): Promise<GrantResponse> {
+    return this.request(
+      "DELETE",
+      spaceGrantRevokeRoute(spaceId, grantId, { ...(actorId ? { actorId } : {}), ...(bar ? { bar } : {}) }),
+    );
+  }
+
+  /** **Every canvas in this space**: the link on each canvas set to a rung,
+   * or turned off, in one request; the answer says how many it reached. */
+  setSpaceLink(
+    spaceId: string,
+    capability: SpaceLinkRequest["capability"],
+    actorId?: string,
+  ): Promise<SpaceLinkResponse> {
+    return this.request("POST", spaceLinkRoute(spaceId), {
+      capability,
+      ...(actorId ? { actorId } : {}),
+    } satisfies SpaceLinkRequest);
   }
 
   // ---- your own surfaces: kill-a-badge (phase 9) ----

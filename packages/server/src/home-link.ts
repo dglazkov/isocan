@@ -22,11 +22,23 @@ import type {
   Canvas,
   RedeemPassResponse,
   ServerMessage,
+  SpaceCanvasResponse,
+  SpaceLinkRequest,
+  SpaceLinkResponse,
+  SpaceResponse,
+  SpacesResponse,
   UndoRedoRequest,
 } from "@isocan/core";
 import {
   ATTEST_ROUTE,
   narrowed,
+  spaceActingRoute,
+  spaceCanvasRoute,
+  spaceGrantRevokeRoute,
+  spaceGrantsRoute,
+  spaceLinkRoute,
+  spaceRoute,
+  SPACES_ROUTE,
   BADGES_ROUTE,
   badgeRoute,
   encodeFilename,
@@ -258,6 +270,28 @@ export interface HomeConnection {
    */
   badges(): Promise<BadgesResponse>;
   killBadge(badgeId: string): Promise<KillBadgeResponse>;
+  /**
+   * The space routes, forwarded (roles phase 4) — for the grant routes'
+   * reason, because a space is part of what a grant means: it is desk state
+   * at the home, and a laptop holds no row for it. Every write carries the
+   * actor acting, as a grant write does, so the home asks `own` of the person
+   * and not of the machine.
+   */
+  spaces(): Promise<SpacesResponse>;
+  createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
+  deleteSpace(spaceId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+  addToSpace(spaceId: string, canvasId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+  removeFromSpace(spaceId: string, canvasId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
+  spaceGrants(spaceId: string): Promise<GrantsResponse>;
+  createSpaceGrant(
+    spaceId: string,
+    subject: GrantSubject,
+    capability?: Capability,
+    actor?: Actor,
+    bars?: boolean,
+  ): Promise<GrantResponse>;
+  revokeSpaceGrant(spaceId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
+  setSpaceLink(spaceId: string, capability: SpaceLinkRequest["capability"], actor?: Actor): Promise<SpaceLinkResponse>;
   /**
    * The attest routes, forwarded — for the badge routes' reason, and it is the
    * same sentence one word further on.
@@ -1653,6 +1687,89 @@ export class HomeLink implements HomeConnection {
 
   killBadge(badgeId: string): Promise<KillBadgeResponse> {
     return this.api<KillBadgeResponse>("DELETE", badgeRoute(badgeId));
+  }
+
+  // ---- the space routes, forwarded (roles phase 4) ----
+  //
+  // The claim goes up before every write, as it does before a grant write:
+  // the home checks the actor is among this badge's claims and then asks
+  // `own` of that person. Reads carry nothing — a space is about badges.
+
+  spaces(): Promise<SpacesResponse> {
+    return this.api<SpacesResponse>("GET", SPACES_ROUTE);
+  }
+
+  async createSpace(name: string, actor?: Actor): Promise<SpaceResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<SpaceResponse>("POST", SPACES_ROUTE, {
+      name,
+      ...(actor ? { actorId: actor.id } : {}),
+    });
+  }
+
+  async deleteSpace(spaceId: string, actor?: Actor): Promise<SpaceCanvasResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<SpaceCanvasResponse>("DELETE", spaceActingRoute(spaceRoute(spaceId), actor?.id));
+  }
+
+  async addToSpace(spaceId: string, canvasId: string, actor?: Actor): Promise<SpaceCanvasResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<SpaceCanvasResponse>("PUT", spaceCanvasRoute(spaceId, canvasId), {
+      ...(actor ? { actorId: actor.id } : {}),
+    });
+  }
+
+  async removeFromSpace(spaceId: string, canvasId: string, actor?: Actor): Promise<SpaceCanvasResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<SpaceCanvasResponse>(
+      "DELETE",
+      spaceActingRoute(spaceCanvasRoute(spaceId, canvasId), actor?.id),
+    );
+  }
+
+  spaceGrants(spaceId: string): Promise<GrantsResponse> {
+    return this.api<GrantsResponse>("GET", spaceGrantsRoute(spaceId));
+  }
+
+  async createSpaceGrant(
+    spaceId: string,
+    subject: GrantSubject,
+    capability?: Capability,
+    actor?: Actor,
+    bars?: boolean,
+  ): Promise<GrantResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<GrantResponse>("POST", spaceGrantsRoute(spaceId), {
+      subject,
+      ...(narrowed(capability) ? { capability } : {}),
+      ...(bars ? { bars: true } : {}),
+      ...(actor ? { actorId: actor.id } : {}),
+    });
+  }
+
+  async revokeSpaceGrant(
+    spaceId: string,
+    grantId: string,
+    actor?: Actor,
+    bar?: boolean,
+  ): Promise<GrantResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<GrantResponse>(
+      "DELETE",
+      spaceGrantRevokeRoute(spaceId, grantId, { ...(actor ? { actorId: actor.id } : {}), ...(bar ? { bar } : {}) }),
+    );
+  }
+
+  async setSpaceLink(
+    spaceId: string,
+    capability: SpaceLinkRequest["capability"],
+    actor?: Actor,
+  ): Promise<SpaceLinkResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<SpaceLinkResponse>("POST", spaceLinkRoute(spaceId), {
+      capability,
+      ...(actor ? { actorId: actor.id } : {}),
+    } satisfies SpaceLinkRequest);
   }
 
   /**
