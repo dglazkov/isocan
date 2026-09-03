@@ -755,6 +755,18 @@ questions on item threads. **One sketch per sketcher**: an agent that could
 make forty makes one, and hands it in at the bell with `copy --to` and
 `sprint handin`.
 
+## A Google Doc on the canvas
+
+`isocan gdoc add <url>` puts a Google Doc here as a **document**: its markdown
+export is the item's content — readable, searchable, thumbed in the lens,
+versioned, context an agent reads — and the doc's address is its `source`,
+the ↗ on its strip. `synced` says when the words were taken. `isocan gdoc sync`
+re-exports every doc item on the canvas (`--in <sheet>` for one shelf) and
+lands a new version only where the document changed. Public docs only
+for now: a doc must be shared by link, and a private one is refused in
+words. The words are on the canvas once added — everyone admitted can read
+them — so say so before adding somebody's private document.
+
 ## A canvas on a canvas
 
 `isocan canvas place <ref|address>` puts another canvas on this one as an

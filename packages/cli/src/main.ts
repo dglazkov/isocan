@@ -153,6 +153,16 @@ import {
   gridPatch,
   canvasItemOf,
   CANVAS_ITEM_SIZE,
+  DOC_MIME,
+  DOC_SYNCED_PROP,
+  docFilenameFrom,
+  docProperties,
+  docTitleFrom,
+  googleDocExportUrl,
+  googleDocId,
+  googleDocUrl,
+  isGoogleDocItem,
+  sourceOf,
   areaInner,
   areasOf,
   findArea,
@@ -5857,6 +5867,126 @@ program
         }
         if (root.truncated) console.log("  … truncated — the tree is larger than a listing");
       }
+    }),
+  );
+
+/**
+ * **Google Docs** (`docs/research/2026-09-02-google-docs-on-the-canvas.md`,
+ * stages 2–3): one item per doc, the markdown export as its blob and the
+ * doc's address as `source`, `synced` saying when. `gdoc add` fetches the
+ * anonymous export (a doc shared by link; a private one answers a sign-in
+ * page and is refused by its content type), `gdoc sync` re-exports every doc
+ * item here and lands a new version only when the bytes changed — the
+ * daemon's own hash says so, so an unchanged doc stacks nothing.
+ */
+async function fetchGoogleDoc(id: string): Promise<{ markdown: string; source: string; title: string; fetchedAt: string }> {
+  const res = await fetch(googleDocExportUrl(id), { redirect: "follow", signal: AbortSignal.timeout(20_000) });
+  const type = res.headers.get("content-type") ?? "";
+  if (!res.ok || /text\/html/i.test(type)) {
+    throw new Error(
+      "Google would not hand this document over anonymously — share it by link (Anyone with the link), or add it from a machine with a Drive token (not built yet)",
+    );
+  }
+  const markdown = await res.text();
+  return { markdown, source: googleDocUrl(id), title: docTitleFrom(markdown, id), fetchedAt: new Date().toISOString() };
+}
+
+const gdocCmd = program
+  .command("gdoc")
+  .description("Google Docs on the canvas — a doc's markdown as an item that keeps its link, and a sync that keeps it current");
+
+gdocCmd
+  .command("add <url>")
+  .description("Put a Google Doc here as a document — its markdown export, with the doc's address as its ↗")
+  .option("--at <x,y>", "place at world coordinates")
+  .option("--anchor <item>", "place to the left of this item")
+  .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--cell <row,col>", "with --in: one cell of the sheet's grid")
+  .option("--title <title>", "what it is called (default: the doc's first heading)")
+  .action(
+    run(
+      async (
+        url: string,
+        opts: { at?: string; anchor?: string; in?: string; cell?: string; title?: string },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const id = googleDocId(url);
+        if (!id) throw new Error(`not a Google Doc address: ${url} — it looks like https://docs.google.com/document/d/<id>/edit`);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+        await narrate(ctx, p.id, { status: "fetching the document…" });
+        const doc = await fetchGoogleDoc(id);
+        const title = opts.title ?? doc.title;
+        const filename = docFilenameFrom(title);
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(doc.markdown, "utf8"), DOC_MIME, filename);
+        const size = { width: 640, height: 800 };
+        const itemId = newItemId();
+        const result = await sendOp(ctx, p.id, {
+          type: "item.add",
+          itemId,
+          version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: DOC_MIME, filename, size: upload.size },
+          ...size,
+          placement: placementFor(snapshot, opts, size),
+          title,
+          properties: docProperties(doc.source, doc.fetchedAt),
+        });
+        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+        if (ctx.json) return printJson({ itemId, title, source: doc.source, syncedAt: doc.fetchedAt, placement: placed });
+        console.log(`added "${title}" (${itemId}) at ${placed.x},${placed.y} — its ↗ opens ${doc.source}; \`isocan gdoc sync\` refreshes it`);
+        console.log("note: the words are on the canvas now, readable by everyone admitted to it");
+      },
+    ),
+  );
+
+gdocCmd
+  .command("sync")
+  .description("Re-export every Google Doc item here; a new version lands only where the document changed")
+  .option("--in <area>", "only the docs on this sheet")
+  .action(
+    run(async (opts: { in?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const sheet = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
+      if (opts.in !== undefined && !sheet) throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
+      const docs = (sheet ? itemsIn(snapshot.canvas, sheet) : Object.values(snapshot.canvas.items)).filter(isGoogleDocItem);
+      if (docs.length === 0) {
+        if (ctx.json) return printJson({ synced: [], unchanged: [], failed: [] });
+        return console.log("no Google Doc items here — `isocan gdoc add <url>` puts one on the canvas");
+      }
+      const synced: string[] = [];
+      const unchanged: string[] = [];
+      const failed: { itemId: string; error: string }[] = [];
+      for (const item of docs) {
+        const id = googleDocId(sourceOf(item) ?? "")!;
+        try {
+          const doc = await fetchGoogleDoc(id);
+          const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
+          const upload = await ctx.client.uploadBlob(p.id, Buffer.from(doc.markdown, "utf8"), DOC_MIME, current.filename);
+          if (upload.blobHash === current.blobHash) {
+            unchanged.push(item.id);
+            continue;
+          }
+          // The words changed: a new version, and the stamp moves with it.
+          const group = newGroupId();
+          await sendOp(
+            ctx,
+            p.id,
+            {
+              type: "item.addVersion",
+              itemId: item.id,
+              version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: DOC_MIME, filename: current.filename, size: upload.size },
+            },
+            group,
+          );
+          await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: { properties: { [DOC_SYNCED_PROP]: doc.fetchedAt } } }, group);
+          synced.push(item.id);
+        } catch (err) {
+          failed.push({ itemId: item.id, error: (err as Error).message });
+        }
+      }
+      if (ctx.json) return printJson({ synced, unchanged, failed });
+      console.log(`${synced.length} changed, ${unchanged.length} unchanged${failed.length ? `, ${failed.length} failed` : ""}`);
+      for (const f of failed) console.log(`  ${f.itemId}: ${f.error}`);
     }),
   );
 

@@ -1,9 +1,9 @@
 import { useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
-import { BROWSER_SIZE, addBrowserItem, addFiles } from "../lib/upload.ts";
-import { checkFrameable } from "../lib/api.ts";
-import { siteLabel } from "@isocan/core";
+import { BROWSER_SIZE, addBrowserItem, addDocumentItem, addFiles } from "../lib/upload.ts";
+import { checkFrameable, exportDoc } from "../lib/api.ts";
+import { docFilenameFrom, googleDocId, siteLabel } from "@isocan/core";
 import { placeableArea, revealIfOffscreen, spotInView } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
@@ -347,6 +347,27 @@ function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
        * anything that goes wrong in the probe answers `ok`, so a site that
        * would have worked is never refused on our guess.
        */
+      /**
+       * A Google Doc typed here becomes a DOCUMENT, not a frame: its markdown
+       * export as the item, with `source` and `synced` on it, so the canvas
+       * can read, thumb and version it and the ↗ opens the real doc
+       * (`docs/research/2026-09-02-google-docs-on-the-canvas.md`). The
+       * daemon does the fetch; a private doc is refused in its own words.
+       */
+      if (googleDocId(url)) {
+        const doc = await exportDoc(url);
+        const itemId = await addDocumentItem(
+          canvasId,
+          actor,
+          { title: doc.title, markdown: doc.markdown, filename: docFilenameFrom(doc.title), source: doc.source, syncedAt: doc.fetchedAt },
+          at,
+        );
+        setOpen(false);
+        setUrl("");
+        setError(null);
+        useUiStore.getState().select(itemId);
+        return;
+      }
       const verdict = await checkFrameable(url);
       if (!verdict.ok) {
         setError(
@@ -389,7 +410,7 @@ function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
           <input
             className="text-input"
             autoFocus
-            placeholder="localhost:5173, or any site"
+            placeholder="localhost:5173, any site, or a Google Doc"
             value={url}
             onChange={(e) => {
               setUrl(e.target.value);
