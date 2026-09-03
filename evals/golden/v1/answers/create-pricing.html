@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plans</title>
+<style>
+  /* The design system already on the canvas. Use these; do not invent values. */
+  :root {
+    --paper: #ffffff; --panel: #f6f8fa; --ink: #1f2328; --muted: #57606a; --line: #d0d7de;
+    --accent: #0969da; --accent-ink: #ffffff; --good: #1a7f37; --bad: #cf222e;
+    --radius: 8px; --space-1: 4px; --space-2: 8px; --space-3: 16px; --space-4: 24px; --space-5: 40px;
+    --text-s: 14px; --text-m: 16px; --text-l: 20px; --text-xl: 28px;
+  }
+  body { margin: 0; font: var(--text-m)/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  main { max-width: 720px; margin: 0 auto; padding: var(--space-4) var(--space-3); }
+  h1 { font-size: var(--text-xl); margin: 0 0 var(--space-4); }
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); }
+  .tier { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-4); background: var(--panel); display: flex; flex-direction: column; gap: var(--space-2); }
+  .tier h2 { margin: 0; font-size: var(--text-l); }
+  .price { font-size: var(--text-xl); font-weight: 700; color: var(--accent); }
+  .price small { font-size: var(--text-s); color: var(--muted); font-weight: 400; }
+  .tier p { margin: 0; color: var(--muted); font-size: var(--text-s); flex: 1; }
+  .tier button { margin-top: var(--space-2); padding: var(--space-2) var(--space-3); min-height: 40px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink); font: inherit; }
+  .tier.quiet button { background: var(--paper); color: var(--accent); border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Plans</h1>
+  <div class="tiers">
+    <section class="tier quiet" aria-labelledby="solo">
+      <h2 id="solo">Solo</h2>
+      <div class="price">$0 <small>forever</small></div>
+      <p>One canvas, one agent, yours. Everything on your own machine.</p>
+      <button type="button">Start with Solo</button>
+    </section>
+    <section class="tier" aria-labelledby="team">
+      <h2 id="team">Team</h2>
+      <div class="price">$12 <small>per person, monthly</small></div>
+      <p>Every canvas shared, every agent enrolled, a home that is always on.</p>
+      <button type="button">Start with Team</button>
+    </section>
+    <section class="tier quiet" aria-labelledby="studio">
+      <h2 id="studio">Studio</h2>
+      <div class="price">$40 <small>per person, monthly</small></div>
+      <p>A home of your own, the night shift, and someone to call.</p>
+      <button type="button">Talk to us about Studio</button>
+    </section>
+  </div>
+</main>
+</body>
+</html>

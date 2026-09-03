@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archery log</title>
+<style>
+  :root { --paper: #ffffff; --ink: #1f2328; --muted: #57606a; --line: #d0d7de; --accent: #0969da; --radius: 8px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  .profile-head { padding: 20px; border-bottom: 1px solid var(--line); }
+  .profile-head h1 { margin: 0; font-size: 22px; }
+  .profile-head p { margin: 4px 0 0; color: var(--muted); }
+  section { max-width: 640px; margin: 0 auto; padding: 20px; }
+  h2 { font-size: 18px; margin: 0 0 12px; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat { flex: 1 1 140px; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+  .stat b { display: block; font-size: 24px; }
+  .stat span { color: var(--muted); font-size: 14px; }
+  ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<div class="profile-head"><h1>Lucas</h1><p>Archery log · 40 cm face, 10-ring</p></div>
+<section id="history">
+  <h2>History</h2>
+  <ul>
+    <li>Day 1 — 60 arrows, 412 points</li>
+    <li>Day 2 — 72 arrows, 533 points</li>
+    <li>Day 3 — 66 arrows, 471 points</li>
+  </ul>
+</section>
+<section id="stats">
+  <h2>Stats</h2>
+  <div class="stats">
+    <div class="stat stat-best"><b>7.4</b><span>Best day, per arrow</span></div>
+    <div class="stat"><b>7.1</b><span>Average, per arrow</span></div>
+    <div class="stat"><b>198</b><span>Arrows shot</span></div>
+  </div>
+</section>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orders</title>
+<style>
+  :root { --paper: #ffffff; --ink: #1f2328; --muted: #57606a; --line: #d0d7de; --accent: #0969da; --accent-ink: #ffffff; --radius: 8px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 20px; margin: 0; }
+  header button { padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); font: inherit; }
+  main { max-width: 640px; margin: 0 auto; padding: 20px; }
+  .empty { text-align: center; padding: 48px 20px; border: 1px dashed var(--line); border-radius: var(--radius); }
+  .empty h2 { font-size: 18px; margin: 0 0 8px; }
+  .empty p { margin: 0 0 20px; color: var(--muted); }
+  .empty button { padding: 10px 16px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink); font: inherit; }
+</style>
+</head>
+<body>
+<header><h1>Orders</h1><button type="button">Filter</button></header>
+<main data-state="empty">
+  <section class="empty" aria-labelledby="empty-title">
+    <h2 id="empty-title">No orders yet</h2>
+    <p>When an order comes in it will show up here, grouped by day, with the day's total under it.</p>
+    <button type="button">Add your first order</button>
+  </section>
+</main>
+</body>
+</html>

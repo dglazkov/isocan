@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rules of the lake</title>
+<style>
+  /* The design system already on the canvas. Use these; do not invent values. */
+  :root {
+    --paper: #ffffff; --panel: #f6f8fa; --ink: #1f2328; --muted: #57606a; --line: #d0d7de;
+    --accent: #0969da; --accent-ink: #ffffff; --good: #1a7f37; --bad: #cf222e;
+    --radius: 8px; --space-1: 4px; --space-2: 8px; --space-3: 16px; --space-4: 24px; --space-5: 40px;
+    --text-s: 14px; --text-m: 16px; --text-l: 20px; --text-xl: 28px;
+  }
+  body { margin: 0; font: var(--text-m)/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  main { max-width: 720px; margin: 0 auto; padding: var(--space-4) var(--space-3); }
+  h1 { font-size: var(--text-xl); margin: 0 0 var(--space-1); }
+  .lede { margin: 0 0 var(--space-4); color: var(--muted); }
+  fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); margin: 0 0 var(--space-3); background: var(--panel); }
+  legend { font-weight: 600; padding: 0 var(--space-1); }
+  label { display: flex; align-items: center; gap: var(--space-2); min-height: 40px; }
+  input[type="checkbox"] { width: 24px; height: 24px; margin: 0; accent-color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Rules of the lake</h1>
+  <p class="lede">Tick them as you go. Leave it better than you found it.</p>
+  <form>
+    <fieldset>
+      <legend>Arrival</legend>
+      <label><input type="checkbox" name="key"> Key back in the box under the bench</label>
+      <label><input type="checkbox" name="dock"> Dock lines checked, both cleats</label>
+    </fieldset>
+    <fieldset>
+      <legend>During your stay</legend>
+      <label><input type="checkbox" name="jackets"> Life jackets on the dock, always</label>
+      <label><input type="checkbox" name="boat"> Boat back and tied by dusk</label>
+      <label><input type="checkbox" name="fire"> Fire out before bed</label>
+    </fieldset>
+    <fieldset>
+      <legend>Departure</legend>
+      <label><input type="checkbox" name="beds"> Beds stripped, linen in the blue bin</label>
+      <label><input type="checkbox" name="fridge"> Fridge emptied, door propped</label>
+      <label><input type="checkbox" name="better"> Left it better than you found it</label>
+    </fieldset>
+  </form>
+</main>
+</body>
+</html>

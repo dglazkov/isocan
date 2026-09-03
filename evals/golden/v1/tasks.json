@@ -1,0 +1,267 @@
+{
+  "version": 1,
+  "since": "2026-09-03",
+  "about": "Twenty golden tasks, weighted by what people actually ask agents for (docs/research/2026-09-03-what-people-ask-agents-for.md): revise first, then create, then restyle and repair. A task is a synthetic starting screen, an ask in plain words, and checks a machine can make. `screen` checks are scripts/grade.mjs's; the rest read the file. Every answer here passes; every untouched fixture fails at least one — scripts/golden.mjs --selftest proves both. Change a task and bump the version.",
+  "tasks": [
+    {
+      "id": "revise-heading",
+      "kind": "revise",
+      "fixture": "settings.html",
+      "answer": "revise-heading.html",
+      "ask": "Rename the page: it's called Settings now, not Preferences — the heading, the tab title and the nav link.",
+      "checks": [
+        { "kind": "text", "text": "Settings" },
+        { "kind": "no-text", "text": "Preferences" },
+        { "kind": "unchanged", "selector": "form" },
+        { "kind": "screen", "names": ["renders", "no contrast failures"] }
+      ]
+    },
+    {
+      "id": "revise-newest-first",
+      "kind": "revise",
+      "fixture": "orders.html",
+      "answer": "revise-newest-first.html",
+      "ask": "Reorder the days so the newest is first and expanded, with the older days collapsed under it.",
+      "checks": [
+        { "kind": "order", "texts": ["12 Sep", "3 Sep", "28 Aug"] },
+        { "kind": "selector", "selector": "details[open]", "min": 1, "max": 1 },
+        { "kind": "selector", "selector": "details", "min": 3 },
+        { "kind": "unchanged", "selector": "header" }
+      ]
+    },
+    {
+      "id": "revise-hover-date",
+      "kind": "revise",
+      "fixture": "profile.html",
+      "answer": "revise-hover-date.html",
+      "ask": "For BEST DAY 7.4, show the date of that day when the pointer hovers over it.",
+      "checks": [
+        { "kind": "attr", "selector": ".stat-best", "name": "title", "minLength": 3 },
+        { "kind": "unchanged", "selector": ".profile-head" },
+        { "kind": "unchanged", "selector": "#history" }
+      ]
+    },
+    {
+      "id": "orchestrate-bullet",
+      "kind": "orchestrate",
+      "fixture": "slide.html",
+      "answer": "orchestrate-bullet.html",
+      "context": "Comment above, from Admiral: Can you add another bullet that is \"Because you bring your own agent, you get mobile and chat access for free\"",
+      "ask": "@agent ^^^",
+      "checks": [
+        { "kind": "selector", "selector": "li", "min": 5 },
+        { "kind": "text", "text": "Because you bring your own agent, you get mobile and chat access for free" },
+        { "kind": "unchanged", "selector": "h1" },
+        { "kind": "unchanged", "selector": "footer" }
+      ]
+    },
+    {
+      "id": "revise-swap-hero",
+      "kind": "revise",
+      "fixture": "gallery.html",
+      "answer": "revise-swap-hero.html",
+      "ask": "Replace the hero image with the new drone shot (hero-2) — keep the grid as it is.",
+      "checks": [
+        { "kind": "attr", "selector": "img.hero", "name": "src", "contains": "hero-2" },
+        { "kind": "unchanged", "selector": ".grid" },
+        { "kind": "screen", "names": ["no stretched images", "images have alt"] }
+      ]
+    },
+    {
+      "id": "revise-day-totals",
+      "kind": "revise",
+      "fixture": "orders.html",
+      "answer": "revise-day-totals.html",
+      "ask": "Under each day's table, add a line \"Day total: $…\" with that day's sum.",
+      "checks": [
+        { "kind": "text-count", "text": "Day total", "min": 3 },
+        { "kind": "text", "text": "$82.00" },
+        { "kind": "text", "text": "$12.50" },
+        { "kind": "text", "text": "$133.00" },
+        { "kind": "unchanged", "selector": "header" }
+      ]
+    },
+    {
+      "id": "create-empty-state",
+      "kind": "create",
+      "fixture": "orders.html",
+      "answer": "create-empty-state.html",
+      "ask": "Make the empty state: what this screen shows when there are no orders yet. Say so plainly, and offer the one thing to do next.",
+      "checks": [
+        { "kind": "selector", "selector": "[data-state=empty]", "min": 1 },
+        { "kind": "matches", "pattern": "no orders" },
+        { "kind": "selector", "selector": "button", "min": 1 },
+        { "kind": "unchanged", "selector": "header" },
+        { "kind": "screen", "names": ["renders", "no contrast failures", "every control named"] }
+      ]
+    },
+    {
+      "id": "create-error-state",
+      "kind": "create",
+      "fixture": "signup.html",
+      "answer": "create-error-state.html",
+      "ask": "Add the error state for when the link could not be sent. It must say what failed and what to do about it.",
+      "checks": [
+        { "kind": "selector", "selector": "[role=alert]", "min": 1 },
+        { "kind": "matches", "pattern": "could not|couldn't|failed|didn't" },
+        { "kind": "matches", "pattern": "try again|check" },
+        { "kind": "unchanged", "selector": "h1" },
+        { "kind": "screen", "names": ["renders", "no contrast failures"] }
+      ]
+    },
+    {
+      "id": "create-pricing",
+      "kind": "create",
+      "fixture": "shell.html",
+      "answer": "create-pricing.html",
+      "ask": "Build a pricing screen with three plans — Solo, Team, Studio — using the tokens already in the file.",
+      "checks": [
+        { "kind": "text", "text": "Solo" },
+        { "kind": "text", "text": "Team" },
+        { "kind": "text", "text": "Studio" },
+        { "kind": "selector", "selector": "button", "min": 3 },
+        { "kind": "fewer-literals", "max": 9 },
+        { "kind": "screen", "names": ["renders", "no contrast failures", "every control named", "targets ≥ 24px"] }
+      ]
+    },
+    {
+      "id": "create-checklist",
+      "kind": "create",
+      "fixture": "shell.html",
+      "answer": "create-checklist.html",
+      "ask": "Make a \"Rules of the lake\" checklist screen: at least six rules across arrival, the stay and departure, each one tickable.",
+      "checks": [
+        { "kind": "selector", "selector": "input[type=checkbox]", "min": 6 },
+        { "kind": "selector", "selector": "label", "min": 6 },
+        { "kind": "order", "texts": ["Arrival", "During", "Departure"] },
+        { "kind": "fewer-literals", "max": 9 },
+        { "kind": "screen", "names": ["renders", "every control named", "targets ≥ 24px"] }
+      ]
+    },
+    {
+      "id": "create-greeting",
+      "kind": "create",
+      "fixture": "shell.html",
+      "answer": "create-greeting.html",
+      "ask": "Make a greeting card for Yu — say hello, warmly, in the style already in the file.",
+      "checks": [
+        { "kind": "text", "text": "Yu" },
+        { "kind": "selector", "selector": "h1", "min": 1 },
+        { "kind": "fewer-literals", "max": 9 },
+        { "kind": "screen", "names": ["renders", "no contrast failures"] }
+      ]
+    },
+    {
+      "id": "restyle-tokens",
+      "kind": "restyle",
+      "fixture": "pricing-literals.html",
+      "answer": "restyle-tokens.html",
+      "ask": "This screen hard-codes its colours. Restyle it to use the tokens declared in :root. Nothing should look different.",
+      "checks": [
+        { "kind": "fewer-literals", "max": 7 },
+        { "kind": "same-text" },
+        { "kind": "screen", "names": ["renders", "no contrast failures"] }
+      ]
+    },
+    {
+      "id": "restyle-390",
+      "kind": "restyle",
+      "fixture": "dashboard-fixed.html",
+      "answer": "restyle-390.html",
+      "ask": "Make this work at 390px wide — nothing should scroll sideways, and nothing should be lost.",
+      "checks": [
+        { "kind": "same-text" },
+        { "kind": "changed", "selector": "style" },
+        { "kind": "screen", "names": ["renders", "no sideways scroll"] }
+      ]
+    },
+    {
+      "id": "repair-contrast",
+      "kind": "repair",
+      "fixture": "settings-lowcontrast.html",
+      "answer": "repair-contrast.html",
+      "ask": "The lede, the labels and the Save button are hard to read. Fix the contrast without changing the words.",
+      "checks": [
+        { "kind": "same-text" },
+        { "kind": "changed", "selector": "style" },
+        { "kind": "screen", "names": ["renders", "no contrast failures"] }
+      ]
+    },
+    {
+      "id": "repair-stretched",
+      "kind": "repair",
+      "fixture": "gallery-stretched.html",
+      "answer": "repair-stretched.html",
+      "ask": "The photos look squashed. Fix them.",
+      "checks": [
+        { "kind": "same-text" },
+        { "kind": "selector", "selector": "img", "min": 3 },
+        { "kind": "changed", "selector": "style" },
+        { "kind": "screen", "names": ["renders", "no stretched images"] }
+      ]
+    },
+    {
+      "id": "repair-nameless",
+      "kind": "repair",
+      "fixture": "toolbar.html",
+      "answer": "repair-nameless.html",
+      "ask": "These toolbar buttons mean nothing to a screen reader. Name them: add, remove, close and select.",
+      "checks": [
+        { "kind": "selector", "selector": "button[aria-label]", "min": 4 },
+        { "kind": "unchanged", "selector": "main" },
+        { "kind": "screen", "names": ["renders", "every control named"] }
+      ]
+    },
+    {
+      "id": "arrange-sections",
+      "kind": "arrange",
+      "fixture": "profile.html",
+      "answer": "arrange-sections.html",
+      "ask": "Put the stats above the history.",
+      "checks": [
+        { "kind": "order", "texts": ["Stats", "History"] },
+        { "kind": "same-words" },
+        { "kind": "unchanged", "selector": ".profile-head" }
+      ]
+    },
+    {
+      "id": "document-readme",
+      "kind": "document",
+      "type": "markdown",
+      "fixture": "orders.html",
+      "answer": "document-readme.md",
+      "ask": "Write a README.md for this screen: what it is, what it shows, and how the days and totals work.",
+      "checks": [
+        { "kind": "headings", "min": 2 },
+        { "kind": "text", "text": "Orders" },
+        { "kind": "text", "text": "Filter" },
+        { "kind": "text", "text": "total" }
+      ]
+    },
+    {
+      "id": "variation-type",
+      "kind": "variation",
+      "fixture": "slide.html",
+      "answer": "variation-type.html",
+      "ask": "Give me three variations that change only the type — different faces and sizes — one under another, layout otherwise untouched.",
+      "checks": [
+        { "kind": "text-count", "text": "Why bring your own agent", "min": 3 },
+        { "kind": "text-count", "text": "Open Stitch? isocan", "min": 3 },
+        { "kind": "screen", "names": ["renders", "no contrast failures"] }
+      ]
+    },
+    {
+      "id": "converge-best-of-both",
+      "kind": "converge",
+      "fixture": "rules-two-takes.html",
+      "answer": "converge-best-of-both.html",
+      "ask": "Take the best of both: A's palette and contacts card, B's arrival / stay / departure grouping — one screen, not two.",
+      "checks": [
+        { "kind": "selector", "selector": ".take", "min": 0, "max": 0 },
+        { "kind": "text", "text": "Contacts" },
+        { "kind": "order", "texts": ["Arrival", "During", "Departure"] },
+        { "kind": "screen", "names": ["renders", "no contrast failures"] }
+      ]
+    }
+  ]
+}

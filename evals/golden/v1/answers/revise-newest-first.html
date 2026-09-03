@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orders</title>
+<style>
+  :root { --paper: #ffffff; --ink: #1f2328; --muted: #57606a; --line: #d0d7de; --accent: #0969da; --accent-ink: #ffffff; --radius: 8px; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 20px; margin: 0; }
+  header button { padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); font: inherit; }
+  main { max-width: 640px; margin: 0 auto; padding: 20px; }
+  details { border: 1px solid var(--line); border-radius: var(--radius); margin: 12px 0; }
+  summary { padding: 12px 16px; font-weight: 600; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 8px 16px; border-top: 1px solid var(--line); }
+  .total { color: var(--muted); }
+</style>
+</head>
+<body>
+<header><h1>Orders</h1><button type="button">Filter</button></header>
+<main>
+  <details open class="day" data-date="2026-09-12">
+    <summary>12 Sep — 3 orders</summary>
+    <table><tr><th>Order</th><th>Items</th><th>Total</th></tr>
+      <tr><td>#1061</td><td>Post-its, three colours</td><td class="total">$9.00</td></tr>
+      <tr><td>#1062</td><td>Monitor arm</td><td class="total">$120.00</td></tr>
+      <tr><td>#1063</td><td>Cable ties</td><td class="total">$4.00</td></tr></table>
+  </details>
+  <details class="day" data-date="2026-09-03">
+    <summary>3 Sep — 1 order</summary>
+    <table><tr><th>Order</th><th>Items</th><th>Total</th></tr>
+      <tr><td>#1050</td><td>Sketchbook</td><td class="total">$12.50</td></tr></table>
+  </details>
+  <details class="day" data-date="2026-08-28">
+    <summary>28 Aug — 2 orders</summary>
+    <table><tr><th>Order</th><th>Items</th><th>Total</th></tr>
+      <tr><td>#1041</td><td>Field notebook, pen</td><td class="total">$18.00</td></tr>
+      <tr><td>#1042</td><td>Desk lamp</td><td class="total">$64.00</td></tr></table>
+  </details>
+</main>
+</body>
+</html>
