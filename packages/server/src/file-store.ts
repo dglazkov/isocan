@@ -291,15 +291,30 @@ export class FileStore implements Store {
     let lastSeq = snapshot?.names === undefined ? 0 : (snapshot?.lastSeq ?? 0);
     const entries = await readJsonLines<LogEntry>(p.actorsLogFile(this.home));
     let recovered = false;
+    /**
+     * **A registry from before `harnesses` learns them from its own log.**
+     * Every claim ever logged carries its session key, so the fact was
+     * always here — it just was not folded. A snapshot written without the
+     * field replays the claims it already folded, for the harness alone
+     * (`bindName`'s stamp guard keeps the names as they are), and is saved
+     * back so this runs once per home.
+     */
+    const backfill = snapshot !== null && snapshot !== undefined && saved.harnesses === undefined;
     for (const entry of entries) {
-      if (entry.seq <= lastSeq) continue;
       const op = entry.envelope.op;
+      if (entry.seq <= lastSeq) {
+        if (backfill && op.type === "actor.claim") {
+          registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, sessionKey: op.sessionKey });
+          recovered = true;
+        }
+        continue;
+      }
       if (op.type === "actor.claim") {
         // Only the PUBLIC half replays. The claims table keys on badge ids
         // and badge ids stay out of the oplog (mechanism 5), so it is not
         // reconstructible from here at all — it is desk state, written
         // directly, and `file-desk.ts` has its own log for it.
-        registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts });
+        registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, sessionKey: op.sessionKey });
       } else if (op.type === "actor.setColor") {
         registry = applyActorColor(registry, op);
       } else if (op.type === "actor.setMark") {

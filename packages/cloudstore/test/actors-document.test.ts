@@ -18,10 +18,12 @@ describe("the actors document", () => {
       colors: { usr_ada: "#0f8a80" },
       marks: { usr_ada: "⚓" },
       joined: { usr_ada_2: "usr_ada" },
+      harnesses: { usr_ada: "claude-code" },
     };
     const doc = actorsToDocument(full, 7);
     expect(doc["lastSeq"]).toBe(7);
     expect(doc["joined"]).toEqual({ usr_ada_2: "usr_ada" });
+    expect(doc["harnesses"]).toEqual({ usr_ada: "claude-code" });
     expect(actorsFromDocument(doc)).toEqual({ registry: full, lastSeq: 7 });
   });
 

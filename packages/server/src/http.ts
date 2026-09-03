@@ -119,6 +119,7 @@ import {
   PASS_REDEEM_ROUTE,
   RUNGS,
   SERVING_ROUTE,
+  ACTOR_KINDS_ROUTE,
   DOC_EXPORT_ROUTE,
   googleDocId,
   googleDocExportUrl,
@@ -1220,6 +1221,7 @@ export function registerRoutes(
      goes in the disc. Kept a separate route rather than folded into `/names`
      so an older client reading names is unaffected. */
   app.get("/api/marks", async () => engine.actorMarks());
+  app.get(ACTOR_KINDS_ROUTE, async () => engine.actorKinds());
 
   /** How this home serves — today, only whether a content origin exists.
    * See `SERVING_ROUTE` in core for the contract and `content.ts` for the

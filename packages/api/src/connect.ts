@@ -564,6 +564,41 @@ export class CanvasHandle {
   }
 
   /**
+   * Start a thread on an item — `isocan comment add --item`'s act. A bot
+   * with something to say every commit says it HERE, on the panel it is
+   * about, not in the Chat: on 3 Sep 2026 one board's 137 build notices
+   * were a third of the request corpus and had made the Chat unusable as a
+   * channel — it noticed itself, mid-run, that it had posted 80 of a
+   * thread's 96 messages.
+   */
+  async comment(itemId: string, message: string): Promise<{ threadId: string; commentId: string }> {
+    return this.reach(async () => {
+      const snapshot = await this.snapshot();
+      const comment = await this.newComment(snapshot, message);
+      const threadId = newThreadId();
+      await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+        type: "thread.create",
+        threadId,
+        x: 0,
+        y: 0,
+        anchorItemId: itemId,
+        comment,
+      });
+      return { threadId, commentId: comment.id };
+    });
+  }
+
+  /** Reply in a thread that exists — `isocan comment reply`'s act. */
+  async reply(threadId: string, message: string): Promise<{ threadId: string; commentId: string }> {
+    return this.reach(async () => {
+      const snapshot = await this.snapshot();
+      const comment = await this.newComment(snapshot, message);
+      await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "thread.reply", threadId, comment });
+      return { threadId, commentId: comment.id };
+    });
+  }
+
+  /**
    * Say something in the Chat — `isocan notify`'s act: the main thread gets
    * the reply, or is born from the first message, with `@Name` mentions and
    * `#Title` references resolved the way every comment resolves them.

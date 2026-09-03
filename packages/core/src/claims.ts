@@ -104,6 +104,22 @@ export interface ActorRegistry {
    * this directly, so a chain of joins resolves to its end.
    */
   joined?: ActorJoins;
+  /**
+   * **The harness each actor last claimed from**, keyed by actor id — what
+   * makes "is this an agent" a recorded fact rather than a guess.
+   *
+   * The daemon has always known it: every claim carries a session key and
+   * the key's first segment is the harness (`claude-code:…`, `codex:…`,
+   * `agent:…` for an enrolment, `board:…` for the bot, `web:…` and
+   * `home:…` for people). It was never written down, so nothing could ask
+   * it after the session was gone — and on 3 Sep 2026 the request corpus
+   * turned out to be 73% agents' own prose the daemon could not tell from
+   * asks, because only `agent.enroll` marked anybody and almost nobody runs
+   * it. Now a claim records its harness here, and `actorKinds` reads it.
+   *
+   * Optional for the reason `marks` is: registries on disk predate it.
+   */
+  harnesses?: Record<string, string>;
 }
 
 export const emptyActorRegistry = (): ActorRegistry => ({
@@ -111,7 +127,35 @@ export const emptyActorRegistry = (): ActorRegistry => ({
   colors: {},
   marks: {},
   joined: {},
+  harnesses: {},
 });
+
+/**
+ * The harnesses a PERSON claims from. Everything else — a coding harness,
+ * an enrolment (`agent:`), a bot on a timer (`board:`) — is an agent. The
+ * list is of people rather than of agents because new harnesses appear
+ * (`harnessVars` in config.json) and a new one should be an agent by
+ * default: the failure mode of guessing wrong the other way is a corpus
+ * that counts a bot's receipts as somebody asking.
+ */
+export const PERSON_HARNESSES: ReadonlySet<string> = new Set(["web", "home", "cli", "person"]);
+
+export const isAgentHarness = (harness: string | null | undefined): boolean =>
+  harness !== null && harness !== undefined && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase());
+
+/** Actor id → "agent", for every actor whose last claim came from a harness
+ *  that is not a person's. People are absent rather than "person", so a
+ *  reader can `kinds[id] === "agent"` and an unknown actor reads as a person,
+ *  which is the safe direction for a face and the honest one for a count. */
+export type ActorKinds = Record<string, "agent">;
+
+export function actorKinds(registry: ActorRegistry): ActorKinds {
+  const kinds: ActorKinds = {};
+  for (const [id, harness] of Object.entries(registry.harnesses ?? {})) {
+    if (isAgentHarness(harness)) kinds[resolveActor(registry.joined, id)] = "agent";
+  }
+  return kinds;
+}
 
 /** A claim row as served over the API — to the badge that holds it, and to
  * nobody else. `key` is the claim's `sessionKey`: a client's own index into
@@ -417,7 +461,7 @@ export function applyClaim(ctx: ClaimContext, op: ActorClaimOp): ClaimResult {
   const adopted = !claimed && shelved ? op.sessionKey : undefined;
 
   const settle = (actor: Actor): ClaimResult => ({
-    registry: bindName(ctx.registry, { actor, ts: ctx.now }),
+    registry: bindName(ctx.registry, { actor, ts: ctx.now, sessionKey: op.sessionKey }),
     actor,
     claims: bindClaim(own, { actor, ts: ctx.now, op }),
     ...(adopted !== undefined ? { adopted } : {}),
@@ -466,12 +510,19 @@ export function applyClaim(ctx: ClaimContext, op: ActorClaimOp): ClaimResult {
  */
 export function bindName(
   registry: ActorRegistry,
-  envelope: { actor: Actor; ts: string },
+  envelope: { actor: Actor; ts: string; sessionKey?: string },
 ): ActorRegistry {
-  const { actor, ts } = envelope;
+  const { actor, ts, sessionKey } = envelope;
+  // The harness rides the same fold as the name: one claim, one row each.
+  // Recorded whenever the claim says which harness it came from, and left
+  // alone otherwise (a legacy migration row, a name set by the door).
+  const harness = harnessOf(sessionKey);
+  const withHarness: ActorRegistry = harness
+    ? { ...registry, harnesses: { ...(registry.harnesses ?? {}), [actor.id]: harness } }
+    : registry;
   const current = registry.names[actor.id];
-  if (current && current.at > ts) return registry;
-  return { ...registry, names: { ...registry.names, [actor.id]: { name: actor.name, at: ts } } };
+  if (current && current.at > ts) return withHarness;
+  return { ...withHarness, names: { ...registry.names, [actor.id]: { name: actor.name, at: ts } } };
 }
 
 /**

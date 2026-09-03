@@ -97,8 +97,40 @@ export interface ActorRegistry {
      * this directly, so a chain of joins resolves to its end.
      */
     joined?: ActorJoins;
+    /**
+     * **The harness each actor last claimed from**, keyed by actor id — what
+     * makes "is this an agent" a recorded fact rather than a guess.
+     *
+     * The daemon has always known it: every claim carries a session key and
+     * the key's first segment is the harness (`claude-code:…`, `codex:…`,
+     * `agent:…` for an enrolment, `board:…` for the bot, `web:…` and
+     * `home:…` for people). It was never written down, so nothing could ask
+     * it after the session was gone — and on 3 Sep 2026 the request corpus
+     * turned out to be 73% agents' own prose the daemon could not tell from
+     * asks, because only `agent.enroll` marked anybody and almost nobody runs
+     * it. Now a claim records its harness here, and `actorKinds` reads it.
+     *
+     * Optional for the reason `marks` is: registries on disk predate it.
+     */
+    harnesses?: Record<string, string>;
 }
 export declare const emptyActorRegistry: () => ActorRegistry;
+/**
+ * The harnesses a PERSON claims from. Everything else — a coding harness,
+ * an enrolment (`agent:`), a bot on a timer (`board:`) — is an agent. The
+ * list is of people rather than of agents because new harnesses appear
+ * (`harnessVars` in config.json) and a new one should be an agent by
+ * default: the failure mode of guessing wrong the other way is a corpus
+ * that counts a bot's receipts as somebody asking.
+ */
+export declare const PERSON_HARNESSES: ReadonlySet<string>;
+export declare const isAgentHarness: (harness: string | null | undefined) => boolean;
+/** Actor id → "agent", for every actor whose last claim came from a harness
+ *  that is not a person's. People are absent rather than "person", so a
+ *  reader can `kinds[id] === "agent"` and an unknown actor reads as a person,
+ *  which is the safe direction for a face and the honest one for a count. */
+export type ActorKinds = Record<string, "agent">;
+export declare function actorKinds(registry: ActorRegistry): ActorKinds;
 /** A claim row as served over the API — to the badge that holds it, and to
  * nobody else. `key` is the claim's `sessionKey`: a client's own index into
  * its own badge's claims, which is all it ever was for a client. */
@@ -267,6 +299,7 @@ export declare function applyClaim(ctx: ClaimContext, op: ActorClaimOp): ClaimRe
 export declare function bindName(registry: ActorRegistry, envelope: {
     actor: Actor;
     ts: string;
+    sessionKey?: string;
 }): ActorRegistry;
 /**
  * The PRIVATE effect of a claim: this badge's claim list, after it.

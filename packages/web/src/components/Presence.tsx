@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Actor, ActivityEntry, PresenceSession, ActorMarks} from "@isocan/core";
+import type { Actor, ActivityEntry, PresenceSession, ActorMarks, ActorKinds } from "@isocan/core";
 import { atLeast, capabilityWord, elapsedLabel, recentActivity, sameActor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -10,6 +10,7 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { describe, facesFor, unreadByAuthor, type Face } from "../lib/facepile.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { useActorMarks } from "../lib/marks.ts";
+import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
 
 /**
  * Who is on this canvas, top right — and, in the same cluster, who has said
@@ -37,6 +38,7 @@ const MAX_FACES = 5;
 export function Presence({ actor }: { actor: Actor }) {
   const colors = useActorColors();
   const marks = useActorMarks();
+  const kinds = useActorKinds();
   const names = useActorNames();
   // Which face the pointer is on. Not per-face hover state: see the row.
   const [peek, setPeek] = useState<string | null>(null);
@@ -114,7 +116,7 @@ export function Presence({ actor }: { actor: Actor }) {
           }${face.unread > 0 ? " badged" : ""}${
             face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
           }`}
-          aria-label={tooltip(face)}
+          aria-label={tooltip(face, kinds)}
           onClick={() => goTo(face)}
           onDoubleClick={() => toggleFollow(face)}
         >
@@ -127,7 +129,7 @@ export function Presence({ actor }: { actor: Actor }) {
         </button>
       ))}
       {overflow > 0 && (
-        <span className="face" title={faces.slice(shown.length).map(tooltip).join("\n")}>
+        <span className="face" title={faces.slice(shown.length).map((f) => tooltip(f, kinds)).join("\n")}>
           <span className="face-mark face-more">+{overflow}</span>
         </span>
       )}
@@ -158,6 +160,7 @@ function FaceCard({
 }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const marks = useActorMarks();
+  const kinds = useActorKinds();
   const recent = canvas ? recentActivity(canvas, face.actor.id, 5) : [];
   // Stamped once per open: "4m ago" that re-renders into "4m ago" is noise,
   // and the card does not live long enough for the number to go stale.
@@ -177,8 +180,10 @@ function FaceCard({
               : face.presence === "available"
                 ? "standing by"
                 : face.presence === "here"
-                  ? rungWord(face) ?? (face.kind === "cli" ? "terminal" : "here")
-                  : "away"}
+                  ? rungWord(face) ?? face.harness ?? (isAgentActor(kinds, face.actor.id) ? "agent" : face.kind === "cli" ? "terminal" : "here")
+                  : isAgentActor(kinds, face.actor.id)
+                    ? "agent · away"
+                    : "away"}
           </span>
         </span>
       </div>
@@ -252,14 +257,18 @@ function rungWord(face: Face): string | null {
   return capabilityWord.presence[face.capability];
 }
 
-function tooltip(face: Face): string {
+function tooltip(face: Face, kinds: ActorKinds): string {
   if (face.self) return `${face.label} (you) · click to rename or switch`;
   const parts = [face.label];
   const rung = rungWord(face);
   if (rung) parts.push(rung);
   // Which agent, when we know — "terminal" is true of every one of them and
   // therefore the least useful thing this card could say about a row of three.
+  // With no live session the registry still knows an agent for one: the
+  // harness of its last claim is recorded, so an agent that spoke here last
+  // week and left is "agent", not a person who went quiet.
   if (face.harness) parts.push(face.harness);
+  else if (isAgentActor(kinds, face.actor.id)) parts.push("agent");
   else if (face.kind === "cli") parts.push("terminal");
   if (face.status) parts.push(face.status);
   if (face.unread > 0) parts.push(`${face.unread} new — click to read`);

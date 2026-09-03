@@ -1,4 +1,4 @@
-import type { Actor, ActorBindingRecord, ActorClaimOp, ActorColors, ActorJoinOp, ActorJoins, ActorMarks, ActorNames, ActorSetColorOp, ActorSetMarkOp, CanvasSnapshotResponse, LogEntry, Operation, PresenceSession, Canvas, ServerMessage, SlashCommand, UploadTicket } from "../../core/src/index.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, ActorColors, ActorJoinOp, ActorJoins, ActorMarks, ActorKinds, ActorNames, ActorSetColorOp, ActorSetMarkOp, CanvasSnapshotResponse, LogEntry, Operation, PresenceSession, Canvas, ServerMessage, SlashCommand, UploadTicket } from "../../core/src/index.js";
 import type { BlobUploadRequest, Store } from "./store.js";
 import type { Desk } from "./desk.js";
 import type { HomeDirectory } from "./home-link.js";
@@ -230,6 +230,10 @@ export declare class Engine {
     actorNames(): Promise<ActorNames>;
     /** The mark each actor wears instead of an initial. */
     actorMarks(): Promise<ActorMarks>;
+    /** Actor id → "agent" for everyone whose last claim came from a harness
+     *  that is not a person's — recorded at claim time, so it outlives the
+     *  session (`core/claims.ts` `actorKinds`). */
+    actorKinds(): Promise<ActorKinds>;
     /**
      * Choosing the color you wear. Home-scoped like a claim: it lands in the
      * actors log, updates the registry, and is not undoable.

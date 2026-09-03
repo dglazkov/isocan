@@ -210,6 +210,23 @@ export declare class CanvasHandle {
      * the CLI's `mv` and the web app's drag follow. */
     move(itemId: string, x: number, y: number): Promise<void>;
     /**
+     * Start a thread on an item — `isocan comment add --item`'s act. A bot
+     * with something to say every commit says it HERE, on the panel it is
+     * about, not in the Chat: on 3 Sep 2026 one board's 137 build notices
+     * were a third of the request corpus and had made the Chat unusable as a
+     * channel — it noticed itself, mid-run, that it had posted 80 of a
+     * thread's 96 messages.
+     */
+    comment(itemId: string, message: string): Promise<{
+        threadId: string;
+        commentId: string;
+    }>;
+    /** Reply in a thread that exists — `isocan comment reply`'s act. */
+    reply(threadId: string, message: string): Promise<{
+        threadId: string;
+        commentId: string;
+    }>;
+    /**
      * Say something in the Chat — `isocan notify`'s act: the main thread gets
      * the reply, or is born from the first message, with `@Name` mentions and
      * `#Title` references resolved the way every comment resolves them.

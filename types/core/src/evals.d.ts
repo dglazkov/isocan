@@ -197,7 +197,14 @@ type AskKind = "addressed" | "broadcast";
  * `buildRecap` takes it — because an ask from three weeks ago is the
  * interesting kind and `gc` may have compacted it.
  */
-export declare function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus;
+export declare function buildCorpus(canvas: CanvasContents, log: LogEntry[], 
+/**
+ * Actors known to be agents beyond the roster — what `actorKinds` reads
+ * off the registry (every actor whose claim came from a harness). Until
+ * 3 Sep 2026 only `agent.enroll` marked anybody, so an interactive agent's
+ * "Done —" in the Chat was counted as an ask; with these, it is a reply.
+ */
+knownAgents?: Iterable<string>): Corpus;
 /**
  * **The converge lane's landings, and whether they were kept** — the night
  * shift's step 3 (`docs/research/2026-08-24-the-night-shift.md`): one
