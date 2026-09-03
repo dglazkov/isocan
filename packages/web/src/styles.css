@@ -4440,6 +4440,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .canvas-embed-title { font-size: 13px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .canvas-embed-meta { flex: none; font-size: 11px; color: var(--ink-muted); }
 .canvas-embed-note { padding: 12px; font-size: 12px; color: var(--ink-muted); }
+/* The screenshot, when the live picture cannot be drawn: fills the card,
+   cropped from the top, the way a thumbnail is. */
+.canvas-embed-picture { flex: 1; min-height: 0; width: 100%; object-fit: cover; object-position: top; }
 .canvas-mini { position: relative; flex: 1; overflow: hidden; pointer-events: none; }
 .canvas-mini-item {
   position: absolute; box-sizing: border-box; overflow: hidden;

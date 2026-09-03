@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -3876,6 +3876,38 @@ canvas
         console.log(`placed "${target.title}" (${target.id}) as ${itemId} at ${placed.x},${placed.y} — double-click it, or its ↗, to open ${made.properties.source}`);
       },
     ),
+  );
+
+/**
+ * **A real screenshot of a canvas** (inception phase 2), through the headless
+ * browser the graders run — `scripts/canvas-shot.mjs`, which needs the
+ * repository checkout and Chrome. `--into` lands it as a new version of a
+ * canvas item, the picture the card shows when its own live pull is refused.
+ */
+canvas
+  .command("shot <ref>")
+  .description("Screenshot a canvas as the app renders it — a PNG, or with --into a version of a canvas item")
+  .option("--out <file>", "where to write the PNG (default: a temp file, printed)")
+  .option("--into <item>", "add the PNG as a new version of this canvas item on the current canvas")
+  .option("--size <WxH>", "the browser's viewport (default 1600x1000)")
+  .action(
+    run(async (ref: string, opts: { out?: string; into?: string; size?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const target = matchRef(await ctx.client.listCanvases(), ref);
+      const script = fileURLToPath(new URL("../../../scripts/canvas-shot.mjs", import.meta.url));
+      if (!existsSync(script)) {
+        throw new Error("canvas shot needs the repository checkout (scripts/canvas-shot.mjs) and Chrome — run it from a clone of isocan");
+      }
+      const { width, height } = sizeFor(opts.size, { width: 1600, height: 1000 });
+      const args = [script, "--canvas", target.id, "--origin", (await ctx.homeOf(target.id)) ?? ctx.client.base, "--width", String(width), "--height", String(height)];
+      if (opts.out) args.push("--out", opts.out);
+      if (opts.into) {
+        const { canvas: p } = await canvasAndSnapshot(ctx);
+        args.push("--into", opts.into, "--on", p.id);
+      }
+      const child = spawnSync(process.execPath, args, { stdio: "inherit" });
+      if (child.status !== 0) throw new Error(`the screenshot did not land (exit ${child.status ?? "?"})`);
+    }),
   );
 
 canvas

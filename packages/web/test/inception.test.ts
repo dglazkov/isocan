@@ -19,7 +19,8 @@ describe("a canvas on a canvas is a picture of a place", () => {
     expect(card).toContain("getSnapshot(canvasId)");
     expect(card).toContain("setInterval(() => void pull(), PULL_MS)");
     expect(view).toContain("if (canvasOf) {");
-    expect(view).toContain("<CanvasCard canvasId={canvasOf}");
+    expect(view).toContain("<CanvasCard");
+    expect(view).toContain("canvasId={canvasOf}");
     // A canvas item is not a live frame, whatever its blob says.
     expect(view).toContain("const isBrowser = current.mimeType === BROWSER_MIME && !isCanvas;");
   });
@@ -72,6 +73,36 @@ describe("the popup has two doors and one dialog", () => {
     expect(popup).toContain("addCanvasItem(canvasId, actor,");
     // A spot found FOR the card is not chosen; the daemon may tidy it clear.
     expect(popup).toContain("not `chosen`");
+  });
+});
+
+describe("the picture that survives, and a canvas at another home", () => {
+  it("shows the screenshot version under the words when the pull is refused, never instead of live", () => {
+    expect(view).toContain('picture={mimeType.startsWith("image/") ? url : null}');
+    const refused = card.slice(card.indexOf('if (state.kind === "refused")'), card.indexOf("const items = Object.values"));
+    expect(refused).toContain('{picture && <img className="canvas-embed-picture"');
+    // Live wins: the picture is only in the refused branch.
+    expect(card.slice(card.indexOf("const items = Object.values"))).not.toContain("canvas-embed-picture");
+  });
+
+  it("says a canvas at another home lives there rather than asking a door that will not answer", () => {
+    expect(card).toContain("origin === window.location.origin ? null : origin");
+    expect(card).toContain("if (elsewhere) return;");
+    expect(card).toContain("Lives at ${elsewhere");
+  });
+
+  it("is drawn as its miniature wherever thumbnails are", () => {
+    const thumb = read("../src/components/ItemThumb.tsx");
+    expect(thumb).toContain("canvasOf={canvasIdOf(item)}");
+  });
+
+  it("has a screenshot verb that lands a version, through the graders' browser", () => {
+    expect(cli).toContain('.command("shot <ref>")');
+    expect(cli).toContain("scripts/canvas-shot.mjs");
+    const shot = read("../../../scripts/canvas-shot.mjs");
+    expect(shot).toContain("Page.captureScreenshot");
+    expect(shot).toContain('op: { type: "actor.claim", name: "Camera" }');
+    expect(shot).toContain('"edit", into, out');
   });
 });
 

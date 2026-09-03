@@ -908,6 +908,7 @@ function ItemViewInner({
           designSystem={isDesignSystem(item)}
           textNode={isText}
           canvasOf={canvasIdOf(item)}
+          canvasSource={source}
           size={{ width, height }}
           reloadToken={reloadToken}
         />
@@ -1160,6 +1161,7 @@ export function VersionContent({
   designSystem,
   textNode,
   canvasOf,
+  canvasSource,
   size,
   warm,
 }: {
@@ -1170,6 +1172,8 @@ export function VersionContent({
   /** A canvas placed here: the id of the canvas to draw small and live,
    *  instead of framing the address the blob carries (`core/canvasitem.ts`). */
   canvasOf?: string | null;
+  /** The address the canvas item points at — which home it is at. */
+  canvasSource?: string | null;
   /** The item's box, for content that lays itself out to it (the canvas card). */
   size?: { width: number; height: number };
   entered: boolean;
@@ -1206,7 +1210,17 @@ export function VersionContent({
     return <video className="video-view" src={url} controls={entered} muted loop playsInline />;
   }
   if (canvasOf) {
-    return <CanvasCard canvasId={canvasOf} width={size?.width ?? 800} height={size?.height ?? 600} />;
+    return (
+      <CanvasCard
+        canvasId={canvasOf}
+        width={size?.width ?? 800}
+        height={size?.height ?? 600}
+        // A screenshot version, when one was taken: the picture that
+        // survives a pull the door refuses (inception phase 2).
+        picture={mimeType.startsWith("image/") ? url : null}
+        source={canvasSource ?? null}
+      />
+    );
   }
   if (mimeType === BROWSER_MIME) {
     return <BrowserView canvasId={canvasId} blobHash={blobHash} reloadToken={reloadToken} />;

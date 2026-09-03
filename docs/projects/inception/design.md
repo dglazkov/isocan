@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: on-demand, standing-agents
-note: phases 0–1 built 2 Sep — core/canvasitem.ts, the card drawn live from the other canvas's snapshot one level deep, ↗ and double-click open a tab, `isocan canvas place` by ref or address, and the popup from the rail and ⌘K (search or paste an address); phases 2–4 (the screenshot, thumbnails everywhere, another home) designed and not built
+note: phases 0–3 built 2 Sep, and phase 4's half — the card drawn live one level deep, ↗ and double-click open a tab, `isocan canvas place`, the popup from the rail and ⌘K, `isocan canvas shot --into` as the picture that survives a refused pull, the miniature wherever thumbnails are, and "lives at another home" said on the card; pulling a picture across homes is not built
 ---
 # Canvas Inception
 
@@ -194,6 +194,18 @@ The third door the design named — pasting an address straight onto the
 canvas — is not built: the app's ⌘V reads its own clipboard, not the
 system's, and reaching the system clipboard is a permission question worth
 its own decision.
+
+**Phases 2 to 4, the same day, smaller than designed.** `scripts/canvas-shot.mjs`
+takes a real PNG of a canvas as the app renders it — through the door as
+*Camera*, fitted with ⇧1, captured by the graders' headless browser — and
+`isocan canvas shot <ref> --into <item>` lands it as a version of the card;
+the card shows it **under the words when its own pull is refused**, and never
+instead of a live picture it can draw. `ItemThumb` draws a canvas item as its
+miniature, so the lens, the files panel and the card peek show one the way
+the card does. A canvas at another home is recognised from its address and
+the card says *lives at …* with the ↗ still there, rather than asking a door
+this home cannot answer for; pulling its picture across homes, the rest of
+phase 4, waits on the same homes walk the CLI makes and is not built.
 
 **Zero new op types**, the target every project here has met so far; the one
 place that might want one is none. **Both surfaces**, held by the tests that

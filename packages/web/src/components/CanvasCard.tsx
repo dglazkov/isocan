@@ -30,14 +30,41 @@ const PULL_MS = 30_000;
  *  cost a thousand nodes in a card. */
 const MOST_ITEMS = 120;
 
-export function CanvasCard({ canvasId, width, height }: { canvasId: string; width: number; height: number }) {
+export function CanvasCard({
+  canvasId,
+  width,
+  height,
+  picture = null,
+  source = null,
+}: {
+  canvasId: string;
+  width: number;
+  height: number;
+  /** A screenshot version of this item, when one was taken — the picture
+   *  that survives a pull the door refuses. Never preferred over live. */
+  picture?: string | null;
+  /** The address the item points at: a canvas at another home cannot be
+   *  pulled from this one (phase 4), and the card says so rather than
+   *  asking a door that will not answer. */
+  source?: string | null;
+}) {
+  const elsewhere = (() => {
+    if (!source) return null;
+    try {
+      const origin = new URL(source).origin;
+      return origin === window.location.origin ? null : origin;
+    } catch {
+      return null;
+    }
+  })();
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "ready"; title: string; canvas: CanvasContents; here: number }
     | { kind: "refused"; why: string }
-  >({ kind: "loading" });
+  >(elsewhere ? { kind: "refused", why: `Lives at ${elsewhere.replace(/^https?:\/\//, "")} — open it there.` } : { kind: "loading" });
 
   useEffect(() => {
+    if (elsewhere) return;
     let live = true;
     const pull = async () => {
       try {
@@ -68,10 +95,19 @@ export function CanvasCard({ canvasId, width, height }: { canvasId: string; widt
       live = false;
       clearInterval(timer);
     };
-  }, [canvasId]);
+  }, [canvasId, elsewhere]);
 
   if (state.kind === "loading") return <div className="canvas-embed canvas-embed-note">Looking…</div>;
-  if (state.kind === "refused") return <div className="canvas-embed canvas-embed-note">{state.why}</div>;
+  if (state.kind === "refused") {
+    // The screenshot, when there is one, with the reason under it; the words
+    // alone otherwise. Never a blank rectangle.
+    return (
+      <div className="canvas-embed">
+        {picture && <img className="canvas-embed-picture" src={picture} alt="" />}
+        <div className="canvas-embed-note">{state.why}</div>
+      </div>
+    );
+  }
 
   const items = Object.values(state.canvas.items);
   const count = items.filter((one) => !isArea(one)).length;

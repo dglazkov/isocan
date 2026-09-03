@@ -766,6 +766,13 @@ never entered. It takes `--in <area>` like everything else, which is how a
 person's canvases are shelved onto sheets. `isocan ls --kind canvas` lists
 them. A canvas will not be placed on itself.
 
+The card draws the other canvas LIVE for anyone admitted to it. For the
+reader who is not — or a tab that is offline, or a canvas at another home —
+`isocan canvas shot <ref> --into <item>` takes a real screenshot through the
+same headless browser the graders run and lands it as a version of the card,
+which shows it under the words when its own pull is refused. Needs the
+repository checkout and Chrome; a nightly is the right place for it.
+
 ## Areas: sheets things are placed on
 
 An **area** is a titled region of the canvas — a sheet things are placed on,
