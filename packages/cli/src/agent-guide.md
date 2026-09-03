@@ -1601,7 +1601,11 @@ isocan fit <items...>                  # grow items to the size their content wa
   same history read as a question about the WORK rather than the ops: every
   ask, whether it was answered, cancelled or met with silence, and the ops
   attributed to it. `isocan evals pairs` is the other half — the version
-  stacks where somebody kept an earlier take over a later one.
+  stacks where somebody kept an earlier take over a later one. The corpus
+  also says what KIND each ask is — revise, create, orchestrate, question,
+  arrange, restyle, document, critique, repair, variation, converge — by a
+  classifier that agrees with a person about four times in five; the `kinds:`
+  line is a reading of the words, not a label, and says so.
 
   Two things to hold when you read it. **The attribution says how it knows**,
   and one of its three labels is a guess: `anchor` and `reference` are

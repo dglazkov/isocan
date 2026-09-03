@@ -74,6 +74,91 @@ interface AttributedOp {
   undone: boolean;
 }
 
+/**
+ * **What kind of ask this is** — Stage 1's taxonomy, the categories that came
+ * out of hand-labelling every human ask at one home on 3 September 2026
+ * (`docs/research/2026-09-03-what-people-ask-agents-for.md`), not ones
+ * brought to the data. Fifteen, and the first eleven are the work:
+ *
+ * - `create` — something that did not exist: a screen, an app, a deck, a
+ *   card, a diagram, a wireframe, a drawing.
+ * - `revise` — change a thing that exists: swap an image, reword, add a
+ *   bullet, reorder, animate, a hover state.
+ * - `restyle` — the look of a thing that exists: redesign, apply a design
+ *   system, "make it pop".
+ * - `variation` — several takes to choose between; diverge.
+ * - `converge` — pick one, merge two, apply the chosen version.
+ * - `critique` — compare, audit, judge, grill.
+ * - `repair` — it is broken, or the last answer missed.
+ * - `arrange` — tidy, format, rearrange, merge layers, delete.
+ * - `document` — write it down: a README, a spec, a design system, an IA.
+ * - `question` — explain, how does it work, what would happen.
+ * - `orchestrate` — point an agent at work: a bare mention, "this one's for
+ *   you", "are you there", running a sprint.
+ * - `ops`, `cancel`, `social`, `probe` — the rest: deploy it; call it off;
+ *   thanks and hello; a test canvas's echo.
+ *
+ * `categoriseAsk` is a classifier over words, calibrated against those hand
+ * labels and reported with its agreement rather than trusted — the research
+ * note carries the number. It exists so the distribution can be read for a
+ * canvas nobody has labelled, with that caveat attached.
+ */
+export type AskCategory =
+  | "create"
+  | "revise"
+  | "restyle"
+  | "variation"
+  | "converge"
+  | "critique"
+  | "repair"
+  | "arrange"
+  | "document"
+  | "question"
+  | "orchestrate"
+  | "ops"
+  | "cancel"
+  | "social"
+  | "probe";
+
+const COMMAND_CATEGORY: Record<string, AskCategory> = {
+  cancel: "cancel",
+  format: "arrange",
+  variation: "variation",
+  "design-audit": "critique",
+  "grill-me": "critique",
+  "design-system": "restyle",
+  sprint: "orchestrate",
+  ask: "question",
+};
+
+export function categoriseAsk(body: string, command: string | null): AskCategory {
+  if (command !== null) return COMMAND_CATEGORY[command] ?? "question";
+  const text = body.replace(/\s+/g, " ").trim();
+  const lower = text.toLowerCase();
+  // Strip the mentions; what is left is what was asked. Nothing left, or
+  // next to nothing, is a person pointing an agent at the thing above.
+  const words = lower.replace(/@[\w'’.-]+(?:\s+[\w'’.-]+)*?\s*🤖?/g, " ").replace(/[^\p{L}\p{N}?]+/gu, " ").trim();
+  if (/^(thanks|thank you|amazing|awesome|nice|great|love it|hello|hi|hey)\b/.test(lower) && words.split(" ").length <= 6) return "social";
+  if (words.split(" ").filter(Boolean).length <= 1) return "orchestrate";
+  if (/^(probe\b|echo check)/.test(lower)) return "probe";
+  if (/\b(this one'?s for you|this is for you|take (on|up) this|pick this up|can you work on this|are you (there|here)|read .* and do it|\^\^\^)/.test(lower)) return "orchestrate";
+  if (/\b(github pages|deploy|host(ed|ing)?\b|make it public)/.test(lower)) return "ops";
+  // Broken outranks the question it is often phrased as: "when I go full
+  // screen it doesn't fill — can you fix that?" opens like a question and is
+  // a repair.
+  if (/\b(fix|broken|bug|doesn'?t work|isn'?t working|not working|don'?t see|still (broken|not)|looks broken)\b/.test(lower)) return "repair";
+  if (/^(how|what|why|when|where|who|which|does|do|is|are|wait|can i|could i)\b/.test(lower) && !/\b(what would a .* (version|look)|what do you think about having)/.test(lower)) return "question";
+  if (/\b(variations?|different (styles|designs|takes|versions)|\d+ (variations|versions|takes|options)|what would an? .* version look like|best shots?|your take)\b/.test(lower)) return "variation";
+  if (/\b(merge (the|these|both) .*(take|version|best)|best of both|take the best|use this (one|version)|update the main .* to use)\b/.test(lower)) return "converge";
+  if (/\b(critique|audit|which (one )?(is|do you think)|are these good|what do you think of|superior|grill)\b/.test(lower)) return "critique";
+  if (/\b(tidy|rearrange|organi[sz]ed?|merge these into one|line (them )?up|clean up|delete the|remove the)\b/.test(lower)) return "arrange";
+  if (/\b(readme|spec\b|design\.md|write up|write a doc|document(ation)?\b|information architecture|extract the .* design system)/.test(lower)) return "document";
+  if (/\b(restyle|redesign|reimagine|reskin|look and feel|make it pop|glassmorphic|design system|font pairings?|fonts?\b|high end|modern (fonts|layout))/.test(lower)) return "restyle";
+  if (/\b(change|update|replace|nudge|reorder|hover|animate[ds]?|integrate|swap|centered|sparkly|dark mode|light\/dark|sorted|add (another|a bullet|the image)|make (it|this|these|them|that)\b|space it out|moving around|flying out|explodes)/.test(lower)) return "revise";
+  if (/\b(create|build|make|draw|sketch|wireframe|generate|design (a|an|me|two|three)|new screen|add a text node|greeting|card for|quiz|deck|diagrams?)\b/.test(lower)) return "create";
+  return lower.endsWith("?") ? "question" : "revise";
+}
+
 interface AskEntry {
   threadId: string;
   commentId: string;
@@ -90,6 +175,9 @@ interface AskEntry {
    * and `/format` are asks with a known shape, and knowing which is most of
    * Stage 1's taxonomy for free. */
   command: string | null;
+  /** What kind of ask, by `categoriseAsk` — a classifier's reading, not a
+   * label. The research note reports how often it agrees with a person. */
+  category: AskCategory;
   /** The words. Never leaves the machine: see `plan.md` Stage 6, which puts
    * comment text on the list of what is never sent on any setting. */
   body: string;
@@ -120,6 +208,9 @@ interface CorpusSummary {
   opsUndone: number;
   /** Asks that opened with a slash command, by name, commonest first. */
   commands: { name: string; count: number }[];
+  /** Asks by category, commonest first — the classifier's reading of every
+   * row here, agent receipts included. Read with the caveat on `category`. */
+  categories: { name: AskCategory; count: number; silent: number }[];
 }
 
 interface Corpus {
@@ -199,11 +290,19 @@ export function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus {
       const answer = later.find((c) => c.author.id !== comment.author.id);
       // A cancel is the asker calling it off, so only their own later comments
       // count. Somebody else typing `/cancel` is cancelling their own thing.
-      const cancelled = later.some(
-        (c) =>
-          c.author.id === comment.author.id &&
-          parseSlashCommand(c.body)?.name === "cancel",
-      );
+      //
+      // And it calls off the ask it follows, not every ask the person ever
+      // made here. The first reading of this — "any later /cancel by the
+      // asker" — was measured on 3 Sep 2026 and found to mark 16 asks on one
+      // canvas cancelled because the person typed `/cancel` once, in the Chat,
+      // after all of them. In the Chat every comment shares one thread, so
+      // that reading turned a single withdrawal into a sixteen-fold one. The
+      // cancel belongs to the asker's most recent ask before it: walk their
+      // own later comments, and the first one decides — a `/cancel` cancels
+      // this ask; anything else is a newer ask, and a cancel after that one is
+      // its cancel, not this one's.
+      const ownNext = later.find((c) => c.author.id === comment.author.id);
+      const cancelled = ownNext !== undefined && parseSlashCommand(ownNext.body)?.name === "cancel";
 
       // The window closes at the next thing anybody said here, not at the
       // answer: an agent that posts its receipt and then keeps tidying is
@@ -267,6 +366,7 @@ export function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus {
         main: thread.main === true,
         kind,
         command: parseSlashCommand(comment.body)?.name ?? null,
+        category: categoriseAsk(comment.body, parseSlashCommand(comment.body)?.name ?? null),
         body: comment.body,
         outcome,
         ...(answer
@@ -293,6 +393,14 @@ export function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus {
     commands.set(ask.command, (commands.get(ask.command) ?? 0) + 1);
   }
 
+  const categories = new Map<AskCategory, { count: number; silent: number }>();
+  for (const ask of asks) {
+    const row = categories.get(ask.category) ?? { count: 0, silent: 0 };
+    row.count += 1;
+    if (ask.outcome === "silent") row.silent += 1;
+    categories.set(ask.category, row);
+  }
+
   const every = asks.flatMap((a) => a.produced);
   return {
     summary: {
@@ -308,6 +416,9 @@ export function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus {
       opsUndone: every.filter((o) => o.undone).length,
       commands: [...commands]
         .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : 1)),
+      categories: [...categories]
+        .map(([name, row]) => ({ name, ...row }))
         .sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : 1)),
     },
     asks,
