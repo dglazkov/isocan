@@ -16,10 +16,12 @@ that moves in the same change as "where we are".
 
 ---
 
-**Where we are: roles phases 1 to 5 CLOSED 2 Sep 2026; roles phase 6 is
-next.** Journeys, design and phases written 2 Sep 2026; phases 1 to 5
-built and walked the same day. Phase 6 is the walk on prod and needs the
-deploy.
+**Where we are: roles phases 1 to 5 CLOSED 2 Sep 2026; phase 6 PART-DONE.**
+Journeys, design and phases written 2 Sep 2026; phases 1 to 5 built and
+walked the same day; the compatibility cases walked on dev.isocan.io and
+against a pre-phase-1 build. What is left of phase 6 is the prod deploy
+(`git tag -f prod green && git push -f origin prod`, Dimitri's call) and
+the walk on isocan.io with a canvas from before it.
 
 The order is dependency order and it is also scope order: phases 1 to 3 are
 one canvas and change no storage shape; phase 4 adds the space and the first
@@ -414,7 +416,20 @@ group's returns the name and size and no members.
 
 ## Phase 6 — Nothing changed for anyone else
 
-**Status: not started.**
+**Status: PART-DONE** 2 Sep 2026. The compatibility cases walked by the
+conductor: on dev.isocan.io at `e2fbab8` (the phase 4 build), a canvas
+from before the deploy whose link row carries no rung admitted Dimitri's
+badge with no capability on the wire, an editor; a `view` link gave a
+fresh door badge `view`; a canvas in no space printed no space line and
+dev's canvas list drew no heading. A CLI from before phase 1 (`75ebcdb`,
+installed from the release branch) run as a replica of dev joined a
+canvas whose link was `read`, printed the link as *on — anyone with the
+address can enter*, and was refused a write with `view-only` naming the
+owner. A new client against a pre-phase-1 home (the same build's daemon)
+had `capability: read` refused with `bad-grant` and `/api/spaces` refused
+as an unknown route. The suite, every multiuser and multi-identity test
+included, is green at `1e7325b`. **Left:** the prod deploy, and the walk
+on isocan.io with a canvas that existed before it, recording the sha.
 
 **Closes journey 8.**
 
@@ -430,6 +445,20 @@ reopened rather than this one growing work.
 
 **Proof:** The conductor walks journey 8 on isocan.io with a canvas that
 existed before the deploy and records the commit sha the home reported.
+
+**Findings:**
+
+- **2026-09-02 — Prod was already at `42afda3`**, phases 1 and 2 included,
+  deployed at 04:11 UTC on 3 Sep by another session. A home from before
+  phase 1 now exists only as a scratch daemon.
+- **2026-09-02 — Open, phase 3's: a pre-phase-1 home accepts `bars: true`
+  as an ordinary invitation.** The field is dropped and the row admits.
+  A new CLI's `--bar` against an old home invites instead of keeping out;
+  the CLI could check the echoed row for `bars` and revoke.
+- **2026-09-02 — An old replica lists a home canvas only after its badge is
+  admitted**; `use <id>` before that says no match. Not new to this project.
+- **2026-09-02 — The old CLI nudges to upgrade** when its home runs a newer
+  commit, from `healthz`. The compatibility rule has a voice already.
 
 ---
 
