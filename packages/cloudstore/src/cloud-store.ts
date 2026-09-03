@@ -411,17 +411,27 @@ export class CloudStore implements Store {
     const snapshot = await this.db.doc(ACTORS_SNAPSHOT).get();
     let { registry, lastSeq } = actorsFromDocument(snapshot.data());
 
-    const entries = await this.readLog(this.db.collection(ACTORS), lastSeq, (seq) =>
+    // A document from before `harnesses` learns them from the claims it
+    // already folded — the same once-per-home backfill the file store does,
+    // and for the same reason: every claim carries its session key.
+    const backfill = snapshot.exists && snapshot.data()?.["harnesses"] === undefined;
+    const entries = await this.readLog(this.db.collection(ACTORS), backfill ? 0 : lastSeq, (seq) =>
       this.actorOverflowKey(seq),
     );
     let recovered = false;
     for (const entry of entries) {
-      if (entry.seq <= lastSeq) continue;
       const op = entry.envelope.op;
+      if (entry.seq <= lastSeq) {
+        if (backfill && op.type === "actor.claim") {
+          registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, sessionKey: op.sessionKey });
+          recovered = true;
+        }
+        continue;
+      }
       if (op.type === "actor.claim") {
         // Only the PUBLIC half replays; the claims table is desk state and is
         // not reconstructible from here at all (the two-ledger rule).
-        registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts });
+        registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, sessionKey: op.sessionKey });
       } else if (op.type === "actor.setColor") {
         registry = applyActorColor(registry, op);
       } else if (op.type === "actor.setMark") {

@@ -282,6 +282,7 @@ export function storeConformance(
           colors: { usr_ada: "#0f8a80" },
           marks: { usr_ada: "⚓" },
           joined: { usr_ada_2: "usr_ada" },
+          harnesses: { usr_ada: "claude-code" },
         };
         await store.saveActors(full, 7);
         const back = await store.loadActors();

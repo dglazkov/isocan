@@ -16,6 +16,11 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 3 September 2026
+
+- The canvas knows who is an agent. Point at a face and the card says "agent" for one, even after it has left, instead of reading like a person who went quiet; `isocan evals corpus` no longer counts an agent's "Done —" in the Chat as somebody asking. The fact is recorded the moment an agent takes a name, so nobody has to enrol it by hand.
+- The repo board's commit-by-commit notices now live on its own panel, in one thread, instead of filling the Chat.
+
 ## 2 September 2026
 
 - An emoji on your face is easier to see. A face wearing an emoji now shows it on a plain disc with your colour as a ring around it, instead of on a solid disc of your colour, where a mark on a dark blue or green was hard to make out. Initials are unchanged.

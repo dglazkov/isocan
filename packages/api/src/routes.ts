@@ -35,6 +35,7 @@ import type {
   WatchLogRequest,
   WatchLogResponse,
   ActorNames,
+  ActorKinds,
   NewsResponse,
   PresenceWhereResponse,
   ServingResponse,
@@ -63,6 +64,7 @@ import {
   FILENAME_HEADER,
   NEWS_ROUTE,
   PRESENCE_WHERE_ROUTE,
+  ACTOR_KINDS_ROUTE,
   badgeRoute,
   BADGES_ROUTE,
   grantRevokeRoute,
@@ -721,6 +723,13 @@ export class DaemonRoutes {
    * fetched on its own for commands that print names without one. */
   actorNames(): Promise<ActorNames> {
     return this.request("GET", "/api/names");
+  }
+
+  /** Who is an agent — actor id → "agent" for every actor whose last claim
+   * came from a harness that is not a person's; people absent. A daemon from
+   * before the route answers its SPA fallback, which parses to nothing. */
+  actorKinds(): Promise<ActorKinds> {
+    return this.request("GET", ACTOR_KINDS_ROUTE);
   }
 
   /** Who is on which canvas right now, across every room this daemon can see

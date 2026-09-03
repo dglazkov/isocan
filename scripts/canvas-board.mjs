@@ -1095,9 +1095,24 @@ if (NOTIFY && !DRY) {
   const what = changed.length
     ? `${changed.length} panel${changed.length === 1 ? "" : "s"} updated`
     : "no panel changed";
-  await board.notify(
-    `\`${f.commit}\` ${f.subject} — ${f.author}. Board: ${line}; ${what}. See #Tree status`,
-  );
+  const notice = `\`${f.commit}\` ${f.subject} — ${f.author}. Board: ${line}; ${what}. See #Tree status`;
+  /**
+   * **On the panel, not in the room.** These used to go to the Chat, one per
+   * commit, and on 3 Sep 2026 they were 137 of the 414 rows in the request
+   * corpus — a third of everything anybody had "asked" — and had made the
+   * Chat unusable as a channel (the board noticed itself, mid-run, that it
+   * had posted 80 of a thread's 96 messages). A notice is about the board,
+   * so it lives on the board: one thread anchored to #Tree status, started
+   * once and replied to forever, which the tray shows as a badge on the
+   * panel and the Chat never sees.
+   */
+  const panel = existing.find((i) => i.properties?.board === "tree-status");
+  const thread = panel
+    ? (await board.threads()).find((t) => t.anchorItemId === panel.id && /^Board notices\b/.test(t.comments[0]?.body ?? ""))
+    : null;
+  if (thread) await board.reply(thread.id, notice);
+  else if (panel) await board.comment(panel.id, `Board notices — one per commit, here rather than in the Chat.\n\n${notice}`);
+  else await board.notify(notice);
 }
 
 /**

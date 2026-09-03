@@ -306,7 +306,7 @@ async function migrateLegacyAgents(home: string, store: Store, desk: Desk): Prom
     // `bindName` judges by the stamp, not by arrival: these entries land at
     // the END of a log whose other entries are newer, so a two-month-old
     // legacy row must not re-letter an actor renamed last week.
-    current = bindName(current, { actor: envelope.actor, ts });
+    current = bindName(current, { actor: envelope.actor, ts, sessionKey: key });
     shelf[key] = { actorId: binding.id, boundAt: ts, sessionKey: key };
     spokenFor.add(binding.id);
     keysTaken.add(key);
