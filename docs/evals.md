@@ -29,6 +29,7 @@ kept as a test that runs, not a note that gets skimmed.
 | **Deterministic graders** | `scripts/grade.mjs`, `grade-night.mjs` | Eight checks on a real screen at 390/768/1440: renders, contrast against what is painted, stretched images, sideways scroll, unnamed controls, target size, alt text, the greppable slop tells. Counts, never a weighted score. | Nightly (`grade.yml`, 08:23 UTC) → a dated page in `docs/grades/`, as a pull request |
 | **Golden tasks** | `evals/golden/v1/`, `scripts/golden.mjs`, `scripts/lib/golden.mjs` | Twenty tasks weighted by what people actually ask — revise, create, restyle, repair, then one each of the rest. A synthetic fixture, an ask, and checks a machine can make: what the file says, in what order, what stayed untouched, plus the screen checks by name. `--task`/`--dir` grade an attempt; `--selftest` requires every answer to pass and every fixture to fail. Versioned. | On demand; the browser-free selftest on every push (`test/golden.test.ts`) |
 | **Skill lift** | `scripts/lift.mjs`, pages in `docs/lift/` | Three numbers per skill, never one: does it fire, does it help (the same golden task with and without the skill — same fixture, prompt, model, tools, turn budget), what does it cost (turns, dollars, seconds). Runs a real agent in a narrow room — a temp directory, Bash limited to `isocan`, a scratch canvas deleted afterwards — and grades what reached the canvas with `golden.mjs`. | On demand, when a skill or the model changes |
+| **The converge lane** | `scripts/converge-night.mjs`, `isocan evals converge`, pages in `docs/converge/` | One measured fix per night: the screen with the most failing mechanical checks, fixed by an agent that can touch only the file, landed as a version only when every targeted check passes, nothing regressed and the words are unchanged. The reply carries before and after and how to say no; the verdicts — kept, built on, reverted — are the accept rate, the trust battery's first reading. | Nightly, on the machine where the canvases are |
 | **The graders' own test** | `grade.mjs --selftest`, `test/fixtures/deliberately-bad.html` | Whether the grader still sees anything — a page built to fail every failable check must fail them all. Gates every nightly run. | Before every grade |
 | **Personas with numbers** | `.agents/personas/*.md`, `scripts/persona-run.mjs`, `scripts/measure.mjs` | Eight standing lenses, each with a goal that is `(number, bound, the command that produces it)` and a measured baseline — largest chunk, contrast failures, unused exports, eslint errors. Two bounds are ratchets. A run takes the numbers, writes a page, changes nothing, and may not touch the persona. | Nightly (`persona.yml`, 08:43 UTC) → `docs/reviews/<date>-<persona>.md`, as a pull request |
 | **Journeys** | `scripts/journeys.mjs`, `journeys.yml` | Whether the app still works when a browser drives it — the checks the suite structurally cannot make. | Weekly |
@@ -186,6 +187,19 @@ cannot forget what it paid for.
    work in fewer turns. One run each — a lift worth acting on is a delta
    that survives three, and the next fixture is the one where the prompt
    does not already say where the work is.
-4. **The converge lane, one item wide**: one measured change per night, landed
+4. ~~**The converge lane, one item wide**: one measured change per night, landed
    as a version with its before-and-after attached, kept or reverted by a
-   keystroke in the morning. The accept rate starts the battery.
+   keystroke in the morning. The accept rate starts the battery.~~ **Built
+   3 Sep 2026** — `scripts/converge-night.mjs` grades every screen on a
+   canvas, picks the one with the most failing mechanical checks, has an
+   agent fix exactly those in a room with nothing but the file, and lands a
+   version only if every targeted check now passes, nothing regressed and
+   the words are unchanged; the reply says the numbers and how to say no.
+   `isocan evals converge` reads the verdicts — kept, built on, reverted,
+   standing — and the accept rate. First night in `docs/converge/`.
+
+The four are done. What the numbers now say is in the sections above, and
+what they ask for next is written where each was measured: a fixture where
+the prompt does not say where the work is (lift), three runs before a delta
+is believed (lift), Stage 4's autoraters calibrated against the pairs the
+morning ritual is beginning to produce (converge).

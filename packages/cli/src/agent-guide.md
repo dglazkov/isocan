@@ -1606,6 +1606,10 @@ isocan fit <items...>                  # grow items to the size their content wa
   arrange, restyle, document, critique, repair, variation, converge — by a
   classifier that agrees with a person about four times in five; the `kinds:`
   line is a reading of the words, not a label, and says so.
+  `isocan evals converge` is the night shift's score: what the converge lane
+  landed here as versions, and whether people kept them, built on them, or
+  brought the previous version back — the accept rate that widens or narrows
+  what the night may do unasked.
 
   Two things to hold when you read it. **The attribution says how it knows**,
   and one of its three labels is a guess: `anchor` and `reference` are
