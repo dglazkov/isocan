@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildCorpus,
   categoriseAsk,
+  harvestConverge,
+  withLanding,
   harvestPreferences,
   type CanvasContents,
   type LogEntry,
@@ -465,6 +467,43 @@ describe("attribution says how it knows", () => {
     expect(asks[0]!.produced).toHaveLength(1);
     expect(asks[0]!.produced[0]!.undone).toBe(true);
     expect(summary.opsUndone).toBe(1);
+  });
+});
+
+describe("the converge lane's landings, and whether people kept them", () => {
+  const T0 = "2026-09-03T03:00:00.000Z";
+  const later = Date.parse(T0) + 13 * 3600e3; // a morning has passed
+  const stacked = (id: string, versions: string[], current: string, converged?: string) => {
+    const it = item(id, id, "2026-09-01T00:00:00.000Z", versions);
+    return { ...it, currentVersionId: current, properties: { ...it.properties, ...(converged ? { converged } : {}) } };
+  };
+
+  it("appends a landing to the property rather than replacing the last one", () => {
+    expect(withLanding(undefined, "v2", T0)).toBe(`v2@${T0}`);
+    expect(withLanding(`v2@${T0}`, "v3", "2026-09-04T03:00:00.000Z")).toBe(`v2@${T0},v3@2026-09-04T03:00:00.000Z`);
+  });
+
+  it("calls a landing kept, built on, reverted or standing by the stack alone", () => {
+    const state = canvas({
+      items: {
+        kept: stacked("kept", ["v1", "v2"], "v2", `v2@${T0}`),
+        builtOn: stacked("builtOn", ["v1", "v2", "v3"], "v3", `v2@${T0}`),
+        reverted: stacked("reverted", ["v1", "v2"], "v1", `v2@${T0}`),
+        standing: stacked("standing", ["v1", "v2"], "v2", `v2@${new Date(later - 3600e3).toISOString()}`),
+        untouched: stacked("untouched", ["v1"], "v1"),
+      },
+    });
+    const report = harvestConverge(state, later);
+    const by = Object.fromEntries(report.landings.map((l) => [l.itemId, l.status]));
+    expect(by).toEqual({ kept: "kept", builtOn: "built-on", reverted: "reverted", standing: "standing" });
+    // Standing is excluded from the rate, so a fresh night cannot move the battery before anyone looked.
+    expect(report).toMatchObject({ kept: 2, reverted: 1, standing: 1 });
+    expect(report.acceptRate).toBeCloseTo(2 / 3);
+  });
+
+  it("has no rate until something has been judged", () => {
+    const state = canvas({ items: { s: stacked("s", ["v1", "v2"], "v2", `v2@${new Date(later).toISOString()}`) } });
+    expect(harvestConverge(state, later).acceptRate).toBeNull();
   });
 });
 

@@ -1,4 +1,4 @@
-import type { CanvasContents, Comment, CommentThread } from "./model.ts";
+import type { CanvasContents, Comment, CommentThread, Item } from "./model.ts";
 import type { LogEntry } from "./ops.ts";
 import { parseSlashCommand } from "./commands.ts";
 import { undoneSeqs } from "./undone.ts";
@@ -423,6 +423,97 @@ export function buildCorpus(canvas: CanvasContents, log: LogEntry[]): Corpus {
     },
     asks,
   };
+}
+
+/**
+ * **The converge lane's landings, and whether they were kept** — the night
+ * shift's step 3 (`docs/research/2026-08-24-the-night-shift.md`): one
+ * measured fix per night, landed as a version, kept or reverted by a person
+ * in the morning. The accept rate is the trust battery's first reading.
+ *
+ * A landing is recorded on the item it landed on, as `converged` —
+ * `<versionId>@<iso>`, comma-separated when there have been several — by
+ * `scripts/converge-night.mjs` the moment it stacks the version. Nothing
+ * else marks it: versions have no properties of their own, and a comment is
+ * prose. So this reads the property and the stack together, and says of each
+ * landing:
+ *
+ * - `reverted` — the current version is EARLIER in the stack than the
+ *   landing: somebody brought a previous take back. That is the morning's
+ *   "no", and it is a labelled rejection.
+ * - `built-on` — a later version exists. Somebody kept working on top of
+ *   the night's change, which is the strongest "yes" there is.
+ * - `kept` — the landing is still current and old enough that a morning
+ *   has passed over it.
+ * - `standing` — still current, too new to call. Not a yes yet.
+ *
+ * The accept rate is kept-or-built-on over everything that has been judged;
+ * `standing` is excluded rather than counted either way, so a fresh night
+ * cannot inflate or deflate the battery before anyone has looked.
+ */
+export const CONVERGED_PROP = "converged";
+/** How long a landing must stand before silence counts as keeping it. */
+export const KEPT_AFTER_MS = 12 * 60 * 60 * 1000;
+
+export type LandingStatus = "reverted" | "built-on" | "kept" | "standing";
+
+export interface Landing {
+  itemId: string;
+  title: string;
+  versionId: string;
+  landedAt: string;
+  status: LandingStatus;
+}
+
+export interface ConvergeReport {
+  landings: Landing[];
+  kept: number;
+  reverted: number;
+  standing: number;
+  /** kept-or-built-on ÷ (kept-or-built-on + reverted); null until something has been judged. */
+  acceptRate: number | null;
+}
+
+/** The property's value for one more landing — appended, never replaced. */
+export function withLanding(existing: string | undefined, versionId: string, at: string): string {
+  const entry = `${versionId}@${at}`;
+  return existing && existing.trim() ? `${existing.trim()},${entry}` : entry;
+}
+
+export function landingsOf(item: Item): { versionId: string; landedAt: string }[] {
+  const raw = item.properties[CONVERGED_PROP];
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((one) => one.trim())
+    .filter(Boolean)
+    .map((one) => {
+      const at = one.indexOf("@");
+      return at < 0 ? { versionId: one, landedAt: "" } : { versionId: one.slice(0, at), landedAt: one.slice(at + 1) };
+    });
+}
+
+export function harvestConverge(canvas: CanvasContents, now: number = Date.now()): ConvergeReport {
+  const landings: Landing[] = [];
+  for (const item of Object.values(canvas.items)) {
+    const order = item.versions.map((v) => v.id);
+    const currentAt = order.indexOf(item.currentVersionId);
+    for (const { versionId, landedAt } of landingsOf(item)) {
+      const landedIndex = order.indexOf(versionId);
+      let status: LandingStatus;
+      if (landedIndex < 0) status = "reverted"; // the version is gone from the stack: as firm a no as there is
+      else if (currentAt >= 0 && currentAt < landedIndex) status = "reverted";
+      else if (order.length - 1 > landedIndex) status = "built-on";
+      else if (landedAt && now - Date.parse(landedAt) >= KEPT_AFTER_MS) status = "kept";
+      else status = "standing";
+      landings.push({ itemId: item.id, title: item.title, versionId, landedAt, status });
+    }
+  }
+  landings.sort((a, b) => (a.landedAt < b.landedAt ? 1 : a.landedAt > b.landedAt ? -1 : 0));
+  const kept = landings.filter((l) => l.status === "kept" || l.status === "built-on").length;
+  const reverted = landings.filter((l) => l.status === "reverted").length;
+  const standing = landings.filter((l) => l.status === "standing").length;
+  return { landings, kept, reverted, standing, acceptRate: kept + reverted === 0 ? null : kept / (kept + reverted) };
 }
 
 /**

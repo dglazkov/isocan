@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 see: evals,personas
-note: step 1 built: nightly grades
+note: steps 1, 3 and 4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`); the morning comment and the diverge lane are open
 ---
 # The night shift
 
@@ -300,6 +300,19 @@ Each of these is useful alone, and none requires the next — the same disciplin
 3. **The converge lane, one item wide.** One measured fix per night, landed as
    a version, with the before/after in the reply. Track the accept rate from
    the first night — it is the trust battery's first reading.
+   **Built 3 Sep 2026:** `scripts/converge-night.mjs` grades every screen on
+   a canvas, picks the one with the most failing mechanical checks (contrast,
+   unnamed controls, missing alt, stretched images, sideways scroll) that the
+   lane has not touched in a day, has an agent fix exactly those in a room
+   with nothing but the file, and lands a version only if every targeted
+   check now passes, nothing regressed and the visible words are unchanged —
+   otherwise the attempt is discarded and the page says so. The landing is
+   recorded on the item as `converged=<version>@<time>` and the reply says
+   the numbers and how to say no (bring the previous version back).
+   `isocan evals converge` reads every landing as kept, built on, reverted
+   or standing, and the accept rate over the judged ones — standing is
+   excluded, so a fresh night cannot move the battery before anyone looked.
+   Pages in `docs/converge/`.
 4. **Convergence** (`docs/projects/atlas/convergence.md`). Now the loop has an exit and
    the diverge lane becomes possible.
 5. **The diverge lane**, scoped to starred items.
