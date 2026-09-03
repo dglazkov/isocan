@@ -8,12 +8,15 @@ import {
   annotationsOf,
   isAnnotation,
   isArea,
+  areaGrid,
+  areaInner,
   areaTint,
   itemsIn,
   AREA_TITLE_HEIGHT,
   isDrawingItem,
   isSlide,
   isTextItem,
+  reactionPointsOf,
   SLIDE_EMOJI,
   textFaceOf,
   textDrawSize,
@@ -43,7 +46,7 @@ import { fileMarkTip } from "../lib/backing.ts";
 import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
-import { useVotesHidden } from "../lib/sprint.ts";
+import { useOnWall, useSprint, useVotesHiddenOn, voteMark } from "../lib/sprint.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
 import { useCanEdit } from "../lib/capability.ts";
@@ -96,7 +99,14 @@ function ItemViewInner({
   const navigate = useNavigate();
   const colors = useActorColors();
   const names = useActorNames();
-  const votesHidden = useVotesHidden();
+  // The curtain applies to the WALL — the Vote sheet's contents — and only
+  // there; a note on the Brief keeps its byline while a sketch hides its own.
+  const votesHidden = useVotesHiddenOn(item);
+  const { state: sprint } = useSprint();
+  const mark = voteMark(sprint);
+  // On the wall during a vote: where a dot may be placed.
+  const wall = useOnWall(item);
+  const onWall = mark !== null && wall;
   const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
   const soleSelection = useUiStore(
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
@@ -224,6 +234,8 @@ function ItemViewInner({
   // tool used inside it still reaches the canvas. See `core/area.ts`.
   const isAreaItem = isArea(item);
   const tint = isAreaItem ? areaTint(item) : null;
+  const grid = isAreaItem ? areaGrid(item) : null;
+  const inner = isAreaItem ? areaInner(item) : null!;
   // The words' world size, and whether they are still words at this zoom.
   // Below the cut a node draws ONE mark instead of forty shapes of grey
   // smear — see `textIsLegible` in core for why 5px and not a fade.
@@ -278,6 +290,26 @@ function ItemViewInner({
     // bubbles to the viewport — Hand pans, Zoom fits this item, the Pen draws
     // over it — even though it started here.
     if (ui.activeTool === "hand" || ui.activeTool === "zoom" || ui.activeTool === "pen") return;
+    /**
+     * **Placing a dot** (sprint phase 4). While a mark is being placed, a
+     * press on a sketch ON THE WALL puts the mark where the press landed, as
+     * fractions of the box, so it sits on the same part of the sketch at
+     * every zoom. One op — `item.react` with `at` — and the same op the
+     * terminal writes with `--at`. A second press moves your dot; the set
+     * semantics of a reaction make it one vote either way. A press off the
+     * wall is an ordinary press: the wall is where the votes are.
+     */
+    if (ui.stamp && onWall) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const at = {
+        x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
+        y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height)),
+      };
+      e.stopPropagation();
+      e.preventDefault();
+      void sendEchoed(canvasId, actor, { type: "item.react", itemId: item.id, emoji: ui.stamp, on: true, at });
+      return;
+    }
     if (commentMode) {
       // Anchored comment: store the click as an offset from the item origin.
       const world = screenToWorldPoint(e.clientX, e.clientY);
@@ -630,6 +662,46 @@ function ItemViewInner({
           ×{item.versions.length}
         </button>
       )}
+      {isAreaItem && grid && (
+        /* The grid (sprint phase 5): guides between cells and a name per row
+           and column, in world units inside the sheet's inner region — the
+           storyboard's fifteen frames, the test wall's people × frames. No
+           pointer: a cell is geometry, and the sheet lets tools through. */
+        <div className="area-grid" aria-hidden>
+          {Array.from({ length: grid.cols - 1 }, (_, i) => (
+            <span
+              key={`c${i}`}
+              className="area-grid-line v"
+              style={{ left: inner.x - x + ((i + 1) * inner.width) / grid.cols, top: inner.y - y, height: inner.height }}
+            />
+          ))}
+          {Array.from({ length: grid.rows - 1 }, (_, i) => (
+            <span
+              key={`r${i}`}
+              className="area-grid-line h"
+              style={{ top: inner.y - y + ((i + 1) * inner.height) / grid.rows, left: inner.x - x, width: inner.width }}
+            />
+          ))}
+          {grid.colNames.map((name, i) => (
+            <span
+              key={`cn${i}`}
+              className="area-grid-name col"
+              style={{ left: inner.x - x + (i * inner.width) / grid.cols + 8, top: inner.y - y - 24 }}
+            >
+              {name}
+            </span>
+          ))}
+          {grid.rowNames.map((name, i) => (
+            <span
+              key={`rn${i}`}
+              className="area-grid-name row"
+              style={{ left: inner.x - x + 8, top: inner.y - y + (i * inner.height) / grid.rows + 6 }}
+            >
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
       {isAreaItem && (
         /* The strip is the area's name AND its handle — the one part of the
            sheet that takes the pointer, so it can be grabbed at any zoom
@@ -640,6 +712,26 @@ function ItemViewInner({
           title={item.title}
         >
           {item.title}
+        </div>
+      )}
+      {mark !== null && reactionPointsOf(item, mark).length > 0 && (
+        /* The heat map: the mark, drawn where each person put it. Under the
+           curtain only YOUR dot shows — you may see where you voted, not
+           where anyone else did — and at the bell all of them. Fractions of
+           the box, so a dot stays on the part of the sketch it was put on. */
+        <div className="vote-dots" aria-hidden>
+          {reactionPointsOf(item, mark)
+            .filter((dot) => !votesHidden || dot.actorId === actor.id)
+            .map((dot) => (
+              <span
+                key={dot.actorId}
+                className={`vote-dot${dot.actorId === actor.id ? " mine" : ""}`}
+                style={{ left: `${dot.x * 100}%`, top: `${dot.y * 100}%` }}
+                title={votesHidden ? "your dot" : (names[dot.actorId] ?? dot.actorId)}
+              >
+                {mark}
+              </span>
+            ))}
         </div>
       )}
       <div className="item-titlebar" style={roomy ? undefined : { display: "none" }}>

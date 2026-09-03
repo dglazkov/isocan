@@ -67,6 +67,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
   const activeTool = useUiStore((s) => s.activeTool);
+  const stamp = useUiStore((s) => s.stamp);
   const canEdit = useCanEdit();
   const railPanning = useUiStore((s) => s.railPanning);
   const menu = useUiStore((s) => s.contextMenu);
@@ -677,7 +678,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   return (
     <div
       ref={ref}
-      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
+      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
         activeTool === "select" && !commentMode ? " own-cursor-on" : ""
       }`}
       style={{

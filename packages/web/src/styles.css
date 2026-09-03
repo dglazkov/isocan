@@ -4400,6 +4400,17 @@ button.mt-card:hover { border-color: var(--accent); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .item.area.dragging .area-title { cursor: grabbing; }
+/* A grid on the sheet (sprint phase 5): hairlines between cells and a
+   name per row and column, in world units so they hold their place at
+   every zoom. Drawn under the contents and taking no pointer. */
+.area-grid { position: absolute; inset: 0; pointer-events: none; }
+.area-grid-line { position: absolute; background: var(--paper-edge, var(--line)); opacity: 0.6; }
+.area-grid-line.v { width: 1px; }
+.area-grid-line.h { height: 1px; }
+.area-grid-name {
+  position: absolute; font-size: 18px; line-height: 1; font-weight: 600;
+  color: var(--paper-ink-soft, var(--ink-muted)); white-space: nowrap;
+}
 /* The card — what happens here, in a few lines — under the name, in the
    band `AREA_CARD_HEIGHT` reserves for it (120 world units), so it can
    never spill into the sheet's contents and nothing placed on the sheet
@@ -5208,6 +5219,21 @@ button.mt-card:hover { border-color: var(--accent); }
   font: inherit; font-size: 11px; font-weight: 600; line-height: 1;
 }
 .sprint-action:hover { border-color: var(--accent); }
+.sprint-action.on { background: var(--ink); border-color: var(--ink); color: var(--card); }
+/* The heat map (sprint phase 4): the mark drawn where each person put it,
+   in world units so it stays on the part of the sketch it was put on. Not
+   a control — the item under it is what takes the press. */
+.vote-dots { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.vote-dot {
+  position: absolute; transform: translate(-50%, -50%);
+  font-size: 18px; line-height: 1;
+}
+.vote-dot.mine { transform: translate(-50%, -50%) scale(1.15); }
+/* While a mark is being placed, a sketch on the wall is a target. */
+.canvas-viewport.stamping .item { cursor: crosshair; }
+/* A desk's chip: the sprint's clock, read from elsewhere, and one button. */
+.sprint-desk-label { color: var(--ink-muted); font-weight: 500; }
+.sprint-chip.desk { border-style: dashed; }
 .sprint-action.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .sprint-phase { display: inline-flex; align-items: center; gap: 5px; }
 .sprint-mark { font-size: 12px; }

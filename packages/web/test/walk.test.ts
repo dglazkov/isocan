@@ -43,7 +43,8 @@ describe("the chip offers the phase's one action", () => {
   });
 
   it("New note, on the phase's paper, in the sheet — never for a vote", () => {
-    expect(chip).toContain("{phaseTakesNotes(state) && (");
+    // Offered to somebody who may write — a reader sees the clock (roles).
+    expect(chip).toContain("{canEdit && phaseTakesNotes(state) && (");
     expect(chip).toContain("onClick={() => newNoteIn(state)}");
     const takes = lib.slice(lib.indexOf("export function phaseTakesNotes"));
     expect(takes.slice(0, takes.indexOf("}"))).toContain('state.phase.kind === "silent" || state.phase.kind === "group"');

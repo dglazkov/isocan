@@ -213,7 +213,16 @@ export type Operation =
    * should be true; who it is true of comes from the envelope, which is also
    * what makes reacting as somebody else unrepresentable.
    */
-  | { type: "item.react"; itemId: string; emoji: string; on: boolean }
+  | {
+      type: "item.react";
+      itemId: string;
+      emoji: string;
+      on: boolean;
+      /** Where on the item it was placed, as fractions of its box (0..1) —
+       * a heat-map dot on the part somebody liked. Optional: a chip click
+       * wears the mark with no point, and `off` removes both. */
+      at?: { x: number; y: number };
+    }
   | { type: "item.move"; itemId: string; x: number; y: number }
   | { type: "item.resize"; itemId: string; width: number; height: number }
   | {

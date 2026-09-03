@@ -1,8 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import { clockLabel, remainingSeconds } from "@isocan/core";
-import { goToArea, handIn, handable, newNoteIn, phasePaper, phaseTakesNotes, ringBell, useSprint } from "../lib/sprint.ts";
+import {
+  deskSprintOf,
+  goToArea,
+  handIn,
+  handInFromDesk,
+  handable,
+  newNoteIn,
+  phasePaper,
+  phaseTakesNotes,
+  ringBell,
+  useRemoteSprint,
+  useSprint,
+} from "../lib/sprint.ts";
 import { useActorNames } from "../lib/names.ts";
+import { useCanEdit } from "../lib/capability.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
@@ -43,7 +56,18 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   const lastPhase = useRef<string | null | undefined>(undefined);
   const rang = useRef<string | null>(null);
   const selectedIds = useUiStore((s) => s.selectedItemIds);
+  const stamp = useUiStore((s) => s.stamp);
+  // A reader (roles phase 1) sees the clock and may go there; every action
+  // that writes — a note, a hand-in, a placed mark — is offered only to
+  // somebody the daemon would let write.
+  const canEdit = useCanEdit();
   const canvas = useCanvasStore((s) => s.canvas);
+  // A desk: no sprint of its own, and a canvas record that names the sprint
+  // it belongs to. Its chip reads THAT sprint — pulled, since the store
+  // holds one canvas — and offers one thing: Hand in, across canvases.
+  const project = useCanvasStore((s) => s.project);
+  const deskOf = state ? null : deskSprintOf(project);
+  const remote = useRemoteSprint(deskOf);
 
   const remaining = state ? remainingSeconds(state, nowMs) : null;
 
@@ -83,6 +107,38 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
     const t = setTimeout(() => setFlash(null), 1400);
     return () => clearTimeout(t);
   }, [flash]);
+
+  if (!state && deskOf && remote.state && remote.canvas) {
+    const away = remote.state;
+    const left = remainingSeconds(away, remote.nowMs);
+    const clockAway = left === null ? null : left === 0 ? "time" : clockLabel(left);
+    const chosen = canvas ? selectedIds.map((id) => canvas.items[id]).filter((one) => one !== undefined) : [];
+    const sprintCanvas = remote.canvas;
+    return (
+      <div
+        className={`sprint-chip desk kind-${away.phase.kind}${lowered ? " lowered" : ""}`}
+        role="status"
+        aria-live="polite"
+        title={`Your desk — the sprint is in ${away.phase.label}${away.area ? `; Hand in lands on ${away.area.title}` : ""}`}
+      >
+        <span className="sprint-desk-label">Your desk</span>
+        <span className="sprint-phase">
+          {away.phase.mark && <span className="sprint-mark">{away.phase.mark}</span>}
+          {away.phase.label}
+        </span>
+        {clockAway && <span className={`sprint-clock${left === 0 ? " rung" : ""}`}>{clockAway}</span>}
+        {chosen.length > 0 && (
+          <button
+            className="sprint-action primary"
+            title={`Copy ${chosen.length === 1 ? "this" : chosen.length} onto the sprint${away.area ? `'s ${away.area.title} sheet` : ""} and hand ${chosen.length === 1 ? "it" : "them"} in`}
+            onClick={() => void handInFromDesk(canvasId, deskOf, sprintCanvas, actor, chosen, away)}
+          >
+            Hand in{chosen.length > 1 ? ` ${chosen.length}` : ""}
+          </button>
+        )}
+      </div>
+    );
+  }
 
   if (!state) return null;
 
@@ -126,7 +182,24 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
           Go there
         </button>
       )}
-      {phaseTakesNotes(state) && (
+      {canEdit && vote && state.phase.mark && remaining !== 0 && (
+        /* Place a mark: a mode, not an act — while it is on, a press on a
+           sketch on the wall puts the mark where the press landed. Escape
+           or a second press here takes the mode off. */
+        <button
+          className={`sprint-action${stamp === state.phase.mark ? " on" : ""}`}
+          aria-pressed={stamp === state.phase.mark}
+          title={
+            stamp === state.phase.mark
+              ? "Placing — click a sketch on the wall where you like it; Esc to stop"
+              : `Place a ${state.phase.mark} on the part of a sketch you like`
+          }
+          onClick={() => useUiStore.getState().setStamp(stamp === state.phase.mark ? null : state.phase.mark)}
+        >
+          {stamp === state.phase.mark ? `Placing ${state.phase.mark}` : `Place a ${state.phase.mark}`}
+        </button>
+      )}
+      {canEdit && phaseTakesNotes(state) && (
         <button
           className="sprint-action"
           title={`A ${phasePaper(state.phase.name)} note${state.area ? ` in ${state.area.title}` : ""}`}
@@ -135,7 +208,7 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
           New note
         </button>
       )}
-      {pending.length > 0 && (
+      {canEdit && pending.length > 0 && (
         <button
           className="sprint-action primary"
           title={`Hand ${pending.length === 1 ? "this" : pending.length} in for ${state.phase.label}${state.area ? ` — it lands on ${state.area.title}` : ""}`}
