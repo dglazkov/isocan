@@ -17,6 +17,7 @@ import {
   siteLabel,
   CANVAS_ITEM_SIZE,
   canvasItemOf,
+  MEMORY_PROP,
   DOC_MIME,
   docProperties,
 } from "@isocan/core";
@@ -269,6 +270,9 @@ export async function addCanvasItem(
   targetCanvasId: string,
   title: string,
   placement: Placement,
+  /** `memory=inherit` on the card: the linked canvas's context joins this
+   *  one's (`core/memory.ts`). One property, set at placement. */
+  memory: "inherit" | null = null,
 ): Promise<string> {
   const made = canvasItemOf(origin, targetCanvasId);
   const blob = new Blob([made.blob], { type: made.mimeType });
@@ -287,7 +291,7 @@ export async function addCanvasItem(
     ...CANVAS_ITEM_SIZE,
     placement,
     title,
-    properties: made.properties,
+    properties: { ...made.properties, ...(memory ? { [MEMORY_PROP]: memory } : {}) },
   });
   return itemId;
 }

@@ -59,6 +59,7 @@ export * from "./frameable.js";
 export * from "./mindmap.js";
 export * from "./designimport.js";
 export * from "./context.js";
+export * from "./memory.js";
 export * from "./converge.js";
 export * from "./itemthread.js";
 export * from "./claim.js";

@@ -15,12 +15,12 @@ describe("the Context view", () => {
     // "A view the CLI cannot print is a view agents cannot use, and the whole
     // point is that both read the same thing." Two readers would agree until
     // the day one of them was taught something the other was not.
-    expect(panel).toMatch(/contextPieces\(canvas\)/);
+    expect(panel).toMatch(/contextLayers\(canvas, linked\)/);
     const cli = readFileSync(
       fileURLToPath(new URL("../../cli/src/main.ts", import.meta.url)),
       "utf8",
     );
-    expect(cli).toMatch(/contextPieces\(snapshot\.canvas/);
+    expect(cli).toMatch(/contextLayers\(snapshot\.canvas/);
   });
 
   it("stores nothing, which is why this stage came first", () => {
@@ -44,7 +44,7 @@ describe("the Context view", () => {
     // this trap has been worth the two extra lines.
     const code = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code, "no machine facts on a surface that cannot have them").not.toMatch(/directory/i);
-    expect(code, "and no extras object at all").toMatch(/contextPieces\(canvas\)/);
+    expect(code, "and no extras object at all").toMatch(/contextLayers\(canvas, linked\)/);
   });
 
   it("shows a reason beside anything it flags", () => {

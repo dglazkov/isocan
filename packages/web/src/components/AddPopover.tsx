@@ -52,6 +52,9 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   const [canvases, setCanvases] = useState<Canvas[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Memory phase 1: a canvas card can carry `memory=inherit`, and the popover
+  // is where the design says the tick lives — "places it, and ticks inherit".
+  const [inherit, setInherit] = useState(false);
   const canvas = useCanvasStore((s) => s.canvas);
   const nowMs = Date.now();
 
@@ -122,7 +125,11 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   async function placeCanvas(target: { id: string; title: string; origin?: string | null }) {
     const at = spotFor(CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height);
     // A spot found FOR the card is not `chosen`; the daemon may tidy it clear.
-    done(await addCanvasItem(canvasId, actor, target.origin ?? window.location.origin, target.id, target.title, at));
+    // `inherit` is memory phase 1: the card wears memory=inherit and the
+    // linked canvas's context joins this one's, read-only.
+    done(
+      await addCanvasItem(canvasId, actor, target.origin ?? window.location.origin, target.id, target.title, at, inherit ? "inherit" : null),
+    );
   }
 
   async function submit(e?: React.FormEvent) {
@@ -225,6 +232,12 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
               </button>
             ))}
           </div>
+          {(pinned.kind === "canvas" || pinned.kind === "search" || adding === "canvas") && (
+            <label className="add-inherit">
+              <input type="checkbox" checked={inherit} onChange={(e) => setInherit(e.target.checked)} />
+              <span>Inherit its memory here — its design system and pins join this canvas's context</span>
+            </label>
+          )}
           {showList && (
             <div className="canvas-picker-list" role="listbox" aria-label="Canvases">
               {canvases === null && <div className="canvas-picker-note">Looking…</div>}

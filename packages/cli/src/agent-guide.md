@@ -573,6 +573,21 @@ Both are `item.update` with a property, so they replicate, undo and are visible
 to everybody like any other fact. The same two verbs are on an item's menu in
 the app.
 
+**Context comes in layers.** `isocan context` prints *This canvas* first, then
+one heading per canvas this one **inherits from** — a canvas card (see *A
+canvas on a canvas*) wearing `memory=inherit`. A linked canvas contributes its
+design system, its pinned items and its size, read-only, each line saying
+which canvas it came from; when both canvases have a design system this
+canvas's wins and the inherited one is listed struck, saying so. Not its Chat
+and not its items wholesale: context is what somebody decided matters, and
+the link inherits exactly that decision. Several links compose top to bottom,
+then left to right, the order the room reads. `isocan context inherit <item>`
+turns a placed card into a link and `isocan context uninherit <item>` turns it
+back; the card stays either way. `isocan design check` on a canvas with no
+design system of its own checks against the inherited one and says whose. A
+linked canvas at another home is named under its heading and not read from
+here. The same headings are in the app's Context panel.
+
 **Pinning is a decision; a reaction is a response.** The list shows both and
 does not merge them — somebody putting 👍 on a screen is real evidence, and it
 is not the same as saying "an agent should read this first".
@@ -808,7 +823,9 @@ and `source=<address>` so you can read which canvas it is without opening
 it. A canvas is a place you go, not a thing you step inside of; a card is
 never entered. It takes `--in <area>` like everything else, which is how a
 person's canvases are shelved onto sheets. `isocan ls --kind canvas` lists
-them. A canvas will not be placed on itself.
+them. A canvas will not be placed on itself. `--inherit` makes the card a
+memory link as it lands — the other canvas's design system and pins join this
+canvas's context (see *Saying what matters here*).
 
 The card draws the other canvas LIVE for anyone admitted to it. For the
 reader who is not — or a tab that is offline, or a canvas at another home —

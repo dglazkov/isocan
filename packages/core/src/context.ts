@@ -25,11 +25,18 @@ import { excludedItems, pinnedItems } from "./contextmark.ts";
  * attached, never a bare flag: "older than 6 of the screens it governs" is
  * actionable and "stale: true" is an accusation.
  */
-interface ContextPiece {
+export interface ContextPiece {
   /** What it is called, in the words the product uses. */
   name: string;
   /** Where it comes from — the canvas, this machine, the CLI itself. */
   source: "canvas" | "machine" | "cli";
+  /** Which canvas it was borrowed from, when it is inherited (`memory.ts`).
+   *  Absent on this canvas's own pieces. */
+  from?: { canvasId: string; title: string };
+  /** Present but beaten by this canvas's own — "this canvas's wins" — so
+   *  the view shows it struck rather than hiding what a link would have
+   *  contributed. */
+  overridden?: string;
   /** Present, or absent with a reason. */
   present: boolean;
   /** How much of it there is, in whatever unit suits it. */
@@ -44,7 +51,7 @@ interface ContextPiece {
 
 /** Facts only the machine running the CLI can know. The web has none of them,
  *  which is why they are passed in rather than read. */
-interface ContextExtras {
+export interface ContextExtras {
   /** The directory bound to this canvas here, if any. */
   directory?: string | null;
   /** How many entries the oplog holds, for the recap's resolution. */
@@ -230,7 +237,8 @@ export function contextReport(pieces: ContextPiece[], nowMs: number = Date.now()
     const mark = piece.present ? (piece.stale ? "!" : " ") : "·";
     const when = piece.updatedAt ? ` · ${ago(piece.updatedAt, nowMs)}` : "";
     const size = piece.present ? (piece.size ?? "yes") : "not here";
-    lines.push(`${mark} ${piece.name.padEnd(width)}${size}${when}`);
+    const beaten = piece.overridden ? ` (${piece.overridden})` : "";
+    lines.push(`${mark} ${piece.name.padEnd(width)}${size}${when}${beaten}`);
     if (piece.stale) lines.push(`  ${" ".repeat(width)}${piece.stale}`);
     if (piece.fix && (piece.stale || !piece.present)) {
       lines.push(`  ${" ".repeat(width)}→ ${piece.fix}`);

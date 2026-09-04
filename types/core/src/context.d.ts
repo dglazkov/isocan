@@ -19,11 +19,21 @@ import { type CanvasContents, type Item } from "./model.js";
  * attached, never a bare flag: "older than 6 of the screens it governs" is
  * actionable and "stale: true" is an accusation.
  */
-interface ContextPiece {
+export interface ContextPiece {
     /** What it is called, in the words the product uses. */
     name: string;
     /** Where it comes from — the canvas, this machine, the CLI itself. */
     source: "canvas" | "machine" | "cli";
+    /** Which canvas it was borrowed from, when it is inherited (`memory.ts`).
+     *  Absent on this canvas's own pieces. */
+    from?: {
+        canvasId: string;
+        title: string;
+    };
+    /** Present but beaten by this canvas's own — "this canvas's wins" — so
+     *  the view shows it struck rather than hiding what a link would have
+     *  contributed. */
+    overridden?: string;
     /** Present, or absent with a reason. */
     present: boolean;
     /** How much of it there is, in whatever unit suits it. */
@@ -37,7 +47,7 @@ interface ContextPiece {
 }
 /** Facts only the machine running the CLI can know. The web has none of them,
  *  which is why they are passed in rather than read. */
-interface ContextExtras {
+export interface ContextExtras {
     /** The directory bound to this canvas here, if any. */
     directory?: string | null;
     /** How many entries the oplog holds, for the recap's resolution. */
@@ -54,4 +64,3 @@ export declare function contextPieces(canvas: CanvasContents, extras?: ContextEx
 /** The list as a terminal prints it — one line a piece, and the reasons under
  *  the pieces that have them. */
 export declare function contextReport(pieces: ContextPiece[], nowMs?: number): string;
-export {};
