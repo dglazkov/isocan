@@ -9805,7 +9805,7 @@ an error. Adapters: claude-code ships known; others are declared in
         as: record.actor.id,
       });
 
-      console.error(`rc: starting ${spec.command} for ${record.actor.name} in ${row.cwd}`);
+      console.error(rcLine("", `${record.actor.name} · starting ${spec.command} in ${row.cwd}`));
       const agent = await AcpAgentProcess.spawn(spec, {
         cwd: row.cwd,
         env: adapterEnv(p.id, record.actor.name),
@@ -9813,18 +9813,21 @@ an error. Adapters: claude-code ships known; others are declared in
       try {
         const session = await agent.ensureSession(row.cwd, row.sessionId);
         console.error(
-          session.resumed
-            ? `rc: session ${session.sessionId} resumed`
-            : `rc: session ${session.sessionId} started${row.sessionId ? " (the stored one would not load — rebuilt)" : ""}`,
+          rcLine(
+            "",
+            session.resumed
+              ? `${record.actor.name} · session ${session.sessionId} resumed`
+              : `${record.actor.name} · session ${session.sessionId} started${row.sessionId ? " (the stored one would not load — rebuilt)" : ""}`,
+          ),
         );
         await setRcSessionId(ctx.home, p.id, record.actor.id, session.sessionId);
         const turn = await agent.prompt(session.sessionId, promptWords.join(" "), (event) => {
           if (event.kind === "chunk" && event.text) process.stdout.write(event.text);
-          else if (event.kind === "tool") console.error(`rc: [tool] ${event.detail}`);
-          else if (event.kind === "permission") console.error(`rc: [permission] ${event.detail}`);
+          else if (event.kind === "tool") console.error(rcLine("", `${record.actor.name} · tool ${event.detail}`));
+          else if (event.kind === "permission") console.error(rcLine("", `${record.actor.name} · permission ${event.detail}`));
         });
         process.stdout.write("\n");
-        console.error(`rc: turn ended — stopReason ${turn.stopReason}`);
+        console.error(rcLine("", `${record.actor.name} · turn ended — ${turn.stopReason}`));
         if (turn.stopReason !== "end_turn") process.exitCode = 1;
       } finally {
         agent.close();
@@ -9916,8 +9919,19 @@ rcCommand
 
 /** One canvas's whole rc — holds, cursors, dispatch, narration — sharing
  *  with its sibling rooms only what `RcShared` says. Never returns. */
+/**
+ * **One shape for every rc line** (#82). The log used to be prompts and raw
+ * adapter lines side by side, every one prefixed `rc:` — a word that said
+ * nothing, since nothing else writes to this terminal. Now: a clock, the
+ * room when there is more than one, and `who · what` for anything an agent
+ * did, so a turn's lines read as one story even when two agents interleave.
+ */
+function rcLine(tag: string, text: string): string {
+  return `${new Date().toTimeString().slice(0, 8)}  ${tag ? `${tag} ` : ""}${text}`;
+}
+
 async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> {
-    const tag = shared.rooms > 1 ? `rc[${p.title}]` : "rc";
+    const tag = shared.rooms > 1 ? `[${p.title}]` : "";
     const rosterOf = async () => {
       const snapshot = await ctx.client.snapshot(p.id);
       return snapshot.canvas.agents ?? {};
@@ -9971,12 +9985,15 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
     // how-to-add is not a roster listing). Names stay unlisted; `isocan
     // who` is where rosters are read.
     const origin = (await ctx.homeOf(p.id).catch(() => null)) ?? ctx.client.base;
-    console.log(`${tag}: answering on "${p.title}" — ${canvasUrl(origin, p.id)}`);
+    console.log(rcLine(tag, `answering on "${p.title}" — ${canvasUrl(origin, p.id)}`));
     const enrolledCount = Object.keys(opening).length;
     console.log(
-      enrolledCount === 0
-        ? `${tag}: nobody is enrolled yet — Add an agent in the tray at that address; this rc picks it up without a restart`
-        : `${tag}: ${enrolledCount} ${enrolledCount === 1 ? "agent" : "agents"} enrolled (\`isocan who\` names them) — quiet until something arrives (Ctrl-C stops answering)`,
+      rcLine(
+        tag,
+        enrolledCount === 0
+          ? "nobody is enrolled yet — Add an agent in the tray at that address; this rc picks it up without a restart"
+          : `${enrolledCount} ${enrolledCount === 1 ? "agent" : "agents"} enrolled (\`isocan who\` names them) — quiet until something arrives (Ctrl-C stops answering)`,
+      ),
     );
 
     /**
@@ -10074,7 +10091,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
           guard: guardFor(actorId),
         });
       } catch (err) {
-        console.log(`${tag}: could not hold ${known.get(actorId) ?? actorId}'s cursor — ${(err as Error).message}`);
+        console.log(rcLine(tag, `could not hold ${known.get(actorId) ?? actorId}'s cursor — ${(err as Error).message}`));
       }
     };
     for (const actorId of Object.keys(opening)) await claimAgent(actorId);
@@ -10107,11 +10124,11 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
            * surfaces at the dialog as its countdown running out.
            */
           for (const ask of held.asks ?? []) {
-            console.log(`${tag}: ${ask.from.name} asked from the canvas to add ${ask.name} — enrolling here`);
+            console.log(rcLine(tag, `${ask.from.name} asked from the canvas to add ${ask.name} — enrolling here`));
             try {
               await mintAndEnrol(ctx, p.id, ask.name, { cwd: rcCwd, harness: null });
             } catch (err) {
-              console.log(`${tag}: could not enrol ${ask.name} — ${(err as Error).message}`);
+              console.log(rcLine(tag, `could not enrol ${ask.name} — ${(err as Error).message}`));
             }
           }
         } catch {
@@ -10145,7 +10162,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
           spec: INSTALL_SPEC,
           ...(parkedOn ? { protect: [parkedOn] } : {}),
         });
-        if (state.upgraded) console.log(`${tag}: ${state.upgraded}`);
+        if (state.upgraded) console.log(rcLine(tag, `${state.upgraded}`));
       })()
         .catch(() => {})
         .finally(() => {
@@ -10205,7 +10222,10 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       const reason = summoned ? "summons" : "change";
       const from = flagged[0]?.envelope.actor.name ?? "someone";
       console.log(
-        `${tag}: summons for ${record.actor.name} (${reason}, from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"}) — starting a session`,
+        rcLine(
+          tag,
+          `${record.actor.name} · ${reason} from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"} — starting a session`,
+        ),
       );
       try {
         await ctx.client.parkDelivered({
@@ -10216,7 +10236,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         });
       } catch (err) {
         if (err instanceof ApiError && err.code === PARK_ADOPTED_CODE) {
-          console.log(`${tag}: another park adopted ${record.actor.name}'s cursor — standing down for it`);
+          console.log(rcLine(tag, `another park adopted ${record.actor.name}'s cursor — standing down for it`));
           dispatches.delete(record.actor.id);
           return;
         }
@@ -10321,9 +10341,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         const session = await agent.ensureSession(row.cwd, row.sessionId ?? shared.sessionIds.get(record.actor.id) ?? null);
         shared.sessionIds.set(record.actor.id, session.sessionId);
         await setRcSessionId(ctx.home, p.id, record.actor.id, session.sessionId);
-        console.log(
-          `${tag}: ${record.actor.name}'s session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`,
-        );
+        console.log(rcLine(tag, `${record.actor.name} · session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`));
         // The event stream the adapter is already sending, spent on the face:
         // each tool call becomes an inferred status (so it never displaces
         // anything the agent said with `--say`) and re-asserts `working`.
@@ -10334,7 +10352,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
           session.sessionId,
           summonsPrompt(record.actor.name, { reason, entries: flagged }),
           (event) => {
-            if (event.kind === "permission") console.log(`${tag}: [${record.actor.name}] permission: ${event.detail}`);
+            if (event.kind === "permission") console.log(rcLine(tag, `${record.actor.name} · permission ${event.detail}`));
             if (event.kind === "tool" && event.detail && Date.now() - lastToolBeat >= 2_000) {
               lastToolBeat = Date.now();
               const title = event.detail.length > 80 ? `${event.detail.slice(0, 79)}…` : event.detail;
@@ -10346,7 +10364,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
             }
           },
         );
-        console.log(`${tag}: ${record.actor.name}'s turn ended — stopReason ${turn.stopReason}`);
+        console.log(rcLine(tag, `${record.actor.name} · turn ended — ${turn.stopReason}`));
         // Completion, explicitly: the rc SAW the turn end, so the cursor
         // advances now rather than waiting for the park's inferred evidence.
         await ctx.client
@@ -10396,7 +10414,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         const eager = [...dispatches.values()].some((d) => d.busy || d.pending.length > 0);
         batch = await ctx.client.watchLog({ cursors, waitMs: eager ? 2_000 : 30_000, only: [p.id] });
         if (offlineSince !== null) {
-          console.log(`${tag}: daemon back after ${Math.round((Date.now() - offlineSince) / 1000)}s — nothing missed`);
+          console.log(rcLine(tag, `daemon back after ${Math.round((Date.now() - offlineSince) / 1000)}s — nothing missed`));
           offlineSince = null;
         }
       } catch (err) {
@@ -10405,7 +10423,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         if (err instanceof ApiError) throw err;
         if (offlineSince === null) {
           offlineSince = Date.now();
-          console.log("rc: the daemon stopped answering — retrying, and starting it if it is gone");
+          console.log(rcLine(tag, "the daemon stopped answering — retrying, and starting it if it is gone"));
         }
         await ctx.client.ensureDaemon().catch(() => {});
         await new Promise((r) => setTimeout(r, 400));
@@ -10441,7 +10459,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         if (op.type === "agent.enroll") {
           known.set(op.agent.id, op.agent.name);
           if (entry.seq > startTip) {
-            console.log(`${tag}: ${by.name} enrolled ${op.agent.name} — answerable here`);
+            console.log(rcLine(tag, `${by.name} enrolled ${op.agent.name} — answerable here`));
             const adopted = await adoptRcAgent(ctx.home, {
               canvasId: p.id,
               actorId: op.agent.id,
@@ -10450,13 +10468,13 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
               cwd: rcCwd,
               sessionId: null,
             });
-            if (adopted) console.log(`${tag}: supplying where and how for ${op.agent.name} — ${rcCwd}`);
+            if (adopted) console.log(rcLine(tag, `${op.agent.name} · where and how supplied — ${rcCwd}`));
             await claimAgent(op.agent.id, entry.seq);
           }
           continue;
         }
         if (op.type === "agent.withdraw" && entry.seq > startTip) {
-          console.log(`${tag}: ${by.name} dismissed ${known.get(op.actorId) ?? op.actorId} — no longer answering here`);
+          console.log(rcLine(tag, `${by.name} dismissed ${known.get(op.actorId) ?? op.actorId} — no longer answering here`));
           await removeRcAgent(ctx.home, p.id, op.actorId);
           dispatches.delete(op.actorId);
           continue;
@@ -10525,7 +10543,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         if (verdict.verdict === "hold-cycle") {
           if (verdict.announce) {
             const line = `${record.actor.name} paused after ${dispatch.guard.agentChain} agent-to-agent ${dispatch.guard.agentChain === 1 ? "turn" : "turns"} with no person in the conversation — a human word resumes it.`;
-            console.log(`${tag}: ${line}`);
+            console.log(rcLine(tag, `${line}`));
             await sayInThread(threadOf(dispatch.pending), line);
           }
           continue;
@@ -10534,13 +10552,13 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
           dispatch.retryAfter = verdict.retryAfter;
           if (verdict.announce) {
             const line = `${record.actor.name} is at its ceiling — ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((verdict.freesAt - Date.now()) / 60_000))} min).`;
-            console.log(`${tag}: ${line}`);
+            console.log(rcLine(tag, `${line}`));
             await sayInThread(threadOf(dispatch.pending), line);
           }
           continue;
         }
         if (wasHeld) {
-          console.log(`${tag}: ${record.actor.name}'s hold lifted — dispatching what waited`);
+          console.log(rcLine(tag, `${record.actor.name}'s hold lifted — dispatching what waited`));
         }
         const failedThread = threadOf(dispatch.pending);
         dispatch.busy = true;
@@ -10551,7 +10569,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
             // never ran, and never silently. The batch is not advanced; a
             // minute's pause keeps a broken adapter off a hot loop.
             const why = (err as Error).message;
-            console.log(`${tag}: ${record.actor.name}'s turn FAILED — ${why} (retrying in 60s)`);
+            console.log(rcLine(tag, `${record.actor.name} · turn FAILED — ${why} (retrying in 60s)`));
             await sayInThread(
               failedThread,
               `${record.actor.name} couldn't answer — ${why}. The summons is held and will be retried; \`isocan rc\`'s log has the detail.`,

@@ -8,7 +8,7 @@ import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
-import { addFiles } from "../lib/upload.ts";
+import { addFailure, addFiles } from "../lib/upload.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
@@ -627,11 +627,15 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     if (files.length === 0) {
       const link = parseUriList(e.dataTransfer.getData("text/uri-list"));
       if (link) {
+        // Not http(s) — nothing to project, and nothing to say: a mailto:
+        // dragged onto the canvas is not a failure. Past that test, any
+        // throw is the upload's own, and is said (#51).
+        if (!/^https?:\/\//i.test(link)) return;
         const { addBrowserItem } = await import("../lib/upload.ts");
         try {
           ui.select(await addBrowserItem(canvasId, actor, link, world));
-        } catch {
-          // Not http(s) — nothing to project.
+        } catch (err) {
+          setNotice(err instanceof Error && err.message ? err.message : "That site could not be added.");
         }
       }
       return;
@@ -641,7 +645,13 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     const targetItem = (e.target as HTMLElement).closest?.("[data-item-id]");
     if (targetItem && files.length === 1) {
       const { addVersionFromFile } = await import("../lib/upload.ts");
-      await addVersionFromFile(canvasId, actor, targetItem.getAttribute("data-item-id")!, files[0]!);
+      try {
+        await addVersionFromFile(canvasId, actor, targetItem.getAttribute("data-item-id")!, files[0]!);
+      } catch (err) {
+        setNotice(
+          `${files[0]!.name}: ${err instanceof Error && err.message ? err.message : "could not be added as a version"}`,
+        );
+      }
       return;
     }
     // The drop's own failure, said out loud rather than left as an unhandled
@@ -650,8 +660,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     // Dropped AT the pointer: chosen, so the files stay where they were let
     // go rather than being tidied clear (`Placement.chosen`).
     const ids = await addFiles(canvasId, actor, files, { ...world, chosen: true }).catch((err: unknown) => {
-      setNotice(err instanceof Error ? err.message : "Those files could not be added.");
-      return [] as string[];
+      // "2 of 5 added — <why>", and the two are selected below (#51).
+      const { landed, notice } = addFailure(err, files.length, "Those files could not be added.");
+      setNotice(notice);
+      return landed;
     });
     // The whole drop is selected, not just the last file — you dropped five
     // things and five things are what arrived.

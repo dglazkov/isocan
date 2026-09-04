@@ -254,7 +254,7 @@ describe("the running rc — quiet start, events narrated", () => {
         comment: { id: "cmt_1", body: "@Sian this spacing looks wrong" },
       },
     });
-    await until(async () => out, (o) => o.includes("summons for Sian"), "the summons narrated");
+    await until(async () => out, (o) => o.includes("Sian · summons"), "the summons narrated");
     expect(out).toContain("starting a session");
     await until(async () => out, (o) => o.includes("turn ended"), "the turn narrated");
 
@@ -308,7 +308,7 @@ describe("the web doors' mechanics (phase 2.5)", () => {
       actor: dimitri,
       op: { type: "agent.enroll", agent: { id: "usr_sian", name: "Sian" } },
     });
-    await until(async () => out, (o) => o.includes("supplying where and how for Sian"), "the adoption");
+    await until(async () => out, (o) => o.includes("Sian · where and how supplied"), "the adoption");
     const rows = await rcRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -460,7 +460,7 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
     const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
     await until(async () => out, (o) => o.includes("answering on 2 canvases"), "the rc to come up on both");
     // Narration names the canvas once there is more than one room.
-    await until(async () => out, (o) => o.includes("rc[P]: answering on") && o.includes("rc[Q]: answering on"), "both rooms announced");
+    await until(async () => out, (o) => o.includes("[P] answering on") && o.includes("[Q] answering on"), "both rooms announced");
 
     const ask = (canvasId: string, n: number) =>
       post("/api/ops", {
@@ -476,11 +476,11 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
         },
       });
     await ask("prj_1", 1);
-    await until(async () => out, (o) => o.includes("rc[P]: summons for Sian"), "the first summons");
-    await until(async () => out, (o) => o.includes("rc[P]: Sian's turn ended"), "the first turn");
+    await until(async () => out, (o) => o.includes("[P] Sian · summons"), "the first summons");
+    await until(async () => out, (o) => o.includes("[P] Sian · turn ended"), "the first turn");
     await ask("prj_2", 2);
-    await until(async () => out, (o) => o.includes("rc[Q]: summons for Sian"), "the second summons");
-    await until(async () => out, (o) => o.includes("rc[Q]: Sian's turn ended"), "the second turn");
+    await until(async () => out, (o) => o.includes("[Q] Sian · summons"), "the second summons");
+    await until(async () => out, (o) => o.includes("[Q] Sian · turn ended"), "the second turn");
 
     // One session handle per agent: the second room resumed what the first
     // minted (the fake adapter refuses the first load of a fresh process,
@@ -502,9 +502,9 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
     rc.stdout!.on("data", (chunk) => (out += chunk));
     const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
     await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
-    expect(out).toContain('rc: answering on "P"');
+    expect(out).toContain('answering on "P"');
     expect(out).not.toContain("canvases —");
-    expect(out).not.toContain("rc[");
+    expect(out).not.toContain("[P]");
     rc.kill("SIGINT");
     await done;
   }, 20_000);

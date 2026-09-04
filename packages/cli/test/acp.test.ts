@@ -123,7 +123,7 @@ describe("a turn in a named agent (phase 3)", () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
     const run = await isocan("rc", "turn", "Sian", "say", "hello");
     expect(run.code).toBe(0);
-    expect(run.stderr).toContain("stopReason end_turn");
+    expect(run.stderr).toContain("turn ended — end_turn");
     // The scripted agent echoes its environment: the harness/session pair
     // the CLI inside would present — exactly the mint claim's key.
     expect(run.stdout).toContain("env:agent:Sian");
@@ -203,7 +203,7 @@ describe("a turn in a named agent (phase 3)", () => {
       await isocan("rc", "add", "Real", "--harness", "claude-code");
       const run = await isocan("rc", "turn", "Real", "Reply with exactly: ok");
       expect(run.code).toBe(0);
-      expect(run.stderr).toContain("stopReason end_turn");
+      expect(run.stderr).toContain("turn ended — end_turn");
     },
     300_000,
   );
