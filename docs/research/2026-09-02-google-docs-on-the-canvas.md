@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: standing-agents, on-demand
-note: stages 1–3 built 2–3 Sep — the ↗ on anything with a source, `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `gdoc sync` stacking a version only where the doc changed, and on 3 Sep `gdoc auth`: a Drive access token on the machine for docs not shared by link, with sync asking Drive for modifiedTime first. Stage 4's live mode and stage 5's folder watch are designed and not built
+note: stages 1–3 built 2–3 Sep — the ↗ on anything with a source, `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `gdoc sync` stacking a version only where the doc changed, and on 3 Sep `gdoc auth`: a Drive access token on the machine for docs not shared by link, with sync asking Drive for modifiedTime first. Stage 4's live mode built 4 Sep — Live | Words on the strip, the /preview frame in the same item, remembered per browser. Stage 5's folder watch is designed and not built
 ---
 
 # Google Docs on the canvas
@@ -179,6 +179,18 @@ purpose: a refresh flow is a registered Google application, a consent
 screen and a review, and this stage needed to prove private docs work,
 not to ship a Google integration. Not built: `changes.list`, images pulled
 into blobs, live mode, the folder watch.
+
+**4 September 2026, stage 4, live mode.** A document whose `source` is a
+Google Doc wears *Live* on its strip beside the ↗; pressed, the item frames
+`googleDocPreviewUrl(id)` in place of the rendered markdown, and *Words*
+brings the record back. The same item either way — no second item, nothing
+written to the canvas; the choice is this browser's, kept in local storage
+beside the theme (`uiStore.liveDocs`), because which lens a person reads
+through is taste, not a canvas fact. A private doc shows Google's own
+sign-in in the frame, which is honest: the frame is Google's, and the words
+the canvas holds are one click away. `web/test/doclive.test.ts` holds that
+the toggle adds nothing and is offered only on a doc. Not built: images
+pulled into blobs, `changes.list`, the folder watch (stage 5).
 
 ## Sources
 

@@ -1253,6 +1253,15 @@ img { height: auto; }
   color: var(--ink-muted); font-size: 12px; line-height: 1; cursor: pointer;
 }
 .browser-reload:hover { color: var(--ink); }
+/* A Google Doc's Live | Words switch on its strip: a word, not a glyph,
+   because the two states are unlike things and a glyph would make you guess
+   which one you are looking at. */
+.doc-live-toggle {
+  flex: none; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line);
+  background: none; color: var(--ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
+}
+.doc-live-toggle:hover { color: var(--ink); border-color: var(--ink-soft); }
+.doc-live-toggle.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
 /* "double-click to interact" is an instruction, not part of the document — so
    it hangs UNDER the item rather than lying across the bottom of it, and only
    while you are pointing at the thing it is talking about. Same bargain as the

@@ -51,6 +51,6 @@ describe("the two controls asked for hide by right-click and come back from Sett
   it("is local, per browser, and survives an unreadable store as nothing hidden", () => {
     expect(store).toContain('const HIDDEN_CHROME_KEY = "isocan.hiddenChrome";');
     expect(store).toContain("hiddenChrome: readHiddenChrome(),");
-    expect(store).toMatch(/function readHiddenChrome\(\): string\[\] \{\n  try \{/);
+    expect(store).toMatch(/function readIdList\(key: string\): string\[\] \{\n  try \{/);
   });
 });
