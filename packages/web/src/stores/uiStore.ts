@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
+import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
 import type { Clipboard } from "../lib/clipboard.ts";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
@@ -135,7 +135,9 @@ interface UiStore {
   stamp: string | null;
   /** The place-a-canvas popup is open (inception phase 1) — shared, so ⌘K
    *  can open the same popover the rail's button does. */
-  placingCanvas: boolean;
+  /** The one Add door: closed, open to anything, or opened on a kind (a row
+   *  in the popover, or a launcher action that knew what it wanted). */
+  adding: AddKind | "any" | null;
   trashOpen: boolean;
   /** The identity menu, opened by clicking your own face in the pile. */
   identityOpen: boolean;
@@ -235,7 +237,7 @@ interface UiStore {
   clearSketch: () => void;
   setActiveTool: (tool: Tool) => void;
   setStamp: (stamp: string | null) => void;
-  setPlacingCanvas: (open: boolean) => void;
+  setAdding: (adding: AddKind | "any" | null) => void;
   setCommentMode: (on: boolean) => void;
   setTrashOpen: (open: boolean) => void;
   setIdentityOpen: (open: boolean) => void;
@@ -490,7 +492,7 @@ export const useUiStore = create<UiStore>((set) => {
     activeTool: "select",
     commentMode: false,
     stamp: null,
-    placingCanvas: false,
+    adding: null,
     trashOpen: false,
     identityOpen: false,
     shareOpen: false,
@@ -567,7 +569,7 @@ export const useUiStore = create<UiStore>((set) => {
     // set together so the two can never drift.
     setActiveTool: (activeTool) => set({ activeTool, commentMode: activeTool === "comment" }),
     setStamp: (stamp) => set({ stamp }),
-    setPlacingCanvas: (placingCanvas) => set({ placingCanvas }),
+    setAdding: (adding) => set({ adding }),
     setCommentMode: (commentMode) =>
       set((s) => ({
         commentMode,

@@ -14,7 +14,7 @@
     },
     "./package.json": "./package.json"
   },
-  "//": "GENERATED BRANCH — `npm run release` builds it from eb24ab3 on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
+  "//": "GENERATED BRANCH — `npm run release` builds it from 7208ea5 on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
   "dependencies": {
     "@types/node": "^22.13.1",
     "commander": "^13.1.0",
@@ -33,7 +33,7 @@
     "vitest": "^3.0.5"
   },
   "isocan": {
-    "commit": "eb24ab3",
-    "builtAt": "2026-09-03T22:33:18-06:00"
+    "commit": "7208ea5",
+    "builtAt": "2026-09-04T08:06:56-06:00"
   }
 }

@@ -16,6 +16,7 @@ export * from "./placement.js";
 export * from "./area.js";
 export * from "./canvasitem.js";
 export * from "./googledoc.js";
+export * from "./addable.js";
 export * from "./titleroom.js";
 export * from "./whatsnew.js";
 export * from "./protocol.js";

@@ -155,6 +155,8 @@ import {
   CANVAS_ITEM_SIZE,
   DOC_MIME,
   DOC_SYNCED_PROP,
+  classifyAddable,
+  type AddKind,
   harvestConverge,
   docFilenameFrom,
   docProperties,
@@ -4415,6 +4417,52 @@ const canvas = program
  * spelling, so the app's popup and this verb cannot disagree. The card draws
  * the other canvas live; a screenshot is a later, optional version.
  */
+/** A canvas as a card on this one — `canvas place`'s act, and `add <ref or address>`'s. */
+async function placeCanvasItem(
+  ctx: Ctx,
+  ref: string,
+  opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string },
+): Promise<void> {
+  const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+  /**
+   * Two doors, one item: an address names a canvas at some home and is
+   * taken as written; anything else is a ref among the canvases this
+   * machine knows — an id or a title prefix — and its address is the
+   * home the canvas lives at, or this daemon when it lives here.
+   */
+  const address = parseCanvasAddress(ref);
+  let target: { id: string; title: string };
+  let origin: string;
+  if (address) {
+    origin = address.origin;
+    const known = (await ctx.client.listCanvases()).find((one) => one.id === address.canvasId);
+    target = known ?? { id: address.canvasId, title: opts.title ?? address.canvasId };
+  } else {
+    const known = matchRef(await ctx.client.listCanvases(), ref);
+    target = known;
+    origin = (await ctx.homeOf(known.id)) ?? ctx.client.base;
+  }
+  if (target.id === p.id) throw new Error("a canvas cannot be placed on itself — that is the canvas you are on");
+  const made = canvasItemOf(origin, target.id);
+  await narrate(ctx, p.id, { status: `placing ${truncate(target.title, 32)}…` });
+  const upload = await ctx.client.uploadBlob(p.id, Buffer.from(made.blob), made.mimeType, made.filename);
+  const { width, height } = sizeFor(opts.size, CANVAS_ITEM_SIZE);
+  const itemId = newItemId();
+  const result = await sendOp(ctx, p.id, {
+    type: "item.add",
+    itemId,
+    version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: made.mimeType, filename: made.filename, size: upload.size },
+    width,
+    height,
+    placement: placementFor(snapshot, opts, { width, height }),
+    title: opts.title ?? target.title,
+    properties: made.properties,
+  });
+  const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+  if (ctx.json) return printJson({ itemId, canvasId: target.id, address: made.properties.source, placement: placed });
+  console.log(`placed "${target.title}" (${target.id}) as ${itemId} at ${placed.x},${placed.y} — double-click it, or its ↗, to open ${made.properties.source}`);
+}
+
 canvas
   .command("place <canvas>")
   .description("Put a canvas on this canvas — by id, title prefix, or address; it draws live and opens in a tab")
@@ -4430,53 +4478,7 @@ canvas
         ref: string,
         opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string },
         cmd: Command,
-      ) => {
-        const ctx = await ctxOf(cmd);
-        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
-        /**
-         * Two doors, one item: an address names a canvas at some home and is
-         * taken as written; anything else is a ref among the canvases this
-         * machine knows — an id or a title prefix — and its address is the
-         * home the canvas lives at, or this daemon when it lives here.
-         */
-        const address = parseCanvasAddress(ref);
-        let target: { id: string; title: string };
-        let origin: string;
-        if (address) {
-          origin = address.origin;
-          const known = (await ctx.client.listCanvases()).find((one) => one.id === address.canvasId);
-          target = known ?? { id: address.canvasId, title: opts.title ?? address.canvasId };
-        } else {
-          const known = matchRef(await ctx.client.listCanvases(), ref);
-          target = known;
-          origin = (await ctx.homeOf(known.id)) ?? ctx.client.base;
-        }
-        if (target.id === p.id) throw new Error("a canvas cannot be placed on itself — that is the canvas you are on");
-        const made = canvasItemOf(origin, target.id);
-        await narrate(ctx, p.id, { status: `placing ${truncate(target.title, 32)}…` });
-        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(made.blob), made.mimeType, made.filename);
-        const { width, height } = sizeFor(opts.size, CANVAS_ITEM_SIZE);
-        const itemId = newItemId();
-        const result = await sendOp(ctx, p.id, {
-          type: "item.add",
-          itemId,
-          version: {
-            id: newVersionId(),
-            blobHash: upload.blobHash,
-            mimeType: made.mimeType,
-            filename: made.filename,
-            size: upload.size,
-          },
-          width,
-          height,
-          placement: placementFor(snapshot, opts, { width, height }),
-          title: opts.title ?? target.title,
-          properties: made.properties,
-        });
-        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
-        if (ctx.json) return printJson({ itemId, canvasId: target.id, address: made.properties.source, placement: placed });
-        console.log(`placed "${target.title}" (${target.id}) as ${itemId} at ${placed.x},${placed.y} — double-click it, or its ↗, to open ${made.properties.source}`);
-      },
+      ) => placeCanvasItem(await ctxOf(cmd), ref, opts),
     ),
   );
 
@@ -4886,8 +4888,9 @@ function sizeFor(
 }
 
 program
-  .command("add <file>")
-  .description("Upload a file as a new canvas item (default placement: left of the leftmost item)")
+  .command("add <thing>")
+  .description("Bring something onto the canvas — a file from disk, a live site, a Google Doc, or a canvas — read from what you give it")
+  .option("--as <kind>", "read the thing as this kind: file, site, doc, or canvas (default: what it looks like)")
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--in <area>", "place inside this area, at the first clear spot")
@@ -4905,8 +4908,11 @@ program
       async (
         file: string,
         opts: {
+          as?: string;
           at?: string;
           anchor?: string;
+          in?: string;
+          cell?: string;
           size?: string;
           title?: string;
           description?: string;
@@ -4916,6 +4922,39 @@ program
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
+        /**
+         * **One verb reads what it is given** — the terminal's half of the
+         * one Add door (`web/components/AddPopover.tsx`), through the same
+         * classifier (`core/addable.ts`) so the two cannot disagree about a
+         * paste. A path that exists is a file; otherwise a Google Doc
+         * address is a document, a canvas address or one of this home's
+         * canvases is a card, any other address is a site. `--as` overrides
+         * the guess. `browse`, `gdoc add` and `canvas place` remain as the
+         * same acts by their older names.
+         */
+        const as = opts.as as AddKind | undefined;
+        if (as !== undefined && !["file", "site", "doc", "canvas"].includes(as)) {
+          throw new Error(`--as expects file, site, doc or canvas — not ${opts.as}`);
+        }
+        const isFile = as === "file" || (as === undefined && existsSync(file));
+        if (!isFile) {
+          const canvases = await ctx.client.listCanvases();
+          const here = await resolveCanvas(ctx).catch(() => null);
+          const read = classifyAddable(file, canvases, here?.id);
+          const kind = as ?? (read.kind === "doc" || read.kind === "site" || read.kind === "canvas" ? read.kind : null);
+          if (kind === "doc") {
+            const id = googleDocId(file);
+            if (!id) throw new Error(`not a Google Doc address: ${file}`);
+            return addGoogleDocItem(ctx, id, opts);
+          }
+          if (kind === "site") return addSiteItem(ctx, file, opts);
+          if (kind === "canvas") return placeCanvasItem(ctx, file, opts);
+          throw new Error(
+            `nothing to add: "${file}" is not a file here, not an address, and not one of this home's canvases` +
+              (read.kind === "search" ? " (several canvases start with it — say more of the name, or its id)" : "") +
+              ". `isocan add --as file|site|doc|canvas <thing>` says which you meant.",
+          );
+        }
         // `add` can start an empty canvas, so it may bind this directory to
         // a fresh canvas when nothing else answers (#60).
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
@@ -5678,6 +5717,35 @@ map
     }),
   );
 
+/** A live site as an item — `browse`'s act, and `add <address>`'s. */
+async function addSiteItem(
+  ctx: Ctx,
+  url: string,
+  opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string },
+): Promise<void> {
+  const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+  const site = normalizeSiteUrl(url);
+  const filename = siteFilename(site);
+  await narrate(ctx, p.id, { status: `projecting ${truncate(siteLabel(site), 32)}…` });
+  // The blob IS the URL: a text/uri-list, so this is an ordinary
+  // item.add — undo, versions, and `isocan edit` need nothing new.
+  const upload = await ctx.client.uploadBlob(p.id, Buffer.from(`${site}\n`), BROWSER_MIME, filename);
+  const { width, height } = sizeFor(opts.size, { width: 800, height: 600 });
+  const itemId = newItemId();
+  const result = await sendOp(ctx, p.id, {
+    type: "item.add",
+    itemId,
+    version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: BROWSER_MIME, filename, size: upload.size },
+    width,
+    height,
+    placement: placementFor(snapshot, opts, { width, height }),
+    title: opts.title ?? siteLabel(site),
+  });
+  const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+  if (ctx.json) return printJson({ itemId, url: site, placement: placed });
+  console.log(`projected ${site} as ${itemId} at ${placed.x},${placed.y}`);
+}
+
 program
   .command("browse <url>")
   .description(
@@ -5693,41 +5761,7 @@ program
         url: string,
         opts: { at?: string; anchor?: string; size?: string; title?: string },
         cmd: Command,
-      ) => {
-        const ctx = await ctxOf(cmd);
-        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
-        const site = normalizeSiteUrl(url);
-        const filename = siteFilename(site);
-        await narrate(ctx, p.id, { status: `projecting ${truncate(siteLabel(site), 32)}…` });
-        // The blob IS the URL: a text/uri-list, so this is an ordinary
-        // item.add — undo, versions, and `isocan edit` need nothing new.
-        const upload = await ctx.client.uploadBlob(
-          p.id,
-          Buffer.from(`${site}\n`),
-          BROWSER_MIME,
-          filename,
-        );
-        const { width, height } = sizeFor(opts.size, { width: 800, height: 600 });
-        const itemId = newItemId();
-        const result = await sendOp(ctx, p.id, {
-          type: "item.add",
-          itemId,
-          version: {
-            id: newVersionId(),
-            blobHash: upload.blobHash,
-            mimeType: BROWSER_MIME,
-            filename,
-            size: upload.size,
-          },
-          width,
-          height,
-          placement: placementFor(snapshot, opts),
-          title: opts.title ?? siteLabel(site),
-        });
-        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
-        if (ctx.json) return printJson({ itemId, url: site, placement: placed });
-        console.log(`projected ${site} as ${itemId} at ${placed.x},${placed.y}`);
-      },
+      ) => addSiteItem(await ctxOf(cmd), url, opts),
     ),
   );
 
@@ -5902,6 +5936,35 @@ async function fetchGoogleDoc(ctx: Ctx, id: string): Promise<FetchedDoc> {
   return fetchDocThroughDoors(id, await readGoogleToken(ctx.home));
 }
 
+/** A Google Doc as a document item — `gdoc add`'s act, and `add <doc address>`'s. */
+async function addGoogleDocItem(
+  ctx: Ctx,
+  id: string,
+  opts: { at?: string; anchor?: string; in?: string; cell?: string; title?: string },
+): Promise<void> {
+  const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+  await narrate(ctx, p.id, { status: "fetching the document…" });
+  const doc = await fetchGoogleDoc(ctx, id);
+  const title = opts.title ?? doc.title;
+  const filename = docFilenameFrom(title);
+  const upload = await ctx.client.uploadBlob(p.id, Buffer.from(doc.markdown, "utf8"), DOC_MIME, filename);
+  const size = { width: 640, height: 800 };
+  const itemId = newItemId();
+  const result = await sendOp(ctx, p.id, {
+    type: "item.add",
+    itemId,
+    version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: DOC_MIME, filename, size: upload.size },
+    ...size,
+    placement: placementFor(snapshot, opts, size),
+    title,
+    properties: docProperties(doc.source, doc.fetchedAt),
+  });
+  const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+  if (ctx.json) return printJson({ itemId, title, source: doc.source, syncedAt: doc.fetchedAt, via: doc.via, placement: placed });
+  console.log(`added "${title}" (${itemId}) at ${placed.x},${placed.y}${doc.via === "drive" ? " — read with this machine's Drive token" : ""} — its ↗ opens ${doc.source}; \`isocan gdoc sync\` refreshes it`);
+  console.log("note: the words are on the canvas now, readable by everyone admitted to it");
+}
+
 const gdocCmd = program
   .command("gdoc")
   .description("Google Docs on the canvas — a doc's markdown as an item that keeps its link, and a sync that keeps it current");
@@ -5970,27 +6033,7 @@ gdocCmd
         const ctx = await ctxOf(cmd);
         const id = googleDocId(url);
         if (!id) throw new Error(`not a Google Doc address: ${url} — it looks like https://docs.google.com/document/d/<id>/edit`);
-        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
-        await narrate(ctx, p.id, { status: "fetching the document…" });
-        const doc = await fetchGoogleDoc(ctx, id);
-        const title = opts.title ?? doc.title;
-        const filename = docFilenameFrom(title);
-        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(doc.markdown, "utf8"), DOC_MIME, filename);
-        const size = { width: 640, height: 800 };
-        const itemId = newItemId();
-        const result = await sendOp(ctx, p.id, {
-          type: "item.add",
-          itemId,
-          version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: DOC_MIME, filename, size: upload.size },
-          ...size,
-          placement: placementFor(snapshot, opts, size),
-          title,
-          properties: docProperties(doc.source, doc.fetchedAt),
-        });
-        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
-        if (ctx.json) return printJson({ itemId, title, source: doc.source, syncedAt: doc.fetchedAt, via: doc.via, placement: placed });
-        console.log(`added "${title}" (${itemId}) at ${placed.x},${placed.y}${doc.via === "drive" ? " — read with this machine's Drive token" : ""} — its ↗ opens ${doc.source}; \`isocan gdoc sync\` refreshes it`);
-        console.log("note: the words are on the canvas now, readable by everyone admitted to it");
+        await addGoogleDocItem(ctx, id, opts);
       },
     ),
   );

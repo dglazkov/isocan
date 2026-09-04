@@ -183,7 +183,7 @@ everything else. Proved in `core/test/canvasitem.test.ts`,
 and by eye: *Lake House · 16 items · 1 here*, its screens and photos where
 they are, opened in a tab on a double-click.
 
-**Phase 1, the same day.** The popup (`web/components/PlaceCanvas.tsx`): a
+**Phase 1, the same day.** The popup (`web/components/PlaceCanvas.tsx`, folded on 4 Sep into the one Add door, `AddPopover.tsx`, where "Canvas" is one of four rows): a
 button on the rail beside Add site and *Place a canvas…* in ⌘K open one
 popover through one shared state; type and the list narrows over your
 canvases, most recent first, each with its last act; paste a `/p/<id>`

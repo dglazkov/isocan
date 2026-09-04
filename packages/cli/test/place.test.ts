@@ -88,6 +88,15 @@ describe("placing a canvas on a canvas", () => {
     const canvases = await json("ls", "--kind", "canvas", "--canvas", S);
     expect(canvases.length).toBe(2);
 
+    // Through the one door: `add` reads a title prefix as a canvas, and a
+    // word that is nothing here is refused in words rather than fetched.
+    const byAdd = await json("add", "sports", "--canvas", S);
+    expect(byAdd.canvasId).toBe(sched.canvasId);
+    expect((await json("ls", "--kind", "canvas", "--canvas", S)).length).toBe(3);
+    const nothing = await isocan("add", "no such thing anywhere", "--canvas", S);
+    expect(nothing.code).not.toBe(0);
+    expect(nothing.stderr).toContain("nothing to add");
+
     // A canvas refuses itself.
     const self = await isocan("canvas", "place", S, "--canvas", S);
     expect(self.code).not.toBe(0);

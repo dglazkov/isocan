@@ -760,6 +760,27 @@ questions on item threads. **One sketch per sketcher**: an agent that could
 make forty makes one, and hands it in at the bell with `copy --to` and
 `sprint handin`.
 
+## Adding anything: one verb that reads what you give it
+
+`isocan add <thing>` is the one door. It reads the thing the way the app's
+Add popover reads what is pasted into its one field: a path on disk is a
+**file**, a Google Doc address is a **document** (the export, with its ↗),
+a canvas address — or a canvas id or title prefix among the canvases this
+machine knows — is a **canvas card**, and any other address is a **site**.
+`--as file|site|doc|canvas` says which you meant when the reading could go
+two ways (a title that is also a word, a file whose name looks like an
+address). `browse <url>`, `gdoc add <url>` and `canvas place <ref>` are the
+same acts with the kind already said; all of them take `--at`, `--in`,
+`--cell` and `--size` alike, and land where there is room in view when you
+say nothing.
+
+```
+isocan add ./deck.pdf                                  # a file
+isocan add https://docs.google.com/document/d/<id>/edit  # a document
+isocan add "Sports schedule"                           # a canvas card, by title
+isocan add https://example.com/status --as site        # a site, said plainly
+```
+
 ## A Google Doc on the canvas
 
 `isocan gdoc add <url>` puts a Google Doc here as a **document**: its markdown
@@ -771,8 +792,8 @@ lands a new version only where the document changed. A doc shared by link
 needs nothing; for one that is not, `isocan gdoc auth --token <token>` saves
 a Drive access token on this machine (mode 600, never on a canvas; Google's
 last about an hour — `gcloud auth print-access-token | isocan gdoc auth
---stdin` refreshes it), and `gdoc add`, `gdoc sync` and the app's Add-site
-dialog through this daemon use it only where the anonymous export refused.
+--stdin` refreshes it), and `gdoc add`, `gdoc sync` and the app's Add
+popover through this daemon use it only where the anonymous export refused.
 With a token, `sync` asks Drive when each doc last moved and leaves the
 unchanged ones unread. The words are on the canvas once added — everyone
 admitted can read them — so say so before adding somebody's private

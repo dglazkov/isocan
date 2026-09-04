@@ -16,6 +16,7 @@ export * from "./placement.ts";
 export * from "./area.ts";
 export * from "./canvasitem.ts";
 export * from "./googledoc.ts";
+export * from "./addable.ts";
 export * from "./titleroom.ts";
 export * from "./whatsnew.ts";
 export * from "./protocol.ts";
