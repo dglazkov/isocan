@@ -524,6 +524,7 @@ describe("preference pairs, harvested from version stacks", () => {
         chosen: "v2",
         chosenAt: "2026-08-01T09:03:00.000Z",
         chosenBy: "Di",
+        chosenById: "usr_di",
         against: ["v1", "v3"],
       },
     ]);
