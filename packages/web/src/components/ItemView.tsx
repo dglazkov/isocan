@@ -5,6 +5,9 @@ import {
   backingOf,
   isDesignSystem,
   BROWSER_MIME,
+  DOC_MIME,
+  googleDocId,
+  googleDocPreviewUrl,
   annotationsOf,
   isAnnotation,
   isArea,
@@ -221,13 +224,19 @@ function ItemViewInner({
   const isCanvas = isCanvasItem(item);
   const isBrowser = current.mimeType === BROWSER_MIME && !isCanvas;
   const source = sourceOf(item);
+  // A Google Doc on the canvas (research note, stage 4): the item's words
+  // are the record, and LIVE is a mode this browser flips — the `/preview`
+  // frame in place of the words, in the same item, never a second one.
+  const docId = source && current.mimeType === DOC_MIME ? googleDocId(source) : null;
+  const liveDoc = useUiStore((s) => docId !== null && s.liveDocs.includes(item.id));
+  const setDocLive = useUiStore((s) => s.setDocLive);
   // What the strip under the item says right now. The rule lives in
   // lib/chrome.ts, where it is argued and tested.
   const underSlot = underSlotFor({
     entered,
     resizing: resize !== null,
     soleSelection,
-    interactive: current.mimeType === "text/html" || isBrowser,
+    interactive: current.mimeType === "text/html" || isBrowser || liveDoc,
   });
   // Ink wears no chrome: a drawing IS its strokes, so the card, the border,
   // and the titlebar step aside until you point at it.
@@ -837,6 +846,24 @@ function ItemViewInner({
             ↗
           </a>
         )}
+        {docId && (
+          /* Live or words: the same item either way. Live is the doc as Google
+             draws it right now, for reading along; the words are what the
+             canvas holds — searched, versioned, read by agents — and what
+             `gdoc sync` keeps current. Remembered per browser. */
+          <button
+            className={`doc-live-toggle${liveDoc ? " active" : ""}`}
+            title={liveDoc ? "Showing the live doc — click for the words the canvas holds" : "Show the doc live, as Google draws it now"}
+            aria-pressed={liveDoc}
+            onClick={(e) => {
+              e.stopPropagation();
+              setDocLive(item.id, !liveDoc);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {liveDoc ? "Words" : "Live"}
+          </button>
+        )}
         {isBrowser && (
           <button
             className="browser-reload"
@@ -911,6 +938,7 @@ function ItemViewInner({
           canvasSource={source}
           size={{ width, height }}
           reloadToken={reloadToken}
+          liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
         />
         )}
 
@@ -1164,11 +1192,15 @@ export function VersionContent({
   canvasSource,
   size,
   warm,
+  liveDoc,
 }: {
   canvasId: string;
   blobHash: string;
   mimeType: string;
   filename: string;
+  /** A Google Doc shown LIVE: the `/preview` address to frame in place of
+   *  the words (stage 4). Null shows the words. */
+  liveDoc?: string | null;
   /** A canvas placed here: the id of the canvas to draw small and live,
    *  instead of framing the address the blob carries (`core/canvasitem.ts`). */
   canvasOf?: string | null;
@@ -1190,6 +1222,12 @@ export function VersionContent({
   designSystem?: boolean;
 }) {
   const url = blobUrl(canvasId, blobHash);
+  if (liveDoc) {
+    // The doc as Google draws it, in the same item. A private doc shows
+    // Google's own sign-in here, which is honest: the frame is Google's,
+    // and the words the canvas holds are one click away on the strip.
+    return <iframe className="browser-view doc-live" src={liveDoc} sandbox="allow-scripts allow-same-origin allow-forms" title={filename} />;
+  }
   if (designSystem && (mimeType === "text/markdown" || mimeType === "text/plain")) {
     return <DesignSystemView canvasId={canvasId} blobHash={blobHash} />;
   }

@@ -188,6 +188,11 @@ interface UiStore {
    *  browser, like the theme: taste, not a canvas fact. */
   hiddenChrome: string[];
   setChromeHidden: (id: string, hidden: boolean) => void;
+  /** Google Doc items this browser shows LIVE — the `/preview` frame in
+   *  place of the words (Google Docs stage 4). A mode you flip, remembered
+   *  per person, never a second item. */
+  liveDocs: string[];
+  setDocLive: (itemId: string, live: boolean) => void;
   /** Item a panel row is pointing at right now: the canvas outlines it, so a
    * name in a list and a thing on the surface are visibly the same thing. */
   peekedItemId: string | null;
@@ -368,12 +373,13 @@ function readWbAgentsWidth(): number {
 }
 
 const HIDDEN_CHROME_KEY = "isocan.hiddenChrome";
+const LIVE_DOCS_KEY = "isocan.liveDocs";
 
-/** The hidden controls, as a list of ids; anything unreadable is "nothing
- *  hidden", which is the default a fresh browser has. */
-function readHiddenChrome(): string[] {
+/** A list of ids in local storage; anything unreadable is the empty list,
+ *  which is the default a fresh browser has. */
+function readIdList(key: string): string[] {
   try {
-    const raw = localStorage.getItem(HIDDEN_CHROME_KEY);
+    const raw = localStorage.getItem(key);
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.filter((one): one is string => typeof one === "string") : [];
   } catch {
@@ -381,12 +387,21 @@ function readHiddenChrome(): string[] {
   }
 }
 
-function writeHiddenChrome(ids: string[]): void {
+function writeIdList(key: string, ids: string[]): void {
   try {
-    localStorage.setItem(HIDDEN_CHROME_KEY, JSON.stringify(ids));
+    localStorage.setItem(key, JSON.stringify(ids));
   } catch {
     // Storage denied: the choice holds for this session and no longer.
   }
+}
+
+/** The hidden controls (chrome you can turn off). */
+function readHiddenChrome(): string[] {
+  return readIdList(HIDDEN_CHROME_KEY);
+}
+
+function writeHiddenChrome(ids: string[]): void {
+  writeIdList(HIDDEN_CHROME_KEY, ids);
 }
 
 function readFlag(key: string, fallback: boolean): boolean {
@@ -536,6 +551,7 @@ export const useUiStore = create<UiStore>((set) => {
     marksOpen: false,
     historyOpen: false,
     hiddenChrome: readHiddenChrome(),
+    liveDocs: readIdList(LIVE_DOCS_KEY),
     pendingChat: null,
     paletteOpen: false,
     peekedItemId: null,
@@ -624,6 +640,16 @@ export const useUiStore = create<UiStore>((set) => {
           : s.hiddenChrome.filter((one) => one !== id);
         writeHiddenChrome(hiddenChrome);
         return { hiddenChrome };
+      }),
+    setDocLive: (itemId, live) =>
+      set((s) => {
+        const liveDocs = live
+          ? s.liveDocs.includes(itemId)
+            ? s.liveDocs
+            : [...s.liveDocs, itemId]
+          : s.liveDocs.filter((one) => one !== itemId);
+        writeIdList(LIVE_DOCS_KEY, liveDocs);
+        return { liveDocs };
       }),
     setPendingChat: (pendingChat) => set({ pendingChat }),
     setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
