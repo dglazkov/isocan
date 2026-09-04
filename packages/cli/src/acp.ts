@@ -53,6 +53,14 @@ import type { AdapterSpec } from "./harnesses.ts";
  *   `~/.pi/agent/settings.json` silences it; the rc does not depend on the
  *   turn's text either way.
  *
+ * **codex** (`@agentclientprotocol/codex-acp`, verified 2026-09-04) speaks
+ * the same wire and resumes through `session/load` with memory intact. It
+ * asked no permission for a shell command or a file write in its default
+ * mode — but that mode's sandbox refuses loopback network, so the CLI
+ * inside could not reach the daemon. The builtin spec runs it with
+ * `INITIAL_AGENT_MODE=agent-full-access` (`harnesses.ts`), which is the
+ * posture below said in codex's words.
+ *
  * **Permissions are auto-allowed, provisionally.** The agent runs as the
  * person, in the person's directory, with the person's credentials — the
  * same trust as the person typing the harness's name themselves — and a
@@ -138,7 +146,10 @@ export class AcpAgentProcess {
   ): Promise<AcpAgentProcess> {
     const child = spawn(spec.command, spec.args, {
       cwd: options.cwd,
-      env: options.env,
+      // The bridge's own variables win over the person's: a builtin knows
+      // what its harness needs (codex's sandbox mode), and a person who
+      // wants otherwise declares the adapter in config.json.
+      env: { ...options.env, ...spec.env },
       stdio: ["pipe", "pipe", "inherit"],
     });
     const agent = new AcpAgentProcess(child);

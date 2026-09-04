@@ -35,6 +35,10 @@ export interface AdapterSpec {
   harness: string;
   command: string;
   args: string[];
+  /** Variables the bridge itself needs, laid over the person's environment
+   * at spawn — a builtin's knowledge of its own harness, never a person's
+   * setting. */
+  env?: Record<string, string>;
 }
 
 /** Adapters isocan knows without being told. `npx -y` so the adapter is
@@ -46,6 +50,18 @@ const BUILTIN_ADAPTERS: Record<string, Omit<AdapterSpec, "harness">> = {
   // (`PI_ACP_PI_COMMAND` points it elsewhere). Verified 2026-09-04 against
   // pi-acp 0.0.33 / pi 0.84.2 — see acp.ts's module comment.
   pi: { command: "npx", args: ["-y", "pi-acp"] },
+  // `@agentclientprotocol/codex-acp` bundles its own codex and reads the
+  // ChatGPT login from `~/.codex`. Verified 2026-09-04 against 1.10.0 /
+  // codex 0.147.0. Its default sandbox refuses LOOPBACK network — the CLI
+  // inside could not reach the daemon (curl exit 7 with it up) — so the
+  // bridge runs in full-access mode: the same provisional trust the rc
+  // already extends by auto-allowing every permission (acp.ts). NO_BROWSER
+  // because a summoned session has nobody to finish a browser login.
+  codex: {
+    command: "npx",
+    args: ["-y", "@agentclientprotocol/codex-acp"],
+    env: { INITIAL_AGENT_MODE: "agent-full-access", NO_BROWSER: "1" },
+  },
 };
 
 /** What "installed" means per harness: the harness's own executable on the

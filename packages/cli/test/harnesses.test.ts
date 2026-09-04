@@ -42,8 +42,9 @@ describe("the harness scan", () => {
     const byName = Object.fromEntries(scan.rows.map((r) => [r.name, r]));
     expect(byName["pi"]).toMatchObject({ installed: true, adapter: "builtin", runnable: true, default: true });
     expect(byName["claude-code"]).toMatchObject({ installed: false, adapter: "builtin", runnable: false });
+    expect(byName["codex"]).toMatchObject({ installed: false, adapter: "builtin", runnable: false });
     // Known as a harness, bridged by nobody: listed, and honest about it.
-    expect(byName["codex"]).toMatchObject({ installed: false, adapter: null, runnable: false });
+    expect(byName["antigravity"]).toMatchObject({ installed: null, adapter: null, runnable: false });
     expect(defaultLine(scan)).toContain("pi is the only harness here");
     expect((await adapterFor(home, null, { PATH: bin }))?.harness).toBe("pi");
   });
