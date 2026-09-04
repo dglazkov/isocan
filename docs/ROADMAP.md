@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**16 built · 31 still open** — of which 21 partly
+**17 built · 31 still open** — of which 21 partly
 built, 9 designed, 0 blocked, and
 **1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -62,13 +62,14 @@ and the done column should not be flattered by either.
 | --- | --- | --- | --- |
 | research | [Modules: adding a kind of thing, and taking it away again](docs/research/2026-09-04-modules.md) | 2026-09-04 | the closed registries are counted; recommends internal modules first, Mermaid as the first node type, runtime loading third, sandboxes last · see extensions, workbench, iso-api, mindmap, atlas |
 
-## Built <sub>16</sub>
+## Built <sub>17</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-30 | the significance function and the CLI track are built; the scrubber is not |
 | **project** | [agent-custody](docs/projects/agent-custody/design.md) | 2026-08-31 | designed and built 31 Aug — no Add button without a visible rc; enrolment is a handshake the rc completes, the desk changed not at all. The Open section records what the build decided and what still waits. · see agent-custody |
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | all four phases done 27–29 Aug 2026 — the home says which commit it runs, a CLI that disagrees says so once, an upgrade is a build installed aside and probed before `current` flips, and a managed install upgrades while parked. Three open items stay named at the top of phases.md. · see auto-upgrade |
+| **project** | [harnesses](docs/projects/harnesses/journey.md) | 2026-09-04 | built 4 Sep 2026 — pi joins claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan. · see harnesses, on-demand, standing-agents |
 | **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface, all four phases closed 31 Aug 2026, every journey played for real: the board is one process on `@isocan/api`, the watcher resumes where it stopped, a stranger machine installed from the release branch and landed an op at dev as its own actor, and a Scene-6 agent found the API through --agent-help alone. · see multiuser, on-demand |
 | **project** | [multi-identity](docs/projects/multi-identity/journey.md) | 2026-09-01 | all five phases closed 1 Sep 2026 — the door starts the proof and shows who this browser may be, the refusal renders its remedy, the first machine's words lead with resumption, and actor.join folds a second actor into the person who holds both. Journeys 1–6 walked on a scratch home borrowing dev's attester. · see multiuser |
 | **project** | [multiuser](docs/projects/multiuser/journey.md) | 2026-08-30 | every phase closed or retired as of 30 Aug — 11 closed by Scene 6 played at dev (prj_hRulnNyXph), 12/12.5/12.7/13 retired, agent-on-demand moved to the on-demand project · see multiuser, on-demand |

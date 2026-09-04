@@ -47,7 +47,9 @@ beforeEach(async () => {
   const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
   await fs.writeFile(
     path.join(home, "config.json"),
-    JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] } }),
+    // …and named as the default outright: a web add's row says null, which
+    // means the machine's default, and the runner's PATH must not vote.
+    JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
   );
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
@@ -230,10 +232,12 @@ describe("the running rc — quiet start, events narrated", () => {
 
     await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
     // Quiet start: it enables, it does not list — where this is, what
-    // happens next, and no agent names. (The address line was the first
-    // real user's first stumble: a title with no way to get there.)
+    // happens next, which harness an unnamed agent runs on, and no agent
+    // names. (The address line was the first real user's first stumble: a
+    // title with no way to get there.)
     await until(async () => out, (o) => o.includes("http"), "the address line");
-    expect(out.trim().split("\n").length).toBeLessThanOrEqual(2);
+    expect(out.trim().split("\n").length).toBeLessThanOrEqual(3);
+    expect(out).toContain("run on claude-code");
     expect(out).toContain("/p/prj_1");
 
     // An enrolment created by verb, noticed by the running rc — no restart.
@@ -509,3 +513,84 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
     await done;
   }, 20_000);
 });
+
+describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
+  // A PATH with nothing on it, so only what config.json declares is
+  // runnable and the runner's own installs cannot vote.
+  const bare = { PATH: path.join(home ?? os.tmpdir(), "no-such-bin") };
+
+  it("`isocan harness` reads the machine, with no daemon in the way", async () => {
+    const run = await collect(spawnCli(["--json", "harness"], bare));
+    expect(run.code).toBe(0);
+    const scan = JSON.parse(run.stdout) as { harnesses: Array<{ name: string; runnable: boolean; default: boolean }>; default: string | null; source: string };
+    expect(scan.default).toBe("claude-code");
+    expect(scan.source).toBe("config");
+    expect(scan.harnesses.find((h) => h.name === "claude-code")).toMatchObject({ runnable: true, default: true });
+    expect(scan.harnesses.find((h) => h.name === "pi")).toMatchObject({ runnable: false, default: false });
+    const table = await collect(spawnCli(["harness"], bare));
+    expect(table.stdout).toContain("HARNESS");
+    expect(table.stdout).toContain("config.json's defaultHarness");
+  });
+
+  it("two runnable, none chosen, an agent that named none: a start with no terminal refuses and names the flag", async () => {
+    const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
+    await fs.writeFile(
+      path.join(home, "config.json"),
+      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
+    );
+    // Enrolled from the web: a row that says null, meaning "the machine's default".
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "agent.enroll", agent: { id: "usr_sian", name: "Sian" } },
+    });
+    const refused = await collect(spawnCli(["rc"], bare));
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toContain("Sian named no harness");
+    expect(refused.stderr).toContain("2 harnesses here (claude-code, fake); an agent added without naming one can't run until");
+    expect(refused.stderr).toContain("isocan rc --default-harness <name>");
+
+    // The flag answers and is kept: the next bare start needs no flag.
+    const rc = spawnCli(["rc", "--default-harness", "fake"], bare);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+    expect(out).toContain("agents that named no harness run on fake (config.json's defaultHarness)");
+    rc.kill("SIGINT");
+    await done;
+    expect(JSON.parse(await fs.readFile(path.join(home, "config.json"), "utf8")).defaultHarness).toBe("fake");
+    const again = await collect(spawnCli(["--json", "harness"], bare));
+    expect(JSON.parse(again.stdout).default).toBe("fake");
+
+    // A flag naming what cannot run here is refused with the list.
+    const wrong = await collect(spawnCli(["rc", "--default-harness", "pi"], bare));
+    expect(wrong.code).not.toBe(0);
+    expect(wrong.stderr).toContain("--default-harness pi: not runnable here");
+    expect(wrong.stderr).toContain("runnable: claude-code, fake");
+  }, 40_000);
+
+  it("with nothing settling it and nothing needing it, the rc only says so", async () => {
+    const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
+    await fs.writeFile(
+      path.join(home, "config.json"),
+      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
+    );
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const rc = spawnCli(["rc"], bare);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+    expect(out).toContain("2 harnesses here (claude-code, fake); every agent enrolled here named its own");
+    expect(out).not.toContain("--default-harness");
+    // `who` says which harness a standing agent would run on.
+    const who = await isocan("who");
+    expect(who.stdout).toMatch(/Sian\s+fake\s+answerable/);
+    rc.kill("SIGINT");
+    await done;
+  }, 30_000);
+});
+

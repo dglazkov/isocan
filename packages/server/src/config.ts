@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import path from "node:path";
 import { normalizeHomeUrl } from "@isocan/core";
 import { configFile } from "./paths.ts";
 
@@ -29,6 +30,18 @@ export async function readConfigFile<T extends object>(home: string): Promise<Pa
   } catch {
     return {};
   }
+}
+
+/**
+ * The one writer, for the few keys a verb settles on the person's behalf
+ * (the CLI's default harness). Read-merge-write of the top level only, so a
+ * key this writer never heard of survives; a malformed file is treated as
+ * empty here too, since keeping it would mean keeping the typo.
+ */
+export async function updateConfigFile<T extends object>(home: string, patch: Partial<T>): Promise<void> {
+  const current = await readConfigFile<T>(home);
+  await fs.mkdir(path.dirname(configFile(home)), { recursive: true });
+  await fs.writeFile(configFile(home), `${JSON.stringify({ ...current, ...patch }, null, 2)}\n`);
 }
 
 /** The one key this package reads for itself. */

@@ -147,9 +147,12 @@ export interface ClaimOptions {
  * windows, live faces, names remembered by canvases — is the reducer's
  * business now, checked atomically at the single writer.
  *
- * The key claimed is an unclaimed one first: a nested agent inherits the
- * variables of the agent that launched it, and that one has already taken
- * its own key — so the key still free is this process's own.
+ * The key claimed is the deliberate one when there is one — `ISOCAN_SESSION_ID`
+ * was exported on purpose, and a harness that also stamps its own variable
+ * into its shells (pi does; an rc's summoned session sees both) must not
+ * have the ambient key win. Otherwise an unclaimed one first: a nested agent
+ * inherits the variables of the agent that launched it, and that one has
+ * already taken its own key — so the key still free is this process's own.
  */
 export async function claimSessionIdentity(
   client: DaemonClient,
@@ -175,7 +178,8 @@ export async function claimSessionIdentity(
     );
   }
   const bound = new Set(bindings.map((b) => b.key));
-  const session = present.find((s) => !bound.has(s.key)) ?? present[0]!;
+  const session =
+    present.find((s) => s.deliberate) ?? present.find((s) => !bound.has(s.key)) ?? present[0]!;
   const op: ActorClaimOp = {
     type: "actor.claim",
     sessionKey: session.key,

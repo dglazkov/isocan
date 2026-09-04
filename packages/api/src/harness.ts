@@ -21,6 +21,9 @@ export interface HarnessSession {
   id: string;
   /** `<harness>:<id>`, the registry key. */
   key: string;
+  /** Set by `ISOCAN_SESSION_ID` — said on purpose, not read off a harness.
+   * Deliberate beats ambient when a key must be claimed (`identity.ts`). */
+  deliberate: boolean;
 }
 
 /** `config.json`'s hook: `{"harnessVars": {"my-agent": "MY_AGENT_SESSION"}}`.
@@ -51,6 +54,9 @@ const BUILTIN: ReadonlyArray<readonly [harness: string, envVar: string]> = [
   ["pi", "PI_SESSION_ID"],
   ["antigravity", "ANTIGRAVITY_CONVERSATION_ID"],
 ];
+
+/** The harnesses isocan knows by name, for anything that lists them. */
+export const builtinHarnesses: readonly string[] = BUILTIN.map(([harness]) => harness);
 
 /** Every variable a probe could read without config — what a test must clear
  * so that a suite asserts the same thing under every harness. */
@@ -97,7 +103,7 @@ export async function harnessSessions(
   const vars = await varsFor(home, env);
   return vars.flatMap(([harness, envVar]) => {
     const id = env[envVar]?.trim();
-    return id ? [{ harness, id, key: `${harness}:${id}` }] : [];
+    return id ? [{ harness, id, key: `${harness}:${id}`, deliberate: envVar === OWN_VAR }] : [];
   });
 }
 

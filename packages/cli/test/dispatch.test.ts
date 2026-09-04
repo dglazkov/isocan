@@ -403,11 +403,13 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
       path.join(home, "config.json"),
       JSON.stringify({
         // Both spellings of the adapter key: Sian enrols with --harness
-        // fake; Percy arrives the web way (harness unsaid → claude-code).
+        // fake; Percy arrives the web way (harness unsaid → the machine's
+        // default, which this file names so the runner's PATH cannot vote).
         acpAdapters: {
           fake: [process.execPath, fakeAcp],
           "claude-code": [process.execPath, fakeAcp],
         },
+        defaultHarness: "claude-code",
         rcLimits: { agentChain: 0 },
       }),
     );
@@ -563,8 +565,9 @@ describe("the roster tells the truth (journey 7, phase 6)", () => {
   it("answerable is the connection, and only the connection — a dead rc reads enrolled at once", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
     // Nothing running: enrolled, and the roster says nobody is listening.
+    // …and which harness Sian would run on, from this machine's rc half.
     expect(await whoStanding()).toEqual([
-      { actor: expect.objectContaining({ name: "Sian" }), state: "enrolled" },
+      { actor: expect.objectContaining({ name: "Sian" }), state: "enrolled", harness: "fake" },
     ]);
 
     const rc = startRc();
