@@ -8,6 +8,7 @@ import { openPanel } from "./panels.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
 import { formatMoves, mapOf, mapsOn, tidyMap } from "@isocan/core";
 import { canEditNow } from "./capability.ts";
+import { showAllChrome } from "./hideable.ts";
 
 /**
  * **The things the app does itself.**
@@ -125,6 +126,16 @@ export const ACTIONS: readonly Action[] = [
       const ui = useUiStore.getState();
       ui.setMinimapOpen(!ui.minimapOpen);
     },
+  },
+  {
+    // Door 3 of chrome you can turn off: the palette is not in the registry
+    // and cannot be hidden, so a person who hid everything still has this.
+    id: "show-chrome",
+    name: "Show hidden controls",
+    hint: "Bring back undo/redo, History — anything hidden by right-click",
+    group: "View",
+    available: onCanvas,
+    run: showAllChrome,
   },
   {
     id: "theme",
