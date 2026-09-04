@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
-const rail = read("../src/components/CanvasTools.tsx");
+const rail = read("../src/components/AddPopover.tsx");
 const upload = read("../src/lib/upload.ts");
 const api = read("../src/lib/api.ts");
 const server = read("../../server/src/http.ts");
@@ -16,8 +16,10 @@ const cli = read("../../cli/src/main.ts");
  */
 describe("a Google Doc typed into Add site becomes a document that keeps its link", () => {
   it("is told apart by its address and added through the daemon's fetch", () => {
-    expect(rail).toContain("if (googleDocId(url)) {");
-    expect(rail).toContain("const doc = await exportDoc(url);");
+    // Through the one Add door now: the classifier says "doc", the popover
+    // fetches through the daemon.
+    expect(rail).toContain('if (what.kind === "doc") {');
+    expect(rail).toContain("const doc = await exportDoc(what.url);");
     expect(api).toContain("export async function exportDoc(url: string)");
   });
 

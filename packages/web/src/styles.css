@@ -3277,7 +3277,20 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Place a canvas: the site popover's shape with a list under the field —
    your canvases, most recent first, narrowed as you type; or the one row an
    address names. */
-.place-canvas { position: relative; }
+/* The one Add door: the picker's shape, with what Enter would do said under
+   the field and four rows that narrow it. The rows are radios in a group,
+   so a state chosen is a state a reader is told. */
+.add-door { position: relative; }
+.add-popover .text-input { width: 320px; }
+.add-preview { font-size: 11px; color: var(--ink-muted); white-space: normal; min-height: 1.3em; }
+.add-kinds { display: flex; gap: 4px; }
+.add-kind {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 999px; background: none; cursor: pointer;
+  color: var(--ink-muted); font: inherit; font-size: 11.5px;
+}
+.add-kind:hover, .add-kind:focus-visible { color: var(--ink); background: var(--chip); outline: none; }
+.add-kind.active { color: var(--ink); border-color: var(--accent); background: var(--accent-wash, var(--chip)); }
 .canvas-picker { flex-direction: column; align-items: stretch; gap: 8px; }
 .canvas-picker .text-input { width: 300px; }
 .canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow: auto; }

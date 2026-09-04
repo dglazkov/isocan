@@ -64,14 +64,15 @@ const withSelection = (ctx: ActionContext) => ctx.selection.length > 0;
 /** Everything the launcher can do, grouped in the order it shows them. */
 export const ACTIONS: readonly Action[] = [
   {
-    id: "place-canvas",
-    name: "Place a canvas…",
-    hint: "Another canvas on this one — search yours, or paste an address",
+    id: "add",
+    name: "Add…",
+    hint: "Files, a site, a Google Doc, or a canvas — paste anything, or pick",
     group: "Canvas",
     available: onCanvas,
     writes: true,
-    // The same popover the rail's button opens: two doors to one dialog.
-    run: () => useUiStore.getState().setPlacingCanvas(true),
+    // The same popover the rail's one Add button opens: two doors to one
+    // dialog, and the dialog reads what you give it.
+    run: () => useUiStore.getState().setAdding("any"),
   },
   // ---- View ----
   {

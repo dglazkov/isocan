@@ -1,13 +1,11 @@
 import { useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
-import { BROWSER_SIZE, addBrowserItem, addDocumentItem, addFiles } from "../lib/upload.ts";
-import { checkFrameable, exportDoc } from "../lib/api.ts";
-import { docFilenameFrom, googleDocId, siteLabel } from "@isocan/core";
-import { placeableArea, revealIfOffscreen, spotInView } from "../lib/spot.ts";
+import { addFiles } from "../lib/upload.ts";
+import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
-import { PlaceCanvas } from "./PlaceCanvas.tsx";
+import { AddPopover } from "./AddPopover.tsx";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -22,8 +20,9 @@ import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts"
  * Pen=P, Text=T, Comment=C — and Esc returns to Select. (Version fan-out,
  * once on V, lives on an item's version badge.)
  *
- * Below a divider, the upload button opens a file picker to bring files onto
- * the canvas — moved here from the top bar to match the Figma tool rail idiom.
+ * Below a divider, one Add button opens the popover that brings anything not
+ * drawn here onto the canvas — files, a site, a Google Doc, a canvas (see
+ * AddPopover). It was three buttons and a hidden fourth.
  *
  * Picking up the Pen opens the ink well beside it: your identity color first —
  * the one your cursor and your face in the pile already wear, so ink is signed
@@ -110,38 +109,12 @@ const marksGlyph = (filled: boolean) => (
   </svg>
 );
 
-/**
- * A clock with its hand swept back — the canvas's history. Not an arrow and
- * not a rewind: both of those promise something moves BACKWARDS, and nothing
- * here does. You stand somewhere; the canvas shows you what stood there.
- */
-const UPLOAD = (
-  <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="3" width="12" height="10" rx="1.5" />
-    <path d="M2 10.5l3.3-3.3a1 1 0 0 1 1.4 0L9 9.5m0 0l1.3-1.3a1 1 0 0 1 1.4 0L14 10.5" />
-    <circle cx="10.5" cy="5.8" r="1" />
-  </svg>
-);
-
 /* A capital T on a baseline — the same mark the kind icon uses, because it
    names the same thing from the other end: this makes them, that lists them. */
 const TEXT = (
   <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
     <path d="M3.5 4h9" />
     <path d="M8 4v8.5" />
-  </svg>
-);
-
-/* The mark a live site already wears everywhere else (`KindIcon`'s `site`):
-   the tool that makes them and the icon that lists them are the same shape,
-   which is the only way somebody learns what this button produces without
-   pressing it. Both changed together — see `KindIcon` for why it is a browser
-   window and not the play button it used to be. */
-const SITE = (
-  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round">
-    <path d="M3 5h18v14H3z" />
-    <path d="M3 9h18" />
-    <path d="M6 7h.01M8.5 7h.01" />
   </svg>
 );
 
@@ -270,20 +243,11 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       >
         <HistoryGlyph size={17} />
       </button>
-      <button
-        className="tool-btn"
-        title="Upload files to canvas"
-        aria-label="Upload files"
-        onClick={() => fileInput.current?.click()}
-      >
-        {UPLOAD}
-      </button>
-      {/* Beside Upload, and that pairing is the argument: both bring onto the
-          canvas something that was not drawn here — one from the disk, one
-          from a URL. It sat in the top bar among navigation and identity,
-          which is why it never read as belonging to anything. */}
-      <ProjectSite canvasId={canvasId} actor={actor} />
-      <PlaceCanvas canvasId={canvasId} actor={actor} />
+      {/* One door for everything brought onto the canvas that was not drawn
+          here — files, a site, a Google Doc, a canvas. It was three buttons
+          and a hidden fourth; the popover reads what it is given and says
+          what it would do, so one field is enough. See AddPopover. */}
+      <AddPopover canvasId={canvasId} actor={actor} onFiles={() => fileInput.current?.click()} />
       <input
         ref={fileInput}
         type="file"
@@ -296,141 +260,3 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
   );
 }
 
-/**
- * **Put a live site onto the canvas.**
- *
- * Not "Project", which was the first label and is a word this product has
- * already spent: `project.create` is the op that makes a CANVAS, ids are
- * `prj_`, and the config calls one `defaultProjectId`. A button reading
- * "Project" inside the thing isocan calls a project is a collision with the
- * domain's own noun, not merely an ambiguous verb.
- *
- * A press, a URL, done — the same shape as Upload beside it, which is why it
- * is a popover and not a placement tool. The hard part of this interaction is
- * the address; where it goes you will decide by dragging, the way you do with
- * anything 800x600. (The drawing tools place on click because for ink and
- * words the POSITION is the input. Here it is not.)
- */
-function ProjectSite({ canvasId, actor }: { canvasId: string; actor: Actor }) {
-  const [open, setOpen] = useState(false);
-  const [url, setUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const canvas = useCanvasStore((s) => s.canvas);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      // Somewhere clear AND somewhere you can see — `spotInView`. The daemon
-      // already keeps items off each other, but it cannot know where the
-      // viewport is, and its search rings are the item's own size: for a
-      // site that is a screenful per step, so a nudged one lands off the
-      // edge and reads as nothing having happened.
-      const at = spotInView(
-        useUiStore.getState().viewport,
-        Object.values(canvas?.items ?? {}),
-        BROWSER_SIZE.width,
-        BROWSER_SIZE.height,
-        placeableArea(),
-      );
-      /**
-       * **Ask whether the site will let itself be framed, before making an
-       * item that cannot show it.**
-       *
-       * An item is an iframe, and most of the public web refuses to be one.
-       * The refusal was silent: `yahoo.com` created an item, the browser
-       * declined to render it, and the canvas showed a blank rectangle — so
-       * the honest report was "it didn't work" when it had worked exactly as
-       * built and nobody had said what happened.
-       *
-       * The check runs on the daemon because a page cannot tell a blocked
-       * cross-origin frame from a loaded one. It is ADVICE and never a gate:
-       * anything that goes wrong in the probe answers `ok`, so a site that
-       * would have worked is never refused on our guess.
-       */
-      /**
-       * A Google Doc typed here becomes a DOCUMENT, not a frame: its markdown
-       * export as the item, with `source` and `synced` on it, so the canvas
-       * can read, thumb and version it and the ↗ opens the real doc
-       * (`docs/research/2026-09-02-google-docs-on-the-canvas.md`). The
-       * daemon does the fetch; a private doc is refused in its own words.
-       */
-      if (googleDocId(url)) {
-        const doc = await exportDoc(url);
-        const itemId = await addDocumentItem(
-          canvasId,
-          actor,
-          { title: doc.title, markdown: doc.markdown, filename: docFilenameFrom(doc.title), source: doc.source, syncedAt: doc.fetchedAt },
-          at,
-        );
-        setOpen(false);
-        setUrl("");
-        setError(null);
-        useUiStore.getState().select(itemId);
-        return;
-      }
-      const verdict = await checkFrameable(url);
-      if (!verdict.ok) {
-        setError(
-          `${siteLabel(verdict.url ?? url)} ${verdict.why ?? "refuses to be shown in a frame"}. ` +
-            "Nothing was added.",
-        );
-        return;
-      }
-      const itemId = await addBrowserItem(canvasId, actor, url, at);
-      setOpen(false);
-      setUrl("");
-      setError(null);
-      useUiStore.getState().select(itemId);
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-
-  return (
-    <div className="create-site">
-      <button
-        className={`tool-btn${open ? " active" : ""}`}
-        /* It said "point it at your localhost dev server", which named the
-           common case as if it were the rule and left somebody typing a real
-           address wondering what they had done wrong. Any http(s) address
-           works — what decides is whether the SITE allows framing, which is
-           the site's call and not ours. */
-        title="Add a live site — any address that allows being shown in a frame"
-        aria-label="Add a live site"
-        aria-pressed={open}
-        onClick={() => {
-          setOpen(!open);
-          setError(null);
-        }}
-      >
-        {SITE}
-      </button>
-      {open && (
-        <form className="site-popover" onSubmit={submit}>
-          <input
-            className="text-input"
-            autoFocus
-            placeholder="localhost:5173, any site, or a Google Doc"
-            value={url}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setOpen(false);
-            }}
-          />
-          {/* "Add site" — the noun the rest of the app uses for what you get
-              (`KindIcon`'s `site`, `isocan ls --kind site`, the Files group),
-              so the button names its own result. It said "Canvas" first, which
-              was a destination where a verb belongs, and then "Project", which
-              is what isocan calls a canvas. */}
-          <button className="btn primary" type="submit" disabled={!url.trim()}>
-            Add site
-          </button>
-          {error && <div className="site-error">{error}</div>}
-        </form>
-      )}
-    </div>
-  );
-}
