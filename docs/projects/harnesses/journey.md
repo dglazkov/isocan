@@ -98,5 +98,10 @@ set aside out loud.
   by auto-allowing every permission, said in codex's words. Anyone who
   wants the sandbox declares the adapter in config.json without it, and
   accepts an agent that cannot speak to the canvas.
+- **Not built: Antigravity.** Google's official ACP server exists (a
+  binary zip, not npm) but keeps a login of its own and refused this
+  account as ineligible; the measurement and the reasons are in
+  [research/2026-09-04-antigravity-acp.md](../../research/2026-09-04-antigravity-acp.md).
+  The general door (`acpAdapters` in config.json) stays open to it.
 - **Not built:** choosing a model per agent. That is pi's per-directory
   settings file in the agent's working directory, not an isocan flag.

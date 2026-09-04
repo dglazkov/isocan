@@ -12,7 +12,7 @@ built, 9 designed, 0 blocked, and
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
-5 more are `noted` — read, absorbed, owing nothing — and
+6 more are `noted` — read, absorbed, owing nothing — and
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
@@ -69,7 +69,7 @@ and the done column should not be flattered by either.
 | research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-30 | the significance function and the CLI track are built; the scrubber is not |
 | **project** | [agent-custody](docs/projects/agent-custody/design.md) | 2026-08-31 | designed and built 31 Aug — no Add button without a visible rc; enrolment is a handshake the rc completes, the desk changed not at all. The Open section records what the build decided and what still waits. · see agent-custody |
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | all four phases done 27–29 Aug 2026 — the home says which commit it runs, a CLI that disagrees says so once, an upgrade is a build installed aside and probed before `current` flips, and a managed install upgrades while parked. Three open items stay named at the top of phases.md. · see auto-upgrade |
-| **project** | [harnesses](docs/projects/harnesses/journey.md) | 2026-09-04 | built 4 Sep 2026 — pi joins claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan. · see harnesses, on-demand, standing-agents |
+| **project** | [harnesses](docs/projects/harnesses/journey.md) | 2026-09-04 | built 4 Sep 2026 — pi and codex join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan. · see harnesses, on-demand, standing-agents |
 | **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface, all four phases closed 31 Aug 2026, every journey played for real: the board is one process on `@isocan/api`, the watcher resumes where it stopped, a stranger machine installed from the release branch and landed an op at dev as its own actor, and a Scene-6 agent found the API through --agent-help alone. · see multiuser, on-demand |
 | **project** | [multi-identity](docs/projects/multi-identity/journey.md) | 2026-09-01 | all five phases closed 1 Sep 2026 — the door starts the proof and shows who this browser may be, the refusal renders its remedy, the first machine's words lead with resumption, and actor.join folds a second actor into the person who holds both. Journeys 1–6 walked on a scratch home borrowing dev's attester. · see multiuser |
 | **project** | [multiuser](docs/projects/multiuser/journey.md) | 2026-08-30 | every phase closed or retired as of 30 Aug — 11 closed by Scene 6 played at dev (prj_hRulnNyXph), 12/12.5/12.7/13 retired, agent-on-demand moved to the on-demand project · see multiuser, on-demand |
@@ -84,11 +84,12 @@ and the done column should not be flattered by either.
 | research | [Where the canvas is janky](docs/research/2026-08-29-performance.md) | 2026-08-29 |  |
 | **project** | [workbench](docs/projects/workbench/design.md) | 2026-08-29 |  · see workbench |
 
-## Noted — read, owing nothing <sub>5</sub>
+## Noted — read, owing nothing <sub>6</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [Agents on the canvas: what the field shipped in a year](docs/research/2026-08-23-agents-on-the-canvas.md) | 2026-08-30 | the category converged on MCP + a skill, which isocan has; edges deliberately declined |
+| research | [Antigravity over ACP](docs/research/2026-09-04-antigravity-acp.md) | 2026-09-04 | measured 4 Sep — Google ships an official ACP server for Antigravity (registry entry 20 Aug, 1.1.1 on 3 Sep) as a 316 MB per-platform zip from dl.google.com, not npm; it speaks ACP 1 with session load/resume, keeps its own login apart from the IDE's and the CLI's, and its Google login rejected this account as "not eligible for Antigravity". Decided not worth building on; the user's call · see harnesses, on-demand |
 | research | [Local agents on the canvas](docs/research/2026-08-24-local-agents.md) | 2026-08-30 | the finding IS the answer: isocan hands agents a CLI, so any model that can run one joins |
 | research | [React Flow and tldraw, measured rather than remembered](docs/research/2026-08-31-react-flow-and-tldraw.md) | 2026-08-31 | measured both libraries; React Flow is a real option for the map only, tldraw collides with the oplog · see mindmap, ui-refresh |
 | research | [Skills worth stealing: what the ecosystem has built](docs/research/agent-skills.md) | 2026-08-30 | import/read/skip verdicts recorded per repo |
