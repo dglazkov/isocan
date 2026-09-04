@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-09-02
 see: context, inception, standing-agents
-note: designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Nothing built
+note: designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Phases 0–1 built 4 Sep — the Context view and `isocan context` in layers with a heading per source, and `memory=inherit` on a canvas card bringing the linked canvas's design system, pins and size in read-only with provenance and the override rule; `design check` reads the governing one. Phases 2–4 not built
 ---
 # Memory, in layers you can see
 
@@ -212,3 +212,33 @@ project defines, and a canvas born the way desks are born. **Both surfaces**
 by the tests that hold every verb. **The record is never hidden**: every link
 is an item anyone can see, and every piece of memory is a file anyone
 admitted can read.
+
+## What was built
+
+**Phases 0 and 1, 4 September 2026.** `core/memory.ts` holds the contract:
+`memory=inherit` on a canvas card (`memoryOf`, `memoryLinks` in reading
+order — top to bottom, then left to right — and `memoryPatch`, cleared with
+`removeProperties` the way a pin is); `inheritedPieces` is what a linked
+canvas contributes — its design system, its pinned items, its size, each
+piece wearing `from`; `contextLayers` puts *This canvas* first and a heading
+per link after it, a link that could not be read keeping its heading with the
+reason; `governingDesign` is the override rule as one function, this canvas's
+own first, else the first inherited in reading order, with the inherited one
+listed struck and *this canvas's wins* beside it when both exist. The Context
+panel pulls each linked canvas the way the inception card does (same
+`getSnapshot`, same two refusals in words — not admitted, or lives at another
+home) and renders the layers with a *from* chip on every borrowed line;
+`isocan context` prints the same headings and `--json` returns the layers.
+The gestures: *Inherit its memory here* as a tick in the Add popover when a
+canvas is what is being added; `isocan canvas place <ref> --inherit`; and
+`isocan context inherit | uninherit <item>` on a card already placed.
+`isocan design check` on a canvas with no design system of its own checks
+against the governing inherited one and says whose. Proved in
+`core/test/memory.test.ts`, `web/test/memory.test.ts` and
+`cli/test/place.test.ts` over a real daemon.
+
+Not built, and deliberately: the recap's head as a contributed piece (there
+is no recap function in core to read it from — the "History" row counts
+ops), the small picture of the linked canvas in the panel (the card on the
+canvas already is one), phase 2's `~<name>` canvas, phase 3's *Context*
+sheet convention and the memory mark on the card, and phase 4's MCP surface.

@@ -228,6 +228,17 @@ import {
   describeLosses,
   contextMark,
   markPatch,
+  contextLayers,
+  layersReport,
+  governingDesign,
+  memoryLinks,
+  memoryOf,
+  memoryPatch,
+  MEMORY_PROP,
+  type LinkedCanvas,
+  type CanvasContents,
+  canvasIdOf,
+  isCanvasItem,
   markLabel,
   isSlide,
   slidePatch,
@@ -4421,7 +4432,7 @@ const canvas = program
 async function placeCanvasItem(
   ctx: Ctx,
   ref: string,
-  opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string },
+  opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string; inherit?: boolean },
 ): Promise<void> {
   const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
   /**
@@ -4456,11 +4467,15 @@ async function placeCanvasItem(
     height,
     placement: placementFor(snapshot, opts, { width, height }),
     title: opts.title ?? target.title,
-    properties: made.properties,
+    // `--inherit` is memory phase 1: one more property on the card.
+    properties: { ...made.properties, ...(opts.inherit ? { [MEMORY_PROP]: "inherit" } : {}) },
   });
   const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
-  if (ctx.json) return printJson({ itemId, canvasId: target.id, address: made.properties.source, placement: placed });
-  console.log(`placed "${target.title}" (${target.id}) as ${itemId} at ${placed.x},${placed.y} — double-click it, or its ↗, to open ${made.properties.source}`);
+  if (ctx.json) return printJson({ itemId, canvasId: target.id, address: made.properties.source, placement: placed, inherit: opts.inherit === true });
+  console.log(
+    `placed "${target.title}" (${target.id}) as ${itemId} at ${placed.x},${placed.y} — double-click it, or its ↗, to open ${made.properties.source}` +
+      (opts.inherit ? "; its design system and pins are read here (`isocan context`)" : ""),
+  );
 }
 
 canvas
@@ -4472,11 +4487,12 @@ canvas
   .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
   .option("--size <WxH>", `display size (default ${CANVAS_ITEM_SIZE.width}x${CANVAS_ITEM_SIZE.height})`)
   .option("--title <title>", "what it is called (default: the canvas's own title)")
+  .option("--inherit", "read its design system and pins as part of this canvas's context (`isocan context inherit` later does the same)")
   .action(
     run(
       async (
         ref: string,
-        opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string },
+        opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string; inherit?: boolean },
         cmd: Command,
       ) => placeCanvasItem(await ctxOf(cmd), ref, opts),
     ),
@@ -7368,10 +7384,75 @@ program
     }),
   );
 
+/**
+ * **The canvases this one inherits from, as this machine can read them**
+ * (memory phases 0–1). One snapshot per `memory=inherit` card, in reading
+ * order; a card whose address names another home is not asked for — the
+ * homes walk is a different verb — and a door that refuses is reported as
+ * it said. Read here rather than in core because reading is a wire fact.
+ */
+async function linkedCanvasesOf(ctx: Ctx, canvasId: string, snapshot: { canvas: CanvasContents }): Promise<LinkedCanvas[]> {
+  const home = (await ctx.homeOf(canvasId).catch(() => null)) ?? ctx.client.base;
+  const rows: LinkedCanvas[] = [];
+  for (const item of memoryLinks(snapshot.canvas)) {
+    const id = canvasIdOf(item)!;
+    const address = sourceOf(item);
+    const elsewhere = address ? parseCanvasAddress(address)?.origin : null;
+    if (elsewhere && elsewhere !== home) {
+      rows.push({ item, canvasId: id, title: item.title, canvas: null, refused: `lives at ${elsewhere} — not read from here` });
+      continue;
+    }
+    try {
+      const theirs = await ctx.client.snapshot(id);
+      rows.push({ item, canvasId: id, title: theirs.project.title, canvas: theirs.canvas });
+    } catch (err) {
+      rows.push({ item, canvasId: id, title: item.title, canvas: null, refused: (err as Error).message });
+    }
+  }
+  return rows;
+}
+
 const context = program
   .command("context")
-  .description("What an agent will actually read when it starts work here")
+  .description("What an agent will actually read when it starts work here — this canvas, then the canvases it inherits from")
   .option("--canvas <canvas>");
+
+/**
+ * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,
+ * phase 1): the card that already points at the other canvas wears one more
+ * property, `memory=inherit`, and its design system and pins join this
+ * canvas's context read-only. `item.update`, the way a pin is — no new op.
+ */
+function inheritVerb(name: "inherit" | "uninherit", memory: "inherit" | null, blurb: string) {
+  context
+    .command(`${name} <item>`)
+    .description(blurb)
+    .option("--canvas <canvas>")
+    .action(
+      run(async (itemRef: string, opts: { canvas?: string }, cmd: Command) => {
+        const ctx = await ctxOf(cmd);
+        if (opts.canvas) ctx.canvasRef = opts.canvas;
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const item = resolveItem(snapshot, itemRef);
+        if (!isCanvasItem(item)) {
+          throw new Error(`"${item.title}" is not a canvas card — \`isocan canvas place <ref> --inherit\` places one that is`);
+        }
+        const was = memoryOf(item);
+        if (was === memory) {
+          return console.log(memory === null ? `"${item.title}" was not inherited` : `"${item.title}" is already inherited here`);
+        }
+        await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: memoryPatch(memory) });
+        console.log(
+          memory === null
+            ? `"${item.title}" is no longer inherited here — its design system and pins leave this canvas's context`
+            : `"${item.title}" is inherited here — its design system and pins join this canvas's context (\`isocan context\` shows them under their own heading)`,
+        );
+      }),
+    );
+}
+
+inheritVerb("inherit", "inherit", "Read a placed canvas's design system and pins as part of this canvas's context");
+inheritVerb("uninherit", null, "Stop inheriting a placed canvas's memory — the card stays");
 
 /**
  * **Stage 2's verbs** (`docs/projects/context/design.md`): pin an item into
@@ -7452,14 +7533,16 @@ context
         }
       }
 
-      const pieces = contextPieces(snapshot.canvas, {
+      // In layers: this canvas, then each canvas it inherits from, with a
+      // heading each — the seam memory phases 2–4 land in.
+      const layers = contextLayers(snapshot.canvas, await linkedCanvasesOf(ctx, p.id, snapshot), {
         // The guide this BUILD ships, which is the one an agent here has read
         // — not "the latest", which is a different machine's business.
         guideVersion: describeBuild(buildStamp()),
         ...(designProblems === undefined ? {} : { designProblems }),
       });
-      if (ctx.json) return printJson(pieces);
-      console.log(contextReport(pieces));
+      if (ctx.json) return printJson(layers);
+      console.log(layersReport(layers, (pieces) => contextReport(pieces)));
     }),
   );
 
@@ -8044,15 +8127,19 @@ style
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const item = designSystem(snapshot.canvas);
-      if (!item) {
+      // The one that governs: this canvas's own, else the first a linked
+      // canvas contributes (memory phase 1) — and the check says whose.
+      const governing = governingDesign(snapshot.canvas, await linkedCanvasesOf(ctx, p.id, snapshot));
+      if (!governing) {
         throw new Error(
           `${p.title} has no design system — isocan design set DESIGN.md, or ask for /design-system`,
         );
       }
+      const item = governing.item;
+      if (governing.from) console.error(`checking against ${governing.from.title}'s design system, inherited here`);
       const version = item.versions.find((v) => v.id === item.currentVersionId);
       if (!version) throw new Error(`${item.title} has no current version`);
-      const text = (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8");
+      const text = (await ctx.client.downloadBlob(governing.from?.canvasId ?? p.id, version.blobHash)).toString("utf8");
       const findings = bySeverity(checkDesign(parseDesign(text)));
       if (ctx.json) return printJson(findings);
       if (findings.length === 0) return console.error(`${item.title}: nothing to fix`);

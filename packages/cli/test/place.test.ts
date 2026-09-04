@@ -97,6 +97,23 @@ describe("placing a canvas on a canvas", () => {
     expect(nothing.code).not.toBe(0);
     expect(nothing.stderr).toContain("nothing to add");
 
+    // Memory phase 1: `--inherit` makes the card a link, `isocan context`
+    // reads the linked canvas under its own heading, and the link is one
+    // property that `uninherit` takes back with the card still there.
+    await json("context", "pin", byRef.itemId, "--canvas", sched.canvasId).catch(() => null);
+    const linked = await json("canvas", "place", "sports", "--inherit", "--canvas", S);
+    expect(linked.inherit).toBe(true);
+    const layers = await json("context", "--canvas", S);
+    expect(layers.map((l: { heading: string }) => l.heading)).toEqual(["This canvas", "Sports Schedule Constraint Solver"]);
+    expect(layers[1].canvasId).toBe(sched.canvasId);
+    expect(layers[1].pieces.every((p: { from?: { canvasId: string } }) => p.from?.canvasId === sched.canvasId)).toBe(true);
+    const off = await isocan("context", "uninherit", linked.itemId, "--canvas", S);
+    expect(off.stdout).toContain("no longer inherited");
+    expect((await json("context", "--canvas", S)).length).toBe(1);
+    expect((await json("ls", "--kind", "canvas", "--canvas", S)).length).toBe(4);
+    const notCard = await isocan("context", "inherit", byRef.itemId, "--canvas", sched.canvasId);
+    expect(notCard.code).not.toBe(0);
+
     // A canvas refuses itself.
     const self = await isocan("canvas", "place", S, "--canvas", S);
     expect(self.code).not.toBe(0);
