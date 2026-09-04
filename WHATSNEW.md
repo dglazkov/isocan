@@ -16,6 +16,10 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 4 September 2026
+
+- One Add. The rail's three add buttons — files, a live site, a canvas — and the Google Doc that hid inside the site one are one button now. Its popover has one field that reads what you give it: paste a doc's address and it becomes a document, a canvas's address or name and it becomes a card, any other address and it becomes a site, or type to search your canvases. A line under the field says what Enter will do; four rows — Files, Site, Google Doc, Canvas — narrow it when you would rather choose first. ⌘K's "Add…" opens the same popover. From a terminal, `isocan add <thing>` reads a path, an address, a doc or a canvas the same way, with `--as` to say which you meant; `browse`, `gdoc add` and `canvas place` still work.
+
 ## 3 September 2026
 
 - The canvas knows who is an agent. Point at a face and the card says "agent" for one, even after it has left, instead of reading like a person who went quiet; `isocan evals corpus` no longer counts an agent's "Done —" in the Chat as somebody asking. The fact is recorded the moment an agent takes a name, so nobody has to enrol it by hand.
