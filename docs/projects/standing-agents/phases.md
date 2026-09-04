@@ -4,7 +4,7 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phases 1 and 2 closed (2026-09-03); phase 3 is next.**
+**Where we are: phases 1–3 closed (2026-09-03); phase 4 is next.**
 
 ## Phase 1 — One name, one machine, many canvases
 
@@ -71,6 +71,18 @@ the web learns.
 
 **Proof:** a web test for the three states, and the accessibility pass
 (a state told by colour alone is not told).
+
+**Status: CLOSED (2026-09-03).** The facepile now takes the `answerable`
+set — the same connection-bound set the agent tray reads, so the two
+cannot disagree — and gives each answerable agent a face in the third
+state: dimmed, ringed in the live wash, with a status that says "standing
+by" in words, which is what the tooltip and the aria label carry. Phase
+2.5's stand-in, which gave the rc's own announcement session a face
+wearing the person, is gone: the person at the terminal is not standing
+by, their agents are. The announcement survives for the add-agent
+dialog's footer.
+
+**Trajectory.** None. Phase 4 is unchanged.
 
 ## Phase 4 — `isocan history <actor>`
 

@@ -109,6 +109,14 @@ export function facesFor(
   sessions: PresenceSession[],
   unreadBy: Map<string, { actor: Actor; count: number }>,
   self: Actor,
+  /**
+   * The agents that could be woken right now (standing agents, phase 3):
+   * enrolled on this canvas AND an rc holding a connection for them — the
+   * `answerable` set the roster derives, never a record alone. These are the
+   * faces the third state was asked for: an agent registered for a canvas
+   * it has never opened is neither present nor absent.
+   */
+  answerable: Actor[] = [],
 ): Face[] {
   const faces: Face[] = [];
   const seen = new Set<string>();
@@ -138,26 +146,34 @@ export function facesFor(
     });
   }
   /**
-   * Then whoever is only STANDING BY — a parked rc and no session of their
-   * own. Ordered here on purpose: being reachable is a stronger fact than
-   * having left a comment and gone, and weaker than being at the canvas, so
-   * first-push-wins puts each actor in the truest state they qualify for.
+   * Then whoever is only STANDING BY — an agent an rc answers for, with no
+   * session of its own. Ordered here on purpose: being reachable is a
+   * stronger fact than having left a comment and gone, and weaker than being
+   * at the canvas, so first-push-wins puts each actor in the truest state
+   * they qualify for.
+   *
+   * This used to be the rc's own announcement session wearing the person's
+   * face — a stand-in from before `answerable` was connection-bound (phase
+   * 6). The person running an rc is not standing by; their agents are.
+   * The announcement still exists for the add-agent dialog's footer, and is
+   * skipped above so it never eats its person's real face.
    */
-  for (const session of sessions) {
-    if (session.kind !== "rc") continue;
+  for (const actor of answerable) {
     push({
-      actor: session.actor,
+      actor,
       // No session handle: there is nothing to follow, because nobody is
       // moving. Follow mode would have nowhere to fly to.
       sessionId: null,
-      label: session.label ?? session.actor.name,
+      label: actor.name,
       presence: "available",
       capability: null,
-      kind: "rc",
-      harness: session.harness,
-      status: "standing by — not here yet",
+      kind: null,
+      harness: null,
+      // Said in words as well as drawn: this is the tooltip and the aria
+      // label, so a state told by colour alone is also told to a reader.
+      status: "standing by — enrolled here, an rc is listening; a comment wakes it",
       cursor: null,
-      unread: unreadBy.get(session.actor.id)?.count ?? 0,
+      unread: unreadBy.get(actor.id)?.count ?? 0,
       self: false,
     });
   }
