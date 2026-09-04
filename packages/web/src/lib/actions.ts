@@ -189,6 +189,18 @@ export const ACTIONS: readonly Action[] = [
     run: (ctx) => ctx.navigate("/lens"),
   },
   {
+    id: "switch-canvas",
+    name: "Switch canvas…",
+    hint: "the ones you were on lately first; type to find any",
+    keys: "⌘O",
+    group: "Open",
+    available: onCanvas,
+    /* The palette handles this one itself — it flips the window to the
+       switcher rather than closing it — so `run` is what a caller OUTSIDE the
+       palette gets: the same window, opened on that face. */
+    run: () => useUiStore.getState().setPaletteOpen("canvases"),
+  },
+  {
     id: "open-canvases",
     name: "All canvases",
     hint: "back to the home screen",

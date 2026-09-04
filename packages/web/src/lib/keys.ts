@@ -64,8 +64,10 @@ export function hasTextSelection(selection?: { isCollapsed?: boolean; toString()
  * canvas any more". So while a cover is up, the page's key handler asks this
  * FIRST and drops whatever does not cross.
  *
- * Only ⌘K crosses — the lane to your emissary is deliberately open from
- * anywhere. Esc is not decided here: a cover owns its own way home, bound in
+ * Only ⌘K and ⌘O cross — the launcher, and the switcher that is its second
+ * face, are deliberately open from anywhere: leaving for another canvas is
+ * the one act that makes sense whatever is covering this one, and it acts on
+ * nothing here. Esc is not decided here: a cover owns its own way home, bound in
  * capture phase so it answers before the canvas could. ⌘-arrows are the same
  * shape — full screen answers them itself (the next screen that way, still
  * full screen), in capture, so they never reach this gate. Everything else —
@@ -81,5 +83,6 @@ interface CoverKey {
 }
 
 export function crossesCover(e: CoverKey): boolean {
-  return Boolean(e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
+  const key = e.key.toLowerCase();
+  return Boolean(e.metaKey || e.ctrlKey) && (key === "k" || key === "o");
 }

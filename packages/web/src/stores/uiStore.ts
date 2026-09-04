@@ -9,6 +9,9 @@ import type { Viewport } from "../lib/viewport.ts";
 /** The pointer tools on the right rail. */
 export type Tool = "select" | "hand" | "comment" | "zoom" | "pen" | "text";
 
+/** The two faces of the ⌘K window — see `paletteOpen`. */
+export type PaletteMode = "commands" | "canvases";
+
 export interface DragState {
   /** Every item riding this gesture — the whole selection for a group drag. */
   itemIds: string[];
@@ -178,8 +181,21 @@ interface UiStore {
    * composer once it has taken it, so it cannot re-apply on the next render.
    */
   pendingChat: string | null;
-  /** The ⌘K launcher. */
-  paletteOpen: boolean;
+  /**
+   * The ⌘K launcher, and which face it is wearing: `commands` is the list of
+   * things to do, `canvases` is the switcher — the same window, so ⌘K's
+   * "Switch canvas…" row flips it rather than opening a second one over it.
+   * `null` is closed.
+   */
+  paletteOpen: PaletteMode | null;
+  /**
+   * The beat between choosing another canvas and standing on it: `out` while
+   * this one recedes, `in` while the next one arrives. Set by
+   * `lib/canvasswitch.ts`, worn by the canvas surface as a class, and null
+   * the rest of the time — so a navigation that is not a switch (Back, a
+   * typed address) plays nothing.
+   */
+  switching: "out" | "in" | null;
   /** The history scrubber along the bottom. Whether it is OPEN lives here;
    * where its playhead is standing lives in `canvasStore.past`, because that
    * is canvas state and every reader of the canvas has to see it. */
@@ -252,7 +268,8 @@ interface UiStore {
   setMarksOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
   setPendingChat: (text: string | null) => void;
-  setPaletteOpen: (open: boolean) => void;
+  setPaletteOpen: (open: PaletteMode | null) => void;
+  setSwitching: (phase: "out" | "in" | null) => void;
   setPeeked: (itemId: string | null) => void;
   setHoveredItem: (itemId: string | null) => void;
   setNewsOpen: (open: boolean) => void;
@@ -510,7 +527,8 @@ export const useUiStore = create<UiStore>((set) => {
     marksOpen: false,
     historyOpen: false,
     pendingChat: null,
-    paletteOpen: false,
+    paletteOpen: null,
+    switching: null,
     peekedItemId: null,
     hoveredItemId: null,
     newsOpen: false,
@@ -590,6 +608,7 @@ export const useUiStore = create<UiStore>((set) => {
     setHistoryOpen: (historyOpen) => set({ historyOpen }),
     setPendingChat: (pendingChat) => set({ pendingChat }),
     setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+    setSwitching: (switching) => set({ switching }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
     setHoveredItem: (hoveredItemId) => set({ hoveredItemId }),
     setNewsOpen: (newsOpen) => set({ newsOpen }),

@@ -48,6 +48,12 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["⌘0", "0", "⇧1"], does: "Fit everything", group: "Moving around" },
   { keys: ["W"], does: "Workbench — the agent room", group: "Moving around", note: "Who is here to work and what each is doing, the main thread beside them, and one item on a stage. A single selection comes along as the stage's focus; Esc steps back out" },
   { keys: ["⇧0"], does: "Actual size (100%)", group: "Moving around" },
+  {
+    keys: ["⌘O"],
+    does: "Switch canvas",
+    group: "Moving around",
+    note: "The canvases you were on lately first, then the rest by activity; type a few letters to find one. Also ⌘K → Switch canvas…, or the ⌄ beside the canvas's name",
+  },
   { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it. In full screen the next item opens full screen too: a row of screens is a slideshow" },
   { keys: ["←", "→", "↑", "↓"], does: "Flip through the slides", group: "Moving around", note: "Full screen only. Items marked 🎬 (right-click → Make this a slide) are the deck, in reading order; with none marked, every item is. Page Up/Down flip too, so a presenter's clicker works" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },
@@ -85,7 +91,12 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["Draw over an item"], does: "Annotate it", note: "The mark travels with what it marks", group: "Ink" },
 
   // ---- Talking ----
-  { keys: ["⌘K"], does: "Message your emissary from anywhere", group: "Talking" },
+  {
+    keys: ["⌘K"],
+    does: "Open the launcher: fit, arm a tool, open a panel, switch canvas, or ask an agent",
+    group: "Talking",
+    note: "Type a few letters and press Enter. A slash command from here opens the Chat with it typed, ready for the rest",
+  },
   {
     keys: ["⌘J"],
     does: "Open or close the Chat",

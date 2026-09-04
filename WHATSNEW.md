@@ -18,6 +18,7 @@ second week.
 
 ## 4 September 2026
 
+- Switch canvas without going home. ⌘O opens a list of the canvases you were on lately, most recent first, then the rest by activity; type a few letters — "lkh" is enough for "Lake House" — and press Enter. The same list is behind ⌘K's "Switch canvas…" row and the ⌄ beside the canvas's name in the bar, and typing a canvas's name into ⌘K itself shows the matches under the commands. The canvas you leave recedes and the one you chose comes forward in its place; the bar and the panels stay where they were. The list works offline too, from what this browser remembers.
 - One Add. The rail's three add buttons — files, a live site, a canvas — and the Google Doc that hid inside the site one are one button now. Its popover has one field that reads what you give it: paste a doc's address and it becomes a document, a canvas's address or name and it becomes a card, any other address and it becomes a site, or type to search your canvases. A line under the field says what Enter will do; four rows — Files, Site, Google Doc, Canvas — narrow it when you would rather choose first. ⌘K's "Add…" opens the same popover. From a terminal, `isocan add <thing>` reads a path, an address, a doc or a canvas the same way, with `--as` to say which you meant; `browse`, `gdoc add` and `canvas place` still work.
 
 ## 3 September 2026

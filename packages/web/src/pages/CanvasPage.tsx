@@ -77,6 +77,7 @@ import { SprintChip } from "../components/SprintChip.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { HelpPanel } from "../components/HelpPanel.tsx";
 import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
+import { recordVisit } from "../lib/recents.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { fitToContent } from "../lib/fititem.ts";
 import { useCanvasHome } from "../lib/homes.ts";
@@ -184,6 +185,16 @@ function CanvasSurface({
   // The canvas's own title, for the tab. Subscribed separately from the
   // contents so a rename repaints the tab and an item move does not.
   const canvasTitle = useCanvasStore((s) => s.project?.title ?? null);
+  /**
+   * A canvas with a title is a canvas you were on: the switcher's "lately"
+   * list is written here, once per arrival, with the title so the list can
+   * paint before — or without — the daemon's answer. A rename while you stand
+   * here rewrites the row, which is what keeps the offline list truthful.
+   */
+  useEffect(() => {
+    if (canvasId && canvasTitle !== null) recordVisit({ id: canvasId, title: canvasTitle });
+  }, [canvasId, canvasTitle]);
+  const switching = useUiStore((s) => s.switching);
   const connection = useCanvasStore((s) => s.connection);
   const capability = useCanvasStore((s) => s.capability);
   const canEdit = useCanEdit();
@@ -511,7 +522,22 @@ function CanvasSurface({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         const ui = useUiStore.getState();
-        ui.setPaletteOpen(!ui.paletteOpen);
+        ui.setPaletteOpen(ui.paletteOpen ? null : "commands");
+        return;
+      }
+      /**
+       * **⌘O is the launcher's other face: the switcher.** The same window
+       * ⌘K opens, on the list of canvases — yours lately first — because
+       * "go to the canvas I was just on" is the one trip that deserves a
+       * key of its own rather than a row to find. Pressed on the switcher it
+       * closes it, like ⌘K on the commands; pressed on the commands it flips
+       * them, so the two keys are two doors to one place rather than two
+       * places.
+       */
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        const ui = useUiStore.getState();
+        ui.setPaletteOpen(ui.paletteOpen === "canvases" ? null : "canvases");
         return;
       }
       /**
@@ -846,7 +872,14 @@ function CanvasSurface({
           `visibility` preserves layout and the stores keep replaying, so Esc
           lands at the zoom you left without the covered surface spending
           frames nobody can see. */}
-      <div style={{ visibility: itemId || onWorkbench ? "hidden" : "visible" }}>
+      {/* `switching-out` / `switching-in` while a switch is under way — the
+          surface recedes and the next canvas arrives in its place, and the
+          chrome around it stays put because it is the same chrome
+          (`lib/canvasswitch.ts`). */}
+      <div
+        className={`canvas-surface${switching ? ` switching-${switching}` : ""}`}
+        style={{ visibility: itemId || onWorkbench ? "hidden" : "visible" }}
+      >
         <CanvasViewport canvasId={canvasId} actor={actor} />
       </div>
       <Toolbar actor={actor} onIdentity={onIdentity} />
@@ -886,7 +919,9 @@ function CanvasSurface({
           <CommandPalette
             canvasId={canvasId}
             actor={actor}
-            onClose={() => setPaletteOpen(false)}
+            mode={paletteOpen}
+            onMode={setPaletteOpen}
+            onClose={() => setPaletteOpen(null)}
           />
         </Suspense>
       )}

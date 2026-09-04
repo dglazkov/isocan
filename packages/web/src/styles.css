@@ -5225,6 +5225,58 @@ button.mt-card:hover { border-color: var(--accent); }
 .palette-none { margin: 0; padding: 12px 10px; color: var(--ink-soft); font-size: 13px; }
 
 /**
+ * **The switcher: the launcher's second face.**
+ *
+ * Same window, same rows — the only new furniture is the lit letters, the
+ * age column, and a foot that says how to get back. A title is allowed to
+ * shrink here where an action's name was not: an action's name IS the row,
+ * and a canvas's title can be forty characters somebody typed.
+ */
+.palette-canvas-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-canvas-title mark {
+  background: transparent; color: var(--accent-text); font-weight: 700;
+  text-decoration: underline; text-decoration-color: var(--accent);
+  text-underline-offset: 2px;
+}
+.palette-when { margin-left: auto; flex: none; color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
+.palette-foot {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 14px; border-top: 1px solid var(--line-soft);
+  color: var(--ink-soft); font-size: 11px;
+}
+/* The caret beside the canvas's name: quiet until pointed at, like the name. */
+.canvas-name .canvas-switch {
+  padding: 4px 3px; margin-right: 6px; border-color: transparent;
+  background: transparent; color: var(--ink-soft);
+}
+.canvas-name .canvas-switch:hover:enabled { background: var(--chip); border-color: var(--chip-line); color: var(--ink); }
+.canvas-name .canvas-switch:disabled { visibility: hidden; }
+
+/**
+ * **Switching, as a move rather than a cut** (`lib/canvasswitch.ts`).
+ *
+ * The surface you are leaving recedes — a touch smaller, gone — and the one
+ * you chose comes forward from a touch larger. The durations are the same
+ * numbers the switch helper waits for; change one and change the other. The
+ * bar and the rail are outside `.canvas-surface` on purpose: they are the
+ * same chrome on both canvases, and chrome that lurched would say the app
+ * reloaded.
+ */
+.canvas-surface { position: absolute; inset: 0; transform-origin: 50% 50%; }
+.canvas-surface.switching-out { animation: switch-out 140ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+.canvas-surface.switching-in { animation: switch-in 220ms cubic-bezier(0, 0, 0.2, 1) both; }
+@keyframes switch-out {
+  to { opacity: 0; transform: scale(0.96); }
+}
+@keyframes switch-in {
+  from { opacity: 0; transform: scale(1.03); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-surface.switching-out, .canvas-surface.switching-in { animation: none; }
+}
+
+/**
  * **The card's peek** — what happened here before the last thing.
  *
  * Inside the card rather than floating over it: a popover would need placing
