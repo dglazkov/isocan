@@ -6,9 +6,9 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**16 built · 30 still open** — of which 21 partly
+**16 built · 31 still open** — of which 21 partly
 built, 9 designed, 0 blocked, and
-**0 with no verdict recorded at all**, which is the number worth
+**1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
@@ -55,6 +55,12 @@ and the done column should not be flattered by either.
 | research | [Roles: a ladder, not a matrix](docs/research/2026-09-01-roles.md) | 2026-09-01 | four rungs on one ladder — Owner, Editor, Canvas Viewer, Presentation Viewer; today's `view` already IS the presentation rung, so the work is one new rung in the middle and one decision about Owner · see multiuser |
 | research | [Sheepdog](docs/research/2026-09-04-sheepdog.md) | 2026-09-04 | designed 4 Sep — a pet agent a person owns, on every canvas they can reach by default, that listens to its owner, to named people, or to everyone, with one switch for spend; four ways to home it in the cloud weighed, a kennel record and a wake signal recommended, in four stages. Nothing built · see standing-agents, on-demand, agent-custody, multi-identity |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
+
+## No verdict recorded <sub>1</sub>
+
+| | What | Since | |
+| --- | --- | --- | --- |
+| research | [Modules: adding a kind of thing, and taking it away again](docs/research/2026-09-04-modules.md) | 2026-09-04 | the closed registries are counted; recommends internal modules first, Mermaid as the first node type, runtime loading third, sandboxes last · see extensions, workbench, iso-api, mindmap, atlas |
 
 ## Built <sub>16</sub>
 
