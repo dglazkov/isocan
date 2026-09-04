@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 see: evals
-note: stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stage 3's twenty golden tasks are in `evals/golden/v1/`, weighted by that distribution and self-testing in both directions. Stage 5's harness `scripts/lift.mjs` measured `/sprint` (same result, a third of the cost) and `isocan-collab` (same result, fewer turns) on 3 Sep. Stage 4 open; the converge lane next
+note: stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stage 3's twenty golden tasks are in `evals/golden/v1/`, weighted by that distribution and self-testing in both directions. Stage 5's harness `scripts/lift.mjs` measured `/sprint` (same result, a third of the cost) and `isocan-collab` (same result, fewer turns) on 3 Sep. Stage 4's harness `scripts/calibrate.mjs` gave its first reading 4 Sep — 30 comparisons, 63% agreement, κ 0.26, and the finding that over half the pairs were an agent's choice, not a person's; the converge lane is built
 ---
 # Evals
 
@@ -335,6 +335,42 @@ number generator:
   it disagrees with somebody.
 - **Adversarial by default.** Ask the judge to refute rather than confirm.
   Default-to-fail on uncertainty.
+
+### Built, 4 September 2026 — `scripts/calibrate.mjs`, and the first reading
+
+The harness: `isocan evals pairs` per canvas, each kept version against each
+it beat at that moment, the two files fetched with `isocan get --rev` and
+shown to `claude -p` (Read only) as A and B in a shuffled order, asked to
+argue against each before picking and to cite; agreement reported with
+κ = 2·agreement − 1, because the shuffle makes chance a coin; a page in
+`docs/calibration/` either way, dry or not, and nothing written to any
+canvas. `test/calibrate.test.ts` pins the discipline.
+
+**The first reading** ([page](../../calibration/2026-09-04.md)): 27
+canvases, 12 pairs, 30 comparisons, **12/19 answered agreed (63%, κ 0.26
+± 0.23), $11.77**. A first reading, not a calibration — and what it taught
+matters more than the number. **Sixteen of the thirty comparisons were an
+agent's choice, not a person's**: *Admiral One* keeping its own earlier take
+while it worked. The harvest could not tell whose hand it was; now
+`PreferencePair` carries `chosenById`, `isocan evals pairs` asks the
+registry and says *(an agent)*, and the harness reads people only unless
+`--include-agents`. With a caveat the run also found: the registry knows
+an agent by the harness its claim came through, and an agent that drives
+the CLI as itself wears a person's harness — Admiral One reads as a person.
+`--exclude <actor>` names such a chooser on the page; a claim that says
+which kind of hand holds the CLI is the standing-agents project's to add.
+Several pairs were the same bytes, or differed by one line of quotation
+marks — a coin flip at forty cents; a pair whose versions share a blob hash
+is skipped now. Eleven comparisons got no answer, probably the largest
+screens against an eight-turn judge; the page's run column will say next
+time. Among a person's choices the judge answered, it agreed 7 of 9.
+
+What this leaves: the calibration set is smaller than the eleven pairs the
+1 September count suggested, because that count did not ask who chose.
+Nothing generates human pairs until people reach for `/variation` and keep
+one; the harness is ready for when they do, and a judge over screenshots
+rather than source is the next thing to try, for cost and for fidelity to
+what the person saw.
 
 ---
 

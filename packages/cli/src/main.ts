@@ -11297,7 +11297,14 @@ evals
       const archived = await ctx.client.getArchivedLog(p.id);
       const live = await ctx.client.getLog(p.id, 0);
       const snap = await ctx.client.snapshot(p.id);
-      const pairs = harvestPreferences(snap.canvas, [...archived, ...live]);
+      // Whose choice: the registry knows which actors are agents, and a
+      // pair an agent made keeping its own earlier take is not the human
+      // label Stage 4 is after — the calibration harness reads this field.
+      const kinds = await ctx.client.actorKinds().catch(() => ({}) as Record<string, string>);
+      const pairs = harvestPreferences(snap.canvas, [...archived, ...live]).map((pair) => ({
+        ...pair,
+        chosenByKind: kinds[pair.chosenById] === "agent" ? ("agent" as const) : ("person" as const),
+      }));
       if (ctx.json) return printJson(pairs);
       if (pairs.length === 0) {
         // The empty answer is the finding, so it says what would fill it
@@ -11312,7 +11319,7 @@ evals
       console.log(`${pairs.length} preference pairs`);
       for (const pair of pairs) {
         console.log(
-          `${pair.chosenAt.slice(0, 16).replace("T", " ")}  ${pair.chosenBy} kept ${pair.chosen} ` +
+          `${pair.chosenAt.slice(0, 16).replace("T", " ")}  ${pair.chosenBy}${pair.chosenByKind === "agent" ? " (an agent)" : ""} kept ${pair.chosen} ` +
             `over ${pair.against.length} on ${pair.title}`,
         );
       }
