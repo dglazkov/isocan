@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
-import { addFiles } from "../lib/upload.ts";
+import { addFailure, addFiles } from "../lib/upload.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
@@ -165,8 +165,10 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
     // read. An unhandled rejection in a console is not a person being told.
     // Not `chosen` — `createPlacement` finds a spot for the file; see it.
     const ids = await addFiles(canvasId, actor, files, createPlacement()).catch((err: unknown) => {
-      setNotice(err instanceof Error ? err.message : "That file could not be added.");
-      return [] as string[];
+      // "2 of 5 added — <why>", and the two are selected below (#51).
+      const { landed, notice } = addFailure(err, files.length, "That file could not be added.");
+      setNotice(notice);
+      return landed;
     });
     if (ids.length > 0) {
       useUiStore.getState().setSelection(ids);

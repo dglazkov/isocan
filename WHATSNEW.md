@@ -18,6 +18,8 @@ second week.
 
 ## 4 September 2026
 
+- An upload that fails says so, everywhere (#51). A file dropped onto an item as a new version, a link dragged in, and a drop of several files all end in a sentence in the bar rather than nothing. When the third of five fails, the bar says "2 of 5 added — third.png: <why>" and the two that landed are selected, not lost. A `mailto:` dragged onto the canvas is still not a failure and says nothing.
+- The `isocan rc` log has one shape (#82). Every line is a clock, the canvas when there is more than one, and `who · what` — `12:02:10  Bobert · summons from Dimitri, 1 entry — starting a session`, then its session, its permissions and its turn ended on lines that read as one story even when two agents interleave. The `rc:` prefix, which said nothing, is gone.
 - One Add. The rail's three add buttons — files, a live site, a canvas — and the Google Doc that hid inside the site one are one button now. Its popover has one field that reads what you give it: paste a doc's address and it becomes a document, a canvas's address or name and it becomes a card, any other address and it becomes a site, or type to search your canvases. A line under the field says what Enter will do; four rows — Files, Site, Google Doc, Canvas — narrow it when you would rather choose first. ⌘K's "Add…" opens the same popover. From a terminal, `isocan add <thing>` reads a path, an address, a doc or a canvas the same way, with `--as` to say which you meant; `browse`, `gdoc add` and `canvas place` still work.
 
 ## 3 September 2026
