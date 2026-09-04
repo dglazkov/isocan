@@ -1,7 +1,7 @@
 ---
 status: partial
 since: 2026-08-29
-note: 4 of 5 witnesses diagnosed
+note: 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue
 ---
 # The flake family, and the first one caught in the act
 
@@ -894,4 +894,44 @@ That is a narrower question than this investigation has ever had, and it is
 the one to take next: **not why a SYN was dropped, but why a SYN that arrived
 was not completed.** The instrument reports everything needed to recognise it
 again.
+
+## The fix that does not need the mechanism, 3 Sep
+
+Every witness in this note has the same cost, whatever its cause: **a
+loopback connect held for ~7.8 seconds by the kernel's SYN retransmit
+ladder**, past every budget the suite has. Two ways to lose a SYN were
+demonstrated, one was killed, one is unconfirmed in situ, and a stranger
+third — arrived, not completed — is what the last witness left standing.
+The fix below is indifferent to all three, which is why it is the right
+first fix and not a dodge.
+
+`test/setup.ts`'s budget was checked between attempts, so a single slow
+attempt exceeded it, and the note said why it could not simply abort each
+attempt: an `AbortError` cannot tell a connect that never completed from a
+request already on the wire, and retrying the latter can mint a badge
+twice. **A connect deadline can tell.** undici's
+`Agent({ connect: { timeout } })` bounds the TCP connect alone and fails it
+with `UND_ERR_CONNECT_TIMEOUT`, which by construction means no request was
+written — the same guarantee `syscall === "connect"` gave. Node's global
+fetch takes no dispatcher we can build from outside its bundled undici, so
+the suite's fetch is the npm undici's (same major), with a 1.2 s connect
+deadline and the 3 s budget now real: three attempts fit inside it, and the
+second attempt's SYN — sent after the queue has drained, or the retransmit
+has been answered — lands.
+
+**Proved the way the mechanism was.** `test/connect-deadline.test.ts`
+spawns a listener with a backlog of one, STOPS it, fills its queue, and
+asks the suite's fetch for the door: it gives up in **3.6 s** with "gave up
+after … and 3 attempts (budget 3000ms)" and `UND_ERR_CONNECT_TIMEOUT` in the
+sentence, where the same request used to sit for 7.8 s and report one
+attempt. The instrument's own lines — who is listening, the queue depths —
+still follow, so a real occurrence is still evidence.
+
+**What this does and does not claim.** It does not explain the seventh
+witness; the narrower question above stands. It changes what a lost SYN
+costs the suite — from a failed test to a retried connect — and it keeps
+the retry safe by the same rule as before. If the loaded-runner failures
+stop, that is the eight-second stall gone; if a witness still fails inside
+a 3 s budget with three attempts, it is a listener that would not answer
+three SYNs in a row, and that is a different animal from any in this note.
 
