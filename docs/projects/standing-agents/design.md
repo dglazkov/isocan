@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-01
 see: standing-agents, on-demand, agent-custody
-note: phases 1–2 built — one name on one machine stands on many canvases (1 Sep), and on 3 Sep `isocan rc --all` parks one process on every canvas the machine's enrolments name, with the ceiling, the cycle guard and the session handle per agent across them; the facepile shows an answerable agent as standing by, in words as well as a ring. `isocan history` is not built.
+note: phases 1–2 built — one name on one machine stands on many canvases (1 Sep), and on 3 Sep `isocan rc --all` parks one process on every canvas the machine's enrolments name, with the ceiling, the cycle guard and the session handle per agent across them; the facepile shows an answerable agent as standing by, in words as well as a ring; `isocan history <actor>` leads with where they stand — a row per canvas, the strongest true state, replies against acts. All four phases closed 3 Sep; the actor credential for a second machine is the piece deliberately left
 ---
 # Standing agents
 
@@ -99,7 +99,7 @@ Why it waits: the bare rc action is the one place the wake lives, the
 refactor is mechanical but wide, and it should be walked against a real
 two-canvas day rather than a fixture.
 
-## Mechanism 4 — `available` *(not built)*
+## Mechanism 4 — `available` *(built 3 Sep 2026 — phase 3)*
 
 The roster state three notes reached for independently. `isocan who`
 already tells `answerable` from `running` from `enrolled` (on-demand
@@ -109,12 +109,15 @@ treating an answerable agent as a third thing that looks different from
 like `here` makes presence dishonest, and presence being honest is one of
 the few things this product has that others do not.
 
-## Mechanism 5 — `isocan history <actor>` *(not built)*
+## Mechanism 5 — `isocan history <actor>` *(built 3 Sep 2026 — phase 4)*
 
 The cross-canvas fold over what is already in the logs; the research's
 first recommendation, and still worth building — it is what tells you
 whether standing agents are earning their keep. No new state: a second
-copy of the history would go stale in one place.
+copy of the history would go stale in one place. Built as `lensStanding`
+in core: a row per canvas where the actor is enrolled, acted, or is, with
+the strongest true state and replies against acts; `isocan history
+<actor>` leads with it, the lens page shows it for a subject.
 
 ## What would make this fail
 

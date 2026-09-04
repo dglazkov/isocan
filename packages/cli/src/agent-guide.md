@@ -532,7 +532,9 @@ canvas: what somebody has been doing across every canvas here, newest first.
 
 ```sh
 isocan history            # everyone
-isocan history Kenny -n 8 # one agent, across all their canvases
+isocan history Kenny -n 8 # one agent, across all their canvases — led by where they stand:
+                          # a row per canvas (here / standing by / enrolled, nobody listening),
+                          # acts, replies, and when the last was
 ```
 
 It ends with the shape of the week — `8 of 286, across 9 canvases` — which is
