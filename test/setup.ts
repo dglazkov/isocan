@@ -1,4 +1,5 @@
 import { monitorEventLoopDelay } from "node:perf_hooks";
+import { Agent, fetch as undiciFetch } from "undici";
 import { afterAll, afterEach, beforeEach } from "vitest";
 
 /**
@@ -379,7 +380,6 @@ async function describeListener(url: string): Promise<string> {
   });
 }
 
-const realFetch = globalThis.fetch;
 /**
  * Bounded by the CLOCK, not by a number of attempts — and that distinction was
  * paid for. The first version retried four times, which is fine against
@@ -388,30 +388,40 @@ const realFetch = globalThis.fetch;
  * failure into a `beforeEach` that blew the 30s hook limit. The retry made
  * the symptom worse while fixing the cause.
  *
- * A budget cannot do that — but read what it actually promises, because the
- * sentence that used to be here promised more than the code delivers.
+ * **The budget used to be checked only BETWEEN attempts, so one slow attempt
+ * could and did exceed it.** Witnessed 29 Aug: `connect ETIMEDOUT 127.0.0.1`
+ * on a POST to the door, "gave up after 7803ms and 1 attempt (budget
+ * 3000ms)". The kernel's SYN retransmit ladder is what set that 7.8 seconds,
+ * and nothing in the budget could shorten a single attempt.
  *
- * **The budget is checked BETWEEN attempts, so one slow attempt can and does
- * exceed it.** Witnessed 29 Aug: `connect ETIMEDOUT 127.0.0.1` on a POST to
- * the door, "gave up after 7803ms and 1 attempt (budget 3000ms)". The budget
- * stopped the retry storm, which is what it was for; it never bounded a
- * single attempt, and this comment claimed it did.
+ * **Why it was not fixed by aborting each attempt, and what fixes it
+ * instead.** An `AbortSignal.timeout` would have broken the rule directly
+ * below it: a retry is safe here ONLY when nothing reached the server, and an
+ * `AbortError` carries no syscall — it cannot tell a connect that never
+ * completed from a request already on the wire. Retrying on that would let a
+ * POST that mints a badge mint two.
  *
- * **Why it is not fixed by aborting each attempt at the budget.** An
- * `AbortSignal.timeout` would make the number honest and would break the rule
- * directly above it: a retry is safe here ONLY because `syscall === "connect"`
- * proves no bytes reached the server, and an `AbortError` carries no syscall —
- * it cannot distinguish a connect that never completed from a request already
- * on the wire. Retrying on that would let a POST that mints a badge mint two.
- * Trading a flake for a possible double write is the wrong direction in a
- * suite that exists to catch double writes.
+ * A CONNECT deadline can. undici's `Agent({ connect: { timeout } })` bounds
+ * the TCP connect alone and fails it with `UND_ERR_CONNECT_TIMEOUT` — an
+ * error that, by construction, means no request was ever written — so an
+ * attempt whose SYN went nowhere costs `CONNECT_ATTEMPT_MS` instead of the
+ * kernel's eight seconds, and the next attempt's SYN, sent into a queue that
+ * has by then drained, lands. The budget is now real: three attempts fit
+ * inside it. Node's global fetch takes no dispatcher we can construct from
+ * outside its bundled undici, so the suite's fetch is the npm undici's, the
+ * same code at the same major.
  *
- * So the number stays advisory and the message says the truth: how long it
- * really took, and how many attempts it really made. See
- * `docs/research/2026-08-29-the-flake-family.md` — a loopback connect that
- * takes 7.8 seconds is not an application bug at all, and that is the finding.
+ * The message still says the truth — how long it really took, how many
+ * attempts it really made, and what was listening. See
+ * `docs/research/2026-08-29-the-flake-family.md`: a loopback connect that
+ * takes 7.8 seconds is not an application bug at all, and this is the fix
+ * that does not need to know which of the two ways the SYN was lost.
  */
 const CONNECT_BUDGET_MS = 3000;
+const CONNECT_ATTEMPT_MS = 1200;
+const connectBounded = new Agent({ connect: { timeout: CONNECT_ATTEMPT_MS } });
+const realFetch: typeof fetch = (input, init) =>
+  undiciFetch(input as Parameters<typeof undiciFetch>[0], { ...(init as Parameters<typeof undiciFetch>[1]), dispatcher: connectBounded }) as unknown as Promise<Response>;
 globalThis.fetch = async function retryingFetch(input, init) {
   const started = Date.now();
   for (let attempt = 0; ; attempt++) {
@@ -420,8 +430,11 @@ globalThis.fetch = async function retryingFetch(input, init) {
     } catch (err) {
       const cause = (err as { cause?: { syscall?: string; code?: string } }).cause;
       const neverLeft =
-        cause?.syscall === "connect" &&
-        (cause.code === "ETIMEDOUT" || cause.code === "ECONNREFUSED" || cause.code === "ECONNRESET");
+        // The connect deadline fired: undici's own word that no request was
+        // written. The same guarantee `syscall === "connect"` gives below.
+        cause?.code === "UND_ERR_CONNECT_TIMEOUT" ||
+        (cause?.syscall === "connect" &&
+          (cause.code === "ETIMEDOUT" || cause.code === "ECONNREFUSED" || cause.code === "ECONNRESET"));
       /**
        * **When it gives up, it says what it gave up ON.**
        *
@@ -475,7 +488,7 @@ globalThis.fetch = async function retryingFetch(input, init) {
            * unmeasured is the depth at the instant of a real failure; see
            * `queueDepth` for why a low reading is not evidence against.
            */
-          (cause?.syscall === "connect" && cause.code === "ETIMEDOUT"
+          ((cause?.syscall === "connect" && cause.code === "ETIMEDOUT") || cause?.code === "UND_ERR_CONNECT_TIMEOUT"
             ? await describeListener(where)
             : "");
         throw err;
