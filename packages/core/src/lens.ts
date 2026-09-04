@@ -327,6 +327,83 @@ export function lensShape(acts: readonly LensAct[]): {
 }
 
 /**
+ * **Every canvas an actor has stood on, and what they did there** — standing
+ * agents phase 4 (`docs/projects/standing-agents/phases.md`). The fold that
+ * says whether a standing agent is earning its keep, from what the logs and
+ * rosters already hold. No new state.
+ *
+ * A row per canvas where any of three things is true: they are enrolled
+ * there (a standing record), they did something there (an act in the log),
+ * or they are there now (presence). `state` is the strongest true fact, in
+ * the roster's own order — `here` outranks `answerable` (an rc holds them)
+ * outranks `enrolled` (a record, nobody listening) — and null for a canvas
+ * they only acted on. `replies` is the half of "earning their keep" a count
+ * can carry: comments and replies they wrote there, against `acts`, which
+ * is everything they did.
+ */
+export interface StandingRow {
+  canvasId: string;
+  canvasTitle: string;
+  enrolled: boolean;
+  state: "here" | "answerable" | "enrolled" | null;
+  acts: number;
+  replies: number;
+  /** ISO of the newest act there, or null for a standing with no acts yet. */
+  lastAct: string | null;
+}
+
+export function lensStanding(
+  sources: readonly LensSource[],
+  acts: readonly LensAct[],
+  live: LensLive,
+  /** Canvas ids where an rc currently answers for this actor. */
+  answerable: ReadonlySet<string>,
+  actorId: string,
+): StandingRow[] {
+  const rows = new Map<string, StandingRow>();
+  const rowFor = (canvasId: string, canvasTitle: string): StandingRow => {
+    let row = rows.get(canvasId);
+    if (!row) {
+      row = { canvasId, canvasTitle, enrolled: false, state: null, acts: 0, replies: 0, lastAct: null };
+      rows.set(canvasId, row);
+    }
+    return row;
+  };
+  for (const source of sources) {
+    if (source.canvas.agents?.[actorId]) rowFor(source.canvasId, source.canvasTitle).enrolled = true;
+  }
+  for (const act of acts) {
+    const row = rowFor(act.canvasId, act.canvasTitle);
+    row.acts += 1;
+    if (act.op === "thread.create" || act.op === "thread.reply") row.replies += 1;
+    if (row.lastAct === null || act.ts > row.lastAct) row.lastAct = act.ts;
+  }
+  const titleOf = (canvasId: string) => sources.find((s) => s.canvasId === canvasId)?.canvasTitle ?? canvasId;
+  for (const canvasId of live.here) rowFor(canvasId, titleOf(canvasId)).state = "here";
+  for (const row of rows.values()) {
+    if (row.state === "here") continue;
+    if (answerable.has(row.canvasId) || live.available.has(row.canvasId)) row.state = "answerable";
+    else if (row.enrolled) row.state = "enrolled";
+  }
+  const rank = { here: 0, answerable: 1, enrolled: 2 } as const;
+  return [...rows.values()].sort(
+    (a, b) =>
+      (a.state ? rank[a.state] : 3) - (b.state ? rank[b.state] : 3) ||
+      (b.lastAct ?? "").localeCompare(a.lastAct ?? "") ||
+      a.canvasTitle.localeCompare(b.canvasTitle),
+  );
+}
+
+/** One sentence for a standing row's state, or null for a canvas they only
+ *  acted on — never "offline", for `lensLiveWords`'s reason. */
+export function standingWords(row: StandingRow): string | null {
+  if (row.state === "here") return "here now";
+  if (row.state === "answerable") return "standing by — an rc answers here";
+  if (row.state === "enrolled") return "enrolled — nobody listening";
+  return null;
+}
+
+/**
  * **Where somebody is right now** — the canvases they are on, and whether
  * they are there or merely reachable there.
  *
@@ -343,7 +420,7 @@ export function lensShape(acts: readonly LensAct[]): {
  * possible. A canvas somebody is genuinely on outranks a parked process on the
  * same canvas — being there is the stronger fact.
  */
-interface LensLive {
+export interface LensLive {
   /** Canvas ids where this actor is actually present. */
   here: ReadonlySet<string>;
   /** Canvas ids where an rc is parked for them, and they are not present. */

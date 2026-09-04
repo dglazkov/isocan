@@ -21,6 +21,8 @@ import {
   lensLiveWords,
   lensKinds,
   lensShape,
+  lensStanding,
+  standingWords,
   opWords,
   canvasPath,
   itemPath,
@@ -246,6 +248,17 @@ export function LensPage() {
     () => (sources && subject ? lensEntries(sources, subject.id) : []),
     [sources, subject],
   );
+  /* Where they STAND (standing agents, phase 4): the canvases they are
+     enrolled on, with the strongest true state. The rc's holds are not
+     polled per canvas here — presence already says "standing by" where an rc
+     is parked — so a standing with nobody listening reads as enrolled. */
+  const standing = useMemo(
+    () =>
+      sources && subject
+        ? lensStanding(sources, acts, live, new Set(), subject.id).filter((row) => row.enrolled)
+        : [],
+    [sources, subject, acts, live],
+  );
   /* Kinds are offered from what is ACTUALLY there — a chooser listing kinds
      nobody has made is a menu of dead ends. Counted before filtering, so
      choosing one does not empty the list you chose it from. */
@@ -295,6 +308,25 @@ export function LensPage() {
                   <Link className="lens-live-at" to={canvasPath(at.canvasId)}>
                     {titles.get(at.canvasId) ?? "a canvas"}
                   </Link>
+                </span>
+              ))}
+            </i>
+          )}
+          {/* Where they stand, as a record rather than a moment: every canvas
+              they are enrolled on, with what they did there — the fold
+              `isocan history <actor>` leads with. */}
+          {subject && standing.length > 0 && (
+            <i className="lens-standing">
+              stands on{" "}
+              {standing.map((row, i) => (
+                <span key={row.canvasId}>
+                  {i > 0 && ", "}
+                  <Link className="lens-live-at" to={canvasPath(row.canvasId)}>
+                    {row.canvasTitle}
+                  </Link>
+                  <span className="lens-standing-note">
+                    {" "}({standingWords(row)}{row.acts > 0 ? ` · ${row.acts} act${row.acts === 1 ? "" : "s"}, ${row.replies} ${row.replies === 1 ? "reply" : "replies"}` : " · nothing yet"})
+                  </span>
                 </span>
               ))}
             </i>

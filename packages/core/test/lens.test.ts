@@ -15,6 +15,8 @@ import {
   lensLiveList,
   lensLiveWords,
   lensShape,
+  lensStanding,
+  standingWords,
   type LensSource,
 } from "../src/lens.ts";
 
@@ -428,5 +430,82 @@ describe("naming where somebody is", () => {
 
   it("is empty when there is nothing to name", () => {
     expect(lensLiveList(lensLive([], "usr_ada"))).toEqual([]);
+  });
+});
+
+/**
+ * **Every canvas an actor has stood on, and what they did there** — standing
+ * agents phase 4. A row wherever they are enrolled, acted, or are; the
+ * strongest true state; replies against acts.
+ */
+describe("where somebody stands, and what they did there", () => {
+  const src = (id: string, title: string, enrolled: boolean): LensSource => ({
+    canvasId: id,
+    canvasTitle: title,
+    canvas: {
+      items: {},
+      threads: {},
+      trash: [],
+      agents: enrolled ? { usr_ada: { actor: ada } } : {},
+    },
+  });
+  const act = (canvasId: string, canvasTitle: string, op: string, ts: string) => ({ ts, canvasId, canvasTitle, actor: "Ada", op });
+  const none = { here: new Set<string>(), available: new Set<string>() };
+
+  it("makes a row for a standing with no acts, an act with no standing, and a presence with neither", () => {
+    const rows = lensStanding(
+      [src("c1", "Lake House", true), src("c2", "Archery", false), src("c3", "Sprint", false)],
+      [act("c2", "Archery", "item.add", "2026-09-01T10:00:00Z")],
+      { here: new Set(["c3"]), available: new Set() },
+      new Set(),
+      ada.id,
+    );
+    expect(rows.map((r) => [r.canvasId, r.enrolled, r.state, r.acts])).toEqual([
+      ["c3", false, "here", 0],
+      ["c1", true, "enrolled", 0],
+      ["c2", false, null, 1],
+    ]);
+  });
+
+  it("says answerable when an rc holds them there, here when they are there, and never both", () => {
+    const rows = lensStanding(
+      [src("c1", "A", true), src("c2", "B", true)],
+      [],
+      { here: new Set(["c2"]), available: new Set(["c1"]) },
+      new Set(["c2"]),
+      ada.id,
+    );
+    expect(rows.map((r) => [r.canvasId, r.state])).toEqual([
+      ["c2", "here"],
+      ["c1", "answerable"],
+    ]);
+    expect(rows.map(standingWords)).toEqual(["here now", "standing by — an rc answers here"]);
+  });
+
+  it("counts replies apart from acts, and keeps the newest act's time", () => {
+    const [row] = lensStanding(
+      [src("c1", "A", false)],
+      [
+        act("c1", "A", "thread.reply", "2026-09-02T10:00:00Z"),
+        act("c1", "A", "item.add", "2026-09-01T10:00:00Z"),
+        act("c1", "A", "thread.create", "2026-09-03T10:00:00Z"),
+      ],
+      none,
+      new Set(),
+      ada.id,
+    );
+    expect(row).toMatchObject({ acts: 3, replies: 2, lastAct: "2026-09-03T10:00:00Z", state: null });
+    expect(standingWords(row!)).toBeNull();
+  });
+
+  it("orders by the strongest state, then by the newest act", () => {
+    const rows = lensStanding(
+      [src("c1", "Old", true), src("c2", "New", true)],
+      [act("c1", "Old", "item.add", "2026-08-01T00:00:00Z"), act("c2", "New", "item.add", "2026-09-01T00:00:00Z")],
+      none,
+      new Set(),
+      ada.id,
+    );
+    expect(rows.map((r) => r.canvasId)).toEqual(["c2", "c1"]);
   });
 });

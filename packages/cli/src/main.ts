@@ -253,6 +253,8 @@ import {
   lensLiveWords,
   lensGroups,
   lensShape,
+  lensStanding,
+  standingWords,
   lensSubjects,
   lensSubjectLabels,
   filterLens,
@@ -10775,11 +10777,68 @@ program
         (actor) => actorNameIn(names, actor),
       );
       const shown = acts.slice(0, Number(opts.limit ?? 20));
-      if (ctx.json) return printJson({ total: acts.length, acts: shown });
-      if (acts.length === 0) {
+      /**
+       * **Where they stand** (standing agents, phase 4). When `who` names ONE
+       * actor, the acts are led by a row per canvas they are enrolled on,
+       * acted on, or are on right now — the strongest true state, what they
+       * did there, how much of it was talking, and when the last was. The
+       * fold is core's `lensStanding`, from the rosters, the logs and
+       * presence the daemon already holds; the rc's own holds say which
+       * standings are actually answerable. No new state.
+       */
+      const candidates = wanted
+        ? [...new Set(logs.flatMap((l) => l.entries.map((e) => e.envelope.actor)).map((a) => [a.id, actorNameIn(names, a)] as const))]
+            .filter(([id, name]) => name.toLowerCase().startsWith(wanted) || id === who)
+            .map(([id]) => id)
+        : [];
+      const rosters: LensSource[] = [];
+      for (const canvas of only) {
+        const snap = await ctx.client.snapshot(canvas.id).catch(() => null);
+        if (snap) rosters.push({ canvasId: canvas.id, canvasTitle: canvas.title, canvas: snap.canvas });
+      }
+      // An enrolled agent that has done nothing yet is still somebody with a
+      // standing, so the roster's names count as candidates too. One match
+      // is a subject; several is a prefix that needs more letters.
+      const ids = new Set(candidates);
+      if (wanted) {
+        for (const r of rosters) {
+          for (const row of Object.values(r.canvas.agents ?? {})) {
+            if (actorNameIn(names, row.actor).toLowerCase().startsWith(wanted) || row.actor.id === who) ids.add(row.actor.id);
+          }
+        }
+      }
+      const subjectId = ids.size === 1 ? [...ids][0]! : null;
+      let standing: ReturnType<typeof lensStanding> = [];
+      if (subjectId) {
+        const { where } = await ctx.client.presenceWhere().catch(() => ({ where: [] }));
+        const live = lensLive(where, subjectId);
+        const answerable = new Set<string>();
+        for (const r of rosters) {
+          if (!r.canvas.agents?.[subjectId]) continue;
+          const answering = await ctx.client.rcAnswering(r.canvasId).catch(() => null);
+          if (answering?.actorIds.includes(subjectId)) answerable.add(r.canvasId);
+        }
+        standing = lensStanding(rosters, acts, live, answerable, subjectId);
+      }
+      if (ctx.json) return printJson({ total: acts.length, acts: shown, ...(subjectId ? { actorId: subjectId, standing } : {}) });
+      if (acts.length === 0 && standing.length === 0) {
         return console.log(who ? `nothing here by "${who}"` : "nothing has happened yet");
       }
       const nowMs = Date.now();
+      if (standing.length > 0) {
+        console.log(`${actorNameIn(names, { id: subjectId!, name: subjectId! })} stands on ${standing.length} canvas${standing.length === 1 ? "" : "es"}:`);
+        printTable(
+          standing.map((row) => ({
+            canvas: truncate(row.canvasTitle, 28),
+            state: standingWords(row) ?? (row.acts > 0 ? "acted here, not enrolled" : "—"),
+            acts: String(row.acts),
+            replies: String(row.replies),
+            last: row.lastAct ? ago(row.lastAct, nowMs) || "just now" : "—",
+          })),
+        );
+        console.log("");
+      }
+      if (shown.length === 0) return;
       printTable(
         shown.map((a) => ({
           when: ago(a.ts, nowMs) || "just now",
