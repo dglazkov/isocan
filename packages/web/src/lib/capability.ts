@@ -113,7 +113,9 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
   {
     what: "undo and redo — the two buttons in the zoom bar",
     file: "components/ZoomControls.tsx",
-    gate: "{canEdit && (\n        <>\n          <button className=\"btn icon\" title=\"Undo (⌘Z)\"",
+    // The inner `!undoHidden` is chrome you can turn off — a person's own
+    // hiding, inside the reader's gate, never instead of it.
+    gate: "{canEdit && (\n        <>\n          {!undoHidden && (\n            <button\n              className=\"btn icon\"\n              title=\"Undo (⌘Z)\"",
   },
   {
     what: "the keyboard's writes — delete, paste, undo, nudge, the tool letters, ⇧C, ⇧F, F2",

@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**16 built · 30 still open** — of which 20 partly
-built, 10 designed, 0 blocked, and
+**16 built · 30 still open** — of which 21 partly
+built, 9 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -16,13 +16,14 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>20</sub>
+## Partly built <sub>21</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A canvas that watches its own repository](docs/research/2026-08-30-repo-admin-canvas.md) | 2026-08-30 | the read half is built, and both sources are watched — commits and the repo's own canvas; CI still cannot reach a canvas · see on-demand |
 | research | [An inbox for the person](docs/research/2026-08-29-the-inbox.md) | 2026-08-29 | step 1 built: isocan inbox |
 | research | [Attaching a directory without the CLI](docs/research/2026-08-26-attaching-a-directory.md) | 2026-08-29 | 1-3 built; the hosted case is not · see workbench |
+| research | [Chrome you can turn off](docs/research/2026-09-02-chrome-you-can-turn-off.md) | 2026-09-02 | designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Stages 1 and 4 built 4 Sep — the registry, the store field, the two controls asked for hidden by right-click and shown again under the identity menu, ⌘K "Show hidden controls", and the test that every entry names its other door; stages 2–3 not built · see ui-refresh |
 | research | [Component libraries, and what survives the trip to a canvas](docs/research/2026-08-28-component-libraries.md) | 2026-08-30 | `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not |
 | **project** | [context](docs/projects/context/design.md) | 2026-08-30 | stages 1 and 2 built; the MCP surface is not · see context |
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
@@ -41,13 +42,12 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open · see evals, personas |
 
-## Designed, not built <sub>10</sub>
+## Designed, not built <sub>9</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
-| research | [Chrome you can turn off](docs/research/2026-09-02-chrome-you-can-turn-off.md) | 2026-09-02 | designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Nothing built · see ui-refresh |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |

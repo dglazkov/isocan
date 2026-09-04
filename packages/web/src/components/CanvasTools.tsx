@@ -6,6 +6,7 @@ import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
 import { AddPopover } from "./AddPopover.tsx";
+import { hideMenu, useChromeHidden } from "../lib/chromemenu.tsx";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -135,6 +136,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
   const marksOpen = useUiStore((s) => s.marksOpen);
   const historyOpen = useUiStore((s) => s.historyOpen);
   const onHistory = useUiStore((s) => s.setHistoryOpen);
+  const historyHidden = useChromeHidden("rail.history");
   const hasMarks = useCanvasStore((s) => {
     const items = s.canvas?.items;
     return items
@@ -236,15 +238,20 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       {/* Beside Reactions, because both are ways of LOOKING at the canvas
           rather than adding to it — one asks what people marked, the other
           asks what it was. */}
-      <button
-        className={`tool-btn${historyOpen ? " active" : ""}`}
-        title="History — the canvas as it was"
-        aria-label="History"
-        aria-pressed={historyOpen}
-        onClick={() => onHistory(!historyOpen)}
-      >
-        <HistoryGlyph size={17} />
-      </button>
+      {/* Hideable (chrome you can turn off): right-click says how to get it
+          back — ⌘K "Open History" — before it goes. */}
+      {!historyHidden && (
+        <button
+          className={`tool-btn${historyOpen ? " active" : ""}`}
+          title="History — the canvas as it was"
+          aria-label="History"
+          aria-pressed={historyOpen}
+          onClick={() => onHistory(!historyOpen)}
+          onContextMenu={(e) => hideMenu(e, "rail.history")}
+        >
+          <HistoryGlyph size={17} />
+        </button>
+      )}
       {/* One door for everything brought onto the canvas that was not drawn
           here — files, a site, a Google Doc, a canvas. It was three buttons
           and a hidden fourth; the popover reads what it is given and says

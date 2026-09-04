@@ -184,6 +184,10 @@ interface UiStore {
    * where its playhead is standing lives in `canvasStore.past`, because that
    * is canvas state and every reader of the canvas has to see it. */
   historyOpen: boolean;
+  /** Controls this browser has hidden — ids from `lib/chrome.ts`. Local, per
+   *  browser, like the theme: taste, not a canvas fact. */
+  hiddenChrome: string[];
+  setChromeHidden: (id: string, hidden: boolean) => void;
   /** Item a panel row is pointing at right now: the canvas outlines it, so a
    * name in a list and a thing on the surface are visibly the same thing. */
   peekedItemId: string | null;
@@ -363,6 +367,28 @@ function readWbAgentsWidth(): number {
   }
 }
 
+const HIDDEN_CHROME_KEY = "isocan.hiddenChrome";
+
+/** The hidden controls, as a list of ids; anything unreadable is "nothing
+ *  hidden", which is the default a fresh browser has. */
+function readHiddenChrome(): string[] {
+  try {
+    const raw = localStorage.getItem(HIDDEN_CHROME_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((one): one is string => typeof one === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeHiddenChrome(ids: string[]): void {
+  try {
+    localStorage.setItem(HIDDEN_CHROME_KEY, JSON.stringify(ids));
+  } catch {
+    // Storage denied: the choice holds for this session and no longer.
+  }
+}
+
 function readFlag(key: string, fallback: boolean): boolean {
   try {
     const raw = localStorage.getItem(key);
@@ -509,6 +535,7 @@ export const useUiStore = create<UiStore>((set) => {
     followingActorId: null,
     marksOpen: false,
     historyOpen: false,
+    hiddenChrome: readHiddenChrome(),
     pendingChat: null,
     paletteOpen: false,
     peekedItemId: null,
@@ -588,6 +615,16 @@ export const useUiStore = create<UiStore>((set) => {
     setFollowingActor: (followingActorId) => set({ followingActorId }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
     setHistoryOpen: (historyOpen) => set({ historyOpen }),
+    setChromeHidden: (id, hidden) =>
+      set((s) => {
+        const hiddenChrome = hidden
+          ? s.hiddenChrome.includes(id)
+            ? s.hiddenChrome
+            : [...s.hiddenChrome, id]
+          : s.hiddenChrome.filter((one) => one !== id);
+        writeHiddenChrome(hiddenChrome);
+        return { hiddenChrome };
+      }),
     setPendingChat: (pendingChat) => set({ pendingChat }),
     setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
     setPeeked: (peekedItemId) => set({ peekedItemId }),
