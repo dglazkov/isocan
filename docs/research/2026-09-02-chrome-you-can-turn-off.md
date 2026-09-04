@@ -1,6 +1,7 @@
 ---
 status: designed
 since: 2026-09-02
+issue: 151
 see: ui-refresh
 note: designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Nothing built
 ---

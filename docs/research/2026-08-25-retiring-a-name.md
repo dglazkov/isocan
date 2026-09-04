@@ -1,6 +1,7 @@
 ---
 status: designed
 since: 2026-08-29
+issue: 140
 ---
 # Retiring a name
 

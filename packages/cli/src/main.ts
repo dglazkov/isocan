@@ -7258,6 +7258,7 @@ doc
       if (ctx.json) return printJson({ ...status, problems });
       console.log(`${status.status}${status.since ? ` since ${status.since}` : ""}`);
       if (status.note) console.log(`  ${status.note}`);
+      if (status.issue) console.log(`  followed in #${status.issue}`);
       if (status.blockedBy) console.log(`  blocked by ${status.blockedBy}`);
       if (status.supersededBy) console.log(`  superseded by ${status.supersededBy}`);
       if (status.see.length) console.log(`  see ${status.see.join(", ")}`);

@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-09-02
+issue: 152
 see: standing-agents, on-demand
 note: stages 1–3 built 2–3 Sep — the ↗ on anything with a source, `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `gdoc sync` stacking a version only where the doc changed, and on 3 Sep `gdoc auth`: a Drive access token on the machine for docs not shared by link, with sync asking Drive for modifiedTime first. Stage 4's live mode and stage 5's folder watch are designed and not built
 ---

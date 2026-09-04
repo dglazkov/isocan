@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-08-30
+issue: 148
 see: on-demand
 note: the read half is built, and both sources are watched — commits and the repo's own canvas; CI still cannot reach a canvas
 ---

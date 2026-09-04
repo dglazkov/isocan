@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-08-29
+issue: 136
 note: import landed; the round-trip did not
 ---
 # Design systems an agent writes, tokens a machine can read
