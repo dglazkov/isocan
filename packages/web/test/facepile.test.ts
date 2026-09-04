@@ -167,41 +167,47 @@ suite("a folded actor's comments are their person's own", () => {
  */
 suite("standing by is neither here nor away", () => {
   const parked = (actor: Actor) => ({ ...session(actor, "ses_rc", "cli"), kind: "rc" as const });
+  const sian: Actor = { id: "usr_sian", name: "Sian" };
 
-  it("gives a parked rc a face of its own", () => {
-    const [face] = facesFor([parked(nico)], noUnread, kenny).filter(
-      (f) => f.actor.id === nico.id,
-    );
+  it("gives an answerable agent a face of its own — and says so in words, not only in a ring", () => {
+    const [face] = facesFor([], noUnread, kenny, [sian]).filter((f) => f.actor.id === sian.id);
     expect(face?.presence).toBe("available");
-    expect(face?.status).toBe("standing by — not here yet");
+    // The status is what the tooltip and the aria label carry: a state told
+    // by colour alone is not told (phase 3's accessibility pass).
+    expect(face?.status).toMatch(/^standing by/);
+  });
+
+  it("does not wear the rc's own person as standing by — the rc runs; its agents stand by", () => {
+    /* Phase 2.5's stand-in gave the announcement session a face. Now that
+       `answerable` is connection-bound, the person at the terminal is not
+       "standing by" — the agents they answer for are. The announcement is
+       still skipped here so it never eats its person's real face. */
+    const faces = facesFor([parked(nico)], noUnread, kenny, [sian]);
+    expect(faces.find((f) => f.actor.id === nico.id)).toBeUndefined();
+    expect(faces.find((f) => f.actor.id === sian.id)?.presence).toBe("available");
   });
 
   it("offers nothing to follow, because nobody is moving", () => {
     /* A session handle here would put a Follow control on a face with no
        cursor: a button that flies you nowhere. */
-    const [face] = facesFor([parked(nico)], noUnread, kenny).filter(
-      (f) => f.actor.id === nico.id,
-    );
+    const [face] = facesFor([], noUnread, kenny, [sian]).filter((f) => f.actor.id === sian.id);
     expect(face?.sessionId).toBeNull();
     expect(face?.cursor).toBeNull();
   });
 
-  it("never eats the real face of somebody who is actually here", () => {
-    /* The reason rc was skipped outright before: first-push-wins. An actor
-       with both a live session and a parked rc is WORKING, and the weaker
-       fact must not claim the row. */
-    const faces = facesFor([parked(nico), session(nico, "ses_cli", "cli")], noUnread, kenny);
-    const theirs = faces.filter((f) => f.actor.id === nico.id);
+  it("never eats the real face of an agent that is actually here", () => {
+    /* First-push-wins. An agent with a live session mid-turn AND an rc
+       holding it is WORKING, and the weaker fact must not claim the row. */
+    const faces = facesFor([session(sian, "ses_cli", "cli")], noUnread, kenny, [sian]);
+    const theirs = faces.filter((f) => f.actor.id === sian.id);
     expect(theirs).toHaveLength(1);
     expect(theirs[0]!.presence).toBe("here");
   });
 
   it("outranks having left a comment and gone", () => {
     /* Reachable now is a stronger fact than was here once. */
-    const unread = new Map([["usr_nico", { actor: nico, count: 2 }]]);
-    const [face] = facesFor([parked(nico)], unread, kenny).filter(
-      (f) => f.actor.id === nico.id,
-    );
+    const unread = new Map([["usr_sian", { actor: sian, count: 2 }]]);
+    const [face] = facesFor([], unread, kenny, [sian]).filter((f) => f.actor.id === sian.id);
     expect(face?.presence).toBe("available");
     expect(face?.unread, "and it keeps what they left behind").toBe(2);
   });

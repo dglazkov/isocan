@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-01
 see: standing-agents, on-demand, agent-custody
-note: phases 1–2 built — one name on one machine stands on many canvases (1 Sep), and on 3 Sep `isocan rc --all` parks one process on every canvas the machine's enrolments name, with the ceiling, the cycle guard and the session handle per agent across them. `available` in the web roster and `isocan history` are not built.
+note: phases 1–2 built — one name on one machine stands on many canvases (1 Sep), and on 3 Sep `isocan rc --all` parks one process on every canvas the machine's enrolments name, with the ceiling, the cycle guard and the session handle per agent across them; the facepile shows an answerable agent as standing by, in words as well as a ring. `isocan history` is not built.
 ---
 # Standing agents
 
