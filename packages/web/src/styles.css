@@ -2823,6 +2823,26 @@ button.mt-card:hover { border-color: var(--accent); }
 .ctx-row.stale .ctx-name { color: var(--warn); }
 .ctx-why { font-size: 11.5px; color: var(--ink-muted); line-height: 1.45; }
 .ctx-fix { font-size: 11.5px; color: var(--accent-text); line-height: 1.45; }
+/* Layers (memory phases 0–1): a heading per source canvas. The first is
+   "This canvas"; the rest are inherited, and every borrowed piece wears a
+   `from` chip so provenance is on the line, not in a tooltip. */
+.ctx-layer + .ctx-layer { margin-top: 10px; }
+.ctx-heading {
+  margin: 0; padding: 6px 10px 4px; display: flex; align-items: baseline; gap: 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.ctx-heading-note { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink-soft); }
+.ctx-from {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
+  background: var(--accent-wash, var(--chip)); color: var(--accent-text); white-space: nowrap;
+}
+.ctx-row.overridden .ctx-name, .ctx-row.overridden .ctx-size { text-decoration: line-through; color: var(--ink-soft); }
+.add-inherit {
+  display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px;
+  font-size: 11.5px; color: var(--ink-muted); line-height: 1.4; cursor: pointer;
+}
+.add-inherit input { margin: 2px 0 0; }
 
 /* ---------- mind maps ----------
 
