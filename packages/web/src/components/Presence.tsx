@@ -11,6 +11,7 @@ import { describe, facesFor, unreadByAuthor, type Face } from "../lib/facepile.t
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
+import { useAnswerable } from "../lib/answerable.ts";
 
 /**
  * Who is on this canvas, top right — and, in the same cluster, who has said
@@ -47,13 +48,21 @@ export function Presence({ actor }: { actor: Actor }) {
   const joined = useCanvasStore((s) => s.actorJoins);
   const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
+  const canvasId = useCanvasStore((s) => s.canvasId);
+  // Who could be woken right now: enrolled AND held by a live rc — the same
+  // connection-bound set the agent tray reads, so the facepile and the tray
+  // cannot disagree about who is standing by.
+  const answerable = useAnswerable(canvasId);
   if (!canvas) return null;
 
   const pending = unreadThreads(canvas, seen, actor.id, joined);
   const unreadBy = unreadByAuthor(pending, seen, actor.id, joined);
+  const standing = Object.values(canvas.agents ?? {})
+    .filter((row) => answerable.has(row.actor.id))
+    .map((row) => row.actor);
   // One entry per PERSON, you included — see lib/facepile.ts for why that is
   // a rule and not a preference.
-  const faces = facesFor(sessions, unreadBy, actor);
+  const faces = facesFor(sessions, unreadBy, actor, standing);
 
   const shown = faces.length > MAX_FACES ? faces.slice(0, MAX_FACES - 1) : faces;
   const overflow = faces.length - shown.length;
