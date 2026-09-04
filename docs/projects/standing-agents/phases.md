@@ -4,7 +4,7 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phases 1–3 closed (2026-09-03); phase 4 is next.**
+**Where we are: all four phases closed (2026-09-03). The walk is done.**
 
 ## Phase 1 — One name, one machine, many canvases
 
@@ -88,6 +88,21 @@ dialog's footer.
 
 **Outcome:** the cross-canvas fold: every canvas an actor has stood on,
 what it did there, from the logs. No new state.
+
+**Status: CLOSED (2026-09-03).** `isocan history <actor>` already
+folded what an actor DID across canvases; it now leads with where they
+STAND: a row per canvas where they are enrolled, acted, or are — the
+strongest true state (`here`, `answerable` while an rc holds them,
+`enrolled` with nobody listening), what they did there, how many of
+those acts were comments, and when the last was. `lensStanding` in
+core is the fold, from the rosters, the logs and presence the daemon
+already holds; the lens page reads the same fold for a subject. No new
+state, and the number that says whether a standing agent is earning its
+keep — replies against acts, per canvas — is one table.
+
+**Trajectory.** The walk is done. What it leaves standing is what it
+said it would: the actor credential for a second machine, and agents
+that spawn agents.
 
 ## Deliberately not in the walk
 

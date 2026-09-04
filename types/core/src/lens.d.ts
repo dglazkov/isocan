@@ -209,6 +209,37 @@ export declare function lensShape(acts: readonly LensAct[]): {
     mostly: string | null;
 };
 /**
+ * **Every canvas an actor has stood on, and what they did there** — standing
+ * agents phase 4 (`docs/projects/standing-agents/phases.md`). The fold that
+ * says whether a standing agent is earning its keep, from what the logs and
+ * rosters already hold. No new state.
+ *
+ * A row per canvas where any of three things is true: they are enrolled
+ * there (a standing record), they did something there (an act in the log),
+ * or they are there now (presence). `state` is the strongest true fact, in
+ * the roster's own order — `here` outranks `answerable` (an rc holds them)
+ * outranks `enrolled` (a record, nobody listening) — and null for a canvas
+ * they only acted on. `replies` is the half of "earning their keep" a count
+ * can carry: comments and replies they wrote there, against `acts`, which
+ * is everything they did.
+ */
+export interface StandingRow {
+    canvasId: string;
+    canvasTitle: string;
+    enrolled: boolean;
+    state: "here" | "answerable" | "enrolled" | null;
+    acts: number;
+    replies: number;
+    /** ISO of the newest act there, or null for a standing with no acts yet. */
+    lastAct: string | null;
+}
+export declare function lensStanding(sources: readonly LensSource[], acts: readonly LensAct[], live: LensLive, 
+/** Canvas ids where an rc currently answers for this actor. */
+answerable: ReadonlySet<string>, actorId: string): StandingRow[];
+/** One sentence for a standing row's state, or null for a canvas they only
+ *  acted on — never "offline", for `lensLiveWords`'s reason. */
+export declare function standingWords(row: StandingRow): string | null;
+/**
  * **Where somebody is right now** — the canvases they are on, and whether
  * they are there or merely reachable there.
  *
@@ -225,7 +256,7 @@ export declare function lensShape(acts: readonly LensAct[]): {
  * possible. A canvas somebody is genuinely on outranks a parked process on the
  * same canvas — being there is the stronger fact.
  */
-interface LensLive {
+export interface LensLive {
     /** Canvas ids where this actor is actually present. */
     here: ReadonlySet<string>;
     /** Canvas ids where an rc is parked for them, and they are not present. */
@@ -259,4 +290,3 @@ export declare function lensLiveList(live: LensLive): Array<{
     canvasId: string;
     state: "here" | "available";
 }>;
-export {};
