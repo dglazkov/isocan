@@ -2,7 +2,7 @@
 status: built
 since: 2026-09-04
 see: harnesses, on-demand, standing-agents
-note: built 4 Sep 2026 — pi joins claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan.
+note: built 4 Sep 2026 — pi and codex join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan.
 ---
 # Harnesses — the journey
 
@@ -91,5 +91,17 @@ set aside out loud.
   the choice is for — *an agent added without naming one can't run until
   … picks which* — and when nothing needs it, only the fact: *every agent
   enrolled here named its own*, with the flag kept for the refusal.
+- **codex runs with its sandbox off.** Its default mode ran a shell and
+  wrote a file without asking, but refused loopback network, so the CLI
+  inside could not reach the daemon. The builtin bridge sets
+  `INITIAL_AGENT_MODE=agent-full-access`: the trust the rc already extends
+  by auto-allowing every permission, said in codex's words. Anyone who
+  wants the sandbox declares the adapter in config.json without it, and
+  accepts an agent that cannot speak to the canvas.
+- **Not built: Antigravity.** Google's official ACP server exists (a
+  binary zip, not npm) but keeps a login of its own and refused this
+  account as ineligible; the measurement and the reasons are in
+  [research/2026-09-04-antigravity-acp.md](../../research/2026-09-04-antigravity-acp.md).
+  The general door (`acpAdapters` in config.json) stays open to it.
 - **Not built:** choosing a model per agent. That is pi's per-directory
   settings file in the agent's working directory, not an isocan flag.

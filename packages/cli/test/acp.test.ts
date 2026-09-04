@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
+import { AcpAgentProcess, adapterEnv } from "../src/acp.ts";
 import { adapterFor } from "../src/harnesses.ts";
 import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
@@ -31,7 +32,7 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  *
  * The REAL adapter is not spawned here — it needs credentials and spends
  * money — except under ISOCAN_REAL_ACP=1 (claude-code) or
- * ISOCAN_REAL_ACP=pi, which runs one true turn in that harness.
+ * ISOCAN_REAL_ACP=pi|codex, which runs one true turn in that harness.
  */
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
@@ -151,6 +152,20 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(await adapterFor(home, "pi")).toEqual({ harness: "pi", command: "pi-acp", args: ["--flag"] });
   });
 
+  it("codex ships known, and its bridge carries the sandbox mode the CLI inside needs", async () => {
+    const spec = await adapterFor(home, "codex");
+    expect(spec).toMatchObject({ harness: "codex", command: "npx", args: ["-y", "@agentclientprotocol/codex-acp"] });
+    expect(spec?.env).toEqual({ INITIAL_AGENT_MODE: "agent-full-access", NO_BROWSER: "1" });
+    // …and a spec's env reaches the spawned bridge: the scripted adapter
+    // told to die at boot through its environment, dies at boot.
+    await expect(
+      AcpAgentProcess.spawn(
+        { harness: "fake", command: process.execPath, args: [fakeAcp], env: { FAKE_ACP_CRASH: "boot" } },
+        { cwd: home, env: adapterEnv("prj_1", "Sian") },
+      ),
+    ).rejects.toThrow(/exited \(code 1\)/);
+  });
+
   it("inside a summoned pi, the injected key beats pi's own: whoami and --session both resume the agent", async () => {
     await isocan("rc", "add", "Sian", "--harness", "pi");
     // pi's shells carry PI_SESSION_ID (a fresh uuid) beside the rc's
@@ -227,7 +242,7 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(run.stderr).toContain("person's verb");
   });
 
-  // `1` runs claude-code; a harness name (`pi`) runs that one's adapter.
+  // `1` runs claude-code; a harness name (`pi`, `codex`) runs that one's adapter.
   const realHarness =
     process.env.ISOCAN_REAL_ACP === "1" ? "claude-code" : process.env.ISOCAN_REAL_ACP;
   it.runIf(Boolean(realHarness))(

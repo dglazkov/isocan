@@ -9869,7 +9869,7 @@ rcCommand
   .command("add <name>")
   .description("Enrol an agent — the person's point-anywhere form")
   .option("--dir <path>", "the agent's working directory (default: here)")
-  .option("--harness <name>", "how its sessions start: claude-code or pi (default: yours, else unsaid)")
+  .option("--harness <name>", "how its sessions start: claude-code, pi or codex (default: yours, else unsaid)")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
   .action(
     run(async (name: string, opts: { dir?: string; harness?: string; rules?: string }, cmd: Command) =>
@@ -9893,7 +9893,7 @@ spawn the agent's ACP adapter, resume its session (or start one), send the
 prompt, narrate the turn, print the stopReason. The session survives this
 process — the resume handle is stored in the enrolment's rc half, and a
 handle that fails to load twice is replaced by a fresh session rather than
-an error. Adapters: claude-code and pi ship known; others are declared in
+an error. Adapters: claude-code, pi and codex ship known; others are declared in
 ~/.isocan/config.json as {"acpAdapters": {"<harness>": ["cmd", "arg"]}}.`,
   )
   .action(
