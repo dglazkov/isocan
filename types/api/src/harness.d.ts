@@ -18,6 +18,9 @@ export interface HarnessSession {
     id: string;
     /** `<harness>:<id>`, the registry key. */
     key: string;
+    /** Set by `ISOCAN_SESSION_ID` — said on purpose, not read off a harness.
+     * Deliberate beats ambient when a key must be claimed (`identity.ts`). */
+    deliberate: boolean;
 }
 /** `config.json`'s hook: `{"harnessVars": {"my-agent": "MY_AGENT_SESSION"}}`.
  * A harness isocan has never heard of works the day it ships, not the day
@@ -25,6 +28,8 @@ export interface HarnessSession {
 export interface HarnessVarConfig {
     harnessVars?: Record<string, string>;
 }
+/** The harnesses isocan knows by name, for anything that lists them. */
+export declare const builtinHarnesses: readonly string[];
 /** Every variable a probe could read without config — what a test must clear
  * so that a suite asserts the same thing under every harness. */
 export declare const harnessVars: string[];

@@ -16,6 +16,13 @@
  * declared `harnessVars` would be claiming to know about coding harnesses.
  */
 export declare function readConfigFile<T extends object>(home: string): Promise<Partial<T>>;
+/**
+ * The one writer, for the few keys a verb settles on the person's behalf
+ * (the CLI's default harness). Read-merge-write of the top level only, so a
+ * key this writer never heard of survives; a malformed file is treated as
+ * empty here too, since keeping it would mean keeping the typo.
+ */
+export declare function updateConfigFile<T extends object>(home: string, patch: Partial<T>): Promise<void>;
 /** The one key this package reads for itself. */
 export interface HomeConfig {
     /**

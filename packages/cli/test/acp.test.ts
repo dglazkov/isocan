@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
+import { adapterFor } from "../src/harnesses.ts";
 import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -29,7 +30,8 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  *   machine-badge binding from the turn itself
  *
  * The REAL adapter is not spawned here — it needs credentials and spends
- * money — except under ISOCAN_REAL_ACP=1, which runs one true turn.
+ * money — except under ISOCAN_REAL_ACP=1 (claude-code) or
+ * ISOCAN_REAL_ACP=pi, which runs one true turn in that harness.
  */
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
@@ -139,6 +141,33 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(inside.stdout).toContain("Sian");
   }, 30_000);
 
+  it("pi ships known: `--harness pi` resolves to the pi-acp adapter without config", async () => {
+    expect(await adapterFor(home, "pi")).toEqual({ harness: "pi", command: "npx", args: ["-y", "pi-acp"] });
+    // The config hook still wins over the builtin, as it does for claude-code.
+    await fs.writeFile(
+      path.join(home, "config.json"),
+      JSON.stringify({ acpAdapters: { pi: ["pi-acp", "--flag"], fake: [process.execPath, fakeAcp] } }),
+    );
+    expect(await adapterFor(home, "pi")).toEqual({ harness: "pi", command: "pi-acp", args: ["--flag"] });
+  });
+
+  it("inside a summoned pi, the injected key beats pi's own: whoami and --session both resume the agent", async () => {
+    await isocan("rc", "add", "Sian", "--harness", "pi");
+    // pi's shells carry PI_SESSION_ID (a fresh uuid) beside the rc's
+    // injection — the shape the 2026-09-04 spike measured. Reads pick the
+    // bound key; a claim must pick the deliberate one, or the guide's first
+    // step (`identity --session`) mints a stranger on pi's key.
+    const piShell = { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Sian", PI_SESSION_ID: "0199-uuid" };
+    const who = await collect(spawnCli(["whoami"], piShell));
+    expect(who.stdout).toContain("Sian");
+    const claim = await collect(spawnCli(["identity", "--session"], piShell));
+    expect(claim.code).toBe(0);
+    expect(claim.stdout).toContain("identity saved: Sian");
+    expect(claim.stdout).toContain("(agent session)");
+    const again = await collect(spawnCli(["whoami"], piShell));
+    expect(again.stdout).toContain("Sian");
+  }, 30_000);
+
   it("the session outlives the process: stored handle, then session/load", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
     const first = await isocan("rc", "turn", "Sian", "one");
@@ -171,10 +200,11 @@ describe("a turn in a named agent (phase 3)", () => {
       op: { type: "agent.enroll", agent: { id: "usr_percy", name: "Percy" } },
     });
     // No rc half — the turn adopts, but the fake adapter must be declared
-    // for the default harness this row will carry (null → claude-code).
+    // for the machine's default harness, which this row's null means —
+    // said outright, since the runner may have pi or claude installed too.
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] } }),
+      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
     );
     const run = await isocan("rc", "turn", "Percy", "hi");
     expect(run.code).toBe(0);
@@ -197,10 +227,13 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(run.stderr).toContain("person's verb");
   });
 
-  it.runIf(process.env.ISOCAN_REAL_ACP === "1")(
-    "the real adapter completes one turn (opt-in: ISOCAN_REAL_ACP=1)",
+  // `1` runs claude-code; a harness name (`pi`) runs that one's adapter.
+  const realHarness =
+    process.env.ISOCAN_REAL_ACP === "1" ? "claude-code" : process.env.ISOCAN_REAL_ACP;
+  it.runIf(Boolean(realHarness))(
+    `the real ${realHarness ?? "claude-code"} adapter completes one turn (opt-in: ISOCAN_REAL_ACP=1|<harness>)`,
     async () => {
-      await isocan("rc", "add", "Real", "--harness", "claude-code");
+      await isocan("rc", "add", "Real", "--harness", realHarness!);
       const run = await isocan("rc", "turn", "Real", "Reply with exactly: ok");
       expect(run.code).toBe(0);
       expect(run.stderr).toContain("turn ended — end_turn");

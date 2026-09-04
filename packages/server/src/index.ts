@@ -11,7 +11,7 @@ export type {
 export { FileStore } from "./file-store.ts";
 export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.ts";
 export { FileDesk } from "./file-desk.ts";
-export { readConfigFile, resolveHomeUrl } from "./config.ts";
+export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
 export {
   DocRefusal,
   clearGoogleToken,

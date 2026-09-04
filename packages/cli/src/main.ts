@@ -349,7 +349,8 @@ import {
 import { agentGuide } from "./agent-guide.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState } from "./rc.ts";
-import { AcpAgentProcess, adapterEnv, adapterFor, enrolmentKey } from "./acp.ts";
+import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
+import { adapterFor, defaultLine, noDefaultLine, noNeedLine, scanHarnesses, setDefaultHarness } from "./harnesses.ts";
 import {
   checkoutState,
   planUpgrade,
@@ -8917,12 +8918,21 @@ program
         (await ctx.client.rcAnswering(p.id).catch(() => ({ actorIds: [] as string[] }))).actorIds,
       );
       const liveActorIds = new Set(sessions.filter((s) => s.kind !== "rc").map((s) => s.actor.id));
+      // Which harness a standing agent would run on — said only for agents
+      // THIS machine has an rc half for (a null half means the machine's
+      // default); an agent another machine answers for gets no guess.
+      const rcRows = await readRcAgents(ctx.home);
+      const machineDefault = (await scanHarnesses(ctx.home)).default?.name ?? null;
       const standing = Object.values(canvas.agents ?? {})
         .filter((a) => !liveActorIds.has(a.actor.id))
-        .map((a) => ({
-          actor: a.actor,
-          state: answering.has(a.actor.id) ? ("answerable" as const) : ("enrolled" as const),
-        }));
+        .map((a) => {
+          const row = rcRows.find((r) => r.canvasId === p.id && r.actorId === a.actor.id);
+          return {
+            actor: a.actor,
+            state: answering.has(a.actor.id) ? ("answerable" as const) : ("enrolled" as const),
+            harness: row ? (row.harness ?? machineDefault) : null,
+          };
+        });
       if (ctx.json) return printJson({ sessions, standing });
       printTable([
         ...sessions.map((s) => ({
@@ -8948,7 +8958,8 @@ program
         })),
         ...standing.map((a) => ({
           who: a.actor.name,
-          kind: "agent",
+          // The same column a live agent session fills with its harness.
+          kind: a.harness ?? "agent",
           state: a.state,
           cursor: "—",
           selection: "—",
@@ -9793,6 +9804,44 @@ agentCommand
     }),
   );
 
+program
+  .command("harness")
+  .description("Which coding harnesses this machine can run agents on, and the default")
+  .addHelpText(
+    "after",
+    `
+A fact about this machine, read without a daemon: every harness isocan
+knows — builtin, or declared in ~/.isocan/config.json under acpAdapters or
+harnessVars — with whether its executable is on the PATH, where the rc
+would get its ACP bridge, whether it could run here, and which one an
+agent enrolled with no harness named runs on. --json adds a \`runnable\`
+field so an agent presenting the choice need not derive it.`,
+  )
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const home = paths.isocanHome();
+      const scan = await scanHarnesses(home);
+      if ((cmd.optsWithGlobals() as { json?: boolean }).json) {
+        return printJson({
+          harnesses: scan.rows,
+          default: scan.default?.name ?? null,
+          source: scan.source,
+          ...(scan.ignored ? { ignored: scan.ignored } : {}),
+        });
+      }
+      printTable(
+        scan.rows.map((r) => ({
+          harness: r.name,
+          installed: r.installed === null ? "?" : r.installed ? "yes" : "no",
+          adapter: r.adapter ?? "none",
+          runnable: r.runnable ? "yes" : "no",
+          default: r.default ? "yes" : "",
+        })),
+      );
+      console.log(scan.default ? defaultLine(scan) : noDefaultLine(scan));
+    }),
+  );
+
 const rcCommand = program
   .command("rc")
   .description("Answer for this canvas's enrolled agents — a person's long-running command")
@@ -9806,6 +9855,12 @@ withdrawal, a summons); the roster is read where rosters are read,
 \`isocan who\`. Ctrl-C stops answering for everyone; the enrolments survive
 to its next start.
 
+An agent enrolled without a harness named runs on this machine's default:
+the only harness installed here, or the one \`--default-harness <name>\` picked
+(kept in ~/.isocan/config.json as defaultHarness). With two installed and
+none picked, a terminal start asks; a start with no terminal refuses and
+names the flag. \`isocan harness\` prints what is installed and runnable.
+
 An agent never starts an rc — inside a harness session this refuses, and
 the agent's spelling of the verbs is \`isocan agent\`.`,
   );
@@ -9814,7 +9869,7 @@ rcCommand
   .command("add <name>")
   .description("Enrol an agent — the person's point-anywhere form")
   .option("--dir <path>", "the agent's working directory (default: here)")
-  .option("--harness <name>", "how its sessions start (default: yours, else unsaid)")
+  .option("--harness <name>", "how its sessions start: claude-code or pi (default: yours, else unsaid)")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
   .action(
     run(async (name: string, opts: { dir?: string; harness?: string; rules?: string }, cmd: Command) =>
@@ -9838,7 +9893,7 @@ spawn the agent's ACP adapter, resume its session (or start one), send the
 prompt, narrate the turn, print the stopReason. The session survives this
 process — the resume handle is stored in the enrolment's rc half, and a
 handle that fails to load twice is replaced by a fresh session rather than
-an error. Adapters: claude-code ships known; others are declared in
+an error. Adapters: claude-code and pi ship known; others are declared in
 ~/.isocan/config.json as {"acpAdapters": {"<harness>": ["cmd", "arg"]}}.`,
   )
   .action(
@@ -9878,8 +9933,10 @@ an error. Adapters: claude-code ships known; others are declared in
       const spec = await adapterFor(ctx.home, row.harness);
       if (!spec) {
         throw new Error(
-          `no ACP adapter is known for harness "${row.harness}" — declare one in ~/.isocan/config.json: ` +
-            `{"acpAdapters": {"${row.harness}": ["command", "arg"]}}`,
+          row.harness === null
+            ? `${record.actor.name} named no harness, and ${noDefaultLine(await scanHarnesses(ctx.home))}`
+            : `no ACP adapter is known for harness "${row.harness}" — declare one in ~/.isocan/config.json: ` +
+                `{"acpAdapters": {"${row.harness}": ["command", "arg"]}}`,
         );
       }
       // The binding: make the machine badge answer for the enrolled actor
@@ -9892,7 +9949,7 @@ an error. Adapters: claude-code ships known; others are declared in
         as: record.actor.id,
       });
 
-      console.error(rcLine("", `${record.actor.name} · starting ${spec.command} in ${row.cwd}`));
+      console.error(rcLine("", `${record.actor.name} · starting ${spec.harness} (${spec.command}) in ${row.cwd}`));
       const agent = await AcpAgentProcess.spawn(spec, {
         cwd: row.cwd,
         env: adapterEnv(p.id, record.actor.name),
@@ -9964,8 +10021,9 @@ async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
 
 rcCommand
   .option("--all", "answer on every canvas this machine's enrolments name, not only this directory's")
+  .option("--default-harness <name>", "the harness agents that named none run on — kept as config.json's defaultHarness")
   .action(
-  run(async (opts: { all?: boolean }, cmd: Command) => {
+  run(async (opts: { all?: boolean; defaultHarness?: string }, cmd: Command) => {
     const ctx = await ctxOf(cmd);
     /**
      * The user/agent divide, enforced (the naming door's residue, decided
@@ -9985,6 +10043,7 @@ rcCommand
     if (rooms.length === 0) {
       throw new Error("`isocan rc --all` found no canvas to answer on — nothing is enrolled from this machine yet (`isocan rc add <name>` on a bound canvas)");
     }
+    await settleDefaultHarness(ctx, rooms, opts.defaultHarness);
     const shared: RcShared = {
       rooms: rooms.length,
       guards: new Map(),
@@ -10003,6 +10062,75 @@ rcCommand
     await Promise.all(rooms.map((p) => runRcRoom(ctx, p, shared)));
   }),
 );
+
+/**
+ * **What an unnamed harness means here, settled before anything parks**
+ * (see `harnesses.ts`). The scan is narrated every start, in one line. A
+ * decision is asked for only when one is NEEDED — an enrolled agent on one
+ * of these canvases has no harness named — and only where somebody can
+ * answer: a terminal asks; a launchd start refuses and names the flag,
+ * because a guess in a log is the silent wrong harness with a different
+ * face. `--harness` answers either way, and the answer is kept.
+ */
+async function settleDefaultHarness(ctx: Ctx, rooms: Canvas[], flag: string | undefined): Promise<void> {
+  let scan = await scanHarnesses(ctx.home);
+  if (flag !== undefined) {
+    const pick = scan.rows.find((r) => r.name === flag);
+    if (!pick?.runnable) {
+      const runnable = scan.rows.filter((r) => r.runnable).map((r) => r.name);
+      throw new Error(
+        `--default-harness ${flag}: ${pick ? "not runnable here" : "not a harness this machine knows"}` +
+          (runnable.length > 0 ? ` — runnable: ${runnable.join(", ")}` : " — nothing is") +
+          " (`isocan harness` lists them)",
+      );
+    }
+    await setDefaultHarness(ctx.home, flag);
+    scan = await scanHarnesses(ctx.home);
+  }
+  if (scan.default) {
+    console.log(`rc: ${defaultLine(scan)}`);
+    return;
+  }
+  // Nothing settled it. Is a decision needed — any agent here with no
+  // harness named (a row saying null, or no row yet: the web's adds)?
+  const rows = await readRcAgents(ctx.home);
+  const unnamed: string[] = [];
+  for (const p of rooms) {
+    const roster = (await ctx.client.snapshot(p.id)).canvas.agents ?? {};
+    for (const record of Object.values(roster)) {
+      const row = rows.find((r) => r.canvasId === p.id && r.actorId === record.actor.id);
+      if (!row || row.harness === null) unnamed.push(record.actor.name);
+    }
+  }
+  if (unnamed.length === 0) {
+    const runnable = scan.rows.filter((r) => r.runnable).length;
+    if (runnable > 0) console.log(`rc: ${noNeedLine(scan)}`);
+    else console.log(`rc: ${noDefaultLine(scan)}`);
+    return;
+  }
+  const runnable = scan.rows.filter((r) => r.runnable).map((r) => r.name);
+  const who = unnamed.length === 1 ? unnamed[0]! : `${unnamed.length} agents (${unnamed.join(", ")})`;
+  if (runnable.length < 2 || !process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(`${who} named no harness, and ${noDefaultLine(scan)}`);
+  }
+  console.log(`rc: ${who} named no harness, and ${runnable.length} are runnable here. Which should such agents run on?`);
+  runnable.forEach((name, i) => console.log(`  ${i + 1}. ${name}`));
+  const readline = await import("node:readline/promises");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    for (;;) {
+      const answer = (await rl.question(`rc: harness [1-${runnable.length}]: `)).trim();
+      const chosen = runnable[Number(answer) - 1] ?? runnable.find((n) => n === answer);
+      if (chosen) {
+        await setDefaultHarness(ctx.home, chosen);
+        console.log(`rc: ${defaultLine(await scanHarnesses(ctx.home))}`);
+        return;
+      }
+    }
+  } finally {
+    rl.close();
+  }
+}
 
 /** One canvas's whole rc — holds, cursors, dispatch, narration — sharing
  *  with its sibling rooms only what `RcShared` says. Never returns. */
@@ -10342,7 +10470,11 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         };
       const spec = await adapterFor(ctx.home, row.harness);
       if (!spec) {
-        throw new Error(`no ACP adapter for harness "${row.harness}" — config.json's acpAdapters hook declares one`);
+        throw new Error(
+          row.harness === null
+            ? `${record.actor.name} named no harness, and ${noDefaultLine(await scanHarnesses(ctx.home))}`
+            : `no ACP adapter for harness "${row.harness}" — config.json's acpAdapters hook declares one`,
+        );
       }
       // The binding (phase 3): idempotent for CLI-added agents, the one
       // rebinding a web-added one needs.
@@ -10357,7 +10489,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
       );
       const face = await ctx.client
-        .createSession(p.id, record.actor, undefined, row.harness ?? "agent")
+        .createSession(p.id, record.actor, undefined, spec.harness)
         .catch(() => null);
       // Where the summons points, so the face lands somewhere rather than
       // floating unplaced: the summoning thread, or (a routed change) the

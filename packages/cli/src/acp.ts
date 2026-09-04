@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { harnessVars } from "@isocan/api";
-import { readConfigFile } from "@isocan/server";
+import type { AdapterSpec } from "./harnesses.ts";
 
 /**
  * **The ACP client in the rc** (agents-on-demand phase 3).
@@ -39,6 +39,20 @@ import { readConfigFile } from "@isocan/server";
  *   the agent anyway — so the spawn env is scrubbed of every harness
  *   variable plus `CLAUDECODE`/`CLAUDE_CODE_ENTRYPOINT` before injection.
  *
+ * **pi** (`pi-acp`, verified 2026-09-04) speaks the same wire — integer
+ * protocolVersion 1, `end_turn`, `session/load` a real resume backed by
+ * pi's own session file — with two differences the rc lives with:
+ * - pi's shells DO carry the harness's own variable (`PI_SESSION_ID`, a
+ *   fresh uuid per session) beside the injected `ISOCAN_SESSION_ID`. Reads
+ *   still resolve to the enrolled actor (the newest binding wins), and the
+ *   claim path prefers the deliberate key over an ambient one
+ *   (`identity.ts`), so `isocan identity --session` inside a summoned pi
+ *   resumes the agent rather than minting a stranger on pi's key.
+ * - A new session's first turn opens with pi's startup banner (version,
+ *   extensions, an update notice) as agent text. `quietStartup: true` in
+ *   `~/.pi/agent/settings.json` silences it; the rc does not depend on the
+ *   turn's text either way.
+ *
  * **Permissions are auto-allowed, provisionally.** The agent runs as the
  * person, in the person's directory, with the person's credentials — the
  * same trust as the person typing the harness's name themselves — and a
@@ -47,44 +61,6 @@ import { readConfigFile } from "@isocan/server";
  * module's policy is one function below, so the door has one thing to
  * change.
  */
-
-/** `config.json`'s hook: `{"acpAdapters": {"my-harness": ["cmd", "arg"]}}`.
- * The same posture as `harnessVars`: a harness isocan has never heard of
- * works the day it ships. */
-interface AcpAdapterConfig {
-  acpAdapters?: Record<string, string[] | string>;
-}
-
-export interface AdapterSpec {
-  command: string;
-  args: string[];
-}
-
-/** Adapters isocan knows without being told. `npx -y` so the adapter is
- * fetched on first use rather than shipped — isocan must not own a copy of
- * somebody's harness bridge. */
-const BUILTIN_ADAPTERS: Record<string, AdapterSpec> = {
-  "claude-code": { command: "npx", args: ["-y", "@zed-industries/claude-code-acp"] },
-};
-
-/** The adapter for a harness — config first, then builtin. A null harness
- * ("not yet said", the rc half's default) runs the claude-code adapter:
- * something must answer, and this is the machine's most likely something.
- * Null when nothing is declared anywhere — the caller owes a refusal that
- * names the config hook. */
-export async function adapterFor(home: string, harness: string | null): Promise<AdapterSpec | null> {
-  const wanted = harness ?? "claude-code";
-  const raw = await readConfigFile<AcpAdapterConfig>(home);
-  const declared = raw.acpAdapters?.[wanted];
-  if (typeof declared === "string" && declared.trim()) {
-    const [command, ...args] = declared.trim().split(/\s+/);
-    return { command: command!, args };
-  }
-  if (Array.isArray(declared) && declared.length > 0 && declared.every((p) => typeof p === "string")) {
-    return { command: declared[0]!, args: declared.slice(1) };
-  }
-  return BUILTIN_ADAPTERS[wanted] ?? null;
-}
 
 /** The environment a spawned adapter gets: the person's, scrubbed of every
  * harness variable (a stale one would misidentify the agent; `CLAUDECODE`

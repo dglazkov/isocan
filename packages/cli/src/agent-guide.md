@@ -346,6 +346,15 @@ this machine's enrolments name: one budget per agent across all of them, one
 conversation per agent that carries on wherever it is summoned, and
 `ISOCAN_CANVAS` in your environment says which canvas asked this time.
 
+Which harness a summoned agent runs in is the enrolment's `--harness`
+(claude-code and pi are known; `~/.isocan/config.json`'s `acpAdapters`
+declares others), and an agent enrolled with none named runs on the
+machine's default: the only runnable harness, or the one picked with
+`isocan rc --default-harness <name>`. `isocan harness` lists what this
+machine can run and which is the default (`--json` adds a `runnable`
+field) — the thing to read before presenting the choice to a person, and
+the thing to tell them when a summons fails for want of one.
+
 ## The Chat
 
 **The web app calls it the Chat**; on the wire and in this CLI it is the
