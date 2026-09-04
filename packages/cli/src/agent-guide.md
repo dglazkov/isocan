@@ -801,7 +801,9 @@ isocan add https://example.com/status --as site        # a site, said plainly
 `isocan gdoc add <url>` puts a Google Doc here as a **document**: its markdown
 export is the item's content — readable, searchable, thumbed in the lens,
 versioned, context an agent reads — and the doc's address is its `source`,
-the ↗ on its strip. `synced` says when the words were taken. `isocan gdoc sync`
+the ↗ on its strip. In the app the strip also has *Live*: the doc as Google
+draws it right now, framed in place of the words, a mode each person flips
+for themselves; the words stay the record you read. `synced` says when the words were taken. `isocan gdoc sync`
 re-exports every doc item on the canvas (`--in <sheet>` for one shelf) and
 lands a new version only where the document changed. A doc shared by link
 needs nothing; for one that is not, `isocan gdoc auth --token <token>` saves
