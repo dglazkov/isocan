@@ -648,6 +648,18 @@ img { height: auto; }
   color: var(--ink-muted); background: none; border: 1px solid transparent;
 }
 .theme-opt:hover { color: var(--ink); }
+/* Chrome you can turn off: the Settings list under the identity menu. A
+   switch per control, its area and its other door on the line, and one
+   "Show everything" when anything is hidden. */
+.chrome-list { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 4px; }
+.chrome-row {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: baseline;
+  font-size: 12px; cursor: pointer;
+}
+.chrome-row input { margin: 0; align-self: center; }
+.chrome-name { font-weight: 600; }
+.chrome-where { grid-column: 2; font-size: 11px; color: var(--ink-soft); line-height: 1.35; }
+.chrome-show-all { align-self: flex-start; font-size: 11.5px; margin-top: 2px; }
 .theme-opt.active {
   color: var(--ink); background: var(--card);
   border-color: var(--chip-line); box-shadow: var(--shadow-card);
