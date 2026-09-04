@@ -59,6 +59,46 @@ async function measure(file: File, mimeType: string): Promise<{ width: number; h
  * whatever is already there, and applies these in turn, so each file's
  * placement already sees the one before it land.
  */
+/**
+ * **How far a drop got before it failed** (#51). `addFiles` lands one file
+ * after another; when the third of five fails, two items are on the canvas
+ * and the person deserves to hear "2 of 5 added — <why>" rather than
+ * "upload failed" — and to see the two selected, not lost.
+ */
+export class AddFilesError extends Error {
+  constructor(
+    message: string,
+    /** The items that DID land, in order. */
+    readonly landed: string[],
+    /** The file that failed, by name. */
+    readonly file: string,
+    readonly total: number,
+  ) {
+    super(message);
+    this.name = "AddFilesError";
+  }
+}
+
+/**
+ * What to say and what to select when `addFiles` throws: the sentence
+ * counts the landed against the total when there were several, and the
+ * items that landed are returned so the caller selects them as it would a
+ * whole drop. A failure with nothing landed is the plain sentence.
+ */
+export function addFailure(err: unknown, total: number, fallback: string): { landed: string[]; notice: string } {
+  if (err instanceof AddFilesError) {
+    const why = err.message;
+    return {
+      landed: err.landed,
+      notice:
+        total > 1
+          ? `${err.landed.length} of ${total} added — ${err.file}: ${why}`
+          : `${err.file}: ${why}`,
+    };
+  }
+  return { landed: [], notice: err instanceof Error && err.message ? err.message : fallback };
+}
+
 export async function addFiles(
   canvasId: string,
   actor: Actor,
@@ -91,8 +131,20 @@ export async function addFiles(
   let offsetX = 0;
   for (const file of files) {
     const mimeType = mimeTypeOf(file);
-    const upload = await uploadBlob(canvasId, file, file.name);
-    const { width, height } = await measure(file, mimeType);
+    let upload: Awaited<ReturnType<typeof uploadBlob>>;
+    let width: number;
+    let height: number;
+    try {
+      upload = await uploadBlob(canvasId, file, file.name);
+      ({ width, height } = await measure(file, mimeType));
+    } catch (err) {
+      throw new AddFilesError(
+        err instanceof Error && err.message ? err.message : "could not be added",
+        ids,
+        file.name,
+        files.length,
+      );
+    }
 
     const at: Placement = spread
       ? {
@@ -106,20 +158,29 @@ export async function addFiles(
     offsetX += width + FILE_GAP;
 
     const itemId = newItemId();
-    await sendEchoed(canvasId, actor, {
-      type: "item.add",
-      itemId,
-      version: {
-        id: newVersionId(),
-        blobHash: upload.blobHash,
-        mimeType,
-        filename: file.name,
-        size: upload.size,
-      },
-      width,
-      height,
-      placement: at,
-    }, group);
+    try {
+      await sendEchoed(canvasId, actor, {
+        type: "item.add",
+        itemId,
+        version: {
+          id: newVersionId(),
+          blobHash: upload.blobHash,
+          mimeType,
+          filename: file.name,
+          size: upload.size,
+        },
+        width,
+        height,
+        placement: at,
+      }, group);
+    } catch (err) {
+      throw new AddFilesError(
+        err instanceof Error && err.message ? err.message : "could not be added",
+        ids,
+        file.name,
+        files.length,
+      );
+    }
     ids.push(itemId);
   }
   return ids;

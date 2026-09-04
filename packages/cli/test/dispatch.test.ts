@@ -177,7 +177,7 @@ describe("the doorbell works (journey 2)", () => {
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
 
     await summon("th_1", "@Sian this spacing looks wrong");
-    await until(async () => rc.out(), (o) => o.includes("turn ended — stopReason end_turn"), "the turn");
+    await until(async () => rc.out(), (o) => o.includes("turn ended — end_turn"), "the turn");
 
     // The reply is IN THE THREAD, authored as Sian — it went through the
     // CLI with the injected identity, like a real summoned agent's would.
@@ -186,13 +186,13 @@ describe("the doorbell works (journey 2)", () => {
     expect(replies).toHaveLength(1);
     expect(replies[0]!.body).toBe("summoned: on it");
     // The narration accounts for the turn (journey 9's ledger).
-    expect(rc.out()).toContain("summons for Sian");
+    expect(rc.out()).toContain("Sian · summons");
     expect(rc.out()).toContain("session started");
 
     // The self-wake guard: Sian's own reply must not re-summon Sian. Give
     // the loop a beat, then count summonses.
     await new Promise((r) => setTimeout(r, 800));
-    expect(rc.out().match(/summons for Sian/g)).toHaveLength(1);
+    expect(rc.out().match(/Sian · summons/g)).toHaveLength(1);
 
     rc.child.kill("SIGINT");
     await rc.done;
@@ -271,7 +271,7 @@ describe("routing (journey 4) and the overnight batch (journey 3)", () => {
       },
     });
     await new Promise((r) => setTimeout(r, 700));
-    expect(rc.out()).not.toContain("summons for Sian");
+    expect(rc.out()).not.toContain("starting a session");
 
     // A matching change wakes exactly one turn.
     await post("/api/ops", {
@@ -280,7 +280,7 @@ describe("routing (journey 4) and the overnight batch (journey 3)", () => {
       op: { type: "item.move", itemId: "itm_1", x: 5, y: 5 },
     });
     await until(async () => rc.out(), (o) => o.includes("turn ended"), "the change turn");
-    expect(rc.out()).toContain("summons for Sian (change");
+    expect(rc.out()).toContain("Sian · change from");
 
     // A mention comes through the filter that just ate the noise.
     await summon("th_m", "@Sian never mind the filters");
@@ -289,7 +289,7 @@ describe("routing (journey 4) and the overnight batch (journey 3)", () => {
       (o) => (o.match(/turn ended/g) ?? []).length >= 2,
       "the mention turn",
     );
-    expect(rc.out()).toContain("summons for Sian (summons");
+    expect(rc.out()).toContain("Sian · summons from");
 
     rc.child.kill("SIGINT");
     await rc.done;
@@ -314,7 +314,7 @@ describe("routing (journey 4) and the overnight batch (journey 3)", () => {
       // the payload — the batching is what is under test, not its manners.
       expect(all[id]).toBeDefined();
     }
-    expect(rc.out().match(/summons for Sian/g)).toHaveLength(1);
+    expect(rc.out().match(/Sian · summons/g)).toHaveLength(1);
     rc.child.kill("SIGINT");
     await rc.done;
   }, 40_000);
@@ -356,7 +356,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
     expect(all["th_d"]!.comments[1]!.body).toContain("Sian couldn't answer");
     // …and the system's own report never re-summons the agent it is about.
     await new Promise((r) => setTimeout(r, 800));
-    expect(rc.out().match(/summons for Sian/g)).toHaveLength(1);
+    expect(rc.out().match(/Sian · summons/g)).toHaveLength(1);
     rc.child.kill("SIGINT");
     await rc.done;
   }, 40_000);
@@ -441,7 +441,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
       },
     });
     await until(async () => rc.out(), (o) => o.includes("paused after"), "the cycle guard", 30_000);
-    expect(rc.out()).not.toContain("summons for Sian");
+    expect(rc.out()).not.toContain("starting a session");
     // The narration prints BEFORE the system comment's op lands — poll the
     // thread rather than reading the gap between the two.
     const all = await until(
@@ -464,7 +464,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
     await until(async () => rc.out(), (o) => o.includes("hold lifted"), "the human word lifting the hold", 30_000);
     await until(
       async () => rc.out(),
-      (o) => o.includes("summons for Sian") && o.includes("turn ended"),
+      (o) => o.includes("Sian · summons") && o.includes("turn ended"),
       "the dispatched turn",
       30_000,
     );
@@ -511,7 +511,7 @@ describe("the scene, for real (opt-in: ISOCAN_REAL_ACP=1)", () => {
       await summon("th_real", "@Sian please reply with a one-line hello so we know you are alive");
       await until(
         async () => rc.out(),
-        (o) => o.includes("turn ended — stopReason end_turn"),
+        (o) => o.includes("turn ended — end_turn"),
         "the real turn",
         240_000,
       );
@@ -544,7 +544,7 @@ describe("a wake that lands mid-turn is never starved", () => {
     await summon("th_busy2", "@Sian second");
     await until(
       async () => rc.out(),
-      (o) => (o.match(/summons for Sian/g) ?? []).length >= 2 && (o.match(/turn ended/g) ?? []).length >= 2,
+      (o) => (o.match(/Sian · summons/g) ?? []).length >= 2 && (o.match(/turn ended/g) ?? []).length >= 2,
       "the mid-turn summons dispatched after the turn, unprompted",
       45_000,
     );
