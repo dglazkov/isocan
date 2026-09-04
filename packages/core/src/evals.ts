@@ -551,6 +551,11 @@ interface PreferencePair {
   chosen: string;
   chosenAt: string;
   chosenBy: string;
+  /** The chooser's id, so a reader can ask the registry whether this was a
+   *  person's choice or an agent's — the calibration harness found that
+   *  over half the pairs at one home were an agent keeping its own earlier
+   *  take, which is not the human label Stage 4 wants. */
+  chosenById: string;
   /** Every version that existed at that moment and was not chosen. */
   against: string[];
 }
@@ -591,6 +596,7 @@ export function harvestPreferences(
       chosen: op.versionId,
       chosenAt: entry.envelope.ts,
       chosenBy: entry.envelope.actor.name,
+      chosenById: entry.envelope.actor.id,
       against,
     });
   }
