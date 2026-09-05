@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
 import {
@@ -50,7 +50,8 @@ import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 import { CanvasCard } from "./CanvasCard.tsx";
-import { ICON_NOUN, iconKindFor } from "../lib/kinds.ts";
+import { iconKindFor, kindNoun } from "../lib/kinds.ts";
+import { moduleRendererFor } from "../modules.ts";
 import { fileMarkTip } from "../lib/backing.ts";
 import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
@@ -836,7 +837,7 @@ function ItemViewInner({
             className="name"
             // Under a sprint's vote curtain the byline goes too: not knowing
             // who drew what while you vote is the method (core/sprint.ts).
-            title={`${item.title} (${current.filename}) — ${ICON_NOUN[kind]} · double-click to rename${
+            title={`${item.title} (${current.filename}) — ${kindNoun(kind)} · double-click to rename${
               votesHidden ? "" : ` · last edit by ${actorNameIn(names, item.updatedBy)}`
             }`}
           >
@@ -1261,11 +1262,32 @@ export function VersionContent({
   designSystem?: boolean;
 }) {
   const url = blobUrl(canvasId, blobHash);
+  // Stable per blob, so a module renderer keying an effect on it does not
+  // refetch on every shell render (see modules/mermaid/src/diagram.tsx).
+  const readText = useCallback(() => readBlobText(canvasId, blobHash), [canvasId, blobHash]);
   if (liveDoc) {
     // The doc as Google draws it, in the same item. A private doc shows
     // Google's own sign-in here, which is honest: the frame is Google's,
     // and the words the canvas holds are one click away on the strip.
     return <iframe className="browser-view doc-live" src={liveDoc} sandbox="allow-scripts allow-same-origin allow-forms" title={filename} />;
+  }
+  // A loaded module's renderer, ahead of the built-in chain: a module owns
+  // the mimes its kind claims, and is handed facts rather than a blob path
+  // (`core/modules.ts`, `RendererFacts`). With the module gone the same
+  // version falls through to the chain below — a diagram reads as text.
+  const ModuleRenderer = moduleRendererFor(mimeType);
+  if (ModuleRenderer) {
+    return (
+      <ModuleRenderer
+        canvasId={canvasId}
+        blobHash={blobHash}
+        mimeType={mimeType}
+        filename={filename}
+        entered={entered}
+        url={url}
+        readText={readText}
+      />
+    );
   }
   if (designSystem && (mimeType === "text/markdown" || mimeType === "text/plain")) {
     return <DesignSystemView canvasId={canvasId} blobHash={blobHash} />;

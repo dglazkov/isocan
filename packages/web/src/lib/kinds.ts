@@ -1,5 +1,5 @@
-import type { Item, ItemKind } from "@isocan/core";
-import { isDesignSystem, itemKind } from "@isocan/core";
+import type { BuiltinKind, Item, ItemKind } from "@isocan/core";
+import { isBuiltinKind, isDesignSystem, itemKind, moduleKinds } from "@isocan/core";
 
 /**
  * How a kind shows itself: the word a list groups under, the word a tooltip
@@ -11,10 +11,17 @@ import { isDesignSystem, itemKind } from "@isocan/core";
  * another on its own card. `kinds.ts` in core says it about the words ("a kind
  * that means one thing in a list and another in a filter is worse than no
  * kinds at all"); it is just as true of the picture.
+ *
+ * **Module kinds** (`docs/projects/modules/design.md`, phase 2) are not in
+ * these records — they cannot be, the records are closed by the compiler
+ * before a module exists — so every consumer goes through the lookups
+ * below, which fall back to what the module declared: its label, its noun,
+ * and the built-in mark it borrows for an icon.
  */
 
 /**
- * The kinds, plus the one thing that is not a kind but reads as one.
+ * The kinds with a mark, plus the one thing that is not a kind but reads as
+ * one.
  *
  * A design system is a markdown document by mime, so `itemKind` calls it a
  * document — correctly, for filtering. But it is the canvas's style, the thing
@@ -23,9 +30,9 @@ import { isDesignSystem, itemKind } from "@isocan/core";
  * why it lives here and not in core's vocabulary: `isocan ls --kind document`
  * still finds it, which is right.
  */
-export type IconKind = ItemKind | "design-system";
+export type IconKind = BuiltinKind | "design-system";
 
-export const KIND_LABEL: Record<ItemKind, string> = {
+export const KIND_LABEL: Record<BuiltinKind, string> = {
   drawing: "Drawings",
   text: "Text",
   screen: "Screens",
@@ -51,6 +58,19 @@ export const ICON_NOUN: Record<IconKind, string> = {
   other: "file",
 };
 
+const addedKind = (kind: string) => moduleKinds().find((k) => k.id === kind);
+
+/** The group heading for a kind — a module's label for a module's kind. */
+export function kindLabel(kind: ItemKind): string {
+  return isBuiltinKind(kind) ? KIND_LABEL[kind] : (addedKind(kind)?.label ?? kind);
+}
+
+/** The singular, for one item — a module's noun for a module's kind. */
+export function kindNoun(kind: string): string {
+  if (kind in ICON_NOUN) return ICON_NOUN[kind as IconKind];
+  return addedKind(kind)?.noun ?? kind;
+}
+
 /**
  * Which mark an item gets.
  *
@@ -60,7 +80,15 @@ export const ICON_NOUN: Record<IconKind, string> = {
  * thing every screen is built against, and being able to pick it out from
  * across the board is worth a mark of its own. Presentation may be more
  * specific than the filter; it may not disagree with it.
+ *
+ * A module's kind wears the built-in mark it named, or the plain file mark:
+ * the icon set is drawn for 11px and a module names one rather than shipping
+ * pixels.
  */
 export function iconKindFor(item: Item): IconKind {
-  return isDesignSystem(item) ? "design-system" : itemKind(item);
+  if (isDesignSystem(item)) return "design-system";
+  const kind = itemKind(item);
+  if (isBuiltinKind(kind)) return kind;
+  const icon = addedKind(kind)?.icon;
+  return icon && isBuiltinKind(icon) ? icon : "other";
 }

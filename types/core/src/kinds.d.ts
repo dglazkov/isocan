@@ -8,9 +8,30 @@
  * is worse than no kinds at all.
  */
 import type { Item } from "./model.js";
-export type ItemKind = "drawing" | "text" | "screen" | "image" | "video" | "document" | "site" | "canvas" | "other";
+/** The kinds the product ships with — the ones every record below names. */
+export type BuiltinKind = "drawing" | "text" | "screen" | "image" | "video" | "document" | "site" | "canvas" | "other";
+/**
+ * **A kind: one of the built-ins, or the id of a kind a loaded module adds**
+ * (`docs/projects/modules/design.md`, phase 2).
+ *
+ * This is the union becoming a string, paid on purpose in one commit: a
+ * module's kind cannot be in a union the compiler closed before the module
+ * existed. What survives the widening is exhaustiveness over the BUILT-INS —
+ * `Record<BuiltinKind, …>` still names a missing label or mark — and a
+ * lookup with a fallback for everything else (`kindLabel`, `kindNoun`,
+ * `iconKindFor` in the web app). `(string & {})` keeps the built-in names as
+ * completions rather than collapsing the whole type to `string`.
+ */
+export type ItemKind = BuiltinKind | (string & {});
 /** In the order a list should show them: what you made, then what you brought. */
-export declare const ITEM_KINDS: readonly ItemKind[];
+export declare const ITEM_KINDS: readonly BuiltinKind[];
+export declare function isBuiltinKind(kind: string): kind is BuiltinKind;
+/**
+ * Every kind a list can group under right now: the built-ins, with the loaded
+ * modules' kinds before `other` — a diagram is a thing you made, and "Files"
+ * stays the last word.
+ */
+export declare function itemKinds(): ItemKind[];
 export declare function itemKind(item: Item): ItemKind;
 /**
  * **Is this item drawn inside an iframe?**

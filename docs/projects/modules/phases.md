@@ -4,7 +4,7 @@ Each phase ends with something a person can remove and watch disappear.
 Ordered by what settles the most with the least: the registries before any
 loader, because a loader with nothing to load into is a loader.
 
-**Where we are:** phase 1 built 4 September 2026. Phase 2 next.
+**Where we are:** phases 1 and 2 built 4 September 2026. Phase 3 next.
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
@@ -38,20 +38,32 @@ the palette and the surface guard passed. Put back, the full suite is 3,401
 green. The panel count from the research note is unchanged, on purpose:
 this phase adds slots, not panels.
 
-## Phase 2 — Mermaid, the first node-type module
+## Phase 2 — Mermaid, the first node-type module ✅
+
+*Built 4 Sep 2026.*
 
 `packages/modules/mermaid/`: kind `diagram`, mime `text/vnd.mermaid`,
-extension `.mmd`. This is the phase that pays the union cost: `ItemKind`
-widens to admit module kinds, `itemKind()` consults the registry before the
-built-in chain, `KIND_LABEL` / `ICON_NOUN` / `KindIcon` fall back to the
-module's label and a generic mark, `isocan ls --kind` accepts a module kind,
-`cli/mime.ts` learns extensions from the registry. The renderer is the second
-web slot, a `React.lazy` chunk carrying the Mermaid library, loaded when the
-first diagram is seen. `isocan add diagram.mmd` needs no new verb; the guide
-section says so. Acceptance: a diagram renders in the app, lists under
-Diagrams in the files panel and `ls --kind diagram`, edits as text in the
-stage and `$EDITOR`, and — with the module's list entries removed — renders
-as a file that names the module.
+extensions `mmd` and `mermaid`, icon borrowed from `drawing`. This is the
+phase that paid the union cost, in one commit: `ItemKind` is now
+`BuiltinKind | (string & {})`, `itemKind()` asks the registry before its own
+mime tests (and after the property-marked kinds, so a module names files and
+not text nodes), `itemKinds()` puts module kinds before `other`, and the web
+app's `kindLabel` / `kindNoun` / `iconKindFor` fall back to what the module
+declared — the closed records keep their exhaustiveness over the built-ins.
+`isocan ls --kind` reads the live list; both mime tables (`cli/mime.ts`,
+`web/lib/mime.ts`) ask the registry for extensions first. The renderer is the
+second web slot: `WebModule.renderers`, keyed by mime, asked ahead of the
+built-in chain in `VersionContent` and handed `RendererFacts` (identity,
+`url`, `readText`) rather than a blob path. The Mermaid library sits behind
+a `React.lazy` boundary in `diagram.tsx`, rendered with `securityLevel:
+"strict"`, themed by the page's three theme states. `isocan add flow.mmd`
+needs no verb; the module's guide section says how the kind is used.
+
+**Acceptance:** with the module registered a `.mmd` is a diagram in
+`itemKind`, the kind list and both mime tables; unregistered, the same file
+is a document. The guard tests hold the renderer to the slot and the library
+to the far side of the boundary. What stays a hand check until phase 3's
+runtime removal: the picture on a card at isocan.io once this promotes.
 
 ## Phase 3 — runtime loading, for self-hosted homes
 
