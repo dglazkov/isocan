@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
 import { readBlobText } from "../lib/api.ts";
 import { addVersionFromFile } from "../lib/upload.ts";
-import { applyEdits, foldEdit, type TextEdit } from "../lib/textPatch.ts";
+import { applyEdits, foldEdit, isAttrEdit, type AttrEdit, type InPlaceEdit } from "../lib/textPatch.ts";
 
 /**
- * Edit-text-in-place: the frozen frame — WYSIWYG's V0
+ * Edit-in-place: the frozen frame — WYSIWYG's V0 and its second stage
  * (docs/research/2026-08-26-wysiwyg.md, "the native path").
  *
  * The artifact renders in the ONE frame mode the research measured as both
@@ -19,11 +19,37 @@ import { applyEdits, foldEdit, type TextEdit } from "../lib/textPatch.ts";
  *
  * Double-click a text node and that ONE node becomes plaintext-editable;
  * Enter or clicking away commits it to the pending list, Escape puts it
- * back. Save applies every pending edit under the unique-match rule
- * (`textPatch.ts`) and lands as an ordinary `item.addVersion` — so even a
- * wrong edit was never destructive; it is one S-fan from restored, and an
- * agent parked on the item wakes on it like on any other version.
+ * back. **Click an element and its properties open in the bar** — the
+ * class, and the handful of inline styles a person reaches for — editing
+ * the frame live and recording an attribute edit. Save applies every
+ * pending edit by source position (`textPatch.ts`) and lands as an ordinary
+ * `item.addVersion` — so even a wrong edit was never destructive; it is one
+ * S-fan from restored, and an agent parked on the item wakes on it like on
+ * any other version.
  */
+
+/** The inline styles the panel offers. Enough to change what a screen looks
+ *  like without becoming an inspector; anything else is the editor's. */
+const STYLE_PROPS: { prop: string; label: string }[] = [
+  { prop: "color", label: "Color" },
+  { prop: "background-color", label: "Background" },
+  { prop: "font-size", label: "Size" },
+  { prop: "font-weight", label: "Weight" },
+  { prop: "padding", label: "Padding" },
+  { prop: "margin", label: "Margin" },
+  { prop: "border-radius", label: "Radius" },
+];
+
+/** What the panel shows for the selected element. */
+interface Selected {
+  ordinal: number;
+  tag: string;
+  el: HTMLElement;
+  /** The attribute values the element had when selected — the `from`s. */
+  classFrom: string | null;
+  styleFrom: string | null;
+}
+
 export function TextEditFrame({
   canvasId,
   item,
@@ -44,9 +70,13 @@ export function TextEditFrame({
    *  that is still there — and a page with no text nodes offers no way to
    *  find out otherwise. */
   const [unreadable, setUnreadable] = useState<string | null>(null);
-  const [pending, setPending] = useState<TextEdit[]>([]);
+  const [pending, setPending] = useState<InPlaceEdit[]>([]);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<Selected | null>(null);
+  /** The panel's field values, mirrored so typing repaints; the frame's
+   *  element is the source of truth and is written on every change. */
+  const [fields, setFields] = useState<Record<string, string>>({});
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
 
@@ -79,6 +109,13 @@ export function TextEditFrame({
       if (!doc) return;
       const theDoc = doc; // narrowed for the closures below
 
+      // The selection outline, drawn by the frame's own stylesheet so it
+      // scales with the page and takes no pointer. Ours, on an attribute the
+      // page cannot have written.
+      const marker = theDoc.createElement("style");
+      marker.textContent = "[data-isocan-selected]{outline:2px solid #1f3fd0 !important;outline-offset:1px}";
+      theDoc.head?.appendChild(marker);
+
       /**
        * Which text node this is, counted in document order over the whole
        * document — the one number this frame and parse5 can both compute,
@@ -94,6 +131,19 @@ export function TextEditFrame({
         let seen = 0;
         while (walker.nextNode()) {
           if (walker.currentNode === node) return seen;
+          seen++;
+        }
+        return -1;
+      }
+
+      /** Which element, by the same rule over elements — and never our own
+       *  marker `<style>`, which is not in the file. */
+      function elementOrdinalOf(target: Element): number {
+        const walker = theDoc.createTreeWalker(theDoc, NodeFilter.SHOW_ELEMENT);
+        let seen = 0;
+        while (walker.nextNode()) {
+          if (walker.currentNode === marker) continue;
+          if (walker.currentNode === target) return seen;
           seen++;
         }
         return -1;
@@ -181,8 +231,48 @@ export function TextEditFrame({
         parent.addEventListener("keydown", onKey);
       }
 
+      /**
+       * **Click selects an element** (stage 2). One click, no modifier — the
+       * page's own handlers are dead, so a click here means nothing else.
+       * The panel reads the element's inline style and class; the `from`s
+       * are what the attributes said at selection, so a later save can
+       * check the file still says them.
+       */
+      function onClick(e: MouseEvent) {
+        const target = e.target as HTMLElement | null;
+        if (!target || target === theDoc.documentElement || target.hasAttribute("contenteditable")) return;
+        e.preventDefault();
+        for (const old of theDoc.querySelectorAll("[data-isocan-selected]")) old.removeAttribute("data-isocan-selected");
+        target.setAttribute("data-isocan-selected", "");
+        const ordinal = elementOrdinalOf(target);
+        if (ordinal < 0) return;
+        const values: Record<string, string> = { class: target.getAttribute("class") ?? "" };
+        for (const { prop } of STYLE_PROPS) values[prop] = target.style.getPropertyValue(prop);
+        setFields(values);
+        setSelected({
+          ordinal,
+          tag: target.tagName.toLowerCase(),
+          el: target,
+          classFrom: target.getAttribute("class"),
+          styleFrom: target.getAttribute("style"),
+        });
+      }
+
+      function onKeyDown(e: KeyboardEvent) {
+        if (e.key === "Escape" && !(e.target as HTMLElement | null)?.hasAttribute("contenteditable")) {
+          for (const old of theDoc.querySelectorAll("[data-isocan-selected]")) old.removeAttribute("data-isocan-selected");
+          setSelected(null);
+        }
+      }
+
       theDoc.addEventListener("dblclick", onDblClick);
-      detach = () => theDoc.removeEventListener("dblclick", onDblClick);
+      theDoc.addEventListener("click", onClick);
+      theDoc.addEventListener("keydown", onKeyDown);
+      detach = () => {
+        theDoc.removeEventListener("dblclick", onDblClick);
+        theDoc.removeEventListener("click", onClick);
+        theDoc.removeEventListener("keydown", onKeyDown);
+      };
     };
     el.addEventListener("load", wire);
     return () => {
@@ -190,6 +280,36 @@ export function TextEditFrame({
       detach();
     };
   }, [source]);
+
+  /**
+   * A field change writes the frame live and records the attribute edit.
+   * The whole `style` attribute is the unit — the parser locates the
+   * attribute, not a declaration inside it — so the edit's `to` is whatever
+   * the element's style reads after the change, and `from` is what it read
+   * at selection. Empty means removed, on the way in and on the way back.
+   */
+  function change(name: "class" | string, value: string) {
+    if (!selected) return;
+    const { el, ordinal, tag, classFrom, styleFrom } = selected;
+    setFields((f) => ({ ...f, [name]: value }));
+    if (name === "class") {
+      if (value.trim() === "") el.removeAttribute("class");
+      else el.setAttribute("class", value);
+      record({ kind: "attr", ordinal, tag, name: "class", from: classFrom, to: el.getAttribute("class") });
+      return;
+    }
+    el.style.setProperty(name, value);
+    if (value.trim() === "") el.style.removeProperty(name);
+    if (el.getAttribute("style") === "") el.removeAttribute("style");
+    record({ kind: "attr", ordinal, tag, name: "style", from: styleFrom, to: el.getAttribute("style") });
+  }
+
+  function record(edit: AttrEdit) {
+    // Our selection mark never reaches the file: it is an attribute, not a
+    // style, and the splice writes only the attribute named.
+    setRefusal(null);
+    setPending((p) => foldEdit(p, edit));
+  }
 
   async function save() {
     if (source === null || saving) return;
@@ -212,19 +332,24 @@ export function TextEditFrame({
     }
   }
 
+  const attrEdits = pending.filter(isAttrEdit).length;
+  const textEdits = pending.length - attrEdits;
+  const count =
+    pending.length === 0
+      ? null
+      : [textEdits > 0 ? `${textEdits} text` : null, attrEdits > 0 ? `${attrEdits} ${attrEdits === 1 ? "property" : "properties"}` : null]
+          .filter(Boolean)
+          .join(", ");
+
   return (
     <div className="text-edit-frame">
       <div className="stage-pane-bar">
         <span className="stage-pane-name">
-          Edit text<i> — double-click any text; Enter keeps it, Esc puts it back</i>
+          Edit text<i> — double-click text to change it; click an element for its properties; Esc puts it back</i>
         </span>
         <span className="spacer" />
         {refusal && <span className="text-edit-refusal">{refusal}</span>}
-        {pending.length > 0 && !refusal && (
-          <span className="stage-editor-dirty">
-            {pending.length} {pending.length === 1 ? "edit" : "edits"}
-          </span>
-        )}
+        {count && !refusal && <span className="stage-editor-dirty">{count}</span>}
         <button className="stage-editor-btn" onClick={onDone} title="Back to the live preview">
           {pending.length > 0 ? "Discard" : "Done"}
         </button>
@@ -239,6 +364,39 @@ export function TextEditFrame({
           </button>
         )}
       </div>
+      {selected && (
+        /* The properties of the selected element: the class, and the inline
+           styles a person reaches for. Each field writes the frame live;
+           the bar above counts the edits; Save splices them by position. */
+        <div className="props-panel" role="group" aria-label={`Properties of <${selected.tag}>`}>
+          <span className="props-tag">&lt;{selected.tag}&gt;</span>
+          <label className="props-field props-class">
+            <span>class</span>
+            <input value={fields.class ?? ""} onChange={(e) => change("class", e.target.value)} spellCheck={false} />
+          </label>
+          {STYLE_PROPS.map(({ prop, label }) => (
+            <label key={prop} className="props-field">
+              <span>{label}</span>
+              <input
+                value={fields[prop] ?? ""}
+                placeholder={selected.el.ownerDocument.defaultView?.getComputedStyle(selected.el).getPropertyValue(prop) ?? ""}
+                onChange={(e) => change(prop, e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+          ))}
+          <button
+            className="stage-editor-btn"
+            onClick={() => {
+              selected.el.removeAttribute("data-isocan-selected");
+              setSelected(null);
+            }}
+            title="Deselect (Esc)"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {unreadable ? (
         <div className="page-note">{unreadable}</div>
       ) : source === null ? (
