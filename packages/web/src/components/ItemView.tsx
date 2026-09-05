@@ -1502,14 +1502,48 @@ function BrowserView({
   if ("failed" in load) return <BlobError reason={load.failed} />;
   const site = parseUriList(load.text);
   if (site === null) return <BlobError reason="not a link" />;
+  return <SiteFrame key={reloadToken} site={site} />;
+}
+
+/** After this long with no `load`, the frame says what may be happening
+ *  rather than sitting white. */
+const SITE_SLOW_MS = 8000;
+
+/**
+ * **The blank rectangle, explained** (the Add-site debt's other half). The
+ * daemon warns BEFORE an item is made for a site whose headers refuse
+ * framing; what it cannot see is a site that starts framing and stops, or
+ * one whose headers lie. A cross-origin frame tells this page nothing about
+ * what it drew — but it does fire `load`, and a frame that has not loaded
+ * after eight seconds is, more often than not, one that will not. So the
+ * note hangs under the frame with the one thing that always works, the
+ * site in a tab, and leaves the moment the frame loads.
+ */
+function SiteFrame({ site }: { site: string }) {
+  const [state, setState] = useState<"loading" | "slow" | "loaded">("loading");
+  useEffect(() => {
+    if (state !== "loading") return;
+    const timer = setTimeout(() => setState((s) => (s === "loading" ? "slow" : s)), SITE_SLOW_MS);
+    return () => clearTimeout(timer);
+  }, [state]);
   return (
-    <iframe
-      key={reloadToken}
-      className="browser-view"
-      src={site}
-      sandbox="allow-scripts allow-same-origin allow-forms"
-      title={site}
-    />
+    <>
+      <iframe
+        className="browser-view"
+        src={site}
+        sandbox="allow-scripts allow-same-origin allow-forms"
+        title={site}
+        onLoad={() => setState("loaded")}
+      />
+      {state === "slow" && (
+        <div className="browser-slow" role="status">
+          <span>Still loading after a while — some sites refuse to be shown in a frame, and a browser does not say which.</span>
+          <a href={site} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+            Open it in a tab ↗
+          </a>
+        </div>
+      )}
+    </>
   );
 }
 
