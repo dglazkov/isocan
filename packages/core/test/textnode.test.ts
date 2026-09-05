@@ -3,6 +3,7 @@ import type { Item } from "../src/model.ts";
 import { TEXT_STYLE_LABEL, textStyleFrom } from "../src/textnode.ts";
 import {
   TEXT_COLUMN,
+  TEXT_COLUMN_MAX,
   TEXT_FACES,
   TEXT_FACE_STACK,
   TEXT_KIND,
@@ -98,8 +99,11 @@ describe("the name a text node goes by", () => {
 });
 
 describe("the box it starts in", () => {
-  it("is one width, so the CLI and the app agree before anything measures", () => {
-    expect(textBox("hello").width).toBe(TEXT_WIDTH);
+  it("is the width the words need — prose fills the column, a word does not", () => {
+    // What the app's composer commits, guessed: a three-word title gets a
+    // three-word box, a paragraph settles at the step's column.
+    expect(textBox("hello").width).toBeLessThan(TEXT_WIDTH);
+    expect(textBox("word ".repeat(60)).width).toBe(TEXT_WIDTH);
   });
 
   it("grows with the text, and never collapses", () => {
@@ -115,6 +119,49 @@ describe("the box it starts in", () => {
     const short = textBox("short");
     const wrapped = textBox("word ".repeat(60));
     expect(wrapped.height).toBeGreaterThan(short.height * 2);
+  });
+
+  /**
+   * **Never a line short.** The estimate is the box for every node an agent
+   * writes from the terminal, where nothing measures — and a chromeless box
+   * with room to spare is invisible while a box a line short crops the
+   * words. These pin the ways the first estimate came up short.
+   */
+  it("wraps by word, not by character — a long word is never split across the count", () => {
+    // Eleven characters that cannot break: the box widens to hold them.
+    const title = textBox("Onboarding", "display");
+    expect(title.width).toBeGreaterThan(128 * 0.55 * 10);
+    // Two long words that will not share a line at the column are two rows.
+    const two = textBox("Internationalization Internationalization", "title");
+    expect(two.height).toBeGreaterThan(textBox("Internationalization", "title").height * 1.8);
+  });
+
+  it("knows a capital is wider than an i, and mono is one width", () => {
+    expect(textBox("MMMMMMMMMM").width).toBeGreaterThan(textBox("iiiiiiiiii").width * 2);
+    expect(textBox("iiiiiiiiii", "body", "mono").width).toBeGreaterThan(textBox("iiiiiiiiii", "body", "sans").width);
+  });
+
+  it("draws the hand face larger, the way the app does, so its box is taller too", () => {
+    expect(textBox("a note", "body", "hand").height).toBeGreaterThan(textBox("a note", "body", "sans").height);
+  });
+
+  it("pays a paragraph's margin, and reads markdown's furniture as no width", () => {
+    const flowing = textBox("one\ntwo");
+    const paragraphs = textBox("one\n\ntwo");
+    expect(paragraphs.height).toBeGreaterThan(flowing.height);
+    // The marker takes no width; the heading itself is drawn at the
+    // stylesheet's 18px, so at body size it is a little wider than the word.
+    expect(textBox("# Title").width).toBeGreaterThanOrEqual(textBox("Title").width);
+    expect(textBox("# Title").width).toBeLessThan(textBox("Title").width * 1.3);
+    // A list is indented by the browser's own 40px and keeps its margins,
+    // so it is wider and a little taller than the same lines bare.
+    expect(textBox("- a\n- b").width).toBeGreaterThan(textBox("a\nb").width + 30);
+    expect(textBox("- a\n- b").height).toBeGreaterThan(textBox("a\nb").height);
+  });
+
+  it("caps a word longer than the hard limit at the limit — the stylesheet breaks it there", () => {
+    const w = textBox("x".repeat(400), "display").width;
+    expect(w).toBeLessThanOrEqual(TEXT_COLUMN_MAX.display);
   });
 });
 

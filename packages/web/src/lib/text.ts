@@ -50,7 +50,7 @@ export async function addTextNode(
    * a post-it will not hold an essay, so it holds an idea. A note sized to
    * its words is a text node with a background.
    */
-  const box = paper !== null ? { width: PAPER_SIZE, height: PAPER_SIZE } : (measured ?? textBox(body, style));
+  const box = paper !== null ? { width: PAPER_SIZE, height: PAPER_SIZE } : (measured ?? textBox(body, style, face));
   /**
    * **`sendEchoed`, so the thing you just made appears when you make it.**
    *
