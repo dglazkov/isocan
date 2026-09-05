@@ -60,6 +60,10 @@
      from the nearest of any of them, which is the widest gap on the wheel,
      and 5.23:1 on `--card` / 5.05:1 on `--ground`. */
   --slide: #b8339f;
+  /* A doorway: an item that leads somewhere else — a canvas card, a live site,
+     a Google Doc — wears this on a dashed border. Teal, so it is neither the
+     accent (selected), the slide (in the deck) nor a warning. */
+  --away: #1f7a6b;
   /* **Paper** (`core/textnode.ts`). Tints rather than the semantic hues:
      warn/accent/good/danger mean things, and seven more colours belong to
      people. Paper is a BACKGROUND, which reads in a different register from a
@@ -151,6 +155,7 @@
   /* Lifted for the dark ground, like every other hue here: 6.30:1 on `--card`,
      7.22:1 on `--ground`. The light value would sit at 2.69 and disappear. */
   --slide: #e07ccb;
+  --away: #4fb39f;
   /* Paper stays PALE in the dark, because that is what paper is — a bright
      object on a dark desk, which is exactly how a sticky note reads on a
      board at night. Dimmed rather than inverted: the same tints a few steps
@@ -943,6 +948,12 @@ img { height: auto; }
    `.item.selected` is declared after this and paints the accent over it. */
 .item.slide { border-color: var(--slide); }
 .item.slide:hover { box-shadow: var(--shadow-card), 0 0 0 1px var(--slide); }
+/* A doorway — a canvas card, a live site, a Google Doc: dashed, in its own
+   colour, so a wall of cards says which ones lead away before you find the ↗.
+   Dashed rather than a second solid hue: a dashed edge reads as "through
+   here", which is what the item is. */
+.item.away { border-style: dashed; border-color: var(--away); }
+.item.away:hover { box-shadow: var(--shadow-card), 0 0 0 1px var(--away); }
 .item.selected { outline: calc(2px / var(--scale, 1)) solid var(--accent); z-index: 1; }
 /* STEPPED INSIDE — the item is running. Its scripts are live, its links work,
    and the wheel belongs to it rather than to the canvas. That is a different
@@ -3370,6 +3381,18 @@ button.mt-card:hover { border-color: var(--accent); }
    the field and four rows that narrow it. The rows are radios in a group,
    so a state chosen is a state a reader is told. */
 .add-door { position: relative; }
+/* **Where the Add popover sits.** It hung off the TOP of the + button and grew
+   downward, and the + is the last thing on the rail: on a short window the
+   list of canvases ran off the bottom of the viewport, and the last rows were
+   unreachable. So it is placed against the viewport, not the button — centred
+   beside the rail like the rail itself, never taller than the window, and its
+   list scrolls inside it rather than pushing the Add button out of reach.
+   The right offset is the rail's inset plus its width plus the gutter. */
+.add-door .add-popover {
+  position: fixed; top: 50%; right: calc(var(--edge) + 40px + 20px);
+  transform: translateY(-50%);
+  max-height: calc(100vh - 2 * var(--edge)); overflow: auto;
+}
 .add-popover .text-input { width: 320px; }
 .add-preview { font-size: 11px; color: var(--ink-muted); white-space: normal; min-height: 1.3em; }
 .add-kinds { display: flex; gap: 4px; }
@@ -3382,7 +3405,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .add-kind.active { color: var(--ink); border-color: var(--accent); background: var(--accent-wash, var(--chip)); }
 .canvas-picker { flex-direction: column; align-items: stretch; gap: 8px; }
 .canvas-picker .text-input { width: 300px; }
-.canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow: auto; }
+.canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: min(280px, 36vh); overflow: auto; }
 .canvas-picker-row {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   padding: 6px 8px; border: none; border-radius: 6px; background: none; cursor: pointer;
