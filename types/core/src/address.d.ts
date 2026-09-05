@@ -35,6 +35,9 @@ export declare function canvasPath(canvasId: string): string;
 export declare function itemPath(canvasId: string, itemId: string): string;
 /** The whole address of one item, full screen: origin + path. */
 export declare function itemUrl(origin: string, canvasId: string, itemId: string): string;
+export declare const DECK_ROUTE = "/p/:canvasId/deck";
+export declare function deckPath(canvasId: string): string;
+export declare function deckUrl(origin: string, canvasId: string): string;
 export declare const WORKBENCH_ROUTE = "/p/:canvasId/w";
 export declare const WORKBENCH_ITEM_ROUTE = "/p/:canvasId/w/:wbItemId";
 /** The workbench with nothing focused — the agent room itself. */
