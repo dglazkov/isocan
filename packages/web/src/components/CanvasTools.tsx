@@ -6,7 +6,7 @@ import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
 import { AddPopover } from "./AddPopover.tsx";
-import { hideMenu, useChromeHidden } from "../lib/chromemenu.tsx";
+import { hideMenu, showMenu, useChromeHidden } from "../lib/chromemenu.tsx";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -186,7 +186,15 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
   }
 
   return (
-    <div className="tool-rail" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
+    <div
+      className="tool-rail"
+      role="toolbar"
+      aria-label="Canvas tools"
+      aria-orientation="vertical"
+      // Chrome you can turn off, door 2: the rail's gap offers back what was
+      // hidden from it (only when something is).
+      onContextMenu={(e) => showMenu(e, "the rail")}
+    >
       {TOOLS.map((t) => (
         <div key={t.tool} className="tool-slot">
           <button
