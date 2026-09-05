@@ -1,7 +1,7 @@
 ---
-status: partial
+status: built
 since: 2026-08-29
-note: import landed; the round-trip did not
+note: import landed 24 Aug; the round-trip landed 4 Sep — the export is DTCG 2025.10 and validates against the official schema for every file in a twelve-file slice of the corpus, the import reads the reference exporter's own files, and the linter went from 42 failing files of 74 to 13, all true findings
 ---
 # Design systems an agent writes, tokens a machine can read
 
@@ -447,6 +447,48 @@ curl -s -o schema.json https://www.designtokens.org/schemas/2025.10/format.json
 
 Everything numeric above came from one of those commands, from the GitHub API
 on 24 Aug 2026, or from a vendor page linked below. Nothing is estimated.
+
+## What was built
+
+**4 September 2026 — the recommendation, all three parts.** The corpus was
+fetched again (74 files) and the linter run over it before anything changed:
+**42 files, 308 errors**, the note's numbers exactly. Then:
+
+1. **`tokens.ts` emits DTCG 2025.10.** A colour is `{colorSpace: "srgb",
+   components, hex}` — `rgb()`, `rgba()`, `hsl()` and eight-digit hex are
+   converted too, since their arithmetic is exact, with `alpha` carried; a
+   dimension is `{value, unit}`; typography carries `$type` on the leaf and
+   keeps `lineHeight`, saying a px line-height over a px size as the ratio it
+   is (70.4px on 64px is 1.1); `$schema` names the version. The composite is
+   all-or-nothing, so a level that states three of its five fields is filled
+   with CSS's initial values — weight 400, letter-spacing 0, line-height 1.2
+   — and the leaf's `$description` says which were filled. What DTCG cannot
+   say — `fontFeature`, `fontVariation`, the components, an `oklch()` colour,
+   a `clamp()` size — rides in `$extensions["io.isocan"]` with the reason,
+   never dropped in silence; a unitless spacing is a `number` token that says
+   it is a ratio rather than wearing a guessed unit. `fromDtcg` reads both
+   shapes and both group names, and `design import` — which walks the tree
+   itself — now reads colour and dimension objects and typography composites
+   instead of calling them "composite, no home" and importing nothing from the
+   reference exporter's own files. The `[object Object]` in `toCss` cannot
+   recur: the readers return strings.
+2. **The linter stopped failing valid input.** References are resolved by
+   substitution inside a value (`{spacing.md} {spacing.lg}` is a padding):
+   214 errors gone. `|` and `>` block scalars are read: 43 gone, and with them
+   the front matters they had been throwing away. `rgba()`/`hsla()` are
+   colours: 38 gone. **74 files now read 13 errors in 13 files** — ten with
+   no front matter at all, three real contrast failures — which is the target
+   this note set, with the subject of every remaining error a true finding.
+3. **The corpus is a fixture.** Twelve of the files are checked in under
+   `packages/core/test/fixtures/design-md/` (MIT), with the official 2025.10
+   schema beside them; `core/test/corpus.test.ts` asserts every front matter
+   reads clean, the two true errors the slice contains and no others, and
+   that every file's export **validates against the schema with ajv** (a root
+   dev dependency, nothing in core). That last one is the promise `--help`
+   makes, measured on every commit.
+
+Not done: the 74-file fetch is a script in the note above rather than a
+nightly, and the DTCG Resolver's modes (runner-up 1) stay a runner-up.
 
 ## Sources
 

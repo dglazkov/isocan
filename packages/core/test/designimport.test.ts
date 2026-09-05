@@ -82,6 +82,28 @@ describe("deciding what a token IS", () => {
   });
 });
 
+describe("the reference exporter's own file imports whole", () => {
+  it("reads DTCG 2025.10 colour and dimension objects, and a typography composite, into DESIGN.md's shape", () => {
+    const text = JSON.stringify({
+      $schema: "https://www.designtokens.org/schemas/2025.10/format.json",
+      color: { brand: { $type: "color", $value: { colorSpace: "srgb", components: [0.325, 0.227, 0.992], hex: "#533afd" } } },
+      spacing: { xxs: { $type: "dimension", $value: { value: 2, unit: "px" } } },
+      rounded: { md: { $type: "dimension", $value: { value: 8, unit: "px" } } },
+      typography: {
+        body: { $type: "typography", $value: { fontFamily: "Inter", fontSize: { value: 16, unit: "px" }, fontWeight: 400, lineHeight: 1.5, letterSpacing: { value: 0, unit: "px" } } },
+      },
+    });
+    const { tokens, problems, format } = importDesign(text, "ref-dtcg.json");
+    expect(format).toBe("dtcg");
+    // Nothing called a composite and dropped: the objects came back as strings.
+    expect(problems.filter((p) => p.includes("composite"))).toEqual([]);
+    expect(tokens.colors).toMatchObject({ "color.brand": "#533afd" });
+    expect(tokens.spacing).toMatchObject({ "spacing.xxs": "2px" });
+    expect(tokens.rounded).toMatchObject({ "rounded.md": "8px" });
+    expect(JSON.stringify(tokens)).not.toContain("[object Object]");
+  });
+});
+
 describe("what an import can answer for itself", () => {
   it("names the system after the file it came from", () => {
     // `design check`'s first complaint about an unnamed system is one an
