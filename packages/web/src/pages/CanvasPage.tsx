@@ -42,6 +42,7 @@ const Workbench = lazy(() =>
 );
 import { FullScreen } from "../components/FullScreen.tsx";
 import { DeckPrint } from "../components/DeckPrint.tsx";
+import { useChromeHidden } from "../lib/hideable.ts";
 import { Viewer } from "../components/Viewer.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
 import { Scrubber } from "../components/Scrubber.tsx";
@@ -178,6 +179,7 @@ function CanvasSurface({
   const onWorkbench = wbItemId !== undefined || wbRootMatch !== null;
   // The third cover: the deck laid out for paper (DeckPrint.tsx).
   const onDeck = useMatch(DECK_ROUTE) !== null;
+  const topFadeHidden = useChromeHidden("canvas.topfade");
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const historyOpen = useUiStore((s) => s.historyOpen);
@@ -853,6 +855,10 @@ function CanvasSurface({
       <div style={{ visibility: itemId || onWorkbench ? "hidden" : "visible" }}>
         <CanvasViewport canvasId={canvasId} actor={actor} />
       </div>
+      {/* A wash of the ground under the top controls, so they read over a
+          busy canvas (lib/hideable.ts, "canvas.topfade"). Over the items,
+          under every piece of chrome, and no pointer target at all. */}
+      {!topFadeHidden && <div className="top-fade" aria-hidden />}
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}

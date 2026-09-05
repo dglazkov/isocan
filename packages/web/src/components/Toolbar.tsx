@@ -7,6 +7,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useUnreadNews } from "./WhatsNew.tsx";
 import { chromeMenu } from "../lib/menuentries.tsx";
+import { showMenu } from "../lib/chromemenu.tsx";
 import { HomeGlyph } from "./Glyphs.tsx";
 import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
@@ -72,7 +73,7 @@ export function Toolbar({
      * `···` is the other half of phase 6 and the place "do not lose features"
      * is most at risk, so it is deliberately not bundled into a restyle.
      */
-    <div className="toolbar">
+    <div className="toolbar" onContextMenu={(e) => showMenu(e, "the top edge")}>
       <div className="bar-cluster floats">
         <Link className="home" to="/" title="All canvases" aria-label="All canvases">
           <HomeGlyph />

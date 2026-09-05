@@ -8,7 +8,7 @@ import { openPanel } from "./panels.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
 import { formatMoves } from "@isocan/core";
 import { canEditNow } from "./capability.ts";
-import { showAllChrome } from "./hideable.ts";
+import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
 import { MODULES } from "../modules.ts";
 
 /**
@@ -137,6 +137,18 @@ export const ACTIONS: readonly Action[] = [
     group: "View",
     available: onCanvas,
     run: showAllChrome,
+  },
+  {
+    id: "top-fade",
+    name: "Top fade",
+    hint: "the wash of the ground under the top controls — off, or back",
+    group: "View",
+    available: onCanvas,
+    run: () => {
+      const hidden = useUiStore.getState().hiddenChrome.includes("canvas.topfade");
+      if (hidden) showChrome("canvas.topfade");
+      else hideChrome("canvas.topfade");
+    },
   },
   {
     id: "theme",
