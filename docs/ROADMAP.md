@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**17 built · 31 still open** — of which 21 partly
-built, 9 designed, 0 blocked, and
+**18 built · 30 still open** — of which 21 partly
+built, 8 designed, 0 blocked, and
 **1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -42,7 +42,7 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open · see evals, personas |
 
-## Designed, not built <sub>9</sub>
+## Designed, not built <sub>8</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -50,7 +50,6 @@ and the done column should not be flattered by either.
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
-| research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia is the one real gap · see ui-refresh |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
 | research | [Roles: a ladder, not a matrix](docs/research/2026-09-01-roles.md) | 2026-09-01 | four rungs on one ladder — Owner, Editor, Canvas Viewer, Presentation Viewer; today's `view` already IS the presentation rung, so the work is one new rung in the middle and one decision about Owner · see multiuser |
 | research | [Sheepdog](docs/research/2026-09-04-sheepdog.md) | 2026-09-04 | designed 4 Sep — a pet agent a person owns, on every canvas they can reach by default, that listens to its owner, to named people, or to everyone, with one switch for spend; four ways to home it in the cloud weighed, a kennel record and a wake signal recommended, in four stages. Nothing built · see standing-agents, on-demand, agent-custody, multi-identity |
@@ -62,7 +61,7 @@ and the done column should not be flattered by either.
 | --- | --- | --- | --- |
 | research | [Modules: adding a kind of thing, and taking it away again](docs/research/2026-09-04-modules.md) | 2026-09-04 | the closed registries are counted; recommends internal modules first, Mermaid as the first node type, runtime loading third, sandboxes last · see extensions, workbench, iso-api, mindmap, atlas |
 
-## Built <sub>17</sub>
+## Built <sub>18</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -71,6 +70,7 @@ and the done column should not be flattered by either.
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | all four phases done 27–29 Aug 2026 — the home says which commit it runs, a CLI that disagrees says so once, an upgrade is a build installed aside and probed before `current` flips, and a managed install upgrades while parked. Three open items stay named at the top of phases.md. · see auto-upgrade |
 | **project** | [harnesses](docs/projects/harnesses/journey.md) | 2026-09-04 | built 4 Sep 2026 — pi and codex join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan. · see harnesses, on-demand, standing-agents |
 | **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface, all four phases closed 31 Aug 2026, every journey played for real: the board is one process on `@isocan/api`, the watcher resumes where it stopped, a stranger machine installed from the release branch and landed an op at dev as its own actor, and a Scene-6 agent found the API through --agent-help alone. · see multiuser, on-demand |
+| research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia was the one real gap; built 4 Sep with arrival motion — a Hand or middle-button drag coasts under the note's three conditions, and an item from somebody else comes in rather than popping · see ui-refresh |
 | **project** | [multi-identity](docs/projects/multi-identity/journey.md) | 2026-09-01 | all five phases closed 1 Sep 2026 — the door starts the proof and shows who this browser may be, the refusal renders its remedy, the first machine's words lead with resumption, and actor.join folds a second actor into the person who holds both. Journeys 1–6 walked on a scratch home borrowing dev's attester. · see multiuser |
 | **project** | [multiuser](docs/projects/multiuser/journey.md) | 2026-08-30 | every phase closed or retired as of 30 Aug — 11 closed by Scene 6 played at dev (prj_hRulnNyXph), 12/12.5/12.7/13 retired, agent-on-demand moved to the on-demand project · see multiuser, on-demand |
 | **project** | [on-demand](docs/projects/on-demand/journey.md) | 2026-08-30 | every phase closed 30 Aug 2026 — `isocan rc` parks against the home, vends agent sessions over ACP, and a summoned agent replies in a thread with presence; journey 10 (a week on one canvas) is lived rather than built. Residue is personas and the web tray's answerable relay (the latter built 31 Aug by agent-custody). AUTHORITATIVE for the wake since 30 Aug. · see on-demand, launch |

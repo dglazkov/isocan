@@ -7,6 +7,7 @@ import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.
 import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
+import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFailure, addFiles } from "../lib/upload.ts";
 import { placeSketch } from "../lib/sketch.ts";
@@ -117,6 +118,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const penHeld = useRef(false);
   // Pending settle: the ink becomes an item when this fires (see INK_SETTLE_MS).
   const settleTimer = useRef<number | null>(null);
+  // The running coast's stopper, reachable from the wheel effect below
+  // without being one of its dependencies (a ref, not a closure).
+  const stopCoastRef = useRef<() => void>(() => {});
 
   // A macOS trackpad pinch is a wheel event with ctrlKey set (Chrome/Firefox)
   // or a gesture event (Safari). Left alone, the browser zooms the whole page —
@@ -194,6 +198,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         return;
       }
       e.preventDefault();
+      // A wheel during a coast takes over from it.
+      stopCoastRef.current();
       const ui = useUiStore.getState();
       ui.setViewport(pan(ui.viewport, -e.deltaX, -e.deltaY));
     }
@@ -396,6 +402,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
     // through activeTool too.) The Hand tool pans from anywhere — an item
     // yields its pointer when it is active — so it is not gated on background.
+    // A press during a coast stops it where it is — nobody waits for the
+    // canvas to finish moving.
+    stopCoast();
     const wantsPan = e.button === 1 || (activeTool === "hand" && e.button === 0);
 
     if (activeTool === "zoom" && e.button === 0) {
@@ -502,17 +511,60 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     el.addEventListener("pointercancel", onUp);
   }
 
+  /**
+   * **Pan inertia** (motion note, recommendation 1): a Hand or middle-button
+   * drag coasts after release, the way every canvas people arrive from
+   * does. The arithmetic is `lib/inertia.ts`; this is the loop, and the two
+   * conditions only the viewport can keep — interruptible (a press or a
+   * wheel stops it where it is, see `stopCoast`) and off under reduced
+   * motion, which the note calls the honest cost.
+   */
+  const coasting = useRef<number | null>(null);
+  function stopCoast() {
+    if (coasting.current !== null) {
+      cancelAnimationFrame(coasting.current);
+      coasting.current = null;
+      setPanning(false);
+    }
+  }
+  stopCoastRef.current = stopCoast;
+  function startCoast(v: { vx: number; vy: number }) {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let velocity = v;
+    let lastAt = performance.now();
+    setPanning(true);
+    const frame = (now: number) => {
+      const step = coastFrame(velocity, Math.min(now - lastAt, 64));
+      lastAt = now;
+      velocity = step.next;
+      const ui = useUiStore.getState();
+      ui.setViewport(pan(ui.viewport, step.dx, step.dy));
+      if (step.done) {
+        coasting.current = null;
+        setPanning(false);
+        return;
+      }
+      coasting.current = requestAnimationFrame(frame);
+    };
+    coasting.current = requestAnimationFrame(frame);
+  }
+
   function startPan(e: React.PointerEvent) {
     e.preventDefault();
+    stopCoast();
     const el = ref.current!;
     el.setPointerCapture(e.pointerId);
     setPanning(true);
     let last = { x: e.clientX, y: e.clientY };
+    // The last moments of the drag, for the flick's speed at release.
+    const samples: Sample[] = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
 
     function onMove(ev: PointerEvent) {
       const dx = ev.clientX - last.x;
       const dy = ev.clientY - last.y;
       last = { x: ev.clientX, y: ev.clientY };
+      samples.push({ t: performance.now(), x: ev.clientX, y: ev.clientY });
+      if (samples.length > 12) samples.shift();
       const ui = useUiStore.getState();
       ui.setViewport(pan(ui.viewport, dx, dy));
     }
@@ -521,6 +573,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
       setPanning(false);
+      const v = flickVelocity(samples, performance.now());
+      if (v) startCoast(v);
     }
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerup", onUp);

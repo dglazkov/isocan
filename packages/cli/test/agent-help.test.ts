@@ -15,10 +15,13 @@ import { describe, expect, it } from "vitest";
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const guideFile = fileURLToPath(new URL("../src/agent-guide.md", import.meta.url));
 
-function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+async function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  // A home nothing has ever run in: no identity, no config, no daemon — and
+  // FRESH, made for this run. A fixed /tmp path was "never run in" only on
+  // the first machine that ran it (a latent debt named on the roadmap).
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-agent-help-"));
   const child = spawn(process.execPath, [cliBin, ...args], {
-    // A home nothing has ever run in: no identity, no config, no daemon.
-    env: { ...process.env, ISOCAN_HOME: path.join(os.tmpdir(), "isocan-agent-help-home") },
+    env: { ...process.env, ISOCAN_HOME: home },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
