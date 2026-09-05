@@ -1,4 +1,5 @@
 import type { DesignTokens } from "./designmd.ts";
+import { dtcgColorString, dtcgDimensionString } from "./tokens.ts";
 
 /**
  * **Bringing somebody else's theme onto this canvas.**
@@ -125,14 +126,38 @@ function walkDtcg(
   const record = node as Record<string, unknown>;
   if ("$value" in record) {
     const value = record.$value;
+    const type = typeof record.$type === "string" ? record.$type : null;
+    if (typeof value === "string" || typeof value === "number") {
+      out.set(path.join("."), { value: String(value), ...(type ? { type } : {}) });
+      return;
+    }
+    // DTCG 2025.10's objects — a colour `{colorSpace, components, hex}`, a
+    // dimension `{value, unit}` — read back to the strings DESIGN.md writes.
+    // These used to be called composites and dropped, which meant the
+    // reference exporter's own files imported as nothing.
+    const asColor = dtcgColorString(value);
+    if (asColor !== undefined && (type === "color" || type === null)) {
+      out.set(path.join("."), { value: asColor, type: "color" });
+      return;
+    }
+    const asDimension = dtcgDimensionString(value);
+    if (asDimension !== undefined) {
+      out.set(path.join("."), { value: String(asDimension), ...(type ? { type } : { type: "dimension" }) });
+      return;
+    }
+    // A typography composite is several properties; each becomes its own
+    // leaf under the level's name, so the buckets below read them as they
+    // read a flat file's `heading.fontSize`.
+    if (type === "typography" && value && typeof value === "object") {
+      for (const [prop, raw] of Object.entries(value as Record<string, unknown>)) {
+        const flat = typeof raw === "string" || typeof raw === "number" ? String(raw) : dtcgDimensionString(raw);
+        if (flat !== undefined) out.set([...path, prop].join("."), { value: String(flat), type: "typography" });
+      }
+      return;
+    }
     // A composite value (a shadow, a gradient) is not something DESIGN.md has
     // a home for yet. Said, not swallowed.
-    if (typeof value === "string" || typeof value === "number") {
-      const type = typeof record.$type === "string" ? record.$type : null;
-      out.set(path.join("."), { value: String(value), ...(type ? { type } : {}) });
-    } else {
-      out.set(path.join("."), { value: "", type: "composite" });
-    }
+    out.set(path.join("."), { value: "", type: "composite" });
     return;
   }
   for (const [key, child] of Object.entries(record)) {

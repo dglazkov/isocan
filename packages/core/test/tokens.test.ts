@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CONTRAST_BODY,
+  type DtcgNode,
   contrastRatio,
   fromDtcg,
   luminance,
@@ -34,29 +35,103 @@ components:
 `).tokens;
 
 describe("the W3C format, out and back", () => {
-  it("wraps every leaf in $value and types the group", () => {
-    const dtcg = toDtcg(TOKENS);
-    expect(dtcg.colors).toMatchObject({ $type: "color", primary: { $value: "#1A1C1E" } });
-    expect(dtcg.spacing).toMatchObject({ $type: "dimension", md: { $value: "16px" } });
-    expect(dtcg.typography).toMatchObject({ $type: "typography" });
-  });
-
-  it("keeps a reference a reference — both formats spell it the same way", () => {
-    expect(toDtcg(TOKENS).components).toMatchObject({
-      button: { background: { $value: "{colors.accent}" } },
+  it("emits DTCG 2025.10: typed leaves, colour and dimension objects, $schema", () => {
+    const dtcg = toDtcg(TOKENS) as Record<string, Record<string, DtcgNode>>;
+    expect(dtcg.$schema).toBe("https://www.designtokens.org/schemas/2025.10/format.json");
+    // `color`, the spec's group name — not `colors`; the value an object, not a hex string.
+    expect(dtcg.color!.primary).toEqual({
+      $type: "color",
+      $value: { colorSpace: "srgb", components: [0.102, 0.1098, 0.1176], hex: "#1a1c1e" },
+    });
+    expect(dtcg.spacing!.md).toEqual({ $type: "dimension", $value: { value: 16, unit: "px" } });
+    expect(dtcg.rounded!.sm).toEqual({ $type: "dimension", $value: { value: 4, unit: "px" } });
+    // $type on the typography LEAF, and lineHeight kept — the reference
+    // exporter drops it and fails its own schema for exactly that.
+    // The composite is all-or-nothing, so a missing letterSpacing is filled
+    // with CSS's initial value — and the leaf SAYS which fields were filled.
+    expect(dtcg.typography!.bodyMd).toEqual({
+      $type: "typography",
+      $value: { fontFamily: "Public Sans", fontSize: { value: 16, unit: "px" }, fontWeight: 400, lineHeight: 1.6, letterSpacing: { value: 0, unit: "px" } },
+      $description: "letterSpacing: not in DESIGN.md — CSS initial value, which the composite requires",
     });
   });
 
-  it("comes back from W3C to the front-matter shape", () => {
-    const back = fromDtcg(toDtcg(TOKENS) as Record<string, unknown>);
-    expect(back.colors).toEqual(TOKENS.colors);
-    expect(back.spacing).toEqual(TOKENS.spacing);
-    expect(back.typography).toEqual(TOKENS.typography);
+  it("says a px line-height over a px size as the ratio it is, and rgb()/hsl() as sRGB with alpha", () => {
+    const dtcg = toDtcg({
+      colors: { veil: "rgba(255,255,255,0.7)", sky: "hsl(210 100% 50%)" },
+      typography: { display: { fontFamily: "Inter", fontSize: "64px", fontWeight: 500, lineHeight: "70.4px", letterSpacing: "-1.92px" } },
+    }) as Record<string, Record<string, DtcgNode>>;
+    expect((dtcg.typography!.display!.$value as { lineHeight: number }).lineHeight).toBe(1.1);
+    expect(dtcg.color!.veil!.$value).toEqual({ colorSpace: "srgb", components: [1, 1, 1], hex: "#ffffff", alpha: 0.7 });
+    expect((dtcg.color!.sky!.$value as { hex: string }).hex).toBe("#0080ff");
   });
 
-  it("reads a plain W3C file that never came from here", () => {
-    const back = fromDtcg({ colors: { $type: "color", brand: { $value: "#123456" } } });
+  it("keeps what it cannot say, with the reason, instead of dropping it", () => {
+    const dtcg = toDtcg({
+      colors: { glow: "oklch(0.7 0.1 200)" },
+      typography: { fluid: { fontFamily: "Inter", fontSize: "clamp(1rem, 2vw, 2rem)" } },
+    }) as { color?: unknown; typography?: unknown; $extensions: Record<string, { unexported: Record<string, { why: string }> }> };
+    expect(dtcg.color).toBeUndefined();
+    expect(dtcg.typography).toBeUndefined();
+    expect(Object.keys(dtcg.$extensions["io.isocan"]!.unexported)).toEqual(["colors.glow", "typography.fluid"]);
+    expect(dtcg.$extensions["io.isocan"]!.unexported["typography.fluid"]!.why).toContain("fontSize");
+  });
+
+  it("puts what DTCG has no home for in $extensions rather than dropping it", () => {
+    const dtcg = toDtcg(TOKENS) as { $extensions: Record<string, { components: unknown }> };
+    expect(dtcg.$extensions["io.isocan"]!.components).toEqual({ button: { background: "{colors.accent}" } });
+    const withFeature = toDtcg({ typography: { h1: { fontFamily: "Inter", fontSize: "32px", fontFeature: '"ss01"' } } }) as Record<string, Record<string, DtcgNode>>;
+    expect(withFeature.typography!.h1!.$extensions).toEqual({ "io.isocan": { fontFeature: '"ss01"' } });
+  });
+
+  it("does not invent a unit: a unitless ratio is a number token that says so", () => {
+    const dtcg = toDtcg({ spacing: { unit: 4 } }) as Record<string, Record<string, DtcgNode>>;
+    expect(dtcg.spacing!.unit!.$type).toBe("number");
+    expect(dtcg.spacing!.unit!.$value).toBe(4);
+    expect(String(dtcg.spacing!.unit!.$description)).toContain("unitless");
+  });
+
+  it("keeps a reference a reference — both formats spell it the same way", () => {
+    const dtcg = toDtcg({ colors: { accent: "#B8422E", link: "{colors.accent}" } }) as Record<string, Record<string, DtcgNode>>;
+    expect(dtcg.color!.link).toEqual({ $type: "color", $value: "{colors.accent}" });
+  });
+
+  it("comes back from W3C to the front-matter shape, round-tripping the export", () => {
+    const back = fromDtcg(toDtcg(TOKENS) as Record<string, unknown>);
+    expect(back.colors).toEqual({ primary: "#1a1c1e", accent: "#b8422e" });
+    expect(back.spacing).toEqual(TOKENS.spacing);
+    expect(back.rounded).toEqual(TOKENS.rounded);
+    // The one asymmetry, on purpose: the composite required a letterSpacing
+    // the file never stated, so the round trip comes back with the CSS
+    // initial value written down — a stated 0px, not a silent one.
+    expect(back.typography).toEqual({ bodyMd: { ...TOKENS.typography!.bodyMd, letterSpacing: "0px" } });
+    expect(back.components).toEqual(TOKENS.components);
+  });
+
+  it("reads the reference exporter's shape — `color` group, objects — and never hands toCss an object", () => {
+    const back = fromDtcg({
+      color: { brand: { $type: "color", $value: { colorSpace: "srgb", components: [0.325, 0.227, 0.992], hex: "#533afd" } } },
+      spacing: { xxs: { $type: "dimension", $value: { value: 2, unit: "px" } } },
+      typography: { body: { $type: "typography", $value: { fontFamily: "Inter", fontSize: { value: 16, unit: "px" }, fontWeight: 400, lineHeight: 1.5 } } },
+    });
+    expect(back.colors).toEqual({ brand: "#533afd" });
+    expect(back.spacing).toEqual({ xxs: "2px" });
+    expect(back.typography).toEqual({ body: { fontFamily: "Inter", fontSize: "16px", fontWeight: 400, lineHeight: 1.5 } });
+    expect(toCss(back)).toContain("--space-xxs: 2px;");
+    expect(toCss(back)).not.toContain("[object Object]");
+    // A triple with no hex still comes back as one.
+    expect(fromDtcg({ color: { x: { $value: { colorSpace: "srgb", components: [1, 0, 0] } } } }).colors).toEqual({ x: "#ff0000" });
+  });
+
+  it("still reads the legacy string shape this exporter used to write — `colors`, hex strings, `16px`", () => {
+    const back = fromDtcg({
+      colors: { $type: "color", brand: { $value: "#123456" } },
+      spacing: { $type: "dimension", md: { $value: "16px" } },
+      typography: { $type: "typography", body: { $value: { fontFamily: "Inter", fontSize: "16px", lineHeight: 1.5 } } },
+    });
     expect(back.colors).toEqual({ brand: "#123456" });
+    expect(back.spacing).toEqual({ md: "16px" });
+    expect(back.typography).toEqual({ body: { fontFamily: "Inter", fontSize: "16px", lineHeight: 1.5 } });
   });
 });
 
