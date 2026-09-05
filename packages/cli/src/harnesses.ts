@@ -1,5 +1,9 @@
-import { promises as fs } from "node:fs";
+import { execFile } from "node:child_process";
+import { createWriteStream, promises as fs } from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { promisify } from "node:util";
 import { builtinHarnesses } from "@isocan/api";
 import { readConfigFile, updateConfigFile } from "@isocan/server";
 
@@ -39,11 +43,114 @@ export interface AdapterSpec {
    * at spawn — a builtin's knowledge of its own harness, never a person's
    * setting. */
   env?: Record<string, string>;
+  /** Make sure the bridge is here before spawning — a builtin fetched on
+   * first use rather than shipped. Narrates through the callback. */
+  ensure?: (narrate: (line: string) => void) => Promise<void>;
+}
+
+/**
+ * **Google's ACP server for Antigravity** (2026-09-04): official, listed in
+ * the ACP registry, and distributed as a per-platform zip from
+ * dl.google.com rather than npm — so it is the one builtin that is fetched
+ * into the isocan home on first use instead of by `npx`. The registry's
+ * `antigravity-acp/agent.json` is the source of these URLs and of the
+ * Linux `--uid=` quirk. It authenticates by `GEMINI_API_KEY` (its
+ * `gemini-api-key` method; `acp.ts` answers the login refusal with it) —
+ * the Google-account method needs a browser and an eligible account, and
+ * refused the first account it was tried with (research/2026-09-04).
+ */
+export const ANTIGRAVITY = {
+  version: "1.1.1",
+  archives: {
+    "darwin-arm64": {
+      url: "https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-agy_acp_server_1.1.1-darwin-arm64.zip",
+      cmd: "agy_acp_server.par",
+      args: [] as string[],
+    },
+    "linux-x64": {
+      url: "https://dl.google.com/agy-extensions/releases/linux/agy-acp-server-agy_acp_server_1.1.1-linux-x86_64.zip",
+      cmd: "agy_acp_server.par",
+      args: ["--uid="],
+    },
+    "linux-arm64": {
+      url: "https://dl.google.com/agy-extensions/releases/linux/agy-acp-server-agy_acp_server_1.1.1-linux-arm64.zip",
+      cmd: "agy_acp_server.par",
+      args: ["--uid="],
+    },
+    "win32-x64": {
+      url: "https://dl.google.com/agy-extensions/releases/windows/agy-acp-server-agy_acp_server_1.1.1-windows-x86_64.zip",
+      cmd: "agy_acp_server.exe",
+      args: [] as string[],
+    },
+    "win32-arm64": {
+      url: "https://dl.google.com/agy-extensions/releases/windows/agy-acp-server-agy_acp_server_1.1.1-windows-arm64.zip",
+      cmd: "agy_acp_server.exe",
+      args: [] as string[],
+    },
+  } as Record<string, { url: string; cmd: string; args: string[] }>,
+};
+
+const platformKey = () => `${process.platform}-${process.arch}`;
+
+export const antigravityDir = (home: string) => path.join(home, "adapters", "antigravity", ANTIGRAVITY.version);
+
+/** The server's executable, if this platform has one; null where Google
+ * ships none. */
+function antigravityArchive(): { url: string; cmd: string; args: string[] } | null {
+  return ANTIGRAVITY.archives[platformKey()] ?? null;
+}
+
+export async function antigravityInstalled(home: string): Promise<boolean> {
+  const archive = antigravityArchive();
+  if (!archive) return false;
+  try {
+    await fs.access(path.join(antigravityDir(home), archive.cmd), fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch and unpack the server into the isocan home, once. `unzip` does the
+ * unpacking (the archive is 300 MB; a pure-JS unzip of that is not worth
+ * owning). The zip lands beside the result and is removed after, so a
+ * failed fetch leaves no half-server that `antigravityInstalled` believes.
+ */
+export async function ensureAntigravityServer(
+  home: string,
+  narrate: (line: string) => void,
+  options: { url?: string } = {},
+): Promise<void> {
+  if (await antigravityInstalled(home)) return;
+  const archive = antigravityArchive();
+  if (!archive) throw new Error(`Google ships no Antigravity ACP server for ${platformKey()}`);
+  const dir = antigravityDir(home);
+  await fs.mkdir(dir, { recursive: true });
+  const url = options.url ?? archive.url;
+  narrate(`fetching Google's Antigravity ACP server ${ANTIGRAVITY.version} (about 300 MB, once) → ${dir}`);
+  const res = await fetch(url);
+  if (!res.ok || !res.body) throw new Error(`fetching ${url}: HTTP ${res.status}`);
+  const zip = path.join(dir, "server.zip");
+  await pipeline(Readable.fromWeb(res.body as import("node:stream/web").ReadableStream), createWriteStream(zip));
+  try {
+    await promisify(execFile)("unzip", ["-o", "-q", zip, "-d", dir]);
+  } catch (err) {
+    throw new Error(`unpacking the Antigravity server needs \`unzip\` on the PATH — ${(err as Error).message}`);
+  } finally {
+    await fs.rm(zip, { force: true });
+  }
+  await fs.chmod(path.join(dir, archive.cmd), 0o755).catch(() => {});
+  if (!(await antigravityInstalled(home))) {
+    throw new Error(`the Antigravity server archive did not contain ${archive.cmd}`);
+  }
+  narrate(`Antigravity ACP server ${ANTIGRAVITY.version} ready`);
 }
 
 /** Adapters isocan knows without being told. `npx -y` so the adapter is
  * fetched on first use rather than shipped — isocan must not own a copy of
- * somebody's harness bridge. */
+ * somebody's harness bridge. Antigravity's is fetched too, from Google
+ * rather than npm (`builtinAdapter`). */
 const BUILTIN_ADAPTERS: Record<string, Omit<AdapterSpec, "harness">> = {
   "claude-code": { command: "npx", args: ["-y", "@zed-industries/claude-code-acp"] },
   // `pi-acp` bridges ACP to `pi --mode rpc`; it needs `pi` on the PATH
@@ -64,6 +171,21 @@ const BUILTIN_ADAPTERS: Record<string, Omit<AdapterSpec, "harness">> = {
   },
 };
 
+/** The builtin for a harness, or null. A function because Antigravity's
+ * command is a path inside the home. */
+function builtinAdapter(home: string, name: string): Omit<AdapterSpec, "harness"> | null {
+  if (name === "antigravity") {
+    const archive = antigravityArchive();
+    if (!archive) return null;
+    return {
+      command: path.join(antigravityDir(home), archive.cmd),
+      args: archive.args,
+      ensure: (narrate) => ensureAntigravityServer(home, narrate),
+    };
+  }
+  return BUILTIN_ADAPTERS[name] ?? null;
+}
+
 /** What "installed" means per harness: the harness's own executable on the
  * PATH. The bridge is fetched on first use, so it is never what is looked
  * for. Absent here means the scan cannot tell (an IDE, a declared adapter). */
@@ -72,6 +194,15 @@ const HARNESS_BINARIES: Record<string, string> = {
   pi: "pi",
   codex: "codex",
 };
+
+/** Antigravity is the exception: neither `agy` on the PATH nor the IDE
+ * implies the ACP server, which is its own download with its own login.
+ * Installed means the server is in the home. */
+async function installedProbe(home: string, name: string, env: NodeJS.ProcessEnv): Promise<boolean | null> {
+  if (name === "antigravity") return antigravityInstalled(home);
+  const bin = HARNESS_BINARIES[name];
+  return bin ? onPath(bin, env) : null;
+}
 
 export interface HarnessRow {
   name: string;
@@ -140,9 +271,8 @@ export async function scanHarnesses(
   ]);
   const rows: HarnessRow[] = [];
   for (const name of names) {
-    const bin = HARNESS_BINARIES[name];
-    const installed = bin ? await onPath(bin, env) : null;
-    const adapter = declaredAdapter(raw, name) ? "config" : BUILTIN_ADAPTERS[name] ? "builtin" : null;
+    const installed = await installedProbe(home, name, env);
+    const adapter = declaredAdapter(raw, name) ? "config" : builtinAdapter(home, name) ? "builtin" : null;
     const runnable = adapter === "config" || (adapter === "builtin" && installed !== false);
     rows.push({ name, installed, adapter, runnable, default: false });
   }
@@ -176,7 +306,7 @@ export async function adapterFor(
   const wanted = harness ?? (await scanHarnesses(home, env)).default?.name ?? null;
   if (!wanted) return null;
   const raw = await readConfigFile<HarnessConfig>(home);
-  const spec = declaredAdapter(raw, wanted) ?? BUILTIN_ADAPTERS[wanted] ?? null;
+  const spec = declaredAdapter(raw, wanted) ?? builtinAdapter(home, wanted) ?? null;
   return spec ? { harness: wanted, ...spec } : null;
 }
 

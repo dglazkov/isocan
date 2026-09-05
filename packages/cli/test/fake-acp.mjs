@@ -25,6 +25,12 @@ const known = () => {
 let buffer = "";
 const loaded = new Set();
 let failedALoad = false;
+// FAKE_ACP_AUTH=<methodId>: advertise that one auth method and refuse
+// session verbs until `authenticate` names it — and, for gemini-api-key,
+// until GEMINI_API_KEY is in this process's environment, the way Google's
+// server reads it. The Antigravity shape, scripted.
+const authMethod = process.env.FAKE_ACP_AUTH ?? null;
+let authenticated = authMethod === null;
 
 // The failure modes journey 5 demands, drivable: a session that never
 // starts, and one that dies mid-turn.
@@ -62,9 +68,21 @@ function handle(msg) {
       result: {
         protocolVersion: 1,
         agentCapabilities: { loadSession: true },
-        agentInfo: { name: "fake-acp", version: "0.0.1" },
+        agentInfo: { name: "fake-acp", title: "Fake", version: "0.0.1" },
+        ...(authMethod ? { authMethods: [{ id: authMethod, name: authMethod }] } : {}),
       },
     });
+  } else if (method === "authenticate") {
+    if (params?.methodId !== authMethod) {
+      send({ jsonrpc: "2.0", id, error: { code: -32602, message: `unknown auth method ${params?.methodId}` } });
+    } else if (authMethod === "gemini-api-key" && !process.env.GEMINI_API_KEY) {
+      send({ jsonrpc: "2.0", id, error: { code: -32602, message: "The GEMINI_API_KEY environment variable must be set" } });
+    } else {
+      authenticated = true;
+      send({ jsonrpc: "2.0", id, result: {} });
+    }
+  } else if ((method === "session/new" || method === "session/load") && !authenticated) {
+    send({ jsonrpc: "2.0", id, error: { code: -32000, message: "Authentication required" } });
   } else if (method === "session/new") {
     const sessions = known();
     const sessionId = `sess_fake_${process.pid}_${sessions.length + 1}`;

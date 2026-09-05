@@ -53,6 +53,16 @@ import type { AdapterSpec } from "./harnesses.ts";
  *   `~/.pi/agent/settings.json` silences it; the rc does not depend on the
  *   turn's text either way.
  *
+ * **Login, when an adapter wants one** (Antigravity, 2026-09-04). ACP lets
+ * an agent advertise `authMethods` at initialize and refuse `session/new`
+ * with "Authentication required" until `authenticate` has run. Google's
+ * `agy_acp_server` does exactly that, and its `gemini-api-key` method reads
+ * `GEMINI_API_KEY` from the environment it was launched from. A summoned
+ * session has nobody to click an OAuth link, so the client answers a
+ * refusal with the one kind of method an environment can satisfy
+ * unattended (`UNATTENDED_AUTH`), and otherwise fails naming the methods
+ * and the variable — where the person is looking, not as a hang.
+ *
  * **codex** (`@agentclientprotocol/codex-acp`, verified 2026-09-04) speaks
  * the same wire and resumes through `session/load` with memory intact. It
  * asked no permission for a shell command or a file write in its default
@@ -118,8 +128,24 @@ export interface TurnEvent {
   detail?: string;
 }
 
+/** Auth methods an environment can satisfy with nobody at a keyboard: the
+ * method id an adapter advertises, and the variable that answers it. The
+ * adapter reads the variable itself; the client only chooses the method. */
+const UNATTENDED_AUTH: Record<string, string> = {
+  "gemini-api-key": "GEMINI_API_KEY",
+};
+
+interface AuthMethod {
+  id: string;
+  name?: string;
+}
+
 export class AcpAgentProcess {
   private child: ChildProcess;
+  private authMethods: AuthMethod[] = [];
+  private agentTitle = "the adapter";
+  private env: NodeJS.ProcessEnv = {};
+  private authenticated = false;
   private buffer = "";
   private nextId = 1;
   private pending = new Map<number, (msg: JsonRpcMessage) => void>();
@@ -142,22 +168,67 @@ export class AcpAgentProcess {
    * to ours: the adapter's own complaints are part of the narration. */
   static async spawn(
     spec: AdapterSpec,
-    options: { cwd: string; env: NodeJS.ProcessEnv },
+    options: { cwd: string; env: NodeJS.ProcessEnv; narrate?: (line: string) => void },
   ): Promise<AcpAgentProcess> {
+    // A builtin that is fetched rather than shipped (Antigravity's server)
+    // makes sure of itself first — narrated, because a first summons that
+    // downloads 300 MB in silence reads as a hang.
+    if (spec.ensure) await spec.ensure(options.narrate ?? ((line) => console.error(line)));
+    // The bridge's own variables win over the person's: a builtin knows
+    // what its harness needs (codex's sandbox mode), and a person who
+    // wants otherwise declares the adapter in config.json.
+    const env = { ...options.env, ...spec.env };
     const child = spawn(spec.command, spec.args, {
       cwd: options.cwd,
-      // The bridge's own variables win over the person's: a builtin knows
-      // what its harness needs (codex's sandbox mode), and a person who
-      // wants otherwise declares the adapter in config.json.
-      env: { ...options.env, ...spec.env },
+      env,
       stdio: ["pipe", "pipe", "inherit"],
     });
     const agent = new AcpAgentProcess(child);
-    await agent.request("initialize", {
+    agent.env = env;
+    const init = await agent.request("initialize", {
       protocolVersion: 1,
       clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
     });
+    agent.authMethods = Array.isArray(init?.authMethods) ? init.authMethods : [];
+    agent.agentTitle = String(init?.agentInfo?.title ?? init?.agentInfo?.name ?? spec.harness);
     return agent;
+  }
+
+  /** The adapter refused for want of a login: answer with a method the
+   * environment can satisfy, once; otherwise say what would. */
+  private async authenticate(): Promise<void> {
+    if (this.authenticated) throw new Error(`${this.agentTitle} still wants a login after authenticating`);
+    const usable = this.authMethods.find((m) => {
+      const envVar = UNATTENDED_AUTH[m.id];
+      return envVar !== undefined && Boolean(this.env[envVar]?.trim());
+    });
+    if (!usable) {
+      const wanted = Object.entries(UNATTENDED_AUTH)
+        .filter(([id]) => this.authMethods.some((m) => m.id === id))
+        .map(([id, envVar]) => `${envVar} for ${id}`);
+      const methods = this.authMethods.map((m) => m.id).join(", ") || "none advertised";
+      throw new Error(
+        `${this.agentTitle} wants a login before a session (methods: ${methods}) — a summoned session has ` +
+          `nobody to click a link` +
+          (wanted.length > 0 ? `; export ${wanted.join(" or ")} where \`isocan rc\` runs` : "") +
+          `, or log in once with the harness's own tool`,
+      );
+    }
+    this.authenticated = true;
+    await this.request("authenticate", { methodId: usable.id });
+    this.onEvent?.({ kind: "other", detail: `authenticated (${usable.id})` });
+  }
+
+  /** A session verb, with the login step folded in: a refusal for want of
+   * a login is answered once and the verb retried. */
+  private async sessionRequest(method: string, params: unknown): Promise<any> {
+    try {
+      return await this.request(method, params);
+    } catch (err) {
+      if (!/authentication required|not authenticated|unauthenticated/i.test((err as Error).message)) throw err;
+      await this.authenticate();
+      return await this.request(method, params);
+    }
   }
 
   private receive(chunk: string): void {
@@ -269,14 +340,16 @@ export class AcpAgentProcess {
     if (previous) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          await this.request("session/load", { sessionId: previous, cwd, mcpServers: [] });
+          await this.sessionRequest("session/load", { sessionId: previous, cwd, mcpServers: [] });
           return { sessionId: previous, resumed: true };
-        } catch {
+        } catch (err) {
+          // A login refusal is not the transient scar the retry is for.
+          if (/wants a login|still wants a login/.test((err as Error).message)) throw err;
           await new Promise((r) => setTimeout(r, 500));
         }
       }
     }
-    const created = await this.request("session/new", { cwd, mcpServers: [] });
+    const created = await this.sessionRequest("session/new", { cwd, mcpServers: [] });
     return { sessionId: created.sessionId as string, resumed: false };
   }
 

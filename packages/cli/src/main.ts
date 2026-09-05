@@ -9897,7 +9897,7 @@ rcCommand
   .command("add <name>")
   .description("Enrol an agent — the person's point-anywhere form")
   .option("--dir <path>", "the agent's working directory (default: here)")
-  .option("--harness <name>", "how its sessions start: claude-code, pi or codex (default: yours, else unsaid)")
+  .option("--harness <name>", "how its sessions start: claude-code, pi, codex or antigravity (default: yours, else unsaid)")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
   .action(
     run(async (name: string, opts: { dir?: string; harness?: string; rules?: string }, cmd: Command) =>
@@ -9921,7 +9921,8 @@ spawn the agent's ACP adapter, resume its session (or start one), send the
 prompt, narrate the turn, print the stopReason. The session survives this
 process — the resume handle is stored in the enrolment's rc half, and a
 handle that fails to load twice is replaced by a fresh session rather than
-an error. Adapters: claude-code, pi and codex ship known; others are declared in
+an error. Adapters: claude-code, pi, codex and antigravity ship known (Antigravity's
+server is fetched from Google on first use and wants GEMINI_API_KEY); others are declared in
 ~/.isocan/config.json as {"acpAdapters": {"<harness>": ["cmd", "arg"]}}.`,
   )
   .action(
@@ -10579,6 +10580,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       const agent = await AcpAgentProcess.spawn(spec, {
         cwd: row.cwd,
         env: adapterEnv(p.id, record.actor.name),
+        narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
       });
       try {
         // One session handle per AGENT (phase 2): a summons on any canvas
