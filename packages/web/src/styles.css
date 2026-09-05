@@ -1261,6 +1261,14 @@ img { height: auto; }
   background: none; color: var(--ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
 }
 .doc-live-toggle:hover { color: var(--ink); border-color: var(--ink-soft); }
+/* The memory mark on a canvas card's strip (memory phase 3): a word, lit
+   when the other canvas's context is read here, and the switch for it. */
+.memory-mark {
+  flex: none; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line);
+  background: none; color: var(--ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
+}
+.memory-mark:hover { color: var(--ink); border-color: var(--ink-soft); }
+.memory-mark.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
 .doc-live-toggle.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
 /* "double-click to interact" is an instruction, not part of the document — so
    it hangs UNDER the item rather than lying across the bottom of it, and only
