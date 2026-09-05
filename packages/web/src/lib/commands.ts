@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { SlashCommand } from "@isocan/core";
-import { DEFAULT_COMMANDS, mergeCommands } from "@isocan/core";
+import { DEFAULT_COMMANDS, mergeCommands, withModuleCommands } from "@isocan/core";
 import { fetchCommands } from "./api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 
@@ -31,5 +31,7 @@ export function useCommands(): SlashCommand[] {
       alive = false;
     };
   }, [loaded]);
-  return loaded ?? mergeCommands(DEFAULT_COMMANDS, []);
+  // The loaded modules' commands lie under whatever the daemon said: the
+  // daemon registers no module, so its list cannot know them (core/modules.ts).
+  return withModuleCommands(loaded ?? mergeCommands(DEFAULT_COMMANDS, []));
 }

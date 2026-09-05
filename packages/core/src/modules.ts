@@ -1,6 +1,7 @@
 import type { ContextPiece } from "./context.ts";
 import type { CanvasContents, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
+import type { SlashCommand } from "./commands.ts";
 
 /**
  * **The module registry** (`docs/projects/modules/design.md`).
@@ -54,6 +55,34 @@ export interface CoreModule {
   contextPieces?: (canvas: CanvasContents) => ContextPiece[];
   edges?: (canvas: CanvasContents) => ModuleEdge[];
   kinds?: readonly ModuleKind[];
+  /**
+   * **Slash commands** (phase 4): instructions an agent carries out, merged
+   * under the built-ins and the home's own — a third source, `module`, that
+   * is there while the module is and gone when it is not. Text, like every
+   * command; a module's agent tool is a command plus a verb.
+   */
+  commands?: readonly SlashCommand[];
+}
+
+/** Every loaded module's slash commands, in name order. */
+export function moduleCommands(): SlashCommand[] {
+  return modules()
+    .flatMap((m) => (m.commands ?? []).map((c) => ({ ...c, source: "module" as const })))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * A command list with the loaded modules' commands laid UNDER it: a built-in
+ * or a home command of the same name wins, so a module cannot shadow what the
+ * product or the person wrote. Both surfaces call this on whatever list they
+ * hold — the daemon's, or the compiled built-ins — because the daemon
+ * registers no module and the list it serves cannot know them.
+ */
+export function withModuleCommands(commands: readonly SlashCommand[]): SlashCommand[] {
+  const byName = new Map<string, SlashCommand>();
+  for (const command of moduleCommands()) byName.set(command.name, command);
+  for (const command of commands) byName.set(command.name, command);
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 const REGISTRY = new Map<string, CoreModule>();
@@ -145,7 +174,45 @@ export interface ModuleRenderer<R> {
   component: R;
 }
 
-export interface WebModule<C, R = C> {
+/**
+ * **What an inspector is handed** (phase 4): the open item, and its bytes on
+ * request. The workbench mounts a module's inspector beside the stage when
+ * the item's kind is one the inspector names — the slot the extensions
+ * design called for and nothing had asked for until documents did.
+ */
+export interface InspectorFacts {
+  canvasId: string;
+  item: Item;
+  readText: () => Promise<string>;
+}
+
+export interface ModuleInspector<I> {
+  /** The kinds it inspects — built-in ids or a module's. */
+  kinds: readonly string[];
+  label: string;
+  component: I;
+}
+
+/**
+ * **What a page is handed** (phase 4): the canvas, whole. A page is a cover
+ * route of its own — `x/<segment>` under the canvas's path — the same kind of thing the
+ * workbench and the deck view are: an address either surface can hand you,
+ * mounted inside the canvas page so the replica underneath stays open.
+ */
+export interface PageFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+}
+
+export interface ModulePage<P> {
+  /** The path segment: lowercase letters, digits, dashes. */
+  segment: string;
+  label: string;
+  hint?: string;
+  component: P;
+}
+
+export interface WebModule<C, R = never, I = never, P = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
@@ -154,6 +221,10 @@ export interface WebModule<C, R = C> {
   /** How a version of one of this module's kinds is drawn on the card and
    *  the stage — ahead of the built-in chain, lazily loaded by the module. */
   renderers?: readonly ModuleRenderer<R>[];
+  /** Beside the workbench's stage, for items of the kinds it names. */
+  inspectors?: readonly ModuleInspector<I>[];
+  /** Whole sections of the app, each a cover route with an address. */
+  pages?: readonly ModulePage<P>[];
 }
 
 /**

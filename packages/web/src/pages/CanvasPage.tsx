@@ -3,6 +3,7 @@ import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
   DECK_ROUTE,
+  MODULE_PAGE_ROUTE,
   WORKBENCH_ROUTE,
   anchorOffset,
   itemPath,
@@ -42,6 +43,7 @@ const Workbench = lazy(() =>
 );
 import { FullScreen } from "../components/FullScreen.tsx";
 import { DeckPrint } from "../components/DeckPrint.tsx";
+import { ModulePage } from "../components/ModulePage.tsx";
 import { useChromeHidden } from "../lib/hideable.ts";
 import { Viewer } from "../components/Viewer.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
@@ -179,6 +181,8 @@ function CanvasSurface({
   const onWorkbench = wbItemId !== undefined || wbRootMatch !== null;
   // The third cover: the deck laid out for paper (DeckPrint.tsx).
   const onDeck = useMatch(DECK_ROUTE) !== null;
+  // A module's page (ModulePage.tsx): the segment names which.
+  const pageSegment = useMatch(MODULE_PAGE_ROUTE)?.params.segment ?? null;
   const topFadeHidden = useChromeHidden("canvas.topfade");
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
@@ -924,6 +928,7 @@ function CanvasSurface({
       {/* The deck on paper: every slide stacked, printed one to a sheet. A
           route like full screen, mounted here so it reads the open replica. */}
       {onDeck && <DeckPrint canvasId={canvasId} />}
+      {pageSegment && <ModulePage canvasId={canvasId} segment={pageSegment} />}
       {/* The other cover: same architecture, different room. Lazy, so the
           canvas path never pays for it; Suspense falls back to nothing for
           the frame the chunk takes. */}

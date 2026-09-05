@@ -89,6 +89,24 @@ export function deckUrl(origin: string, canvasId: string): string {
 }
 
 /**
+ * **A module's page** (`docs/projects/modules/design.md`, phase 4): a whole
+ * section a module adds — the Documents page is the first — under `x/`, so
+ * a module's segment can never collide with a route the product adds later.
+ * A cover route like the workbench and the deck view: an address either
+ * surface can hand you, and `isocan open --page <segment>` does.
+ */
+const MODULE_PAGE_PATH_SEGMENT = "x";
+export const MODULE_PAGE_ROUTE = `${CANVAS_ROUTE}/${MODULE_PAGE_PATH_SEGMENT}/:segment`;
+
+export function modulePagePath(canvasId: string, segment: string): string {
+  return `${canvasPath(canvasId)}/${MODULE_PAGE_PATH_SEGMENT}/${segment}`;
+}
+
+export function modulePageUrl(origin: string, canvasId: string, segment: string): string {
+  return `${origin.replace(/\/+$/, "")}${modulePagePath(canvasId, segment)}`;
+}
+
+/**
  * **The workbench: the same canvas, flipped to the agent room.**
  *
  * A second projection of the canvas — the agent roster, the main thread, and

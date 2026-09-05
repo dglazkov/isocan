@@ -1,6 +1,6 @@
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, deckPath, itemPath } from "@isocan/core";
+import { canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -9,7 +9,7 @@ import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts"
 import { formatMoves } from "@isocan/core";
 import { canEditNow } from "./capability.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
-import { MODULES } from "../modules.ts";
+import { MODULES, modulePages } from "../modules.ts";
 
 /**
  * **The things the app does itself.**
@@ -306,7 +306,18 @@ export const ACTIONS: readonly Action[] = [
  * so none is offered on the read-only canvas.
  */
 function moduleActions(): Action[] {
-  return MODULES.flatMap((m) =>
+  // A module's pages are doors like the workbench's: "Open Documents".
+  const pages = modulePages().map(
+    (page): Action => ({
+      id: `open-page-${page.segment}`,
+      name: `Open ${page.label}`,
+      ...(page.hint ? { hint: page.hint } : {}),
+      group: "Open",
+      available: onCanvas,
+      run: (ctx) => ctx.navigate(modulePagePath(ctx.canvasId!, page.segment)),
+    }),
+  );
+  return pages.concat(MODULES.flatMap((m) =>
     (m.actions ?? []).map(
       (a): Action => ({
         id: a.id,
@@ -327,7 +338,7 @@ function moduleActions(): Action[] {
         },
       }),
     ),
-  );
+  ));
 }
 
 /**
