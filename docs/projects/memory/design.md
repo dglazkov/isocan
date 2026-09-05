@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents
-note: designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Phases 0–1 built 4 Sep — the Context view and `isocan context` in layers with a heading per source, and `memory=inherit` on a canvas card bringing the linked canvas's design system, pins and size in read-only with provenance and the override rule; `design check` reads the governing one. Phases 2–4 not built
+note: designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Phases 0–1 built 4 Sep — the Context view and `isocan context` in layers with a heading per source, and `memory=inherit` on a canvas card bringing the linked canvas's design system, pins and size in read-only with provenance and the override rule; `design check` reads the governing one. Phase 3 the same day — the Context sheet a first link lays and lands on, and the memory mark on the card as the switch. Phases 2 and 4 not built
 ---
 # Memory, in layers you can see
 
@@ -242,3 +242,16 @@ is no recap function in core to read it from — the "History" row counts
 ops), the small picture of the linked canvas in the panel (the card on the
 canvas already is one), phase 2's `~<name>` canvas, phase 3's *Context*
 sheet convention and the memory mark on the card, and phase 4's MCP surface.
+
+**Phase 3, later the same day.** The *Context* sheet is a convention with
+one name: `contextSheet` is any sheet titled Context, and `contextSheetSpot`
+is where the first link lays it — the origin when the origin is clear,
+otherwise to the left of everything, level with the top, the rule `area
+new` keeps. A link placed with nowhere else said (`canvas place --inherit`
+with no `--at`, `--in`, `--anchor` or `--cell`; the popover's tick) goes onto
+it, laid first if it is the first link; the app gained `addAreaItem`, the
+sheet `isocan area new` makes spelled the same. The memory mark is a word
+on the card's strip, *memory*, lit when the other canvas's context is read
+here — and it is the switch, writing the same patch `isocan context inherit
+| uninherit` writes, so a card already on the canvas becomes a link from
+the strip. Not built: phase 2 and phase 4, as above.

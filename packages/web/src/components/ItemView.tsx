@@ -8,6 +8,8 @@ import {
   DOC_MIME,
   googleDocId,
   googleDocPreviewUrl,
+  memoryOf,
+  memoryPatch,
   annotationsOf,
   isAnnotation,
   isArea,
@@ -845,6 +847,32 @@ function ItemViewInner({
           >
             ↗
           </a>
+        )}
+        {isCanvas && canEdit && (
+          /* The memory mark (memory phase 3): a canvas card says on its strip
+             whether the other canvas's context is read here, and the mark is
+             the switch — `memory=inherit` on, `removeProperties` off, the same
+             patch `isocan context inherit | uninherit` writes. */
+          <button
+            className={`memory-mark${memoryOf(item) === "inherit" ? " active" : ""}`}
+            title={
+              memoryOf(item) === "inherit"
+                ? "Inherited here — its design system and pins are read as part of this canvas's context. Click to stop."
+                : "Not inherited — click to read its design system and pins as part of this canvas's context."
+            }
+            aria-pressed={memoryOf(item) === "inherit"}
+            onClick={(e) => {
+              e.stopPropagation();
+              void sendEchoed(canvasId, actor, {
+                type: "item.update",
+                itemId: item.id,
+                patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit"),
+              });
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            memory
+          </button>
         )}
         {docId && (
           /* Live or words: the same item either way. Live is the doc as Google

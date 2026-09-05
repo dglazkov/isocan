@@ -3,7 +3,10 @@ import type { CanvasContents, Item } from "../src/model.ts";
 import { canvasItemOf } from "../src/canvasitem.ts";
 import { designSystemProperties } from "../src/designsystem.ts";
 import {
+  CONTEXT_SHEET_SIZE,
   contextLayers,
+  contextSheet,
+  contextSheetSpot,
   governingDesign,
   inheritedPieces,
   layersReport,
@@ -107,6 +110,21 @@ describe("what a linked canvas contributes", () => {
   it("contributes no design row when it has none, and no pins row when it has none", () => {
     const bare = canvas([item("one")]);
     expect(inheritedPieces(bare, from, false).map((p) => p.name)).toEqual(["The canvas"]);
+  });
+});
+
+describe("the Context sheet, a convention with one name", () => {
+  it("is any sheet titled Context, and none when there is none", () => {
+    const sheet = item("sheet", { title: "Context", properties: { kind: "area" }, width: 1600, height: 1000 });
+    expect(contextSheet(canvas([sheet, item("x")]))?.id).toBe("sheet");
+    expect(contextSheet(canvas([item("Context")]))).toBeNull();
+  });
+
+  it("is laid at the origin when the origin is clear, else to the left of everything", () => {
+    expect(contextSheetSpot(canvas([]))).toEqual({ x: 0, y: 0 });
+    expect(contextSheetSpot(canvas([item("far", { x: 3000, y: 200 })]))).toEqual({ x: 0, y: 0 });
+    const spot = contextSheetSpot(canvas([item("near", { x: 100, y: 50, width: 400, height: 300 })]));
+    expect(spot).toEqual({ x: 100 - 40 - CONTEXT_SHEET_SIZE.width, y: 50 });
   });
 });
 

@@ -1,5 +1,7 @@
 import type { CanvasContents, Item } from "./model.ts";
 import { canvasIdOf, isCanvasItem } from "./canvasitem.ts";
+import { areasOf } from "./area.ts";
+import { PLACEMENT_GAP } from "./placement.ts";
 import { designSystem } from "./designsystem.ts";
 import { pinnedItems } from "./contextmark.ts";
 import { type ContextExtras, type ContextPiece, contextPieces } from "./context.ts";
@@ -193,4 +195,35 @@ export function layersReport(layers: ContextLayer[], report: (pieces: ContextPie
  *  walks a canvas's cards deciding what to fetch. */
 export function linkedCanvasId(item: Item): string | null {
   return memoryOf(item) === MEMORY_INHERIT ? canvasIdOf(item) : null;
+}
+
+/**
+ * **The Context sheet** (phase 3): the corner where a canvas's inheritance
+ * sits, so a newcomer reads it first. A sheet named *Context*, laid by
+ * whoever links the first canvas, at the canvas's origin when the origin is
+ * clear and otherwise to the left of everything, level with the top — a
+ * region beside the work, never over it, the same rule `area new` keeps.
+ * One title, one place both surfaces look for it, and a convention rather
+ * than a kind: any sheet somebody names Context is the Context sheet.
+ */
+export const CONTEXT_SHEET_TITLE = "Context";
+/** Room for two cards side by side, and a third below. */
+export const CONTEXT_SHEET_SIZE = { width: 1760, height: 1400 };
+
+export function contextSheet(canvas: CanvasContents): Item | null {
+  return areasOf(canvas).find((area) => area.title === CONTEXT_SHEET_TITLE) ?? null;
+}
+
+export function contextSheetSpot(
+  canvas: CanvasContents,
+  size: { width: number; height: number } = CONTEXT_SHEET_SIZE,
+): { x: number; y: number } {
+  const all = Object.values(canvas.items);
+  const clear = all.every(
+    (item) => item.x >= size.width || item.y >= size.height || item.x + item.width <= 0 || item.y + item.height <= 0,
+  );
+  if (clear) return { x: 0, y: 0 };
+  const left = Math.min(...all.map((item) => item.x)) - PLACEMENT_GAP - size.width;
+  const top = Math.min(...all.map((item) => item.y));
+  return { x: left, y: top };
 }

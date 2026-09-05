@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Actor, Canvas, AddKind, Addable } from "@isocan/core";
+import type { Actor, Canvas, AddKind, Addable, Item, Placement } from "@isocan/core";
 import {
   CANVAS_ITEM_SIZE,
+  CONTEXT_SHEET_SIZE,
+  CONTEXT_SHEET_TITLE,
+  contextSheet,
+  contextSheetSpot,
+  freeSpotIn,
   addableWords,
   ago,
   classifyAddable,
@@ -12,7 +17,7 @@ import {
   siteLabel,
 } from "@isocan/core";
 import { checkFrameable, exportDoc, listCanvases } from "../lib/api.ts";
-import { BROWSER_SIZE, addBrowserItem, addCanvasItem, addDocumentItem } from "../lib/upload.ts";
+import { BROWSER_SIZE, addAreaItem, addBrowserItem, addCanvasItem, addDocumentItem } from "../lib/upload.ts";
 import { placeableArea, spotInView } from "../lib/spot.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -123,10 +128,21 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   }
 
   async function placeCanvas(target: { id: string; title: string; origin?: string | null }) {
-    const at = spotFor(CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height);
     // A spot found FOR the card is not `chosen`; the daemon may tidy it clear.
+    let at: Placement = spotFor(CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height);
     // `inherit` is memory phase 1: the card wears memory=inherit and the
-    // linked canvas's context joins this one's, read-only.
+    // linked canvas's context joins this one's, read-only. Phase 3: a link
+    // goes onto the Context sheet — laid now if this is the first — so
+    // every canvas has a corner where its inheritance sits.
+    if (inherit && canvas) {
+      let sheet = contextSheet(canvas);
+      if (!sheet) {
+        const spot = contextSheetSpot(canvas);
+        const id = await addAreaItem(canvasId, actor, CONTEXT_SHEET_TITLE, spot, CONTEXT_SHEET_SIZE);
+        sheet = { id, title: CONTEXT_SHEET_TITLE, ...spot, ...CONTEXT_SHEET_SIZE, properties: { kind: "area" } } as unknown as Item;
+      }
+      at = { ...freeSpotIn(canvas, sheet, CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height), chosen: true };
+    }
     done(
       await addCanvasItem(canvasId, actor, target.origin ?? window.location.origin, target.id, target.title, at, inherit ? "inherit" : null),
     );

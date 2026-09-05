@@ -592,7 +592,12 @@ and not its items wholesale: context is what somebody decided matters, and
 the link inherits exactly that decision. Several links compose top to bottom,
 then left to right, the order the room reads. `isocan context inherit <item>`
 turns a placed card into a link and `isocan context uninherit <item>` turns it
-back; the card stays either way. `isocan design check` on a canvas with no
+back; the card stays either way. A link placed with nowhere else said lands
+on the sheet named **Context** — laid at the canvas's origin (or to the left
+of everything) the first time — so every canvas has a corner where its
+inheritance sits and a newcomer reads it first; `--in`, `--at` and the rest
+override it. In the app the card's strip wears *memory*, lit when the link
+is on, and clicking it is the same switch. `isocan design check` on a canvas with no
 design system of its own checks against the inherited one and says whose. A
 linked canvas at another home is named under its heading and not read from
 here. The same headings are in the app's Context panel.
