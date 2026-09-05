@@ -62,6 +62,8 @@ import { useCanEdit } from "../lib/capability.ts";
 
 /** Two presses this close together are one double-press. */
 const DOUBLE_PRESS_MS = 450;
+/** An item made within this long, by somebody else, arrives with motion. */
+const ARRIVAL_MS = 1500;
 // How close an edge has to come before it snaps, in SCREEN pixels — the same
 // pull at every zoom. Holding Shift mid-drag widens it: the same gesture, more
 // magnetic, for when you are aiming at a line rather than a place.
@@ -128,6 +130,15 @@ function ItemViewInner({
   const scale = useUiStore((s) => s.viewport.scale);
   const commentMode = useUiStore((s) => s.commentMode);
   const canEdit = useCanEdit();
+  /**
+   * **Arrival motion** (motion note, recommendation 2): an item that
+   * appears from somebody else comes in over a few frames rather than
+   * popping fully formed between one frame and the next — kind 1,
+   * skippable, guarded by reduced motion in the stylesheet. Decided once,
+   * at mount: an item is new if it was made in the last moment and not by
+   * you; yours arrive where you put them and need no announcement.
+   */
+  const arrived = useRef(Date.now() - Date.parse(item.createdAt) < ARRIVAL_MS && item.createdBy.id !== actor.id);
   // A remote session holding this item shows as an outline in their color.
   const remoteHolder = useCanvasStore((s) => {
     const holder = s.sessions.find((session) => session.selection.includes(item.id));
@@ -640,7 +651,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       /* One id in the store rather than a flag per item: moving the pointer
          across a canvas re-renders the two items whose state changed, not
