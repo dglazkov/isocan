@@ -187,7 +187,11 @@ three** land, per invariant 5.
   expulsion reaches the bytes *within one TTL* on the hosted shape — an
   expelled badge cannot mint anew, and what it already minted dies in
   minutes. This design belongs with the door (the multiuser project) and
-  should be written there, not improvised inside this plan.
+  should be written there, not improvised inside this plan. *Written there
+  on 5 Sep 2026:
+  [multiuser/content-read-auth.md](../multiuser/content-read-auth.md) — the
+  three options costed, signed URLs recommended, the domain and the TTL left
+  to the owners.*
 - **4c. Flip hosted frames** — mechanically identical to stage 2's flip,
   gated on 4a+4b, still governed by invariant 2.
 
