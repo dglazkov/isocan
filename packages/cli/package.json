@@ -6,6 +6,9 @@
   "bin": {
     "isocan": "./bin/isocan.js"
   },
+  "exports": {
+    "./modulehost": "./src/modulehost.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },

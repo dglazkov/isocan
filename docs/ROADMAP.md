@@ -6,17 +6,17 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**20 built · 29 still open** — of which 21 partly
+**20 built · 29 still open** — of which 22 partly
 built, 7 designed, 0 blocked, and
-**1 with no verdict recorded at all**, which is the number worth
+**0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
 6 more are `noted` — read, absorbed, owing nothing — and
-2 superseded. Neither counts as done: reading is not building,
+3 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>21</sub>
+## Partly built <sub>22</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -31,7 +31,8 @@ and the done column should not be flattered by either.
 | **project** | [inception](docs/projects/inception/design.md) | 2026-09-02 | phases 0–3 built 2 Sep, and phase 4's half — the card drawn live one level deep, ↗ and double-click open a tab, `isocan canvas place`, the popup from the rail and ⌘K, `isocan canvas shot --into` as the picture that survives a refused pull, the miniature wherever thumbnails are, and "lives at another home" said on the card; pulling a picture across homes is not built · see on-demand, standing-agents |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered |
 | **project** | [memory](docs/projects/memory/design.md) | 2026-09-02 | designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Phases 0–1 built 4 Sep — the Context view and `isocan context` in layers with a heading per source, and `memory=inherit` on a canvas card bringing the linked canvas's design system, pins and size in read-only with provenance and the override rule; `design check` reads the governing one. Phase 3 the same day — the Context sheet a first link lays and lands on, and the memory mark on the card as the switch. Phases 2 and 4 not built · see context, inception, standing-agents |
-| **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand · see mindmap |
+| **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand. Since 4 Sep the mind map is a module (packages/modules/mindmap), the first internal one · see mindmap, modules |
+| **project** | [modules](docs/projects/modules/design.md) | 2026-09-04 | designed 4 Sep from the research note's counts; phase 1 (the registries, the mind map as the first internal module) built the same night. Phases 2–5 designed and not built · see modules, extensions, workbench, mindmap, iso-api, atlas |
 | research | [One agent, many canvases](docs/research/2026-08-29-one-agent-many-canvases.md) | 2026-08-29 | the same-machine half answered 1 Sep by standing-agents phase 1 — the enrolment key is the name, so one badge holds one actor across canvases; the cross-machine credential (shape A) is not built and stays a vouch · see standing-agents, personas |
 | **project** | [personas](docs/projects/personas/design.md) | 2026-08-29 | steps 1-5 built; 6 waits on a second editor · see personas |
 | **project** | [sprint](docs/projects/sprint/journey.md) | 2026-09-02 | phases 0–5 built 2 Sep, the day of the design — areas, the board and the brief, the walk, desks, the wall as the Vote sheet with placed dots, grids; Scenes 0–3 and 5 play, and the one-hour cut is rehearsed end to end over the wire in cli/test/one-hour.test.ts. Still owed: phase 6's run with people, and Scene 7's rival rooms as practice · see on-demand, personas, mindmap, atlas |
@@ -50,15 +51,9 @@ and the done column should not be flattered by either.
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
 | **project** | [extensions](docs/projects/extensions/design.md) | 2026-08-29 | gated on runtime validation for `does` · see extensions |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary |
+| research | [Modules: adding a kind of thing, and taking it away again](docs/research/2026-09-04-modules.md) | 2026-09-04 | the closed registries are counted; recommends internal modules first, Mermaid as the first node type, runtime loading third, sandboxes last. Became the modules project (docs/projects/modules) on 4 Sep; phase 1 built the same night · see modules, extensions, workbench, iso-api, mindmap, atlas |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  |
 | research | [Roles: a ladder, not a matrix](docs/research/2026-09-01-roles.md) | 2026-09-01 | four rungs on one ladder — Owner, Editor, Canvas Viewer, Presentation Viewer; today's `view` already IS the presentation rung, so the work is one new rung in the middle and one decision about Owner · see multiuser |
-| research | [Sheepdog](docs/research/2026-09-04-sheepdog.md) | 2026-09-04 | designed 4 Sep — a pet agent a person owns, on every canvas they can reach by default, that listens to its owner, to named people, or to everyone, with one switch for spend; four ways to home it in the cloud weighed, a kennel record and a wake signal recommended, in four stages. Nothing built · see standing-agents, on-demand, agent-custody, multi-identity |
-
-## No verdict recorded <sub>1</sub>
-
-| | What | Since | |
-| --- | --- | --- | --- |
-| research | [Modules: adding a kind of thing, and taking it away again](docs/research/2026-09-04-modules.md) | 2026-09-04 | the closed registries are counted; recommends internal modules first, Mermaid as the first node type, runtime loading third, sandboxes last · see extensions, workbench, iso-api, mindmap, atlas |
 
 ## Built <sub>20</sub>
 
@@ -96,9 +91,10 @@ and the done column should not be flattered by either.
 | research | [Skills worth stealing: what the ecosystem has built](docs/research/agent-skills.md) | 2026-08-30 | import/read/skip verdicts recorded per repo |
 | research | [What Headlong knows](docs/research/2026-08-24-headlong.md) | 2026-08-30 | its three asks are owned elsewhere: backoff by the night shift, convergence by atlas · see atlas |
 
-## Superseded <sub>2</sub>
+## Superseded <sub>3</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [Eighteen roads out: readiness of the proposed features](docs/research/feature-readiness.md) | 2026-08-30 |  |
 | **project** | [launch](docs/projects/launch/design.md) | 2026-08-30 | kept as the measured record of the dispatch shape — spike run 30 Aug, 4 of 5 guesses answered; guess 3 (the fine-grained token) is moot unless a dispatch hook returns · see launch, on-demand |
+| research | [Sheepdog](docs/research/2026-09-04-sheepdog.md) | 2026-09-04 | designed 4 Sep, then superseded the same day by an external sheep CLI that covers the pet-agent role and works with isocan rather than inside it; kept as the record of the options weighed — a pet agent a person owns, on every canvas they can reach by default, that listens to its owner, to named people, or to everyone, with one switch for spend; four ways to home it in the cloud weighed, a kennel record and a wake signal recommended, in four stages. Nothing built · see standing-agents, on-demand, agent-custody, multi-identity |

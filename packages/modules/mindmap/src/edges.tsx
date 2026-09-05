@@ -1,6 +1,5 @@
-import { allMapEdges, edgeAnchors, type Item } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
-import { useUiStore } from "../stores/uiStore.ts";
+import type { Item, UnderlayFacts } from "@isocan/core";
+import { allMapEdges, edgeAnchors } from "./graph.ts";
 
 /**
  * **The lines of every mind map on the canvas.**
@@ -51,10 +50,10 @@ function curve({ x1, y1, x2, y2, axis }: ReturnType<typeof edgeAnchors>): string
   return `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
 }
 
-export function MapEdges() {
-  const canvas = useCanvasStore((s) => s.canvas);
-  const drag = useUiStore((s) => s.drag);
-  if (!canvas) return null;
+/** Facts as props — the shell reads its stores once and hands them over
+ *  (`ModuleUnderlays.tsx`), so this component knows core and React and
+ *  nothing about where the canvas came from. */
+export function MapEdges({ canvas, drag }: UnderlayFacts) {
   const edges = allMapEdges(canvas);
   if (edges.length === 0) return null;
 

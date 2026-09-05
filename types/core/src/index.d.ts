@@ -56,7 +56,7 @@ export * from "./attest.js";
 export * from "./authaction.js";
 export * from "./lane.js";
 export * from "./frameable.js";
-export * from "./mindmap.js";
+export * from "./modules.js";
 export * from "./designimport.js";
 export * from "./context.js";
 export * from "./memory.js";

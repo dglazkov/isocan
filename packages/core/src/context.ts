@@ -2,7 +2,7 @@ import { ago } from "./elapsed.ts";
 import { type CanvasContents, type Item, mainThread } from "./model.ts";
 import { designSystem } from "./designsystem.ts";
 
-import { mapsOn } from "./mindmap.ts";
+import { moduleContextPieces } from "./modules.ts";
 import { excludedItems, pinnedItems } from "./contextmark.ts";
 
 /**
@@ -172,15 +172,10 @@ export function contextPieces(
     });
   }
 
-  const maps = mapsOn(canvas);
-  if (maps.length > 0) {
-    pieces.push({
-      name: "Mind maps",
-      source: "canvas",
-      present: true,
-      size: maps.map((m) => `${m.title} (${m.nodes})`).join(", "),
-    });
-  }
+  // What loaded modules read from the canvas — the mind map's "Mind maps"
+  // row was here by name; now any module contributes its own
+  // (`core/modules.ts`), and a surface without the module has no row.
+  pieces.push(...moduleContextPieces(canvas));
 
   pieces.push({
     name: "The canvas",

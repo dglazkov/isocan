@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CanvasContents, Item } from "../src/model.ts";
+import type { CanvasContents, Item } from "@isocan/core";
 import {
   MAP_PARENT_PROP,
   MAP_PROP,
@@ -10,9 +10,9 @@ import {
   mapsOn,
   newMapId,
   edgeAnchors,
-} from "../src/mindmap.ts";
-import { PARENT_PROP } from "../src/lineage.ts";
-import { tidyMap, type MapMove } from "../src/mindmap.ts";
+} from "../src/core.ts";
+import { PARENT_PROP } from "@isocan/core";
+import { tidyMap, type MapMove } from "../src/core.ts";
 
 /**
  * **A mind map is items and properties, and that is the whole design.**

@@ -22,7 +22,7 @@ import { canvasMenu, itemMenu } from "../lib/menuentries.tsx";
 import { ItemView } from "./ItemView.tsx";
 import { VersionFanOut } from "./VersionFanOut.tsx";
 import { CommentLayer } from "./CommentLayer.tsx";
-import { MapEdges } from "./MapEdges.tsx";
+import { ModuleUnderlays } from "./ModuleUnderlays.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
 import { InkLayer, SketchBar } from "./InkLayer.tsx";
@@ -781,7 +781,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         {/* Before the items, so a line passes UNDER the nodes it joins — a
             map node is chromeless text, and a line over it strikes through
             the words. */}
-        <MapEdges />
+        <ModuleUnderlays />
         {items.map((item) => (
           <ItemView
             key={item.id}

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -68,15 +68,42 @@ export function documentedVerbs(markdown: string): Set<string> {
   return verbs;
 }
 
+/**
+ * The modules this build carries (`docs/projects/modules/design.md`): each
+ * registers verbs from its own `cli.ts` and describes them in its own
+ * `agent-guide.md`, printed after the base guide while it is loaded. Both are
+ * read here, so a module verb nobody is told about fails exactly as a core
+ * one does.
+ */
+function moduleDirs(): string[] {
+  const root = path.join(repo, "packages/modules");
+  return readdirSync(root)
+    .map((name) => path.join(root, name))
+    .filter((dir) => existsSync(path.join(dir, "package.json")));
+}
+
 function registeredCommands(): string[] {
-  const source = readFileSync(path.join(repo, "packages/cli/src/main.ts"), "utf8");
+  const sources = [
+    path.join(repo, "packages/cli/src/main.ts"),
+    ...moduleDirs().map((dir) => path.join(dir, "src/cli.ts")).filter((f) => existsSync(f)),
+  ];
   const names = new Set<string>();
-  for (const match of source.matchAll(/\.command\("([a-z-]+)/g)) names.add(match[1]!);
+  for (const file of sources) {
+    for (const match of readFileSync(file, "utf8").matchAll(/\.command\("([a-z-]+)/g)) names.add(match[1]!);
+  }
   return [...names].sort();
 }
 
+function wholeGuide(): string {
+  const sections = moduleDirs()
+    .map((dir) => path.join(dir, "agent-guide.md"))
+    .filter((f) => existsSync(f))
+    .map((f) => readFileSync(f, "utf8"));
+  return [readFileSync(path.join(repo, "packages/cli/src/agent-guide.md"), "utf8"), ...sections].join("\n\n");
+}
+
 describe("the agent-facing surface", () => {
-  const guide = readFileSync(path.join(repo, "packages/cli/src/agent-guide.md"), "utf8");
+  const guide = wholeGuide();
   const skill = readFileSync(path.join(repo, ".agents/skills/isocan-collab/SKILL.md"), "utf8");
   const commands = registeredCommands();
   const documented = documentedVerbs(guide);

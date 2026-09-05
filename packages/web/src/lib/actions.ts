@@ -6,9 +6,10 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "./panels.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
-import { formatMoves, mapOf, mapsOn, tidyMap } from "@isocan/core";
+import { formatMoves } from "@isocan/core";
 import { canEditNow } from "./capability.ts";
 import { showAllChrome } from "./hideable.ts";
+import { MODULES } from "../modules.ts";
 
 /**
  * **The things the app does itself.**
@@ -233,17 +234,6 @@ export const ACTIONS: readonly Action[] = [
     run: (ctx) => runFormat(ctx, "smart"),
   },
   {
-    id: "tidy-map",
-    name: "Tidy the mind map",
-    hint: "a column per depth, parents centred on their children",
-    group: "Canvas",
-    /* Offered only where there is one to tidy: a menu that lists what it
-       cannot do teaches people to stop reading it. */
-    available: (ctx) => onCanvas(ctx) && mapsHere().length > 0,
-    writes: true,
-    run: (ctx) => runTidy(ctx),
-  },
-  {
     id: "full-screen",
     name: "Full screen this",
     hint: "the selected item, filling the screen",
@@ -289,51 +279,55 @@ export const ACTIONS: readonly Action[] = [
     available: onCanvas,
     run: (ctx) => ctx.navigate(`${canvasPath(ctx.canvasId!)}/w`),
   },
+  // What the modules this build carries add, after the app's own.
+  ...moduleActions(),
 ];
 
 /**
- * The tidy, run from here rather than asked for.
+ * **A module's palette actions, adapted** (`core/modules.ts`, `ModuleAction`).
  *
- * ONE `items.move`, which is one undo — a tidy you cannot take back in one
- * press is a tidy nobody dares run from a menu they were only browsing.
+ * A module declares an action over facts — the canvas and the selection —
+ * and returns the ops to send. The shell reads its stores here, once, and
+ * sends what comes back through the same echoed door every other write
+ * takes, so a module never holds a store or a socket and its tidy is an
+ * `items.move` the terminal sees as the same op. Every module action writes,
+ * so none is offered on the read-only canvas.
+ */
+function moduleActions(): Action[] {
+  return MODULES.flatMap((m) =>
+    (m.actions ?? []).map(
+      (a): Action => ({
+        id: a.id,
+        name: a.name,
+        ...(a.hint ? { hint: a.hint } : {}),
+        group: "Canvas",
+        writes: true,
+        available: (ctx) => {
+          const canvas = useCanvasStore.getState().canvas;
+          return onCanvas(ctx) && canvas !== null && (a.available?.({ canvas, selection: ctx.selection }) ?? true);
+        },
+        run: async (ctx) => {
+          const canvas = useCanvasStore.getState().canvas;
+          if (!canvas || !ctx.canvasId) return;
+          for (const op of a.run({ canvas, selection: ctx.selection }) ?? []) {
+            await sendEchoed(ctx.canvasId, ctx.actor, op);
+          }
+        },
+      }),
+    ),
+  );
+}
+
+/**
+ * The format, run from here rather than asked for.
+ *
+ * ONE `items.move`, which is one undo — a format you cannot take back in one
+ * press is a format nobody dares run from a menu they were only browsing.
  */
 async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas || !ctx.canvasId) return;
   const moves = formatMoves(canvas, { mode });
-  if (moves.length === 0) return;
-  await sendEchoed(ctx.canvasId, ctx.actor, { type: "items.move", moves });
-}
-
-/** The maps on the canvas in front of us, for the availability check and for
- *  deciding which one a tidy means. */
-function mapsHere() {
-  const canvas = useCanvasStore.getState().canvas;
-  return canvas ? mapsOn(canvas) : [];
-}
-
-/**
- * **Tidy the map the selection is in, or the only one there is.**
- *
- * Ambiguity is refused rather than guessed, the same rule `resolveMap` follows
- * in the CLI: with two maps on a canvas and nothing selected, tidying one of
- * them at random rearranges work somebody did not ask about.
- *
- * One `items.move`, so one undo — the first thing anybody does after an
- * automatic layout is decide they preferred it before.
- */
-async function runTidy(ctx: ActionContext): Promise<void> {
-  const canvas = useCanvasStore.getState().canvas;
-  if (!canvas || !ctx.canvasId) return;
-  const maps = mapsOn(canvas);
-  const selected = useUiStore.getState().selectedItemIds;
-  const fromSelection = selected
-    .map((id) => canvas.items[id])
-    .map((item) => (item ? mapOf(item) : null))
-    .find((mapId): mapId is string => mapId !== null);
-  const mapId = fromSelection ?? (maps.length === 1 ? maps[0]!.id : null);
-  if (!mapId) return;
-  const moves = tidyMap(canvas, mapId);
   if (moves.length === 0) return;
   await sendEchoed(ctx.canvasId, ctx.actor, { type: "items.move", moves });
 }

@@ -1,8 +1,8 @@
 ---
 status: partial
 since: 2026-08-29
-see: mindmap
-note: all four stages built; tidy lays a map out on demand
+see: mindmap, modules
+note: all four stages built; tidy lays a map out on demand. Since 4 Sep the mind map is a module (packages/modules/mindmap), the first internal one
 ---
 # Mind maps — a real graph on the canvas
 
