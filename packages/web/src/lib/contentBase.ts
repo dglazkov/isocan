@@ -1,4 +1,5 @@
 import { getServing } from "./api.ts";
+import { activateRuntimeModules } from "./runtimeModules.ts";
 
 /**
  * The content origin's base URL, as this tab knows it — the app half of
@@ -31,7 +32,11 @@ export function adoptContentBase(next: string | null): void {
 
 export async function loadContentBase(): Promise<void> {
   try {
-    adoptContentBase((await getServing()).contentBase ?? null);
+    const serving = await getServing();
+    adoptContentBase(serving.contentBase ?? null);
+    // The same answer names the home's runtime modules (modules phase 3);
+    // one fetch, two facts, and the modules arrive after first paint.
+    void activateRuntimeModules(serving.modules ?? []);
   } catch {
     adoptContentBase(null);
   }

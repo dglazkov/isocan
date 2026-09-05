@@ -16,3 +16,5 @@ export const mermaidCli: CliModule = {
   register: () => {},
   guide: readFileSync(fileURLToPath(new URL("../agent-guide.md", import.meta.url)), "utf8"),
 };
+
+export default mermaidCli;

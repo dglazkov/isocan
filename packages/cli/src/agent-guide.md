@@ -637,6 +637,31 @@ so it replicates, undoes, and cannot disagree between the CLI and the app's
 and the rows are the running order. There is no slide-number to maintain and
 none to drift.
 
+## Modules
+
+Some of what this CLI and the app can do is a **module**: a package that adds
+a kind of item, the picture it draws as, and a family of verbs — the mind map
+and diagrams are two — and that can be taken away leaving every item it made
+readable as a file. A build carries its own; a self-hosted home can add more,
+outside core, without rebuilding anything:
+
+- `isocan module ls` — every module here: the build's own, the ones added to
+  this machine, and why any is refused (its `engines` names an isocan this
+  is not).
+- `isocan module add <dir>` — install a built module from a directory. It
+  PRINTS the manifest — the kinds, property keys and halves it declares — and
+  installs nothing until you run it again with `--yes`, the same gate
+  `command add --from` has and for the same reason: this is code that runs
+  as the app, chosen by whoever runs this machine. Loaded on the next
+  command and the next page load; no restart.
+- `isocan module rm <name>` — remove one. Its items stay on every canvas, as
+  the files they are; its verbs and pictures are gone.
+
+A module is built from `packages/modules/<name>` with
+`node --import tsx scripts/module-build.mjs <name>`. What a module may add is
+bounded by one rule: only what a person could already do with a file and a
+verb — never an operation, never a route.
+
 ## Saying where a document stands
 
 Every note in `docs/research/` and every project's primary doc carries its

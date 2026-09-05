@@ -219,7 +219,7 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
       const offBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
       const offBadge = await mintTestBadge(offBase);
       const res = await fetch(`${offBase}${SERVING_ROUTE}`, { headers: offBadge.headers });
-      expect(await res.json()).toEqual({ contentBase: null });
+      expect(await res.json()).toEqual({ contentBase: null, modules: [] });
       expect(off.contentBase).toBe(null);
     } finally {
       await off.close();

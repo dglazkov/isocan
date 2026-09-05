@@ -24,7 +24,10 @@ export const DIAGRAM_KIND: ModuleKind = {
   icon: "drawing",
 };
 
+
 export const mermaidModule: CoreModule = {
   name: "@isocan/mermaid",
   kinds: [DIAGRAM_KIND],
 };
+
+export default mermaidModule;

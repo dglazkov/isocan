@@ -188,6 +188,10 @@ interface UiStore {
    *  browser, like the theme: taste, not a canvas fact. */
   hiddenChrome: string[];
   setChromeHidden: (id: string, hidden: boolean) => void;
+  /** Bumped when a runtime module arrives after first paint (modules phase
+   *  3), so the slots that read the module list re-render. Never stored. */
+  modulesGeneration: number;
+  bumpModules: () => void;
   /** Google Doc items this browser shows LIVE — the `/preview` frame in
    *  place of the words (Google Docs stage 4). A mode you flip, remembered
    *  per person, never a second item. */
@@ -551,6 +555,8 @@ export const useUiStore = create<UiStore>((set) => {
     marksOpen: false,
     historyOpen: false,
     hiddenChrome: readHiddenChrome(),
+    modulesGeneration: 0,
+    bumpModules: () => set((s) => ({ modulesGeneration: s.modulesGeneration + 1 })),
     liveDocs: readIdList(LIVE_DOCS_KEY),
     pendingChat: null,
     paletteOpen: false,

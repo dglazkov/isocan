@@ -15,6 +15,8 @@ import { useUiStore } from "../stores/uiStore.ts";
 export function ModuleUnderlays() {
   const canvas = useCanvasStore((s) => s.canvas);
   const drag = useUiStore((s) => s.drag);
+  // A runtime module that arrived after first paint is a new underlay.
+  useUiStore((s) => s.modulesGeneration);
   if (!canvas) return null;
   const facts = { canvas, drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null };
   return (

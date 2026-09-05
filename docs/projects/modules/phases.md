@@ -4,7 +4,7 @@ Each phase ends with something a person can remove and watch disappear.
 Ordered by what settles the most with the least: the registries before any
 loader, because a loader with nothing to load into is a loader.
 
-**Where we are:** phases 1 and 2 built 4 September 2026. Phase 3 next.
+**Where we are:** phases 1–3 built 4–5 September 2026. Phase 4 next.
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
@@ -65,17 +65,49 @@ is a document. The guard tests hold the renderer to the slot and the library
 to the far side of the boundary. What stays a hand check until phase 3's
 runtime removal: the picture on a card at isocan.io once this promotes.
 
-## Phase 3 — runtime loading, for self-hosted homes
+## Phase 3 — runtime loading, for self-hosted homes ✅
 
-`isocan module add <dir | git spec>` / `rm` / `ls`; `~/.isocan/modules/<name>/`
-holding `manifest.json`, `web.js`, `cli.js`, `agent-guide.md`; the engines
-check; the manifest printed before `--yes`. The daemon serves `/api/modules`
-and `/modules/<name>/web.js`; the shell activates each with a host object
-carrying React and core; the CLI imports each `cli.js` before parsing. A
-build script turns a `packages/modules/<name>` into that shape, so Mermaid is
-both the build-time module of phase 2 and the runtime module that proves
-phase 3 — and its removal is the acceptance: the diagram item stays, as a
-file that names the module; the verbs are gone; the oplog is untouched.
+*Built 5 Sep 2026.*
+
+`isocan module add <dir>` / `rm` / `ls`. `~/.isocan/modules/<slug>/` holds a
+built module: `manifest.json`, `agent-guide.md`, `dist/web.js` (+ chunks),
+`dist/cli.js`. `add` prints the manifest — name, version, engines, every
+kind, key and half — and installs nothing until `--yes`; the engines check
+(`>=a.b.c`, `^a.b.c`, `*`) refuses with a sentence naming both versions, at
+add and again at every load. The daemon reads the directory per request: the
+loaded manifests ride `/api/serving` (the fetch the shell already makes) and
+each module's files are served under `/modules/<slug>/` — typed from the
+static map, `no-cache`, `nosniff`, path-guarded to the module's real
+directory. The shell registers every manifest's record first (kinds known
+before any code runs), sets `globalThis.isocan` — the app's own React, JSX
+runtime and core — and `import()`s each web half; `addModule` bumps a
+generation the underlay slot, the renderer chain and the palette read. The
+CLI does the same before it parses argv, through the same `CliHost` a
+build-time module gets. `scripts/module-build.mjs <name>` makes the layout
+with esbuild: platform imports rewritten to host reads, the web half
+code-split so a lazy boundary stays lazy on the wire, the manifest written
+from the package and the core record's default export.
+
+**Not a git spec yet.** `add` takes a directory; a `github:owner/repo#ref`
+spec is a `git clone` into a temp dir in front of the same code, and waits
+for a module that is published that way.
+
+**Acceptance, run by hand on 5 Sep.** Mermaid taken out of both build-time
+lists, the app rebuilt without it (no diagram chunks in `dist/`), a daemon
+run from that tree on a scratch home. `isocan module ls`: the mind map only.
+`module add <built mermaid>` printed the manifest and refused until `--yes`;
+after it, `module ls` said `@isocan/mermaid 0.1.0 loaded`, `--agent-help`
+printed the Diagrams section, `isocan add flow.mmd` landed a **diagram**
+(the kind came from the manifest before any code ran — the first build's
+CLI half was refused as CommonJS, and the kind still held), and the app
+drew both diagrams from `/modules/mermaid/dist/web.js` with the host
+object set and two SVGs on the cards. `module rm mermaid`: `ls --kind
+diagram` refused the kind, the guide lost its section, the served path
+answered 404, and the page showed both items as files — `flow.mmd
+(text/vnd.mermaid)` — with the oplog untouched. Two things the proof found
+and fixed on the spot: a `.js` CLI half under a home directory is
+CommonJS to Node (built as `.mjs` now), and a web half with only a named
+export loads nothing (default exports, and a guard).
 
 ## Phase 4 — documents
 
