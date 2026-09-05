@@ -39,6 +39,9 @@ if (!url || (!pdf && !png)) {
   process.exit(2);
 }
 const address = new URL(url);
+// `--notes`: the deck view starts with speaker notes under each slide, and
+// the print puts them on the sheet (DeckPrint.tsx reads the same flag).
+if (argv.includes("--notes")) address.searchParams.set("notes", "1");
 const origin = address.origin;
 /** 1920×1080 is a slide's native size; the frames are 16:9 at the page width. */
 const width = Number(arg("--width") ?? 1920);

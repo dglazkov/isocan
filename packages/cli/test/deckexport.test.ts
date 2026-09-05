@@ -96,8 +96,36 @@ describe("isocan slides export", () => {
     const { C } = await canvasWithOneSlide();
     const run = await isocan("slides", "export", path.join(home, "deck.docx"), "--canvas", C);
     expect(run.code).not.toBe(0);
-    expect(run.stderr).toContain("deck.pdf or deck.html");
+    expect(run.stderr).toContain("deck.pdf, deck.html or notes.md");
     expect(run.stderr).toContain(".docx");
+  });
+
+  it("writes speaker notes under a slide, re-words them, lists them, and carries them into the handout and the deck file", async () => {
+    const { C, itemId } = await canvasWithOneSlide();
+    await isocan("slides", "add", itemId, "--canvas", C);
+    const made = await json("slides", "note", itemId, "Say", "hello", "first.", "--canvas", C);
+    expect(made).toMatchObject({ slideId: itemId, created: true });
+    // The note is a text item under the slide, the slide's width, and never a slide itself.
+    const items = await json("ls", "--canvas", C);
+    const note = items.find((i: { id: string }) => i.id === made.noteId);
+    expect(note.properties).toMatchObject({ kind: "text", noteFor: itemId });
+    expect(note.kind).toBe("text");
+    const deckRows = await json("slides", "show", "--canvas", C);
+    expect(deckRows.map((r: { id: string }) => r.id)).toEqual([itemId]);
+    // Re-wording keeps the one note and stacks a version.
+    const again = await json("slides", "note", itemId, "Say hello, then pause.", "--canvas", C);
+    expect(again).toEqual({ noteId: made.noteId, slideId: itemId, created: false });
+    const listed = await json("slides", "notes", "--canvas", C);
+    expect(listed).toEqual([{ slide: { id: itemId, title: "one.html" }, note: { id: made.noteId, text: "Say hello, then pause." } }]);
+    // The handout and the deck file carry the words.
+    const md = path.join(home, "notes.md");
+    await json("slides", "export", md, "--canvas", C);
+    expect(await fs.readFile(md, "utf8")).toContain("## 1. one.html\n\nSay hello, then pause.");
+    const html = path.join(home, "deck.html");
+    await json("slides", "export", html, "--notes", "--canvas", C);
+    const file = await fs.readFile(html, "utf8");
+    expect(file).toContain('<aside class="notes">Say hello, then pause.</aside>');
+    expect(file).toContain('<body class="notes">');
   });
 
   it("prints the deck view's address from slides show", async () => {

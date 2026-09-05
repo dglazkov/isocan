@@ -33,7 +33,7 @@ describe("the deck view", () => {
   it("prints one slide to a landscape sheet and hides the bar", () => {
     const print = css.slice(css.indexOf("@media print"));
     expect(print).toContain("size: 13.333in 7.5in");
-    expect(print).toContain(".deck-page { break-after: page;");
+    expect(print).toContain(".deck-sheet { break-after: page;");
     expect(print).toContain(".deck-bar { display: none; }");
     // Measured, not assumed: with the shell still a fixed, clipped viewport,
     // two slides printed as one page holding the first screenful.
@@ -42,7 +42,7 @@ describe("the deck view", () => {
   });
 
   it("downloads the file core builds, named after the canvas, and reaches the view from the palette", () => {
-    expect(view).toContain("deckHtml(title, contents)");
+    expect(view).toContain("deckHtml(title, contents, { withNotes })");
     expect(view).toContain('deckFilename(title, "html")');
     expect(actions).toContain('id: "export-deck"');
     expect(actions).toContain("ctx.navigate(deckPath(ctx.canvasId!))");
