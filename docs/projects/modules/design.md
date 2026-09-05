@@ -6,6 +6,10 @@ note: designed 4 Sep from the research note's counts; phases 1 (the registries, 
 ---
 # Modules — a package that contributes to both surfaces, and can be taken away
 
+*This is the argument. To build one, read [`authoring.md`](authoring.md):
+the layout, every extension point and its exact shape, the host, the build,
+the install, and the guards.*
+
 **4 September 2026.** The ask: *let's have a module system, and can we make
 it dynamic so external modules can be loaded and unloaded outside of core?*
 The [research note](../../research/2026-09-04-modules.md) counted what that
