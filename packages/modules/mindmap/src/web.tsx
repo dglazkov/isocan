@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { ModuleAction, UnderlayFacts, WebModule } from "@isocan/core";
+import type { ModuleAction, RendererFacts, UnderlayFacts, WebModule } from "@isocan/core";
 import { mapOf, mapsOn, mindmap, tidyMap } from "./core.ts";
 import { MapEdges } from "./edges.tsx";
 
@@ -41,7 +41,7 @@ const tidy: ModuleAction = {
  * and the tidy, as a palette action over facts. Nothing here knows the
  * shell's stores (`docs/projects/modules/design.md`).
  */
-export const mindmapWeb: WebModule<ComponentType<UnderlayFacts>> = {
+export const mindmapWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<RendererFacts>> = {
   core: mindmap,
   underlays: [MapEdges],
   actions: [tidy],

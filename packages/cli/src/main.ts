@@ -91,7 +91,7 @@ import {
   collectItemRefCandidates,
   extractItemRefs,
   ALIGN_EDGES,
-  ITEM_KINDS,
+  itemKinds,
   registerModule,
   alignMoves,
   annotationsOf,
@@ -6062,7 +6062,7 @@ areaCmd
 program
   .command("ls")
   .description("List items on the canvas")
-  .option("--kind <kind>", `only this kind: ${ITEM_KINDS.join(", ")}`)
+  .option("--kind <kind>", `only this kind: ${itemKinds().join(", ")}`)
   .option("--filter <text>", "only items whose title or filename contains this")
   .option("--reaction <emoji>", "only items wearing this mark")
   .option("--in <area>", "only what is inside this area (by its centre)")
@@ -6071,8 +6071,8 @@ program
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "surveying the canvas…" });
-      if (opts.kind && !ITEM_KINDS.includes(opts.kind as never)) {
-        throw new Error(`--kind expects one of ${ITEM_KINDS.join(", ")}, got: ${opts.kind}`);
+      if (opts.kind && !itemKinds().includes(opts.kind)) {
+        throw new Error(`--kind expects one of ${itemKinds().join(", ")}, got: ${opts.kind}`);
       }
       const needle = opts.filter?.trim().toLowerCase();
       // `--in`: membership is geometry, read now — the same answer the app

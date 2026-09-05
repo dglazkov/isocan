@@ -23,14 +23,25 @@ export interface ModuleEdge {
   to: Item;
 }
 
-/** A kind a module adds (phase 2): a mime first, because the file is the truth. */
+/**
+ * **A kind a module adds** (phase 2): a mime first, because the file is the
+ * truth — `itemKind()` asks the registry before its own mime tests, and with
+ * the module gone the same file falls through to whatever the built-ins call
+ * it. Extensions are how `isocan add diagram.mmd` and a dropped file learn
+ * the mime.
+ */
 export interface ModuleKind {
   id: string;
   mimes: readonly string[];
+  /** Bare, lower-case: `mmd`, not `.mmd`. */
   extensions?: readonly string[];
   /** The plural a list groups under, and the singular a tooltip uses. */
   label: string;
   noun: string;
+  /** Which of the built-in marks this kind borrows for its icon — the icon
+   *  set is the app's, drawn for 11px, and a module names one rather than
+   *  shipping pixels. Unset, the kind wears the plain file mark. */
+  icon?: string;
 }
 
 export interface CoreModule {
@@ -112,10 +123,35 @@ export interface ModuleAction {
   run: (facts: ModuleActionFacts) => readonly Operation[] | void;
 }
 
-export interface WebModule<C> {
+/**
+ * **What a renderer is handed** (phase 2): the version's identity, the two
+ * ways to reach its bytes, and whether the item is entered. The shell builds
+ * `url` and `readText` from its own blob client; a module never spells a
+ * blob path.
+ */
+export interface RendererFacts {
+  canvasId: string;
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  entered: boolean;
+  url: string;
+  readText: () => Promise<string>;
+}
+
+export interface ModuleRenderer<R> {
+  /** The mimes this draws — the same list the module's kind claims. */
+  mimes: readonly string[];
+  component: R;
+}
+
+export interface WebModule<C, R = C> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
   /** Entries in the ⌘K palette's Canvas group. Every one of them writes. */
   actions?: readonly ModuleAction[];
+  /** How a version of one of this module's kinds is drawn on the card and
+   *  the stage — ahead of the built-in chain, lazily loaded by the module. */
+  renderers?: readonly ModuleRenderer<R>[];
 }
