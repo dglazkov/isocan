@@ -619,7 +619,17 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   stays on the canvas.
 - `isocan slides show` — the deck in order, and the address to hand an
   audience: the first slide's full-screen URL, which is an ordinary item
-  address (`isocan open <item>` opens the same view).
+  address (`isocan open <item>` opens the same view), and the deck view's
+  address (`/deck` on the canvas), where the app prints.
+- `isocan slides export <out>` — the deck as a document. The extension
+  decides the format: `deck.pdf` is one slide per landscape page, printed by
+  headless Chrome from the app's deck view (needs a repository checkout and
+  Chrome, like `canvas shot`); `deck.html` is one self-contained file that
+  plays the deck anywhere — arrows and Page keys flip, and its own print
+  stylesheet makes the same PDF — built here without a browser; `--png <dir>`
+  writes one PNG per slide beside either. The app's ⌘K "Export the deck"
+  opens the same view with Save as PDF and Download deck.html; both surfaces
+  write the same HTML file from core's `deckHtml`.
 
 A slide is a property set by `item.update` — the same shape as a context pin —
 so it replicates, undoes, and cannot disagree between the CLI and the app's
