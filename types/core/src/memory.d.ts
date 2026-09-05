@@ -91,3 +91,26 @@ export declare function layersReport(layers: ContextLayer[], report: (pieces: Co
 /** The canvas a card links, when it is a memory link — for a reader that
  *  walks a canvas's cards deciding what to fetch. */
 export declare function linkedCanvasId(item: Item): string | null;
+/**
+ * **The Context sheet** (phase 3): the corner where a canvas's inheritance
+ * sits, so a newcomer reads it first. A sheet named *Context*, laid by
+ * whoever links the first canvas, at the canvas's origin when the origin is
+ * clear and otherwise to the left of everything, level with the top — a
+ * region beside the work, never over it, the same rule `area new` keeps.
+ * One title, one place both surfaces look for it, and a convention rather
+ * than a kind: any sheet somebody names Context is the Context sheet.
+ */
+export declare const CONTEXT_SHEET_TITLE = "Context";
+/** Room for two cards side by side, and a third below. */
+export declare const CONTEXT_SHEET_SIZE: {
+    width: number;
+    height: number;
+};
+export declare function contextSheet(canvas: CanvasContents): Item | null;
+export declare function contextSheetSpot(canvas: CanvasContents, size?: {
+    width: number;
+    height: number;
+}): {
+    x: number;
+    y: number;
+};

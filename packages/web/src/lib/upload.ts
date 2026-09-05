@@ -18,6 +18,9 @@ import {
   CANVAS_ITEM_SIZE,
   canvasItemOf,
   MEMORY_PROP,
+  AREA_MIME,
+  AREA_FILENAME,
+  AREA_PROPERTIES,
   DOC_MIME,
   docProperties,
 } from "@isocan/core";
@@ -218,6 +221,35 @@ export async function addBrowserItem(
     ...BROWSER_SIZE,
     placement,
     title: siteLabel(site),
+  });
+  return itemId;
+}
+
+/**
+ * **A sheet, from the app** — the item `isocan area new` makes, spelled the
+ * same: an area-kind item whose blob is its card (one newline when it has
+ * nothing to say, because the daemon refuses an empty blob). The first
+ * caller is memory phase 3's Context sheet; `chosen`, because the corner of
+ * a sheet is exactly where somebody meant it to be.
+ */
+export async function addAreaItem(
+  canvasId: string,
+  actor: Actor,
+  title: string,
+  at: { x: number; y: number },
+  size: { width: number; height: number },
+): Promise<string> {
+  const blob = new Blob(["\n"], { type: AREA_MIME });
+  const upload = await uploadBlob(canvasId, blob, AREA_FILENAME);
+  const itemId = newItemId();
+  await sendEchoed(canvasId, actor, {
+    type: "item.add",
+    itemId,
+    version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: AREA_MIME, filename: AREA_FILENAME, size: upload.size },
+    ...size,
+    placement: { ...at, chosen: true },
+    title,
+    properties: { ...AREA_PROPERTIES },
   });
   return itemId;
 }

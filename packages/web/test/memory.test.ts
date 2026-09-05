@@ -40,6 +40,29 @@ describe("the Context panel reads in layers", () => {
   });
 });
 
+describe("the Context sheet, and the memory mark (phase 3)", () => {
+  const view = read("../src/components/ItemView.tsx");
+
+  it("a link placed from the popover lands on the Context sheet, laid if it is the first", () => {
+    expect(popover).toContain("let sheet = contextSheet(canvas);");
+    expect(popover).toContain("await addAreaItem(canvasId, actor, CONTEXT_SHEET_TITLE, spot, CONTEXT_SHEET_SIZE)");
+    expect(popover).toContain("freeSpotIn(canvas, sheet, CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height)");
+    expect(upload).toContain("export async function addAreaItem(");
+    expect(upload).toContain("properties: { ...AREA_PROPERTIES }");
+  });
+
+  it("the terminal does the same when nowhere else is said", () => {
+    expect(cli).toContain("if (opts.inherit && !opts.at && !opts.anchor && !opts.in && !opts.cell) {");
+    expect(cli).toContain("opts = { ...opts, in: CONTEXT_SHEET_TITLE };");
+  });
+
+  it("a canvas card wears the memory mark on its strip, and the mark is the switch", () => {
+    expect(view).toContain('className={`memory-mark${memoryOf(item) === "inherit" ? " active" : ""}`}');
+    expect(view).toContain('patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit")');
+    expect(css).toContain(".memory-mark.active");
+  });
+});
+
 describe("the link is one property on the card, set where the card is placed", () => {
   it("the Add popover offers the tick when a canvas is what is being added, and passes it through", () => {
     expect(popover).toContain('className="add-inherit"');

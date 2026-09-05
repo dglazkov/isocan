@@ -234,6 +234,10 @@ import {
   memoryLinks,
   memoryOf,
   memoryPatch,
+  contextSheet,
+  contextSheetSpot,
+  CONTEXT_SHEET_SIZE,
+  CONTEXT_SHEET_TITLE,
   MEMORY_PROP,
   type LinkedCanvas,
   type CanvasContents,
@@ -4435,7 +4439,31 @@ async function placeCanvasItem(
   ref: string,
   opts: { at?: string; anchor?: string; in?: string; cell?: string; size?: string; title?: string; inherit?: boolean },
 ): Promise<void> {
-  const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+  let { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+  /**
+   * **The Context sheet** (memory phase 3): a link placed with nowhere said
+   * goes onto the sheet named Context — laid now, at the origin or to the
+   * left of everything, if this is the first link — so every canvas has a
+   * corner where its inheritance sits and a newcomer reads it first.
+   */
+  if (opts.inherit && !opts.at && !opts.anchor && !opts.in && !opts.cell) {
+    if (!contextSheet(snapshot.canvas)) {
+      const spot = contextSheetSpot(snapshot.canvas);
+      const upload = await ctx.client.uploadBlob(p.id, Buffer.from("\n", "utf8"), AREA_MIME, AREA_FILENAME);
+      await sendOp(ctx, p.id, {
+        type: "item.add",
+        itemId: newItemId(),
+        version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: AREA_MIME, filename: AREA_FILENAME, size: upload.size },
+        ...CONTEXT_SHEET_SIZE,
+        placement: { ...spot, chosen: true },
+        title: CONTEXT_SHEET_TITLE,
+        properties: { ...AREA_PROPERTIES },
+      });
+      if (!ctx.json) console.log(`laid the "${CONTEXT_SHEET_TITLE}" sheet at ${spot.x},${spot.y} — where this canvas's inheritance sits`);
+      snapshot = await ctx.client.snapshot(p.id);
+    }
+    opts = { ...opts, in: CONTEXT_SHEET_TITLE };
+  }
   /**
    * Two doors, one item: an address names a canvas at some home and is
    * taken as written; anything else is a ref among the canvases this

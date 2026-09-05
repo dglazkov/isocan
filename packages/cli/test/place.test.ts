@@ -103,6 +103,15 @@ describe("placing a canvas on a canvas", () => {
     await json("context", "pin", byRef.itemId, "--canvas", sched.canvasId).catch(() => null);
     const linked = await json("canvas", "place", "sports", "--inherit", "--canvas", S);
     expect(linked.inherit).toBe(true);
+    // Phase 3: the first link lays the Context sheet and lands on it; the
+    // second finds the sheet already there.
+    const sheets = (await json("ls", "--canvas", S)).filter((i: { properties: { kind?: string } }) => i.properties.kind === "area");
+    expect(sheets.map((s: { title: string }) => s.title)).toEqual(["Work", "Context"]);
+    expect((await json("ls", "--in", "Context", "--canvas", S)).map((i: { id: string }) => i.id)).toContain(linked.itemId);
+    const second = await json("canvas", "place", "sports", "--inherit", "--title", "Twice", "--canvas", S);
+    expect((await json("ls", "--in", "Context", "--canvas", S)).length).toBe(2);
+    expect((await json("ls", "--canvas", S)).filter((i: { properties: { kind?: string } }) => i.properties.kind === "area").length).toBe(2);
+    await isocan("rm", second.itemId, "--canvas", S);
     const layers = await json("context", "--canvas", S);
     expect(layers.map((l: { heading: string }) => l.heading)).toEqual(["This canvas", "Sports Schedule Constraint Solver"]);
     expect(layers[1].canvasId).toBe(sched.canvasId);
