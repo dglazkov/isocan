@@ -49,7 +49,8 @@ describe("the two controls asked for hide by right-click and come back from Sett
     expect(rail).toContain('onContextMenu={(e) => showMenu(e, "the rail")}');
     expect(zoom).toContain('onContextMenu={(e) => showMenu(e, "the zoom cluster")}');
     // Every registry entry's `where` is an area that has the door.
-    for (const entry of HIDEABLE) expect(["the rail", "the zoom cluster"]).toContain(entry.where);
+    for (const entry of HIDEABLE) expect(["the rail", "the zoom cluster", "the top edge"]).toContain(entry.where);
+    expect(read("../src/components/Toolbar.tsx")).toContain('showMenu(e, "the top edge")');
   });
 
   it("Settings under the identity menu lists the registry with a switch each and Show everything", () => {

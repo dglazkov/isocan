@@ -48,6 +48,21 @@ export const HIDEABLE: readonly HideableEntry[] = [
     command: "open-history",
     stillReachable: "⌘K “Open History” still opens it; Settings brings the button back",
   },
+  /**
+   * **The top fade**: a wash of the page's ground under the top controls, so
+   * the title, the faces and Share read over a busy canvas — the effect
+   * Stitch has at the top of a scrolled canvas, in this app's own ground
+   * colour so it is white on light and near-black on dark. Chrome, not
+   * canvas: it is in the registry because a person who wants every pixel of
+   * their work should be able to switch it off and get it back.
+   */
+  {
+    id: "canvas.topfade",
+    name: "Top fade",
+    where: "the top edge",
+    command: "top-fade",
+    stillReachable: "⌘K “Top fade” brings it back, and so does Settings",
+  },
 ];
 
 export function hideableEntry(id: string): HideableEntry | undefined {
