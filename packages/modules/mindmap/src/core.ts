@@ -12,6 +12,7 @@ export * from "./graph.ts";
  * Context view, and the edges the canvas draws and JSON Canvas exports. Both
  * surfaces register it from their lists; core never imports it.
  */
+
 export const mindmap: CoreModule = {
   name: "@isocan/mindmap",
   propertyKeys: [MAP_PROP, MAP_PARENT_PROP],
@@ -29,3 +30,5 @@ export const mindmap: CoreModule = {
   },
   edges: allMapEdges,
 };
+
+export default mindmap;

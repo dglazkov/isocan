@@ -134,6 +134,7 @@ import {
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
+import { moduleFile, readRuntimeModules } from "./modules.ts";
 import { boundDirs, hashBound, pickList, readBound, readTree, writeBound } from "./tree.ts";
 import {
   attestersOf,
@@ -366,6 +367,13 @@ interface RouteOptions {
    * it holds, which is every daemon a test constructs without one.
    */
   homes?: HomeLinks | null;
+  /**
+   * **This machine's runtime modules** (`docs/projects/modules/design.md`,
+   * phase 3): the isocan home whose `modules/` directory holds them. Read per
+   * request by `/api/serving` and `/modules/<slug>/…`, so `isocan module add`
+   * needs no restart. Absent on a daemon that should serve none.
+   */
+  modulesHome?: string;
   /**
    * The content origin's base URL, or null/absent when none exists — which
    * is every daemon at stage 1 of the content-origin plan. The daemon sets
@@ -1229,7 +1237,34 @@ export function registerRoutes(
   /** How this home serves — today, only whether a content origin exists.
    * See `SERVING_ROUTE` in core for the contract and `content.ts` for the
    * role it advertises. */
-  app.get(SERVING_ROUTE, async () => ({ contentBase: options.contentBase ?? null }));
+  app.get(SERVING_ROUTE, async () => ({
+    contentBase: options.contentBase ?? null,
+    // The loaded runtime modules — refused ones are not advertised; `isocan
+    // module ls` is where a refusal is read.
+    modules: options.modulesHome
+      ? readRuntimeModules(options.modulesHome)
+          .filter((m) => m.refused === null)
+          .map((m) => m.manifest)
+      : [],
+  }));
+
+  /**
+   * **A runtime module's web half, served from its own directory.** Path
+   * guarded to that directory (real paths on both sides), typed from the
+   * same map every static asset uses, and never cached long: a module that
+   * was just replaced must be the module the next load runs. Nothing here
+   * is behind the door because the app's own chunks are not either — a
+   * module is app-origin code the operator installed, not canvas content.
+   */
+  app.get("/modules/:slug/*", async (req, reply) => {
+    const { slug, "*": rest } = req.params as { slug: string; "*": string };
+    const file = options.modulesHome && /^[a-z0-9][a-z0-9._-]*$/.test(slug) ? moduleFile(options.modulesHome, slug, rest) : null;
+    if (!file) return reply.status(404).send({ error: `not found: GET /modules/${slug}/${rest}` });
+    reply.type(STATIC_TYPES[path.extname(file)] ?? "application/octet-stream");
+    reply.header("Cache-Control", "no-cache");
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(createReadStream(file));
+  });
 
   // ---- slash commands: the work a message can ask for ----
 

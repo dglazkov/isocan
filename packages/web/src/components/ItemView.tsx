@@ -1265,6 +1265,8 @@ export function VersionContent({
   // Stable per blob, so a module renderer keying an effect on it does not
   // refetch on every shell render (see modules/mermaid/src/diagram.tsx).
   const readText = useCallback(() => readBlobText(canvasId, blobHash), [canvasId, blobHash]);
+  // A runtime module that arrived after first paint may own this mime now.
+  useUiStore((s) => s.modulesGeneration);
   if (liveDoc) {
     // The doc as Google draws it, in the same item. A private doc shows
     // Google's own sign-in here, which is honest: the frame is Google's,

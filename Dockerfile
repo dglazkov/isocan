@@ -46,6 +46,14 @@ COPY packages/cloudstore/package.json packages/cloudstore/package.json
 COPY packages/core/package.json       packages/core/package.json
 COPY packages/server/package.json     packages/server/package.json
 COPY packages/web/package.json        packages/web/package.json
+# The modules are workspaces too (`packages/modules/*`). With these lines
+# missing `npm ci` does NOT refuse — it quietly plans the tree without them,
+# so no `node_modules/@isocan/<module>` link exists and `npm run build` below
+# dies resolving `@isocan/mindmap/web`. That is what happened for two merges
+# on 5 Sep while dev and prod sat on the commit before. `test/modules.test.ts`
+# holds every module directory to a line here.
+COPY packages/modules/mindmap/package.json packages/modules/mindmap/package.json
+COPY packages/modules/mermaid/package.json packages/modules/mermaid/package.json
 
 # --ignore-scripts: the root `prepare` (scripts/prepare.mjs) exists to build the
 # web bundle for people installing from git, and it does it by shelling out to

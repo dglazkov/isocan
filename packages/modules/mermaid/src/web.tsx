@@ -23,3 +23,5 @@ export const mermaidWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<R
   core: mermaidModule,
   renderers: [{ mimes: [MERMAID_MIME], component: DiagramView }],
 };
+
+export default mermaidWeb;
