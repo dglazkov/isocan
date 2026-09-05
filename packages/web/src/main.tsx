@@ -12,6 +12,9 @@ import { loadActorColors } from "./lib/colors.ts";
 import { loadActorNames } from "./lib/names.ts";
 import { loadContentBase } from "./lib/contentBase.ts";
 import "./styles.css";
+// The modules this build carries register their core records on import, so
+// every panel that reads core (context, files) sees them before first paint.
+import "./modules.ts";
 
 initTheme();
 // A replaced badge holds no claims, so the tab re-claims its persona before

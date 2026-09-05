@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/mindmap",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mind maps: nodes you can drag, links that follow — the first internal module",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

@@ -15,7 +15,8 @@
     "./package.json": "./package.json"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "packages/modules/*"
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w @isocan/server\" \"npm run dev -w @isocan/web\"",

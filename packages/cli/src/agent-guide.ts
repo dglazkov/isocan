@@ -16,4 +16,11 @@ import { fileURLToPath } from "node:url";
 export const agentGuidePath = (): string =>
   fileURLToPath(new URL("./agent-guide.md", import.meta.url));
 
-export const agentGuide = (): string => readFileSync(agentGuidePath(), "utf8");
+/**
+ * The base guide, then a section per loaded module
+ * (`docs/projects/modules/design.md`): a module's verbs are described only
+ * while the module is here to answer them, which is `surface.test.ts`'s rule
+ * — a verb nobody is told about does not exist — with its pleasant inverse.
+ */
+export const agentGuide = (moduleSections: readonly string[] = []): string =>
+  [readFileSync(agentGuidePath(), "utf8"), ...moduleSections.map((s) => s.trim())].join("\n\n") + "\n";

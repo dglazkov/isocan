@@ -7,10 +7,10 @@ import { describe, expect, it } from "vitest";
  * and it exists because of a bug that had no symptom in the DOM at all.
  */
 const view = readFileSync(
-  fileURLToPath(new URL("../src/components/MapEdges.tsx", import.meta.url)),
+  fileURLToPath(new URL("../src/edges.tsx", import.meta.url)),
   "utf8",
 );
-const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
+const css = readFileSync(fileURLToPath(new URL("../../../web/src/styles.css", import.meta.url)), "utf8");
 
 describe("the map's lines", () => {
   it("sizes its SVG to the lines inside it", () => {
@@ -52,15 +52,15 @@ describe("the map's lines", () => {
      * the nodes for free, with nothing listening at all.
      */
     const viewport = readFileSync(
-      fileURLToPath(new URL("../src/components/CanvasViewport.tsx", import.meta.url)),
+      fileURLToPath(new URL("../../../web/src/components/CanvasViewport.tsx", import.meta.url)),
       "utf8",
     );
     const world = viewport.slice(viewport.indexOf('className={`world'), viewport.indexOf("{items.map("));
-    expect(viewport.indexOf("<MapEdges />")).toBeGreaterThan(viewport.indexOf('className={`world'));
+    expect(viewport.indexOf("<ModuleUnderlays />")).toBeGreaterThan(viewport.indexOf('className={`world'));
     expect(world, "and it is inside .world").toBeTruthy();
     // Before the items: a node is chromeless text, and a line over it strikes
     // through the words.
-    expect(viewport.indexOf("<MapEdges />")).toBeLessThan(viewport.indexOf("{items.map("));
+    expect(viewport.indexOf("<ModuleUnderlays />")).toBeLessThan(viewport.indexOf("{items.map("));
   });
 
   it("rides a drag, so a line does not lag the node it joins", () => {

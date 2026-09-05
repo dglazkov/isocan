@@ -1,5 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
-import { allMapEdges } from "./mindmap.ts";
+import { moduleEdges } from "./modules.ts";
 import { BROWSER_MIME, parseUriList } from "./browseritem.ts";
 
 /**
@@ -124,7 +124,7 @@ export function toJsonCanvas(
    * canvas, whichever map it belongs to, pointing parent → child with an arrow
    * — the same direction the canvas draws.
    */
-  const edges: JsonCanvasEdge[] = allMapEdges(canvas).map(({ from, to }) => ({
+  const edges: JsonCanvasEdge[] = moduleEdges(canvas).map(({ from, to }) => ({
     id: `${from.id}-${to.id}`,
     fromNode: from.id,
     toNode: to.id,
