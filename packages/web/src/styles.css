@@ -4616,6 +4616,10 @@ button.mt-card:hover { border-color: var(--accent); }
   /* Words on a canvas are read, not scrolled: a node that outgrew its box
      should be re-fitted (⇧F), not given a scrollbar the size of a sentence. */
   overflow: hidden;
+  /* A word longer than the box wraps inside it rather than running out of
+     the right edge and being clipped — the one way a title could still be
+     cut once the box is measured to the words (`core/textnode.ts`, textBox). */
+  overflow-wrap: anywhere;
 }
 .item.textnode .md-view p:first-child { margin-top: 0; }
 .item.textnode .md-view p:last-child { margin-bottom: 0; }

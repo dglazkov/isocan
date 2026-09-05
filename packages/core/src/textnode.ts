@@ -391,19 +391,136 @@ export const TEXT_COLUMN_MAX: Record<TextStyle, number> = {
   display: TEXT_COLUMN.display * 2,
 };
 
-export function textBox(body: string, style: TextStyle = "body"): { width: number; height: number } {
-  const size = TEXT_STYLE_SIZE[style];
-  const lines = body.split("\n");
-  const width = TEXT_COLUMN[style];
-  // Roughly two characters per em at this size; the wrap is what the app will
-  // do, so the guess only has to be close.
-  const perLine = Math.max(1, Math.floor(width / (size * 0.5)));
-  const rows = lines.reduce(
-    (total, line) => total + Math.max(1, Math.ceil(line.length / perLine)),
-    0,
+/**
+ * **The box must err large, never small.** A text node is chromeless, so a
+ * box with room to spare is invisible; a box a line short crops the words,
+ * because the node's overflow is hidden on purpose (a scrollbar the size of
+ * a sentence is worse). The first estimate counted half an em per character
+ * and wrapped by character, and at the big steps that is exactly wrong: a
+ * title is a few long words, a word does not break, and "Onboarding" at 128
+ * is wider than the count said. Agents write titles from the terminal, where
+ * nothing measures, so the guess is the box — and it was cropping them.
+ *
+ * So this wraps the way the browser will: by WORD, with a width per glyph
+ * by its class (an `m` is not an `i`, a capital is wider than either),
+ * scaled by the face the way the app draws it, with the stylesheet's own
+ * line-height and padding, a paragraph's margin, and a tenth on top. The
+ * width is what the words need — a three-word title gets a three-word box,
+ * which is what the app's composer commits — never narrower than the
+ * longest word (up to the step's hard limit) and never wider than the column
+ * for prose.
+ */
+const LINE_HEIGHT = 1.5;
+/** `.item.textnode .md-view` padding: 4px top and bottom, 6px each side. */
+const PAD_Y = 8;
+const PAD_X = 12;
+/** `.md-view p` margin, collapsed between paragraphs, in em. */
+const PARAGRAPH_GAP = 0.35;
+/** The margin of error a guess owes, so it is wrong on the roomy side. */
+const SLACK = 1.1;
+/** The browser's own `ul` padding: 40px, a fixed number in world units. */
+const LIST_INDENT = 40;
+/** `.md-view h1`'s fixed size — the largest a heading is drawn at. */
+const HEADING_PX = 18;
+
+/** Advance width of one character, in em, for a UI sans — the classes that
+ *  matter, not a font table. `mono` is one width; the app scales `hand`. */
+function glyphEm(ch: string, face: TextFace): number {
+  if (face === "mono") return 0.6;
+  // Georgia sets wider than a UI sans, by about a twentieth.
+  const wide = face === "serif" ? 1.06 : 1;
+  if (ch === " ") return 0.28 * wide;
+  if (/[iljtfI!.,;:'|]/.test(ch)) return 0.3 * wide;
+  if (/[mwMW@%]/.test(ch)) return 0.9 * wide;
+  if (/[A-Z]/.test(ch)) return 0.7 * wide;
+  if (/[0-9]/.test(ch)) return 0.56 * wide;
+  if (/[a-z]/.test(ch)) return 0.55 * wide;
+  return 0.6 * wide;
+}
+
+/** Markdown's furniture takes no width on the canvas: the marker of a
+ *  heading or a list item, emphasis and code ticks. */
+function bareLine(line: string): string {
+  return line
+    .replace(/^\s{0,3}(#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/, "")
+    .replace(/[*_`~]/g, "")
+    .trim();
+}
+
+export function textBox(
+  body: string,
+  style: TextStyle = "body",
+  face: TextFace = "sans",
+): { width: number; height: number } {
+  const size = TEXT_STYLE_SIZE[style] * TEXT_FACE_SCALE[face];
+  const column = TEXT_COLUMN[style];
+  const hardMax = TEXT_COLUMN_MAX[style];
+
+  let rows = 0;
+  let widest = 0;
+  let gaps = 0;
+  let wrapped = false;
+  let lastBlank = true;
+  // Rows a heading adds beyond a line: the stylesheet sets headings at a
+  // fixed 18px with margins, which at body size is more than a line and at
+  // the big steps is less — counted as a line and a half either way.
+  let extra = 0;
+  let listed = false;
+  for (const raw of body.replace(/\r/g, "").split("\n")) {
+    const line = bareLine(raw);
+    if (line === "") {
+      // A blank line ends a paragraph; the next one pays a margin.
+      if (!lastBlank) gaps += 1;
+      lastBlank = true;
+      continue;
+    }
+    // A paragraph after a blank line pays the margin once, however many
+    // blank lines sat between them.
+    lastBlank = false;
+    // A list item is indented by the browser's own 40px, whatever the size,
+    // and a list keeps its margins where a first or last paragraph loses
+    // them — so the first list line pays a paragraph's gap at both ends.
+    const indent = /^\s{0,3}([-*+]|\d+[.)])\s+/.test(raw) ? LIST_INDENT : 0;
+    if (indent && !listed) {
+      listed = true;
+      extra += (PARAGRAPH_GAP * 2) / LINE_HEIGHT;
+    }
+    // A heading is drawn at the stylesheet's fixed 18px, which at the body
+    // step is LARGER than the words around it — so its width is measured at
+    // that size, or it wraps a word early and the box is a row short.
+    const heading = /^\s{0,3}#{1,6}\s+/.test(raw);
+    if (heading) extra += 0.6;
+    const lineSize = heading ? Math.max(size, HEADING_PX) : size;
+    const em = (text: string) => [...text].reduce((w, ch) => w + glyphEm(ch, face), 0) * lineSize;
+    // Wrap by word at the column, the way the browser will; a word longer
+    // than the column widens the box, up to the hard limit, past which the
+    // stylesheet breaks it (`overflow-wrap: anywhere`).
+    let lineRows = 1;
+    let run = indent;
+    for (const word of line.split(/\s+/)) {
+      const w = Math.min(em(word), hardMax - PAD_X - indent);
+      const spaced = run === indent ? run + w : run + em(" ") + w;
+      if (run > indent && spaced > column - PAD_X) {
+        lineRows += 1;
+        wrapped = true;
+        run = indent + w;
+      } else {
+        run = spaced;
+      }
+      widest = Math.max(widest, run, indent + w);
+    }
+    rows += lineRows;
+  }
+  // One row of margin for a gap that is followed by nothing would be paid
+  // to no paragraph; a trailing blank line costs nothing.
+  const paragraphs = Math.max(0, gaps - (lastBlank ? 1 : 0));
+  // Prose that wrapped settles at the column, the way the composer's mirror
+  // does; a label takes the width its words need.
+  const width = wrapped
+    ? Math.max(column, Math.min(hardMax, Math.round(widest * SLACK + PAD_X)))
+    : Math.round(Math.min(hardMax, Math.max(size * 2, widest * SLACK + PAD_X)));
+  const height = Math.round(
+    (Math.max(1, rows) + extra) * size * LINE_HEIGHT * SLACK + paragraphs * size * PARAGRAPH_GAP + PAD_Y,
   );
-  return {
-    width,
-    height: Math.max(size * 2, Math.round(rows * size * 1.5) + size),
-  };
+  return { width, height };
 }
