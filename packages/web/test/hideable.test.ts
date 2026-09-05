@@ -42,6 +42,16 @@ describe("the two controls asked for hide by right-click and come back from Sett
     expect(rail).toContain('hideMenu(e, "rail.history")');
   });
 
+  it("right-click the area offers back what was hidden from it, and only then (stage 2)", () => {
+    const menu = read("../src/lib/chromemenu.tsx");
+    expect(menu).toContain("export function showMenu(e: React.MouseEvent, where: string)");
+    expect(menu).toContain("if (hidden.length === 0) return;");
+    expect(rail).toContain('onContextMenu={(e) => showMenu(e, "the rail")}');
+    expect(zoom).toContain('onContextMenu={(e) => showMenu(e, "the zoom cluster")}');
+    // Every registry entry's `where` is an area that has the door.
+    for (const entry of HIDEABLE) expect(["the rail", "the zoom cluster"]).toContain(entry.where);
+  });
+
   it("Settings under the identity menu lists the registry with a switch each and Show everything", () => {
     expect(identity).toContain("HIDEABLE.map((entry) =>");
     expect(identity).toContain("Show everything");

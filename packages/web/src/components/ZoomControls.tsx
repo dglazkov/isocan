@@ -6,7 +6,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../lib/zoomactions.ts";
 import { useCanEdit } from "../lib/capability.ts";
-import { hideMenu, useChromeHidden } from "../lib/chromemenu.tsx";
+import { hideMenu, showMenu, useChromeHidden } from "../lib/chromemenu.tsx";
 
 /**
  * Bottom-right navigation cluster (Stitch-style): undo/redo, then a zoom group
@@ -45,7 +45,13 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
   ];
 
   return (
-    <div className="zoom-controls" onPointerDown={(e) => e.stopPropagation()}>
+    <div
+      className="zoom-controls"
+      onPointerDown={(e) => e.stopPropagation()}
+      // Chrome you can turn off, door 2: the cluster's empty left edge offers
+      // undo/redo back once they are hidden.
+      onContextMenu={(e) => showMenu(e, "the zoom cluster")}
+    >
       {/* Undo and redo are writes — a reader keeps the zoom group and loses
           these two (roles phase 1, `HIDDEN_WRITES`). A person may also hide
           them (chrome you can turn off): right-click says how to get them

@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: ui-refresh
-note: designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Stages 1 and 4 built 4 Sep — the registry, the store field, the two controls asked for hidden by right-click and shown again under the identity menu, ⌘K "Show hidden controls", and the test that every entry names its other door; stages 2–3 not built
+note: designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Stages 1, 2 and 4 built 4 Sep — the registry, the store field, the two controls asked for hidden by right-click and shown again under the identity menu or by right-clicking the area they were hidden from, ⌘K "Show hidden controls", and the test that every entry names its other door; stage 3 not built
 ---
 
 # Chrome you can turn off
@@ -105,7 +105,7 @@ asked for; a person who hides everything still has a working app.
 
 ## What was built
 
-**Stages 1 and 4, 4 September 2026.** The registry is `web/src/lib/chrome.ts`
+**Stages 1 and 4, 4 September 2026.** The registry is `web/src/lib/hideable.ts`
 — two entries, `zoom.undo` (its other door is the `Undo and redo` shortcut
 in core's `SHORTCUTS`) and `rail.history` (its other door is ⌘K's *Open
 History*), each carrying the sentence the menu says beside *Hide …*. The
@@ -117,8 +117,15 @@ the half of it that is Settings: a *Controls* list under the identity menu
 beside Theme, a switch per entry with its area and its other door on the
 line, and *Show everything* when anything is hidden. Door 3: ⌘K *Show hidden
 controls*, an action that is not in the registry. Stage 4's guard is
-`web/test/chrome.test.ts`: every entry names a shortcut that exists in core
-or an action that exists in the palette, and the palette's own command is
-never hideable. Not built: right-click the empty area to show that area's
-hidden controls (stage 2), and the rest of the rail and corners (stage 3),
-which arrive one entry each as people ask.
+`web/test/hideable.test.ts`: every entry names a shortcut that exists in
+core or an action that exists in the palette, and the palette's own command
+is never hideable.
+
+**Stage 2, later the same day.** Right-click the rail's gap or the zoom
+cluster's empty edge and `showMenu` offers back whatever the registry says
+was hidden from that area — *Show undo and redo*, *Show History* — through
+the same context-menu component; when nothing there is hidden the
+right-click is left alone, so an area with nothing to show does not grow a
+menu that says nothing. The test now also holds that every entry's `where`
+is an area that has the door. Not built: the rest of the rail and corners
+(stage 3), which arrive one entry each as people ask.
