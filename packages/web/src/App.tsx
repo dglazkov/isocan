@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { preloadMarkdown } from "./lib/markdown.tsx";
 import { BrowserRouter, matchPath, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
+import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, MODULE_PAGE_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
 import { getSnapshot } from "./lib/api.ts";
 import { Viewer } from "./components/Viewer.tsx";
 import { readIdentity } from "./lib/identity.ts";
@@ -107,6 +107,7 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
                 it. */}
             <Route path={ITEM_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
             <Route path={DECK_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
+            <Route path={MODULE_PAGE_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
             {/* The workbench — the same element again, for the same reason:
                 both covers live over a canvas that must not be torn down by
                 flipping to them. */}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
@@ -8,6 +8,7 @@ import {
   answeringExcerpt,
   workbenchItemPath,
   workbenchPath,
+  itemKind,
   type AgentRow,
 } from "@isocan/core";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
@@ -25,6 +26,8 @@ import { goStage } from "../lib/goStage.ts";
 import { AgentRowView } from "./AgentRow.tsx";
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
+import { moduleInspectorsFor } from "../modules.ts";
+import { readBlobText } from "../lib/api.ts";
 import { useAnswerable } from "../lib/answerable.ts";
 
 /**
@@ -93,6 +96,13 @@ export function Workbench({
       navigate(workbenchItemPath(canvasId, locus), { replace: true });
     }
   }, [canvasId, itemId, followed, navigate]);
+  // The open item and the module inspectors that read its kind (phase 4).
+  // The generation is read so a runtime module's inspector arrives.
+  const openItem = useCanvasStore((s) => (itemId ? (s.canvas?.items[itemId] ?? null) : null));
+  useUiStore((s) => s.modulesGeneration);
+  const inspectors = openItem ? moduleInspectorsFor(itemKind(openItem)) : [];
+  const openHash = openItem ? (openItem.versions.find((v) => v.id === openItem.currentVersionId) ?? openItem.versions[0])?.blobHash ?? null : null;
+  const readOpenItem = useCallback(() => (openHash ? readBlobText(canvasId, openHash) : Promise.resolve("")), [canvasId, openHash]);
   const [rail, setRail] = useState(() => readRail(canvasId));
   const setRailKept = (folded: boolean) => {
     setRail(folded);
@@ -206,6 +216,23 @@ export function Workbench({
             </div>
           )}
         </div>
+        {/* **The inspector slot** (modules phase 4): beside the stage, for
+            the open item's kind, filled by whichever loaded module reads
+            that kind — the document's outline is the first. Handed the item
+            and its bytes on request; never a store. */}
+        {openItem && inspectors.length > 0 && (
+          <aside className="wb-inspector" aria-label="Inspector">
+            {inspectors.map((inspector) => {
+              const Body = inspector.component;
+              return (
+                <section key={inspector.label} className="wb-inspector-section">
+                  <h3>{inspector.label}</h3>
+                  <Body canvasId={canvasId} item={openItem} readText={readOpenItem} />
+                </section>
+              );
+            })}
+          </aside>
+        )}
       </div>
     </div>
   );

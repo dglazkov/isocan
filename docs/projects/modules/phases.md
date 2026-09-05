@@ -4,7 +4,7 @@ Each phase ends with something a person can remove and watch disappear.
 Ordered by what settles the most with the least: the registries before any
 loader, because a loader with nothing to load into is a loader.
 
-**Where we are:** phases 1–3 built 4–5 September 2026. Phase 4 next.
+**Where we are:** phases 1–4 built 4–5 September 2026. Phase 5 waits on three named gates.
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
@@ -88,9 +88,10 @@ with esbuild: platform imports rewritten to host reads, the web half
 code-split so a lazy boundary stays lazy on the wire, the manifest written
 from the package and the core record's default export.
 
-**Not a git spec yet.** `add` takes a directory; a `github:owner/repo#ref`
-spec is a `git clone` into a temp dir in front of the same code, and waits
-for a module that is published that way.
+**A git spec too, since phase 4:** `module add github:owner/repo#ref` (or
+any URL git clones) is a shallow clone into a temporary directory in front
+of the same code that reads a directory, the built module at the root or in
+`build/`.
 
 **Acceptance, run by hand on 5 Sep.** Mermaid taken out of both build-time
 lists, the app rebuilt without it (no diagram chunks in `dist/`), a daemon
@@ -109,12 +110,45 @@ and fixed on the spot: a `.js` CLI half under a home directory is
 CommonJS to Node (built as `.mjs` now), and a web half with only a named
 export loads nothing (default exports, and a guard).
 
-## Phase 4 — documents
+## Phase 4 — documents: the inspector slot, the page slot, module commands ✅
 
-The module that needs the two slots that do not exist: an inspector (the
-outline of the document, keyed to the kind) and a page (a doc-centric section
-beside the workbench). A prose editor as the renderer; `/outline` and
-`/summarize` as commands; export. Every edit is `item.addVersion`.
+*Built 5 Sep 2026.*
+
+Three slots the earlier phases had no customer for, and the module that
+asked for them. **Inspectors** (`WebModule.inspectors`, keyed by kind) mount
+beside the workbench's stage for the open item's kind, handed the item and
+its bytes on request. **Pages** (`WebModule.pages`) are cover routes of
+their own at `/p/<canvas>/x/<segment>` — the same kind of thing the
+workbench and the deck view are — mounted inside the canvas page with the
+shell's own bar, reachable from ⌘K ("Open Documents") and from `isocan open
+--page <segment>`; a segment nobody owns says so rather than showing a blank
+cover. **Commands** (`CoreModule.commands`) are slash commands laid UNDER
+the built-ins and the home's own on both surfaces, source `module` — the
+daemon registers no module, so each surface lays them under whatever list
+it holds.
+
+`packages/modules/documents` fills all three and adds no kind, key or op: a
+document is a markdown or text item brought as prose (not a caption, a note
+or the design system). The **Outline** inspector reads headings and size;
+the **Documents** page lists every document, newest edit first, opening on
+the stage; `/outline` and `/summarize` are what an agent carries out;
+`isocan docs ls` and `docs outline <item>` are the verbs they carry it out
+with.
+
+**Deferred on purpose:** the prose editor. The WYSIWYG note placed TipTap
+and ProseMirror as the right layer for a markdown lens, and the renderer
+slot from phase 2 is where it would go — but a markdown round trip through
+a rich editor is its own project, with its own losses to measure, and
+nothing in this phase's slots depends on it. The document still edits where
+every text item does.
+
+**Loose ends closed in the same PR:** `module add` takes a git spec
+(`github:owner/repo#ref`, or any URL git clones — the built module at the
+root or in `build/`), a shallow clone in front of the same code that reads a
+directory, proved against a local bare repository in the test. Left open: a
+card that names the module a file came from when the module is absent —
+the mime does not carry the name, and inventing a registry of departed
+modules is a second copy of a fact.
 
 ## Phase 5 — sandboxes
 

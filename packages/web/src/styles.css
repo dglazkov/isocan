@@ -5578,6 +5578,46 @@ button.mt-card:hover { border-color: var(--accent); }
 .with-notes .deck-page { border-radius: var(--radius) var(--radius) 0 0; }
 .deck-notes-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 13px; }
 
+/* ---------- a module's page, as a cover (ModulePage.tsx) ---------- */
+.module-page {
+  position: fixed; inset: 0; z-index: var(--z-fullscreen);
+  background: var(--ground); color: var(--ink);
+  display: flex; flex-direction: column;
+}
+.module-page-bar {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: 10px var(--edge); border-bottom: 1px solid var(--line); background: var(--ground);
+}
+.module-page-title { font-size: 14px; }
+.module-page-hint { color: var(--ink-soft); font-size: 13px; }
+.module-page-body { flex: 1; min-height: 0; overflow: auto; padding: 24px var(--edge); }
+.module-page-missing { max-width: 48ch; margin: 40px auto; text-align: center; color: var(--ink-soft); }
+
+/* ---------- the inspector beside the workbench's stage ---------- */
+.wb-inspector {
+  flex: none; width: 280px; min-height: 0; overflow: auto;
+  border-left: 1px solid var(--line); background: var(--card); padding: 12px 16px;
+}
+.wb-inspector-section h3 {
+  margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ---------- documents (modules/documents) ---------- */
+.doc-size { margin: 0 0 8px; font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.doc-quiet { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.doc-headings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.doc-headings li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.docs-page { max-width: 720px; margin: 0 auto; }
+.docs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.docs-row a {
+  display: flex; flex-direction: column; gap: 4px; padding: 12px 16px;
+  color: var(--ink); text-decoration: none;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.docs-row a:hover { border-color: var(--accent); }
+.docs-row small { color: var(--ink-soft); font-size: 12px; }
+
 /* ---------- speaker notes (core/slides.ts) ---------- */
 /* On the canvas: the caption that says which slide a note speaks for, above
    the words, in world units like the words. */
