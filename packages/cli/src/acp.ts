@@ -130,6 +130,38 @@ export interface TurnEvent {
   detail?: string;
 }
 
+/**
+ * **The adapter's stderr, passed through — minus one kind of chatter.** An
+ * adapter's own complaints are part of the narration, so its stderr reaches
+ * ours. Google's Antigravity server, though, logs every websocket message
+ * and every telemetry drop at INFO/WARNING in absl's format, hundreds of
+ * lines per turn, and its logging flags (`--verbosity`, `--stderrthreshold`,
+ * `--log_dir`, measured 2026-09-04) change nothing. So absl's INFO, WARNING
+ * and DEBUG lines are dropped here; its ERROR and FATAL lines, and any line
+ * in any other shape, pass through. `ISOCAN_ADAPTER_STDERR=all` passes
+ * everything, for the day the chatter is the clue.
+ */
+const ABSL_CHATTER = /^[IWDV]\d{4} \d\d:\d\d:\d\d\.\d+ +\d+ [\w./-]+:\d+\] /;
+
+function relayStderr(child: ChildProcess): void {
+  if (!child.stderr) return;
+  child.stderr.setEncoding("utf8");
+  const all = process.env.ISOCAN_ADAPTER_STDERR === "all";
+  let pending = "";
+  child.stderr.on("data", (chunk: string) => {
+    pending += chunk;
+    let nl;
+    while ((nl = pending.indexOf("\n")) >= 0) {
+      const line = pending.slice(0, nl + 1);
+      pending = pending.slice(nl + 1);
+      if (all || !ABSL_CHATTER.test(line)) process.stderr.write(line);
+    }
+  });
+  child.stderr.on("end", () => {
+    if (pending && (all || !ABSL_CHATTER.test(pending))) process.stderr.write(pending);
+  });
+}
+
 /** Auth methods an environment can satisfy with nobody at a keyboard: the
  * method id an adapter advertises, and the variable that answers it. The
  * adapter reads the variable itself; the client only chooses the method. */
@@ -186,8 +218,9 @@ export class AcpAgentProcess {
     const child = spawn(spec.command, spec.args, {
       cwd: options.cwd,
       env,
-      stdio: ["pipe", "pipe", "inherit"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
+    relayStderr(child);
     const agent = new AcpAgentProcess(child);
     agent.env = env;
     const init = await agent.request("initialize", {

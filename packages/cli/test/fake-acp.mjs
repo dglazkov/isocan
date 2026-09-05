@@ -35,6 +35,15 @@ let authenticated = authMethod === null;
 // The failure modes journey 5 demands, drivable: a session that never
 // starts, and one that dies mid-turn.
 if (process.env.FAKE_ACP_CRASH === "boot") process.exit(1);
+// FAKE_ACP_STDERR=absl: the stderr Google's Antigravity server writes —
+// absl-format INFO and WARNING chatter, an absl ERROR, and a plain line —
+// so the client's filter can be seen keeping the last two and not the first.
+if (process.env.FAKE_ACP_STDERR === "absl") {
+  process.stderr.write("I0904 20:46:34.517650 8367415680 local_connection.py:521] RAW WS MSG: {\"stepUpdate\":{}}\n");
+  process.stderr.write("W0904 20:46:34.520097 8367415680 telemetry.py:431] No business auth manager configured\n");
+  process.stderr.write("E0904 20:46:34.600000 8367415680 oauth_manager.py:288] Onboarding failed with terminal error\n");
+  process.stderr.write("fake-acp: a plain complaint\n");
+}
 const send = (msg) => process.stdout.write(`${JSON.stringify(msg)}\n`);
 let permissionId = 1000;
 const awaitingPermission = new Map();
