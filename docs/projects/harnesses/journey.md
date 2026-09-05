@@ -111,5 +111,16 @@ set aside out loud.
   of a login is answered with a method the environment can satisfy, or
   fails naming the variable. Installed means the server is in the home:
   neither `agy` on the PATH nor the IDE implies it.
+- **Builtins are registry ids** (5 Sep). The first Antigravity build
+  typed five dl.google.com URLs and a version into `harnesses.ts`, stale
+  the day Google bumped the entry, and the Claude builtin was pinned to a
+  package npm has since deprecated in favour of a renamed one. The ACP
+  registry publishes a hosted index (refreshed hourly) that is the
+  official path every client walks, so a builtin now names its registry
+  id and nothing else: resolution reads the index cached in the home
+  (refreshed at spawn when older than an hour), `npx -y <package@version>`
+  for an npm entry, a binary fetched once into
+  `~/.isocan/adapters/<id>/<version>/` for an archive one. A pin of the
+  index as of that day serves only a machine that has never reached it.
 - **Not built:** choosing a model per agent. That is pi's per-directory
   settings file in the agent's working directory, not an isocan flag.

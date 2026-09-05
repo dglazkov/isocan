@@ -143,7 +143,12 @@ describe("a turn in a named agent (phase 3)", () => {
   }, 30_000);
 
   it("pi ships known: `--harness pi` resolves to the pi-acp adapter without config", async () => {
-    expect(await adapterFor(home, "pi")).toEqual({ harness: "pi", command: "npx", args: ["-y", "pi-acp"] });
+    // The registry's current pi-acp, pinned to the version the index names.
+    expect(await adapterFor(home, "pi")).toMatchObject({
+      harness: "pi",
+      command: "npx",
+      args: ["-y", expect.stringMatching(/^pi-acp@\d/)],
+    });
     // The config hook still wins over the builtin, as it does for claude-code.
     await fs.writeFile(
       path.join(home, "config.json"),
@@ -154,7 +159,11 @@ describe("a turn in a named agent (phase 3)", () => {
 
   it("codex ships known, and its bridge carries the sandbox mode the CLI inside needs", async () => {
     const spec = await adapterFor(home, "codex");
-    expect(spec).toMatchObject({ harness: "codex", command: "npx", args: ["-y", "@agentclientprotocol/codex-acp"] });
+    expect(spec).toMatchObject({
+      harness: "codex",
+      command: "npx",
+      args: ["-y", expect.stringMatching(/^@agentclientprotocol\/codex-acp@\d/)],
+    });
     expect(spec?.env).toEqual({ INITIAL_AGENT_MODE: "agent-full-access", NO_BROWSER: "1" });
     // …and a spec's env reaches the spawned bridge: the scripted adapter
     // told to die at boot through its environment, dies at boot.
