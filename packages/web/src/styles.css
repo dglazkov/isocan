@@ -5501,3 +5501,65 @@ button.mt-card:hover { border-color: var(--accent); }
 /* A canvas open wider than its space — the mark an owner is looking for. */
 .share-wider { color: var(--accent-text); }
 .share-back { padding: 0 6px; margin-right: 4px; font-size: 14px; line-height: 1; }
+
+/* ---------- the deck, laid out for paper (DeckPrint.tsx) ---------- */
+/* Covers the canvas like full screen does, and for the same reason: `--ground`
+   here is load-bearing, an undefined token would be no colour at all. */
+.deck-print {
+  position: fixed; inset: 0; z-index: var(--z-fullscreen);
+  background: var(--ground); color: var(--ink);
+  overflow-y: auto; overflow-x: hidden;
+}
+.deck-bar {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px var(--edge);
+  background: var(--ground); border-bottom: 1px solid var(--line);
+}
+.deck-bar button {
+  padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); cursor: pointer;
+}
+.deck-bar button:disabled { color: var(--ink-muted); cursor: default; }
+.deck-count { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.deck-spacer { flex: 1; }
+.deck-empty { max-width: 48ch; margin: 40px auto; text-align: center; color: var(--ink-soft); }
+.deck-pages {
+  list-style: none; margin: 0; padding: 24px var(--edge) 40px;
+  display: flex; flex-direction: column; align-items: center; gap: 28px;
+}
+/* `--card` rather than white: a slide draws its own ground inside its frame,
+   and the page behind it should sit on this theme's surface like a card. */
+.deck-page {
+  position: relative; width: min(100%, 1280px); aspect-ratio: 16 / 9;
+  background: var(--card); border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.deck-page iframe { display: block; width: 100%; height: 100%; border: 0; background: var(--card); }
+.deck-page img { display: block; max-width: 100%; max-height: 100%; height: auto; margin: 0 auto; object-fit: contain; }
+.deck-page-other {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; color: var(--ink-soft);
+}
+.deck-page-n {
+  position: absolute; right: 10px; bottom: 8px; font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--ink-soft);
+}
+@media print {
+  /* A slide is 16:9, so the sheet is: PowerPoint's 13.333 × 7.5 inches, not Letter landscape, which would stretch every slide to 4:3. */
+  @page { size: 13.333in 7.5in; margin: 0; }
+  /* Only the pages print — the canvas beneath, the bar and the page's own
+     chrome are all off the sheet. */
+  body > *:not(#root), .canvas-page > *:not(.deck-print) { display: none !important; }
+  /* The shell is a fixed, clipped viewport (`.canvas-page`, and `height: 100%`
+     up the chain); a print of that is one sheet holding the first screenful.
+     Measured: two slides printed as one page until these were let go. */
+  html, body, #root { height: auto; overflow: visible; }
+  .canvas-page { position: static; overflow: visible; }
+  .deck-print { position: static; overflow: visible; }
+  .deck-bar { display: none; }
+  .deck-pages { padding: 0; gap: 0; display: block; }
+  .deck-page { break-after: page; width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
+  .deck-page:last-child { break-after: auto; }
+  .deck-page-n { display: none; }
+}

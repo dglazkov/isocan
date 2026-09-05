@@ -248,6 +248,10 @@ import {
   slidePatch,
   slides,
   SLIDE_EMOJI,
+  deckPages,
+  deckHtml,
+  deckUrl,
+  type DeckPageContent,
   majors,
   majorLine,
   track,
@@ -7659,6 +7663,71 @@ slidesCmd
       const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
       console.log(`\nThe deck's address (the first slide, full screen):`);
       console.log(itemUrl(origin, p.id, deck[0]!.id));
+      console.log(`The deck on paper (Save as PDF, or download one file that plays it):`);
+      console.log(deckUrl(origin, p.id));
+    }),
+  );
+
+/**
+ * **The deck as a document** (`docs/research/2026-09-04-deck-export.md`).
+ *
+ * The extension is the format. `.html` is built HERE from the slides' bytes
+ * with core's `deckHtml` — the same function the app's Download runs, so the
+ * two surfaces write one file — and needs no browser. `.pdf` and `--png` are
+ * pictures, and the only faithful picture of a slide that draws itself is the
+ * one a browser makes: `scripts/deck-export.mjs` opens the app's deck view
+ * (core's `deckUrl`, the address `slides show` prints) in the headless Chrome
+ * the graders and `canvas shot` use, and prints it. That needs the repository
+ * checkout, as `canvas shot` does, and says so rather than failing inside.
+ */
+slidesCmd
+  .command("export <out>")
+  .description("The deck as a document: deck.pdf (one slide per page, via Chrome) or deck.html (one file that plays it)")
+  .option("--canvas <canvas>")
+  .option("--png <dir>", "also write one PNG per slide into this directory (via Chrome)")
+  .action(
+    run(async (out: string, opts: { canvas?: string; png?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const pages = deckPages(snapshot.canvas);
+      if (pages.length === 0) throw new Error("nothing to export — this canvas has no items");
+      const ext = path.extname(out).toLowerCase();
+      const written: string[] = [];
+      if (ext === ".html" || ext === ".htm") {
+        const contents: DeckPageContent[] = await Promise.all(
+          pages.map(async (page) => {
+            if (page.mimeType === "text/html") {
+              return { ...page, html: (await ctx.client.downloadBlob(p.id, page.blobHash)).toString("utf8") };
+            }
+            if (page.mimeType.startsWith("image/")) {
+              const bytes = await ctx.client.downloadBlob(p.id, page.blobHash);
+              return { ...page, imageDataUrl: `data:${page.mimeType};base64,${bytes.toString("base64")}` };
+            }
+            return page;
+          }),
+        );
+        await fs.writeFile(out, deckHtml(p.title, contents));
+        written.push(out);
+      } else if (ext !== ".pdf") {
+        throw new Error(`export writes deck.pdf or deck.html — not ${ext || "a file with no extension"}`);
+      }
+      if (ext === ".pdf" || opts.png) {
+        const script = fileURLToPath(new URL("../../../scripts/deck-export.mjs", import.meta.url));
+        if (!existsSync(script)) {
+          throw new Error("PDF and PNG export need the repository checkout (scripts/deck-export.mjs) and Chrome — run it from a clone of isocan, or export deck.html");
+        }
+        const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
+        const args = [script, "--url", deckUrl(origin, p.id)];
+        if (ext === ".pdf") args.push("--pdf", out);
+        if (opts.png) args.push("--png", opts.png);
+        const child = spawnSync(process.execPath, args, { stdio: ctx.json ? "pipe" : "inherit" });
+        if (child.status !== 0) throw new Error(`the export did not land (exit ${child.status ?? "?"})`);
+        if (ext === ".pdf") written.push(out);
+        if (opts.png) written.push(opts.png);
+      }
+      if (ctx.json) return printJson({ canvasId: p.id, pages: pages.map((page) => page.id), written });
+      if (ext !== ".pdf" && !opts.png) console.log(`wrote ${out} (${pages.length} ${pages.length === 1 ? "slide" : "slides"})`);
     }),
   );
 

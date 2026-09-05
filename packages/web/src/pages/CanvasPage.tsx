@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
+  DECK_ROUTE,
   WORKBENCH_ROUTE,
   anchorOffset,
   itemPath,
@@ -40,6 +41,7 @@ const Workbench = lazy(() =>
   import("../components/Workbench.tsx").then((m) => ({ default: m.Workbench })),
 );
 import { FullScreen } from "../components/FullScreen.tsx";
+import { DeckPrint } from "../components/DeckPrint.tsx";
 import { Viewer } from "../components/Viewer.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
 import { Scrubber } from "../components/Scrubber.tsx";
@@ -174,6 +176,8 @@ function CanvasSurface({
   // short-circuit or the hook order changes with the route.
   const wbRootMatch = useMatch(WORKBENCH_ROUTE);
   const onWorkbench = wbItemId !== undefined || wbRootMatch !== null;
+  // The third cover: the deck laid out for paper (DeckPrint.tsx).
+  const onDeck = useMatch(DECK_ROUTE) !== null;
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const historyOpen = useUiStore((s) => s.historyOpen);
@@ -911,6 +915,9 @@ function CanvasSurface({
       {itemId && (
         <FullScreen canvasId={canvasId} itemId={itemId} actor={actor} onIdentity={onIdentity} />
       )}
+      {/* The deck on paper: every slide stacked, printed one to a sheet. A
+          route like full screen, mounted here so it reads the open replica. */}
+      {onDeck && <DeckPrint canvasId={canvasId} />}
       {/* The other cover: same architecture, different room. Lazy, so the
           canvas path never pays for it; Suspense falls back to nothing for
           the frame the chunk takes. */}

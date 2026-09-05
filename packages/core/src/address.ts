@@ -69,6 +69,26 @@ export function itemUrl(origin: string, canvasId: string, itemId: string): strin
 }
 
 /**
+ * **The deck, laid out for paper** (`docs/research/2026-09-04-deck-export.md`).
+ *
+ * Every slide of a canvas stacked on one page, one per sheet when printed —
+ * the view the browser's own Save-as-PDF turns into a document, and the
+ * view the CLI's headless Chrome prints to `deck.pdf`, so both surfaces
+ * produce the same pages from the same address. A route for the reason
+ * full screen is one: it is an address either surface can hand you.
+ */
+const DECK_PATH_SEGMENT = "deck";
+export const DECK_ROUTE = `${CANVAS_ROUTE}/${DECK_PATH_SEGMENT}`;
+
+export function deckPath(canvasId: string): string {
+  return `${canvasPath(canvasId)}/${DECK_PATH_SEGMENT}`;
+}
+
+export function deckUrl(origin: string, canvasId: string): string {
+  return `${origin.replace(/\/+$/, "")}${deckPath(canvasId)}`;
+}
+
+/**
  * **The workbench: the same canvas, flipped to the agent room.**
  *
  * A second projection of the canvas — the agent roster, the main thread, and

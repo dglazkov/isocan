@@ -1,6 +1,6 @@
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, itemPath } from "@isocan/core";
+import { canvasPath, deckPath, itemPath } from "@isocan/core";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -251,6 +251,14 @@ export const ACTIONS: readonly Action[] = [
     group: "Canvas",
     available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1,
     run: (ctx) => ctx.navigate(itemPath(ctx.canvasId!, ctx.selection[0]!)),
+  },
+  {
+    id: "export-deck",
+    name: "Export the deck",
+    hint: "every slide on one page — Save as PDF, or download one file that plays it",
+    group: "Canvas",
+    available: onCanvas,
+    run: (ctx) => ctx.navigate(deckPath(ctx.canvasId!)),
   },
   {
     id: "download",
