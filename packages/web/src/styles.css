@@ -1269,6 +1269,18 @@ img { height: auto; }
 }
 .memory-mark:hover { color: var(--ink); border-color: var(--ink-soft); }
 .memory-mark.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
+/* Arrival motion (motion note, recommendation 2): an item from somebody
+   else comes in rather than popping. The settled state IS the base state —
+   the keyframes are only an entrance, so a throttled tab still shows the
+   item — and reduced motion skips it. */
+@keyframes item-arrive {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.item.arrived { animation: item-arrive 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) {
+  .item.arrived { animation: none; }
+}
 .doc-live-toggle.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
 /* "double-click to interact" is an instruction, not part of the document — so
    it hangs UNDER the item rather than lying across the bottom of it, and only
