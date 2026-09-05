@@ -122,5 +122,27 @@ set aside out loud.
   for an npm entry, a binary fetched once into
   `~/.isocan/adapters/<id>/<version>/` for an archive one. A pin of the
   index as of that day serves only a machine that has never reached it.
-- **Not built:** choosing a model per agent. That is pi's per-directory
+- **Adapter stderr is filtered, not silenced** (4 Sep, from the Antigravity
+  walk). Google's server logs at absl INFO/WARNING for every websocket
+  message and cannot be told not to; the client drops those lines and
+  passes errors and everything else, with `ISOCAN_ADAPTER_STDERR=all` for
+  the day the chatter is the clue.
+- **Not built:** choosing a model per agent.
+
+## An open finding, not this project's to close
+
+The first `isocan rc add` on a canvas homed at dev was refused as *this
+badge does not speak for* the person running it. Nothing in harnesses: the
+canvas had been born on this machine's daemon, a *Bring your own agent*
+pass had handed the machine its person there, and the canvas was later
+moved home to dev. The handoff was a claim on the old home's desk; a
+replica vouches agents to its home and never the machine's own person;
+teleport carries the canvas and not that standing; and `setup` refuses,
+rightly, to overwrite a machine's existing person with a handed one, so
+even a fresh pass leaves the CLI acting as the leftover id. The refusal
+sends the person to `identity --session`, the agents' verb. Three fixes
+were named, any of which closes it: teleport carrying the person to the
+new home; the replica vouching the machine's person as it does agents;
+`setup` offering to make a handed identity this machine's default. The
+identity desk's call. That is pi's per-directory
   settings file in the agent's working directory, not an isocan flag.

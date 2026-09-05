@@ -194,6 +194,19 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(again.stderr).toContain("resumed");
   }, 40_000);
 
+  it("an adapter's stderr reaches ours, minus absl's INFO and WARNING chatter", async () => {
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const run = await collect(spawnCli(["rc", "turn", "Sian", "hello"], { FAKE_ACP_STDERR: "absl" }));
+    expect(run.code).toBe(0);
+    expect(run.stderr).not.toContain("RAW WS MSG");
+    expect(run.stderr).not.toContain("No business auth manager");
+    expect(run.stderr).toContain("Onboarding failed with terminal error");
+    expect(run.stderr).toContain("fake-acp: a plain complaint");
+    // …and all of it on request.
+    const loud = await collect(spawnCli(["rc", "turn", "Sian", "hello"], { FAKE_ACP_STDERR: "absl", ISOCAN_ADAPTER_STDERR: "all" }));
+    expect(loud.stderr).toContain("RAW WS MSG");
+  }, 40_000);
+
   it("inside a summoned pi, the injected key beats pi's own: whoami and --session both resume the agent", async () => {
     await isocan("rc", "add", "Sian", "--harness", "pi");
     // pi's shells carry PI_SESSION_ID (a fresh uuid) beside the rc's

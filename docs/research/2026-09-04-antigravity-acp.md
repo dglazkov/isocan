@@ -105,6 +105,17 @@ The user's word: a metered key is a valid way to use Antigravity. Built
 that evening: the ACP client answers "Authentication required" with a
 method the environment can satisfy (`acp.ts`, `UNATTENDED_AUTH`), and
 `antigravity` is a builtin whose server is fetched from Google into the
-isocan home on first use (`harnesses.ts`). Not yet measured: a real turn
-through it — the machine had no key exported, and reading one out of
-another tool's credential store was rightly refused.
+isocan home on first use (`harnesses.ts`). **Walked for real the same
+night**, with a key exported by hand: `isocan rc add Percy --harness
+antigravity`, a summons, the server fetched once, Percy replying on the
+thread through the CLI as the enrolled actor, the next summons resuming the
+same conversation. Two things the walk found. The server writes every
+websocket message and every telemetry drop to stderr at absl INFO/WARNING,
+hundreds of lines a turn, and its logging flags (`--verbosity`,
+`--stderrthreshold`, `--log_dir`) change nothing — so `acp.ts` drops absl's
+INFO/WARNING/DEBUG lines from every adapter's stderr and passes the rest
+(`ISOCAN_ADAPTER_STDERR=all` restores them). And the enrolment was refused
+at first for a reason unrelated to harnesses: the canvas had been moved
+home from this machine's daemon to dev, and the pass that had once handed
+this machine its person was a claim on the old home's desk — see the
+harnesses journey's open finding on the identity desk.
