@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**18 built · 30 still open** — of which 21 partly
+**19 built · 29 still open** — of which 20 partly
 built, 8 designed, 0 blocked, and
 **1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -16,7 +16,7 @@ read lately.
 2 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>21</sub>
+## Partly built <sub>20</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -26,7 +26,6 @@ and the done column should not be flattered by either.
 | research | [Chrome you can turn off](docs/research/2026-09-02-chrome-you-can-turn-off.md) | 2026-09-02 | designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Stages 1, 2 and 4 built 4 Sep — the registry, the store field, the two controls asked for hidden by right-click and shown again under the identity menu or by right-clicking the area they were hidden from, ⌘K "Show hidden controls", and the test that every entry names its other door; stage 3 not built · see ui-refresh |
 | research | [Component libraries, and what survives the trip to a canvas](docs/research/2026-08-28-component-libraries.md) | 2026-08-30 | `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not |
 | **project** | [context](docs/projects/context/design.md) | 2026-08-30 | stages 1 and 2 built; the MCP surface is not · see context |
-| research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed; the round-trip did not |
 | **project** | [evals](docs/projects/evals/plan.md) | 2026-08-29 | stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stage 3's twenty golden tasks are in `evals/golden/v1/`, weighted by that distribution and self-testing in both directions. Stage 5's harness `scripts/lift.mjs` measured `/sprint` (same result, a third of the cost) and `isocan-collab` (same result, fewer turns) on 3 Sep. Stage 4's harness `scripts/calibrate.mjs` gave its first reading 4 Sep — 30 comparisons, 63% agreement, κ 0.26, and the finding that over half the pairs were an agent's choice, not a person's; the converge lane is built · see evals |
 | research | [Google Docs on the canvas](docs/research/2026-09-02-google-docs-on-the-canvas.md) | 2026-09-02 | stages 1–3 built 2–3 Sep — the ↗ on anything with a source, `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `gdoc sync` stacking a version only where the doc changed, and on 3 Sep `gdoc auth`: a Drive access token on the machine for docs not shared by link, with sync asking Drive for modifiedTime first. Stage 4's live mode built 4 Sep — Live | Words on the strip, the /preview frame in the same item, remembered per browser. Stage 5's folder watch is designed and not built · see standing-agents, on-demand |
 | **project** | [inception](docs/projects/inception/design.md) | 2026-09-02 | phases 0–3 built 2 Sep, and phase 4's half — the card drawn live one level deep, ↗ and double-click open a tab, `isocan canvas place`, the popup from the rail and ⌘K, `isocan canvas shot --into` as the picture that survives a refused pull, the miniature wherever thumbnails are, and "lives at another home" said on the card; pulling a picture across homes is not built · see on-demand, standing-agents |
@@ -61,13 +60,14 @@ and the done column should not be flattered by either.
 | --- | --- | --- | --- |
 | research | [Modules: adding a kind of thing, and taking it away again](docs/research/2026-09-04-modules.md) | 2026-09-04 | the closed registries are counted; recommends internal modules first, Mermaid as the first node type, runtime loading third, sandboxes last · see extensions, workbench, iso-api, mindmap, atlas |
 
-## Built <sub>18</sub>
+## Built <sub>19</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-30 | the significance function and the CLI track are built; the scrubber is not |
 | **project** | [agent-custody](docs/projects/agent-custody/design.md) | 2026-08-31 | designed and built 31 Aug — no Add button without a visible rc; enrolment is a handshake the rc completes, the desk changed not at all. The Open section records what the build decided and what still waits. · see agent-custody |
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | all four phases done 27–29 Aug 2026 — the home says which commit it runs, a CLI that disagrees says so once, an upgrade is a build installed aside and probed before `current` flips, and a managed install upgrades while parked. Three open items stay named at the top of phases.md. · see auto-upgrade |
+| research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed 24 Aug; the round-trip landed 4 Sep — the export is DTCG 2025.10 and validates against the official schema for every file in a twelve-file slice of the corpus, the import reads the reference exporter's own files, and the linter went from 42 failing files of 74 to 13, all true findings |
 | **project** | [harnesses](docs/projects/harnesses/journey.md) | 2026-09-04 | built 4 Sep 2026 — pi and codex join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan. · see harnesses, on-demand, standing-agents |
 | **project** | [iso-api](docs/projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface, all four phases closed 31 Aug 2026, every journey played for real: the board is one process on `@isocan/api`, the watcher resumes where it stopped, a stranger machine installed from the release branch and landed an op at dev as its own actor, and a Scene-6 agent found the API through --agent-help alone. · see multiuser, on-demand |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](docs/research/2026-08-28-motion.md) | 2026-08-29 | pan inertia was the one real gap; built 4 Sep with arrival motion — a Hand or middle-button drag coasts under the note's three conditions, and an item from somebody else comes in rather than popping · see ui-refresh |

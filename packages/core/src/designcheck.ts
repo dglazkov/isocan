@@ -1,5 +1,5 @@
 import { CONTRAST_BODY, CONTRAST_UI, contrastRatio, parseHex } from "./contrast.ts";
-import { DESIGN_SECTIONS, resolveToken, type DesignDoc } from "./designmd.ts";
+import { DESIGN_SECTIONS, unresolvedReferences, type DesignDoc } from "./designmd.ts";
 
 /**
  * Is this design system usable, or just written down?
@@ -69,18 +69,19 @@ export function checkDesign(doc: DesignDoc): DesignFinding[] {
 
   // Every value that claims to be a colour has to be one.
   for (const [name, value] of Object.entries(tokens.colors ?? {})) {
-    if (String(value).startsWith("{")) {
-      if (resolveToken(tokens, String(value)) === null) {
+    if (String(value).includes("{")) {
+      const missing = unresolvedReferences(tokens, String(value));
+      if (missing.length > 0) {
         findings.push({
           severity: "error",
           where: `colors.${name}`,
-          what: `points at ${value}, which is not in this file`,
+          what: `points at ${missing.join(" and ")}, which ${missing.length === 1 ? "is" : "are"} not in this file`,
           fix: "fix the path, or inline the value",
         });
       }
       continue;
     }
-    if (parseHex(String(value)) === null && !/^(rgb|hsl|hwb|oklch|oklab|lch|lab|color-mix)\(|^[a-z]+$/i.test(String(value))) {
+    if (parseHex(String(value)) === null && !/^(rgba?|hsla?|hwb|oklch|oklab|lch|lab|color-mix|color)\(|^[a-z]+$/i.test(String(value).trim())) {
       findings.push({
         severity: "error",
         where: `colors.${name}`,
@@ -89,14 +90,16 @@ export function checkDesign(doc: DesignDoc): DesignFinding[] {
     }
   }
 
-  // References anywhere else have to resolve too.
+  // References anywhere else have to resolve too — each one, inside a value
+  // that may hold several (`{spacing.md} {spacing.lg}` is a padding).
   for (const [component, props] of Object.entries(tokens.components ?? {})) {
     for (const [prop, value] of Object.entries(props)) {
-      if (String(value).startsWith("{") && resolveToken(tokens, String(value)) === null) {
+      const missing = String(value).includes("{") ? unresolvedReferences(tokens, String(value)) : [];
+      if (missing.length > 0) {
         findings.push({
           severity: "error",
           where: `components.${component}.${prop}`,
-          what: `points at ${value}, which is not in this file`,
+          what: `points at ${missing.join(" and ")}, which ${missing.length === 1 ? "is" : "are"} not in this file`,
         });
       }
     }

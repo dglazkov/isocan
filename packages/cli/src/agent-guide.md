@@ -1541,7 +1541,14 @@ isocan fit <items...>                  # grow items to the size their content wa
   Two flags save you from retyping values into a screen and getting one wrong:
   `isocan design --css` gives you custom properties to paste, and `isocan design
   --tokens` gives you W3C design tokens for anything downstream (Figma, Style
-  Dictionary, a Tailwind theme). Build against the variables rather than the
+  Dictionary, a Tailwind theme) — DTCG 2025.10, validated against the official
+  schema: colours as sRGB objects, dimensions as `{value, unit}`, typography
+  typed on the leaf. What the format cannot say (components, an `oklch()`
+  colour, a `clamp()` size) rides in `$extensions["io.isocan"]` with the
+  reason rather than being dropped, and a composite field the file never
+  stated is filled with CSS's initial value and says so in `$description`.
+  `isocan design import <tokens.json>` reads the same shape back, including
+  the reference exporter's files. Build against the variables rather than the
   literals; a screen full of hex codes is a screen that cannot follow the
   system when it changes.
 
