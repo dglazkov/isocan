@@ -93,6 +93,10 @@ import {
   ALIGN_EDGES,
   itemKinds,
   registerModule,
+  ISOCAN_VERSION,
+  enginesSatisfied,
+  moduleSlug,
+  type ModuleManifest,
   alignMoves,
   annotationsOf,
   distributeMoves,
@@ -304,6 +308,7 @@ import {
   driveAccount,
   driveModifiedTime,
   fetchGoogleDoc as fetchDocThroughDoors,
+  modulesDir,
   paths,
   plausibleSha,
   readConfigFile,
@@ -349,6 +354,7 @@ import {
 } from "@isocan/api";
 import { agentGuide } from "./agent-guide.ts";
 import { CLI_MODULES } from "./modules.ts";
+import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState } from "./rc.ts";
@@ -5526,6 +5532,14 @@ for (const m of CLI_MODULES) {
   registerModule(m.core);
   m.register(moduleHost);
 }
+/**
+ * **And the runtime ones** (modules phase 3): whatever `isocan module add`
+ * put under `~/.isocan/modules/`, loaded through the same host before argv
+ * is parsed, so their verbs, kinds and guide sections are indistinguishable
+ * from a build-time module's. A module that will not load is a row with a
+ * reason in `isocan module ls`, never a failure of every other verb.
+ */
+const runtimeModules = await loadRuntimeModules(paths.isocanHome(), moduleHost);
 
 /** A live site as an item — `browse`'s act, and `add <address>`'s. */
 async function addSiteItem(
@@ -8292,6 +8306,102 @@ command
       await ctx.client.deleteCommand(wanted);
       const back = findCommand(await ctx.client.commands(), wanted);
       console.error(back ? `/${wanted} is the built-in again` : `/${wanted} is gone`);
+    }),
+  );
+
+// ---------- modules ----------
+
+/**
+ * **Modules added and removed outside core** (`docs/projects/modules/design.md`,
+ * phase 3). A module is a directory: `manifest.json`, a web half the daemon
+ * serves, a CLI half this program imports, a guide section. `add` PRINTS the
+ * manifest — every kind, key and half it declares — and installs nothing
+ * until `--yes`, the ceremony `command add --from` already has and for the
+ * same reason: this is code that will run as the app, chosen by whoever runs
+ * this machine. The engines check refuses with a sentence naming both
+ * versions. Nothing here talks to a daemon: the daemon reads the same
+ * directory per request, so what `add` lands is served on the next load.
+ */
+const moduleCmd = program
+  .command("module")
+  .description("Modules on this machine — kinds, renderers and verbs added outside core, and removed again");
+
+function describeManifest(m: ModuleManifest, dir: string): string {
+  const lines = [`${m.name} ${m.version}${m.description ? ` — ${m.description}` : ""}`, `  from ${dir}`];
+  lines.push(`  needs isocan ${m.engines ?? "*"} (this is ${ISOCAN_VERSION})`);
+  for (const k of m.kinds ?? []) {
+    lines.push(`  kind ${k.id}: ${k.mimes.join(", ")}${k.extensions?.length ? ` (.${k.extensions.join(", .")})` : ""} — ${k.label}`);
+  }
+  if (m.propertyKeys?.length) lines.push(`  property keys: ${m.propertyKeys.join(", ")}`);
+  lines.push(`  web half: ${m.web ? m.web : "none"} · cli half: ${m.cli ? m.cli : "none"} · guide: ${m.guide ? m.guide : "none"}`);
+  return lines.join("\n");
+}
+
+moduleCmd
+  .command("add <dir>")
+  .description("Install a built module from a directory — prints what it declares, installs nothing until --yes")
+  .option("--yes", "install it, having read what it declares")
+  .action(
+    run(async (dirArg: string, opts: { yes?: boolean }, cmd: Command) => {
+      const globals = cmd.optsWithGlobals() as { json?: boolean };
+      const dir = path.resolve(dirArg);
+      const file = path.join(dir, "manifest.json");
+      if (!existsSync(file)) throw new Error(`${dir} has no manifest.json — build the module first (scripts/module-build.mjs)`);
+      const manifest = JSON.parse(await fs.readFile(file, "utf8")) as ModuleManifest;
+      if (typeof manifest.name !== "string" || !/^(@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(manifest.name)) {
+        throw new Error(`${file} names no module — "name" must be a package name`);
+      }
+      const engines = enginesSatisfied(manifest.engines);
+      if (!engines.ok) throw new Error(`${manifest.name} refused: ${engines.why}`);
+      for (const half of [manifest.web, manifest.cli, manifest.guide]) {
+        if (half && !existsSync(path.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
+      }
+      const slug = moduleSlug(manifest.name);
+      const target = path.join(modulesDir(paths.isocanHome()), slug);
+      if (!opts.yes) {
+        if (globals.json) return printJson({ manifest, target, installed: false });
+        console.log(describeManifest(manifest, dir));
+        console.error(`\nread that? then: isocan module add ${dirArg} --yes`);
+        return;
+      }
+      await fs.rm(target, { recursive: true, force: true });
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.cp(dir, target, { recursive: true });
+      if (globals.json) return printJson({ manifest, target, installed: true });
+      console.error(`${manifest.name} installed at ${target} — loaded on the next isocan command and the next page load (isocan module rm ${slug})`);
+    }),
+  );
+
+moduleCmd
+  .command("rm <name>")
+  .description("Remove a module — its items stay on every canvas, as files")
+  .action(
+    run(async (name: string, _opts: unknown, cmd: Command) => {
+      const globals = cmd.optsWithGlobals() as { json?: boolean };
+      const slug = moduleSlug(name);
+      const target = path.join(modulesDir(paths.isocanHome()), slug);
+      if (!existsSync(target)) throw new Error(`no module called ${slug} here — isocan module ls`);
+      await fs.rm(target, { recursive: true, force: true });
+      if (globals.json) return printJson({ removed: slug });
+      console.error(`${slug} removed — its items are files now, wherever they are`);
+    }),
+  );
+
+moduleCmd
+  .command("ls", { isDefault: true })
+  .description("The modules on this machine: the build's own, the runtime ones, and why any is refused")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const globals = cmd.optsWithGlobals() as { json?: boolean };
+      const rows = [
+        ...CLI_MODULES.map((m) => ({ name: m.core.name, version: "built in", refused: null as string | null })),
+        ...runtimeModules.map((m) => ({ name: m.name, version: m.version, refused: m.refused })),
+      ];
+      if (globals.json) return printJson(rows);
+      if (rows.length === 0) return console.log("no modules");
+      for (const row of rows) {
+        console.log(`${row.name.padEnd(28)} ${row.version.padEnd(10)} ${row.refused ? `refused — ${row.refused}` : "loaded"}`);
+      }
     }),
   );
 
@@ -11482,7 +11592,7 @@ trash
 // --agent-help`): stop, and print how to work here. Nothing above this line
 // has run anything — the definitions are registrations only.
 if (process.argv.slice(2).includes("--agent-help")) {
-  console.log(agentGuide(CLI_MODULES.map((m) => m.guide)));
+  console.log(agentGuide([...CLI_MODULES.map((m) => m.guide), ...runtimeModules.flatMap((m) => (m.guide ? [m.guide] : []))]));
 } else {
   program.parseAsync().catch((err: unknown) => {
     console.error(`error: ${(err as Error).message}`);

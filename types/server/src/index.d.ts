@@ -21,6 +21,7 @@ export { HOME_HEADER } from "./http.js";
 export { buildStamp, describeBuild, plausibleSha, stalenessOf, upgradeVerdict } from "./build.js";
 export type { BuildStamp, HomeBuild } from "./build.js";
 export * as paths from "./paths.js";
+export { modulesDir, readRuntimeModules, type RuntimeModule } from "./modules.js";
 /**
  * Binding: which directory a canvas means on this machine. It lived in the
  * CLI until the app needed to bind without one — the daemon is the only party

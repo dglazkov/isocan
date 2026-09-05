@@ -420,6 +420,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // The durable park cursor (on-demand phase 1) — a machine-local fact
     // beside homes.json, never behind the Store seam. See park.ts.
     park: new ParkCursors(home),
+    // This machine's runtime modules, read per request (modules phase 3).
+    modulesHome: home,
     rc,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
   };

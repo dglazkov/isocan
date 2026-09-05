@@ -67,6 +67,13 @@ interface RouteOptions {
      */
     homes?: HomeLinks | null;
     /**
+     * **This machine's runtime modules** (`docs/projects/modules/design.md`,
+     * phase 3): the isocan home whose `modules/` directory holds them. Read per
+     * request by `/api/serving` and `/modules/<slug>/…`, so `isocan module add`
+     * needs no restart. Absent on a daemon that should serve none.
+     */
+    modulesHome?: string;
+    /**
      * The content origin's base URL, or null/absent when none exists — which
      * is every daemon at stage 1 of the content-origin plan. The daemon sets
      * this from the content listener it actually started (stage 2), never from

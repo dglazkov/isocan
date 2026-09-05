@@ -46,3 +46,5 @@ export const mindmapWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<R
   underlays: [MapEdges],
   actions: [tidy],
 };
+
+export default mindmapWeb;

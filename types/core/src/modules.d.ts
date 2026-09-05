@@ -126,3 +126,53 @@ export interface WebModule<C, R = C> {
      *  the stage — ahead of the built-in chain, lazily loaded by the module. */
     renderers?: readonly ModuleRenderer<R>[];
 }
+/**
+ * **A runtime module's manifest** (phase 3): what `isocan module add` prints
+ * before `--yes`, what the daemon lists on `/api/serving`, and what the CLI
+ * reads before it imports any code. Written by `scripts/module-build.mjs`
+ * from the package and its core record, so the declaration and the code come
+ * from one place; the registry is filled from the manifest, so a module's
+ * kinds are known to both surfaces without executing its web half at all.
+ *
+ * Paths are relative to the module's directory: `~/.isocan/modules/<name>/`.
+ */
+export interface ModuleManifest {
+    name: string;
+    version: string;
+    description?: string;
+    /** The isocan version range this was built against — refused with a
+     *  sentence, never crashed on. `>=0.1.0`, `^0.1`, or `*`. */
+    engines?: string;
+    kinds?: readonly ModuleKind[];
+    propertyKeys?: readonly string[];
+    /** The web half, an ES module the daemon serves under `/modules/<name>/`. */
+    web?: string;
+    /** The CLI half, an ES module the CLI imports before it parses argv. */
+    cli?: string;
+    /** The guide section, printed after the base guide while loaded. */
+    guide?: string;
+}
+/** The version a module's `engines` is judged against. One place; the
+ *  packaging test holds it equal to the root manifest's. */
+export declare const ISOCAN_VERSION = "0.1.0";
+/** The name a module is addressed by on disk and in a URL: the package
+ *  name's last segment — `@isocan/<name>` → `<name>`. */
+export declare function moduleSlug(name: string): string;
+/** Where the daemon serves a module's web half from: `/modules/<slug>/<web>`.
+ *  Spelled once, here, for the daemon that serves it and the shell that asks. */
+export declare function moduleWebPath(manifest: ModuleManifest): string | null;
+/** The registry record a manifest declares — the code-free half of a module. */
+export declare function manifestRecord(manifest: ModuleManifest): CoreModule;
+/**
+ * Does this isocan satisfy a module's `engines`? Three shapes, on purpose
+ * no more: `*` (or nothing) is anything; `>=a.b.c` is at least; `^a.b.c` is
+ * at least and the same major (same minor while the major is 0, as npm
+ * reads it). A range this cannot read is a refusal that says so, because a
+ * module that cannot state what it needs is not a module a home should run.
+ */
+export declare function enginesSatisfied(range: string | undefined, version?: string): {
+    ok: true;
+} | {
+    ok: false;
+    why: string;
+};

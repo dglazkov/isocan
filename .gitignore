@@ -149,3 +149,6 @@ vite.config.ts.timestamp-*
 # `npm run dev:replica`'s own ISOCAN_HOME — a scratch daemon's badges, log and
 # replicated store. Kept out of ~/.isocan on purpose (scripts/dev-replica.mjs).
 .dev-replica/
+
+# A module built for runtime loading (scripts/module-build.mjs) lands here by default.
+packages/modules/*/build/

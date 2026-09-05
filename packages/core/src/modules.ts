@@ -155,3 +155,89 @@ export interface WebModule<C, R = C> {
    *  the stage — ahead of the built-in chain, lazily loaded by the module. */
   renderers?: readonly ModuleRenderer<R>[];
 }
+
+/**
+ * **A runtime module's manifest** (phase 3): what `isocan module add` prints
+ * before `--yes`, what the daemon lists on `/api/serving`, and what the CLI
+ * reads before it imports any code. Written by `scripts/module-build.mjs`
+ * from the package and its core record, so the declaration and the code come
+ * from one place; the registry is filled from the manifest, so a module's
+ * kinds are known to both surfaces without executing its web half at all.
+ *
+ * Paths are relative to the module's directory: `~/.isocan/modules/<name>/`.
+ */
+export interface ModuleManifest {
+  name: string;
+  version: string;
+  description?: string;
+  /** The isocan version range this was built against — refused with a
+   *  sentence, never crashed on. `>=0.1.0`, `^0.1`, or `*`. */
+  engines?: string;
+  kinds?: readonly ModuleKind[];
+  propertyKeys?: readonly string[];
+  /** The web half, an ES module the daemon serves under `/modules/<name>/`. */
+  web?: string;
+  /** The CLI half, an ES module the CLI imports before it parses argv. */
+  cli?: string;
+  /** The guide section, printed after the base guide while loaded. */
+  guide?: string;
+}
+
+/** The version a module's `engines` is judged against. One place; the
+ *  packaging test holds it equal to the root manifest's. */
+export const ISOCAN_VERSION = "0.1.0";
+
+/** The name a module is addressed by on disk and in a URL: the package
+ *  name's last segment — `@isocan/<name>` → `<name>`. */
+export function moduleSlug(name: string): string {
+  return name.split("/").pop() ?? name;
+}
+
+/** Where the daemon serves a module's web half from: `/modules/<slug>/<web>`.
+ *  Spelled once, here, for the daemon that serves it and the shell that asks. */
+export function moduleWebPath(manifest: ModuleManifest): string | null {
+  return manifest.web ? `/modules/${moduleSlug(manifest.name)}/${manifest.web}` : null;
+}
+
+/** The registry record a manifest declares — the code-free half of a module. */
+export function manifestRecord(manifest: ModuleManifest): CoreModule {
+  return {
+    name: manifest.name,
+    ...(manifest.kinds ? { kinds: manifest.kinds } : {}),
+    ...(manifest.propertyKeys ? { propertyKeys: manifest.propertyKeys } : {}),
+  };
+}
+
+function parseVersion(v: string): [number, number, number] | null {
+  const m = /^v?(\d+)\.(\d+)(?:\.(\d+))?/.exec(v.trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)] : null;
+}
+
+function compare(a: [number, number, number], b: [number, number, number]): number {
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i]! - b[i]!;
+  return 0;
+}
+
+/**
+ * Does this isocan satisfy a module's `engines`? Three shapes, on purpose
+ * no more: `*` (or nothing) is anything; `>=a.b.c` is at least; `^a.b.c` is
+ * at least and the same major (same minor while the major is 0, as npm
+ * reads it). A range this cannot read is a refusal that says so, because a
+ * module that cannot state what it needs is not a module a home should run.
+ */
+export function enginesSatisfied(range: string | undefined, version: string = ISOCAN_VERSION): { ok: true } | { ok: false; why: string } {
+  const have = parseVersion(version);
+  if (!have) return { ok: false, why: `this isocan's version "${version}" cannot be read` };
+  const r = (range ?? "*").trim();
+  if (r === "*" || r === "") return { ok: true };
+  const m = /^(>=|\^)?\s*(.+)$/.exec(r);
+  const want = m ? parseVersion(m[2]!) : null;
+  if (!m || !want) return { ok: false, why: `cannot read the engines range "${r}" — use >=a.b.c, ^a.b.c or *` };
+  const op = m[1] ?? "^";
+  if (compare(have, want) < 0) return { ok: false, why: `needs isocan ${r}, and this is ${version}` };
+  if (op === "^") {
+    const sameLine = want[0] === 0 ? have[0] === 0 && have[1] === want[1] : have[0] === want[0];
+    if (!sameLine) return { ok: false, why: `needs isocan ${r}, and this is ${version}` };
+  }
+  return { ok: true };
+}

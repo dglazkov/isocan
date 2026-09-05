@@ -2,6 +2,7 @@ import { INSTALL_SPEC } from "./address.ts";
 import type { Capability } from "./grants.ts";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.ts";
 import type { Actor, Canvas, CanvasContents } from "./model.ts";
+import type { ModuleManifest } from "./modules.ts";
 import type { NewsDay } from "./whatsnew.ts";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
 
@@ -1195,6 +1196,11 @@ export interface ServingResponse {
   /** Origin (scheme://host[:port], no trailing slash) serving item content,
    * or null: content is served from the app's own origin, as it always was. */
   contentBase: string | null;
+  /** The runtime modules this home has loaded (`docs/projects/modules/design.md`,
+   * phase 3): the manifests, so the shell can register their kinds and
+   * import each one's web half from `/modules/<slug>/`. Absent or empty on a
+   * home with none, which is every hosted home today. */
+  modules?: ModuleManifest[];
 }
 
 export interface HomesResponse {

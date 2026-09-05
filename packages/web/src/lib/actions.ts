@@ -335,7 +335,11 @@ async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<vo
 /** What can be run right now, in the order the groups are declared. On the
  * read-only canvas the actions that write are not in the list at all. */
 export function availableActions(ctx: ActionContext): Action[] {
-  return ACTIONS.filter((action) => {
+  // The module actions are read live, so a runtime module's arrive without a
+  // reload; the build-time ones are already in ACTIONS and are not doubled.
+  const live = moduleActions();
+  const known = new Set(ACTIONS.map((a) => a.id));
+  return [...ACTIONS, ...live.filter((a) => !known.has(a.id))].filter((action) => {
     if (!canEditNow() && action.writes) return false;
     return action.available?.(ctx) ?? true;
   });
