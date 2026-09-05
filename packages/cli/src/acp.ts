@@ -9,7 +9,9 @@ import type { AdapterSpec } from "./harnesses.ts";
  * adapter — one adapter process per enrolled agent, its subprocess, the
  * person's credentials, because the rc runs as the person. Everything here
  * was verified against the real `@zed-industries/claude-code-acp` adapter
- * (the phase's spike, 2026-08-30; the record lives in the design doc):
+ * (the phase's spike, 2026-08-30; the record lives in the design doc —
+ * since renamed `@agentclientprotocol/claude-agent-acp`, which the builtin
+ * follows through the ACP registry, `harnesses.ts`; re-verified 2026-09-05):
  *
  * - Framing is newline-delimited JSON-RPC 2.0; `protocolVersion` is the
  *   integer 1; a finished turn answers `stopReason: "end_turn"`.
@@ -173,7 +175,10 @@ export class AcpAgentProcess {
     // A builtin that is fetched rather than shipped (Antigravity's server)
     // makes sure of itself first — narrated, because a first summons that
     // downloads 300 MB in silence reads as a hang.
-    if (spec.ensure) await spec.ensure(options.narrate ?? ((line) => console.error(line)));
+    if (spec.ensure) {
+      const current = await spec.ensure(options.narrate ?? ((line) => console.error(line)));
+      if (current) Object.assign(spec, current);
+    }
     // The bridge's own variables win over the person's: a builtin knows
     // what its harness needs (codex's sandbox mode), and a person who
     // wants otherwise declares the adapter in config.json.

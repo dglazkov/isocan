@@ -9921,8 +9921,9 @@ spawn the agent's ACP adapter, resume its session (or start one), send the
 prompt, narrate the turn, print the stopReason. The session survives this
 process — the resume handle is stored in the enrolment's rc half, and a
 handle that fails to load twice is replaced by a fresh session rather than
-an error. Adapters: claude-code, pi, codex and antigravity ship known (Antigravity's
-server is fetched from Google on first use and wants GEMINI_API_KEY); others are declared in
+an error. Adapters: claude-code, pi, codex and antigravity ship known — each
+the ACP registry's current bridge, fetched on first use (Antigravity's is a
+300 MB binary and wants GEMINI_API_KEY); others are declared in
 ~/.isocan/config.json as {"acpAdapters": {"<harness>": ["cmd", "arg"]}}.`,
   )
   .action(
