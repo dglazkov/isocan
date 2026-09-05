@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, deckStep, itemPath, isFramedItem } from "@isocan/core";
+import { canvasPath, deckStep, itemPath, isFramedItem, noteFor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { readBlobText } from "../lib/api.ts";
+import { Markdown } from "../lib/markdown.tsx";
 import { ArtifactStage } from "./ArtifactStage.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
@@ -104,6 +106,17 @@ export function FullScreen({
         navigate(itemPath(canvasId, next.id));
         return;
       }
+      // N: the speaker notes, under the slide, for the presenter (core/slides.ts).
+      // A mode you flip and the browser remembers, so the second slide of a
+      // talk does not ask again.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "n" || e.key === "N")) {
+        if (isTyping(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const ui = useUiStore.getState();
+        ui.setPresenterNotes(!ui.presenterNotes);
+        return;
+      }
       // Bare arrows flip the deck (#87): the items marked as slides, in
       // reading order — or every item, with none marked, because a canvas of
       // screens is already a deck and marking narrows it rather than turning
@@ -140,6 +153,35 @@ export function FullScreen({
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   });
+
+  /**
+   * **The speaker notes, when the presenter asked for them.** The note is a
+   * text item pointing at this slide (`noteFor`); its words are read from
+   * the blob when the slide or the note's version changes, and drawn under
+   * the stage as markdown. Nothing here writes; the note is edited where
+   * every text node is.
+   */
+  const presenterNotes = useUiStore((s) => s.presenterNotes);
+  const note = useCanvasStore((s) => (s.canvas ? noteFor(s.canvas, itemId) : null));
+  const noteHash = note ? (note.versions.find((v) => v.id === note.currentVersionId) ?? note.versions[0])?.blobHash ?? null : null;
+  const [noteText, setNoteText] = useState<string | null>(null);
+  useEffect(() => {
+    if (!presenterNotes || !noteHash) {
+      setNoteText(null);
+      return;
+    }
+    let live = true;
+    readBlobText(canvasId, noteHash)
+      .then((text) => {
+        if (live) setNoteText(text);
+      })
+      .catch(() => {
+        if (live) setNoteText(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [presenterNotes, noteHash, canvasId]);
 
   /**
    * **The chrome gets out of the way while you are presenting.**
@@ -219,13 +261,36 @@ export function FullScreen({
             re-copies what the browser is already showing is chrome earning
             nothing. What belongs here instead is what this view had been
             throwing away: which canvas you are in, and who is in it. */}
+        <button
+          type="button"
+          className={`fullscreen-notes-toggle${presenterNotes ? " on" : ""}`}
+          onClick={() => useUiStore.getState().setPresenterNotes(!presenterNotes)}
+          title={presenterNotes ? "Hide the speaker notes (N)" : "Show the speaker notes under the slide (N)"}
+          aria-pressed={presenterNotes}
+        >
+          Notes
+        </button>
         <ShareButton actor={actor} />
           <CanvasPresence actor={actor} onIdentity={onIdentity} />
         </div>
       </div>
-      <div className="fullscreen-stage">
+      <div className={`fullscreen-stage${presenterNotes ? " with-notes" : ""}`}>
         <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />
       </div>
+      {/* Under the stage, never over it: the audience's picture keeps its
+          frame and the presenter reads below it. A slide with no note says
+          so rather than showing an empty strip. */}
+      {presenterNotes && (
+        <aside className="fs-notes" aria-label="Speaker notes">
+          {noteText !== null ? (
+            <Markdown>{noteText}</Markdown>
+          ) : (
+            <p className="fs-notes-empty">
+              {note ? "Loading the notes…" : "No speaker notes for this slide — right-click it on the canvas: Add speaker notes, or isocan slides note."}
+            </p>
+          )}
+        </aside>
+      )}
     </div>
   );
 }

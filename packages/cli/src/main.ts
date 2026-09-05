@@ -247,6 +247,12 @@ import {
   SLIDE_EMOJI,
   deckPages,
   deckHtml,
+  isNote,
+  noteFor,
+  noteProperties,
+  noteSpot,
+  notesMarkdown,
+  notesOn,
   deckUrl,
   type DeckPageContent,
   majors,
@@ -7460,8 +7466,9 @@ slidesCmd
   .description("The deck as a document: deck.pdf (one slide per page, via Chrome) or deck.html (one file that plays it)")
   .option("--canvas <canvas>")
   .option("--png <dir>", "also write one PNG per slide into this directory (via Chrome)")
+  .option("--notes", "with the speaker notes under each slide — on the PDF's sheets, and showing when deck.html opens")
   .action(
-    run(async (out: string, opts: { canvas?: string; png?: string }, cmd: Command) => {
+    run(async (out: string, opts: { canvas?: string; png?: string; notes?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       if (opts.canvas) ctx.canvasRef = opts.canvas;
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
@@ -7469,23 +7476,37 @@ slidesCmd
       if (pages.length === 0) throw new Error("nothing to export — this canvas has no items");
       const ext = path.extname(out).toLowerCase();
       const written: string[] = [];
+      const textOf = async (blobHash: string) => (await ctx.client.downloadBlob(p.id, blobHash)).toString("utf8");
       if (ext === ".html" || ext === ".htm") {
         const contents: DeckPageContent[] = await Promise.all(
           pages.map(async (page) => {
+            // The speaker note's words ride along; N shows them in the file.
+            const notes = page.note ? { notes: await textOf(page.note.blobHash) } : {};
             if (page.mimeType === "text/html") {
-              return { ...page, html: (await ctx.client.downloadBlob(p.id, page.blobHash)).toString("utf8") };
+              return { ...page, ...notes, html: await textOf(page.blobHash) };
             }
             if (page.mimeType.startsWith("image/")) {
               const bytes = await ctx.client.downloadBlob(p.id, page.blobHash);
-              return { ...page, imageDataUrl: `data:${page.mimeType};base64,${bytes.toString("base64")}` };
+              return { ...page, ...notes, imageDataUrl: `data:${page.mimeType};base64,${bytes.toString("base64")}` };
             }
-            return page;
+            return { ...page, ...notes };
           }),
         );
-        await fs.writeFile(out, deckHtml(p.title, contents));
+        await fs.writeFile(out, deckHtml(p.title, contents, { withNotes: Boolean(opts.notes) }));
+        written.push(out);
+      } else if (ext === ".md") {
+        // The handout: every slide with its note, in deck order, and a slide
+        // with nothing written says so rather than vanishing from the list.
+        const bodies = new Map<string, string>();
+        for (const { note } of notesOn(snapshot.canvas)) {
+          if (!note) continue;
+          const current = note.versions.find((v) => v.id === note.currentVersionId) ?? note.versions[0];
+          if (current) bodies.set(note.id, await textOf(current.blobHash));
+        }
+        await fs.writeFile(out, `# ${p.title}\n\n${notesMarkdown(snapshot.canvas, (note) => bodies.get(note.id) ?? "")}`);
         written.push(out);
       } else if (ext !== ".pdf") {
-        throw new Error(`export writes deck.pdf or deck.html — not ${ext || "a file with no extension"}`);
+        throw new Error(`export writes deck.pdf, deck.html or notes.md — not ${ext || "a file with no extension"}`);
       }
       if (ext === ".pdf" || opts.png) {
         const script = fileURLToPath(new URL("../../../scripts/deck-export.mjs", import.meta.url));
@@ -7494,6 +7515,7 @@ slidesCmd
         }
         const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
         const args = [script, "--url", deckUrl(origin, p.id)];
+        if (opts.notes) args.push("--notes");
         if (ext === ".pdf") args.push("--pdf", out);
         if (opts.png) args.push("--png", opts.png);
         const child = spawnSync(process.execPath, args, { stdio: ctx.json ? "pipe" : "inherit" });
@@ -7503,6 +7525,97 @@ slidesCmd
       }
       if (ctx.json) return printJson({ canvasId: p.id, pages: pages.map((page) => page.id), written });
       if (ext !== ".pdf" && !opts.png) console.log(`wrote ${out} (${pages.length} ${pages.length === 1 ? "slide" : "slides"})`);
+    }),
+  );
+
+/**
+ * **Speaker notes, from the terminal** (`core/slides.ts`, "speaker notes").
+ *
+ * A note is a text item that points at its slide, so `note` is the Text
+ * tool's `item.add` with one more property — or, when the slide already has
+ * a note, an `item.addVersion` that re-words it: the same shape `isocan
+ * edit` gives every text node, so every wording stays on the stack and ⌘Z
+ * walks back through them. It lands under the slide at the slide's width,
+ * where the app's "Add speaker notes" lands it, and both surfaces make the
+ * byte-identical item.
+ */
+slidesCmd
+  .command("note <slide> [words...]")
+  .description("Write a slide's speaker notes — under it on the canvas, N in full screen, on the sheet with --notes")
+  .option("--canvas <canvas>")
+  .option("-f, --file <path>", "take the words from a file, or `-` for stdin")
+  .action(
+    run(async (slideRef: string, words: string[], opts: { canvas?: string; file?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const slide = resolveItem(snapshot, slideRef);
+      if (isNote(slide)) throw new Error(`"${slide.title}" is itself a speaker note — name the slide it speaks for`);
+      const body =
+        opts.file !== undefined
+          ? opts.file === "-"
+            ? await readStdin()
+            : await fs.readFile(opts.file, "utf8")
+          : words.join(" ");
+      if (body.trim() === "") throw new Error("nothing to say — pass words, or --file <path> (or `-` for stdin)");
+      const upload = await ctx.client.uploadBlob(p.id, Buffer.from(body, "utf8"), TEXT_MIME, TEXT_FILENAME);
+      const existing = noteFor(snapshot.canvas, slide.id);
+      if (existing) {
+        const group = newGroupId();
+        await sendOp(
+          ctx,
+          p.id,
+          {
+            type: "item.addVersion",
+            itemId: existing.id,
+            version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: TEXT_MIME, filename: TEXT_FILENAME, size: upload.size },
+          },
+          group,
+        );
+        await sendOp(ctx, p.id, { type: "item.update", itemId: existing.id, patch: { title: textTitle(body) } }, group);
+        if (ctx.json) return printJson({ noteId: existing.id, slideId: slide.id, created: false });
+        console.log(`re-worded the notes for "${slide.title}" (${existing.id})`);
+        return;
+      }
+      const spot = noteSpot(slide);
+      const itemId = newItemId();
+      await sendOp(ctx, p.id, {
+        type: "item.add",
+        itemId,
+        version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: TEXT_MIME, filename: TEXT_FILENAME, size: upload.size },
+        width: spot.width,
+        height: spot.height,
+        // Under its slide is a spot somebody meant: a tidy must not move it away.
+        placement: { x: spot.x, y: spot.y, chosen: true },
+        title: textTitle(body),
+        properties: noteProperties(slide.id),
+      });
+      if (ctx.json) return printJson({ noteId: itemId, slideId: slide.id, created: true });
+      console.log(`notes for "${slide.title}" — ${itemId}, under the slide; N shows them in full screen`);
+    }),
+  );
+
+slidesCmd
+  .command("notes")
+  .description("Every slide with its speaker notes, in deck order")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const rows = [];
+      for (const { slide, note } of notesOn(snapshot.canvas)) {
+        const current = note ? (note.versions.find((v) => v.id === note.currentVersionId) ?? note.versions[0]) : null;
+        const text = note && current ? (await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8") : null;
+        rows.push({ slide: { id: slide.id, title: slide.title }, note: note && text !== null ? { id: note.id, text } : null });
+      }
+      if (ctx.json) return printJson(rows);
+      if (rows.length === 0) return console.log("no slides here");
+      rows.forEach((row, i) => {
+        console.log(`${i + 1}. ${row.slide.title} (${row.slide.id})`);
+        console.log(row.note ? `   ${row.note.text.trim().split("\n").join("\n   ")}` : "   — no notes: isocan slides note " + row.slide.id + ' "…"');
+      });
     }),
   );
 

@@ -23,6 +23,7 @@ import {
   AREA_TITLE_HEIGHT,
   isDrawingItem,
   isSlide,
+  noteTarget,
   isTextItem,
   reactionPointsOf,
   SLIDE_EMOJI,
@@ -259,6 +260,9 @@ function ItemViewInner({
   // node IS its words, so a card around them would be a card around a
   // sentence somebody typed onto a canvas.
   const isText = isTextItem(item);
+  // A speaker note names its slide on the canvas (core/slides.ts).
+  const noteTargetId = noteTarget(item);
+  const noteSlideTitle = useCanvasStore((s) => (noteTargetId ? (s.canvas?.items[noteTargetId]?.title ?? "a slide") : null));
   // Paper turns a caption into an object: see `core/textnode.ts`.
   const paper = isText ? paperOf(item) : null;
   // An area is a sheet things are placed ON: drawn behind everything, and
@@ -946,6 +950,14 @@ function ItemViewInner({
           </span>
         )}
       </div>
+      {/* A speaker note says which slide it speaks for, on the canvas, where
+          the deck is arranged (core/slides.ts). A caption above the words,
+          not a card: the note stays the chromeless text it is. */}
+      {noteSlideTitle !== null && (
+        <span className="note-of" title="Speaker notes — N shows them in full screen">
+          {SLIDE_EMOJI} Notes for {noteSlideTitle}
+        </span>
+      )}
       <div className={`item-content${entered ? "" : " inert"}`}>
         {/**
          * Too far away to read: draw the mark, not the words.

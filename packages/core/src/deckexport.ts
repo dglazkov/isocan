@@ -1,5 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
-import { deck } from "./slides.ts";
+import { deck, noteFor } from "./slides.ts";
 
 /**
  * **Taking a deck somewhere else** (`docs/research/2026-09-04-deck-export.md`).
@@ -13,6 +13,10 @@ import { deck } from "./slides.ts";
  * download and `isocan slides export deck.html` write byte-identical files.
  * PDF and PNG are the browser's job (the app prints the deck view; the CLI
  * drives headless Chrome over the same view); PPTX is pictures of pages.
+ *
+ * **Speaker notes ride along** (`slides.ts`, "speaker notes"): a page names
+ * its note's blob, and the file inlines the words so `N` shows them under
+ * the slide and a print with notes puts them on the sheet.
  */
 
 export interface DeckPage {
@@ -20,6 +24,8 @@ export interface DeckPage {
   title: string;
   mimeType: string;
   blobHash: string;
+  /** The speaker note's item and blob, when the slide has one. */
+  note?: { id: string; blobHash: string };
 }
 
 /** The pages, in order: the marked slides, or — with none marked — every
@@ -27,7 +33,18 @@ export interface DeckPage {
 export function deckPages(canvas: CanvasContents): DeckPage[] {
   return deck(canvas).flatMap((item) => {
     const current = currentVersion(item);
-    return current ? [{ id: item.id, title: item.title, mimeType: current.mimeType, blobHash: current.blobHash }] : [];
+    if (!current) return [];
+    const note = noteFor(canvas, item.id);
+    const noteVersion = note ? currentVersion(note) : null;
+    return [
+      {
+        id: item.id,
+        title: item.title,
+        mimeType: current.mimeType,
+        blobHash: current.blobHash,
+        ...(note && noteVersion ? { note: { id: note.id, blobHash: noteVersion.blobHash } } : {}),
+      },
+    ];
   });
 }
 
@@ -37,10 +54,11 @@ function currentVersion(item: Item) {
 
 /** What a page holds once its bytes were read: a screen's HTML, an image as
  *  a data URL, or nothing a deck can show (a video, a PDF) — said, not
- *  skipped. */
+ *  skipped. And the note's words, when there are any. */
 export interface DeckPageContent extends DeckPage {
   html?: string;
   imageDataUrl?: string;
+  notes?: string;
 }
 
 /** Attribute-safe: `srcdoc` holds a whole document in a quoted attribute. */
@@ -55,13 +73,17 @@ function text(value: string): string {
 /**
  * One file that plays the deck: every slide inlined, arrows and Page keys and
  * a click to flip, a counter, and a print stylesheet that puts one slide on
- * each landscape sheet — so the same file is the slideshow and the PDF's
- * source. Screens are `srcdoc` frames with scripts allowed, as they are on
- * the canvas; a screen that reaches for the canvas's own blobs by path will
- * find nothing off the canvas, which the file says in its footer rather than
+ * each 16:9 sheet — so the same file is the slideshow and the PDF's source.
+ * Screens are `srcdoc` frames with scripts allowed, as they are on the
+ * canvas; a screen that reaches for the canvas's own blobs by path will find
+ * nothing off the canvas, which the file says in its footer rather than
  * pretending.
+ *
+ * `N` shows the speaker notes under the slide, for the presenter; a print
+ * made with notes showing puts them on the sheet. `withNotes` is where the
+ * file starts.
  */
-export function deckHtml(title: string, pages: readonly DeckPageContent[]): string {
+export function deckHtml(title: string, pages: readonly DeckPageContent[], options: { withNotes?: boolean } = {}): string {
   const slides = pages
     .map((page, i) => {
       const body =
@@ -70,7 +92,8 @@ export function deckHtml(title: string, pages: readonly DeckPageContent[]): stri
           : page.imageDataUrl !== undefined
             ? `<img src="${page.imageDataUrl}" alt="${attr(page.title)}">`
             : `<div class="empty">${text(page.title)}<small>${text(page.mimeType)} — not something a deck can show</small></div>`;
-      return `<section class="slide" data-n="${i + 1}" aria-label="${attr(page.title)}">${body}</section>`;
+      const notes = page.notes !== undefined && page.notes.trim() !== "" ? `<aside class="notes">${text(page.notes)}</aside>` : "";
+      return `<section class="slide" data-n="${i + 1}" aria-label="${attr(page.title)}"><div class="picture">${body}</div>${notes}</section>`;
     })
     .join("\n");
   return `<!doctype html>
@@ -81,20 +104,25 @@ export function deckHtml(title: string, pages: readonly DeckPageContent[]): stri
 <title>${text(title)}</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #fff; font: 14px system-ui, sans-serif; }
-  .slide { position: absolute; inset: 0; display: none; }
-  .slide.current { display: block; }
+  .slide { position: absolute; inset: 0; display: none; flex-direction: column; }
+  .slide.current { display: flex; }
+  .picture { flex: 1; min-height: 0; }
   .slide iframe, .slide img { width: 100%; height: 100%; border: 0; object-fit: contain; background: #fff; }
+  .notes { display: none; flex: none; max-height: 38%; overflow: auto; padding: 14px 20px; white-space: pre-wrap;
+           background: #111; color: #ddd; border-top: 1px solid #333; font-size: 16px; line-height: 1.5; }
+  body.notes .notes { display: block; }
   .empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #aaa; }
   .counter { position: fixed; right: 14px; bottom: 10px; opacity: 0.6; font-variant-numeric: tabular-nums; }
   @media print {
     @page { size: 13.333in 7.5in; margin: 0; }
     body { background: #fff; }
-    .slide { position: static; display: block; width: 100vw; height: 100vh; break-after: page; }
+    .slide { position: static; display: flex; width: 100vw; height: 100vh; break-after: page; }
+    body.notes .notes { display: block; max-height: 38%; background: #fff; color: #000; border-top: 1px solid #ccc; }
     .counter { display: none; }
   }
 </style>
 </head>
-<body>
+<body${options.withNotes ? ' class="notes"' : ""}>
 ${slides}
 <div class="counter"><span id="n">1</span> / ${pages.length}</div>
 <script>
@@ -113,6 +141,7 @@ ${slides}
       else if (prev.indexOf(e.key) >= 0) { e.preventDefault(); show(at - 1); }
       else if (e.key === "Home") show(0);
       else if (e.key === "End") show(slides.length - 1);
+      else if (e.key === "n" || e.key === "N") document.body.classList.toggle("notes");
     });
     window.addEventListener("click", function (e) { if (e.target === document.body) show(at + 1); });
     show(at);

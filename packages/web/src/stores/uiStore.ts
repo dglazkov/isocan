@@ -150,6 +150,10 @@ interface UiStore {
   /** The minimap, which folds away into its corner. Remembered per browser:
    * someone who put it away wants it away tomorrow too. */
   minimapOpen: boolean;
+  /** Full screen shows the slide's speaker note to the presenter (N). A
+   *  mode you flip, remembered per browser like the minimap. */
+  presenterNotes: boolean;
+  setPresenterNotes: (on: boolean) => void;
   /** The docked files panel — the canvas as a list of files. Shares the left
    * dock with the main thread (see lib/panels.ts). */
   filesPanelOpen: boolean;
@@ -290,6 +294,7 @@ interface UiStore {
 
 const INK_KEY = "isocan.ink";
 const MINIMAP_KEY = "isocan.minimap";
+const PRESENTER_NOTES_KEY = "isocan.presenterNotes";
 const PANEL_WIDTH_KEY = "isocan.panelWidth";
 const WB_AGENTS_WIDTH_KEY = "isocan.wb.agents.width";
 /** The workbench agent column's floor — V1's fixed grid, now the reset. */
@@ -543,6 +548,7 @@ export const useUiStore = create<UiStore>((set) => {
     shareOpen: false,
     mainPanelOpen: false,
     minimapOpen: readFlag(MINIMAP_KEY, true),
+    presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     panelWidth: readPanelWidth(),
     panelResizing: false,
     panning: false,
@@ -702,6 +708,10 @@ export const useUiStore = create<UiStore>((set) => {
         // Storage denied: the width holds for this session and no longer.
       }
       set({ wbAgentsWidth });
+    },
+    setPresenterNotes: (presenterNotes) => {
+      writeFlag(PRESENTER_NOTES_KEY, presenterNotes);
+      set({ presenterNotes });
     },
     setMinimapOpen: (minimapOpen) => {
       writeFlag(MINIMAP_KEY, minimapOpen);

@@ -74,15 +74,66 @@ export declare function slideIntent(items: readonly Item[]): {
  * nobody trusts (the `canvassort` rule).
  */
 export declare function readingOrder(items: readonly Item[]): Item[];
-/** The marked slides, in reading order. */
+/** The marked slides, in reading order. A speaker note is never a slide,
+ *  whatever it wears: it is what you say about one. */
 export declare function slides(canvas: CanvasContents): Item[];
 /**
  * What full screen actually flips through: the marked slides, or — with none
  * marked — every item. The fallback is the feature working before anyone has
  * set it up: a canvas of screens is already a deck, and marking is how you
- * narrow it, not how you switch it on.
+ * narrow it, not how you switch it on. Speaker notes are left out of the
+ * fallback too: a deck that projected its own notes would be the one thing a
+ * presenter cannot forgive.
  */
 export declare function deck(canvas: CanvasContents): Item[];
+/**
+ * **What you say about a slide, kept beside it.**
+ *
+ * A speaker note is a TEXT ITEM on the canvas that points at its slide —
+ * `noteFor=<slideId>` on an ordinary text node — and that is the whole
+ * design, for the reasons the mind map's edges are a property and its nodes
+ * are items: the note versions, edits in the stage and in `$EDITOR`, is a
+ * real `notes.md`, can be dragged, and is visible on the canvas next to the
+ * slide it speaks for, where the person arranging the deck can read both at
+ * once. No new op; no new kind — a note is words. Full screen shows it to
+ * the presenter on a key, the deck view prints it under the slide, and every
+ * export carries it.
+ *
+ * One note per slide: the first by id wins, so two people racing to add one
+ * see the same one, and `slides note` re-words that one rather than making
+ * a second.
+ */
+export declare const NOTE_FOR_PROP = "noteFor";
+/** How far under its slide a new note lands. */
+export declare const NOTE_GAP = 24;
+/** The default box for a note made with nothing measured: the slide's
+ *  width, a few lines tall. */
+export declare const NOTE_HEIGHT = 160;
+export declare function isNote(item: Item): boolean;
+/** The slide a note speaks for, or null when it is not a note. */
+export declare function noteTarget(item: Item): string | null;
+/** The note that speaks for this slide, if there is one. */
+export declare function noteFor(canvas: CanvasContents, slideId: string): Item | null;
+/** Every slide of the deck with its note, in deck order — the handout. */
+export declare function notesOn(canvas: CanvasContents): {
+    slide: Item;
+    note: Item | null;
+}[];
+/** Where a new note lands: under its slide, the slide's width. */
+export declare function noteSpot(slide: Item): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+/** The properties a note wears: a text node's, plus the slide it is for. */
+export declare function noteProperties(slideId: string): Record<string, string>;
+/**
+ * The handout: one section per slide, in deck order, the note's words under
+ * its title — and a slide with nothing written under it says so, because a
+ * handout that skips a slide reads as a deck with fewer slides.
+ */
+export declare function notesMarkdown(canvas: CanvasContents, bodyOf: (note: Item) => string): string;
 /**
  * The slide a flip lands on, or null at the deck's edge — stay put rather
  * than wrap, the same answer the spatial walk gives at the canvas's edge.
