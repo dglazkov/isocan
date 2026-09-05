@@ -1,0 +1,22 @@
+{
+  "name": "@isocan/mermaid",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Diagrams as text: a Mermaid file is a kind, drawn on the card and the stage — the first node-type module",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*",
+    "mermaid": "^11.17.2"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

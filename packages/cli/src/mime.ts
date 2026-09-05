@@ -1,4 +1,5 @@
 import path from "node:path";
+import { moduleKinds } from "@isocan/core";
 
 const BY_EXT: Record<string, string> = {
   md: "text/markdown",
@@ -17,8 +18,17 @@ const BY_EXT: Record<string, string> = {
   mov: "video/quicktime",
 };
 
+/**
+ * The mime for a filename — a loaded module's extensions first, so
+ * `isocan add diagram.mmd` lands the file as the module's kind and, with the
+ * module gone, as whatever the table below (or nothing) says: the same rule
+ * the web app's `mimeTypeOf` follows for a dropped file.
+ */
 export function mimeFor(filename: string): string {
-  return BY_EXT[path.extname(filename).slice(1).toLowerCase()] ?? "application/octet-stream";
+  const ext = path.extname(filename).slice(1).toLowerCase();
+  const added = moduleKinds().find((k) => k.extensions?.includes(ext));
+  if (added) return added.mimes[0]!;
+  return BY_EXT[ext] ?? "application/octet-stream";
 }
 
 /** Sensible default canvas footprint per media kind (web reads natural sizes). */

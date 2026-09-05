@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Actor, CanvasContents, Item } from "@isocan/core";
-import { ITEM_KINDS, itemKind, needsDesignSystem, type ItemKind } from "@isocan/core";
-import { KIND_LABEL, iconKindFor } from "../lib/kinds.ts";
+import { itemKind, itemKinds, needsDesignSystem, type ItemKind } from "@isocan/core";
+import { iconKindFor, kindLabel } from "../lib/kinds.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -66,7 +66,7 @@ function rowsOf(canvas: CanvasContents, filter: string): Array<[ItemKind, Row[]]
     rows.push({ item, filename: current.filename, size: current.size, kind: itemKind(item) });
   }
   rows.sort((a, b) => a.item.title.localeCompare(b.item.title));
-  return ITEM_KINDS.map((kind): [ItemKind, Row[]] => [
+  return itemKinds().map((kind): [ItemKind, Row[]] => [
     kind,
     rows.filter((row) => row.kind === kind),
   ]).filter(
@@ -184,7 +184,7 @@ export function FilesPanel({ canvasId, actor }: { canvasId: string; actor: Actor
         {groups.map(([kind, rows]) => (
           <section key={kind}>
             <div className="files-group">
-              {KIND_LABEL[kind]}
+              {kindLabel(kind)}
               <i>{rows.length}</i>
             </div>
             {rows.map((row) => (
