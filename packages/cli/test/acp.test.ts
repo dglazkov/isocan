@@ -166,6 +166,25 @@ describe("a turn in a named agent (phase 3)", () => {
     ).rejects.toThrow(/exited \(code 1\)/);
   });
 
+  it("an adapter that wants a login gets it from the environment, or says which variable would", async () => {
+    // Google's Antigravity server, scripted: session verbs refuse with
+    // "Authentication required" until `authenticate` names gemini-api-key,
+    // which the server itself answers from GEMINI_API_KEY.
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const wants = { FAKE_ACP_AUTH: "gemini-api-key" };
+    const refused = await collect(spawnCli(["rc", "turn", "Sian", "hello"], wants));
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain("Fake wants a login before a session (methods: gemini-api-key)");
+    expect(refused.stderr).toContain("export GEMINI_API_KEY for gemini-api-key");
+    const run = await collect(spawnCli(["rc", "turn", "Sian", "hello"], { ...wants, GEMINI_API_KEY: "k" }));
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain("turn ended — end_turn");
+    // …and the login is answered on load too, so the second turn resumes.
+    const again = await collect(spawnCli(["rc", "turn", "Sian", "again"], { ...wants, GEMINI_API_KEY: "k" }));
+    expect(again.code).toBe(0);
+    expect(again.stderr).toContain("resumed");
+  }, 40_000);
+
   it("inside a summoned pi, the injected key beats pi's own: whoami and --session both resume the agent", async () => {
     await isocan("rc", "add", "Sian", "--harness", "pi");
     // pi's shells carry PI_SESSION_ID (a fresh uuid) beside the rc's

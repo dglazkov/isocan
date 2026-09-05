@@ -2,7 +2,19 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { adapterFor, defaultLine, noDefaultLine, scanHarnesses, setDefaultHarness } from "../src/harnesses.ts";
+import http from "node:http";
+import { execFileSync } from "node:child_process";
+import {
+  ANTIGRAVITY,
+  adapterFor,
+  antigravityDir,
+  antigravityInstalled,
+  defaultLine,
+  ensureAntigravityServer,
+  noDefaultLine,
+  scanHarnesses,
+  setDefaultHarness,
+} from "../src/harnesses.ts";
 
 /**
  * **What an unnamed harness means on a machine** (decided 2026-09-04): the
@@ -43,8 +55,9 @@ describe("the harness scan", () => {
     expect(byName["pi"]).toMatchObject({ installed: true, adapter: "builtin", runnable: true, default: true });
     expect(byName["claude-code"]).toMatchObject({ installed: false, adapter: "builtin", runnable: false });
     expect(byName["codex"]).toMatchObject({ installed: false, adapter: "builtin", runnable: false });
-    // Known as a harness, bridged by nobody: listed, and honest about it.
-    expect(byName["antigravity"]).toMatchObject({ installed: null, adapter: null, runnable: false });
+    // Antigravity's server is not in this home, so not runnable — whatever
+    // the PATH says (the dedicated test below).
+    expect(byName["antigravity"]).toMatchObject({ runnable: false });
     expect(defaultLine(scan)).toContain("pi is the only harness here");
     expect((await adapterFor(home, null, { PATH: bin }))?.harness).toBe("pi");
   });
@@ -108,5 +121,62 @@ describe("the harness scan", () => {
     // A harness known only by its session variable is listed, unrunnable.
     const scan = await scanHarnesses(home, await pathWith("pi"));
     expect(scan.rows.find((r) => r.name === "mine")).toMatchObject({ adapter: null, runnable: false });
+  });
+
+  it("antigravity is builtin, and installed means the server is in the home — not agy on the PATH", async () => {
+    const serverCmd = ANTIGRAVITY.archives[`${process.platform}-${process.arch}`]?.cmd;
+    if (!serverCmd) return; // Google ships no server for this platform
+    const before = await scanHarnesses(home, await pathWith("pi", "agy"));
+    expect(before.rows.find((r) => r.name === "antigravity")).toMatchObject({
+      installed: false,
+      adapter: "builtin",
+      runnable: false,
+    });
+    expect(before.default?.name).toBe("pi");
+    // The spec still resolves by name — the download happens at spawn.
+    const spec = await adapterFor(home, "antigravity", { PATH: bin });
+    expect(spec?.command).toBe(path.join(antigravityDir(home), serverCmd));
+    expect(typeof spec?.ensure).toBe("function");
+    // Once the server is in the home it is installed, and a second runnable
+    // harness means no default.
+    await fs.mkdir(antigravityDir(home), { recursive: true });
+    await fs.writeFile(path.join(antigravityDir(home), serverCmd), "#!/bin/sh\n", { mode: 0o755 });
+    const after = await scanHarnesses(home, await pathWith("pi"));
+    expect(after.rows.find((r) => r.name === "antigravity")).toMatchObject({ installed: true, runnable: true });
+    expect(after.default).toBeNull();
+  });
+
+  it("the server is fetched once, unpacked into the home, and never fetched again", async () => {
+    const serverCmd = ANTIGRAVITY.archives[`${process.platform}-${process.arch}`]?.cmd;
+    if (!serverCmd) return;
+    // A zip the shape Google's is: the executable at the top level.
+    const src = path.join(home, "zip-src");
+    await fs.mkdir(src);
+    await fs.writeFile(path.join(src, serverCmd), "#!/bin/sh\necho fake\n", { mode: 0o755 });
+    execFileSync("zip", ["-j", "-q", path.join(home, "server.zip"), path.join(src, serverCmd)]);
+    const archive = await fs.readFile(path.join(home, "server.zip"));
+    let fetches = 0;
+    const server = http.createServer((_req, res) => {
+      fetches++;
+      res.writeHead(200, { "Content-Type": "application/zip" });
+      res.end(archive);
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as { port: number }).port;
+    const url = `http://127.0.0.1:${port}/server.zip`;
+    try {
+      const said: string[] = [];
+      expect(await antigravityInstalled(home)).toBe(false);
+      await ensureAntigravityServer(home, (line) => said.push(line), { url });
+      expect(await antigravityInstalled(home)).toBe(true);
+      expect(said[0]).toContain("fetching Google's Antigravity ACP server");
+      expect(said.at(-1)).toContain("ready");
+      // No zip left behind, and the second call is a no-op.
+      await expect(fs.access(path.join(antigravityDir(home), "server.zip"))).rejects.toThrow();
+      await ensureAntigravityServer(home, () => {}, { url });
+      expect(fetches).toBe(1);
+    } finally {
+      server.close();
+    }
   });
 });

@@ -2,7 +2,7 @@
 status: built
 since: 2026-09-04
 see: harnesses, on-demand, standing-agents
-note: built 4 Sep 2026 — pi and codex join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan.
+note: built 4 Sep 2026 — pi, codex and antigravity (on a Gemini API key; the server fetched from Google on first use) join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan.
 ---
 # Harnesses — the journey
 
@@ -98,10 +98,18 @@ set aside out loud.
   by auto-allowing every permission, said in codex's words. Anyone who
   wants the sandbox declares the adapter in config.json without it, and
   accepts an agent that cannot speak to the canvas.
-- **Not built: Antigravity.** Google's official ACP server exists (a
-  binary zip, not npm) but keeps a login of its own and refused this
-  account as ineligible; the measurement and the reasons are in
-  [research/2026-09-04-antigravity-acp.md](../../research/2026-09-04-antigravity-acp.md).
-  The general door (`acpAdapters` in config.json) stays open to it.
+- **Antigravity, on a key.** Google's official ACP server exists as a
+  per-platform zip, not on npm, and keeps a login of its own; its Google
+  login refused this account as ineligible, and the first reading was "not
+  worth it" ([research/2026-09-04-antigravity-acp.md](../../research/2026-09-04-antigravity-acp.md)).
+  Revisited the same evening: the server's `gemini-api-key` method reads
+  `GEMINI_API_KEY` from its environment and skips the eligibility gate,
+  and the user's word was that a metered key is a valid way to use
+  Antigravity. So: the one builtin fetched from Google rather than by
+  `npx` (into `~/.isocan/adapters/antigravity/<version>/`, narrated, once),
+  and the ACP client learned the `authenticate` step — a refusal for want
+  of a login is answered with a method the environment can satisfy, or
+  fails naming the variable. Installed means the server is in the home:
+  neither `agy` on the PATH nor the IDE implies it.
 - **Not built:** choosing a model per agent. That is pi's per-directory
   settings file in the agent's working directory, not an isocan flag.

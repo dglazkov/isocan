@@ -2,7 +2,7 @@
 status: noted
 since: 2026-09-04
 see: harnesses, on-demand
-note: measured 4 Sep — Google ships an official ACP server for Antigravity (registry entry 20 Aug, 1.1.1 on 3 Sep) as a 316 MB per-platform zip from dl.google.com, not npm; it speaks ACP 1 with session load/resume, keeps its own login apart from the IDE's and the CLI's, and its Google login rejected this account as "not eligible for Antigravity". Decided not worth building on; the user's call
+note: measured 4 Sep — Google ships an official ACP server for Antigravity (registry entry 20 Aug, 1.1.1 on 3 Sep) as a 316 MB per-platform zip from dl.google.com, not npm; it speaks ACP 1 with session load/resume, keeps its own login apart from the IDE's and the CLI's, and its Google login rejected this account as "not eligible for Antigravity". First call: not worth building on. Revisited the same evening: the server's gemini-api-key method skips the gate, so it is built on a key
 ---
 
 # Antigravity over ACP
@@ -10,8 +10,10 @@ note: measured 4 Sep — Google ships an official ACP server for Antigravity (re
 **4 September 2026.** Could `isocan rc` run agents on Google Antigravity
 the way it runs them on Claude Code, pi and codex (the
 [harnesses](../projects/harnesses/journey.md) project)? Measured on this
-machine, on the day dated. **Decision: not built.** The user's call, after
-reading what follows: the product is not in a shape worth building on.
+machine, on the day dated. **First decision: not built** — the user's
+call, after reading what follows: the product is not in a shape worth
+building on. **Revisited the same evening and built on a key**; the
+addendum at the end says what changed.
 
 ## What exists
 
@@ -85,3 +87,24 @@ product to build a harness row on yet. The door stays the general one:
 anybody may declare the server under `acpAdapters` in config.json today
 and it will be tried like any other adapter; nothing in isocan names
 Antigravity specially.
+
+## Addendum, the same evening: built on a key
+
+The question "do we need ACP at all — could a lightweight adapter over the
+SDK do the same?" had a cheaper answer than either. ACP is not the
+obstacle: the rc's contract is four calls and any stdio process speaking
+them is a harness. The SDK is the same `localharness` engine the official
+server bundles, and authenticates only by Gemini API key (77 mentions of
+`api_key` in the wheel, none of OAuth) — so an SDK adapter would be more
+code for the same engine and the same auth. And the official server's
+`gemini-api-key` method already reads `GEMINI_API_KEY` from the
+environment it was launched from, skipping the eligibility gate; tried
+with no key, it said exactly that.
+
+The user's word: a metered key is a valid way to use Antigravity. Built
+that evening: the ACP client answers "Authentication required" with a
+method the environment can satisfy (`acp.ts`, `UNATTENDED_AUTH`), and
+`antigravity` is a builtin whose server is fetched from Google into the
+isocan home on first use (`harnesses.ts`). Not yet measured: a real turn
+through it — the machine had no key exported, and reading one out of
+another tool's credential store was rightly refused.
