@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
+import { TEXT_PROPERTIES } from "./textnode.ts";
 
 /**
  * **The slide deck** (#87): mark items as slides, and full screen flips
@@ -101,20 +102,96 @@ export function readingOrder(items: readonly Item[]): Item[] {
   );
 }
 
-/** The marked slides, in reading order. */
+/** The marked slides, in reading order. A speaker note is never a slide,
+ *  whatever it wears: it is what you say about one. */
 export function slides(canvas: CanvasContents): Item[] {
-  return readingOrder(Object.values(canvas.items).filter(isSlide));
+  return readingOrder(Object.values(canvas.items).filter((item) => isSlide(item) && !isNote(item)));
 }
 
 /**
  * What full screen actually flips through: the marked slides, or — with none
  * marked — every item. The fallback is the feature working before anyone has
  * set it up: a canvas of screens is already a deck, and marking is how you
- * narrow it, not how you switch it on.
+ * narrow it, not how you switch it on. Speaker notes are left out of the
+ * fallback too: a deck that projected its own notes would be the one thing a
+ * presenter cannot forgive.
  */
 export function deck(canvas: CanvasContents): Item[] {
   const marked = slides(canvas);
-  return marked.length > 0 ? marked : readingOrder(Object.values(canvas.items));
+  return marked.length > 0 ? marked : readingOrder(Object.values(canvas.items).filter((item) => !isNote(item)));
+}
+
+// ---------- speaker notes ----------
+
+/**
+ * **What you say about a slide, kept beside it.**
+ *
+ * A speaker note is a TEXT ITEM on the canvas that points at its slide —
+ * `noteFor=<slideId>` on an ordinary text node — and that is the whole
+ * design, for the reasons the mind map's edges are a property and its nodes
+ * are items: the note versions, edits in the stage and in `$EDITOR`, is a
+ * real `notes.md`, can be dragged, and is visible on the canvas next to the
+ * slide it speaks for, where the person arranging the deck can read both at
+ * once. No new op; no new kind — a note is words. Full screen shows it to
+ * the presenter on a key, the deck view prints it under the slide, and every
+ * export carries it.
+ *
+ * One note per slide: the first by id wins, so two people racing to add one
+ * see the same one, and `slides note` re-words that one rather than making
+ * a second.
+ */
+export const NOTE_FOR_PROP = "noteFor";
+
+/** How far under its slide a new note lands. */
+export const NOTE_GAP = 24;
+
+/** The default box for a note made with nothing measured: the slide's
+ *  width, a few lines tall. */
+export const NOTE_HEIGHT = 160;
+
+export function isNote(item: Item): boolean {
+  return Boolean(item.properties?.[NOTE_FOR_PROP]);
+}
+
+/** The slide a note speaks for, or null when it is not a note. */
+export function noteTarget(item: Item): string | null {
+  return item.properties?.[NOTE_FOR_PROP] ?? null;
+}
+
+/** The note that speaks for this slide, if there is one. */
+export function noteFor(canvas: CanvasContents, slideId: string): Item | null {
+  const notes = Object.values(canvas.items)
+    .filter((item) => noteTarget(item) === slideId)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return notes[0] ?? null;
+}
+
+/** Every slide of the deck with its note, in deck order — the handout. */
+export function notesOn(canvas: CanvasContents): { slide: Item; note: Item | null }[] {
+  return deck(canvas).map((slide) => ({ slide, note: noteFor(canvas, slide.id) }));
+}
+
+/** Where a new note lands: under its slide, the slide's width. */
+export function noteSpot(slide: Item): { x: number; y: number; width: number; height: number } {
+  return { x: slide.x, y: slide.y + slide.height + NOTE_GAP, width: slide.width, height: NOTE_HEIGHT };
+}
+
+/** The properties a note wears: a text node's, plus the slide it is for. */
+export function noteProperties(slideId: string): Record<string, string> {
+  return { ...TEXT_PROPERTIES, [NOTE_FOR_PROP]: slideId };
+}
+
+/**
+ * The handout: one section per slide, in deck order, the note's words under
+ * its title — and a slide with nothing written under it says so, because a
+ * handout that skips a slide reads as a deck with fewer slides.
+ */
+export function notesMarkdown(canvas: CanvasContents, bodyOf: (note: Item) => string): string {
+  const sections = notesOn(canvas).map(({ slide, note }, i) => {
+    const body = note ? bodyOf(note).trim() : "";
+    return `## ${i + 1}. ${slide.title}\n\n${body === "" ? "_No notes._" : body}\n`;
+  });
+  return sections.join("\n");
 }
 
 /**

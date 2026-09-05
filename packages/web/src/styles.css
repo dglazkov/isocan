@@ -5531,7 +5531,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* `--card` rather than white: a slide draws its own ground inside its frame,
    and the page behind it should sit on this theme's surface like a card. */
 .deck-page {
-  position: relative; width: min(100%, 1280px); aspect-ratio: 16 / 9;
+  position: relative; width: 100%; aspect-ratio: 16 / 9;
   background: var(--card); border-radius: var(--radius); overflow: hidden;
   box-shadow: var(--shadow-card);
 }
@@ -5559,10 +5559,48 @@ button.mt-card:hover { border-color: var(--accent); }
   .deck-print { position: static; overflow: visible; }
   .deck-bar { display: none; }
   .deck-pages { padding: 0; gap: 0; display: block; }
-  .deck-page { break-after: page; width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
-  .deck-page:last-child { break-after: auto; }
+  .deck-sheet { break-after: page; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+  .deck-sheet:last-child { break-after: auto; }
+  .deck-page { flex: 1; min-height: 0; width: 100%; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
+  /* With notes, the slide keeps the top of the sheet and the words the rest. */
+  .with-notes .deck-page { flex: 0 0 62%; }
+  .deck-notes { flex: 1; overflow: hidden; padding: 12px 24px; border-top: 1px solid var(--line); }
   .deck-page-n { display: none; }
 }
+/* The sheet on screen: the page, and its notes beneath when asked for. */
+.deck-sheet { width: min(100%, 1280px); list-style: none; }
+.deck-notes {
+  padding: 12px 16px; color: var(--ink); font-size: 14px; line-height: 1.5;
+  background: var(--card); border: 1px solid var(--line); border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.deck-notes em { color: var(--ink-soft); }
+.with-notes .deck-page { border-radius: var(--radius) var(--radius) 0 0; }
+.deck-notes-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 13px; }
+
+/* ---------- speaker notes (core/slides.ts) ---------- */
+/* On the canvas: the caption that says which slide a note speaks for, above
+   the words, in world units like the words. */
+.item.textnode .note-of {
+  position: absolute; left: 0; bottom: 100%; margin-bottom: 4px;
+  font-size: 11px; line-height: 1; white-space: nowrap; color: var(--ink-soft);
+  pointer-events: none;
+}
+/* In full screen: under the stage, never over it. */
+.fullscreen-stage.with-notes { bottom: 30%; }
+.fs-notes {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 30%;
+  overflow: auto; padding: 16px var(--edge);
+  background: var(--card); color: var(--ink); border-top: 1px solid var(--line);
+  font-size: 18px; line-height: 1.5;
+}
+.fs-notes-empty { margin: 0; color: var(--ink-soft); font-size: 14px; }
+.fullscreen-notes-toggle {
+  flex: none; font: inherit; font-size: 12px; font-weight: 600; line-height: 1;
+  padding: 6px 11px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chip); color: var(--ink);
+}
+.fullscreen-notes-toggle.on { border-color: var(--accent); color: var(--accent-text); }
 
 /* ---------- the top fade (lib/hideable.ts, "canvas.topfade") ---------- */
 /* A wash of the page's own ground from the top edge, so the title, the faces

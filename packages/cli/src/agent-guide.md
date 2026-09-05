@@ -631,6 +631,17 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   opens the same view with Save as PDF and Download deck.html; both surfaces
   write the same HTML file from core's `deckHtml`.
 
+**Speaker notes** are text items that point at their slide, kept under it on
+the canvas where the deck is arranged — so a person reads the slide and what
+to say about it side by side, and the note versions, edits and drags like any
+text node. `isocan slides note <slide> "what to say"` writes one (or re-words
+the one it has; `-f notes.md` or `-f -` for more than a line);
+`isocan slides notes` prints every slide with its note;
+`isocan slides export notes.md` writes the handout. In full screen the presenter presses **N** to see the
+note under the slide — never over it, and never on the audience's picture —
+and `slides export deck.pdf --notes` puts each note on its slide's sheet. A
+note is never a slide, even when nothing is marked.
+
 A slide is a property set by `item.update` — the same shape as a context pin —
 so it replicates, undoes, and cannot disagree between the CLI and the app's
 "Make this a slide" menu entry. Order is geometry: lay the deck out in rows

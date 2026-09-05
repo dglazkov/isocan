@@ -1,5 +1,5 @@
 import type { Actor, Item } from "@isocan/core";
-import { contextMark, isSlide, itemKind, itemPath, markPatch, newGroupId, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
+import { contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -19,7 +19,8 @@ import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { type Panel, openPanel } from "./panels.ts";
-import { glideToBox } from "./zoomactions.ts";
+import { glideToBox, revealItem } from "./zoomactions.ts";
+import { addSpeakerNote, noteStarter } from "./notes.ts";
 import { handIn, handable } from "./sprint.ts";
 import { canEditNow } from "./capability.ts";
 
@@ -258,6 +259,38 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         );
       },
     },
+    /**
+     * **Speaker notes** (`core/slides.ts`): a text item under the slide that
+     * points at it. One slide selected: make its note, or go to the one it
+     * has. The same item `isocan slides note` makes, so nothing here is a
+     * second kind of thing.
+     */
+    ...(items.length === 1 && isSlide(items[0]!) && !isNote(items[0]!)
+      ? [
+          (() => {
+            const slide = items[0]!;
+            const existing = noteFor(useCanvasStore.getState().canvas ?? { items: {}, threads: {} } as never, slide.id);
+            return existing
+              ? {
+                  label: "Go to speaker notes",
+                  run: () => {
+                    useUiStore.getState().select(existing.id);
+                    revealItem(existing.id);
+                  },
+                }
+              : {
+                  label: "Add speaker notes",
+                  writes: true,
+                  run: async () => {
+                    const id = await addSpeakerNote(ctx.canvasId, ctx.actor, slide, noteStarter(slide));
+                    useUiStore.getState().select(id);
+                    revealItem(id);
+                    flashNotice(`Notes for "${slide.title}" — under the slide; N shows them in full screen`);
+                  },
+                };
+          })(),
+        ]
+      : []),
     // Handing in to a sprint (core/sprint.ts): one property, the same op
     // `isocan sprint handin` sends. Offered only while a phase is running —
     // there is nothing to hand in to otherwise — and only for items not
