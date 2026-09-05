@@ -54,6 +54,7 @@ COPY packages/web/package.json        packages/web/package.json
 # holds every module directory to a line here.
 COPY packages/modules/mindmap/package.json packages/modules/mindmap/package.json
 COPY packages/modules/mermaid/package.json packages/modules/mermaid/package.json
+COPY packages/modules/documents/package.json packages/modules/documents/package.json
 
 # --ignore-scripts: the root `prepare` (scripts/prepare.mjs) exists to build the
 # web bundle for people installing from git, and it does it by shelling out to

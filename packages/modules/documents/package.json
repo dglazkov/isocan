@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/documents",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Documents: an outline beside the stage, a Documents page, /outline and /summarize — the module that needed the inspector and page slots",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

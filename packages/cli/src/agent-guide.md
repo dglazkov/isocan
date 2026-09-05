@@ -659,12 +659,16 @@ outside core, without rebuilding anything:
 - `isocan module ls` — every module here: the build's own, the ones added to
   this machine, and why any is refused (its `engines` names an isocan this
   is not).
-- `isocan module add <dir>` — install a built module from a directory. It
-  PRINTS the manifest — the kinds, property keys and halves it declares — and
-  installs nothing until you run it again with `--yes`, the same gate
-  `command add --from` has and for the same reason: this is code that runs
-  as the app, chosen by whoever runs this machine. Loaded on the next
-  command and the next page load; no restart.
+- `isocan module add <dir | github:owner/repo#ref>` — install a built module
+  from a directory or a git repository (the built module at its root or in
+  `build/`). It PRINTS the manifest — the kinds, property keys and halves it
+  declares — and installs nothing until you run it again with `--yes`, the
+  same gate `command add --from` has and for the same reason: this is code
+  that runs as the app, chosen by whoever runs this machine. Loaded on the
+  next command and the next page load; no restart.
+- A module can add a whole PAGE to the app — the Documents page is the
+  first — and `isocan open --page <segment>` hands a person its address, the
+  way `open --workbench` hands out the agent room's.
 - `isocan module rm <name>` — remove one. Its items stay on every canvas, as
   the files they are; its verbs and pictures are gone.
 

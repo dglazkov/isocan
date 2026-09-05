@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
-import { DECK_ROUTE, deckPath, deckUrl } from "../src/address.ts";
+import { DECK_ROUTE, deckPath, deckUrl, modulePagePath, modulePageUrl } from "../src/address.ts";
 import { deckFilename, deckHtml, deckPages } from "../src/deckexport.ts";
 
 /**
@@ -78,6 +78,8 @@ describe("the one file that plays the deck", () => {
 describe("the deck's address", () => {
   it("is one spelling for the route, the path and the whole address", () => {
     expect(deckPath("prj_x")).toBe("/p/prj_x/deck");
+    expect(modulePagePath("prj_x", "docs")).toBe("/p/prj_x/x/docs");
+    expect(modulePageUrl("https://isocan.io", "prj_x", "docs")).toBe("https://isocan.io/p/prj_x/x/docs");
     expect(deckUrl("https://isocan.io/", "prj_x")).toBe("https://isocan.io/p/prj_x/deck");
     expect(DECK_ROUTE.endsWith("/deck")).toBe(true);
   });

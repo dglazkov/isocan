@@ -96,6 +96,8 @@ import {
   ISOCAN_VERSION,
   enginesSatisfied,
   moduleSlug,
+  modulePageUrl,
+  withModuleCommands,
   type ModuleManifest,
   alignMoves,
   annotationsOf,
@@ -2379,8 +2381,9 @@ program
     "--workbench",
     "open the workbench — the agent room — instead; with an item, it is on the stage",
   )
+  .option("--page <segment>", "open a page a module adds — the Documents page is `docs`")
   .action(
-    run(async (ref: string | undefined, opts: { workbench?: boolean }, cmd: Command) => {
+    run(async (ref: string | undefined, opts: { workbench?: boolean; page?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       // Full screen is a ROUTE, which is the whole reason the CLI can take
       // part in it at all: there is no op to send — what somebody is looking
@@ -2407,11 +2410,15 @@ program
       // The workbench is the same kind of thing full screen is — a cover
       // route — so the flag only changes which address gets built. An agent
       // that wants a person watching the agent room hands them this.
-      const url = opts.workbench
-        ? workbenchUrl(origin, canvas.id, item?.id)
-        : item
-          ? itemUrl(origin, canvas.id, item.id)
-          : canvasUrl(origin, canvas.id);
+      // A module's page is the same kind of thing again — a cover route with
+      // an address (modules phase 4) — so `--page docs` only changes the path.
+      const url = opts.page
+        ? modulePageUrl(origin, canvas.id, opts.page)
+        : opts.workbench
+          ? workbenchUrl(origin, canvas.id, item?.id)
+          : item
+            ? itemUrl(origin, canvas.id, item.id)
+            : canvasUrl(origin, canvas.id);
       const token = await browserPass(ctx, canvas.id);
       // The pass goes on the END of whichever address was built — canvas or
       // item — because a fragment is only a fragment if nothing follows it.
@@ -8300,7 +8307,7 @@ command
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const commands = await ctx.client.commands();
+      const commands = withModuleCommands(await ctx.client.commands());
       if (ctx.json) return printJson(commands);
       printTable(
         commands.map((c) => ({
@@ -8321,7 +8328,7 @@ command
     run(async (name: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const wanted = name.replace(/^\//, "").toLowerCase();
-      const found = findCommand(await ctx.client.commands(), wanted);
+      const found = findCommand(withModuleCommands(await ctx.client.commands()), wanted);
       if (!found) throw new Error(`no command called /${wanted} (isocan command list)`);
       if (ctx.json) return printJson(found);
       // The body alone on stdout, so it can be piped into something that
@@ -8417,7 +8424,7 @@ command
       const ctx = await ctxOf(cmd);
       const wanted = name.replace(/^\//, "").toLowerCase();
       await ctx.client.deleteCommand(wanted);
-      const back = findCommand(await ctx.client.commands(), wanted);
+      const back = findCommand(withModuleCommands(await ctx.client.commands()), wanted);
       console.error(back ? `/${wanted} is the built-in again` : `/${wanted} is gone`);
     }),
   );
@@ -8450,14 +8457,55 @@ function describeManifest(m: ModuleManifest, dir: string): string {
   return lines.join("\n");
 }
 
+/**
+ * **A module from a git repository** — `github:owner/repo#ref`,
+ * `owner/repo#ref`, or any URL git can clone — is a shallow clone into a
+ * temporary directory in front of the same code that reads a directory. The
+ * built module may sit at the repository's root or in `build/`, which is
+ * where `scripts/module-build.mjs` puts it. Nothing is installed from the
+ * clone until `--yes`, exactly as from a directory; the print is the same
+ * manifest, read from the same file.
+ */
+const GIT_SPEC = /^(github:|https?:\/\/|git@|ssh:\/\/|file:\/\/|[\w.-]+\/[\w.-]+#)/;
+
+function gitSpecToClone(spec: string): { url: string; ref: string | null } {
+  const [head, ref] = spec.split("#") as [string, string | undefined];
+  if (head.startsWith("github:")) return { url: `https://github.com/${head.slice("github:".length)}.git`, ref: ref ?? null };
+  if (/^[\w.-]+\/[\w.-]+$/.test(head)) return { url: `https://github.com/${head}.git`, ref: ref ?? null };
+  return { url: head, ref: ref ?? null };
+}
+
+async function fetchModuleSpec(spec: string): Promise<{ dir: string; cleanup: () => Promise<void> }> {
+  if (!GIT_SPEC.test(spec)) return { dir: path.resolve(spec), cleanup: async () => {} };
+  const { url, ref } = gitSpecToClone(spec);
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-module-"));
+  const args = ["clone", "--quiet", "--depth", "1", ...(ref ? ["--branch", ref] : []), url, tmp];
+  const cloned = spawnSync("git", args, { encoding: "utf8" });
+  if (cloned.status !== 0) {
+    await fs.rm(tmp, { recursive: true, force: true });
+    throw new Error(`could not clone ${url}${ref ? `#${ref}` : ""}: ${(cloned.stderr || "").trim().split("\n").pop() ?? "git failed"}`);
+  }
+  const dir = existsSync(path.join(tmp, "manifest.json")) ? tmp : path.join(tmp, "build");
+  return { dir, cleanup: () => fs.rm(tmp, { recursive: true, force: true }) };
+}
+
 moduleCmd
-  .command("add <dir>")
-  .description("Install a built module from a directory — prints what it declares, installs nothing until --yes")
+  .command("add <dir-or-spec>")
+  .description("Install a built module from a directory or a git spec (github:owner/repo#ref) — prints what it declares, installs nothing until --yes")
   .option("--yes", "install it, having read what it declares")
   .action(
     run(async (dirArg: string, opts: { yes?: boolean }, cmd: Command) => {
       const globals = cmd.optsWithGlobals() as { json?: boolean };
-      const dir = path.resolve(dirArg);
+      const fetched = await fetchModuleSpec(dirArg);
+      try {
+        await addModuleFrom(fetched.dir, dirArg, opts, globals);
+      } finally {
+        await fetched.cleanup();
+      }
+    }),
+  );
+
+async function addModuleFrom(dir: string, dirArg: string, opts: { yes?: boolean }, globals: { json?: boolean }): Promise<void> {
       const file = path.join(dir, "manifest.json");
       if (!existsSync(file)) throw new Error(`${dir} has no manifest.json — build the module first (scripts/module-build.mjs)`);
       const manifest = JSON.parse(await fs.readFile(file, "utf8")) as ModuleManifest;
@@ -8482,8 +8530,7 @@ moduleCmd
       await fs.cp(dir, target, { recursive: true });
       if (globals.json) return printJson({ manifest, target, installed: true });
       console.error(`${manifest.name} installed at ${target} — loaded on the next isocan command and the next page load (isocan module rm ${slug})`);
-    }),
-  );
+}
 
 moduleCmd
   .command("rm <name>")

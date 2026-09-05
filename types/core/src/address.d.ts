@@ -38,6 +38,9 @@ export declare function itemUrl(origin: string, canvasId: string, itemId: string
 export declare const DECK_ROUTE = "/p/:canvasId/deck";
 export declare function deckPath(canvasId: string): string;
 export declare function deckUrl(origin: string, canvasId: string): string;
+export declare const MODULE_PAGE_ROUTE = "/p/:canvasId/x/:segment";
+export declare function modulePagePath(canvasId: string, segment: string): string;
+export declare function modulePageUrl(origin: string, canvasId: string, segment: string): string;
 export declare const WORKBENCH_ROUTE = "/p/:canvasId/w";
 export declare const WORKBENCH_ITEM_ROUTE = "/p/:canvasId/w/:wbItemId";
 /** The workbench with nothing focused — the agent room itself. */

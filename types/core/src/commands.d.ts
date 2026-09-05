@@ -25,8 +25,8 @@ export interface SlashCommand {
     usage: string;
     /** What the agent should do. Markdown — this is the skill. */
     body: string;
-    /** Shipped with isocan, or written by this home. */
-    source: "built-in" | "home";
+    /** Shipped with isocan, written by this home, or carried by a loaded module (core/modules.ts). */
+    source: "built-in" | "home" | "module";
     /**
      * The app answers this one itself instead of posting it.
      *

@@ -1,7 +1,17 @@
 import type { ComponentType } from "react";
-import { registerModule, type RendererFacts, type UnderlayFacts, type WebModule } from "@isocan/core";
+import {
+  registerModule,
+  type InspectorFacts,
+  type ModuleInspector,
+  type ModulePage,
+  type PageFacts,
+  type RendererFacts,
+  type UnderlayFacts,
+  type WebModule,
+} from "@isocan/core";
 import { mindmapWeb } from "@isocan/mindmap/web";
 import { mermaidWeb } from "@isocan/mermaid/web";
+import { documentsWeb } from "@isocan/documents/web";
 import { useUiStore } from "./stores/uiStore.ts";
 
 /**
@@ -9,10 +19,10 @@ import { useUiStore } from "./stores/uiStore.ts";
  *
  * One list, and it is the whole coupling between the shell and a module: the
  * shell maps over it to fill its slots, and registers each entry's core
- * record so `isocan context`'s rows, the JSON Canvas edges and the kinds
- * agree with what is drawn. Remove a line here (and the twin in
- * `packages/cli/src/modules.ts`) and the module is gone from this surface —
- * its items stay, as files.
+ * record so `isocan context`'s rows, the JSON Canvas edges, the kinds and
+ * the slash commands agree with what is drawn. Remove a line here (and the
+ * twin in `packages/cli/src/modules.ts`) and the module is gone from this
+ * surface — its items stay, as files.
  *
  * Two ways in. **Build-time** entries are the literals below: this bundle is
  * made by CI, never where it is installed, so a module's web half compiles
@@ -21,9 +31,14 @@ import { useUiStore } from "./stores/uiStore.ts";
  * and serves under `/modules/<slug>/` — after first paint, with a generation
  * bump so the slots that read this list draw them.
  */
-export type ShellModule = WebModule<ComponentType<UnderlayFacts>, ComponentType<RendererFacts>>;
+export type ShellModule = WebModule<
+  ComponentType<UnderlayFacts>,
+  ComponentType<RendererFacts>,
+  ComponentType<InspectorFacts>,
+  ComponentType<PageFacts>
+>;
 
-const LIST: ShellModule[] = [mindmapWeb, mermaidWeb];
+const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb];
 
 /** Read at render time: the same array, so a runtime module shows up in
  *  every slot the moment it is added. */
@@ -49,4 +64,19 @@ export function moduleRendererFor(mimeType: string): ComponentType<RendererFacts
     if (hit) return hit.component;
   }
   return null;
+}
+
+/** The inspectors that read items of this kind, in module order. */
+export function moduleInspectorsFor(kind: string): ModuleInspector<ComponentType<InspectorFacts>>[] {
+  return LIST.flatMap((m) => (m.inspectors ?? []).filter((i) => i.kinds.includes(kind)));
+}
+
+/** Every page a loaded module adds, in module order. */
+export function modulePages(): ModulePage<ComponentType<PageFacts>>[] {
+  return LIST.flatMap((m) => m.pages ?? []);
+}
+
+/** The page at a segment, or null: a segment nobody owns is a plain 404. */
+export function modulePage(segment: string): ModulePage<ComponentType<PageFacts>> | null {
+  return modulePages().find((p) => p.segment === segment) ?? null;
 }
