@@ -158,6 +158,17 @@ recurred.
   the first use. The constant would have made "one image, many homes"
   impossible for the sake of a lie that cannot be told.
 
+- **An estimate that can only be too small is a bug; err on the side that
+  costs nothing, and measure it against the renderer.** `textBox` guessed a
+  text node's box at half an em per character, wrapped by character, and
+  ignored the face — and at the big steps it cropped the titles agents wrote
+  from the terminal, where nothing measures. A chromeless box with room to
+  spare is invisible; a box a line short hides words. The guess now wraps by
+  word with a width per kind of glyph and a tenth on top, and the guard is a
+  harness that renders random notes in Chrome at the estimated box and
+  counts clips (0 of 300 on 4 Sep 2026); `core/test/textnode.test.ts` pins
+  the shapes that used to come up short.
+
 ## Working alongside agents
 
 - **`git add -A` commits whatever the other agents have on disk right now.**

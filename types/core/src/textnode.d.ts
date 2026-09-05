@@ -251,7 +251,7 @@ export declare const TEXT_COLUMN: Record<TextStyle, number>;
  * decided how these steps relate, and a second table would drift from it.
  */
 export declare const TEXT_COLUMN_MAX: Record<TextStyle, number>;
-export declare function textBox(body: string, style?: TextStyle): {
+export declare function textBox(body: string, style?: TextStyle, face?: TextFace): {
     width: number;
     height: number;
 };

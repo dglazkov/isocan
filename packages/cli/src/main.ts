@@ -5469,7 +5469,7 @@ program
         const paper = opts.paper === undefined ? null : pickOne("paper", opts.paper, PAPERS, "yellow");
         const { width, height } = sizeFor(
           opts.size,
-          paper === null ? textBox(body, style) : { width: PAPER_SIZE, height: PAPER_SIZE },
+          paper === null ? textBox(body, style, face) : { width: PAPER_SIZE, height: PAPER_SIZE },
         );
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
