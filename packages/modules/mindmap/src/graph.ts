@@ -1,5 +1,5 @@
-import type { CanvasContents, Item } from "./model.ts";
-import { newId } from "./ids.ts";
+import type { CanvasContents, Item } from "@isocan/core";
+import { newId } from "@isocan/core";
 
 /**
  * **Mind maps: a graph you can drag, made of things the canvas already has.**

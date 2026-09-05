@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
-import { MAP_PROP, MAP_PARENT_PROP } from "../src/mindmap.ts";
 import { BROWSER_MIME } from "../src/browseritem.ts";
+import { registerModule, unregisterModule } from "../src/modules.ts";
 import { describeLosses, toJsonCanvas } from "../src/jsoncanvas.ts";
 
 /**
@@ -70,19 +70,36 @@ describe("edges — the question the research could not answer", () => {
    * isocan had no relationship primitive. Mind maps shipped on 29 Aug and
    * answered it: an edge is a PROPERTY (`mapParent`), not a new op. So a canvas
    * holding a map exports as a graph rather than as a pile of boxes.
+   *
+   * Since 4 Sep the mind map is a module, and core asks the registry for
+   * edges rather than the map by name (`core/modules.ts`). So this exercises
+   * the seam with a module of its own — the mind map's real edges are proved
+   * in `packages/modules/mindmap/test`.
    */
-  const root = item("root", 0, 0, { properties: { [MAP_PROP]: "m1" } });
-  const child = item("kid", 300, 0, { properties: { [MAP_PROP]: "m1", [MAP_PARENT_PROP]: "root" } });
+  const root = item("root", 0, 0, { properties: { "test.parent": "" } });
+  const child = item("kid", 300, 0, { properties: { "test.parent": "root" } });
+  const testModule = {
+    name: "@isocan/test-edges",
+    edges: (canvas: CanvasContents) =>
+      Object.values(canvas.items).flatMap((to) => {
+        const from = to.properties?.["test.parent"] ? canvas.items[to.properties["test.parent"]] : undefined;
+        return from ? [{ from, to }] : [];
+      }),
+  };
 
-  it("a map becomes real edges, parent to child, with an arrow", () => {
-    const { file } = toJsonCanvas(canvasOf([root, child]));
-    expect(file.edges).toEqual([
-      { id: "root-kid", fromNode: "root", toNode: "kid", toEnd: "arrow" },
-    ]);
+  it("a module's edges become real edges, parent to child, with an arrow", () => {
+    registerModule(testModule);
+    try {
+      const { file } = toJsonCanvas(canvasOf([root, child]));
+      expect(file.edges).toEqual([{ id: "root-kid", fromNode: "root", toNode: "kid", toEnd: "arrow" }]);
+    } finally {
+      unregisterModule(testModule.name);
+    }
   });
 
-  it("a canvas with no map exports no edges rather than inventing them", () => {
+  it("a canvas with no edges exports none rather than inventing them, and so does a core with no module", () => {
     expect(toJsonCanvas(canvasOf([item("a", 0, 0)])).file.edges).toEqual([]);
+    expect(toJsonCanvas(canvasOf([root, child])).file.edges).toEqual([]);
   });
 });
 

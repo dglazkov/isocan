@@ -34,7 +34,7 @@ import reactHooks from "eslint-plugin-react-hooks";
  */
 export default [
   {
-    files: ["packages/web/src/**/*.ts", "packages/web/src/**/*.tsx"],
+    files: ["packages/web/src/**/*.ts", "packages/web/src/**/*.tsx", "packages/modules/*/src/**/*.tsx"],
     languageOptions: {
       parser,
       parserOptions: { ecmaVersion: "latest", sourceType: "module", ecmaFeatures: { jsx: true } },
