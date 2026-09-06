@@ -15,6 +15,7 @@
  * door's test over these rows is `server/grants.ts`.
  */
 
+import { resolveActor, type ActorJoins } from "./identity.ts";
 import type { Attestation, SweepReport } from "./badge.ts";
 
 /**
@@ -64,13 +65,41 @@ export type GrantSubject = "link" | `email:${string}` | `repo:${string}` | `grou
  * stranger. Owning by actor is what makes "I made this" survive changing
  * surfaces.
  */
-export function ownerOf(project: { createdBy: { id: string } }): string {
-  return project.createdBy.id;
+export function ownerOf(project: { createdBy: { id: string } }, joined?: ActorJoins): string {
+  return resolveActor(joined, project.createdBy.id);
 }
 
-/** Is this actor the one who made it? */
-export function ownsCanvas(project: { createdBy: { id: string } }, actorId: string): boolean {
-  return ownerOf(project) === actorId;
+/**
+ * Is this actor the one who made it — where "the same actor" means **the same
+ * PERSON**, which after `actor.join` is not the same question.
+ *
+ * Multi-identity phase 5 converted every reader that DISPLAYS an actor —
+ * names, colours, marks, the inbox, the roster, the unread counts — to
+ * resolve through the `joined` map first. It did not convert the one that
+ * AUTHORIZES on one, and this was it: `createdBy` keeps the id it recorded,
+ * as the log always does, so folding `Dimitri 2` into Dimitri left every
+ * canvas `Dimitri 2` created owned by an actor nobody answers to any more.
+ *
+ * The person then lost the owner controls on a canvas they made, one gesture
+ * after the gesture that promised to make them one person — which is the
+ * shape of the lockout the owner floor exists to prevent.
+ *
+ * BOTH SIDES resolve, not just the stored one. Two ids are the same person
+ * exactly when they fold to the same id, and a caller may hold either: the
+ * survivor (the usual case, a person acting under their current actor) or a
+ * folded id (an old op's author, a claim a badge still carries). Resolving
+ * one side only would answer correctly in one direction and not the other.
+ *
+ * `joined` is optional because most callers have no registry to hand and no
+ * join to worry about — a home that has never seen `actor.join` gets exactly
+ * the comparison this made before.
+ */
+export function ownsCanvas(
+  project: { createdBy: { id: string } },
+  actorId: string,
+  joined?: ActorJoins,
+): boolean {
+  return ownerOf(project, joined) === resolveActor(joined, actorId);
 }
 
 /**

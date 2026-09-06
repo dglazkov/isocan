@@ -63,8 +63,21 @@
  * Bumped when the shape of what is cached changes — never for content, which
  * is hashed into its own filename by Vite. Old caches are deleted on activate,
  * so a bump is also how a bad cache is disowned.
+ *
+ * **v2 disowns v1, which had grown to 59MB on a real machine.** The sentence
+ * above was true and never fired: the name is a constant, so `activate` — which
+ * deletes every cache whose NAME is not this one — had nothing to delete, while
+ * `assetFirst` went on adding every content-hashed chunk of every deploy and
+ * removing none. A build ships three to four megabytes of hashed assets and
+ * this project deploys several times a day, so the cache grew by a build a
+ * deploy, forever. The tab that found it sat on "connecting" until the cache
+ * was cleared by hand, after which the same canvas opened at once.
+ *
+ * The bump is the whole migration: nobody has to clear anything, because the
+ * next visit to a build carrying this name deletes the old cache on activate.
+ * `sweep` below is what stops v2 becoming v1 again.
  */
-const CACHE = "isocan-shell-v1";
+const CACHE = "isocan-shell-v2";
 
 /** The app shell, under one key regardless of which route was navigated to.
  * Every path in this SPA is served the same `index.html`, so caching it per
@@ -126,6 +139,51 @@ self.addEventListener("install", (event) => {
  * worse app than one that is simply not offline-ready yet, and the runtime
  * handlers below fill the cache anyway on the next successful load.
  */
+/**
+ * The asset URLs THIS build names, read out of the shell markup — the one
+ * parse, so the install that fills the cache and the sweep that empties it
+ * cannot disagree about which build's assets are current.
+ */
+function assetsIn(html) {
+  const assets = new Set();
+  for (const match of html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)) assets.add(match[1]);
+  return assets;
+}
+
+/**
+ * **Drop every `/assets/` entry this build does not name.**
+ *
+ * The cache is keyed by a name that changes only when a person edits it, so
+ * without this the only bound on its size is how long the browser profile
+ * lives. Sweeping on activate makes the bound "one build", which is the size
+ * the design always implied.
+ *
+ * Lazily-imported chunks are not in `index.html` and so are swept too. That is
+ * correct rather than unfortunate: after a deploy the previous build's lazy
+ * chunks are bytes nothing will ask for again, and the one that IS asked for
+ * is re-fetched and re-cached by `assetFirst` on first use — the same network
+ * trip a first-time visitor pays. Steady state is this build's eager assets
+ * plus whatever has been opened since, never a museum of every deploy.
+ *
+ * Best-effort, like `precache`: a sweep that throws must not stop the worker
+ * activating, or a bad cache would also be an unstartable app.
+ */
+async function sweep() {
+  try {
+    const cache = await caches.open(CACHE);
+    const shell = await cache.match(SHELL);
+    if (!shell) return; // nothing precached yet: nothing to sweep against
+    const keep = assetsIn(await shell.text());
+    for (const request of await cache.keys()) {
+      const { pathname } = new URL(request.url, self.location.origin);
+      if (!pathname.startsWith("/assets/")) continue;
+      if (!keep.has(pathname)) await cache.delete(request);
+    }
+  } catch {
+    // A sweep that could not run leaves the cache exactly as it was.
+  }
+}
+
 async function precache() {
   try {
     const response = await fetch(SHELL, { cache: "no-store" });
@@ -133,9 +191,7 @@ async function precache() {
     const html = await response.clone().text();
     const cache = await caches.open(CACHE);
     await cache.put(SHELL, response);
-    const assets = new Set();
-    for (const match of html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)) assets.add(match[1]);
-    await Promise.all([...assets].map((url) => cache.add(url).catch(() => {})));
+    await Promise.all([...assetsIn(html)].map((url) => cache.add(url).catch(() => {})));
   } catch {
     // No network at install time. Nothing is cached, and nothing is broken.
   }
@@ -146,6 +202,8 @@ self.addEventListener("activate", (event) => {
     (async () => {
       const names = await caches.keys();
       await Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name)));
+      // And within the cache we keep: everything the current build does not name.
+      await sweep();
       await self.clients.claim();
     })(),
   );

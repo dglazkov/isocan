@@ -10,7 +10,7 @@ Run by `scripts/persona-run.mjs` at `96b2b19`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| largest built JavaScript chunk is 737756, past 700000 | unanswered |
+| largest built JavaScript chunk is 737756, past 700000 | rejected — the metric was retired. A max-over-chunks bound "could be satisfied by splitting an eager chunk in two and downloading exactly the same bytes", so it was replaced by `the entry chunk a first visit downloads` at 640,000. Superseded, not ignored. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. Nothing counts
 them yet, and nothing should until there are enough to mean something.

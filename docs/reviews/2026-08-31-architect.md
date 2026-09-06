@@ -11,7 +11,7 @@ Run by `scripts/persona-run.mjs` at `02c8099`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| operations in the vocabulary is 32, past 31 | unanswered |
+| operations in the vocabulary is 32, past 31 | accepted — the bound was raised to 33 on purpose, for `actor.setMark` and `actor.join`. Each was argued in its own commit; the ratchet did its job by making somebody say so. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. Nothing counts
 them yet, and nothing should until there are enough to mean something.

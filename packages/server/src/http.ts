@@ -1765,7 +1765,7 @@ export function registerRoutes(
      * Checked here rather than in the client, and after the replica forward
      * above, so the home that owns the canvas is the one that answers.
      */
-    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null), "own")) {
+    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null, await engine.actorJoins()), "own")) {
       return reply
         .status(403)
         .send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
@@ -2126,7 +2126,7 @@ export function registerRoutes(
     }
     // Revoking is a write to grants, and every write to grants is an owner's
     // (roles phase 2) — the link's off switch included.
-    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null), "own")) {
+    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null, await engine.actorJoins()), "own")) {
       return reply
         .status(403)
         .send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
@@ -2321,7 +2321,7 @@ export function registerRoutes(
     }
     const snapshot = await engine.getSnapshot(canvasId); // 404 for a canvas that is not here
     await admit(req, canvasId); // the door, since the hook did not ask
-    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null), "own")) {
+    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null, await engine.actorJoins()), "own")) {
       return reply
         .status(403)
         .send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });

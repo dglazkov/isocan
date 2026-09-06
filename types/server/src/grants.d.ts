@@ -1,3 +1,4 @@
+import { type ActorJoins } from "../../core/src/index.js";
 import type { Capability, Grant, Group, Space } from "../../core/src/index.js";
 import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.js";
 /**
@@ -169,7 +170,21 @@ export declare function heldRung(desk: Desk, project: {
     createdBy: {
         id: string;
     };
-}, badge: BadgeRecord, asActor?: string | null): Promise<Capability>;
+}, badge: BadgeRecord, asActor?: string | null, 
+/**
+ * The home's `actor.join` map, so the floor recognises a creator who has
+ * since been folded into somebody else (multi-identity phase 5).
+ *
+ * Without it this function asks `asActor === owner` on RAW ids, and a
+ * person who folded two identities is refused `own` on canvases their
+ * folded actor made — even on the very badge that performed the fold,
+ * because `asActor` is by then the survivor and `createdBy` is not. The
+ * claims check alone would have passed; the narrowing is what bites.
+ *
+ * Optional, and omitting it is the behaviour this had before: a home that
+ * has never seen a join has an empty map and an unchanged answer.
+ */
+joined?: ActorJoins): Promise<Capability>;
 /**
  * **What this badge holds over a SPACE** (roles phase 4), for the space
  * routes: the highest rung from the live rows on the space that its

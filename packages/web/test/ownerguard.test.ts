@@ -22,7 +22,7 @@ describe("only an owner may change who may enter", () => {
     // that revokes — ask the same question of the same function; and, since
     // roles phase 4, so does putting a canvas into a space (`own` on both).
     const asks = http.match(
-      /atLeast\(await heldRung\(desk, snapshot\.project, req\.badge!, actorId \?\? null\), "own"\)/g,
+      /atLeast\(await heldRung\(desk, snapshot\.project, req\.badge!, actorId \?\? null, await engine\.actorJoins\(\)\), "own"\)/g,
     );
     expect(asks).toHaveLength(3);
     expect(http).toContain("code: NOT_OWNER");
@@ -33,7 +33,9 @@ describe("only an owner may change who may enter", () => {
   });
 
   it("asks core who the creator is, and the hello who else owns it", () => {
-    expect(dialog).toContain("ownsCanvas(record, actor.id)");
+    // Both sides pass the join map, or a folded creator is an owner to one of
+    // them and a stranger to the other — see `ownerjoin.test.ts`.
+    expect(dialog).toContain("ownsCanvas(record, actor.id, joins)");
     expect(dialog).toContain('atLeast(capability, "own")');
   });
 

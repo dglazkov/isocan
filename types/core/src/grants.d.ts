@@ -14,6 +14,7 @@
  * explanation. The desk's own storage of a grant is `server/desk.ts`; the
  * door's test over these rows is `server/grants.ts`.
  */
+import { type ActorJoins } from "./identity.js";
 import type { Attestation, SweepReport } from "./badge.js";
 /**
  * What a grant binds to — a **provable attribute**, per the design's "borrow,
@@ -65,13 +66,37 @@ export declare function ownerOf(project: {
     createdBy: {
         id: string;
     };
-}): string;
-/** Is this actor the one who made it? */
+}, joined?: ActorJoins): string;
+/**
+ * Is this actor the one who made it — where "the same actor" means **the same
+ * PERSON**, which after `actor.join` is not the same question.
+ *
+ * Multi-identity phase 5 converted every reader that DISPLAYS an actor —
+ * names, colours, marks, the inbox, the roster, the unread counts — to
+ * resolve through the `joined` map first. It did not convert the one that
+ * AUTHORIZES on one, and this was it: `createdBy` keeps the id it recorded,
+ * as the log always does, so folding `Dimitri 2` into Dimitri left every
+ * canvas `Dimitri 2` created owned by an actor nobody answers to any more.
+ *
+ * The person then lost the owner controls on a canvas they made, one gesture
+ * after the gesture that promised to make them one person — which is the
+ * shape of the lockout the owner floor exists to prevent.
+ *
+ * BOTH SIDES resolve, not just the stored one. Two ids are the same person
+ * exactly when they fold to the same id, and a caller may hold either: the
+ * survivor (the usual case, a person acting under their current actor) or a
+ * folded id (an old op's author, a claim a badge still carries). Resolving
+ * one side only would answer correctly in one direction and not the other.
+ *
+ * `joined` is optional because most callers have no registry to hand and no
+ * join to worry about — a home that has never seen `actor.join` gets exactly
+ * the comparison this made before.
+ */
 export declare function ownsCanvas(project: {
     createdBy: {
         id: string;
     };
-}, actorId: string): boolean;
+}, actorId: string, joined?: ActorJoins): boolean;
 /**
  * What a grant lets its holder DO once the door says yes — the roles question
  * `identity-desk.md` left open ("that waits for a scene that forces it"),

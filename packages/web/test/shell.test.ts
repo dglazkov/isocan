@@ -58,7 +58,7 @@ const SHELL_HTML = `<!doctype html><html><head>
   <link rel="stylesheet" crossorigin href="/assets/index-D2wqCYKm.css">
 </head><body><div id="root"></div></body></html>`;
 
-function load(startOffline = false): Harness {
+function load(startOffline = false, shellHtml: string = SHELL_HTML): Harness {
   const source = readFileSync(SW, "utf8");
   const handlers = new Map<string, (event: any) => void>();
   const cache = new Map<string, { body: string; from: string }>();
@@ -83,6 +83,15 @@ function load(startOffline = false): Harness {
           const response = await self.fetch(url);
           cache.set(key(url), { body: response.body, from: "cache" });
         },
+        // `sweep` walks the entries and removes what this build does not name,
+        // so the fake has to hold entries the way a real Cache does: as
+        // Requests with absolute URLs.
+        keys: async () => [...cache.keys()].map((url) => ({ url })),
+        delete: async (request: any) => cache.delete(key(request)),
+        match: async (request: any) => {
+          const found = cache.get(key(request));
+          return found ? { ...found, ok: true, clone: () => found, text: async () => found.body } : undefined;
+        },
       };
     },
     match: async (request: any) => {
@@ -90,7 +99,14 @@ function load(startOffline = false): Harness {
       return found ? { ...found, ok: true, clone: () => found } : undefined;
     },
     keys: async () => [...keys],
-    delete: async (name: string) => keys.delete(name),
+    // Deleting a cache BY NAME takes its contents with it — which is the whole
+    // mechanism a version bump relies on, so a fake that only forgot the name
+    // would make the bump look like it worked when it had not.
+    delete: async (name: string) => {
+      if (!keys.delete(name)) return false;
+      cache.clear();
+      return true;
+    },
   };
 
   const self: any = {
@@ -107,7 +123,7 @@ function load(startOffline = false): Harness {
       // precache reads them out of exactly this markup.
       const body =
         url === "/index.html" || url.endsWith("/index.html")
-          ? SHELL_HTML
+          ? shellHtml
           : `network:${url}`;
       return {
         ok: true,
@@ -203,6 +219,72 @@ describe("what the shell must never touch", () => {
     const before = sw.cached().sort();
     expect(await sw.fetch("https://example.test/thing.js")).toBe("passed");
     expect(sw.cached().sort()).toEqual(before);
+  });
+});
+
+describe("the cache is bounded by one build", () => {
+  /**
+   * **The bug this is here for, found on a real machine on 6 September 2026.**
+   *
+   * A tab sat on "connecting" and froze, and `navigator.storage.estimate()`
+   * said 59MB under `caches` against 7.5MB of actual canvas data. Clearing the
+   * cache by hand fixed it immediately.
+   *
+   * The cause was two true sentences that never met: `activate` deletes every
+   * cache whose NAME is not the current one, and the name is a constant. So
+   * nothing was ever deleted, while `assetFirst` added every content-hashed
+   * chunk of every deploy. The cache grew by roughly one build per deploy for
+   * as long as the browser profile lived.
+   */
+  it("drops the previous build's assets when a new one activates", async () => {
+    const first = load();
+    await first.install();
+    await first.activate();
+    expect(first.cached().sort()).toEqual([
+      `${origin}/assets/index-D2wqCYKm.css`,
+      `${origin}/assets/index-_NQH5FWZ.js`,
+      `${origin}/index.html`,
+    ]);
+
+    // A lazily-imported chunk, cached at runtime the way `assetFirst` does —
+    // named by no markup, which is exactly why it used to survive forever.
+    await first.fetch(`${origin}/assets/StageEditor-OLD1111.js`);
+    expect(first.cached()).toContain(`${origin}/assets/StageEditor-OLD1111.js`);
+
+    // Now deploy: the shell names different hashes.
+    const NEXT_HTML = SHELL_HTML.replace("index-_NQH5FWZ.js", "index-NEW2222.js").replace(
+      "index-D2wqCYKm.css",
+      "index-NEW3333.css",
+    );
+    const next = load(false, NEXT_HTML);
+    await next.install();
+    await next.activate();
+
+    const after = next.cached().sort();
+    expect(after).toContain(`${origin}/assets/index-NEW2222.js`);
+    expect(after).toContain(`${origin}/assets/index-NEW3333.css`);
+    // The point: last build's eager assets AND its lazy chunk are gone, rather
+    // than sitting there until the profile is deleted.
+    expect(after).not.toContain(`${origin}/assets/index-_NQH5FWZ.js`);
+    expect(after).not.toContain(`${origin}/assets/index-D2wqCYKm.css`);
+    expect(after).not.toContain(`${origin}/assets/StageEditor-OLD1111.js`);
+  });
+
+  it("keeps the shell itself, which is not an asset and is how offline works", async () => {
+    await sw.fetch(`${origin}/assets/lazy-AAA111.js`);
+    await sw.activate();
+    // The sweep is about /assets/ only: sweeping the shell would take the
+    // offline story with it.
+    expect(sw.cached()).toContain(`${origin}/index.html`);
+    expect(sw.cached()).not.toContain(`${origin}/assets/lazy-AAA111.js`);
+  });
+
+  it("names a cache the previous version does not, so an old one is disowned", () => {
+    const source = readFileSync(SW, "utf8");
+    // The bump IS the migration for everybody already carrying the leaked
+    // cache: they delete it on their next visit, with nothing to do by hand.
+    expect(source).toContain('const CACHE = "isocan-shell-v2"');
+    expect(source).not.toContain('"isocan-shell-v1"');
   });
 });
 

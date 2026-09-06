@@ -111,6 +111,7 @@ export function ShareDialog({
   canvases?: readonly Canvas[];
 }) {
   const record = useCanvasStore((s) => s.project);
+  const joins = useCanvasStore((s) => s.actorJoins);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
   const answerable = useAnswerable(record?.id ?? null);
@@ -239,7 +240,12 @@ export function ShareDialog({
   // made, so nothing had to be stored for this — and so does anybody whose
   // admission holds `own` (roles phase 2): the hello said so, and a
   // `standing` message moves it without a reload.
-  const made = record !== null && ownsCanvas(record, actor.id);
+  // Through the join map, exactly as the daemon does (multi-identity phase 5):
+  // `createdBy` keeps the id it recorded, so a person who folded two actors is
+  // still the creator of what the folded one made. Without this the dialog
+  // disables the owner's own controls and tells them somebody else made it —
+  // while the daemon, asked the same question, says yes.
+  const made = record !== null && ownsCanvas(record, actor.id, joins);
   const owned = made || atLeast(capability, "own");
   const ownerName = record ? actorNameIn(names, record.createdBy) : "";
   const ownerNote = record

@@ -14,6 +14,8 @@ import {
   newId,
   NOT_ADMITTED,
   ownerOf,
+  resolveActor,
+  type ActorJoins,
   RUNGS,
   VIEW_ONLY,
   WITHDRAWN,
@@ -337,12 +339,27 @@ export async function heldRung(
   project: { id: string; createdBy: { id: string } },
   badge: BadgeRecord,
   asActor: string | null = null,
+  /**
+   * The home's `actor.join` map, so the floor recognises a creator who has
+   * since been folded into somebody else (multi-identity phase 5).
+   *
+   * Without it this function asks `asActor === owner` on RAW ids, and a
+   * person who folded two identities is refused `own` on canvases their
+   * folded actor made — even on the very badge that performed the fold,
+   * because `asActor` is by then the survivor and `createdBy` is not. The
+   * claims check alone would have passed; the narrowing is what bites.
+   *
+   * Optional, and omitting it is the behaviour this had before: a home that
+   * has never seen a join has an empty map and an unchanged answer.
+   */
+  joined?: ActorJoins,
 ): Promise<Capability> {
   const held = capabilityIn(badge, project.id) ?? "edit";
   if (atLeast(held, "own")) return held;
-  const owner = ownerOf(project);
+  const owner = ownerOf(project, joined);
   const claims = await desk.claimsOf(badge.badgeId);
-  if ((asActor === null || asActor === owner) && claimsActor(claims, owner)) return "own";
+  const asPerson = asActor === null ? null : resolveActor(joined, asActor);
+  if ((asPerson === null || asPerson === owner) && claimsActor(claims, owner)) return "own";
   /**
    * **The space's creator owns every canvas in it** (roles phase 4): the
    * same floor, one scope wider. Asked last and only here, so a canvas in no
