@@ -239,6 +239,10 @@ function ItemViewInner({
   const isCanvas = isCanvasItem(item);
   const isBrowser = current.mimeType === BROWSER_MIME && !isCanvas;
   const source = sourceOf(item);
+  // A doorway: this item points somewhere else — a canvas card, a live site, a
+  // Google Doc — and wears a dashed border in its own colour so a wall of
+  // cards says which ones lead away (`.item.away`).
+  const away = source !== null || kind === "site";
   // A Google Doc on the canvas (research note, stage 4): the item's words
   // are the record, and LIVE is a mode this browser flips — the `/preview`
   // frame in place of the words, in the same item, never a second one.
@@ -656,7 +660,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       /* One id in the store rather than a flag per item: moving the pointer
          across a canvas re-renders the two items whose state changed, not
