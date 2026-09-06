@@ -25,6 +25,8 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
  * Adding one is a file beside `Galaxy.tsx` and a line in this switch.
  */
 const Galaxy = lazy(() => import("./themes/Galaxy.tsx").then((m) => ({ default: m.Galaxy })));
+const Ocean = lazy(() => import("./themes/Ocean.tsx").then((m) => ({ default: m.Ocean })));
+const Mountains = lazy(() => import("./themes/Mountains.tsx").then((m) => ({ default: m.Mountains })));
 
 export function CanvasThemeLayer() {
   const project = useCanvasStore((s) => s.project);
@@ -34,8 +36,12 @@ export function CanvasThemeLayer() {
   return (
     <Suspense fallback={null}>
       {theme === "galaxy" && <Galaxy anchor={anchor} />}
-      {/* farm, mountains and ocean are painted and not built yet: the canvas
-          keeps its dot grid until they are, rather than showing a blank. */}
+      {theme === "ocean" && <Ocean anchor={anchor} />}
+      {theme === "mountains" && <Mountains anchor={anchor} />}
+      {/* Farm is not in `THEMES` yet, so nothing can ask for it: grass and
+          hedgerows read as DRAWN in a way procedural texture does not, and a
+          picker step that appears to do nothing is worse than a shorter
+          picker. It arrives as a component and a line in that list. */}
     </Suspense>
   );
 }

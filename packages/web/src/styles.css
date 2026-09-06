@@ -29,6 +29,11 @@
   --dot: #c9ccc4;
   /* The grid dots under the cursor spotlight — a denser cobalt-tinted dot. */
   --dot-glow: #6f81df;
+  /* Open water and high ground (#195), the same on either theme and for the
+     same reason as space: these are pictures, not surfaces that follow the
+     app's theme. Dark enough that white item cards read as objects on top. */
+  --theme-ocean: #0b2733;
+  --theme-rock: #2b2825;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -192,6 +197,11 @@
   --ground: #0e0f12;
   --dot: #2b2f36;
   --dot-glow: #c3c9d6;
+  /* Open water and high ground (#195), the same on either theme and for the
+     same reason as space: these are pictures, not surfaces that follow the
+     app's theme. Dark enough that white item cards read as objects on top. */
+  --theme-ocean: #0b2733;
+  --theme-rock: #2b2825;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -802,6 +812,28 @@ img { height: auto; }
 }
 /* The stars fade with zoom; the ground does not. Painted as a second layer so
    the fade is one composited opacity rather than three gradients redrawn. */
+/* Ocean and mountains: the same two-layer shape as the starfield — a ground
+   that never fades, and a pattern layer that does. Their grounds are quiet,
+   mid-dark colours chosen so items keep their contrast on top; a background
+   somebody has to turn off to read the canvas is not a background. */
+.canvas-theme-ocean {
+  background-color: var(--theme-ocean);
+  --swell: none; --swell-pos: 0 0; --swell-fade: 0;
+}
+.canvas-theme-ocean::after {
+  content: ""; position: absolute; inset: 0;
+  background-image: var(--swell); background-position: var(--swell-pos);
+  opacity: var(--swell-fade, 1);
+}
+.canvas-theme-mountains {
+  background-color: var(--theme-rock);
+  --ridge: none; --ridge-pos: 0 0; --ridge-fade: 0;
+}
+.canvas-theme-mountains::after {
+  content: ""; position: absolute; inset: 0;
+  background-image: var(--ridge); background-position: var(--ridge-pos);
+  opacity: var(--ridge-fade, 1);
+}
 .canvas-theme-galaxy::after {
   content: ""; position: absolute; inset: 0;
   background-image: var(--stars); background-size: var(--stars-size); background-position: var(--stars-pos);

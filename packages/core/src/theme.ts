@@ -47,9 +47,18 @@ import type { MetaPatch } from "./ops.ts";
  */
 export const THEME_PROP = "theme";
 
-/** The seeded set. `none` is not a member — it is the absence of the
- *  property, so removing a theme leaves nothing behind. */
-export const THEMES = ["galaxy", "farm", "mountains", "ocean"] as const;
+/**
+ * The grounds this build can actually draw. `none` is not a member — it is the
+ * absence of the property, so removing a theme leaves nothing behind.
+ *
+ * **Farm is deliberately not here yet**, and that is the rule rather than an
+ * omission: a canvas wearing a name nothing can draw shows the dot grid with
+ * no way to explain itself, and cycling through the picker would hit a step
+ * that appears to do nothing. Grass and hedgerows read as DRAWN in a way
+ * procedural texture does not, so farm waits for artwork — and adding it is
+ * this list plus a component, with nothing else to change (#195, 6 Sep).
+ */
+export const THEMES = ["galaxy", "ocean", "mountains"] as const;
 
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
