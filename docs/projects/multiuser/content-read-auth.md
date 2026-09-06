@@ -77,7 +77,14 @@ had to give up (`private`) comes back on the origin where it is safe.
    enough, because cookies can be scoped to a parent domain. This is the
    `githubusercontent.com` pattern and it needs a name, a certificate and one
    host rule on the existing load balancer routing to the same Cloud Run
-   service. No new service.
+   service. No new service. *Decided 5 Sep 2026: **isocan.store**. The
+   infra half is done the same day — A record at Namecheap to the existing
+   load balancer IP, managed certificate `isocan-store-cert` attached to
+   `isocan-https-proxy` beside `isocan-cert-2`, and a host rule on
+   `isocan-urlmap` whose path matcher `content` is a 301 to isocan.io until
+   the daemon reads `ISOCAN_CONTENT_HOST`. When 4c lands, that matcher's
+   redirect becomes `defaultService: isocan-backend`; nothing else in the
+   front door changes.*
 2. **The TTL.** Five minutes is the number that makes "within one TTL" feel
    like "at once" to a person, at the price of one mint per frame render;
    an hour is calmer for caching and makes an expulsion take an hour to be

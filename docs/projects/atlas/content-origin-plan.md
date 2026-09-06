@@ -174,7 +174,10 @@ three** land, per invariant 5.
   picked isocan.io. Infra: one more managed certificate and a host rule on
   the existing URL map → the same Cloud Run service; `80-load-balancer.sh`
   grows, no new service exists. The daemon recognizes the role by
-  `ISOCAN_CONTENT_HOST`.
+  `ISOCAN_CONTENT_HOST`. *Domain chosen and its infra landed 5 Sep 2026:
+  isocan.store, parked on a redirect to isocan.io until the daemon reads
+  the variable — the record is in
+  [multiuser/content-read-auth.md](../multiuser/content-read-auth.md).*
 - **4b. Read auth — the collision, resolved rather than dodged.** The
   2026-08-23 closure says expulsion reaches the bytes; the content origin
   cannot carry the cookie that enforces it. The recommended resolution:
