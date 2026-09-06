@@ -4,7 +4,7 @@ import { canvasPath, deckFilename, deckHtml, deckPages, type DeckPageContent } f
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
-import { itemFrame } from "../lib/frame.ts";
+import { useFrameSrc } from "../lib/frame.ts";
 import { Markdown } from "../lib/markdown.tsx";
 
 /**
@@ -139,12 +139,17 @@ export function DeckPrint({ canvasId }: { canvasId: string }) {
 function DeckSlide({ canvasId, mimeType, blobHash, title }: { canvasId: string; mimeType: string; blobHash: string; title: string }) {
   // The same two decisions the canvas makes, and in the same order: ask the
   // content origin for a ticket if it wants one (stage 4b), then let
-  // `itemFrame` decide src and sandbox together (invariant 2). The hook runs
-  // unconditionally — a slide that is not a screen mints nothing, because the
-  // list it is handed is empty.
-  const origin = useContentOrigin(canvasId, mimeType === "text/html" ? [blobHash] : []);
-  if (mimeType === "text/html") {
-    const frame = itemFrame(origin, canvasId, blobHash);
+  // `itemFrame` decide src and sandbox together (invariant 2).
+  //
+  // BOTH hooks run unconditionally, above every branch — a slide that is not
+  // a screen mints nothing because the list it is handed is empty, and holds
+  // a frame nobody reads. Calling either inside the `text/html` branch would
+  // change the hook order for a deck whose slides are not all screens, which
+  // is most decks.
+  const isScreen = mimeType === "text/html";
+  const origin = useContentOrigin(canvasId, isScreen ? [blobHash] : []);
+  const frame = useFrameSrc(origin, canvasId, blobHash);
+  if (isScreen) {
     // Null is "the ticket has not landed yet"; the sheet keeps its place and
     // the slide arrives on the next render.
     if (!frame) return <div className="deck-page-other" />;

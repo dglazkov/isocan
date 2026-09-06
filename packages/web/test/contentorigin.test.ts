@@ -77,10 +77,14 @@ describe("invariant 2: the sandbox upgrade is keyed to the split, never to a fla
       new URL("../src/components/ItemView.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toContain("itemFrame(origin, canvasId, blobHash)");
+    // Through `useFrameSrc`, which is `itemFrame` plus "a loaded frame keeps
+    // the src it loaded with" — still one builder deciding the pair.
+    expect(source).toContain("useFrameSrc(origin, canvasId, blobHash)");
     // The old hand-paired frame must not come back: an html-view src with a
     // literal sandbox is a second place deciding the pair.
     expect(source).not.toMatch(/className="html-view"\s+src=\{url\}\s+sandbox="/);
+    // And nothing outside frame.ts may write the grant by hand.
+    expect(source).not.toContain('sandbox="allow-scripts allow-same-origin"');
   });
 });
 
@@ -181,13 +185,56 @@ describe("stage 4b: the tickets", () => {
     expect(itemFrame(contentOrigin(), "prj_1", "a")).not.toBe(null);
   });
 
-  it("a ticket inside the renewal margin is treated as absent", async () => {
+  it("a ticket inside the renewal margin is still SERVED — it is only re-minted", async () => {
+    // **The white-screen bug, as a test** (6 Sep 2026). `ticket()` used to
+    // answer null for anything inside the renewal margin, so four and a half
+    // minutes after a canvas loaded every mounted frame went blank and STAYED
+    // blank: the effect that would re-mint has stable deps, so nothing asked
+    // again until the person clicked an item and remounted it.
+    //
+    // A ticket the home would still accept must still be handed over. Being
+    // inside the margin means "worth replacing", never "unusable".
     adoptContentBase("https://isocan.store", true);
     home({ a: "/api/projects/prj_1/blobs/a?exp=1&sig=sa" }, Math.floor(Date.now() / 1000) + 5, 5);
     await ensureTickets("prj_1", ["a"]);
-    // Five seconds of life is less than the margin: handing a frame a URL
-    // that dies mid-load is a broken screen for no reason.
+    expect(itemFrame(contentOrigin(), "prj_1", "a")?.src).toBe(
+      "https://isocan.store/api/projects/prj_1/blobs/a?exp=1&sig=sa",
+    );
+  });
+
+  it("a ticket that has actually expired is gone, and nothing is rendered", async () => {
+    // The other side of the same line: past `exp` the home refuses, so a
+    // frame pointed at it would show its own error page. Null is honest.
+    adoptContentBase("https://isocan.store", true);
+    home({ a: "/api/projects/prj_1/blobs/a?exp=1&sig=sa" }, 1, -5);
+    await ensureTickets("prj_1", ["a"]);
     expect(itemFrame(contentOrigin(), "prj_1", "a")).toBe(null);
+  });
+
+  it("collapses one call per screen into one call per tick", async () => {
+    // **Every item on the canvas is its own component asking for its own
+    // hash** — `ItemView` renders an `HtmlItemView` per screen. So forty
+    // screens made forty round trips, which quietly falsified the decision
+    // doc's argument for a five-minute TTL ("one batched call per canvas
+    // visit"). Sibling effects run in one commit, so collecting on a
+    // microtask turns them back into one.
+    adoptContentBase("https://isocan.store", true);
+    const urls = Object.fromEntries(
+      ["a", "b", "c", "d"].map((h) => [h, `/api/projects/prj_1/blobs/${h}?exp=9999999999&sig=s${h}`]),
+    );
+    const calls = home(urls, 9999999999);
+    // Four components mounting in the same commit, each asking for its own.
+    await Promise.all([
+      ensureTickets("prj_1", ["a"]),
+      ensureTickets("prj_1", ["b"]),
+      ensureTickets("prj_1", ["c"]),
+      ensureTickets("prj_1", ["d"]),
+    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("hashes=a,b,c,d");
+    for (const h of ["a", "b", "c", "d"]) {
+      expect(itemFrame(contentOrigin(), "prj_1", h)?.src).toContain(`sig=s${h}`);
+    }
   });
 
   it("mints nothing on a home that serves item content unsigned", async () => {

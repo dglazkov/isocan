@@ -40,7 +40,7 @@ import {
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
-import { itemFrame } from "../lib/frame.ts";
+import { itemFrame, useFrameSrc } from "../lib/frame.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 import { DesignSystemView } from "./DesignSystemView.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -1445,7 +1445,10 @@ function HtmlItemView({
   warm: readonly string[];
 }) {
   const origin = useContentOrigin(canvasId, [blobHash, ...warm]);
-  const frame = itemFrame(origin, canvasId, blobHash);
+  // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
+  // loaded with. A renewed signature is for the same bytes, and swapping it
+  // in would reload the document for nothing — see `frame.ts`.
+  const frame = useFrameSrc(origin, canvasId, blobHash);
   if (!frame) return <div className="html-view" />;
   return (
     <HtmlView

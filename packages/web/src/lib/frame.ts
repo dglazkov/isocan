@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { blobUrl } from "./api.ts";
 
 /**
@@ -58,4 +59,40 @@ export function itemFrame(
   const path = origin.ticket ? origin.ticket(canvasId, blobHash) : blobUrl(canvasId, blobHash);
   if (path === null) return null;
   return { src: `${origin.base}${path}`, sandbox: "allow-scripts allow-same-origin" };
+}
+
+/**
+ * **A frame's src, frozen for as long as it stays mounted.**
+ *
+ * A signature gates the initial `GET` and nothing after it: the content
+ * origin's CSP allows no remote subresources but fonts, so a document that
+ * has loaded never asks that origin for anything again. Handing a mounted
+ * frame a fresher URL therefore buys nothing — and costs a reload, a flash,
+ * and every piece of in-page state the screen was holding.
+ *
+ * That is not hypothetical. The first attempt at fixing the four-minute white
+ * screen added a renewal timer, and browsers throttle timers in background
+ * tabs — so it fired when somebody came back to the tab, re-minted, and every
+ * frame on the canvas reloaded at once. A flash storm at the exact moment the
+ * person returned, caused by the fix for the blanking.
+ *
+ * So the rule is: the first src that works is the src, until the item's
+ * VERSION changes. A new `blobHash` is a different document and rebuilds; a
+ * new signature for the same bytes does not.
+ *
+ * Null still means "nothing to render yet" — the beat before the first mint
+ * lands. It cannot mean "expired", because an expired ticket never replaces a
+ * working one here.
+ */
+export function useFrameSrc(
+  origin: ContentOrigin | null,
+  canvasId: string,
+  blobHash: string,
+): { src: string; sandbox: string } | null {
+  const held = useRef<{ hash: string; frame: { src: string; sandbox: string } } | null>(null);
+  const built = itemFrame(origin, canvasId, blobHash);
+  // A different version: drop what we were holding and take the new one.
+  if (held.current && held.current.hash !== blobHash) held.current = null;
+  if (built && !held.current) held.current = { hash: blobHash, frame: built };
+  return held.current?.frame ?? built;
 }

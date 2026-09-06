@@ -99,7 +99,7 @@ had to give up (`private`) comes back on the origin where it is safe.
    `ISOCAN_CONTENT_TTL` overrides it, in seconds, for a home that wants the
    calmer edge cache.*
 
-## Built — 6 September 2026
+## Built and live — 6 September 2026
 
 Both numbers were the owners', both are answered, and the code is in. What
 landed, in the order a reader would want it:
@@ -142,6 +142,43 @@ The costs are asserted rather than asserted-about: `contentauth.test.ts` has a
 test for the half of expulsion that is immediate (an expelled badge cannot mint)
 **and** a test for the half that is not (what it already minted still works for
 its minutes), because a documented cost that nothing tests is a claim.
+
+### Deployed to isocan.io, and what the browser showed
+
+Live the same afternoon. `isocan.store` reaches the daemon, and the front door
+reads:
+
+| asked | answer |
+| --- | --- |
+| `GET https://isocan.store/` | **404** — not the app shell |
+| `GET https://isocan.store/api/serving` | **404** — invariant 4, on the shape that has no route table |
+| `GET https://isocan.io/api/serving` (badged) | `contentBase: https://isocan.store`, `contentSigned: true` |
+
+And the thing all of it exists for, read off a real canvas in devtools:
+
+```html
+<iframe class="html-view"
+        src="https://isocan.store/api/projects/prj_…/blobs/a9a722b…?exp=1788678125&sig=GKAz8HW…gicEA"
+        sandbox="allow-scripts allow-same-origin">
+  #document  <!-- DOCTYPE, html, head, body — the bytes arrived -->
+```
+
+Four things are visible in that one line, and they are the four the design
+turned on. The src left the app origin. The credential is the URL. The
+signature is 43 characters, which is HMAC-SHA256 in base64url and nothing
+else. And `allow-same-origin` is there *because* the src is cross-origin —
+invariant 2, not as an argument but as a rendered attribute.
+
+The `exp` decoded to three minutes and sixteen seconds in the future. That is
+the whole answer to the 23 August ledger's objection to "a token in a URL": a
+durable token is a credential where people paste, and this one is not durable.
+
+**Two bugs surfaced in the infra scripts on that first real run, neither
+findable by reading** — a `grep \|` that is GNU-only and so passed on Linux
+and failed silently on the operator's Mac, and a `--ssl-certificates` update
+that replaced the proxy's certificate list from a hardcoded pair, which would
+have dropped a third certificate had one been there. Both are recorded in the
+scripts themselves at the line that had them.
 
 ## What does not change
 

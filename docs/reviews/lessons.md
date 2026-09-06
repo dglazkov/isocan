@@ -49,7 +49,25 @@ recurred.
 
 | 29 | **A path predicate written by SHAPE swallows the static siblings that share its prefix.** A router prefers a static segment to a parameter, so a hand-written `^/api/…/blobs/[^/]+$` is not "the parameterized route" — it is that route *plus* every sibling under the same prefix, and the predicate and the router then disagree about which handler a matching path reaches. | Stage 4b of the content origin. The hosted content role is a Host header on the app's one port, so "this origin serves blob bytes and nothing else" is a predicate rather than a route table — and `/api/projects/:id/blobs/signed`, the route that MINTS read signatures, matched it. The unbadged content origin would have minted signatures for any canvas id, on the origin that exists precisely because it carries no badge. Never shipped: the invariant-4 test enumerated the refusals and one of them answered 200. | `packages/server/test/contentauth.test.ts` walks the refusals by name, and `isContentPath` now matches a sha256 segment — an allowlist by shape, so a *fifth* sibling added next month is refused by default rather than by somebody remembering. The general shape: **when a predicate stands in for a route table, test it against the table's other rows, not only against the row it was written for** — and prefer an allowlist over a denylist of the siblings you can currently see. |
 
+| 30 | **A repository whose CI only runs on the trunk makes the trunk the first place anything is tested.** Every check is real and every check is too late: the branch is green by assumption, and the first honest answer arrives after the merge, on the ref everything else depends on. The cost compounds, because a trunk that goes red stops whatever the trunk feeds. | 6 Sep 2026. Every workflow here triggered on `schedule`, `workflow_dispatch` or `push: branches: [main]`; none on `pull_request`. A research note merged with no `issue:` in its front matter turned `docstatus.test.ts` red on main — which held `green` back by **eleven commits**, stopped dev.isocan.io deploying, and surfaced only when somebody went to promote to prod and found `green` four days stale. Two hours of unpicking, for a one-line front-matter fix. The same morning a second change left `docs/ROADMAP.md` stale and would have reddened main again; it was caught by running the suite by hand first, which is luck wearing diligence's clothes. | `.github/workflows/pr.yml` — the same suite, the same emulator, the same anti-skip switch, on `pull_request`. Deliberately NOT a required check: advisory is the smaller promise and deleting the file is the whole rollback. The general shape: **ask when a check first CAN fail, not whether it exists.** A suite that only ever runs after the merge is a suite that reports history rather than preventing it. |
+
 ## The habits, from bugs with no test to give
+
+- **Work committed to local `main` instead of its branch is invisible, and
+  nothing warns.** Four sessions each created a branch, never checked it out,
+  committed to `main`, and never pushed — so four differently-named branches
+  all pointed at the same stale tip while the real work piled up behind them
+  on one laptop. It surfaced on 6 Sep 2026 only because an unrelated merge
+  produced "ahead by 9" where 6 was expected: two commits of real work
+  (teleport carrying blobs, canvas export/import), four days old, one
+  `git push origin main` from reaching the trunk unreviewed as a side effect
+  of somebody else's deploy. Had that laptop's disk failed first, there was no
+  second copy anywhere.
+
+  The habit, until there is a guard worth the noise: **`git log origin/main..main`
+  before you trust a branch count**, and push a branch the day you make it —
+  a pushed branch nobody reviews is still a branch that exists somewhere other
+  than one machine. The full story is #186.
 
 - **Verify against what is actually served.** The daemon serves the built
   `packages/web/dist`, not Vite. A fix "not working" was a fix never built —

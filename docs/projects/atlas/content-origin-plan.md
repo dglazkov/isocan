@@ -210,8 +210,21 @@ three** land, per invariant 5.
 Stable place at every point inside this stage: hosted base stays null until
 4c, so the hosted home is today's home throughout.
 
-*Stage 4 closed 6 Sep 2026, and with it the plan. Two things about the shape
-are worth carrying past it. **Invariant 4 needed a second mechanism**: the
+*Stage 4 closed 6 Sep 2026, and with it the plan — **live on isocan.io the
+same afternoon**, with isocan.store answering 404 to everything but a signed
+blob read, and a real canvas's frame carrying a signature three minutes from
+expiry. The record, with what the browser showed, is in
+[multiuser/content-read-auth.md](../multiuser/content-read-auth.md).*
+
+*On the shape of the walk itself: every stage boundary held. The hosted home
+rode today's behavior for eleven days across stages 1–3 and flipped in one
+variable, and the two bugs the first real deploy produced were both in the
+INFRA scripts rather than in the daemon — a `grep \|` that is GNU-only, and a
+certificate-list update that replaced rather than appended. Neither could have
+been found by reading, which is the argument for staging a change so the first
+real run is small enough to watch.*
+
+*Two things about the code's shape are worth carrying past the plan. **Invariant 4 needed a second mechanism**: the
 hosted origin is a Host header on the app's one `$PORT`, so "blobs and nothing
 else" cannot be a route table there — it is a refusal at the top of the door
 hook, plus one on the WebSocket upgrade, which no Fastify hook would have

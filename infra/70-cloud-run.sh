@@ -140,6 +140,33 @@ fi
 step "deploying ${SERVICE}"
 note "min=${MIN_INSTANCES} max=${MAX_INSTANCES} cpu=${CPU} memory=${MEMORY} concurrency=${CONCURRENCY} timeout=${REQUEST_TIMEOUT}s"
 
+# **This script's default is `:latest`, and on a home whose images are tagged
+# by COMMIT it can quietly roll production backwards.**
+#
+# The Cloud Build trigger deploys `--image=${_IMAGE}:${_TAG}` — the short sha —
+# so a home driven by the trigger runs a sha-tagged image and its `:latest` is
+# whatever was pushed last, which is not necessarily what is serving. Re-running
+# this script to change one ENVIRONMENT VARIABLE would then also swap the code,
+# with nothing in the output saying so. Found on 6 Sep 2026 while adding
+# ISOCAN_CONTENT_HOST to prod: the fix that day was to pass
+# ISOCAN_IMAGE_TAG=<sha> by hand, which works only if you already know about
+# this and think of it at the right moment. Neither is a control.
+#
+# So: say what is running, say what is about to run, and when they differ make
+# somebody agree to it out loud. A deploy that changes the code is completely
+# legitimate — that is what this script is for — but it should never be a
+# SIDE EFFECT of a config change.
+RUNNING_IMAGE="$(gcloud run services describe "${SERVICE}" \
+  --project="${PROJECT_ID}" --region="${REGION}" \
+  --format='value(spec.template.spec.containers[0].image)' 2>/dev/null || true)"
+if [ -n "${RUNNING_IMAGE}" ] && [ "${RUNNING_IMAGE}" != "${IMAGE}" ]; then
+  note "running now: ${RUNNING_IMAGE}"
+  note "about to deploy: ${IMAGE}"
+  confirm "this CHANGES THE CODE as well as the configuration. Deploy ${TAG} over ${RUNNING_IMAGE##*:}?"
+elif [ -n "${RUNNING_IMAGE}" ]; then
+  note "image unchanged (${RUNNING_IMAGE##*:}) — this deploy is configuration only"
+fi
+
 # `gcloud run deploy` is idempotent by construction: it creates the service if
 # absent and adds a revision if present. Every flag is re-stated on every run,
 # which is what makes this file — not the console — the description of the

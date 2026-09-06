@@ -108,16 +108,38 @@ fi
 # names. `--ssl-certificates` REPLACES the list, so the app's certificate has to
 # be named again here or it would be dropped and every request to the app
 # domain would fail its handshake.
+#
+# **Two bugs lived in this block until 6 Sep 2026, both found by running it.**
+#
+# 1. The "is it already attached?" test was `grep "…\$\|…,"`. `\|` is a GNU
+#    extension: BSD grep, which is what macOS ships, reads it as a LITERAL
+#    pipe — and then the `$` is no longer at the end of the pattern, so it
+#    stops being an anchor too. The test passed on Linux and silently failed
+#    on the machine the operator was actually using, so a re-run re-wrote
+#    every time and reported `+` where it should have said `=`. The separator
+#    was wrong as well: gcloud joins this list with `;`, not `,`.
+# 2. Re-writing was not harmless. `--ssl-certificates` REPLACES the list, and
+#    the replacement was hardcoded to `${CERT_NAME},${CONTENT_CERT_NAME}` —
+#    so on a proxy that had picked up a third certificate, a re-run of this
+#    script would silently drop it and break that domain's handshake.
+#
+# Both are fixed by not parsing with a regex: split the list on either
+# separator, take the basenames, and compare exactly — then build the new list
+# from what is ACTUALLY there plus ours, so nothing can be dropped by a script
+# that only meant to add.
 step "certificate attached to ${HTTPS_PROXY_NAME}"
 ATTACHED="$(gcloud compute target-https-proxies describe "${HTTPS_PROXY_NAME}" \
   --global --project="${PROJECT_ID}" --format='value(sslCertificates)')"
-if printf '%s' "${ATTACHED}" | grep -q "/${CONTENT_CERT_NAME}\$\|/${CONTENT_CERT_NAME},"; then
+CERT_NAMES="$(printf '%s' "${ATTACHED}" | tr ';,' '\n\n' | sed 's#.*/##' | grep -v '^$' || true)"
+if printf '%s\n' "${CERT_NAMES}" | grep -qx "${CONTENT_CERT_NAME}"; then
   have "${CONTENT_CERT_NAME} on ${HTTPS_PROXY_NAME}"
 else
+  KEEP="$(printf '%s\n' "${CERT_NAMES}" | grep -v '^$' | paste -sd, - 2>/dev/null || true)"
+  [ -n "${KEEP}" ] || KEEP="${CERT_NAME}"
   gcloud compute target-https-proxies update "${HTTPS_PROXY_NAME}" \
     --project="${PROJECT_ID}" --global \
-    --ssl-certificates="${CERT_NAME},${CONTENT_CERT_NAME}" >/dev/null
-  made "${CERT_NAME} + ${CONTENT_CERT_NAME} on ${HTTPS_PROXY_NAME}"
+    --ssl-certificates="${KEEP},${CONTENT_CERT_NAME}" >/dev/null
+  made "${KEEP} + ${CONTENT_CERT_NAME} on ${HTTPS_PROXY_NAME}"
 fi
 
 # ------------------------------------------------------- 2. the cache key
