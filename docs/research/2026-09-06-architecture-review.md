@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-06
 issue: 185
 see: ui-refresh, evals
-note: steps 0, 2, 3, 4, 5, 6, 7 and 8 done and step 1 partly (768,993 → 720,659, still over the 640,000 bound — the rest is shell code, not chunk boundaries); an outside architecture review checked against the tree — most of it holds, four items are wrong in ways that change the fix, and the finding it missed is that the nightly caught the bundle breach three nights running and every report is sitting in an unmerged PR
+note: steps 0, 2-8 done, step 9 decided against (no big-bang split), and step 1 overshot — the entry chunk went 768,993 → 689,543 by loading rare surfaces when they are asked for; step 1 partly (768,993 → 720,659, still over the 640,000 bound — the rest is shell code, not chunk boundaries); an outside architecture review checked against the tree — most of it holds, four items are wrong in ways that change the fix, and the finding it missed is that the nightly caught the bundle breach three nights running and every report is sitting in an unmerged PR
 ---
 
 # The architecture review, checked against the tree
@@ -327,6 +327,24 @@ refactor of eleven thousand lines makes every one of those lines answer "moved
 in the great split" to `git blame`. Split **opportunistically** instead — a
 new command lands in its own module, and a family is extracted when somebody
 is already editing it for another reason. The same for `http.ts`.
+
+**✅ Decided 6 Sep: no split.** Dion, asked directly: *"let's not refactor for
+the sake of it now."* So this is settled rather than deferred, and the reason
+is worth keeping because the numbers will grow and somebody will propose it
+again.
+
+The cost of the monolith is real and is paid by readers. The cost of the split
+is paid once, by everybody, forever: eleven thousand lines whose `git blame`
+answers "the great split" instead of naming the commit that made the decision.
+In a repository where the commit message carries the REASONING — where the
+answer to "why is this shaped like this" is routinely in the log and nowhere
+else — that trade is worse than it looks on a file-size chart.
+
+What would change the answer: a split that follows a real seam somebody found
+while working, not one drawn to make a number smaller. `packages/cli/src/
+main.ts` gaining `commands/sprint.ts` because sprint was being edited anyway
+is the shape this should take, one family at a time, each with its own reason
+in its own commit.
 
 ## Not verified
 
