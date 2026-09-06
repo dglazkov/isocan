@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { isArea, parseUriList } from "@isocan/core";
+import { isArea, parseUriList, themeOf } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
@@ -18,7 +18,18 @@ import { isTyping } from "../lib/keys.ts";
 import { TextComposer } from "./TextComposer.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
-import { canvasMenu, itemMenu } from "../lib/menuentries.tsx";
+/**
+ * **The menus arrive when a menu is asked for** (#195's budget, not its
+ * feature). `menuentries.tsx` is twenty-four kilobytes of every row the
+ * canvas can offer — the item menu, the canvas menu, the chrome drawer — and
+ * a right-click is a deliberate gesture with a frame to spare. It was in the
+ * bytes of every first visit, including the ones that never open a menu.
+ *
+ * The screen point and the world point are read BEFORE the await: the event
+ * is gone by the time the module lands, and reading `e.clientX` off a pooled
+ * event later is the kind of bug that only shows up under a slow network.
+ */
+const menus = () => import("../lib/menuentries.tsx");
 import { ItemView } from "./ItemView.tsx";
 /**
  * **The fan is rare, so it is not in the bytes a first visit downloads.**
@@ -36,6 +47,14 @@ import { CommentLayer } from "./CommentLayer.tsx";
 import { ModuleUnderlays } from "./ModuleUnderlays.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
+/**
+ * **A canvas with no ground downloads no ground** (#195) — which today is
+ * every canvas. The layer AND the theme it picks are both behind this, so the
+ * entry chunk carries only the one comparison that decides whether to ask.
+ */
+const CanvasThemeLayer = lazy(() =>
+  import("./CanvasThemeLayer.tsx").then((m) => ({ default: m.CanvasThemeLayer })),
+);
 import { InkLayer, SketchBar } from "./InkLayer.tsx";
 import { EdgeRadar } from "./EdgeRadar.tsx";
 
@@ -73,6 +92,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   /* Only to SAY it is the past — the write door in the store is what
      actually refuses changes. */
   const inPast = useCanvasStore((s) => s.past !== null);
+  /* The one comparison the entry chunk pays for: whether to ask for a ground
+     at all. Everything that draws one is behind it. */
+  const themed = useCanvasStore((s) => (s.project ? themeOf(s.project) !== null : false));
   /* One timer for the whole canvas — see `useSettling`. The set is usually
      empty, and when it is, nothing is scheduled at all. */
   const settling = useSettling();
@@ -396,15 +418,17 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         .map((id) => canvas.items[id])
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
       if (items.length === 0) return;
-      openContextMenu(
-        { x: e.clientX, y: e.clientY },
-        itemMenu(items, { canvasId, actor, world: screenToWorld(ui.viewport, e.clientX, e.clientY), navigate }),
+      const at = { x: e.clientX, y: e.clientY };
+      const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+      void menus().then(({ itemMenu }) =>
+        openContextMenu(at, itemMenu(items, { canvasId, actor, world, navigate })),
       );
       return;
     }
-    openContextMenu(
-      { x: e.clientX, y: e.clientY },
-      canvasMenu({ canvasId, actor, world: screenToWorld(ui.viewport, e.clientX, e.clientY), navigate }),
+    const at = { x: e.clientX, y: e.clientY };
+    const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    void menus().then(({ canvasMenu }) =>
+      openContextMenu(at, canvasMenu({ canvasId, actor, world, navigate })),
     );
   }
 
@@ -755,7 +779,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   return (
     <div
       ref={ref}
-      className={`canvas-viewport${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
+      className={`canvas-viewport${themed ? " themed" : ""}${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
         activeTool === "select" && !commentMode ? " own-cursor-on" : ""
       }`}
       style={{
@@ -775,6 +799,13 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       }}
       onDrop={onDrop}
     >
+      {/* Under everything, including the glow: the ground is the thing the
+          canvas stands on, not something drawn over it (#195). */}
+      {themed && (
+        <Suspense fallback={null}>
+          <CanvasThemeLayer />
+        </Suspense>
+      )}
       <CursorGlow />
       <div
         className={`world${railPanning ? " rail-panning" : ""}${inPast ? " in-past" : ""}`}

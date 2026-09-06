@@ -52,13 +52,23 @@ describe("browsing a hundred", () => {
   it("sorts and filters with the shared functions", () => {
     /* A home screen and `isocan canvas list` disagreeing about which canvas is
        most recent is the drift core exists to prevent. */
-    expect(bare).toMatch(/sortCanvases\(filterCanvases\(/);
+    expect(bare).toMatch(/sortCanvases\(/);
+    expect(bare).toMatch(/filterCanvases\(/);
   });
 
-  it("filters before it sorts", () => {
+  it("filters before it sorts, with the shelf narrowed before either", () => {
     /* Ordering what is about to be discarded is work nobody sees, and at a
-       hundred canvases it is real. */
-    expect(bare).toMatch(/sortCanvases\(filterCanvases\([^)]*\)/);
+       hundred canvases it is real. The archive scope (#194) narrows first for
+       the same reason, and because the count on screen must describe the set
+       on screen. Asserted as nesting rather than adjacency: `sortCanvases(`
+       must OPEN before `filterCanvases(` does, which is what "sorts the
+       filtered list" means however many scopes sit between them. */
+    const sortAt = bare.indexOf("sortCanvases(");
+    const filterAt = bare.indexOf("filterCanvases(");
+    const scopeAt = bare.indexOf("inScope(");
+    expect(sortAt).toBeGreaterThan(-1);
+    expect(sortAt).toBeLessThan(filterAt);
+    expect(filterAt).toBeLessThan(scopeAt);
   });
 
   it("shows the controls only when there are enough to need them", () => {

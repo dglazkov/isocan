@@ -112,6 +112,17 @@ import {
   drawingViewBox,
   SHORTCUTS,
   formatMoves,
+  inScope,
+  isTheme,
+  noThemePatch,
+  themeOf,
+  themePatch,
+  THEMES,
+  isShelved,
+  shelvePatch,
+  shelvedAt,
+  unshelvePatch,
+  type ShelfScope,
   formatScope,
   shortcutsAsText,
   elapsedLabel,
@@ -4626,15 +4637,25 @@ canvas
   .command("list")
   .description("List canvases — in a bound directory, that directory's canvas (--all for every one)")
   .option("--all", "every canvas in the home, not just this directory's")
+  .option("--archived", "the ones put away, instead of the ones in the list")
+  .option("--with-archived", "both, with a column saying which")
   .option("--sort <order>", "recent (default), name, or created")
   .option("--filter <text>", "only canvases whose title or description matches every word")
   .action(
-    run(async (opts: { all?: boolean; sort?: string; filter?: string }, cmd: Command) => {
+    run(async (opts: { all?: boolean; sort?: string; filter?: string; archived?: boolean; withArchived?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const all = await ctx.client.listCanvases();
+      const allEverything = await ctx.client.listCanvases();
       // A bound directory shows its own canvas: an agent that landed here
       // should not go wandering through every other canvas in the home.
       // Ergonomics, not a wall — same user, same home, --all opens it.
+      /**
+       * **The shelf is out of the way unless it is asked for** (#194), which
+       * is the whole feature: a list that only grows stops meaning "my
+       * canvases". Filtered before the directory narrowing so the counts
+       * below talk about the same set the person is looking at.
+       */
+      const scope: ShelfScope = opts.archived ? "shelved" : opts.withArchived ? "all" : "live";
+      const all = allEverything.filter((p) => inScope(p, scope));
       const canvases =
         !opts.all && ctx.binding ? all.filter((p) => p.id === ctx.binding!.canvasId) : all;
       if (canvases.length < all.length) {
@@ -4752,6 +4773,66 @@ canvas
         console.log(`updated canvas ${p.id}`);
       },
     ),
+  );
+
+canvas
+  .command("background [theme]")
+  .description(`The ground this canvas stands on — ${THEMES.join(", ")}, or \`none\` to remove it`)
+  .action(
+    run(async (theme: string | undefined, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      // No argument is a question, not a change: `isocan canvas background`
+      // says what it is wearing, which is what a person types first.
+      if (theme === undefined) {
+        const now = themeOf(p);
+        return console.log(now ?? `none — ${THEMES.join(", ")} are the grounds it can wear`);
+      }
+      if (theme !== "none" && !isTheme(theme)) {
+        throw new Error(`not a background: ${theme} — ${THEMES.join(", ")}, or none`);
+      }
+      await sendOp(ctx, p.id, {
+        type: "project.update",
+        patch: theme === "none" ? noThemePatch() : themePatch(theme),
+      });
+      console.log(theme === "none" ? `${p.id} is back to the dot grid` : `${p.id} wears ${theme}`);
+    }),
+  );
+
+canvas
+  .command("archive [ref]")
+  .description("Put a canvas away — it leaves the list and stays exactly where it was")
+  .option("--undo", "bring it back to the list")
+  .action(
+    run(async (ref: string | undefined, opts: { undo?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (ref !== undefined) ctx.canvasRef = ref;
+      const p = await resolveCanvas(ctx);
+      /**
+       * **Visibility, and nothing else** (#194). An archived canvas still
+       * takes ops, still answers at its address, still serves a `view` link
+       * as the deck, and agents parked on it never notice. Anything more
+       * would make this a second kind of delete, and a second kind of delete
+       * needs a second kind of undo.
+       *
+       * The instant comes from here rather than from a clock inside the
+       * patch, so a test can choose it and both surfaces can agree on it.
+       */
+      const already = isShelved(p);
+      if (opts.undo && !already) throw new Error(`"${p.title}" is not archived`);
+      if (!opts.undo && already) {
+        return console.log(`already archived ${p.id} (${shelvedAt(p)?.slice(0, 10)})`);
+      }
+      await sendOp(ctx, p.id, {
+        type: "project.update",
+        patch: opts.undo ? unshelvePatch() : shelvePatch(new Date().toISOString()),
+      });
+      console.log(
+        opts.undo
+          ? `${p.id} is back in the list`
+          : `archived ${p.id} — \`isocan canvas list --archived\` finds it, \`--undo\` brings it back`,
+      );
+    }),
   );
 
 canvas

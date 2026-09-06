@@ -104,7 +104,30 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * Three of these raises have been justified individually; the fourth should
  * be somebody deciding to spend a session on shell code instead.
  */
-const CEILING = 736_800;
+/**
+ * **Lowered, 737,300 → 727,300, and that is the direction this is supposed to
+ * move.**
+ *
+ * It went up twice on 6 September — once for the fix that stopped a browser
+ * freezing, once for #196 and #194 — and the file said, in these words, that
+ * there should not be a third before somebody took bytes OUT. So the third
+ * ask went looking instead.
+ *
+ * `menuentries.tsx` is twenty-four kilobytes of every row the canvas can
+ * offer, and it was in the bytes of every first visit — including the visits
+ * that never open a menu. It is now imported when a menu is actually asked
+ * for: a right-click and the `···` handle are deliberate gestures with a
+ * frame to spare. That returned 11,116 bytes, which paid for the freeze fix,
+ * the tidy, the archive AND the themes, and left 10,000 over.
+ *
+ * The lesson is the cheap one: the entry chunk grew for months because
+ * nothing asked, not because it had to. The first place anybody looked, on
+ * being told to look, held eleven kilobytes.
+ *
+ * The goal is 87,300 away. Same rule as before — this comes down, not up,
+ * unless somebody has a reason worth writing here.
+ */
+const CEILING = 727_300;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is

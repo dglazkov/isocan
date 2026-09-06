@@ -7,6 +7,10 @@ import {
   CANVAS_SORT_LABEL,
   canvasPath,
   filterCanvases,
+  inScope,
+  isShelved,
+  shelvePatch,
+  unshelvePatch,
   isCanvasSort,
   newCanvasId,
   opWords,
@@ -216,12 +220,31 @@ export function CanvasListPage({
     }
   };
 
+  /**
+   * **Archived canvases are not in the list** (#194), which is the feature:
+   * a list that only grows stops meaning "my canvases".
+   *
+   * Scoped before filter and sort, so the count and the order are about the
+   * set actually on screen. `Show archived` widens it to everything rather
+   * than swapping to the shelf alone — somebody looking for one they put away
+   * is usually not sure whether they did, and a view that hides the live ones
+   * answers a question nobody asked.
+   */
+  const [showArchived, setShowArchived] = useState(false);
   /* Filter first, then sort: sorting what will be thrown away is work nobody
      sees, and at a hundred canvases the difference is real. */
   const shown = useMemo(
-    () => sortCanvases(filterCanvases(canvases ?? [], query), sort),
-    [canvases, query, sort],
+    () =>
+      sortCanvases(
+        filterCanvases(
+          (canvases ?? []).filter((one) => inScope(one, showArchived ? "all" : "live")),
+          query,
+        ),
+        sort,
+      ),
+    [canvases, query, sort, showArchived],
   );
+
   /** What just happened, when what just happened was not a new card. */
   const [createNote, setCreateNote] = useState<{ kind: "error" | "elsewhere"; text: string } | null>(
     null,
@@ -443,6 +466,15 @@ export function CanvasListPage({
     refresh();
   }
 
+  /**
+   * Out of the list, or back into it (#194). One `project.update` carrying a
+   * property, the same op and the same patch `isocan canvas archive` sends —
+   * so the two surfaces cannot disagree about what archiving IS.
+   */
+  async function toggleArchive(canvas: Canvas) {
+    await edit(canvas, isShelved(canvas) ? unshelvePatch() : shelvePatch(new Date().toISOString()));
+  }
+
   async function remove(canvas: Canvas) {
     await sendOp(canvas.id, actor, { type: "project.delete" });
     setConfirmingDelete(null);
@@ -550,6 +582,25 @@ export function CanvasListPage({
                         }}
                       >
                         Rename
+                      </button>
+                      {/**
+                        * **Archive** (#194): out of the list, and nothing
+                        * else. The canvas keeps its address, its history and
+                        * its agents; a `view` link to it still opens the
+                        * deck. That is why this sits beside Rename and not
+                        * beside Delete — it is a change to what you see, not
+                        * to what exists.
+                        */}
+                      <button
+                        className="btn card-act"
+                        title={
+                          isShelved(canvas)
+                            ? "Put it back in the list"
+                            : "Out of the list — it keeps its address, history and agents"
+                        }
+                        onClick={() => void toggleArchive(canvas)}
+                      >
+                        {isShelved(canvas) ? "Unarchive" : "Archive"}
                       </button>
                       {/* **Move to space…** (roles phase 4): a picker of the
                           spaces this person made, and **No space** to take
@@ -741,6 +792,23 @@ export function CanvasListPage({
                 {CANVAS_SORT_LABEL[option]}
               </button>
             ))}
+            {/**
+              * **Show archived** (#194). Widens the list to everything rather
+              * than swapping to the shelf alone: somebody hunting for one they
+              * put away is usually not sure they did, and a view that hides
+              * the live ones answers a question nobody asked. Offered only
+              * when there is a shelf, so the control appears the day it means
+              * something.
+              */}
+            {(canvases ?? []).some(isShelved) && (
+              <button
+                className={`btn quiet${showArchived ? " on" : ""}`}
+                aria-pressed={showArchived}
+                onClick={() => setShowArchived((was) => !was)}
+              >
+                Archived
+              </button>
+            )}
           </div>
         </div>
       )}

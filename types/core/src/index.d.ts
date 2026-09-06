@@ -73,6 +73,8 @@ export * from "./jsoncanvas.js";
 export * from "./contextmark.js";
 export * from "./slides.js";
 export * from "./deckexport.js";
+export * from "./shelf.js";
+export * from "./theme.js";
 export * from "./sprint.js";
 export * from "./timeline.js";
 export * from "./opwords.js";

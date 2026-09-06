@@ -153,6 +153,8 @@ interface UiStore {
   /** The minimap, which folds away into its corner. Remembered per browser:
    * someone who put it away wants it away tomorrow too. */
   minimapOpen: boolean;
+  /** Whether the dot grid lights up under the pointer. */
+  cursorGlow: boolean;
   /** Full screen shows the slide's speaker note to the presenter (N). A
    *  mode you flip, remembered per browser like the minimap. */
   presenterNotes: boolean;
@@ -277,6 +279,17 @@ interface UiStore {
   setShareOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
   setMinimapOpen: (open: boolean) => void;
+  /**
+   * **The cursor glow, off if you want it off.**
+   *
+   * Per BROWSER rather than per canvas, and that is the decision. The
+   * glow is not a property of anybody's canvas — it is a thing this
+   * machine draws under this person's pointer, and a collaborator who
+   * finds it distracting should be able to stop it without changing what
+   * everybody else sees. `prefers-reduced-motion` already hides it; this
+   * is for people who simply do not want it.
+   */
+  setCursorGlow: (on: boolean) => void;
   setFilesPanelOpen: (open: boolean) => void;
   setAgentsPanelOpen: (open: boolean) => void;
   setContextPanelOpen: (open: boolean) => void;
@@ -399,6 +412,8 @@ function readWbAgentsWidth(): number {
 }
 
 const HIDDEN_CHROME_KEY = "isocan.hiddenChrome";
+/** The cursor glow, which some people find delightful and some find busy. */
+const GLOW_KEY = "isocan.cursorGlow";
 const LIVE_DOCS_KEY = "isocan.liveDocs";
 
 /** A list of ids in local storage; anything unreadable is the empty list,
@@ -565,6 +580,7 @@ export const useUiStore = create<UiStore>((set) => {
     shareOpen: false,
     mainPanelOpen: false,
     minimapOpen: readFlag(MINIMAP_KEY, true),
+    cursorGlow: readFlag(GLOW_KEY, true),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     panelWidth: readPanelWidth(),
     panelResizing: false,
@@ -731,6 +747,10 @@ export const useUiStore = create<UiStore>((set) => {
     setPresenterNotes: (presenterNotes) => {
       writeFlag(PRESENTER_NOTES_KEY, presenterNotes);
       set({ presenterNotes });
+    },
+    setCursorGlow: (cursorGlow) => {
+      writeFlag(GLOW_KEY, cursorGlow);
+      set({ cursorGlow });
     },
     setMinimapOpen: (minimapOpen) => {
       writeFlag(MINIMAP_KEY, minimapOpen);

@@ -14,6 +14,7 @@ const FADE_MS = 750;
  * move (we write straight to the node), and CSS hides it for reduced-motion.
  */
 export function CursorGlow() {
+  const on = useUiStore((s) => s.cursorGlow);
   const scale = useUiStore((s) => s.viewport.scale);
   const tx = useUiStore((s) => s.viewport.tx);
   const ty = useUiStore((s) => s.viewport.ty);
@@ -21,7 +22,7 @@ export function CursorGlow() {
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !on) return;
     let opacity = 0;
     let raf = 0;
     let last = 0;
@@ -55,8 +56,12 @@ export function CursorGlow() {
       window.removeEventListener("pointermove", onMove);
       cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [on]);
 
+  // Off means nothing drawn and no listener left running — the effect above
+  // returns early on the same flag, so turning it off stops the work rather
+  // than hiding its result.
+  if (!on) return null;
   // The brighter grid must sit exactly over the base one — same size and origin.
   return (
     <div

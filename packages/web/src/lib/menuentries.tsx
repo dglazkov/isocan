@@ -1,4 +1,4 @@
-import type { Actor, Item } from "@isocan/core";
+import type { Actor, CanvasTheme, Item } from "@isocan/core";
 import { contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
@@ -480,6 +480,12 @@ export function chromeMenu(ctx: {
   /** Days of release notes this reader has not seen — 0 hides the count. */
   unreadNews: number;
   minimapOpen: boolean;
+  cursorGlow: boolean;
+  /** What ground this canvas is wearing, or null for the dot grid. */
+  theme: CanvasTheme | null;
+  /** Next ground along, wrapping through none. The caller owns the write,
+   *  because this module builds entries and sends no ops. */
+  cycleTheme: () => void | Promise<void>;
   /** Whether this tab may write (roles phase 1). The trash is a write's
    *  aftermath and a way to undo one, so a reader is not offered it. Absent
    *  means yes, so a caller from before the rung sees the drawer it had. */
@@ -554,6 +560,35 @@ export function chromeMenu(ctx: {
       label: ctx.minimapOpen ? "Hide minimap" : "Show minimap",
       icon: <MinimapGlyph size={14} />,
       run: () => ui().setMinimapOpen(!ctx.minimapOpen),
+    },
+    {
+      /**
+       * **The canvas's ground** (#195): flip through the seeded themes and
+       * back to none. One row rather than a picker, because the set is small
+       * and the answer is visible the moment it changes — a menu that opens a
+       * dialog to choose between four things somebody can just SEE is a
+       * dialog for the developer's benefit.
+       *
+       * A canvas fact, not a browser one: everybody on it sees the same
+       * ground. That is the opposite of the glow below, and the two sit
+       * together deliberately so the difference is legible.
+       */
+      label: ctx.theme === null ? "Background…" : `Background: ${ctx.theme}`,
+      writes: true,
+      run: () => void ctx.cycleTheme(),
+    },
+    {
+      /**
+       * **The cursor glow, off if you want it off** (#195).
+       *
+       * Beside the minimap because it is the same kind of choice: what this
+       * browser draws, for this person, on every canvas. It is not a property
+       * of anybody's canvas, so turning it off must not change what a
+       * collaborator sees. `prefers-reduced-motion` already hides it; this is
+       * for people who simply find it busy.
+       */
+      label: ctx.cursorGlow ? "Turn off cursor glow" : "Turn on cursor glow",
+      run: () => ui().setCursorGlow(!ctx.cursorGlow),
     },
     { separator: "" },
     {

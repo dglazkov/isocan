@@ -29,6 +29,11 @@
   --dot: #c9ccc4;
   /* The grid dots under the cursor spotlight — a denser cobalt-tinted dot. */
   --dot-glow: #6f81df;
+  /* Deep space (#195). The same value on either ground, deliberately: a
+     starfield is a PICTURE, not a surface that follows the app's theme, and a
+     white sky is a different picture rather than a light-mode one. Declared in
+     both blocks so no colour lives only behind a media query. */
+  --theme-space: #05060c;
   --card: #ffffff;
   --line: #e2e3dd;
   --line-soft: #eff0ea;
@@ -187,6 +192,11 @@
   --ground: #0e0f12;
   --dot: #2b2f36;
   --dot-glow: #c3c9d6;
+  /* Deep space (#195). The same value on either ground, deliberately: a
+     starfield is a PICTURE, not a surface that follows the app's theme, and a
+     white sky is a different picture rather than a light-mode one. Declared in
+     both blocks so no colour lives only behind a media query. */
+  --theme-space: #05060c;
   --card: #1b1e23;
   --line: #2c313a;
   --line-soft: #23272e;
@@ -765,6 +775,38 @@ img { height: auto; }
   mask-image: radial-gradient(circle 132px at var(--gx) var(--gy), #000 0%, #000 16%, transparent 70%);
 }
 @media (prefers-reduced-motion: reduce) { .cursor-glow { display: none; } }
+
+/* ---------- the ground a canvas stands on (#195) ----------
+   Under the world and under the glow, never catching a pointer: it is a
+   picture ABOUT the canvas, and a band that swallowed clicks would make the
+   canvas unreachable where nobody could see why. The stars themselves are
+   painted by the theme component, in world space, so they pan and zoom with
+   the items rather than sliding under them. */
+.canvas-theme { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+/* A ground REPLACES the dot grid rather than sitting under it: stars and dots
+   together is two grounds arguing, and the grid is what the theme was chosen
+   instead of. The dots come back the moment the theme is removed, because
+   nothing about them was thrown away. */
+.canvas-viewport.themed { background-image: none; }
+/* Space is dark whatever the app's theme is: a starfield on a white ground is
+   not a compromise, it is a different picture. The items keep their own
+   surfaces, which is what stops this costing legibility. */
+/* The star layer's four values are written by `Galaxy.tsx` on every pan and
+   zoom. Declared here too, and that is not belt-and-braces: `var()` with no
+   definition drops the whole declaration silently, so a component that failed
+   to set them would give a rule nobody could see was gone. The defaults are
+   the safe picture — deep space with no stars — rather than an empty ground. */
+.canvas-theme-galaxy {
+  background-color: var(--theme-space);
+  --stars: none; --stars-size: auto; --stars-pos: 0 0; --star-fade: 0;
+}
+/* The stars fade with zoom; the ground does not. Painted as a second layer so
+   the fade is one composited opacity rather than three gradients redrawn. */
+.canvas-theme-galaxy::after {
+  content: ""; position: absolute; inset: 0;
+  background-image: var(--stars); background-size: var(--stars-size); background-position: var(--stars-pos);
+  opacity: var(--star-fade, 1);
+}
 
 /* ---------- toolbar ---------- */
 /* **The bar is a layout, not a surface.**

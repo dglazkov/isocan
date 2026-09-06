@@ -37,6 +37,9 @@ const menu = (over = {}) =>
     historyOpen: false,
     unreadNews: 0,
     minimapOpen: true,
+    cursorGlow: true,
+    theme: null,
+    cycleTheme: () => {},
     toWorkbench: () => {},
     ...over,
   });

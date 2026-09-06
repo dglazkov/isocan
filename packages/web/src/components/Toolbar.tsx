@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { workbenchPath, type Actor } from "@isocan/core";
+import { noThemePatch, nextTheme, themeOf, themePatch, workbenchPath, type Actor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useUnreadNews } from "./WhatsNew.tsx";
-import { chromeMenu } from "../lib/menuentries.tsx";
 import { showMenu } from "../lib/chromemenu.tsx";
 import { HomeGlyph } from "./Glyphs.tsx";
 import { Presence } from "./Presence.tsx";
@@ -37,6 +36,7 @@ export function Toolbar({
   const contextOpen = useUiStore((s) => s.contextPanelOpen);
   const personasOpen = useUiStore((s) => s.personasPanelOpen);
   const minimapOpen = useUiStore((s) => s.minimapOpen);
+  const cursorGlow = useUiStore((s) => s.cursorGlow);
   const historyOpen = useUiStore((s) => s.historyOpen);
   const unreadNews = useUnreadNews();
   const identityOpen = useUiStore((s) => s.identityOpen);
@@ -84,8 +84,11 @@ export function Toolbar({
             title="Files, trash, the map and the shortcut list"
             aria-label="More"
             aria-haspopup="menu"
-            onClick={(e) => {
+            onClick={async (e) => {
               const r = e.currentTarget.getBoundingClientRect();
+              // Read the button's box before the await: the element is still
+              // here, but `currentTarget` is not once the handler yields.
+              const { chromeMenu } = await import("../lib/menuentries.tsx");
               useUiStore.getState().setContextMenu({
                 // Under the handle, aligned to its left edge — a menu that
                 // opens where the pointer happened to be is right for a
@@ -103,6 +106,22 @@ export function Toolbar({
                   historyOpen,
                   unreadNews,
                   minimapOpen,
+                  cursorGlow,
+                  theme: themeOf(canvas),
+                  /**
+                   * One `project.update`, the same op `isocan canvas
+                   * background` sends — so the two surfaces cannot disagree
+                   * about what a background IS. Cycling wraps back through
+                   * none, so the row that puts one on is also the row that
+                   * takes it off.
+                   */
+                  cycleTheme: async () => {
+                    const next = nextTheme(themeOf(canvas));
+                    await sendEchoed(canvas.id, actor, {
+                      type: "project.update",
+                      patch: next === null ? noThemePatch() : themePatch(next),
+                    });
+                  },
                   canEdit,
                   toWorkbench: () => navigate(workbenchPath(canvas.id)),
                 }),
