@@ -113,6 +113,8 @@ import {
   SHORTCUTS,
   formatMoves,
   inScope,
+  anchorOf,
+  anchorPatch,
   isTheme,
   noThemePatch,
   themeOf,
@@ -4778,15 +4780,35 @@ canvas
 canvas
   .command("background [theme]")
   .description(`The ground this canvas stands on — ${THEMES.join(", ")}, or \`none\` to remove it`)
+  .option("--moves", "the ground travels with the canvas, so a place stays under what stands on it (default)")
+  .option("--pinned", "the ground stays behind the glass and items move across it; the dot grid returns")
   .action(
-    run(async (theme: string | undefined, _opts: unknown, cmd: Command) => {
+    run(async (theme: string | undefined, opts: { moves?: boolean; pinned?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
+      if (opts.moves && opts.pinned) {
+        throw new Error("--moves and --pinned are the two answers to one question: pick one");
+      }
+      /**
+       * How the ground behaves is its own question, so it can be asked
+       * without re-choosing the ground: `canvas background --pinned` on a
+       * canvas already wearing one changes only that.
+       */
+      if (opts.moves || opts.pinned) {
+        if (themeOf(p) === null) throw new Error(`"${p.title}" has no background to pin — set one first`);
+        await sendOp(ctx, p.id, {
+          type: "project.update",
+          patch: anchorPatch(opts.pinned ? "window" : "world"),
+        });
+        console.log(opts.pinned ? `${p.id}'s ground stays put` : `${p.id}'s ground travels with the canvas`);
+        if (theme === undefined) return;
+      }
       // No argument is a question, not a change: `isocan canvas background`
       // says what it is wearing, which is what a person types first.
       if (theme === undefined) {
         const now = themeOf(p);
-        return console.log(now ?? `none — ${THEMES.join(", ")} are the grounds it can wear`);
+        if (now === null) return console.log(`none — ${THEMES.join(", ")} are the grounds it can wear`);
+        return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"})`);
       }
       if (theme !== "none" && !isTheme(theme)) {
         throw new Error(`not a background: ${theme} — ${THEMES.join(", ")}, or none`);

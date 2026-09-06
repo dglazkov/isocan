@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
 import {
@@ -50,7 +50,13 @@ import { snapBox, unionBox } from "../lib/snap.ts";
 import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
-import { CanvasCard } from "./CanvasCard.tsx";
+/**
+ * **A canvas placed on a canvas is rare, so it is not in every first visit.**
+ * The card pulls the other canvas's snapshot, lays out its items as blocks and
+ * refreshes on a timer — a real component for a gesture most canvases never
+ * use. It arrives when one is actually on screen.
+ */
+const CanvasCard = lazy(() => import("./CanvasCard.tsx").then((m) => ({ default: m.CanvasCard })));
 import { iconKindFor, kindNoun } from "../lib/kinds.ts";
 import { moduleRendererFor } from "../modules.ts";
 import { fileMarkTip } from "../lib/backing.ts";
@@ -1328,6 +1334,7 @@ export function VersionContent({
   }
   if (canvasOf) {
     return (
+      <Suspense fallback={null}>
       <CanvasCard
         canvasId={canvasOf}
         width={size?.width ?? 800}
@@ -1337,6 +1344,7 @@ export function VersionContent({
         picture={mimeType.startsWith("image/") ? url : null}
         source={canvasSource ?? null}
       />
+      </Suspense>
     );
   }
   if (mimeType === BROWSER_MIME) {

@@ -1,4 +1,4 @@
-import type { Actor, CanvasTheme, Item } from "@isocan/core";
+import type { Actor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
 import { contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
@@ -486,6 +486,9 @@ export function chromeMenu(ctx: {
   /** Next ground along, wrapping through none. The caller owns the write,
    *  because this module builds entries and sends no ops. */
   cycleTheme: () => void | Promise<void>;
+  /** Whether the ground travels with the canvas or stays behind the glass. */
+  anchor: ThemeAnchor;
+  toggleAnchor: () => void | Promise<void>;
   /** Whether this tab may write (roles phase 1). The trash is a write's
    *  aftermath and a way to undo one, so a reader is not offered it. Absent
    *  means yes, so a caller from before the rung sees the drawer it had. */
@@ -576,6 +579,23 @@ export function chromeMenu(ctx: {
       label: ctx.theme === null ? "Background…" : `Background: ${ctx.theme}`,
       writes: true,
       run: () => void ctx.cycleTheme(),
+    },
+    {
+      /**
+       * **Which of the two things a background is** (#195).
+       *
+       * Travelling: the ground belongs to the canvas, so a field stays under
+       * whatever is standing in it and a pen is somewhere you can come back
+       * to. Pinned: the ground is behind the glass and items move across it,
+       * and the dot grid returns to say where you are — because with a fixed
+       * backdrop nothing else does.
+       *
+       * Offered only when there is a ground, since it describes one.
+       */
+      label: ctx.anchor === "window" ? "Background stays put" : "Background moves with the canvas",
+      writes: true,
+      disabled: ctx.theme === null,
+      run: () => void ctx.toggleAnchor(),
     },
     {
       /**

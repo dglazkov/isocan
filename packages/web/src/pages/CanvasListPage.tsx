@@ -41,7 +41,8 @@ import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";
 import { CardPeek } from "../components/CardPeek.tsx";
-import { IdentityMenu } from "../components/IdentityMenu.tsx";
+/** Opened from a click, so it arrives on the click (#195's budget). */
+const IdentityMenu = lazy(() => import("../components/IdentityMenu.tsx").then((m) => ({ default: m.IdentityMenu })));
 import { HomeGlyph } from "../components/Glyphs.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { useActorMarks } from "../lib/marks.ts";
@@ -746,6 +747,7 @@ export function CanvasListPage({
           </button>
           {identityOpen && (
             <div className="identity-popover">
+              <Suspense fallback={null}>
               <IdentityMenu
                 actor={actor}
                 /* No canvas here, so no pass to mint: escalation is onto one
@@ -754,6 +756,7 @@ export function CanvasListPage({
                 onIdentity={onIdentity}
                 onClose={() => setIdentityOpen(false)}
               />
+              </Suspense>
             </div>
           )}
         </div>

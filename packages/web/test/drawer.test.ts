@@ -39,6 +39,8 @@ const menu = (over = {}) =>
     minimapOpen: true,
     cursorGlow: true,
     theme: null,
+    anchor: "world" as const,
+    toggleAnchor: () => {},
     cycleTheme: () => {},
     toWorkbench: () => {},
     ...over,

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { noThemePatch, nextTheme, themeOf, themePatch, workbenchPath, type Actor } from "@isocan/core";
+import { anchorOf, anchorPatch, noThemePatch, nextTheme, themeOf, themePatch, workbenchPath, type Actor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
@@ -108,6 +108,13 @@ export function Toolbar({
                   minimapOpen,
                   cursorGlow,
                   theme: themeOf(canvas),
+                  anchor: anchorOf(canvas),
+                  toggleAnchor: async () => {
+                    await sendEchoed(canvas.id, actor, {
+                      type: "project.update",
+                      patch: anchorPatch(anchorOf(canvas) === "window" ? "world" : "window"),
+                    });
+                  },
                   /**
                    * One `project.update`, the same op `isocan canvas
                    * background` sends — so the two surfaces cannot disagree

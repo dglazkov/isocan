@@ -1,3 +1,4 @@
+import type { ThemeAnchor } from "@isocan/core";
 import { useUiStore } from "../../stores/uiStore.ts";
 
 /**
@@ -33,10 +34,17 @@ import { useUiStore } from "../../stores/uiStore.ts";
  * drawing states: it is a picture ABOUT the canvas, and catching a click
  * would make the canvas unreachable in a band nobody can see.
  */
-export function Galaxy() {
+export function Galaxy({ anchor }: { anchor: ThemeAnchor }) {
   const scale = useUiStore((s) => s.viewport.scale);
   const tx = useUiStore((s) => s.viewport.tx);
   const ty = useUiStore((s) => s.viewport.ty);
+  /**
+   * Pinned to the window: the sky does not move and does not scale, so items
+   * travel across it. Everything below still runs — one branch, at the two
+   * places the viewport actually enters — rather than a second component, so
+   * the two behaviours cannot drift into two starfields.
+   */
+  const pinned = anchor === "window";
 
   /**
    * Three fields at co-prime-ish spacings, so nothing lines up and there is
@@ -60,9 +68,15 @@ export function Galaxy() {
     { size: 590, dot: 2.1, alpha: 0.42, dx: 250, dy: 40 },
   ];
 
-  /** Full strength at half zoom and above; gone by a tenth, where the canvas
-   *  is being read as a map and the stars would only be noise. */
-  const fade = Math.max(0, Math.min(1, (scale - 0.1) / 0.4));
+  /**
+   * Full strength at half zoom and above; gone by a tenth, where the canvas is
+   * being read as a map and the stars would only be noise.
+   *
+   * A pinned sky never fades: its density does not change with the zoom,
+   * because it is not in the canvas — so there is no scale at which it turns
+   * into a texture, and nothing to protect the reader from.
+   */
+  const fade = pinned ? 1 : Math.max(0, Math.min(1, (scale - 0.1) / 0.4));
 
   return (
     <div
@@ -80,9 +94,14 @@ export function Galaxy() {
                 `radial-gradient(circle at ${f.dot}px ${f.dot}px, rgba(255,255,255,${f.alpha}) ${f.dot}px, transparent ${f.dot + 0.6}px)`,
             )
             .join(", "),
-          "--stars-size": fields.map((f) => `${f.size * scale}px ${f.size * scale}px`).join(", "),
+          "--stars-size": fields
+            .map((f) => {
+              const size = pinned ? f.size / 3 : f.size * scale;
+              return `${size}px ${size}px`;
+            })
+            .join(", "),
           "--stars-pos": fields
-            .map((f) => `${tx + f.dx * scale}px ${ty + f.dy * scale}px`)
+            .map((f) => (pinned ? `${f.dx / 3}px ${f.dy / 3}px` : `${tx + f.dx * scale}px ${ty + f.dy * scale}px`))
             .join(", "),
         } as React.CSSProperties
       }

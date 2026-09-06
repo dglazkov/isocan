@@ -105,29 +105,33 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * be somebody deciding to spend a session on shell code instead.
  */
 /**
- * **Lowered, 737,300 → 727,300, and that is the direction this is supposed to
- * move.**
+ * **Lowered again, 727,300 → 690,000 — and the whole story is that nobody was
+ * looking.**
  *
- * It went up twice on 6 September — once for the fix that stopped a browser
- * freezing, once for #196 and #194 — and the file said, in these words, that
- * there should not be a third before somebody took bytes OUT. So the third
- * ask went looking instead.
+ * This number went UP twice on 6 September, for a browser-freeze fix and for
+ * two features, and the file said there should be no third raise before
+ * somebody took bytes out. Four lookings later:
  *
- * `menuentries.tsx` is twenty-four kilobytes of every row the canvas can
- * offer, and it was in the bytes of every first visit — including the visits
- * that never open a menu. It is now imported when a menu is actually asked
- * for: a right-click and the `···` handle are deliberate gestures with a
- * frame to spare. That returned 11,116 bytes, which paid for the freeze fix,
- * the tidy, the archive AND the themes, and left 10,000 over.
+ *   menuentries.tsx   11,116   every row the canvas can offer, on every visit
+ *   CanvasCard         2,457   a placed canvas's miniature; 1 exists in 22 canvases
+ *   FullScreen        ~33,000   a route, with ArtifactStage behind it
+ *   IdentityMenu       ~2,400   opened from a click
  *
- * The lesson is the cheap one: the entry chunk grew for months because
- * nothing asked, not because it had to. The first place anybody looked, on
- * being told to look, held eleven kilobytes.
+ * **768,993 → 689,550 in a day, and not one of them was hard.** Every one was
+ * a component mounted behind a condition — a route, a click, a gesture most
+ * sessions never make — that was nonetheless in the bytes of every first
+ * visit. Nothing was refactored and nothing was removed; they are imported
+ * when they are asked for.
  *
- * The goal is 87,300 away. Same rule as before — this comes down, not up,
- * unless somebody has a reason worth writing here.
+ * The lesson to keep, because it is cheaper than any of the fixes: the entry
+ * chunk grew for months not because the app needs those bytes at load, but
+ * because a static import is the default and no instrument asked. The first
+ * four places anybody looked held seventy-nine kilobytes.
+ *
+ * **The goal is 49,550 away** — close enough to be a target rather than a
+ * debt. Same rule: this comes down, not up.
  */
-const CEILING = 727_300;
+const CEILING = 690_000;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is

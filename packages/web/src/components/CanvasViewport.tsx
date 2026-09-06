@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { isArea, parseUriList, themeOf } from "@isocan/core";
+import { anchorOf, isArea, parseUriList, themeOf } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
@@ -95,6 +95,15 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   /* The one comparison the entry chunk pays for: whether to ask for a ground
      at all. Everything that draws one is behind it. */
   const themed = useCanvasStore((s) => (s.project ? themeOf(s.project) !== null : false));
+  /**
+   * The dot grid goes away only for a ground that TRAVELS with the canvas
+   * (#195). A ground pinned to the window leaves nothing else saying where
+   * you are, so the grid stays and moves — which is the whole difference
+   * between a place and a backdrop.
+   */
+  const groundIsPlace = useCanvasStore(
+    (s) => s.project !== null && themeOf(s.project) !== null && anchorOf(s.project) === "world",
+  );
   /* One timer for the whole canvas — see `useSettling`. The set is usually
      empty, and when it is, nothing is scheduled at all. */
   const settling = useSettling();
@@ -779,7 +788,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   return (
     <div
       ref={ref}
-      className={`canvas-viewport${themed ? " themed" : ""}${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
+      className={`canvas-viewport${groundIsPlace ? " themed" : ""}${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
         activeTool === "select" && !commentMode ? " own-cursor-on" : ""
       }`}
       style={{

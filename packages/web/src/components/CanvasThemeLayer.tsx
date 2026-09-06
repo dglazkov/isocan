@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { themeOf } from "@isocan/core";
+import { anchorOf, themeOf } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
@@ -29,10 +29,11 @@ const Galaxy = lazy(() => import("./themes/Galaxy.tsx").then((m) => ({ default: 
 export function CanvasThemeLayer() {
   const project = useCanvasStore((s) => s.project);
   const theme = project ? themeOf(project) : null;
+  const anchor = project ? anchorOf(project) : "world";
   if (theme === null) return null;
   return (
     <Suspense fallback={null}>
-      {theme === "galaxy" && <Galaxy />}
+      {theme === "galaxy" && <Galaxy anchor={anchor} />}
       {/* farm, mountains and ocean are painted and not built yet: the canvas
           keeps its dot grid until they are, rather than showing a blank. */}
     </Suspense>

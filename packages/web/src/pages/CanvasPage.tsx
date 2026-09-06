@@ -41,7 +41,13 @@ import { itemThread } from "../components/CommentLayer.tsx";
 const Workbench = lazy(() =>
   import("../components/Workbench.tsx").then((m) => ({ default: m.Workbench })),
 );
-import { FullScreen } from "../components/FullScreen.tsx";
+/**
+ * **Full screen is a place you go, not a thing the canvas is wearing.** It is
+ * mounted only for a route with an item in it, and it carries `ArtifactStage`
+ * — the editor surface — behind it. Both were in the bytes of every first
+ * visit for a gesture that needs a deliberate keystroke or a URL.
+ */
+const FullScreen = lazy(() => import("../components/FullScreen.tsx").then((m) => ({ default: m.FullScreen })));
 import { DeckPrint } from "../components/DeckPrint.tsx";
 import { ModulePage } from "../components/ModulePage.tsx";
 import { useChromeHidden } from "../lib/hideable.ts";
@@ -962,7 +968,9 @@ function CanvasSurface({
           screen. Driven by the route rather than by state — see
           FullScreen.tsx for why that distinction is the whole design. */}
       {itemId && (
-        <FullScreen canvasId={canvasId} itemId={itemId} actor={actor} onIdentity={onIdentity} />
+        <Suspense fallback={null}>
+          <FullScreen canvasId={canvasId} itemId={itemId} actor={actor} onIdentity={onIdentity} />
+        </Suspense>
       )}
       {/* The deck on paper: every slide stacked, printed one to a sheet. A
           route like full screen, mounted here so it reads the open replica. */}

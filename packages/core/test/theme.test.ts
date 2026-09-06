@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   THEMES,
+  THEME_ANCHOR_PROP,
+  anchorOf,
+  anchorPatch,
   THEME_PROP,
   isTheme,
   nextTheme,
@@ -60,5 +63,33 @@ describe("what ground a canvas stands on", () => {
     // download — which is why it is the theme that proves the layer while the
     // painted ones are still being drawn.
     expect(THEMES[0]).toBe("galaxy");
+  });
+});
+
+/**
+ * **A ground is either a place or a backdrop**, and the difference is what you
+ * can do with it: a field that travels stays under whatever is standing in it,
+ * so a pen is somewhere you can come back to; a sky that stays put is
+ * atmosphere you move across.
+ */
+describe("how a ground behaves", () => {
+  it("travels with the canvas unless told otherwise", () => {
+    // Every canvas already wearing a ground keeps behaving as it did.
+    expect(anchorOf({ properties: {} })).toBe("world");
+    expect(anchorOf({})).toBe("world");
+  });
+
+  it("can be pinned to the window", () => {
+    expect(anchorOf({ properties: { [THEME_ANCHOR_PROP]: "window" } })).toBe("window");
+  });
+
+  it("reads anything it does not know as travelling", () => {
+    expect(anchorOf({ properties: { [THEME_ANCHOR_PROP]: "sideways" } })).toBe("world");
+  });
+
+  it("stores only the unusual one, so the common case leaves nothing behind", () => {
+    expect(anchorPatch("window").properties?.[THEME_ANCHOR_PROP]).toBe("window");
+    expect(anchorPatch("world").removeProperties).toEqual([THEME_ANCHOR_PROP]);
+    expect(anchorPatch("world").properties).toBeUndefined();
   });
 });

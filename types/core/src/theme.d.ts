@@ -60,6 +60,40 @@ export declare function isTheme(value: string): value is CanvasTheme;
 export declare function themeOf(canvas: {
     properties?: Record<string, string>;
 }): CanvasTheme | null;
+/**
+ * **Two ways for a ground to behave, and they are different pictures.**
+ *
+ * `world` — the ground is part of the canvas. It pans and zooms with the
+ * items, so a field stays under the sheep standing in it and a pen is
+ * somewhere you can come back to. This is the default and the reason the
+ * layer is in world space at all.
+ *
+ * `window` — the ground is a backdrop behind the glass. Items travel across
+ * a sky that does not move, which is the other thing people mean by a
+ * background, and it is the better one for a canvas whose ground is
+ * atmosphere rather than a place.
+ *
+ * **The dot grid comes back for `window`**, and that is the point rather than
+ * a side effect: with a fixed backdrop the only thing left saying where you
+ * are is the grid, so hiding it would take away the last spatial reference at
+ * the exact moment the ground stopped providing one. Under `world` the ground
+ * IS the reference, so the grid would be a second one arguing with it.
+ *
+ * Absent means `world`, so every canvas already wearing a ground keeps
+ * behaving exactly as it did.
+ */
+export declare const THEME_ANCHOR_PROP = "themeAnchor";
+/** Where a ground is pinned: to the canvas, or to the window. */
+export type ThemeAnchor = "world" | "window";
+/** How this canvas's ground behaves. Anything unrecognised reads as `world`,
+ *  which is the behaviour every themed canvas has had. */
+export declare function anchorOf(canvas: {
+    properties?: Record<string, string>;
+}): ThemeAnchor;
+/** Pin it to the window, or let it travel with the canvas. `world` REMOVES
+ *  the property rather than writing the default, so the common case leaves
+ *  nothing behind to read. */
+export declare function anchorPatch(anchor: ThemeAnchor): MetaPatch;
 /** Wear one. */
 export declare function themePatch(theme: CanvasTheme): MetaPatch;
 /** Take it off — a removal, so a canvas with no theme is byte-for-byte a

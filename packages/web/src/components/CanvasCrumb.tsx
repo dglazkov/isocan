@@ -6,7 +6,8 @@ import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
-import { IdentityMenu } from "./IdentityMenu.tsx";
+/** Opened from a click, so it arrives on the click (#195's budget). */
+const IdentityMenu = lazy(() => import("./IdentityMenu.tsx").then((m) => ({ default: m.IdentityMenu })));
 /**
  * Loaded when Share is clicked, not when the canvas is. The dialog is the
  * largest component in the app after `ItemView`, it is a modal most sessions
@@ -127,12 +128,14 @@ export function CanvasPresence({
         <Presence actor={actor} />
         {identityOpen && (
           <div className="identity-popover">
+            <Suspense fallback={null}>
             <IdentityMenu
               actor={actor}
               canvasId={canvas?.id ?? null}
               onIdentity={onIdentity}
               onClose={() => useUiStore.getState().setIdentityOpen(false)}
             />
+            </Suspense>
           </div>
         )}
       </div>
