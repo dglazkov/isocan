@@ -276,7 +276,7 @@ export async function handInFromDesk(
 }
 
 /** Whether votes are hidden right now — the lens half of the curtain. */
-export function useVotesHidden(): boolean {
+function useVotesHidden(): boolean {
   const { state, nowMs } = useSprint();
   return hidesVotes(state, nowMs);
 }

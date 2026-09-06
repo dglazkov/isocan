@@ -12,6 +12,14 @@ interface TeleportReport {
     bytes: number;
     /** False for a dry run, and for nothing else. */
     moved: boolean;
+    /**
+     * Blobs the far home did not take once the log had landed there. Zero on
+     * every ordinary move; when it is not, the move still completed and the
+     * old home — a replica from that moment — sends them on the blob keeper's
+     * next sweep, or on `isocan blobs --push`. See `teleport` for why a refused
+     * blob is counted rather than fatal.
+     */
+    behind: number;
 }
 interface EngineOptions {
     /** Who is visibly on a canvas right now — presence, which lives outside
@@ -344,13 +352,39 @@ export declare class Engine {
      * `docs/research/2026-09-01-teleport.md` is the argument. The short form:
      * the log IS the canvas, the reducer is deterministic, so a home holding
      * the same entries holds the same canvas. This is not a data migration, it
-     * is a replay — and the order below is chosen so that anything failing
-     * before the last step leaves the canvas exactly where it was.
+     * is a replay — and the order below is chosen so that a failure leaves the
+     * canvas somewhere a retry can finish from.
      *
-     *   1. bytes — content-addressed, so sending them twice is free
-     *   2. the log — verbatim, via `adopt`, which refuses a canvas that exists
+     *   1. the log — verbatim, via `adopt`, which refuses a canvas that exists.
+     *      This is what makes the canvas exist at the far home at all.
+     *   2. bytes — content-addressed, so sending them twice is free, and sent
+     *      INTO the canvas the log just made.
      *   3. the routing row — this daemon stops being the home and starts
      *      forwarding, which is what makes it a MOVE rather than a copy
+     *
+     * **Why the log leads.** The research note asked for bytes first, so that
+     * no item would ever exist anywhere without its bytes, and that is how this
+     * shipped — and no canvas naming a blob could move. Every canvas route at
+     * the far home, the blob POST included, answers 404 for a canvas it does
+     * not hold, and until `adopt` runs it holds nothing: the first upload was
+     * refused and the move stopped, safely and uselessly. The other fix — a
+     * blob route that takes bytes for a canvas that does not exist — was not
+     * taken, because the far home cannot tell a teleporting daemon from any
+     * other badge: it would be a write path under every unheld id for anyone
+     * at the door, and bytes under an id no canvas ever claims are bytes no
+     * sweep ever collects.
+     *
+     * So the log leads, and the window the research wanted closed is open for
+     * the length of step 2, at a home nobody is routed to yet. It is the same
+     * window every ordinary upload has — an item's op replicates before its
+     * bytes are pushed — which is what the blob keeper exists to close. That is
+     * also why a blob the far home refuses after the log has landed is COUNTED
+     * and not fatal: stopping there would leave a canvas the far home holds and
+     * `adopt` will never take again, with no gesture that retries. The move
+     * completes, `behind` says how many bytes did not arrive, and the keeper
+     * that heals every replica heals this one — from step 3 on, this daemon is
+     * one. A failure before the log lands still leaves the canvas exactly where
+     * it was; a failure after it completes the move and says what is behind.
      *
      * Two things deliberately do not travel, and the report says so rather
      * than leaving them to be discovered:

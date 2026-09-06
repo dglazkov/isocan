@@ -102,7 +102,7 @@ the relationships we already have to be visible".
 
 ## Where this stands, 30 Aug 2026 — export BUILT, and edges answered
 
-`isocan export <file>`, `toJsonCanvas` in core. Geometry crosses unchanged.
+`isocan export --jsoncanvas <file>` (the bare verb became the backup on 2 Sep), `toJsonCanvas` in core. Geometry crosses unchanged.
 
 **The edge question this note left open has been answered by other work.** It
 said edges were "the whole question" because isocan had no relationship

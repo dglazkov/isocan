@@ -53,10 +53,6 @@
  */
 export declare const CONTENT_TTL_DEFAULT_SECONDS = 300;
 export declare function contentTtl(envValue: string | undefined): number;
-/** The query parameters a signed read carries. Two, both opaque to everything
- * but this file. */
-export declare const EXPIRY_PARAM = "exp";
-export declare const SIGNATURE_PARAM = "sig";
 /** The signature alone, base64url — 32 bytes of HMAC-SHA256 as 43 characters. */
 export declare function signContentRead(key: string, canvasId: string, blobHash: string, expiresAt: number): string;
 /**

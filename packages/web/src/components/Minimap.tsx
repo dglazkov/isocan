@@ -195,14 +195,18 @@ export function Minimap() {
           {standing.map(({ session, locus }) => (
         <circle
           key={session.sessionId}
+          // `followed` rather than a stroke colour: the ring was a literal
+          // ("#1f3fd0" when followed, "#fff" otherwise), and an SVG
+          // presentation attribute takes no var(), so neither could move with
+          // the theme — the light accent measured 2.25:1 on the graphite
+          // panel, and the white ring was the panel itself in light.
           className={`minimap-dot${session.activity ? " working" : ""}${
             quietFor(session) ? " quiet" : ""
-          }`}
+          }${session.sessionId === followSessionId ? " followed" : ""}`}
           cx={mapX(locus.x)}
           cy={mapY(locus.y)}
           r={3}
           fill={actorColorIn(colors, session.actor.id)}
-          stroke={session.sessionId === followSessionId ? "#1f3fd0" : "#fff"}
           strokeWidth={1.2}
         >
           <title>{session.label ?? session.actor.name}</title>
@@ -213,8 +217,8 @@ export function Minimap() {
             y={mapY(vpTopLeft.y)}
             width={(vpBottomRight.x - vpTopLeft.x) * scale}
             height={(vpBottomRight.y - vpTopLeft.y) * scale}
+            className="minimap-viewport"
             fill="none"
-            stroke="#1f3fd0"
             strokeWidth={1.5}
             rx={2}
           />

@@ -106,7 +106,7 @@ export type SweepOutcome =
   | { outcome: "rerooted"; capability: Capability }
   | { outcome: "expelled" };
 
-export type SweepListener = (canvasId: string, badgeId: string, outcome: SweepOutcome) => void;
+type SweepListener = (canvasId: string, badgeId: string, outcome: SweepOutcome) => void;
 
 /**
  * **Where the sweep's outcomes go, and what it remembers of them.**
@@ -392,7 +392,7 @@ export async function sweepCanvas(
 }
 
 /** What a sweep over several canvases did, and how many it reached. */
-export interface SpaceSweepReport extends SweepReport {
+interface SpaceSweepReport extends SweepReport {
   reached: number;
 }
 

@@ -62,7 +62,7 @@ second week.
 - The heat map is a picture. During a vote, *Place a 🔴* on the clock chip and click the part of a sketch you like; the dot lands there and stays there at every zoom. You see your own dots while the vote is open and everyone's at the bell. Counts and names hide on the Vote sheet only. `isocan react 🔴 <sketch> --at 0.4,0.6` places the same dot.
 - Grids on a sheet. `isocan area grid Test 5x15 --rows "Ana,Ben,…"` draws rows and columns with names; `--cell 3,4` with `--in` puts a note in one cell; `isocan slides add --in Storyboard` makes the deck from a sheet, in reading order.
 - Areas: a titled sheet you place things on. Draw one from the terminal (`isocan area new "Sketches"`), put things on it (`--in Sketches` on `text`, `add` and `mv`), read it back (`isocan ls --in Sketches`), tidy it (`isocan format --in Sketches`). In the app a sheet lies behind everything, lets your tools through to the canvas, and carries what is on it when you drag it by its name.
-
+- Back a canvas up: `isocan export --to <dir>` writes its whole history and every file it names to a directory, and `--git <repo>` commits and pushes that to GitHub. Point it at a canvas, at one item, or at a whole home by URL. `isocan import <dir>` brings a backup back, history and timestamps intact.
 - The Text tool keeps what you typed. Typing a note and then choosing a colour, size or face used to lose the words when you clicked away; it no longer does.
 - Changing a note's colour, size or face saves the moment you choose it, as its own undo step — no need to change the words too.
 - Double-clicking text edits it in place: the field sits exactly on the note or caption, transparent, with the words selected, the way renaming works.

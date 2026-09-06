@@ -11,6 +11,8 @@ import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
+import { ToolGlyph, toolHint, useCanvasTools } from "../lib/tools.tsx";
+import { postToMain } from "../lib/mainthread.ts";
 
 /**
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
@@ -134,6 +136,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
   const setActiveTool = useUiStore((s) => s.setActiveTool);
   const inkColor = useUiStore((s) => s.inkColor);
   const marksOpen = useUiStore((s) => s.marksOpen);
+  const tools = useCanvasTools(canvasId);
   const historyOpen = useUiStore((s) => s.historyOpen);
   const onHistory = useUiStore((s) => s.setHistoryOpen);
   const historyHidden = useChromeHidden("rail.history");
@@ -260,6 +263,36 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           <HistoryGlyph size={17} />
         </button>
       )}
+      {/* The canvas's OWN tools, below everything the app ships, because that
+          is the boundary: above the line is isocan, below it is what this
+          canvas brought. A tool wears its own label and never the app's — the
+          reserved-name check is in core, so both surfaces refuse the same
+          impersonation.
+
+          Pressing one posts the ask as a comment, through the same door the
+          composer uses, which is the design's whole sentence made literal:
+          *an extension may only ask for what a person could ask for.* What
+          follows is attributed and undoable per actor because it went through
+          that door and not around it. */}
+      {tools.length > 0 && <div className="tool-sep" />}
+      {tools.map((t) => (
+        <button
+          key={t.itemId}
+          className="tool-btn tool-ext"
+          title={toolHint(t)}
+          aria-label={t.tool ? t.tool.label : `${t.title} — unavailable`}
+          disabled={!t.tool}
+          onClick={() => {
+            if (!t.tool) return;
+            void postToMain(canvasId, actor, t.tool.does, useUiStore.getState().selectedItemIds).catch(() => {
+              setNotice("That could not be asked for just now.");
+            });
+          }}
+        >
+          {t.tool ? <ToolGlyph icon={t.tool.icon} /> : <span aria-hidden>·</span>}
+          <span className="tool-ext-label">{t.tool ? t.tool.label : t.title}</span>
+        </button>
+      ))}
       {/* One door for everything brought onto the canvas that was not drawn
           here — files, a site, a Google Doc, a canvas. It was three buttons
           and a hidden fourth; the popover reads what it is given and says

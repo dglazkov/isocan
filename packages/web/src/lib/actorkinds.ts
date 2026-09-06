@@ -17,7 +17,7 @@ let cached: ActorKinds | null = null;
 let inFlight: Promise<void> | null = null;
 const listeners = new Set<(kinds: ActorKinds) => void>();
 
-export function loadActorKinds(): Promise<ActorKinds> {
+function loadActorKinds(): Promise<ActorKinds> {
   inFlight ??= fetchActorKinds()
     .then((kinds) => {
       cached = kinds;

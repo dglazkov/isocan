@@ -91,13 +91,39 @@ const allGreen = () =>
  * **The one place this file starts the board**, so the `gh` shim is not
  * something a new test can forget. Returns what the script SAID.
  */
-const runBoard = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) =>
-  execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", only], {
-    cwd: repo,
-    encoding: "utf8",
-    timeout: CHILD_BUDGET_MS,
-    env,
-  });
+const runBoard = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) => {
+  try {
+    return execFileSync("node", [`${repo}/scripts/canvas-board.mjs`, "--dry-run", "--only", only], {
+      cwd: repo,
+      encoding: "utf8",
+      timeout: CHILD_BUDGET_MS,
+      env,
+    });
+  } catch (e) {
+    /**
+     * **The board's exit code is a VERDICT, not a crash**, and reading it as
+     * one made three tests here fail for a reason none of them is about.
+     *
+     * `canvas-board.mjs` exits 1 for exactly one thing: an instrument that
+     * would not run — deliberately, and documented at its last line, because a
+     * board that goes red on a missed goal trains everybody to stop looking.
+     * On a machine where the accessibility and design-auditor instruments are
+     * unavailable, every panel still renders and the script still says where,
+     * and `execFileSync` still throws. So all three Build-signal tests failed
+     * with `Command failed: node …/canvas-board.mjs`, which names neither the
+     * amber panel nor the fact that nothing was wrong with the Build panel at
+     * all.
+     *
+     * Amber is a reading this file has no fixture for and does not assert on;
+     * what it asserts on is the HTML, which is in the child's stdout either
+     * way. Anything other than 1 is a real failure and is re-raised — a
+     * missing canvas is 2, and a killed child has a signal.
+     */
+    const err = e as { status?: number | null; signal?: string | null; stdout?: string };
+    if (err.status !== 1 || err.signal || typeof err.stdout !== "string") throw e;
+    return err.stdout;
+  }
+};
 
 /** Render a panel without touching a canvas, and hand back its HTML. */
 const render = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) => {
@@ -282,10 +308,27 @@ describe("the Build signal", () => {
      * Forced for real, with a `gh` on PATH that refuses: "nothing failed" and
      * "nothing was asked" are different facts, and the failure mode of every
      * status light ever built is rendering them the same.
+     *
+     * **It asserts the CI READING and the never-green rule, not the word** —
+     * for the reason its sibling above already gives, which this test had the
+     * same coupling to and nobody noticed. `signal()` returns RED rather than
+     * NO SIGNAL when an instrument would not run, deliberately and by its own
+     * printed rule: a broken instrument is something the board KNOWS, and a
+     * second unknown must not soften a certainty to grey. So the word folds in
+     * board state on disk that no fixture here controls, and pinning it made
+     * this test fail on any machine where a persona instrument is unavailable.
+     *
+     * What the fixture does control is `gh`, and `c.unknown` alone drives the
+     * CI line. That line is the fact under test.
      */
     const html = render("build", ghSaying("not logged in", 1));
+    expect(html, "an unreachable CI must render as absent, not as passing").toContain(
+      '<span class="pill grey">no signal</span>',
+    );
     const shown = html.match(/letter-spacing:-0\.03em;[\s\S]*?>\s*([A-Z ]+)<\/div>/)?.[1]?.trim();
-    expect(shown).toBe("NO SIGNAL");
+    // The rule this light exists for. GREEN is the lie; AMBER ("still going")
+    // would be one too, since nothing was asked.
+    expect(["NO SIGNAL", "RED"], `the light said ${shown} with no CI reading`).toContain(shown);
   }, 120_000);
 
   it("says so when CI ran a different commit than the one you are on", () => {

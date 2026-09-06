@@ -19,7 +19,7 @@ import { useUiStore } from "../stores/uiStore.ts";
  * (`chrome.ts` beside this is the item chrome's geometry — a different
  * "chrome"; this file is the controls a person may turn off.)
  */
-export interface HideableEntry {
+interface HideableEntry {
   id: string;
   /** What it is called where a person reads it. */
   name: string;

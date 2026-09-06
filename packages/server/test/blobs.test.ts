@@ -458,3 +458,79 @@ describe("filenames that are not ByteStrings", () => {
     expect(Object.values(index).map((entry) => entry.filename)).toEqual([name]);
   });
 });
+
+/**
+ * **A blob whose media type is one the framework already parses.**
+ *
+ * `addContentTypeParser("*")` reads as "everything", and means "everything
+ * Fastify does not already have a parser for" — and it has one for
+ * `application/json`. So JSON bytes were parsed into an object before the blob
+ * route saw them, `Buffer.isBuffer` said no, and the upload was refused as
+ * `empty blob body`: a message about a body that was neither empty nor wrong,
+ * which is the kind of refusal nobody debugs to the real cause.
+ *
+ * It never showed up from the terminal, because `.json` is not in the CLI's
+ * mime table and files fall through to `application/octet-stream`. It showed
+ * up in a BROWSER every time: `mimeTypeOf` prefers `file.type`, and a browser
+ * reports `application/json` for a `.json` file — so dragging one onto a
+ * canvas failed on every deployment, for as long as the drop path existed.
+ *
+ * Asserted here as the shape rather than the one type: any media type the
+ * daemon happens to understand elsewhere is still just bytes to a blob.
+ */
+describe("bytes that look like something else", () => {
+  async function put(body: string, contentType: string) {
+    const res = await fetch(`${base}/api/projects/prj_1/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": contentType, "X-Isocan-Filename": "data.json", ...badge.headers },
+      body,
+    });
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+  }
+
+  it("takes a JSON file as a file, not as a request body", async () => {
+    const text = JSON.stringify({ kind: "tool", label: "Tidy" });
+    const { status, body } = await put(text, "application/json");
+    expect(status, JSON.stringify(body)).toBe(200);
+    expect(body.size).toBe(Buffer.byteLength(text));
+    expect(body.mimeType).toBe("application/json");
+  });
+
+  it("keeps the bytes EXACTLY, rather than re-serialising them", async () => {
+    // The tell that the JSON parser is still in the path: a round trip through
+    // JSON.parse/stringify would come back the same length for compact input
+    // and silently reformat anything spaced — so the input is spaced on
+    // purpose, and the hash must be of what was sent.
+    const text = '{\n  "a":   1,\n  "b": [1, 2]\n}\n';
+    const { status, body } = await put(text, "application/json");
+    expect(status).toBe(200);
+    expect(body.size).toBe(Buffer.byteLength(text));
+    const read = await fetch(`${base}/api/projects/prj_1/blobs/${body.blobHash as string}`, {
+      headers: badge.headers,
+    });
+    expect(await read.text()).toBe(text);
+  });
+
+  it("still refuses a body that really is empty", async () => {
+    // The negative control: the refusal this displaced must still fire, or the
+    // fix has traded one wrong answer for another.
+    const { status, body } = await put("", "application/json");
+    expect(status).toBe(400);
+    expect(body.error).toBe("empty blob body");
+  });
+
+  it("has not stopped the API's own routes being JSON", async () => {
+    // The scoping half. Replacing the parser on the root app would take the
+    // body away from every route here, all of which are JSON.
+    const res = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        canvasId: null,
+        actor: alice,
+        op: { type: "project.create", canvasId: "prj_json", title: "Still JSON" },
+      }),
+    });
+    expect(res.status).toBe(200);
+  });
+});

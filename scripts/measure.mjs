@@ -356,7 +356,16 @@ function entryChunk() {
   return path.join("packages/web/dist/assets", found[1]);
 }
 
-function scanExports() {
+/**
+ * **Which exports, not just how many.**
+ *
+ * A count tells you a ratchet slipped; it does not tell you what to do. The
+ * guard in `test/unused-exports.test.ts` names this in its failure message, so
+ * "39 is now 40" comes with the line that made it 40:
+ *
+ *   node scripts/measure.mjs unused-exports --names
+ */
+function scanExports(names = false) {
   const list = (glob) =>
     execFileSync("git", ["ls-files", ...glob], { cwd: repo, encoding: "utf8" })
       .split("\n")
@@ -369,6 +378,7 @@ function scanExports() {
 
   let unused = 0;
   let bare = 0;
+  const found = [];
   for (const file of sources) {
     const src = bodies.get(file) ?? readFileSync(path.join(repo, file), "utf8");
     const lines = src.split("\n");
@@ -385,13 +395,23 @@ function scanExports() {
         if (other === file) continue;
         if (word.test(body)) { usedElsewhere = true; break; }
       }
-      if (!usedElsewhere) unused += 1;
+      if (!usedElsewhere) {
+        unused += 1;
+        if (names) found.push(`${file}:${i + 1}  ${name}`);
+      }
     });
   }
-  return { unused, bare };
+  return { unused, bare, found };
 }
 
 const argv = process.argv.slice(2);
+
+// `unused-exports --names` prints the offenders rather than the count, so a
+// tripped ratchet is actionable without a second scan somewhere else.
+if (argv[0] === "unused-exports" && argv.includes("--names")) {
+  for (const line of scanExports(true).found) console.log(line);
+  process.exit(0);
+}
 
 if (argv.includes("--list")) {
   for (const [name, m] of Object.entries(METRICS)) console.log(`${name.padEnd(24)} ${m.what}`);

@@ -37,11 +37,58 @@ describe("the roadmap is derived, not written", () => {
      * A second little parser here is exactly how the roadmap would come to
      * disagree with the docs it summarises — the bug it exists to fix, rebuilt
      * inside the fix.
+     *
+     * This used to assert the SPAWN — that the script shelled out to `isocan
+     * doc status`. That was the mechanism, not the invariant, and it cost 62
+     * CLI spawns a run (~35s) to satisfy. The invariant is that core's
+     * `docStatus` is the one reader; the script now imports it directly, which
+     * is the same reader and 80x cheaper.
      */
-    expect(script).toContain("doc\", \"status\"");
+    expect(script).toMatch(/docStatus[^\n]*await import\("@isocan\/core"\)|docStatus.*from "@isocan\/core"/s);
     expect(script).not.toContain("splitFrontMatter");
     expect(script).not.toMatch(/\/\^---\\n/);
   });
+
+  it("agrees with `isocan doc status` about a document", () => {
+    /**
+     * The textual guard above can only say the script *mentions* the right
+     * reader. This says the two surfaces answer the same thing about the same
+     * file — the property "one reader" exists to buy — through the CLI, which
+     * is the other way a person asks.
+     *
+     * One spawn, not one per document: the script reaching `docStatus` in
+     * process is what made the 62 affordable to drop.
+     */
+    const page = readFileSync(`${repo}/docs/ROADMAP.md`, "utf8");
+    // The heading→state map read out of the script rather than restated here:
+    // a second copy of it is a second thing to keep in step, which is the
+    // failure mode the roadmap itself exists to end.
+    const labels = /const LABEL = \{([^}]*)\}/.exec(script);
+    expect(labels, "scripts/roadmap.mjs no longer declares LABEL").not.toBeNull();
+    const state: Record<string, string> = {};
+    for (const [, key, label] of labels![1].matchAll(/(\w+): "([^"]*)"/g)) state[label] = key;
+    let section = "";
+    let checked = 0;
+    for (const line of page.split("\n")) {
+      const head = /^## (.+?) <sub>/.exec(line);
+      if (head) {
+        section = state[head[1]] ?? "";
+        continue;
+      }
+      const row = /^\| (?:\*\*project\*\*|research) \| \[[^\]]*\]\(([^)]+)\)/.exec(line);
+      if (!row || checked >= 2) continue;
+      checked += 1;
+      const answer = JSON.parse(
+        execFileSync("node", [`${repo}/packages/cli/bin/isocan.js`, "--json", "doc", "status", row[1]], {
+          cwd: repo,
+          encoding: "utf8",
+          timeout: 60_000,
+        }),
+      );
+      expect(answer.status, `${row[1]} is under "${section}" in the roadmap`).toBe(section);
+    }
+    expect(checked, "the roadmap had no rows to check").toBeGreaterThan(0);
+  }, 120_000);
 
   it("counts the untriaged out loud", () => {
     // An untriaged doc is not a doc nobody needs; it is a doc nobody has read

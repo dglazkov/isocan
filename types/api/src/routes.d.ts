@@ -382,6 +382,15 @@ export declare class DaemonRoutes {
         blobs: number;
         bytes: number;
         moved: boolean;
+        /** Blobs the far home did not take after the log landed; the old home,
+         *  a replica now, sends them on its next blob sweep or on `isocan blobs --push`. */
+        behind: number;
+    }>;
+    /** Hand a home a whole canvas as somebody else's log — teleport's far end,
+     *  and what `isocan import` restores a backup through. Creates, never
+     *  merges: a canvas already at the home is refused. */
+    adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{
+        seqs: number;
     }>;
     gc(canvasId: string, request: GcRequest): Promise<GcReport>;
     /** Every canvas this badge is admitted to at this home, in one sweep — the

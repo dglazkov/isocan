@@ -146,7 +146,7 @@ export interface DoorAnswer {
  * space through this, rather than one `spaceOf` per canvas (roles design,
  * "The door reads both").
  */
-export interface DoorLookup {
+interface DoorLookup {
   spaceOf(canvasId: string): Promise<Space | null>;
   grantsForSpace(spaceId: string): Promise<Grant[]>;
   /** The group behind a `group:` row (roles phase 5) — one document read per
@@ -172,7 +172,7 @@ export interface DoorLookup {
  * `groupOf` is the caller's memo: `admittingGrant` builds one per door test
  * so a group named by a canvas row AND a space row costs one read.
  */
-export async function subjectAdmits(
+async function subjectAdmits(
   subject: GrantSubject,
   attestations: readonly Attestation[],
   groupOf: (groupId: string) => Promise<Group | null>,

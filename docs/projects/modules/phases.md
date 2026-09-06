@@ -154,3 +154,14 @@ modules is a second copy of a fact.
 
 Gated, and the gates are named: the content origin, extension actors, and the
 compute-consent question agent-custody left open. Not before all three.
+
+**Where the three stand, 6 Sep 2026.** The **content origin** is cleared: it
+went live on prod that morning, with short-lived signed URLs over
+`(canvasId, blobHash, expiry)` from a second registrable domain that holds no
+cookie, badge or API. **Extension actors** is not a matter of somebody getting
+to it — extensions stages 1 and 2 built the same day, and building them showed
+the stage has no subject: a tier-1 tool asks rather than acts, so the actor to
+attribute is the person who pressed it, and the thing that would need one is a
+panel that acts on its own (extensions stage 3). **Compute consent** is
+untouched. So the gate that moved is one of three, and the one behind it moved
+its own dependency into view rather than closer.

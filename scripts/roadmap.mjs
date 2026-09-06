@@ -22,23 +22,38 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFileSync } from "node:child_process";
+import { register as registerLoader } from "node:module";
+import { register } from "tsx/esm/api";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
-const cli = path.join(repo, "packages/cli/bin/isocan.js");
 
 /**
- * Front matter is read through the CLI so there is ONE reader — core's
- * `docStatus`. A second little parser here is how the roadmap would come to
- * disagree with the thing it is a view of, which is the bug it exists to fix.
+ * **One reader, and now one process.**
+ *
+ * Front matter is read through core's `docStatus` so there is ONE reader: a
+ * second little parser here is how the roadmap would come to disagree with the
+ * thing it is a view of, which is the bug it exists to fix. That has not
+ * changed and must not.
+ *
+ * What changed is HOW it reaches that reader. It used to spawn the whole CLI
+ * — `isocan --json doc status <file>` — once per document, and the CLI
+ * registers tsx and transpiles 11,800 lines of `main.ts` plus core, api and
+ * server on every spawn. Measured 6 Sep 2026: 571ms a spawn, 62 documents,
+ * ~35 seconds, which was `roadmap.test.ts` being the slowest test in the suite
+ * by an order of magnitude and paid on every run.
+ *
+ * So this registers tsx ONCE and imports the same function the CLI would have
+ * called. One reader still, because the reader was never the CLI — it was
+ * `docStatus`, and this calls it directly rather than through eleven thousand
+ * lines of command definitions that have nothing to do with front matter.
  */
+register();
+registerLoader("../packages/cli/bin/workspace-loader.mjs", import.meta.url);
+const { docStatus, statusProblems } = await import("@isocan/core");
+
 function statusOf(file) {
-  const out = execFileSync("node", [cli, "--json", "doc", "status", file], {
-    cwd: repo,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  return JSON.parse(out);
+  const status = docStatus(readFileSync(path.join(repo, file), "utf8"));
+  return { ...status, problems: statusProblems(status) };
 }
 
 const ORDER = ["journey.md", "design.md", "plan.md", "phases.md"];

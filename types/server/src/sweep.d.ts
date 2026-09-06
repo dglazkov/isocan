@@ -105,7 +105,7 @@ export type SweepOutcome = {
 } | {
     outcome: "expelled";
 };
-export type SweepListener = (canvasId: string, badgeId: string, outcome: SweepOutcome) => void;
+type SweepListener = (canvasId: string, badgeId: string, outcome: SweepOutcome) => void;
 /**
  * **Where the sweep's outcomes go, and what it remembers of them.**
  *
@@ -168,7 +168,7 @@ export declare class SweepHub {
  */
 export declare function sweepCanvas(desk: Desk, canvasId: string, creator?: string | null, report?: SweepListener): Promise<SweepReport>;
 /** What a sweep over several canvases did, and how many it reached. */
-export interface SpaceSweepReport extends SweepReport {
+interface SpaceSweepReport extends SweepReport {
     reached: number;
 }
 /**
@@ -221,3 +221,4 @@ report?: SweepListener): Promise<{
     killed: BadgeRecord;
     swept: SweepReport;
 } | null>;
+export {};

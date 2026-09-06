@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-06
 issue: 185
 see: ui-refresh, evals
-note: step 0 done (the eight-PR queue drained) and step 1 partly (768,993 → 720,659, still over the 640,000 bound — the rest is shell code, not chunk boundaries); an outside architecture review checked against the tree — most of it holds, four items are wrong in ways that change the fix, and the finding it missed is that the nightly caught the bundle breach three nights running and every report is sitting in an unmerged PR
+note: steps 0, 2, 3, 4, 5, 6, 7 and 8 done and step 1 partly (768,993 → 720,659, still over the 640,000 bound — the rest is shell code, not chunk boundaries); an outside architecture review checked against the tree — most of it holds, four items are wrong in ways that change the fix, and the finding it missed is that the nightly caught the bundle breach three nights running and every report is sitting in an unmerged PR
 ---
 
 # The architecture review, checked against the tree
@@ -25,8 +25,9 @@ Checked and confirmed: core's runtime dependencies are still exactly one
 is 11,818 lines and `packages/server/src/http.ts` 4,542; all six pages in
 `App.tsx` are statically imported; `docs/architecture.md`'s "Distance to the
 map" still lists the Share dialog and grant routes as unbuilt, which they have
-not been since phase 14; and `test/roadmap.test.ts` really does kill its child
-at 60s inside a test that allows 120s, so raising the child is exactly right.
+not been since phase 14; and `test/roadmap.test.ts` really did kill its child
+at 60s inside a test that allows 120s — though the fix turned out to be
+removing the reason it took a minute, not raising the minute (step 7).
 
 Unused exports measure 49, not 47. A small thing, and the direction is the
 same.
@@ -155,7 +156,8 @@ resolution, and it is worth knowing that this conflict is structural and will
 recur every time more than one night is drained at once.
 
 **1. Get the entry chunk under 640,000.** ⚠️ **Partly done 6 Sep —
-768,993 → 720,659, and the bound is still missed.** `LensPage`,
+768,993 → 720,659, and the bound is still missed.** (722,753 as measured on
+the 6th after the day's other merges; step 2 now holds that line.) `LensPage`,
 `CanvasListPage`, `NotHerePage`, the Share dialog and the history scrubber
 are behind lazy boundaries; all five were already mounted conditionally, so
 only the arrival of their bytes changed.
@@ -182,20 +184,140 @@ every canvas visitor downloaded the same bytes and one more round trip, which
 is the precise move the bound was reshaped to make impossible. A metric
 satisfied that way is worse than a metric breached honestly.
 
-**2. Make the bound fail a push, not a report.** The nightly says MISSED; CI
-says nothing. Until the number can redden a commit, step 1 is a one-time
-cleanup rather than a floor.
+**2. Make the bound fail a push, not a report.** ✅ **Done 6 Sep.** The nightly
+said MISSED; CI said nothing. `test/bundle-budget.test.ts` now measures the
+entry chunk in the ordinary suite — so it runs on every pull request, now that
+`pr.yml` exists.
 
-**3. `formatBytes` to core**, with the terabyte as its test.
+**It is a ratchet, not the bound**, and that is deliberate: the chunk is
+722,753 today against a goal of 640,000, so asserting the goal would redden
+main from the moment it landed, which is a red trunk rather than a guard.
+The assertion is "no bigger than the last number somebody agreed to", and the
+distance to the goal is printed on every run. Raising the ceiling is one line
+in a diff with a reason beside it; what cannot happen again is a hundred
+kilobytes arriving as a hundred unremarked commits.
+
+**It measures the build and never makes one**, and that took two goes. The
+first version built when `dist` was stale — because the trap bit immediately:
+this machine's `dist` predated step 1 and measured 768,812 for a tree whose
+real answer was 722,753. But building from inside a parallel suite is worse
+than the problem: four other test files read `packages/web/dist`, and the
+racing build made this test report **1,093,766** for a tree that actually
+produces 725,291 — fifty per cent wrong, in the alarming direction, which is
+how a guard teaches people to ignore it. So a missing or stale build is a loud
+SKIP naming the command, and `ISOCAN_REQUIRE_BUNDLE=1` (which both workflows
+set) turns that skip into a failure — the `ISOCAN_REQUIRE_EMULATOR` shape,
+for the same reason.
+
+**3. `formatBytes` to core**, with the terabyte as its test. ✅ **Done 6 Sep.**
+`core/bytes.ts`, beside `elapsed.ts` and not in `format.ts` — that file is the
+canvas tidy, and a size is not a layout. The CLI re-exports it from
+`output.ts` so `main.ts`'s import list is untouched; the web imports it
+directly and its shorter unit list is gone. The test leads with the terabyte,
+which is the case that was wrong, and a guard names the two files that used
+to hold a copy each so a re-introduction is caught where it happened.
 
 **4. `defaultSize` and the extension table to core**, keeping `mimeFor` and
-`mimeTypeOf` as two entry points.
+`mimeTypeOf` as two entry points. ✅ **Done 6 Sep.** `core/media.ts` holds the
+fourteen-row table, the lookup ORDER (a loaded module's extensions first, then
+the table — two copies of that is how one surface keeps calling a file a
+diagram after the other has stopped), and `defaultSize`, which was three number
+pairs written out twice.
+
+`mimeFromName` answers `undefined` rather than a default, which is what lets
+the two entry points stay two: the CLI has nothing else to go on and falls back
+to `application/octet-stream`; the browser still has `file.type` and reaches
+the table only as a patch. The web now sees all fourteen rows rather than the
+five browsers get wrong, and that is not the dead weight it looks like — the
+table is consulted only when `file.type` was empty or `octet-stream`, so extra
+rows can only improve an answer the browser declined to give and can never
+override one it did. It costs **276 bytes in the entry chunk**, measured, which
+is what "the other nine would be dead weight" turns out to weigh. `media.test.ts` names the three files that held a copy, so
+a re-introduction is caught where it happened.
 
 **5. Restate the cloud-desk invariant** as `denormalize()`, with a source
-guard.
+guard. ✅ **Done 6 Sep.** The comment says what is true — every write of a
+badge document passes its record through `denormalize()`, four write sites
+sharing one derivation — and says out loud that it used to claim one writer,
+so the next reader knows the sentence changed rather than the code.
+
+The guard is `cloud-desk-writers.test.ts`, and deliberately **not** in
+`cloud-desk-arrays.test.ts`, which needs a Firestore emulator and therefore
+does not run on most machines or most pull requests. A guard that catches a
+fifth writer has to run where the fifth writer is written. It reads the source,
+resolves each `.set(` to the collection it targets — chained, `tx.set(ref, …)`
+and plain receiver, all three — and requires `denormalize` on every badge
+write, with `touch`'s `lastSeen` merge as the one named exception. Anything it
+cannot classify comes back as **unresolved and fails**, rather than as "not a
+badge write": the first version silently missed the chained
+`collection(BADGES).doc(id).set(…)` entirely, which is a guard reporting green
+about code it never looked at. Three mutations killed, including aliasing the
+ref to a new name to dodge it.
 
 **6–8. The small true things.** `architecture.md`'s stale inventory; the
 `roadmap.test.ts` child timeout; the 49 unused exports.
+
+**6 — the inventory, and why a list of ABSENCES rots quietly.** ✅ **Done
+6 Sep.** "Distance to the map" said the Share dialog and the grant routes were
+unbuilt for the three weeks after phase 14 built them (the dispatch path on the
+same line is built too; `registrations/{id}` really is not, and now stands
+alone). An absence is the one kind of claim that goes stale without anything
+failing — the shape the roadmap exists to end for a document's status, one
+level along.
+
+So the section says how each bullet would be checked, and
+`test/architecture.test.ts` checks the two that can be: no client mentions
+`MAX_DIRECT_UPLOAD_BYTES`, and nothing queues blob bytes offline. Build either
+and the suite asks for the doc in the same commit. The others carry their
+reasoning instead, because "queueing bytes is a second durable store" is a
+design position and not a grep. Both guards mutation-tested.
+
+**8 — and the review undersold this one.** ✅ **Enforced 6 Sep.** It reported
+"49 unused exports, not 47" — a small thing, same direction. The finding is in
+`.agents/personas/reviewer.md`, which has said **`at most: 0`** since 2
+September with the reasoning beside it: *"a ratchet set above its floor is
+slack nobody decided to leave. The next one fails on the commit that adds it,
+which is the whole point."*
+
+Four days later it was **56**. The ratchet was at its floor, the principle was
+written down, and fifty-six arrived anyway — because only the nightly read the
+number, and a nightly report is not a commit failing. **That is step 2's
+finding on a second metric**, which is what makes it a pattern rather than an
+incident: a bound nothing enforces is a comment.
+
+`test/unused-exports.test.ts` measures it in the ordinary suite, through the
+same `scripts/measure.mjs` the persona declares. 56 → 39 by un-exporting every
+server and web `lib/` name on the list, where nothing outside this repository
+could have imported them, with the compiler as the check. **The 39 that remain
+are all in `packages/core/src`** — and core is what a runtime module is handed
+at load, so deleting from it is a decision about what `@isocan/core` promises a
+module author, not a tidy-up. `ModuleEdge`, `ModuleActionFacts` and the DTCG
+token types look exactly like surface somebody would build against. That
+decision wants a person and is left as one; the drift is not.
+`measure.mjs unused-exports --names` prints them.
+
+**7 did not need its fix — it needed its cause removed.** ✅ **Done 6 Sep.**
+The review is right that the child was killed at 60s inside a test allowing
+120s, and raising the child would have made the test pass. But the question
+raising it does not ask is *why a script that reads front matter out of 62
+markdown files needs a minute*. It was spawning the whole CLI once per
+document: `isocan --json doc status <file>`, and every spawn registers tsx and
+transpiles `main.ts`'s 11,818 lines plus core, api and server before it reads
+a single `---`. Measured: 571ms a spawn, 62 documents, ~35 seconds — the
+slowest file in the suite by an order of magnitude, paid on every run.
+
+`scripts/roadmap.mjs` now registers tsx once and imports `docStatus` directly.
+**0.42s for the whole script**, and the test file went 35s → 1.8s. The "one
+reader" invariant is untouched, because the reader was never the CLI — it was
+`docStatus`, reached through eleven thousand lines of command definitions that
+have nothing to do with front matter.
+
+The guard moved with it, and this is the part worth keeping: it used to assert
+`doc", "status"` appeared in the script — the *mechanism*, which made the 62
+spawns a thing the suite required. It now asserts the invariant (core is the
+one reader, no second parser here) and adds what the textual check cannot say:
+that the roadmap and `isocan doc status` **agree about a document**, through
+one spawn rather than 62.
 
 **9. The monoliths — and this page disagrees with the review.** `main.ts` at
 11,818 lines is a real cost. A big-bang split is a large, risky diff with no

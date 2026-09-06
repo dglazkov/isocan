@@ -1,21 +1,8 @@
 import { useState } from "react";
-import type { Actor, GcReport } from "@isocan/core";
+import { formatBytes, type Actor, type GcReport } from "@isocan/core";
 import { runGc } from "../lib/api.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB"];
-  let value = bytes;
-  let unit = "B";
-  for (const next of units) {
-    if (value < 1024) break;
-    value /= 1024;
-    unit = next;
-  }
-  return `${value.toFixed(value >= 100 ? 0 : 1)} ${unit}`;
-}
 
 /** Must match .trash-panel's width in styles.css. */
 

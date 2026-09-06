@@ -70,4 +70,11 @@ export const {
   // direct.ts — speaking to a canvas's home when it lives elsewhere
   DIRECT_VAR,
   refuseDaemonVerb,
+  // export.ts — backups: read a canvas out of a home, hand it back
+  exportCanvases,
+  exportItem,
+  importExport,
+  readManifest,
+  exportedCanvasIds,
+  wholeLog,
 } = api;

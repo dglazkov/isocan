@@ -69,7 +69,7 @@ export interface ContentSigning {
   ttlSeconds: number;
 }
 
-export interface ContentOptions {
+interface ContentOptions {
   /**
    * True when every request this mount hears is the content role's — the
    * local second listener, which has no app origin to tell it apart from.

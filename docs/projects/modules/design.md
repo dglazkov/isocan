@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-04
 see: modules, extensions, workbench, mindmap, iso-api, atlas
-note: designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep. Phase 5, sandboxes, waits on the content origin, extension actors and compute consent
+note: designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep. Phase 5, sandboxes, waits on three gates: the content origin (CLEARED 6 Sep, live on prod), extension actors (which extensions stage 4 found has no subject to attribute until a panel ACTS, so it waits on that rather than on the calendar) and compute consent
 ---
 # Modules — a package that contributes to both surfaces, and can be taken away
 

@@ -880,7 +880,7 @@ export function createSpaceGrant(
   });
 }
 
-export function createSpaceBar(spaceId: string, subject: GrantSubject, actorId?: string): Promise<GrantResponse> {
+function createSpaceBar(spaceId: string, subject: GrantSubject, actorId?: string): Promise<GrantResponse> {
   return request("POST", spaceGrantsRoute(spaceId), {
     subject,
     bars: true,

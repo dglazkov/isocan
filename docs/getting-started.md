@@ -106,6 +106,8 @@ isocan teleport <canvas> --to https://dev.isocan.io --dry-run
 It carries the whole history and the bytes, and leaves the old home
 forwarding, so every address that worked still works. Grants do not travel —
 who may enter is a decision about a place — and the command says so.
+[Teleport](isocan-teleport.md) is the full walkthrough; to keep a copy rather
+than move it, [Export](isocan-export.md) is the backup.
 
 **Two things worth being careful about.**
 

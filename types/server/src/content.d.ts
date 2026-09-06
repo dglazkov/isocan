@@ -63,7 +63,7 @@ export interface ContentSigning {
      * than half of it living in a route file. */
     ttlSeconds: number;
 }
-export interface ContentOptions {
+interface ContentOptions {
     /**
      * True when every request this mount hears is the content role's — the
      * local second listener, which has no app origin to tell it apart from.
@@ -177,3 +177,4 @@ export declare const CONTENT_CSP: string;
 export declare function isContentPath(method: string, pathname: string): boolean;
 /** Register the content role's routes — all of them, which is one. */
 export declare function registerContentRoutes(app: FastifyInstance, deps: ContentDeps, options: ContentOptions): void;
+export {};

@@ -74,8 +74,8 @@ export function contentTtl(envValue: string | undefined): number {
 
 /** The query parameters a signed read carries. Two, both opaque to everything
  * but this file. */
-export const EXPIRY_PARAM = "exp";
-export const SIGNATURE_PARAM = "sig";
+const EXPIRY_PARAM = "exp";
+const SIGNATURE_PARAM = "sig";
 
 /**
  * What is signed, spelled once.

@@ -23,6 +23,7 @@ import {
   AREA_PROPERTIES,
   DOC_MIME,
   docProperties,
+  defaultSize,
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
@@ -33,7 +34,14 @@ const MAX_INITIAL_WIDTH = 480;
  *  of dropped images sits the way the daemon would have spaced them. */
 const FILE_GAP = 40;
 
-/** Measure an image/video's natural size, capped; fall back to defaults. */
+/**
+ * Measure an image/video's natural size, capped; fall back to core's defaults.
+ *
+ * Only the MEASUREMENT is this surface's: the numbers to fall back to are
+ * `defaultSize`, which the CLI answers with too, because a file the terminal
+ * adds and the same file dropped here should land the same size. They were
+ * written out twice until step 4 of the architecture review.
+ */
 async function measure(file: File, mimeType: string): Promise<{ width: number; height: number }> {
   if (mimeType.startsWith("image/")) {
     try {
@@ -46,11 +54,10 @@ async function measure(file: File, mimeType: string): Promise<{ width: number; h
       bitmap.close();
       return size;
     } catch {
-      return { width: 480, height: 360 };
+      return defaultSize(mimeType);
     }
   }
-  if (mimeType.startsWith("video/")) return { width: 480, height: 270 };
-  return { width: 420, height: 320 };
+  return defaultSize(mimeType);
 }
 
 /**

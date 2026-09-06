@@ -89,6 +89,55 @@ describe("teleport", () => {
     expect(theirs.map((e) => e.seq)).toEqual(mine.map((e) => e.seq));
   });
 
+  it("carries the bytes an item names, and the far home holds them", async () => {
+    /**
+     * The move that a canvas with anything ON it takes. Bytes are not
+     * operations — they do not replicate, and `adopt` writes only the log —
+     * so a teleport has to carry them by hand, into a canvas that until the
+     * log lands does not exist at the far home. The blob route, like every
+     * canvas route, answers 404 for a canvas the home does not have; sending
+     * the bytes before the log was therefore a move that could not complete
+     * for any canvas naming a blob, which the blob-less tests above never
+     * noticed.
+     */
+    const body = "# packed\n";
+    const uploaded = await fetch(`${baseOf(here)}/api/projects/${CANVAS}/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": "text/markdown", "X-Isocan-Filename": "packed.md", ...badge.headers },
+      body,
+    });
+    expect(uploaded.status, await uploaded.clone().text()).toBe(200);
+    const { blobHash } = (await uploaded.json()) as { blobHash: string };
+    const added = await post(badge, baseOf(here), "/api/ops", {
+      canvasId: CANVAS,
+      actor: dion,
+      op: {
+        type: "item.add",
+        itemId: "itm_packed",
+        version: { id: "ver_packed", blobHash, mimeType: "text/markdown", filename: "packed.md", size: body.length },
+        width: 100,
+        height: 100,
+        placement: { x: 0, y: 0 },
+      },
+    });
+    expect(added.status, await added.text()).toBe(200);
+
+    const moved = await teleport(baseOf(there), false);
+    expect(moved.status, JSON.stringify(moved.body)).toBe(200);
+    expect(moved.body.moved).toBe(true);
+    expect(moved.body.blobs).toBe(1);
+
+    const theirs = await there.store.listBlobs(CANVAS);
+    expect(theirs.map((b) => b.hash)).toEqual([blobHash]);
+    expect(theirs[0]!.meta.filename).toBe("packed.md");
+    // And the far home can hand them back: the item is openable where it now lives.
+    const opened = await fetch(`${baseOf(here)}/api/projects/${CANVAS}/blobs/${blobHash}`, {
+      headers: badge.headers,
+    });
+    expect(opened.status).toBe(200);
+    expect(await opened.text()).toBe(body);
+  });
+
   it("keeps the timestamps, which a replay through the write path would not", async () => {
     /**
      * The reason `adopt` exists rather than a loop over `submitOp`.

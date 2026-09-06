@@ -1,39 +1,13 @@
-import path from "node:path";
-import { moduleKinds } from "@isocan/core";
-
-const BY_EXT: Record<string, string> = {
-  md: "text/markdown",
-  markdown: "text/markdown",
-  html: "text/html",
-  htm: "text/html",
-  txt: "text/plain",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  svg: "image/svg+xml",
-  webp: "image/webp",
-  mp4: "video/mp4",
-  webm: "video/webm",
-  mov: "video/quicktime",
-};
+import { defaultSize, mimeFromName } from "@isocan/core";
 
 /**
- * The mime for a filename — a loaded module's extensions first, so
- * `isocan add diagram.mmd` lands the file as the module's kind and, with the
- * module gone, as whatever the table below (or nothing) says: the same rule
- * the web app's `mimeTypeOf` follows for a dropped file.
+ * The mime for a filename. Only the extension to go on, so core's table is
+ * this function's whole knowledge and `application/octet-stream` is its last
+ * resort — see `core/media.ts` for why this and the web's `mimeTypeOf` are two
+ * entry points onto one table rather than one function.
  */
 export function mimeFor(filename: string): string {
-  const ext = path.extname(filename).slice(1).toLowerCase();
-  const added = moduleKinds().find((k) => k.extensions?.includes(ext));
-  if (added) return added.mimes[0]!;
-  return BY_EXT[ext] ?? "application/octet-stream";
+  return mimeFromName(filename) ?? "application/octet-stream";
 }
 
-/** Sensible default canvas footprint per media kind (web reads natural sizes). */
-export function defaultSize(mimeType: string): { width: number; height: number } {
-  if (mimeType.startsWith("image/")) return { width: 480, height: 360 };
-  if (mimeType.startsWith("video/")) return { width: 480, height: 270 };
-  return { width: 420, height: 320 };
-}
+export { defaultSize };

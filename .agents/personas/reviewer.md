@@ -14,13 +14,27 @@ goal:
   # the box is what it is", which no caller ever did, so it went with the
   # invariant left where `merge.test.ts` already states it.
   #
-  # The bound is 0 because that is what it measures now, and a ratchet set
-  # above its floor is slack nobody decided to leave. The next one fails on the
-  # commit that adds it, which is the whole point.
+  # The bound was 0 on 2 Sep, with the reasoning that "a ratchet set above its
+  # floor is slack nobody decided to leave. The next one fails on the commit
+  # that adds it, which is the whole point."
+  #
+  # Four days later it measured 56. The principle was right and nothing acted
+  # on it, because only the nightly ever read this number, and a nightly report
+  # is not a commit failing — step 2's finding about the bundle, on a second
+  # metric, which is what makes it a pattern rather than an incident.
+  #
+  # So it is 39 and it is ENFORCED: test/unused-exports.test.ts measures it in
+  # the ordinary suite, through this same command. 56 → 39 came from
+  # un-exporting every server and web lib/ name on the list, where nothing
+  # outside the repository could have imported them. The 39 that remain are all
+  # in packages/core/src, and core is what a runtime module is handed at load —
+  # so deleting from it is a decision about what @isocan/core promises a module
+  # author, which wants a person and is named rather than made in passing.
+  # `--names` prints them.
   - name: exports nothing outside their own file uses
-    at most: 0
+    at most: 39
     measured by: node scripts/measure.mjs unused-exports
-    baseline: 0, 2026-09-02, 6bb8994
+    baseline: 39, 2026-09-06, 16b7891
   # 277 → 253 on the same commit, and NOT because anything was documented:
   # this counts exports with no comment above them, and 73 of the declarations
   # above stopped being exports. The drop is a consequence, not an achievement,

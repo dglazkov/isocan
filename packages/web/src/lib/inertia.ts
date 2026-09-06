@@ -28,9 +28,9 @@ export interface Sample {
 
 /** How far back the release looks to read the hand's speed. Older samples
  *  describe where the drag has been, not where it was going. */
-export const FLICK_WINDOW_MS = 80;
+const FLICK_WINDOW_MS = 80;
 /** Below this, px/ms, a release is a stop, not a flick. */
-export const MIN_FLICK = 0.35;
+const MIN_FLICK = 0.35;
 /** Fastest coast honoured, px/ms — a wild throw still lands nearby. */
 export const MAX_FLICK = 3;
 /** Exponential decay's time constant: speed halves every ~0.7·DECAY_MS. */

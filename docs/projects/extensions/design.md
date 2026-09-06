@@ -1,8 +1,8 @@
 ---
-status: designed
-since: 2026-08-29
+status: partial
+since: 2026-09-06
 see: extensions
-note: gated on runtime validation for `does`
+note: stages 1 and 2 built 6 Sep — a declarative tool as an item with `role=tool`, `does` limited to a slash command that exists, a closed icon set, reserved labels, and the capability list printed before `--yes`; `isocan tool list/add` and the rail render from ONE reader in core. Stages 3 (declarative panels), 4 (extension actors — which has no subject to attribute until a panel ACTS, checked 6 Sep) and 5 (hosted panels; its content-origin gate cleared 6 Sep) not built
 ---
 # Extending the canvas from inside it
 
@@ -157,15 +157,63 @@ by typing.
 
 ## Stages
 
-1. **Declarative tools.** Manifest, named icons, `does` limited to existing
-   commands. No new ops, no frames, no actors — the rail becomes editable and
-   most of the want is met.
+1. **Declarative tools.** ✅ **Built 6 Sep.** Manifest, named icons, `does`
+   limited to existing commands. No new ops, no frames, no actors — the rail
+   becomes editable and most of the want is met.
+
+   `core/extensions.ts` is the one reader — `readToolExtension` answers with a
+   tool or a **sentence naming the field**, and both surfaces call it, so a
+   manifest the terminal refuses is one the rail refuses for the same reason.
+   The rule is enforced where it is stated: `does` must name a command this
+   canvas actually has, the icon must come from the set we ship (a closed set
+   is a security decision — an icon is a place anything at all could be
+   painted, including a copy of a control that already exists), and the label
+   may not be one of the app's own tools, compared with case and punctuation
+   flattened because a check that only catches the exact string catches nobody
+   trying. `isocan tool list` / `tool add`; the rail draws them below a divider,
+   with the tool's own name under the glyph. Pressing one calls `postToMain` —
+   the same door the composer uses — which is the design's sentence made
+   literal, and a test forbids the rail sending an operation of its own.
+
+   **No new op, route or store**, and the CLI test proves it the honest way: it
+   asserts `isocan ls` sees a tool as an ordinary item with `role=tool`, and
+   removes one with `rm` rather than a verb of its own.
+
 2. **The capability list**, printed on install, even though tier 1 needs almost
    none. The habit has to exist before the tier that depends on it.
+   ✅ **Built 6 Sep, with stage 1** and for exactly the stated reason.
+   `toolCapabilities` is **derived, never declared** — a manifest that stated
+   its own capabilities could understate them — and `tool add` prints it and
+   adds nothing until `--yes`, the gate `command add --from` already has.
 3. **Declarative panels**, once two real tools have asked for the same shape.
 4. **Extension actors and grants**, which is mostly wiring the identity desk to
    a non-human subject.
+
+   **It has no subject yet, and that is a finding rather than a delay.**
+   Checked on 6 Sep with stages 1 and 2 built: a tier-1 tool does not *act*, it
+   *asks*. Pressing one posts the slash command the person would have typed,
+   under that person's actor, and the acting is done by whatever agent picks
+   the comment up — which is already attributed, already undoable per actor,
+   already revocable. Giving the tool its own actor there would make the log
+   say the Tidy button asked for something, when what happened is that a person
+   asked for it with one click instead of eight keystrokes. That is a worse
+   record, not a better one.
+
+   The subject appears at tier 2 and 3, where a panel acts on its own — and
+   tier 3 is where it becomes load-bearing, because a hosted panel is somebody
+   else's code. So this stage's real predecessor is **a panel that acts**, not
+   the calendar. Building the desk wiring first would be machinery with nothing
+   to attribute, tested only against a fixture, which is the thing this design
+   forbids two paragraphs above about panel fields: *added when two real
+   extensions need it, never because one might.*
+
+   What stages 1 and 2 did settle, and what stage 4 inherits: the manifest, the
+   one reader, the capability list, and the rule that the ask goes through the
+   same door a person's message goes through. An extension actor is a change of
+   WHO is at that door, not a second door.
 5. **Hosted panels**, after the content origin lands. Not before.
+   *(The content origin landed on prod 6 Sep, so this gate is clear — the two
+   in front of it are not.)*
 
 ## Open
 

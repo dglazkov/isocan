@@ -281,6 +281,54 @@ export function parseCanvasAddress(raw: string): CanvasAddress | null {
   return { origin: url.origin, canvasId, ...(pass !== undefined ? { pass } : {}) };
 }
 
+/** An item address taken apart — `parseCanvasAddress`'s shape with the item
+ * that filled the screen. */
+export interface ItemAddress {
+  origin: string;
+  canvasId: string;
+  itemId: string;
+}
+
+/**
+ * **The inverse of `itemUrl`** — `origin/p/<canvas>/i/<item>`, and nothing
+ * else.
+ *
+ * `parseCanvasAddress` refuses this shape on purpose: its caller enrols a
+ * machine, and an address pointing at one screen is a thing to look at, not
+ * a thing to set a machine up from. `isocan export` is the caller that DOES
+ * mean one screen — back this item up, wherever it lives — so the shape gets
+ * its own reader here, beside the writer, for the reason every function in
+ * this file is here: one spelling, never two.
+ */
+export function parseItemAddress(raw: string): ItemAddress | null {
+  const { address } = splitPassFragment(raw.trim());
+  if (!address) return null;
+  const schemed = /^[a-z][a-z0-9+.-]*:\/\//i.test(address)
+    ? address
+    : `${/^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(address) ? "http" : "https"}://${address}`;
+  let url: URL;
+  try {
+    url = new URL(schemed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  const parts = url.pathname.replace(/\/+$/, "").split("/");
+  if (
+    parts.length !== 5 ||
+    parts[0] !== "" ||
+    `/${parts[1]}` !== CANVAS_PATH_PREFIX ||
+    parts[3] !== ITEM_PATH_SEGMENT
+  ) {
+    return null;
+  }
+  const canvasId = decodeURIComponent(parts[2] ?? "");
+  const itemId = decodeURIComponent(parts[4] ?? "");
+  if (!canvasId || !itemId) return null;
+  return { origin: url.origin, canvasId, itemId };
+}
+
 /**
  * **One address, one spelling** — the home half of what this file does for a
  * canvas.

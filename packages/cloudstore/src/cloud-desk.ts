@@ -95,7 +95,7 @@ const DISJUNCTION_LIMIT = 30;
  * phase 7 one per grant at `grants/{id}`, and from phase 8 one per pass at
  * `passes/{id}` — exactly the shapes the architecture draws.
  *
- * ## The denormalized arrays, and why there is exactly one writer
+ * ## The denormalized arrays, and the one function every write goes through
  *
  * `claimIds`, `claimKeys`, `admittedTo` and — from phase 9 stage 2 —
  * `attested` are the same data denormalized, one array per question the desk
@@ -104,11 +104,31 @@ const DISJUNCTION_LIMIT = 30;
  * that does not write them on every claim and every admission passes the suite
  * on a FileDesk and answers nothing in the cloud.
  *
- * So they cannot be forgotten, structurally: **nothing writes a badge except
- * `writeBadge`**, and `writeBadge` derives every one of them from `claims`,
- * `admissions` and `attestations` on every call. There is no code path that writes a claim and a
- * separate code path that writes an array — they are the same statement. A
- * reviewer's whole job on this file is to confirm there is one writer.
+ * So they cannot be forgotten, structurally: **every write of a badge document
+ * passes its record through `denormalize()`**, which derives all four arrays
+ * from `claims`, `admissions` and `attestations` on every call. There is no
+ * code path that writes a claim and a separate code path that writes an array
+ * — they are the same statement.
+ *
+ * **This used to say "nothing writes a badge except `writeBadge`", and by
+ * September that was false** — `mutate`, `killBadge` and the claim transaction
+ * had grown their own `tx.set`, four write sites where the sentence promised
+ * one. The invariant had not broken; its statement had. That is worse than an
+ * ordinary stale comment, because the sentence went on to tell a reviewer
+ * their whole job here was to confirm there is one writer: anybody doing that
+ * job in September would conclude the file was broken, or add a fifth writer
+ * by yet another path and believe it was fine (step 5 of
+ * `docs/research/2026-09-06-architecture-review.md`).
+ *
+ * So it is restated as what it actually is, and given a guard rather than a
+ * request: `cloud-desk-arrays.test.ts` reads this source and fails on a
+ * `tx.set`/`.set(` of a badge document whose argument does not go through
+ * `denormalize`. The next writer cannot skip it quietly.
+ *
+ * **`lastSeen` is the one exception, and it is exact**: `touch` merges that
+ * leaf alone. It is the only thing about a badge that changes without any of
+ * the arrays changing, which is what makes a merge safe there and nowhere
+ * else.
  *
  * ## And reads are forbidden a fallback
  *
@@ -169,7 +189,8 @@ export class CloudDesk implements Desk {
     if (!(stamp - previous >= TOUCH_DEBOUNCE_MS)) return;
     // `lastSeen` is a leaf field on its own: it is the ONE thing about a badge
     // that changes without any of the arrays changing, so it is the one place
-    // a merge is safe and `writeBadge` is not required.
+    // a merge is safe and `denormalize` is not required. The guard in
+    // `cloud-desk-arrays.test.ts` names this line as the single exception.
     await ref.set({ lastSeen: at }, { merge: true });
   }
 
@@ -415,7 +436,8 @@ export class CloudDesk implements Desk {
 
   // ---- spaces (roles phase 4) ----
 
-  /** THE ONE WRITER of a space document, like `writeBadge` for a badge: the
+  /** THE ONE WRITER of a space document — and unlike a badge, which has four
+   * writers sharing `denormalize`, a space really does have just this one: the
    * `holding` array is derived here from `canvasIds` on every write, empty on
    * a tombstone, so "did you remember to update the index?" is never asked. */
   async putSpace(space: Space): Promise<void> {
@@ -644,9 +666,12 @@ export class CloudDesk implements Desk {
   }
 
   /**
-   * THE ONE WRITER. Every array on a badge document is derived here, from the
-   * record, on every write — so "did you remember to update `claimIds`?" is
-   * not a question anybody has to ask.
+   * One of the badge writers, and the plainest — the others are `mutate`,
+   * `killBadge` and the claim transaction, each of which needs a transaction
+   * this one does not. What they share, and what the invariant actually is, is
+   * `denormalize`: every array on a badge document is derived there, from the
+   * record, on every write, so "did you remember to update `claimIds`?" is not
+   * a question anybody has to ask at any of the four.
    */
   private async writeBadge(badge: BadgeRecord): Promise<void> {
     await this.db.collection(BADGES).doc(badge.badgeId).set(denormalize(badge));
@@ -666,8 +691,8 @@ export class CloudDesk implements Desk {
    * **A killed badge is never mutated here.** One guard rather than one per
    * caller, so "a killed badge is a badge nobody holds" is a property of this
    * function and not a rule six methods have to remember — the same argument
-   * `writeBadge` makes about the denormalized arrays. `killBadge` is the
-   * deliberate exception and runs its own transaction.
+   * `denormalize` makes about the arrays. `killBadge` is the deliberate
+   * exception and runs its own transaction.
    */
   private async mutate(
     badgeId: string,

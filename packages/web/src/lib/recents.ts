@@ -14,12 +14,12 @@
  * A title that has since changed is corrected the moment the fetch lands,
  * because the row is drawn from the fetched canvas whenever there is one.
  */
-export interface RecentCanvas {
+interface RecentCanvas {
   id: string;
   title: string;
 }
 
-export const RECENT_KEY = "isocan.canvases.recent";
+const RECENT_KEY = "isocan.canvases.recent";
 
 /** Beyond this many, a "recent" canvas is not recent. */
 export const RECENT_LIMIT = 20;

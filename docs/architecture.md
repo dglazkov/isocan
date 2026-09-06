@@ -655,10 +655,21 @@ read off the machine.
 ## Distance to the map
 
 What the code does not have yet — an inventory, not a sequence (the
-sequence is [phases.md](projects/multiuser/phases.md)):
+sequence is [phases.md](projects/multiuser/phases.md)).
 
-- The Share dialog and grant routes; registrations and the dispatch
-  path.
+**Every bullet here is a claim that something is absent, and an absence is the
+one kind of statement that goes stale without anything failing.** This list
+said the Share dialog and the grant routes were unbuilt for the three weeks
+after phase 14 built them, and nothing could tell — which is the same shape the
+roadmap exists to end for a document's status. So each bullet now says how it
+would be checked, and `test/architecture.test.ts` checks the two that can be:
+if somebody builds them and forgets this list, the suite says so.
+
+- **`registrations/{id}`** — the frozen delegation's record, and the scoped
+  launch token that goes with it. *(The Share dialog, the grant routes and the
+  dispatch path were on this line until 6 Sep 2026 and are all built:
+  `ShareDialog.tsx`, `GET`/`POST`/`DELETE /api/projects/:id/grants`, and
+  agents-on-demand phase 4's summoning, walked by `dispatch.test.ts`.)*
 - **Blobs offline.** Phase 10 gave the browser a cached shell, a durable
   replica and a queue, and cut exactly one thing: adding a FILE with no
   network. Queueing bytes is a second durable store with its own quota
@@ -668,7 +679,8 @@ sequence is [phases.md](projects/multiuser/phases.md)):
   See [projects/multiuser/offline-tab.md](projects/multiuser/offline-tab.md).
 - The **clients'** half of the large-blob upload: the daemon serves the
   ticket and the register route, and neither the CLI nor the web
-  uploader branches on `MAX_DIRECT_UPLOAD_BYTES` yet. The intent is
+  uploader branches on `MAX_DIRECT_UPLOAD_BYTES` yet. *(Checked: no client
+  package mentions that constant.)* The intent is
   still "add this file", so it is a transport branch and not a verb —
   and when it lands, `agent-guide.md`'s advice to `POST …/blobs`
   directly needs the size caveat beside it.

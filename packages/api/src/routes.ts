@@ -862,8 +862,25 @@ export class DaemonRoutes {
     canvasId: string,
     to: string,
     dryRun: boolean,
-  ): Promise<{ canvasId: string; to: string; entries: number; blobs: number; bytes: number; moved: boolean }> {
+  ): Promise<{
+    canvasId: string;
+    to: string;
+    entries: number;
+    blobs: number;
+    bytes: number;
+    moved: boolean;
+    /** Blobs the far home did not take after the log landed; the old home,
+     *  a replica now, sends them on its next blob sweep or on `isocan blobs --push`. */
+    behind: number;
+  }> {
     return this.request("POST", `/api/projects/${canvasId}/teleport`, { to, dryRun });
+  }
+
+  /** Hand a home a whole canvas as somebody else's log — teleport's far end,
+   *  and what `isocan import` restores a backup through. Creates, never
+   *  merges: a canvas already at the home is refused. */
+  adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{ seqs: number }> {
+    return this.request("POST", `/api/projects/${canvasId}/adopt`, { entries });
   }
 
   gc(canvasId: string, request: GcRequest): Promise<GcReport> {

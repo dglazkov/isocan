@@ -140,6 +140,25 @@ export interface CanvasAddress {
  * is exactly the case phase 7's cheerful-wrong-address finding is about.
  */
 export declare function parseCanvasAddress(raw: string): CanvasAddress | null;
+/** An item address taken apart — `parseCanvasAddress`'s shape with the item
+ * that filled the screen. */
+export interface ItemAddress {
+    origin: string;
+    canvasId: string;
+    itemId: string;
+}
+/**
+ * **The inverse of `itemUrl`** — `origin/p/<canvas>/i/<item>`, and nothing
+ * else.
+ *
+ * `parseCanvasAddress` refuses this shape on purpose: its caller enrols a
+ * machine, and an address pointing at one screen is a thing to look at, not
+ * a thing to set a machine up from. `isocan export` is the caller that DOES
+ * mean one screen — back this item up, wherever it lives — so the shape gets
+ * its own reader here, beside the writer, for the reason every function in
+ * this file is here: one spelling, never two.
+ */
+export declare function parseItemAddress(raw: string): ItemAddress | null;
 /**
  * **One address, one spelling** — the home half of what this file does for a
  * canvas.

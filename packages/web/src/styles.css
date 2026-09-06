@@ -3189,6 +3189,15 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 /* A collaborator's place on the map. Clicking one recenters there like any
    minimap click — the dot IS the answer to "where is the agent?" (#39). */
+/* The ring around a collaborator's dot, and the rectangle showing where you
+   are looking. Both were hex literals in the component until 6 Sep — and an
+   SVG presentation attribute takes no var(), so no theme could move them: the
+   light accent measured 2.25:1 on the graphite panel and the white ring WAS
+   the panel in light. As CSS `stroke` they take tokens, and themes.test.ts
+   can see them. */
+.minimap-dot { stroke: var(--card); }
+.minimap-dot.followed { stroke: var(--accent); }
+.minimap-viewport { stroke: var(--accent); }
 .minimap-dot.working { animation: dot-pulse 1.6s ease-in-out infinite; }
 .minimap-dot.quiet { opacity: 0.55; }
 @keyframes dot-pulse {
@@ -3454,6 +3463,17 @@ button.mt-card:hover { border-color: var(--accent); }
 .tool-btn:hover { background: var(--chip); color: var(--ink); }
 .tool-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .tool-sep { height: 1px; margin: 2px 6px; background: var(--line); }
+/* A canvas's own tool (extensions stage 1). It keeps the rail's geometry —
+   same 38px square, same radius, same focus ring — because the app draws it
+   and a tool cannot be off-brand. What differs is that it says its own name
+   under the glyph, which is the design's *it must look like an extension*:
+   a control wearing no name is a control a person reads as the app's. */
+.tool-ext { flex-direction: column; gap: 1px; height: auto; padding: 5px 2px 4px; }
+.tool-ext-label {
+  font-size: 9.5px; line-height: 1; letter-spacing: .01em;
+  max-width: 34px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tool-ext:disabled { opacity: .45; }
 /* A short window gets a shorter rail rather than a scrolling one: smaller
    buttons keep every control on screen and reachable, and the popovers that
    hang off the rail (the ink well, the Add popover) keep working, which an
@@ -3703,6 +3723,12 @@ button.mt-card:hover { border-color: var(--accent); }
   pointer-events: none; will-change: transform;
   transition: opacity 0.12s ease;
 }
+/* The cursor's outline. It was `stroke="#fff"` in both components — the same
+   white on vellum and on graphite, where it reads as a hard halo rather than a
+   cut. `--card` is the surface a cursor is usually over, and is the white it
+   always was in light. */
+.own-cursor svg path,
+.remote-cursor svg path { stroke: var(--card); }
 .own-cursor svg { display: block; filter: drop-shadow(0 1px 2px var(--shade)); }
 /* The OS arrow would be a second cursor saying the same thing in a different
    colour. Only under Select, where this component renders at all. */
