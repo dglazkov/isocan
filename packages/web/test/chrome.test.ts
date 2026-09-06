@@ -583,18 +583,18 @@ describe("the Chat and the comments say which they are", () => {
     readFileSync(new URL(`../src/components/${file}`, import.meta.url), "utf8");
 
   it("gives the button and the panel it opens the SAME word", () => {
-    // `PanelSwitch` was deleted with the `···` drawer: nothing rendered it any
-    // more, and it was the last thing wearing the old `✳`. What replaced this
-    // assertion is `chatglyph.test.ts`, which holds the mark itself.
-    expect(read("CreateActions.tsx"), "PanelSwitch is gone").not.toMatch(/PanelSwitch/);
-    /* The word now reaches the header through the shared `PanelHead`, so the
-       assertion follows it there rather than looking for markup this file no
-       longer writes. The decision it guards is unchanged: the panel says the
-       same word as the button that opens it. */
+    /* The word reaches the header through the shared `PanelHead`, so the
+       assertion follows it there. The decision it guards is unchanged: the
+       panel says the same word as the button that opens it.
+
+       Two assertions used to sit here against `CreateActions.tsx` — that
+       `PanelSwitch` was gone from it, and the old `Main` label with it. That
+       file was deleted on 6 Sep because it had no code left, only a comment
+       and ten unused imports, which also means those two assertions had been
+       passing for reasons unrelated to what they claimed to check. A guard
+       against a file with nothing in it is not a guard. `chatglyph.test.ts`
+       holds the mark, and the two below hold the words. */
     expect(read("MainThreadPanel.tsx")).toContain('name="Chat"');
-    // The old pair, gone from both: a label naming the slot taught nobody
-    // what the panel was for.
-    expect(read("CreateActions.tsx")).not.toMatch(/<\/span> Main\b/);
     expect(read("MainThreadPanel.tsx")).not.toContain("<b>Main thread</b>");
   });
 

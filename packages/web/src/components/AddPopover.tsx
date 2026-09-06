@@ -87,6 +87,9 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
     if (adding !== "file") return;
     onFiles();
     setAdding(null);
+    // `adding` alone: `onFiles` is a prop with a new identity on every parent
+    // render, and depending on it would re-open the file picker every time the
+    // canvas re-rendered underneath this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adding]);
 

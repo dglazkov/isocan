@@ -72,6 +72,10 @@ export function useCanvasTools(canvasId: string): CanvasTool[] {
     return () => {
       alive = false;
     };
+    // `key` rather than `canvas`, for the reason given where it is built: the
+    // effect READS the whole canvas but only cares when a tool's version
+    // changes, and depending on the canvas would re-fetch every manifest on
+    // every pointer move.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, key, commands]);
 
