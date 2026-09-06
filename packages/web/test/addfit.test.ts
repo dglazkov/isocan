@@ -34,6 +34,27 @@ describe("the Add popover fits the window", () => {
   });
 });
 
+describe("the rail fits a short window", () => {
+  it("is centred by pinning both edges, so a rail taller than the window pins to the top rather than losing both ends", () => {
+    const rule = css.slice(css.indexOf(".tool-rail {"), css.indexOf("}", css.indexOf(".tool-rail {")));
+    expect(rule).toContain("top: var(--edge); bottom: var(--edge);");
+    expect(rule).toContain("margin: auto 0; height: fit-content;");
+    expect(rule).not.toContain("translateY(-50%)");
+    expect(rule).not.toMatch(/overflow/);
+  });
+
+  it("shrinks its buttons on a short window instead of scrolling, so the popovers that hang off it are not clipped", () => {
+    expect(css).toContain("@media (max-height: 560px) {\n  .tool-rail { gap: 2px; padding: 4px; }\n  .tool-btn { width: 32px; height: 32px; border-radius: var(--radius); }");
+    expect(css).toContain("@media (max-height: 420px) {\n  .tool-btn { width: 28px; height: 28px; }");
+  });
+
+  it("puts the short-window rules after the base ones, since at equal specificity the later rule wins", () => {
+    // Found the first time: the media blocks sat above `.tool-btn {` and lost to it; the rail stayed 396px tall on a 340px window.
+    expect(css.indexOf("@media (max-height: 560px)")).toBeGreaterThan(css.indexOf("\n.tool-btn {\n"));
+    expect(css.indexOf("@media (max-height: 420px)")).toBeGreaterThan(css.indexOf("\n.tool-sep {"));
+  });
+});
+
 describe("items that lead away wear a dashed border in their own colour", () => {
   it("marks a card with a source, and a live site, as away", () => {
     expect(itemView).toContain('const away = source !== null || kind === "site";');

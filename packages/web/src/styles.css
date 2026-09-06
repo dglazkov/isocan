@@ -3429,8 +3429,16 @@ button.mt-card:hover { border-color: var(--accent); }
 .btn.active .shelf-badge { background: var(--accent-ink); color: var(--accent); }
 
 /* ---------- right tool rail (pointer modes, Figma-style) ---------- */
+/* **Centred, but never off the top.** It was `top: 50%; translateY(-50%)`,
+   which centres a rail taller than the window by pushing BOTH ends out of
+   it — on a short window the + at the bottom, and the pointer at the top,
+   were simply not there. Pinning both edges with `margin: auto` centres the
+   same way when there is room and pins to the top edge when there is not,
+   so what overflows is at the bottom, once, and the height rules below
+   make sure it rarely does. */
 .tool-rail {
-  position: absolute; right: var(--edge); top: 50%; transform: translateY(-50%); z-index: var(--z-float);
+  position: absolute; right: var(--edge); top: var(--edge); bottom: var(--edge);
+  margin: auto 0; height: fit-content; z-index: var(--z-float);
   display: flex; flex-direction: column; gap: 4px; padding: 6px;
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
   box-shadow: var(--shadow-pop);
@@ -3443,6 +3451,20 @@ button.mt-card:hover { border-color: var(--accent); }
 .tool-btn:hover { background: var(--chip); color: var(--ink); }
 .tool-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .tool-sep { height: 1px; margin: 2px 6px; background: var(--line); }
+/* A short window gets a shorter rail rather than a scrolling one: smaller
+   buttons keep every control on screen and reachable, and the popovers that
+   hang off the rail (the ink well, the Add popover) keep working, which an
+   `overflow` on the rail would have clipped. These sit after the base rules
+   on purpose: at equal specificity the later one wins. Measured: nine
+   buttons and two separators are 396px at 38px; 322px at 32px; 286px at 28px. */
+@media (max-height: 560px) {
+  .tool-rail { gap: 2px; padding: 4px; }
+  .tool-btn { width: 32px; height: 32px; border-radius: var(--radius); }
+}
+@media (max-height: 420px) {
+  .tool-btn { width: 28px; height: 28px; }
+  .tool-sep { margin: 1px 6px; }
+}
 
 /* The ink well: the Pen's palette, hung off the rail while the Pen is up.
    The chip on the button shows what is in the nib right now. */
