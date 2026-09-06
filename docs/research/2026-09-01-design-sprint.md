@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-09-01
+issue: 150
 see: atlas, personas, on-demand, sprint
 note: stages 0-2 built 1 Sep — the `/sprint` command, `sprintState` derived from the Chat, `isocan sprint` and the clock chip, hand-in as a property, the vote curtain by lens, the split tally, the bell; stage 3 (rival rooms, the overnight Monday) is practice, not code, and the sprint has not yet been run for real
 ---

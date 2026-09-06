@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-08-30
+issue: 149
 see: standing-agents, on-demand, personas
 note: the wake was the hinge and on-demand built it 30 Aug; the project that followed is standing-agents — phase 1 (one name, one machine, many canvases) built 1 Sep, the multi-canvas rc and `available` not
 ---

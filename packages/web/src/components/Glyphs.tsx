@@ -254,6 +254,17 @@ export function PersonaGlyph({ size = 15 }: { size?: number }) {
  * weight and cap as the rest of this family, because it sits on a bar beside
  * them.
  */
+/** A caret pointing down: "there is a list under this". The switcher's handle
+ *  beside the canvas's name. */
+export function ChevronGlyph({ size = 12 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"
+      stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round">
+      <path d="M4 6.5 8 10.5l4-4" />
+    </svg>
+  );
+}
+
 export function ArrowGlyph({ size = 12 }: { size?: number }) {
   return (
     <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill="none"

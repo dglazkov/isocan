@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-08-30
+issue: 154
 note: export built; import deliberately not, and the edge question is answered
 ---
 # JSON Canvas: what adopting it would mean

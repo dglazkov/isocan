@@ -1,6 +1,7 @@
 ---
 status: designed
 since: 2026-09-05
+issue: 182
 see: multi-identity, workbench, on-demand, ui-refresh
 note: measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with a finger, the chrome overlaps, the Chat fits by accident and the deck fits on purpose; the field draws one line (a phone views, comments and presents; a tablet edits); recommends touch physics for every coarse pointer, a phone face built from the Chat, the viewer and the deck, and no native app. Nothing built
 ---

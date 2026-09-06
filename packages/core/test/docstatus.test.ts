@@ -26,6 +26,32 @@ describe("where a document says it stands", () => {
     });
   });
 
+  it("reads the issue that follows the work, as a number, either spelling", () => {
+    /* The doc is the argument and the plan; the issue is where the work is
+       followed and closed. "#134" and "134" both mean issue 134; a word there
+       is not an issue and is dropped rather than guessed at. */
+    expect(docStatus(fm("status: partial\nissue: 134")).issue).toBe(134);
+    expect(docStatus(fm("status: partial\nissue: #134")).issue).toBe(134);
+    expect(docStatus(fm("status: partial\nissue: soon")).issue).toBeUndefined();
+    expect(docStatus(fm("status: partial"))).not.toHaveProperty("issue");
+  });
+
+  it("every research note that owes work says where it is followed", async () => {
+    /* A note that is `designed` or `partial` is work somebody could pick up,
+       and a GitHub issue is where that happens; a note with no issue is work
+       nobody can find from the tracker. `built`, `noted` and `superseded` owe
+       nothing and may stand alone. Added 4 Sep 2026, the day every open note
+       got its issue. */
+    const dir = path.join(repo, "docs/research");
+    const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".md") && f !== "README.md");
+    const owing: string[] = [];
+    for (const file of files) {
+      const doc = docStatus(await fs.readFile(path.join(dir, file), "utf8"));
+      if (["designed", "partial", "blocked"].includes(doc.status) && !doc.issue) owing.push(file);
+    }
+    expect(owing, "research notes owing work with no `issue:` in their front matter").toEqual([]);
+  });
+
   it("a doc with no front matter is untriaged, not broken", () => {
     // An untriaged doc is a real state and counting them is half the point.
     expect(docStatus("# Just a doc\n")).toEqual({ status: "open", see: [] });

@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-08-29
+issue: 138
 see: evals,personas
 note: steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open
 ---

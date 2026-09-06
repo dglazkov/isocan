@@ -65,6 +65,13 @@ interface DocStatus {
   supersededBy?: string;
   /** One line for the roadmap, when the title is not enough. */
   note?: string;
+  /**
+   * The GitHub issue that follows this doc's work, by number. The doc is the
+   * argument and the plan; the issue is where the work is followed and where
+   * it is closed. One number, here, so the roadmap can link it and a test can
+   * find a doc that owes work and has nowhere it is being followed.
+   */
+  issue?: number;
 }
 
 const isState = (s: string): s is DocState => (DOC_STATES as readonly string[]).includes(s);
@@ -95,6 +102,9 @@ export function docStatus(text: string): DocStatus {
     ...(kv.get("blockedBy") ? { blockedBy: kv.get("blockedBy")! } : {}),
     ...(kv.get("supersededBy") ? { supersededBy: kv.get("supersededBy")! } : {}),
     ...(kv.get("note") ? { note: kv.get("note")! } : {}),
+    // A number, or nothing: "#134" and "134" both mean issue 134, and a word
+    // there is not an issue.
+    ...(/^#?\d+$/.test(kv.get("issue") ?? "") ? { issue: Number(kv.get("issue")!.replace(/^#/, "")) } : {}),
   };
 }
 

@@ -116,8 +116,11 @@ for (const state of ["blocked", "partial", "designed", "open", "built", "noted",
   for (const d of group.sort((a, b) => a.title.localeCompare(b.title))) {
     const why = d.blockedBy ? `blocked by ${d.blockedBy}` : (d.note ?? "");
     const see = d.see.length ? ` · see ${d.see.join(", ")}` : "";
+    // The issue that follows the work, when the doc names one. A link, so the
+    // roadmap is one click from where the work actually moves.
+    const issue = d.issue ? ` · [#${d.issue}](https://github.com/dglazkov/isocan/issues/${d.issue})` : "";
     lines.push(
-      `| ${d.kind === "project" ? "**project**" : "research"} | [${d.title}](${d.rel}) | ${d.since ?? "—"} | ${why}${see} |`,
+      `| ${d.kind === "project" ? "**project**" : "research"} | [${d.title}](${d.rel}) | ${d.since ?? "—"} | ${why}${see}${issue} |`,
     );
   }
   lines.push("");

@@ -234,6 +234,7 @@ async function rig() {
       const codes = {
         Enter: { windowsVirtualKeyCode: 13, key: "Enter", text: "\r" },
         k: { windowsVirtualKeyCode: 75, key: "k", code: "KeyK" },
+        o: { windowsVirtualKeyCode: 79, key: "o", code: "KeyO" },
         Delete: { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" },
       };
       const k = codes[key];
@@ -506,6 +507,64 @@ export const JOURNEYS = [
       }))()`);
       if (!done.closed) throw new Error("the launcher stayed open after running something");
       if (done.zoom !== "100") throw new Error(`Actual size did not zoom to 100% (got ${done.zoom})`);
+    },
+  },
+  {
+    name: "switcher",
+    /** The launcher's second face. Three doors open one window that leads
+     *  with the canvas you were on lately; a few letters find one; Enter
+     *  moves you there. The move is an animation and is NOT asserted on —
+     *  what is asserted is the state after it: the other canvas's name in
+     *  the bar, and a world under it. */
+    what: "Cmd-O and the caret open the switcher; recents lead; fuzzy letters find a canvas; Enter goes",
+    async run(rig) {
+      await makeCanvas(rig, "Lake House");
+      await makeCanvas(rig, "Roadmap");
+      // Door 1: ⌘O, from Roadmap. Lake House was the canvas before this one,
+      // so it is the first row, under "Recent".
+      await rig.press("o", { meta: true });
+      await until(rig.b, `!!document.querySelector(".palette.palette-canvases")`, "the switcher to open");
+      const first = await rig.b.ev(`(() => ({
+        group: document.querySelector(".palette-group")?.textContent ?? null,
+        title: document.querySelector(".palette-row .palette-canvas-title")?.textContent ?? null,
+        self: [...document.querySelectorAll(".palette-canvas-title")].some(t => t.textContent === "Roadmap"),
+      }))()`);
+      if (first.group !== "Recent") throw new Error(`the switcher does not lead with Recent: ${first.group}`);
+      if (first.title !== "Lake House") throw new Error(`the first row is not the last canvas: ${first.title}`);
+      if (first.self) throw new Error("the switcher offers the canvas you are on");
+      // Fuzzy: three letters that are not a word, and the letters light up.
+      await rig.type("lkh");
+      await until(
+        rig.b,
+        `document.querySelectorAll(".palette-row").length === 1 && document.querySelectorAll(".palette-canvas-title mark").length === 3`,
+        "lkh to find Lake House, with three lit letters",
+      );
+      await rig.press("Enter");
+      await until(
+        rig.b,
+        `!document.querySelector(".palette") && document.querySelector(".canvas-name .title")?.textContent === "Lake House" && !!document.querySelector(".world")`,
+        "Enter to land on Lake House",
+      );
+      // Door 2: the caret beside the name, back the other way.
+      await rig.click(".canvas-name .canvas-switch", "the switch caret beside the canvas's name");
+      await until(rig.b, `!!document.querySelector(".palette.palette-canvases")`, "the caret to open the switcher");
+      await rig.type("rdm");
+      await until(rig.b, `document.querySelectorAll(".palette-row").length === 1`, "rdm to find Roadmap");
+      await rig.press("Enter");
+      await until(
+        rig.b,
+        `!document.querySelector(".palette") && document.querySelector(".canvas-name .title")?.textContent === "Roadmap"`,
+        "Enter to land on Roadmap",
+      );
+      // Door 3: ⌘K's own field finds a canvas under the actions, no mode needed.
+      await rig.press("k", { meta: true });
+      await until(rig.b, `!!document.querySelector(".palette:not(.palette-canvases)")`, "the launcher to open");
+      await rig.type("lake");
+      await until(
+        rig.b,
+        `[...document.querySelectorAll(".palette-group")].some(g => g.textContent === "Switch to") && [...document.querySelectorAll(".palette-canvas-title")].some(t => t.textContent === "Lake House")`,
+        "the launcher to list Lake House under the actions",
+      );
     },
   },
   {

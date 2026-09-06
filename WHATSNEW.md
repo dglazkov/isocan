@@ -16,6 +16,10 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 6 September 2026
+
+- Switch canvas without going home. ⌘O opens a list of the canvases you were on lately, most recent first, then the rest by activity; type a few letters — "lkh" is enough for "Lake House" — and press Enter. The same list is behind ⌘K's "Switch canvas…" row and the ⌄ beside the canvas's name in the bar, and typing a canvas's name into ⌘K itself shows the matches under the commands. The canvas you leave recedes and the one you chose comes forward in its place; the bar and the panels stay where they were. The list works offline too, from what this browser remembers.
+
 ## 4 September 2026
 
 - Element properties on the stage. In *Edit text*, click any element of a screen and a strip shows its tag, its class, and the inline styles a person reaches for — colour, background, size, weight, padding, margin, radius. Each field changes the frozen page live; *Save version* splices exactly those attributes into the source by position, the way text edits already land — nothing else in the file is touched, and a file that changed under you is refused by name. WYSIWYG's second stage; the first was text.

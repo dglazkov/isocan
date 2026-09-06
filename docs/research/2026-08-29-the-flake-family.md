@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-08-29
+issue: 146
 note: 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue
 ---
 # The flake family, and the first one caught in the act

@@ -8,7 +8,7 @@ import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
-import { ShareGlyph } from "./Glyphs.tsx";
+import { ChevronGlyph, ShareGlyph } from "./Glyphs.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 
 /**
@@ -54,6 +54,23 @@ export function CanvasTitle({ actor }: { actor: Actor }) {
         onClick={() => setEditing(!editing)}
       >
         {canvas?.title ?? "…"}
+      </button>
+      {/* **The switcher's handle, beside the name it would replace.** A
+          canvas's name with a caret is the shape every app with several
+          documents uses for "the others are under here", and it is the one
+          entry point that does not need a key to be found. Two glyphs wide,
+          and the only thing in the bar that grew: the drawer's `···` and the
+          rail already hold everything else that goes somewhere. Shown to a
+          reader too — switching is not a write. */}
+      <button
+        className="btn canvas-switch"
+        title="Switch canvas (⌘O)"
+        aria-label="Switch canvas"
+        aria-haspopup="dialog"
+        disabled={!canvas}
+        onClick={() => useUiStore.getState().setPaletteOpen("canvases")}
+      >
+        <ChevronGlyph />
       </button>
       {editing && canvas && (
         <div className="canvas-popover">

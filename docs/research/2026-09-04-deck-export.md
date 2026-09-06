@@ -1,6 +1,7 @@
 ---
 status: partial
 since: 2026-09-04
+issue: 184
 see: inception, workbench
 note: HTML deck, PDF (app print + CLI Chrome) and PNG-per-slide built 4 Sep; PPTX open after the PDF is used for a talk; Google Slides blocked on the per-user OAuth client
 ---

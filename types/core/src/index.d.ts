@@ -74,4 +74,5 @@ export * from "./sprint.js";
 export * from "./timeline.js";
 export * from "./opwords.js";
 export * from "./canvassort.js";
+export * from "./canvasswitch.js";
 export * from "./lens.js";

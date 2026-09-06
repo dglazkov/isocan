@@ -131,6 +131,20 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   that would have to answer them, because a help panel describing a different
   app than the one it is in is worse than no help panel. The same panel lists
   the slash commands available here, including any this home added.
+- **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
+  canvases you were on lately, most recent first, then the rest by activity,
+  with a field that finds one from a few letters (`lkh` reaches "Lake House";
+  the matched letters light up). Three doors, one window: `⌘O`, `⌘K` → "Switch
+  canvas…", or the `⌄` beside the canvas's name in the bar. Typing a title
+  into `⌘K` itself also lists the matches under the actions, so the common
+  trip is three letters and Enter with no mode to know about. The canvas you
+  leave recedes and the one you chose comes forward in its place; the bar and
+  the rail stay put, because they are the same chrome. "Lately" is this
+  browser's memory (the daemon sees writes, not visits), so the list paints
+  before the canvas list arrives and still works offline, where it is exactly
+  the canvases the replica can open. An agent switches canvases by naming one
+  — every verb takes `--canvas` — so there is no CLI verb for a viewport
+  gesture.
 - **Names**: an item's name sits above it rather than inside a chrome bar —
   the item is the content — and stays hidden until you point at the item or
   select it, so a canvas of sketches reads as the sketches rather than as a

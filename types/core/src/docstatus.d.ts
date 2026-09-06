@@ -35,6 +35,13 @@ interface DocStatus {
     supersededBy?: string;
     /** One line for the roadmap, when the title is not enough. */
     note?: string;
+    /**
+     * The GitHub issue that follows this doc's work, by number. The doc is the
+     * argument and the plan; the issue is where the work is followed and where
+     * it is closed. One number, here, so the roadmap can link it and a test can
+     * find a doc that owes work and has nowhere it is being followed.
+     */
+    issue?: number;
 }
 /**
  * Read the front matter, or say there is none. A doc without it is not
