@@ -753,6 +753,35 @@ export function deskConformance(
         expect(await desk.killBadge("bdg_nope", "2026-03-01T00:00:00.000Z", "bdg_2")).toBeNull();
       }),
     );
+
+    /**
+     * **The content-signing key** (`content-read-auth.md`, option A): minted
+     * on first ask and the same one ever after.
+     *
+     * Here rather than only in the server's own suite because a file desk
+     * cannot vouch for a cloud desk (lesson #24). "Once" means something
+     * different on each backing — a serialized write chain on one, a
+     * transaction on the other — and the failure this catches is a hosted
+     * home minting a second key during a rollout, which would break every
+     * signed URL already sitting in an open tab.
+     */
+    test(
+      "the content-signing key is minted once, concurrent askers included",
+      withDesk(async ({ desk }) => {
+        const first = await desk.contentKey();
+        expect(typeof first).toBe("string");
+        expect(first.length).toBeGreaterThan(20);
+        expect(await desk.contentKey()).toBe(first);
+        // Three at once: the second and third must adopt the first's key
+        // rather than each minting their own.
+        const racing = await Promise.all([
+          desk.contentKey(),
+          desk.contentKey(),
+          desk.contentKey(),
+        ]);
+        expect(new Set(racing)).toEqual(new Set([first]));
+      }),
+    );
   });
 }
 

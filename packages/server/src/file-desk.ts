@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "@isocan/core";
 import {
@@ -90,7 +91,15 @@ type DeskLogEntry =
   /** A group, WHOLE, on every write (roles phase 5), for the space's reason:
    * losing a member removal would quietly re-admit somebody to every canvas
    * the group reaches. */
-  | { seq: number; type: "group"; group: Group; at: string };
+  | { seq: number; type: "group"; group: Group; at: string }
+  /** **This home's content-signing key** (content-read-auth.md, option A),
+   * written exactly once and never again. Logged for the sharpest of the
+   * durability reasons on this list: losing it does not lose access, it
+   * INVALIDATES every URL already in a living page — every frame on every
+   * open tab breaks at once and stays broken until each one re-mints. A key
+   * is also the one row here that a replay must never overwrite with a newer
+   * one, and it cannot: it is written only when there is none. */
+  | { seq: number; type: "contentkey"; key: string; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -116,6 +125,11 @@ interface DeskSnapshot {
    * and correctly EMPTY: a `group:` row whose group was never written admits
    * nobody. */
   groups?: Record<string, Group>;
+  /** The HMAC key this home signs content reads with (content-read-auth.md).
+   * Absent on every desk written before it, and absent means "not minted
+   * yet" — the first ask mints one. Local homes never ask: loopback content
+   * reads carry no signature and need none. */
+  contentKey?: string;
 }
 
 /** How stale `lastSeen` may get before a touch costs a snapshot rewrite. A
@@ -151,6 +165,9 @@ export class FileDesk implements Desk {
       // Absent before roles phase 5; empty means no group exists, so a
       // `group:` row admits nobody, which is the only safe reading.
       groups: snapshot?.groups ?? {},
+      // Absent until a hosted home first signs a content read. Undefined
+      // means "none minted", never "sign with nothing".
+      ...(snapshot?.contentKey ? { contentKey: snapshot.contentKey } : {}),
     };
     // Crash recovery: replay any log tail the snapshot doesn't cover.
     let recovered = false;
@@ -567,6 +584,26 @@ export class FileDesk implements Desk {
     });
   }
 
+  /**
+   * Mint once, then answer the same key forever. The write chain is what
+   * makes "once" true here: two callers racing arrive one after the other,
+   * and the second sees the first's key rather than replacing it.
+   *
+   * 256 bits from the CSPRNG — `mintBadge`'s number, because it is the same
+   * kind of secret and there is no reason for this home to hold two opinions
+   * about how long a secret is.
+   */
+  async contentKey(): Promise<string> {
+    if (this.state.contentKey) return this.state.contentKey;
+    await this.enqueue(async () => {
+      if (this.state.contentKey) return;
+      const key = randomBytes(32).toString("base64url");
+      this.state.contentKey = key;
+      await this.append({ type: "contentkey", key, at: new Date().toISOString() });
+    });
+    return this.state.contentKey!;
+  }
+
   // ---- internals ----
 
   /**
@@ -682,6 +719,13 @@ export class FileDesk implements Desk {
       case "group": {
         // A replacement, like a space's: the newest write is the row.
         this.groups()[entry.group.id] = { ...entry.group, members: [...entry.group.members] };
+        return;
+      }
+      case "contentkey": {
+        // `??=`, and it is the strong kind: a key is written once, so a
+        // second entry could only come from a log two homes wrote into — and
+        // there the FIRST key is the one whose signatures are in flight.
+        this.state.contentKey ??= entry.key;
         return;
       }
     }

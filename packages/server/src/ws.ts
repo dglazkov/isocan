@@ -18,6 +18,7 @@ import { Engine, CanvasNotFoundError } from "./engine.ts";
 import type { Desk } from "./desk.ts";
 import { admittingGrant, heldCapability } from "./grants.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
+import { isContentRequest } from "./content.ts";
 import { PresenceHub } from "./presence.ts";
 import type { RcHolds } from "./rc-holds.ts";
 import type { SweepHub } from "./sweep.ts";
@@ -47,6 +48,19 @@ interface WebSocketOptions {
    * sockets without a daemon.
    */
   sweeps?: SweepHub;
+  /**
+   * **The hosted content origin's host** (`ISOCAN_CONTENT_HOST`), or absent
+   * on every shape that has none.
+   *
+   * A socket upgrade never passes through Fastify's hooks — it is hijacked
+   * off the raw server — so the door hook's "this Host gets blob bytes and
+   * nothing else" does not cover it, and invariant 4 would have a hole in
+   * exactly the place nobody looks. A browser could not use it (no cookie
+   * travels to that origin), but a bearer holder could, and "the content
+   * origin answers nothing but blobs" must be true of every listener on it,
+   * not of the routed half.
+   */
+  contentHost?: string | null;
 }
 
 /**
@@ -286,6 +300,20 @@ export function attachWebSockets(
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname !== "/ws") return; // let other handlers (e.g. Vite HMR proxy) pass
+    /**
+     * The content origin has no socket, for the reason it has no API: it
+     * holds nothing and answers "these bytes, or no". See `contentHost`
+     * above for why this line exists here rather than in the door hook.
+     *
+     * Destroyed rather than upgraded-and-closed: the 4400-family close codes
+     * are answers to a client of THIS home's socket, and there is no such
+     * client on that origin to read one.
+     */
+    const host = Array.isArray(request.headers.host) ? request.headers.host[0] : request.headers.host;
+    if (isContentRequest(host, options.contentHost ?? null)) {
+      socket.destroy();
+      return;
+    }
     const canvasId = url.searchParams.get("canvasId");
     const since = parseCursor(url.searchParams.get("since"));
     /**

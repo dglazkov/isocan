@@ -1,7 +1,8 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Engine } from "./engine.ts";
 import type { Store } from "./store.ts";
 import type { HomeLinks } from "./home-links.ts";
+import { remainingSeconds, verifyContentRead, type ReadVerdict } from "./content-auth.ts";
 
 /**
  * **The content role** — the route set a content origin serves, and nothing
@@ -40,19 +41,72 @@ export interface ContentDeps {
   homes: HomeLinks | null;
 }
 
-interface ContentOptions {
+/**
+ * **How this mount tells a content read from an app read, and what it asks
+ * of one** — stage 4b of the content-origin plan.
+ *
+ * There are three mounts in the world and each fills this in differently,
+ * which is why it is one object rather than three flags scattered about:
+ *
+ * | mount | `always` | `host` | `appCsp` | `signing` |
+ * | --- | --- | --- | --- | --- |
+ * | the local content listener | true | — | — | null (loopback needs none) |
+ * | a local app origin | — | null | `sandbox allow-scripts` | null |
+ * | the hosted single `$PORT` | — | `isocan.store` | `sandbox allow-scripts` | the key + TTL |
+ *
+ * The hosted row is the one that matters: Cloud Run exposes one port, so ONE
+ * Fastify instance answers for both origins and every per-origin decision
+ * below is made per request, from the Host header, rather than at
+ * registration.
+ */
+export interface ContentSigning {
+  /** This home's HMAC key — a function because the desk mints it lazily and
+   * caches it, and the route must not hold a copy that outlives a rotation. */
+  key: () => Promise<string>;
+  /** How long a freshly minted signature lives. Read by the MINT side
+   * (`http.ts`); kept here so one object describes the whole scheme rather
+   * than half of it living in a route file. */
+  ttlSeconds: number;
+}
+
+export interface ContentOptions {
   /**
-   * The `Content-Security-Policy` these responses carry, or null for none.
+   * True when every request this mount hears is the content role's — the
+   * local second listener, which has no app origin to tell it apart from.
+   */
+  always?: boolean;
+  /**
+   * The hosted content host (`ISOCAN_CONTENT_HOST` — `isocan.store`), or
+   * null on every local shape. A request whose Host matches is the role's,
+   * on the same mount that serves the app to every other Host.
+   */
+  host?: string | null;
+  /**
+   * The `Content-Security-Policy` an APP-ORIGIN response carries, or null for
+   * none.
    *
    * The app origin passes `"sandbox allow-scripts"` — defense in depth for a
    * directly-opened blob document, unchanged from before the extraction. The
    * content role must NOT send that header as-is: a response-header sandbox
    * intersects with any iframe attribute and re-imposes the opaque origin,
    * defeating the storage the split exists to grant (measured from the other
-   * side in `docs/research/2026-08-26-wysiwyg.md`). What the content role
-   * sends instead is stage 3's decision, made on measurement.
+   * side in `docs/research/2026-08-26-wysiwyg.md`). It sends `CONTENT_CSP`,
+   * which stage 3 chose by measurement.
    */
-  csp: string | null;
+  appCsp: string | null;
+  /**
+   * **What a content read must prove, or null when it need prove nothing.**
+   *
+   * Null on the local listener and that is not a gap: loopback-bound,
+   * single-user home, hash-addressed — the tree's three facts, and the same
+   * warning applies about relaxing the argument without all three.
+   *
+   * Set on a hosted home, where none of the three holds. Then a read carries
+   * a signature the badged app origin minted over `(canvasId, hash, expiry)`
+   * and this route verifies it, looking nothing up: no desk read, no
+   * admission, no cookie — see `content-auth.ts` for the whole argument.
+   */
+  signing?: ContentSigning | null;
 }
 
 /**
@@ -169,6 +223,64 @@ export const CONTENT_CSP = [
 
 const CACHE_BLOB = "private, immutable, max-age=31536000";
 
+/**
+ * **The cache header a VERIFIED signed read carries, and the thing option A
+ * gives back.**
+ *
+ * The 23 August closure had to make blob responses `private`: they were
+ * credentialed by a cookie, and a shared cache holding one would hand a swept
+ * badge exactly the bytes it was just expelled from. Here the credential is
+ * the URL itself and it expires — so a shared cache keyed on that URL cannot
+ * outlive the permission, and the edge copy comes back for whatever is left
+ * of the TTL.
+ *
+ * **`immutable` is not repeated, and that is the point**: the bytes under a
+ * hash never change, but the URL's right to them does, so a year is exactly
+ * the wrong freshness for this response even though it is right for the same
+ * bytes on the app origin.
+ *
+ * **This is only true while the cache key includes the query string.** Cloud
+ * CDN's default does; `infra/82-content-origin.sh` sets it explicitly anyway,
+ * because a cache that dropped the signature would serve this response to a
+ * caller that presented none.
+ */
+function cacheSignedRead(seconds: number): string {
+  return `public, max-age=${seconds}`;
+}
+
+/**
+ * **Is this pathname the content role's one route?** — the hosted shape's
+ * spelling of invariant 4.
+ *
+ * On a local home the invariant is a route table: the content listener is its
+ * own Fastify instance and `content.test.ts` enumerates every route it has.
+ * The hosted home has ONE instance serving both origins, so there is no table
+ * to enumerate — the door hook in `http.ts` refuses everything else by this
+ * predicate instead, before any handler runs. Same invariant, two mechanisms,
+ * because the shapes differ; both are guarded.
+ *
+ * **The last segment must be a content HASH, and that is not tidiness.** The
+ * blob prefix has static siblings — `/blobs/signed`, `/blobs/reconcile`,
+ * `/blobs/upload-url`, `/blobs/register` — and Fastify prefers a static
+ * segment to a parameter, so a shape-only pattern (`[^/]+`) would have let
+ * `/blobs/signed` through this predicate and straight into the MINT route,
+ * unbadged, on the origin that exists precisely because it carries no badge.
+ * That was found by the invariant-4 test enumerating the refusals rather than
+ * by reading, which is the argument for enumerating them.
+ *
+ * An allowlist by shape rather than a denylist of the four siblings, for the
+ * door hook's reason: a fifth sibling added next month is refused by DEFAULT
+ * instead of by somebody remembering. Blob addressing is a sha256 hex digest
+ * everywhere it is minted (`engine.putBlob`) and validated
+ * (`/^[0-9a-f]{64}$/` on the register route); a home that ever addresses
+ * content another way changes this line and its test together.
+ */
+const CONTENT_BLOB_PATH = /^\/api\/projects\/[^/]+\/blobs\/[0-9a-f]{64}$/;
+
+export function isContentPath(method: string, pathname: string): boolean {
+  return (method === "GET" || method === "HEAD") && CONTENT_BLOB_PATH.test(pathname);
+}
+
 /** Register the content role's routes — all of them, which is one. */
 export function registerContentRoutes(
   app: FastifyInstance,
@@ -177,8 +289,38 @@ export function registerContentRoutes(
 ): void {
   const { engine, store, homes } = deps;
 
+  /** Which origin this request arrived on. Per request, because the hosted
+   * mount hears both. */
+  const onContentOrigin = (req: FastifyRequest): boolean =>
+    options.always === true || isContentRequest(headerHost(req), options.host ?? null);
+
   app.get(CONTENT_BLOB_ROUTE, async (req, reply) => {
     const { id, hash } = req.params as { id: string; hash: string };
+    const content = onContentOrigin(req);
+    const csp = content ? CONTENT_CSP : options.appCsp;
+
+    /**
+     * **The read auth, and everything it deliberately is not** (stage 4b).
+     *
+     * It is one HMAC over the two path segments and an expiry. It is not a
+     * desk read, not an admission test, not a cookie — the content origin
+     * answers "these bytes, or no" and still knows nothing about canvases or
+     * about who is asking, which is invariant 4 surviving contact with a
+     * multi-user home.
+     *
+     * The app origin never takes this branch: a chrome read is badged and
+     * goes through the door, unchanged (invariant 3).
+     */
+    const signing = content ? (options.signing ?? null) : null;
+    let cache = CACHE_BLOB;
+    if (signing) {
+      const query = req.query as { exp?: unknown; sig?: unknown };
+      const now = Math.floor(Date.now() / 1000);
+      const verdict = verifyContentRead(await signing.key(), id, hash, query, now);
+      if (verdict !== "ok") return refuseUnsigned(reply, verdict);
+      cache = cacheSignedRead(remainingSeconds(query, now));
+    }
+
     await engine.getSnapshot(id);
     const meta = await store.blobMeta(id, hash);
     /**
@@ -208,8 +350,8 @@ export function registerContentRoutes(
       reply
         .header("Content-Type", remote.mimeType)
         .header("X-Content-Type-Options", "nosniff")
-        .header("Cache-Control", CACHE_BLOB);
-      if (options.csp) reply.header("Content-Security-Policy", options.csp);
+        .header("Cache-Control", cache);
+      if (csp) reply.header("Content-Security-Policy", csp);
       return reply.send(remote.stream);
     }
     if (!meta) return reply.status(404).send({ error: "blob not found" });
@@ -217,10 +359,10 @@ export function registerContentRoutes(
     reply
       .header("Content-Type", meta.mimeType)
       .header("X-Content-Type-Options", "nosniff")
-      .header("Cache-Control", CACHE_BLOB)
+      .header("Cache-Control", cache)
       // Said unconditionally, so a player knows it may seek BEFORE it asks.
       .header("Accept-Ranges", "bytes");
-    if (options.csp) reply.header("Content-Security-Policy", options.csp);
+    if (csp) reply.header("Content-Security-Policy", csp);
 
     const range = parseRange(req.headers.range, meta.size);
     if (range === "unsatisfiable") {
@@ -239,6 +381,31 @@ export function registerContentRoutes(
     if (!stream) return reply.status(404).send({ error: "blob not found" });
     return reply.header("Content-Length", String(meta.size)).send(stream);
   });
+}
+
+/**
+ * **One refusal for four verdicts.** Unsigned, mistyped, forged and expired
+ * all get 403 and the same sentence: telling them apart is a service to
+ * somebody probing, and to nobody else. The verdict rides in the body's
+ * `code` for a reader of the logs — it is this home's own word for what it
+ * saw, not a hint about the secret.
+ *
+ * 403 rather than 401, because there is no door on this origin to send
+ * anybody to. A person who lands here with a dead URL should go back to the
+ * canvas and let the app mint a live one, which is what the sentence says.
+ */
+function refuseUnsigned(reply: FastifyReply, verdict: ReadVerdict): FastifyReply {
+  return reply.status(403).send({
+    error:
+      "this link has expired or was not signed for these bytes — open the item on the canvas again",
+    code: verdict === "expired" ? "expired-read" : "unsigned-read",
+  });
+}
+
+/** The Host header as a single string, however the client sent it. */
+function headerHost(req: FastifyRequest): string | undefined {
+  const host = req.headers.host;
+  return Array.isArray(host) ? host[0] : host;
 }
 
 function parseRange(

@@ -194,12 +194,35 @@ three** land, per invariant 5.
   on 5 Sep 2026:
   [multiuser/content-read-auth.md](../multiuser/content-read-auth.md) — the
   three options costed, signed URLs recommended, the domain and the TTL left
-  to the owners.*
+  to the owners. **Both answered and built 6 Sep 2026**: isocan.store, a
+  five-minute TTL, and the mint batched into one call per canvas visit —
+  which removed the argument for the calmer hour. `content-auth.ts` is the
+  scheme, `Desk.contentKey()` the per-home key, `GET
+  /api/projects/:id/blobs/signed` the mint. A GET on purpose: the capability
+  hook refuses non-GETs to a badge below `edit`, and a viewer who cannot mint
+  is a viewer who sees an empty canvas.*
 - **4c. Flip hosted frames** — mechanically identical to stage 2's flip,
-  gated on 4a+4b, still governed by invariant 2.
+  gated on 4a+4b, still governed by invariant 2. *Landed 6 Sep 2026, and it
+  is one line: a daemon that knows `ISOCAN_CONTENT_HOST` advertises
+  `https://<host>` as its content base and `itemFrame` does the rest. One
+  variable turns the hosted half on; unsetting it is the rollback.*
 
 Stable place at every point inside this stage: hosted base stays null until
 4c, so the hosted home is today's home throughout.
+
+*Stage 4 closed 6 Sep 2026, and with it the plan. Two things about the shape
+are worth carrying past it. **Invariant 4 needed a second mechanism**: the
+hosted origin is a Host header on the app's one `$PORT`, so "blobs and nothing
+else" cannot be a route table there — it is a refusal at the top of the door
+hook, plus one on the WebSocket upgrade, which no Fastify hook would have
+reached. The refusal matches a sha256 path segment rather than any segment,
+because a shape-only pattern let `/blobs/signed` — the MINT route — through to
+an unbadged caller on the origin that exists precisely because it carries no
+badge; the invariant-4 test found that, not a reader. **Invariant 2 grew a
+third answer**: `itemFrame` may now return `null`, meaning "the signature has
+not landed yet". That is the only safe thing to return in that beat — falling
+back to an app-origin src would pair it with `allow-same-origin`, the exact
+compromise the invariant exists to make unbuildable.*
 
 ## What this unblocks — the acceptance, owned by other projects
 

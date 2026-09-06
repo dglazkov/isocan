@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Canvas, Space } from "@isocan/core";
 import {
@@ -27,7 +27,10 @@ import {
   removeFromSpace,
   sendOp,
 } from "../lib/api.ts";
-import { ShareDialog } from "../components/ShareDialog.tsx";
+// A modal, loaded when it is opened — see `CanvasCrumb` for the reasoning.
+const ShareDialog = lazy(() =>
+  import("../components/ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })),
+);
 import { GroupsPanel } from "../components/GroupsPanel.tsx";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
@@ -850,12 +853,14 @@ export function CanvasListPage({
                     </button>
                     {sharing === space.id && (
                       <div className="identity-popover share-popover">
+                        <Suspense fallback={null}>
                         <ShareDialog
                           actor={actor}
                           space={space}
                           canvases={canvases ?? []}
                           onClose={() => setSharing(null)}
                         />
+                        </Suspense>
                       </div>
                     )}
                   </div>

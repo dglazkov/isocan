@@ -29,6 +29,19 @@ interface WebSocketOptions {
      * sockets without a daemon.
      */
     sweeps?: SweepHub;
+    /**
+     * **The hosted content origin's host** (`ISOCAN_CONTENT_HOST`), or absent
+     * on every shape that has none.
+     *
+     * A socket upgrade never passes through Fastify's hooks — it is hijacked
+     * off the raw server — so the door hook's "this Host gets blob bytes and
+     * nothing else" does not cover it, and invariant 4 would have a hole in
+     * exactly the place nobody looks. A browser could not use it (no cookie
+     * travels to that origin), but a bearer holder could, and "the content
+     * origin answers nothing but blobs" must be true of every listener on it,
+     * not of the routed half.
+     */
+    contentHost?: string | null;
 }
 export declare function attachWebSockets(server: Server, engine: Engine, desk: Desk, presence: PresenceHub, rc?: RcHolds, options?: WebSocketOptions): () => void;
 export {};

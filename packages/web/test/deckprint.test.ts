@@ -25,7 +25,7 @@ describe("the deck view", () => {
   });
 
   it("frames each slide with the itemFrame pair and reads the pages from core", () => {
-    expect(view).toContain("itemFrame(contentBase(), canvasId, blobHash)");
+    expect(view).toContain("itemFrame(origin, canvasId, blobHash)");
     expect(view).toContain("sandbox={frame.sandbox}");
     expect(view).toContain("deckPages(canvas)");
   });

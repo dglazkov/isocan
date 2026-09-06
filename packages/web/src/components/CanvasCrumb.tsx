@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import type { Actor } from "@isocan/core";
 
 import { useDismissOnOutside } from "../lib/dismiss.ts";
@@ -7,7 +7,12 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
-import { ShareDialog } from "./ShareDialog.tsx";
+/**
+ * Loaded when Share is clicked, not when the canvas is. The dialog is the
+ * largest component in the app after `ItemView`, it is a modal most sessions
+ * never open, and it was riding in the entry chunk on every visit.
+ */
+const ShareDialog = lazy(() => import("./ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })));
 import { ChevronGlyph, ShareGlyph } from "./Glyphs.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 
@@ -160,7 +165,9 @@ export function ShareButton({ actor }: { actor: Actor }) {
       </button>
       {shareOpen && canvas && (
         <div className="identity-popover share-popover">
-          <ShareDialog actor={actor} onClose={() => useUiStore.getState().setShareOpen(false)} />
+          <Suspense fallback={null}>
+            <ShareDialog actor={actor} onClose={() => useUiStore.getState().setShareOpen(false)} />
+          </Suspense>
         </div>
       )}
     </div>

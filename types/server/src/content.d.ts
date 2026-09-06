@@ -36,19 +36,71 @@ export interface ContentDeps {
      * the same pass-through the app-origin route has always done. */
     homes: HomeLinks | null;
 }
-interface ContentOptions {
+/**
+ * **How this mount tells a content read from an app read, and what it asks
+ * of one** — stage 4b of the content-origin plan.
+ *
+ * There are three mounts in the world and each fills this in differently,
+ * which is why it is one object rather than three flags scattered about:
+ *
+ * | mount | `always` | `host` | `appCsp` | `signing` |
+ * | --- | --- | --- | --- | --- |
+ * | the local content listener | true | — | — | null (loopback needs none) |
+ * | a local app origin | — | null | `sandbox allow-scripts` | null |
+ * | the hosted single `$PORT` | — | `isocan.store` | `sandbox allow-scripts` | the key + TTL |
+ *
+ * The hosted row is the one that matters: Cloud Run exposes one port, so ONE
+ * Fastify instance answers for both origins and every per-origin decision
+ * below is made per request, from the Host header, rather than at
+ * registration.
+ */
+export interface ContentSigning {
+    /** This home's HMAC key — a function because the desk mints it lazily and
+     * caches it, and the route must not hold a copy that outlives a rotation. */
+    key: () => Promise<string>;
+    /** How long a freshly minted signature lives. Read by the MINT side
+     * (`http.ts`); kept here so one object describes the whole scheme rather
+     * than half of it living in a route file. */
+    ttlSeconds: number;
+}
+export interface ContentOptions {
     /**
-     * The `Content-Security-Policy` these responses carry, or null for none.
+     * True when every request this mount hears is the content role's — the
+     * local second listener, which has no app origin to tell it apart from.
+     */
+    always?: boolean;
+    /**
+     * The hosted content host (`ISOCAN_CONTENT_HOST` — `isocan.store`), or
+     * null on every local shape. A request whose Host matches is the role's,
+     * on the same mount that serves the app to every other Host.
+     */
+    host?: string | null;
+    /**
+     * The `Content-Security-Policy` an APP-ORIGIN response carries, or null for
+     * none.
      *
      * The app origin passes `"sandbox allow-scripts"` — defense in depth for a
      * directly-opened blob document, unchanged from before the extraction. The
      * content role must NOT send that header as-is: a response-header sandbox
      * intersects with any iframe attribute and re-imposes the opaque origin,
      * defeating the storage the split exists to grant (measured from the other
-     * side in `docs/research/2026-08-26-wysiwyg.md`). What the content role
-     * sends instead is stage 3's decision, made on measurement.
+     * side in `docs/research/2026-08-26-wysiwyg.md`). It sends `CONTENT_CSP`,
+     * which stage 3 chose by measurement.
      */
-    csp: string | null;
+    appCsp: string | null;
+    /**
+     * **What a content read must prove, or null when it need prove nothing.**
+     *
+     * Null on the local listener and that is not a gap: loopback-bound,
+     * single-user home, hash-addressed — the tree's three facts, and the same
+     * warning applies about relaxing the argument without all three.
+     *
+     * Set on a hosted home, where none of the three holds. Then a read carries
+     * a signature the badged app origin minted over `(canvasId, hash, expiry)`
+     * and this route verifies it, looking nothing up: no desk read, no
+     * admission, no cookie — see `content-auth.ts` for the whole argument.
+     */
+    signing?: ContentSigning | null;
 }
 /**
  * Is this request addressed to the content origin? The hosted shape has one
@@ -122,6 +174,6 @@ export declare function contentPorts(host: string, envValue: string | undefined,
  * different mechanism than a header.
  */
 export declare const CONTENT_CSP: string;
+export declare function isContentPath(method: string, pathname: string): boolean;
 /** Register the content role's routes — all of them, which is one. */
 export declare function registerContentRoutes(app: FastifyInstance, deps: ContentDeps, options: ContentOptions): void;
-export {};

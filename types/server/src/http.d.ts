@@ -9,6 +9,7 @@ import type { HomeLinks } from "./home-links.js";
 import type { ParkCursors } from "./park.js";
 import { type GoogleToken } from "./google.js";
 import { RcHolds } from "./rc-holds.js";
+import { type ContentSigning } from "./content.js";
 declare module "fastify" {
     interface FastifyRequest {
         /** The badge this request presented, resolved once by the door hook. */
@@ -81,6 +82,24 @@ interface RouteOptions {
      * what `GET /api/serving` reports and nothing else reads it.
      */
     contentBase?: string | null;
+    /**
+     * **The hosted content origin's host** (`ISOCAN_CONTENT_HOST` —
+     * `isocan.store`), or null/absent on every local shape, where the content
+     * origin is a second listener instead.
+     *
+     * Cloud Run exposes one `$PORT`, so on the hosted shape this ONE app
+     * answers for both origins and the Host header is the seam. Two things
+     * read it: the door hook, which lets a content request past the badge and
+     * refuses it everything but blob bytes; and the blob route itself, which
+     * decides its CSP, its cache header and whether to demand a signature.
+     */
+    contentHost?: string | null;
+    /**
+     * **How a content read proves it may have these bytes** (stage 4b), or
+     * null/absent where none is required — which is every local home, and the
+     * hosted home until its content host is configured.
+     */
+    contentSigning?: ContentSigning | null;
     /**
      * The Drive token on THIS machine, read fresh per request so `isocan gdoc
      * auth` takes effect without a restart — or null, which is every hosted

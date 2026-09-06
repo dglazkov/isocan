@@ -1050,10 +1050,80 @@ export interface PresenceWhereResponse {
  * so a base that is advertised is a base that answers.
  */
 export declare const SERVING_ROUTE = "/api/serving";
+/**
+ * **`GET /api/projects/:id/blobs/signed?hashes=…` — where a frame's URL is
+ * minted** (content-read-auth.md, option A).
+ *
+ * Canvas-scoped on purpose and not as a detail: it sits under
+ * `/api/projects/:id/`, so the door's one hook re-asks `canvasId ∈
+ * admissions` before a single signature exists. That is the whole enforcement
+ * — an expelled badge cannot mint, so expulsion reaches the bytes as fast as
+ * the signatures it already holds expire.
+ *
+ * **A GET, and that is load-bearing rather than tidy.** The same hook refuses
+ * every non-GET on a canvas a badge holds below `edit`, so a POST here would
+ * mean a view-only member could not render a single screen. It is also the
+ * truth: minting a signature reads a key and writes nothing.
+ */
+export declare const SIGN_BLOBS_ROUTE = "/api/projects/:id/blobs/signed";
+/** The query parameter `SIGN_BLOBS_ROUTE` takes: content hashes, comma
+ * separated. `SIGN_BLOBS_LIMIT` per call — the app chunks, so a canvas of two
+ * hundred screens is a handful of round trips rather than a URL no proxy will
+ * forward. */
+export declare const SIGN_BLOBS_PARAM = "hashes";
+export declare const SIGN_BLOBS_LIMIT = 100;
+export interface SignedBlobsResponse {
+    /**
+     * Content hash → the PATH to fetch those bytes with, signature and all.
+     * Joined to `contentBase` by the app's one frame builder — the path knows
+     * nothing about which origin serves it, and the origin knows nothing about
+     * paths.
+     *
+     * A hash the home refuses to sign is simply absent rather than being an
+     * error for the whole call: one dead item must not blank a canvas.
+     */
+    urls: Record<string, string>;
+    /** When every URL in this answer dies, as a unix timestamp in seconds —
+     * by the HOME's clock, which is the clock the signatures were made against
+     * and the one that will judge them. It is also what the `exp` on each URL
+     * says. */
+    expiresAt: number;
+    /**
+     * How long they live from now, in seconds — the same fact as a DURATION,
+     * and the one a browser should actually use.
+     *
+     * A tab's clock and a home's clock disagree by more than a few seconds
+     * often enough to matter, and the two disagreements fail differently: a tab
+     * running fast throws away live URLs and re-mints (wasteful, invisible), a
+     * tab running slow hands a frame a URL the home has already buried and the
+     * screen goes blank with nothing to re-render it. Measuring from receipt
+     * makes the skew irrelevant in both directions.
+     */
+    ttlSeconds: number;
+}
 export interface ServingResponse {
     /** Origin (scheme://host[:port], no trailing slash) serving item content,
      * or null: content is served from the app's own origin, as it always was. */
     contentBase: string | null;
+    /**
+     * **Whether a read on that origin must carry a signature** — stage 4b of
+     * the content-origin plan, decided in
+     * `docs/projects/multiuser/content-read-auth.md`.
+     *
+     * False or absent on a local home: the content listener is loopback-bound
+     * on a single-user machine and asks for nothing, which is what it has
+     * always done. True on a hosted home, where the origin serves strangers
+     * and cannot hold the cookie that would tell them apart — so the app mints
+     * a short-lived signature per frame at `SIGN_BLOBS_ROUTE` and puts it in
+     * the URL.
+     *
+     * Absent is the safe reading either way: an app that does not understand
+     * this field asks for no signature, gets a 403 on the content origin, and
+     * has an item that does not render — which is a visible failure on a home
+     * that has deliberately moved on, and never a private canvas served to
+     * somebody who should not have it.
+     */
+    contentSigned?: boolean;
     /** The runtime modules this home has loaded (`docs/projects/modules/design.md`,
      * phase 3): the manifests, so the shell can register their kinds and
      * import each one's web half from `/modules/<slug>/`. Absent or empty on a

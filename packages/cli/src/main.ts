@@ -1247,7 +1247,13 @@ program
         ...(await new DaemonClient(daemonBase, paths.isocanHome())
           .serving()
           .then((s) => ({
-            "content origin": s.contentBase ?? "none — item content serves from the app origin",
+            // The base, and — from stage 4b — whether a read there has to
+            // carry a signature the app origin minted. An operator looking at
+            // a hosted home wants to know that the read auth is actually on,
+            // not just that a second origin exists.
+            "content origin": s.contentBase
+              ? `${s.contentBase}${s.contentSigned ? " (signed reads)" : ""}`
+              : "none — item content serves from the app origin",
           }))
           .catch(() => ({}))),
         // Staleness is "the daemon on this port is older than this CLI", and

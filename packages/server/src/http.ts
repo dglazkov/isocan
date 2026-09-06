@@ -30,6 +30,7 @@ import type {
   PostOpRequest,
   Canvas,
   RcAskRequest,
+  SignedBlobsResponse,
   RedeemPassRequest,
   RedeemPassResponse,
   Space,
@@ -119,6 +120,9 @@ import {
   PASS_REDEEM_ROUTE,
   RUNGS,
   SERVING_ROUTE,
+  SIGN_BLOBS_LIMIT,
+  SIGN_BLOBS_PARAM,
+  SIGN_BLOBS_ROUTE,
   ACTOR_KINDS_ROUTE,
   DOC_EXPORT_ROUTE,
   googleDocId,
@@ -183,7 +187,8 @@ import type { HomeLinks } from "./home-links.ts";
 import type { ParkCursors } from "./park.ts";
 import { DocRefusal, fetchGoogleDoc, type GoogleToken } from "./google.ts";
 import { RcHolds } from "./rc-holds.ts";
-import { registerContentRoutes } from "./content.ts";
+import { isContentPath, isContentRequest, registerContentRoutes, type ContentSigning } from "./content.ts";
+import { signedBlobPath } from "./content-auth.ts";
 import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
 import { personaRefusal, readPersonas, writePersona } from "./personas.ts";
 
@@ -332,6 +337,40 @@ const CANVAS_API_ROUTE = /^\/api\/projects\/([^/?]+)/;
  * See also the `Cache-Control` on the route itself, which had to become
  * `private` in the same change: a credentialed response cached at a shared
  * edge is a closed route with an open back gate.
+ *
+ * ---
+ *
+ * **2026-09-06: the hosted home reaches the bytes WITHIN ONE TTL, and the
+ * edge copy comes back on the other origin.** This is the entry
+ * `content-read-auth.md` said to write here when it landed.
+ *
+ * The content origin holds no cookie — that is the whole of its safety — so
+ * on a multi-user home it cannot ask the question this ledger answers. Option
+ * A resolves it without weakening either side: the badged app origin mints a
+ * signature over `(canvasId, hash, expiry)` at
+ * `GET /api/projects/:id/blobs/signed`, under this same canvas-scoped prefix
+ * and therefore behind this same `onRequest` hook, and the content origin
+ * verifies it (`content-auth.ts`).
+ *
+ * So the promise above holds in two halves, and the second is a cost rather
+ * than a caveat:
+ *
+ * - **Immediately**: an expelled badge cannot mint. The hook refuses it on
+ *   this prefix, and nothing about signing had to know that.
+ * - **Within one TTL** (five minutes, `ISOCAN_CONTENT_TTL`): what it minted
+ *   before it was expelled still works. That is the honest price of an origin
+ *   that cannot be asked who is calling, and both halves have a test.
+ *
+ * What comes back in exchange: on the content origin the URL *is* the
+ * credential and it expires, so a verified response is `public, max-age=<what
+ * is left>` — the shared-cache copy this change had to give up here, safe
+ * there because a cached copy cannot outlive the permission that fetched it.
+ * `private` stays on THIS origin, where the credential is a cookie that does
+ * not expire with the response.
+ *
+ * Nothing about the app origin changed. Chrome reads are badged, this hook
+ * still gates them, and a home with no `ISOCAN_CONTENT_HOST` is byte for byte
+ * the home this comment described before the line above it.
  */
 function isOpen(method: string, pathname: string): boolean {
   if ((HEALTH_ROUTES as readonly string[]).includes(pathname)) return true;
@@ -382,6 +421,24 @@ interface RouteOptions {
    * what `GET /api/serving` reports and nothing else reads it.
    */
   contentBase?: string | null;
+  /**
+   * **The hosted content origin's host** (`ISOCAN_CONTENT_HOST` —
+   * `isocan.store`), or null/absent on every local shape, where the content
+   * origin is a second listener instead.
+   *
+   * Cloud Run exposes one `$PORT`, so on the hosted shape this ONE app
+   * answers for both origins and the Host header is the seam. Two things
+   * read it: the door hook, which lets a content request past the badge and
+   * refuses it everything but blob bytes; and the blob route itself, which
+   * decides its CSP, its cache header and whether to demand a signature.
+   */
+  contentHost?: string | null;
+  /**
+   * **How a content read proves it may have these bytes** (stage 4b), or
+   * null/absent where none is required — which is every local home, and the
+   * hosted home until its content host is configured.
+   */
+  contentSigning?: ContentSigning | null;
   /**
    * The Drive token on THIS machine, read fresh per request so `isocan gdoc
    * auth` takes effect without a restart — or null, which is every hosted
@@ -685,6 +742,32 @@ export function registerRoutes(
 
   app.addHook("onRequest", async (req, reply) => {
     const pathname = (req.url ?? "/").split("?")[0]!;
+
+    /**
+     * **The content origin's door, which is that it has none** — stage 4b of
+     * `docs/projects/atlas/content-origin-plan.md`, and invariant 4 in the
+     * one shape that cannot express it as a route table.
+     *
+     * A local content origin is its own listener, so "the role serves blobs
+     * and nothing else" is enumerable: `content.test.ts` reads its routes.
+     * The hosted origin is a Host header on THIS app, which has the whole
+     * API on it — so the same invariant has to be a refusal, taken before
+     * any handler runs and before the badge is even resolved. Everything but
+     * a blob `GET` is 404 here: no door, no canvas questions, no app shell,
+     * no `/api/serving`, nothing that a second API with no door on it would
+     * have.
+     *
+     * And the blob GET itself is let through the BADGE check, not around the
+     * read check: an origin that holds no cookie can present no badge, so
+     * demanding one would refuse every frame. What it presents instead is a
+     * signature in its URL, and `content.ts` verifies that — which is the
+     * whole of option A, and the reason this branch is not a hole.
+     */
+    if (isContentRequest(hostHeader(req.headers.host), options.contentHost ?? null)) {
+      if (isContentPath(req.method, pathname)) return;
+      return reply.status(404).send({ error: `not found: ${req.method} ${pathname}` });
+    }
+
     const presented = presentedBadge(req.headers);
     req.badge = await resolveBadge(desk, presented);
 
@@ -1239,6 +1322,12 @@ export function registerRoutes(
    * role it advertises. */
   app.get(SERVING_ROUTE, async () => ({
     contentBase: options.contentBase ?? null,
+    // Whether a read on that base must carry a signature (stage 4b). Derived
+    // from the signing the routes were actually given, never from
+    // configuration alone — the same rule `contentBase` follows, and for the
+    // same reason: an app told to sign against a home that verifies nothing
+    // would be paying for a promise nobody is keeping.
+    contentSigned: Boolean(options.contentSigning),
     // The loaded runtime modules — refused ones are not advertised; `isocan
     // module ls` is where a refusal is read.
     modules: options.modulesHome
@@ -3516,6 +3605,77 @@ export function registerRoutes(
     return gcCanvases(engine, held.map((canvas) => canvas.id), body);
   });
 
+  /**
+   * **Mint the URLs a canvas's frames load from** — the app-origin half of
+   * option A (`docs/projects/multiuser/content-read-auth.md`), and the only
+   * place in this codebase that turns a badge into permission to read bytes
+   * from an origin that holds no badge.
+   *
+   * Three things make it safe, and all three are somewhere else:
+   *
+   * 1. **The door.** This route is under `/api/projects/:id/`, so the
+   *    `onRequest` hook has already re-asked `canvasId ∈ admissions`. An
+   *    expelled badge reaches this line only by being un-expelled first.
+   * 2. **The clock.** Every signature carries an expiry minutes away, so what
+   *    an about-to-be-expelled badge minted dies on its own. That is the
+   *    honest cost the decision recorded: on the hosted shape expulsion
+   *    reaches the bytes *within one TTL*, not at once.
+   * 3. **The scope.** A signature is over `(canvasId, hash, expiry)` and
+   *    nothing else, so it is a capability for ONE object on ONE canvas — a
+   *    URL copied out of a page's source hands over that item for its
+   *    remaining minutes, and never the canvas.
+   *
+   * It reads no store and touches no ledger: signing is a pure function of
+   * the home's key and three strings, so a canvas of forty screens costs one
+   * key lookup and forty HMACs. Nothing is checked about the hashes
+   * themselves — an unknown one signs happily and 404s on the content
+   * origin, because signing something the store does not have grants
+   * precisely nothing.
+   *
+   * **A `GET`, deliberately** — see `SIGN_BLOBS_ROUTE`: the capability hook
+   * refuses every non-GET to a badge below `edit`, and a viewer who cannot
+   * mint is a viewer who sees an empty canvas.
+   *
+   * **A home with no signing answers 404**, not an empty object: the app asks
+   * only when `/api/serving` said `contentSigned`, so a call arriving here on
+   * a home that signs nothing is a client with a wrong idea, and an empty
+   * success would let it render frames that cannot load.
+   */
+  app.get(SIGN_BLOBS_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const signing = options.contentSigning ?? null;
+    if (!signing) {
+      return reply
+        .status(404)
+        .send({ error: "this home serves item content unsigned", code: "no-signing" });
+    }
+    const raw = (req.query as Record<string, unknown>)[SIGN_BLOBS_PARAM];
+    const hashes = (typeof raw === "string" ? raw.split(",") : [])
+      .map((h) => h.trim())
+      .filter((h) => h.length > 0);
+    if (hashes.length === 0) {
+      return reply
+        .status(400)
+        .send({ error: `${SIGN_BLOBS_PARAM} must name at least one content hash`, code: "bad-op" });
+    }
+    if (hashes.length > SIGN_BLOBS_LIMIT) {
+      return reply.status(400).send({
+        error: `${hashes.length} hashes is more than this home signs at once — ask for ${SIGN_BLOBS_LIMIT} or fewer`,
+        code: "bad-op",
+      });
+    }
+    await engine.getSnapshot(id); // 404 for unknown canvases, as everywhere here
+    const key = await signing.key();
+    const expiresAt = Math.floor(Date.now() / 1000) + signing.ttlSeconds;
+    const urls: Record<string, string> = {};
+    for (const hash of hashes) urls[hash] = signedBlobPath(key, id, hash, expiresAt);
+    // `no-store` because the body IS the credential. Nothing between here and
+    // the tab may keep a copy — least of all the CDN this home sits behind.
+    return reply
+      .header("Cache-Control", "no-store")
+      .send({ urls, expiresAt, ttlSeconds: signing.ttlSeconds } satisfies SignedBlobsResponse);
+  });
+
   app.post("/api/projects/:id/blobs", async (req, reply) => {
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id); // 404 for unknown canvases
@@ -3908,7 +4068,14 @@ export function registerRoutes(
   registerContentRoutes(
     app,
     { engine, store, homes: options.homes ?? null },
-    { csp: "sandbox allow-scripts" },
+    {
+      appCsp: "sandbox allow-scripts",
+      // Hosted: the same registration answers for the content origin too,
+      // told apart by Host and made safe by the signature. Null on every
+      // local shape, where this mount only ever hears the app origin.
+      host: options.contentHost ?? null,
+      signing: options.contentSigning ?? null,
+    },
   );
 
   /**
@@ -4125,6 +4292,11 @@ function badUploadRequest(request: Partial<BlobUploadRequest> | undefined): stri
 /** The canvas id out of a path segment. A malformed percent escape is not
  * worth a 500 from a hook: it is not a canvas id either way, and the route
  * behind it will say so. */
+/** The `Host` header as one string, however the client spelled it. */
+function hostHeader(raw: string | string[] | undefined): string | undefined {
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
 function decodeSegment(raw: string): string {
   try {
     return decodeURIComponent(raw);

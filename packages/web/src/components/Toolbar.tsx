@@ -12,7 +12,6 @@ import { HomeGlyph } from "./Glyphs.tsx";
 import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
-import { ShareDialog } from "./ShareDialog.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 

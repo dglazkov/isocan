@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { canvasPath, deckFilename, deckHtml, deckPages, type DeckPageContent } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { blobUrl, readBlobText } from "../lib/api.ts";
-import { contentBase } from "../lib/contentBase.ts";
+import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame } from "../lib/frame.ts";
 import { Markdown } from "../lib/markdown.tsx";
 
@@ -137,10 +137,17 @@ export function DeckPrint({ canvasId }: { canvasId: string }) {
 }
 
 function DeckSlide({ canvasId, mimeType, blobHash, title }: { canvasId: string; mimeType: string; blobHash: string; title: string }) {
+  // The same two decisions the canvas makes, and in the same order: ask the
+  // content origin for a ticket if it wants one (stage 4b), then let
+  // `itemFrame` decide src and sandbox together (invariant 2). The hook runs
+  // unconditionally — a slide that is not a screen mints nothing, because the
+  // list it is handed is empty.
+  const origin = useContentOrigin(canvasId, mimeType === "text/html" ? [blobHash] : []);
   if (mimeType === "text/html") {
-    // The same src/sandbox pair the canvas uses: `itemFrame` is the one place
-    // allowed to decide them together (content-origin plan, invariant 2).
-    const frame = itemFrame(contentBase(), canvasId, blobHash);
+    const frame = itemFrame(origin, canvasId, blobHash);
+    // Null is "the ticket has not landed yet"; the sheet keeps its place and
+    // the slide arrives on the next render.
+    if (!frame) return <div className="deck-page-other" />;
     return <iframe src={frame.src} sandbox={frame.sandbox} title={title} loading="eager" />;
   }
   if (mimeType.startsWith("image/")) return <img src={blobUrl(canvasId, blobHash)} alt={title} />;

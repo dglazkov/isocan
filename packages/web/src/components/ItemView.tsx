@@ -39,7 +39,7 @@ import {
   paperOf,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
-import { contentBase } from "../lib/contentBase.ts";
+import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame } from "../lib/frame.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 import { DesignSystemView } from "./DesignSystemView.tsx";
@@ -1343,21 +1343,8 @@ export function VersionContent({
     return <BrowserView canvasId={canvasId} blobHash={blobHash} reloadToken={reloadToken} />;
   }
   if (mimeType === "text/html") {
-    // Security boundary: src and sandbox are built as a pair by `itemFrame`,
-    // the one place allowed to decide them together (content-origin plan,
-    // invariant 2). With no content origin that pair is allow-scripts alone —
-    // an opaque origin that cannot reach the daemon API, this app's DOM, or
-    // its storage. The blob response additionally carries `CSP: sandbox` and
-    // nosniff.
-    const frame = itemFrame(contentBase(), canvasId, blobHash);
-    const base = contentBase();
     return (
-      <HtmlView
-        src={frame.src}
-        sandbox={frame.sandbox}
-        title={filename}
-        warm={(warm ?? []).map((hash) => itemFrame(base, canvasId, hash).src)}
-      />
+      <HtmlItemView canvasId={canvasId} blobHash={blobHash} filename={filename} warm={warm ?? []} />
     );
   }
   return (
@@ -1427,6 +1414,51 @@ const EMPTY: ReadonlySet<string> = new Set();
  * a hundred live documents; the oldest is dropped, and the one on screen
  * never is.
  */
+/**
+ * **A screen, and the two decisions that get it on the glass safely.**
+ *
+ * Its own component rather than a branch above, because the second decision
+ * is a hook: on a home whose content origin serves strangers, the frame's URL
+ * carries a short-lived signature this tab has to ask the badged app origin
+ * for (`contentBase.ts`, and `content-read-auth.md` for why). Local homes and
+ * homes with no content origin at all take the same path and pay nothing —
+ * `useContentOrigin` mints nothing where nothing is asked of it.
+ *
+ * The first decision is `itemFrame`: src and sandbox built as a pair by the
+ * one place allowed to decide them together (content-origin plan, invariant
+ * 2). With no content origin that pair is `allow-scripts` alone — an opaque
+ * origin that cannot reach the daemon API, this app's DOM, or its storage.
+ * The blob response additionally carries `CSP: sandbox` and nosniff.
+ *
+ * Null from `itemFrame` means "the ticket has not landed yet", and the honest
+ * render for that beat is the empty card the frame would sit on anyway.
+ */
+function HtmlItemView({
+  canvasId,
+  blobHash,
+  filename,
+  warm,
+}: {
+  canvasId: string;
+  blobHash: string;
+  filename: string;
+  warm: readonly string[];
+}) {
+  const origin = useContentOrigin(canvasId, [blobHash, ...warm]);
+  const frame = itemFrame(origin, canvasId, blobHash);
+  if (!frame) return <div className="html-view" />;
+  return (
+    <HtmlView
+      src={frame.src}
+      sandbox={frame.sandbox}
+      title={filename}
+      warm={warm
+        .map((hash) => itemFrame(origin, canvasId, hash)?.src)
+        .filter((src): src is string => src !== undefined)}
+    />
+  );
+}
+
 function HtmlView({
   src,
   sandbox,

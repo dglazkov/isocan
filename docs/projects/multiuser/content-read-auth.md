@@ -1,8 +1,9 @@
 ---
-status: open
+status: decided
 since: 2026-09-05
+decided: 2026-09-06
 see: multiuser, atlas
-note: the decision the content origin's hosted half turns on — how a cookieless origin knows who may read a private canvas's bytes. Three options costed; signed URLs with a minutes-long TTL recommended; two choices left to the owners, the second domain and the TTL
+note: how a cookieless origin knows who may read a private canvas's bytes. Three options costed; signed URLs chosen and built — isocan.store as the second domain, five minutes as the TTL
 ---
 # Read auth on the content origin — the decision
 
@@ -89,7 +90,58 @@ had to give up (`private`) comes back on the origin where it is safe.
    like "at once" to a person, at the price of one mint per frame render;
    an hour is calmer for caching and makes an expulsion take an hour to be
    true for bytes already framed. The frame is re-rendered on every canvas
-   load, so the mint cost is paid per visit, not per second.
+   load, so the mint cost is paid per visit, not per second. *Decided 6 Sep
+   2026: **five minutes**, and the price that argued for the hour turned out
+   not to exist. Signatures are minted in ONE batched call per canvas visit
+   (`GET /api/projects/:id/blobs/signed?hashes=…`), not one call per frame, so
+   a canvas of forty screens costs one round trip either way. With the cost
+   gone, the number that makes expulsion nearly immediate is the one to take.
+   `ISOCAN_CONTENT_TTL` overrides it, in seconds, for a home that wants the
+   calmer edge cache.*
+
+## Built — 6 September 2026
+
+Both numbers were the owners', both are answered, and the code is in. What
+landed, in the order a reader would want it:
+
+- **`packages/server/src/content-auth.ts`** — the scheme, on its own, knowing
+  nothing about Fastify or the desk: HMAC-SHA256 over `v1\n<canvasId>\n<hash>\n
+  <exp>`, base64url, with four verdicts (`ok`, `unsigned`, `expired`,
+  `bad-signature`) that collapse to one 403 for the caller and stay four for
+  the log. The signature is checked *before* the clock, so nobody can choose
+  which refusal they get by writing a date in the query.
+- **The key is a desk ledger**, `Desk.contentKey()` — minted on first ask,
+  create-once across concurrent callers (a Firestore transaction on
+  `meta/content-key`; the file desk's own write chain), because a rollout runs
+  two instances of a home for a few seconds and two keys would break half the
+  frames on every open tab.
+- **The mint is `GET /api/projects/:id/blobs/signed`**, under the canvas-scoped
+  prefix so the door's one hook has already re-asked `canvasId ∈ admissions`.
+  A GET rather than a POST is load-bearing rather than tidy: the same hook
+  refuses every non-GET to a badge below `edit`, and a view-only member who
+  cannot mint is a view-only member who sees an empty canvas.
+- **The hosted content role is a Host header**, `ISOCAN_CONTENT_HOST`. One
+  Cloud Run `$PORT` serves both origins, so invariant 4 ("blobs and nothing
+  else") cannot be a route table there — it is a refusal at the top of the door
+  hook, before the badge is even resolved, and it covers the WebSocket upgrade
+  too, which no Fastify hook would have. The predicate matches a sha256 path
+  segment rather than any segment: a shape-only pattern let `/blobs/signed`
+  through to the *mint* route, unbadged, on the origin that exists precisely
+  because it carries no badge. The invariant-4 test found that, not a reader.
+- **The edge copy comes back.** A verified read is `public, max-age=<what is
+  left of its TTL>` — never `immutable`, because the bytes are permanent and
+  the URL's right to them is not. `infra/82-content-origin.sh` sets the cache
+  key to include the query string explicitly, since that is the line the whole
+  argument rests on.
+- **One variable is the rollback.** Unset `ISOCAN_CONTENT_HOST` and the hosted
+  home is byte-for-byte what it was: frames on the app origin, no signing, no
+  refusals. Local homes never took any of this — loopback, single-user,
+  hash-addressed, exactly as before.
+
+The costs are asserted rather than asserted-about: `contentauth.test.ts` has a
+test for the half of expulsion that is immediate (an expelled badge cannot mint)
+**and** a test for the half that is not (what it already minted still works for
+its minutes), because a documented cost that nothing tests is a claim.
 
 ## What does not change
 
@@ -114,10 +166,18 @@ first of the three gates on the sandboxes module.
 
 - **Sharing within a TTL.** A signed URL copied out of a page's source can
   be handed to someone else for the minutes it lives. Bounded by the TTL,
-  and the same exposure a screenshot has; recorded, not solved.
+  and by the scope — one object on one canvas, never the canvas — and it is
+  the same exposure a screenshot has; recorded, not solved.
 - **Key rotation.** A per-home HMAC key needs a rotation story before it is
-  a year old; the badge desk's revocation machinery is the model.
+  a year old; the badge desk's revocation machinery is the model. What is
+  decided now is only where it will land: the desk ledger `contentKey()`
+  reads, so the shape is a second key accepted while the first is the one
+  being minted against. Nothing rotates today.
 - **Replicas.** Bytes a replica never held stream through from the canvas's
   home today; a signature minted at the home must verify at the replica, so
-  the key travels the home link or the replica forwards the read. Decide
-  when stage 4 is built, not before.
+  the key travels the home link or the replica forwards the read. **Still
+  open, and now precisely bounded**: a replica that serves a content origin
+  has its own key and would refuse the home's signatures. No replica does —
+  `ISOCAN_CONTENT_HOST` is set on the hosted home alone, and a local replica's
+  loopback content listener asks for no signature at all. The day a second
+  home wants a content origin, this is the question to answer first.

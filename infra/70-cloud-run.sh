@@ -71,6 +71,15 @@ have "${IMAGE}"
 #                               Set only when config.sh's PROXY_HOPS is set,
 #                               so an unset variable means the code's own
 #                               default rather than this script asserting one.
+# ISOCAN_CONTENT_HOST           the second registrable domain item content is
+#                               served from (isocan.store). THE variable that
+#                               turns the hosted content origin on: frames move
+#                               there, reads there carry a short-lived
+#                               signature the app origin minted, and that Host
+#                               is refused everything but blob bytes. Set only
+#                               when config.sh's CONTENT_DOMAIN is set, so a
+#                               home without one is byte for byte the home
+#                               before the split — which is also the rollback.
 ENV_VARS="ISOCAN_STORE=cloud"
 ENV_VARS="${ENV_VARS},ISOCAN_GCP_PROJECT=${PROJECT_ID}"
 ENV_VARS="${ENV_VARS},ISOCAN_BUCKET=${BUCKET}"
@@ -83,6 +92,20 @@ ENV_VARS="${ENV_VARS},ISOCAN_ALLOWED_ORIGINS=https://${DOMAIN}"
 # claiming a decision nobody made.
 if [ -n "${PROXY_HOPS}" ]; then
   ENV_VARS="${ENV_VARS},ISOCAN_PROXY_HOPS=${PROXY_HOPS}"
+fi
+
+# **The content origin, if this home has one** — and only if, for the reason
+# above: an empty value would put a variable in the service description
+# claiming a decision nobody made, and the daemon reads an empty string as
+# "no content host" anyway. A home with none serves item content from its own
+# origin exactly as it always did.
+#
+# ORDERING: 82-content-origin.sh must have run and its certificate must be
+# ACTIVE before this deploy, or the domain has no valid route and the frames
+# this variable moves there will not load. Both scripts are idempotent, so the
+# fix is to run them in order rather than to repair anything.
+if [ -n "${CONTENT_DOMAIN}" ]; then
+  ENV_VARS="${ENV_VARS},ISOCAN_CONTENT_HOST=${CONTENT_DOMAIN}"
 fi
 
 # **The borrowed attester, as CONFIGURATION.** This is what makes one image run

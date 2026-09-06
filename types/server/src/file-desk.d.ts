@@ -69,6 +69,16 @@ export declare class FileDesk implements Desk {
     adopt(sessionKey: string, badgeId: string): Promise<ActorClaim | null>;
     shelve(rows: Record<string, ActorClaim>): Promise<void>;
     /**
+     * Mint once, then answer the same key forever. The write chain is what
+     * makes "once" true here: two callers racing arrive one after the other,
+     * and the second sees the first's key rather than replacing it.
+     *
+     * 256 bits from the CSPRNG — `mintBadge`'s number, because it is the same
+     * kind of secret and there is no reason for this home to hold two opinions
+     * about how long a secret is.
+     */
+    contentKey(): Promise<string>;
+    /**
      * The badge behind an id, **or nothing if it was killed** — the one lookup
      * every method here goes through, so "a killed badge is a badge nobody
      * holds" is a property of the file rather than a rule each method

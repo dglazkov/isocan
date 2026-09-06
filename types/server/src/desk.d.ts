@@ -536,4 +536,30 @@ export interface Desk {
      * the private ledger, keyed by the `sessionKey` that will come to collect
      * it. */
     shelve(rows: Record<string, ActorClaim>): Promise<void>;
+    /**
+     * **This home's HMAC key for signing content reads**, minted on first ask
+     * and the same one ever after.
+     *
+     * It is on the desk rather than in the environment for the reason every
+     * other ledger here is: it is a fact ABOUT this home that must outlive any
+     * one process and be identical on every instance of it. A key in a
+     * deployment variable is a key somebody must provision before the origin
+     * works, forget to copy when they clone the home, and rotate by editing a
+     * console — and a signature minted by one Cloud Run instance has to verify
+     * on the next, which a per-process random key silently fails at exactly
+     * when a second instance appears during a rollout.
+     *
+     * **It must therefore be create-once across concurrent callers.** Two
+     * instances booting together must not mint two keys; the second to write
+     * loses and adopts the first one's. `CloudDesk` does that with a
+     * transaction, `FileDesk` with its serialized write chain — the same
+     * split `redeemPass` has, and for the same reason.
+     *
+     * Rotation is not here yet, and `content-read-auth.md` names it open: the
+     * shape it will take is a second key accepted while the first is still
+     * being minted against, which is the badge desk's revocation machinery in
+     * miniature. What is decided today is that when that lands, it lands in
+     * this ledger.
+     */
+    contentKey(): Promise<string>;
 }

@@ -17,7 +17,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/lib/common.sh"
 STAGE="${1:-}"
 case "${STAGE}" in
   a|A) SCRIPTS=(10-project.sh 20-firestore.sh 30-bucket.sh 40-service-account.sh 50-artifact-registry.sh 60-build-image.sh 70-cloud-run.sh) ;;
-  b|B) SCRIPTS=(80-load-balancer.sh 81-cert-status.sh) ;;
+  b|B) SCRIPTS=(80-load-balancer.sh 81-cert-status.sh 82-content-origin.sh) ;;
   c|C) SCRIPTS=(90-backup-export.sh 92-uptime-check.sh) ;;
   d|D) SCRIPTS=(95-build-trigger.sh) ;;
   e|E) SCRIPTS=(100-identity-platform.sh) ;;
@@ -30,7 +30,11 @@ usage: $0 <stage>
                           Ends with a working home at an ugly *.run.app URL.
                           Costs at rest with nobody visiting: \$0/month.
 
-  b   THE FRONT DOOR      static IP, load balancer, Cloud CDN, managed cert.
+  b   THE FRONT DOOR      static IP, load balancer, Cloud CDN, managed cert,
+                          and the content origin's second domain on the same
+                          load balancer (homes that name one — see
+                          ISOCAN_CONTENT_DOMAIN; dev names none and that
+                          script says so and exits).
                           Ends needing you to add a DNS A record.
                           Costs at rest with nobody visiting: ~\$18/month.
 

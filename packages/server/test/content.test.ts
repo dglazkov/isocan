@@ -32,7 +32,7 @@ describe("invariant 4: the content role answers blobs and nothing else", () => {
     // Registration never touches the deps — only a handled request would —
     // so the table can be enumerated without standing a daemon up.
     registerContentRoutes(app, { engine: null, store: null, homes: null } as unknown as ContentDeps, {
-      csp: null,
+      appCsp: null,
     });
     await app.ready();
     // Fastify mirrors every GET with a HEAD; both answer bytes for a hash.
@@ -219,7 +219,7 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
       const offBase = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
       const offBadge = await mintTestBadge(offBase);
       const res = await fetch(`${offBase}${SERVING_ROUTE}`, { headers: offBadge.headers });
-      expect(await res.json()).toEqual({ contentBase: null, modules: [] });
+      expect(await res.json()).toEqual({ contentBase: null, contentSigned: false, modules: [] });
       expect(off.contentBase).toBe(null);
     } finally {
       await off.close();

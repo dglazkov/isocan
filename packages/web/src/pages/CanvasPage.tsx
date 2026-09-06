@@ -47,7 +47,9 @@ import { ModulePage } from "../components/ModulePage.tsx";
 import { useChromeHidden } from "../lib/hideable.ts";
 import { Viewer } from "../components/Viewer.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
-import { Scrubber } from "../components/Scrubber.tsx";
+/** Asked for by a keystroke and unmounted when closed, so it need not be in
+ *  the bytes a first visit downloads. */
+const Scrubber = lazy(() => import("../components/Scrubber.tsx").then((m) => ({ default: m.Scrubber })));
 import { WhatsNew } from "../components/WhatsNew.tsx";
 /**
  * **Loaded when it is opened, not when the canvas is.**
@@ -946,7 +948,9 @@ function CanvasSurface({
           canvas to now, so there is no way to leave a tab stranded in a past
           with nothing on screen explaining why it will not take a change. */}
       {historyOpen && (
-        <Scrubber canvasId={canvasId} onClose={() => setHistoryOpen(false)} />
+        <Suspense fallback={null}>
+          <Scrubber canvasId={canvasId} onClose={() => setHistoryOpen(false)} />
+        </Suspense>
       )}
       {/* Release notes. Floats over the canvas like the other panels rather
           than living inside one, and decides its own visibility from the

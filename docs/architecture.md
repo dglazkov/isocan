@@ -45,6 +45,7 @@ the map edits this doc in the same change.
 | desk ledgers | **Firestore** — badges, grants, attestations, registrations, audit; registration launch tokens wrapped by **Cloud KMS** |
 | attesters | **Firebase Auth** — magic-link email (the floor), Google, GitHub |
 | front door | global external HTTPS load balancer + Cloud CDN + managed cert → serverless NEG → the Cloud Run service. **On prod the LB is the only way in** (`--ingress=internal-and-cloud-load-balancing`): the `*.run.app` URL reaches the service around the balancer, and on that path the door's rate limit keys on a caller-supplied forwarded chain. Dev stays open, having no strangers to protect from |
+| content origin | **isocan.store** — a second *registrable* domain (not a subdomain: cookies scope to parents), one more managed cert and one host rule on the SAME load balancer to the SAME Cloud Run service. Item content is framed from here so that `allow-same-origin` grants a page an origin with nothing in it; the daemon tells the two Hosts apart by `ISOCAN_CONTENT_HOST` and serves that one blob bytes and nothing else. Reads there carry a five-minute HMAC the badged app origin minted — `docs/projects/multiuser/content-read-auth.md`. Prod only; dev proves the split on a second loopback port instead |
 | secrets | Secret Manager (GitHub app credentials and kin) |
 | deploy | **Cloud Build triggers** on the GitHub repo — push to `green` (main's own commit, moved forward by CI once the suite passes) builds and deploys dev; prod promotes only by an explicit gesture (`git tag -f prod green && git push -f origin prod`) — NOT the `release` branch, which CI regenerates from every main commit: it is the CLI distribution branch, not a gate; build → Artifact Registry → `gcloud run deploy`, all inside GCP on a build service account, so no cross-cloud credentials exist at all |
 | environments | two GCP projects: `isocan-io-dev` at dev.isocan.io, `isocan-io-prod` at isocan.io (both live since phase 14; the ids carry the domain, because `isocan-dev` is ambiguous about whose isocan it is) |
@@ -100,8 +101,10 @@ flowchart LR
         TC["thin CLIs<br/>(cloud agents)"]
     end
     B --> LB["isocan.io<br/>HTTPS LB + CDN"]
+    B -->|"item frames only,<br/>signed URLs"| CO["isocan.store<br/>same LB, same cert store"]
     LD -->|"per canvas's home"| LB
     TC --> LB
+    CO --> CR
     LB --> CR["Cloud Run — one instance<br/>the daemon: door · engine (single writer) ·<br/>presence hub · WS rooms · shell"]
     CR --> FS["Firestore<br/>oplog docs · desk ledgers"]
     CR --> GCS["Cloud Storage<br/>blobs · snapshots"]

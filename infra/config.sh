@@ -70,6 +70,25 @@ BACKEND_NAME="${ISOCAN_BACKEND_NAME:-isocan-backend}"
 URLMAP_NAME="${ISOCAN_URLMAP_NAME:-isocan-urlmap}"
 CERT_NAME="${ISOCAN_CERT_NAME:-isocan-cert}"
 
+# ---- the content origin (the second registrable domain) ----
+#
+# **A second domain and not a subdomain, and that is the whole point.** Item
+# content is served from an origin that owns nothing — no cookie, no badge, no
+# API — so that a page somebody (or some agent) put on a canvas can be granted
+# `allow-same-origin` and still reach nothing of ours. A subdomain of the app's
+# domain would not do: cookies can be scoped to a parent domain. This is the
+# `githubusercontent.com` pattern; the argument is in
+# docs/projects/atlas/content-origin.md and the decision in
+# docs/projects/multiuser/content-read-auth.md.
+#
+# **isocan.store, chosen 5 September 2026.** Empty here on purpose: dev has no
+# second domain, so 82-content-origin.sh does nothing on a home that has not
+# named one, and a daemon with no ISOCAN_CONTENT_HOST serves item content
+# exactly as it did before any of this — unsetting one variable is the rollback
+# for the whole feature. prod.env names it.
+CONTENT_DOMAIN="${ISOCAN_CONTENT_DOMAIN:-}"
+CONTENT_CERT_NAME="${ISOCAN_CONTENT_CERT_NAME:-isocan-store-cert}"
+
 # ---- the shape of the instance ----
 #
 # max = 1 is the single-writer promise expressed as a flag. min differs by

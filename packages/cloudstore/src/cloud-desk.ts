@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
 import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "@isocan/core";
 import {
@@ -60,6 +61,20 @@ export const GROUPS = "groups";
  * empties. One document is right precisely because it is finite and shrinking;
  * nothing new is ever shelved. */
 export const SHELF_DOC = "meta/shelf";
+/**
+ * `meta/content-key` — the HMAC key this home signs content reads with
+ * (`docs/projects/multiuser/content-read-auth.md`, option A). One document,
+ * because there is exactly one key; beside the shelf under `meta/` because
+ * neither is a ledger of rows, and both belong to the home rather than to
+ * anybody in it.
+ *
+ * **It is the one document here that is created in a transaction for
+ * uniqueness rather than for atomicity.** A rollout runs two instances of
+ * this home for a few seconds; if both minted a key, half the frames on
+ * every open tab would fail to verify until one instance drained. The
+ * transaction makes the second minter adopt the first's key instead.
+ */
+export const CONTENT_KEY_DOC = "meta/content-key";
 
 /**
  * How stale `lastSeen` may get before a touch costs a write.
@@ -112,6 +127,9 @@ export class CloudDesk implements Desk {
    * drift against. Purely an optimization cache: losing it costs one extra
    * write, never a wrong answer. */
   private readonly lastWrittenSeen = new Map<string, number>();
+  /** This home's content-signing key, once read. It cannot change while the
+   * process is up — see `contentKey`. */
+  private cachedContentKey: string | null = null;
 
   constructor(options: { firestore: Firestore; shutdown?: () => Promise<void> }) {
     this.db = options.firestore;
@@ -591,6 +609,31 @@ export class CloudDesk implements Desk {
   async shelve(rows: Record<string, ActorClaim>): Promise<void> {
     if (Object.keys(rows).length === 0) return;
     await this.db.doc(SHELF_DOC).set(jsonSafe(rows), { merge: true });
+  }
+
+  /**
+   * Mint once, then answer the same key forever — across instances, which is
+   * the only reason this is a transaction and not a read-then-write. See
+   * `CONTENT_KEY_DOC`.
+   *
+   * Cached in memory after the first read: it is asked once per mint call on
+   * a hot route, it cannot change while the process is up (nothing rewrites
+   * the document), and a Firestore read per signature would put the content
+   * origin's cost on the app origin's hottest path.
+   */
+  async contentKey(): Promise<string> {
+    if (this.cachedContentKey) return this.cachedContentKey;
+    const ref = this.db.doc(CONTENT_KEY_DOC);
+    const key = await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      const existing = doc.data()?.["key"];
+      if (typeof existing === "string" && existing.length > 0) return existing;
+      const minted = randomBytes(32).toString("base64url");
+      tx.set(ref, { key: minted, mintedAt: new Date().toISOString() });
+      return minted;
+    });
+    this.cachedContentKey = key;
+    return key;
   }
 
   // ---- internals ----

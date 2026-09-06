@@ -41,6 +41,24 @@ export interface DaemonOptions {
      */
     contentPort?: number | "off";
     /**
+     * **The hosted content origin's host** — `isocan.store`, read from
+     * `ISOCAN_CONTENT_HOST` when this is absent, and unset on every local
+     * daemon.
+     *
+     * The local half of the split is a second listener; the hosted half cannot
+     * be, because Cloud Run exposes one `$PORT`. So the hosted content origin
+     * is a second registrable domain routed to this same service, recognized
+     * here by Host header — the `githubusercontent.com` pattern, chosen and
+     * provisioned on 5 September 2026 (`content-read-auth.md`).
+     *
+     * Setting it is what turns the hosted half ON, and it does three things at
+     * once, which is why it is one variable and not three: item frames start
+     * pointing at that origin, reads there start requiring a signature, and
+     * this app starts refusing that Host everything but blob bytes. Unset —
+     * the rollback — restores today exactly.
+     */
+    contentHost?: string;
+    /**
      * **Where a canvas born on this machine, naming nothing, is born** —
      * `https://isocan.io`. Absent (the default, and every daemon in this repo
      * today) means a canvas born here stays here.

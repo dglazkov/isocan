@@ -34,6 +34,7 @@ import type {
   RcAskResponse,
   RedeemPassResponse,
   ServingResponse,
+  SignedBlobsResponse,
   SlashCommand,
   SpaceCanvasResponse,
   SpaceLinkRequest,
@@ -75,6 +76,8 @@ import {
   passesRoute,
   canvasesRoute,
   SERVING_ROUTE,
+  SIGN_BLOBS_PARAM,
+  SIGN_BLOBS_ROUTE,
 } from "@isocan/core";
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
@@ -1103,6 +1106,24 @@ export async function readBlobText(canvasId: string, blobHash: string): Promise<
 /** How this home serves — today, only whether a content origin exists. */
 export function getServing(): Promise<ServingResponse> {
   return request("GET", SERVING_ROUTE);
+}
+
+/**
+ * **Ask the badged app origin for URLs that will work on the content
+ * origin** (`docs/projects/multiuser/content-read-auth.md`, option A).
+ *
+ * A read through the door, on a route the door has already tested `canvasId
+ * ∈ admissions` for — which is why an expelled tab gets nothing here rather
+ * than getting URLs that fail later. `request` brings the 401 recovery with
+ * it: a tab whose badge lapsed knocks and asks again, exactly as it does for
+ * every other chrome read.
+ *
+ * Never called on a home that serves item content unsigned; `contentBase.ts`
+ * asks only when `/api/serving` said so.
+ */
+export function signedBlobs(canvasId: string, hashes: string[]): Promise<SignedBlobsResponse> {
+  const path = SIGN_BLOBS_ROUTE.replace(":id", encodeURIComponent(canvasId));
+  return request("GET", `${path}?${SIGN_BLOBS_PARAM}=${hashes.map(encodeURIComponent).join(",")}`);
 }
 
 
