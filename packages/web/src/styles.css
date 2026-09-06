@@ -29,6 +29,15 @@
   --dot: #c9ccc4;
   /* The grid dots under the cursor spotlight — a denser cobalt-tinted dot. */
   --dot-glow: #6f81df;
+  /* What a node IS, on the minimap when a pointer is on it. Two families and
+     a neutral, not nine hues: at two pixels a rect can carry a GROUP and
+     cannot carry a category, and the kinds' own declared order already names
+     the group worth seeing — "what you made, then what you brought". Kept
+     desaturated so they never read as `IDENTITY_COLORS`, which mean a person
+     and land on items during remote selection. */
+  --kind-made: #8a6a2f;
+  --kind-brought: #3f6b7a;
+  --kind-other: #7b7f88;
   /* Open water and high ground (#195), the same on either theme and for the
      same reason as space: these are pictures, not surfaces that follow the
      app's theme. Dark enough that white item cards read as objects on top. */
@@ -197,6 +206,11 @@
   --ground: #0e0f12;
   --dot: #2b2f36;
   --dot-glow: #c3c9d6;
+  /* See the light block: two families and a neutral, lifted for the dark
+     ground so a two-pixel rect still separates from it. */
+  --kind-made: #d0a95e;
+  --kind-brought: #7fb4c6;
+  --kind-other: #9aa0aa;
   /* Open water and high ground (#195), the same on either theme and for the
      same reason as space: these are pictures, not surfaces that follow the
      app's theme. Dark enough that white item cards read as objects on top. */
@@ -3174,7 +3188,18 @@ button.mt-card:hover { border-color: var(--accent); }
    hovered row, and the same accent the item itself wears while peeked — one
    colour for "this one", wherever you happen to be pointing at it from. */
 .minimap-item { fill: var(--chip-line); transition: fill 0.1s ease; }
-.minimap-item.peeked { fill: var(--accent); }
+/* Lit: the map takes a pointer and the shape gains a legend. Three rules,
+   because `kindFamily` in core has already done the grouping — the sheet is
+   handed "made", "brought" or "other" and never learns the kind list. A
+   per-kind step within a family was tried and removed: at two pixels the eye
+   reads hue and does not read a 20% opacity difference, so it was decoration
+   that cost a copy of the list. */
+.minimap.lit .minimap-item { fill: var(--kind-other); }
+.minimap.lit .minimap-item[data-family="made"] { fill: var(--kind-made); }
+.minimap.lit .minimap-item[data-family="brought"] { fill: var(--kind-brought); }
+/* The node under the pointer outranks its family: the peek card names the
+   kind in words, so the colour is free to say "this one" instead. */
+.minimap-item.peeked, .minimap.lit .minimap-item.peeked { fill: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .minimap-item { transition: none; } }
 
 .minimap-dock {

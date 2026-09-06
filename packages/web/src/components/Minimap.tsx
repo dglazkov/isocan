@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { itemKind, kindFamily } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { ItemPeek } from "./ItemThumb.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -23,6 +24,8 @@ const PAD = 8;
  */
 export function Minimap() {
   const colors = useActorColors();
+  /** Whether a pointer is on the map — see the `lit` note on the svg. */
+  const [lit, setLit] = useState(false);
   const canvasId = useCanvasStore((s) => s.canvasId);
   /**
    * Which node the pointer is on, and where to hang its card.
@@ -155,16 +158,37 @@ export function Minimap() {
           ⌄
         </button>
         <svg
-          className="minimap"
+          /**
+           * **`lit` is the map answering "what is all this?"**
+           *
+           * At rest every node is one quiet colour, because the map's job then
+           * is shape: where the work is and where you are in it. Put a pointer
+           * on it and the same rects take a colour by kind, so the shape gains
+           * a legend without gaining any ink.
+           *
+           * On the SVG rather than each rect: this is a property of looking at
+           * the map, not of hovering a node, and lighting one node at a time
+           * would answer a question nobody asked.
+           */
+          className={`minimap${lit ? " lit" : ""}`}
           width={MAP_W}
           height={MAP_H}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
+          onPointerEnter={() => setLit(true)}
+          onPointerLeave={() => {
+            setLit(false);
+            setPeek(null);
+          }}
         >
           {Object.values(canvas.items).map((item) => (
         <rect
           key={item.id}
           className={`minimap-item${peek?.itemId === item.id ? " peeked" : ""}`}
+          /* The family, not the kind: core owns the split (`kindFamily`), so
+             the stylesheet never holds a second copy of the kind list and a
+             module's kind is placed without the sheet having met it. */
+          data-family={kindFamily(itemKind(item))}
           x={mapX(item.x)}
           y={mapY(item.y)}
           width={Math.max(item.width * scale, 2)}

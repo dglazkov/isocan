@@ -27,6 +27,27 @@ export type ItemKind = BuiltinKind | (string & {});
 export declare const ITEM_KINDS: readonly BuiltinKind[];
 export declare function isBuiltinKind(kind: string): kind is BuiltinKind;
 /**
+ * The coarser grouping `ITEM_KINDS` already names in its own comment — *what
+ * you made, then what you brought* — with `other` as the honest third answer.
+ */
+export type KindFamily = "made" | "brought" | "other";
+/**
+ * **Which side of the line a kind falls on.**
+ *
+ * The split is read OUT of `ITEM_KINDS` rather than written down again: the
+ * made kinds are the ones ordered before `image`, because that ordering is
+ * the fact, and a second list would be a second thing to keep right — the
+ * failure this file's own header warns about one level up.
+ *
+ * A module's kind is `made`, for the reason `itemKinds()` puts it before
+ * `other`: a diagram is a thing somebody made here.
+ *
+ * Used where there is room for a family and not for a category — a minimap
+ * rect two pixels wide can carry "made or brought" and cannot carry nine
+ * hues.
+ */
+export declare function kindFamily(kind: ItemKind): KindFamily;
+/**
  * Every kind a list can group under right now: the built-ins, with the loaded
  * modules' kinds before `other` — a diagram is a thing you made, and "Files"
  * stays the last word.
