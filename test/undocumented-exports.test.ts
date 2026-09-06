@@ -25,14 +25,36 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * than the gap, because it is invisible to the instrument that caused it.
  *
  * So this guard is deliberately weak about the past and strict about the
- * future: it does not ask anybody to document 361 exports, it asks that the
- * 362nd arrive with a sentence. The goal stays printed, and the distance to
+ * future: it does not ask anybody to document every export, it asks that the
+ * next one arrive with a sentence. The goal stays printed, and the distance to
  * it stays visible, because the number falling is a good thing to see when it
  * happens for the right reason.
  *
- * ## Why the ceiling is 361
+ * ## What the first hundred-and-eight would have been, and what was done
  *
- * It is the measurement at the commit that added this file — the same trade
+ * 361 → 331 on 6 September, by documenting `protocol.ts` — thirty wire types
+ * with well-documented FIELDS and nothing saying what the exchange was FOR.
+ * That file is the contract both surfaces speak, so a reader arriving at
+ * `RcHoldRequest` or `ParkClaimResponse` and finding only field comments has
+ * to reconstruct the conversation from its parts. Those thirty were worth
+ * thirty sentences.
+ *
+ * **The remaining 78 to the goal were deliberately not written.** The next
+ * cluster is `ids.ts` — `newItemId`, `newVersionId`, `newThreadId` — and a
+ * comment reading "makes a new item id" above `newItemId` is exactly the
+ * failure this file names below: it satisfies the counter and leaves the
+ * codebase worse, because now there is a comment to keep in step with a name
+ * that already said everything. `paths.ts` is the same: `canvasFile`,
+ * `oplogFile`, `blobsDir` are a layout, and the layout wants one header, not
+ * fifteen restatements.
+ *
+ * So the number moved by the amount that had something to say. That is the
+ * measure working as intended: it asked, somebody read, and the answer was
+ * "thirty of these, not a hundred and eight".
+ *
+ * ## Why the ceiling is 331
+ *
+ * It is the measurement after that pass — the same trade
  * `test/bundle-budget.test.ts` and `test/unused-exports.test.ts` make, for
  * the same reason: a test asserting the goal would redden the trunk on every
  * commit and be turned off within the day.
@@ -41,7 +63,7 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * declares, so the suite and the nightly can never answer differently for one
  * name (`docs/reviews/lessons.md` #5).
  */
-const CEILING = 361;
+const CEILING = 331;
 const GOAL = 253;
 
 describe("exports with no comment above them", () => {

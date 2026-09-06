@@ -11,6 +11,8 @@ export const DEFAULT_PORT = 4441;
 
 // ---- WebSocket ----
 
+/** Everything the socket pushes DOWN to a connected tab or park. The
+ *  union is the whole of what a client must be ready to hear. */
 export type ServerMessage =
   /**
    * **Proof the connection is still there**, sent on a timer whether or not
@@ -193,6 +195,8 @@ export type ClientMessage =
 
 // ---- presence sessions ----
 
+/** One live connection, as the desk holds it: who is on the canvas, what
+ *  they may do, and what they are doing right now. */
 export interface PresenceSession {
   sessionId: string;
   actor: Actor;
@@ -290,6 +294,9 @@ export interface PresenceSession {
   via?: string | null;
 }
 
+/** What a session says it is doing, so the facepile can say more than
+ *  "here". Two of the three are places; the third is a question somebody is
+ *  waiting on an answer to. */
 export type PresenceActivity =
   | { kind: "working"; itemId: string }
   | { kind: "working"; x: number; y: number }
@@ -301,6 +308,8 @@ export type PresenceActivity =
    * the thing it was asked about. */
   | { kind: "working"; threadId: string };
 
+/** Announcing yourself to the roster — the CLI and a parked rc do this by
+ *  hand, where a browser session is born on the socket instead. */
 export interface CreateSessionRequest {
   actor: Actor;
   label?: string;
@@ -311,11 +320,15 @@ export interface CreateSessionRequest {
   kind?: "cli" | "rc";
 }
 
+/** The lease: the id to send with every beat, and how long silence may
+ *  last before the face goes. */
 export interface CreateSessionResponse {
   sessionId: string;
   ttlMs: number;
 }
 
+/** The beat that keeps a session alive and moves what it shows. Sent on a
+ *  timer whether or not anything changed, because stopping IS the signal. */
 export interface UpdateSessionRequest {
   /** Who is holding this session now. Sent on every update so renaming
    * yourself re-labels the live face instead of waiting out its TTL — the
@@ -357,6 +370,8 @@ export interface WatchLogRequest {
   waitMs?: number;
 }
 
+/** A log entry with the canvas it came from, for a park watching several
+ *  at once — one stream where the entries no longer share an origin. */
 export interface WatchedLogEntry extends LogEntry {
   canvasId: string;
   /** The canvas's title, so a waiter can name where it was summoned. */
@@ -367,6 +382,8 @@ export interface WatchedLogEntry extends LogEntry {
   redelivered?: boolean;
 }
 
+/** What arrived across every watched canvas, and where to resume. The
+ *  cursors go straight back into the next request. */
 export interface WatchLogResponse {
   /** Across all watched canvases, oldest first. */
   entries: WatchedLogEntry[];
@@ -404,6 +421,8 @@ export interface ParkClaimRequest {
   seedAt?: number;
 }
 
+/** The lease a park takes on a canvas's log: where to read from, and what
+ *  a previous park was handed but may never have finished. */
 export interface ParkClaimResponse {
   /** The lease. Present it on every delivery and advance. */
   parkId: string;
@@ -459,6 +478,8 @@ export interface RcAsk {
   from: Actor;
 }
 
+/** An rc parking against the home: hold this connection open, and wake me
+ *  if somebody rings for one of these agents. */
 export interface RcHoldRequest {
   canvasId: string;
   /** The agents this rc currently answers for — answerable while held. */
@@ -466,6 +487,8 @@ export interface RcHoldRequest {
   waitMs: number;
 }
 
+/** The hold returning — nearly always empty, because the interesting
+ *  answer is the one that carries an ask. */
 export interface RcHoldResponse {
   ok: true;
   /** Asks that arrived during (or just before) this hold. Empty nearly
@@ -481,11 +504,13 @@ export interface RcAnsweringResponse {
   actorIds: string[];
 }
 
+/** The doorbell: somebody wants an agent by name, on this canvas. */
 export interface RcAskRequest {
   name: string;
   from: Actor;
 }
 
+/** The receipt for a ring, so the caller can follow what it started. */
 export interface RcAskResponse {
   ok: true;
   askId: string;
@@ -637,6 +662,8 @@ export function staleClientRefusal(
 
 // ---- REST payloads ----
 
+/** An operation on its way up. Carries no timestamp on purpose — the home
+ *  stamps it, so a client cannot lie about when something happened. */
 export interface PostOpRequest {
   /** null only for project.create and actor.claim. */
   canvasId: string | null;
@@ -732,16 +759,21 @@ export interface PostOpRequest {
   op: Operation;
 }
 
+/** Where it landed in the one order: the seq the home assigned, and the
+ *  envelope every other client will see. */
 export interface PostOpResponse {
   seq: number;
   envelope: OpEnvelope;
 }
 
+/** Whose stack to walk. Undo is per ACTOR, so two people working at once
+ *  never take back each other's work. */
 export interface UndoRedoRequest {
   actor: Actor;
   clientId?: string;
 }
 
+/** What the bytes became: the content hash an item's version will name. */
 export interface BlobUploadResponse {
   blobHash: string;
   mimeType: string;
@@ -806,6 +838,8 @@ export function decodeFilename(raw: string | string[] | undefined): string {
   }
 }
 
+/** Everything a tab needs to draw a canvas from cold — the fold, the seq it
+ *  is true at, and the registry facts that are not in the log. */
 export interface CanvasSnapshotResponse {
   project: Canvas;
   canvas: CanvasContents;
@@ -1059,6 +1093,8 @@ export function canvasesRoute(reach?: CanvasesReach): string {
  */
 export const HOME_JOIN_ROUTE = "/api/home/join";
 
+/** Take up a canvas that lives at another home: fetch it from there and
+ *  hold it here as a replica, under the same id. */
 export interface JoinCanvasRequest {
   canvasId: string;
   /**
@@ -1141,10 +1177,13 @@ export const PRESENCE_WHERE_ROUTE = "/api/presence/where";
  */
 export const NEWS_ROUTE = "/api/news";
 
+/** The release notes, newest first — what the What's New panel reads. */
 export interface NewsResponse {
   days: NewsDay[];
 }
 
+/** One person, and the canvas they are on — a row of the answer to "where
+ *  is everybody", which crosses canvases and so cannot come from one. */
 export interface PresenceWhere {
   canvasId: string;
   /** The vouched actor — the trustworthy half of a presence row. */
@@ -1165,6 +1204,8 @@ export const ACTOR_KINDS_ROUTE = "/api/kinds";
  *  daemon for the app (`core/googledoc.ts`). */
 export const DOC_EXPORT_ROUTE = "/api/docs/export";
 
+/** A Google Doc's words, fetched as markdown, with the address the item
+ *  will point back at. */
 export interface DocExportResponse {
   id: string;
   /** The doc's canonical address — what the item's `source` records. */
@@ -1175,6 +1216,7 @@ export interface DocExportResponse {
   fetchedAt: string;
 }
 
+/** Everybody, across every canvas this badge may see. */
 export interface PresenceWhereResponse {
   where: PresenceWhere[];
 }
@@ -1214,8 +1256,13 @@ export const SIGN_BLOBS_ROUTE = "/api/projects/:id/blobs/signed";
  * hundred screens is a handful of round trips rather than a URL no proxy will
  * forward. */
 export const SIGN_BLOBS_PARAM = "hashes";
+/** How many tickets one mint may ask for. A URL nothing between here and
+ *  the home would forward is not a service to anybody, so a big canvas is a
+ *  handful of calls rather than one impossible one. */
 export const SIGN_BLOBS_LIMIT = 100;
 
+/** The tickets: for each hash, the path that will actually serve those
+ *  bytes, and how long this tab should go on using it. */
 export interface SignedBlobsResponse {
   /**
    * Content hash → the PATH to fetch those bytes with, signature and all.
@@ -1246,6 +1293,8 @@ export interface SignedBlobsResponse {
   ttlSeconds: number;
 }
 
+/** What this home serves and how — the content origin, whether reads there
+ *  must be signed, and the modules it advertises. Asked once, at boot. */
 export interface ServingResponse {
   /** Origin (scheme://host[:port], no trailing slash) serving item content,
    * or null: content is served from the app's own origin, as it always was. */
@@ -1276,6 +1325,8 @@ export interface ServingResponse {
   modules?: ModuleManifest[];
 }
 
+/** The routing table: where a new canvas would be born, and which home
+ *  each canvas this daemon holds actually belongs to. */
 export interface HomesResponse {
   /** Where a canvas born here, naming nothing, would be born. Null: here. */
   birth: string | null;
@@ -1321,6 +1372,8 @@ export interface CanvasLinkState {
   lastFailure: string | null;
 }
 
+/** Every refusal, in one shape. The code is what a client branches on; the
+ *  message is what a person reads. */
 export interface ApiError {
   error: string;
   code?: string;
@@ -1356,6 +1409,8 @@ export const UNKNOWN_ROUTE = "unknown-route";
 
 // ---- blob garbage collection (maintenance; not an Operation) ----
 
+/** Asking a home to sweep: fold the old log into the archive and drop the
+ *  blobs nothing names any more. */
 export interface GcRequest {
   /** How many recent oplog entries to keep (the undo horizon). */
   keepOps?: number;
@@ -1365,6 +1420,8 @@ export interface GcRequest {
   graceMs?: number;
 }
 
+/** What the sweep actually did, so a dry run and a real one are read the
+ *  same way. */
 export interface GcReport {
   dryRun: boolean;
   retainedEntries: number;
