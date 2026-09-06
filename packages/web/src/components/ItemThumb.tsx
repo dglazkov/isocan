@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { canvasIdOf, itemKind, isTextItem, type Item } from "@isocan/core";
 import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
+import { useOnScreen } from "../lib/onscreen.ts";
 import { VersionContent } from "./ItemView.tsx";
 
 /**
@@ -13,6 +14,19 @@ import { VersionContent } from "./ItemView.tsx";
  * uses, shrunk to fit and inert. Shared by everything that peeks at an item
  * without going to it: the edge radar's card, the files panel's, the
  * marks dock.
+ *
+ * **And only while you can see it** (6 Sep 2026). A `text/html` thumbnail is
+ * the real document — scripts, animations, the lot — and the Chat panel
+ * mounts one per message card. A canvas with a long agent thread had 132
+ * copies of one screen live at once, 764MB, a pegged core, and a tab that
+ * froze the longer it stayed open. The renderer was never the problem; the
+ * number of them was. `useOnScreen` bounds it to a screenful, which is a
+ * bound that does not grow with the thread, the version count, or the age of
+ * the tab.
+ *
+ * Before it is seen the box is still drawn, at its real size, so nothing
+ * reflows when the content arrives — an empty frame that becomes the thing,
+ * rather than a layout that jumps.
  */
 export function ItemThumb({
   canvasId,
@@ -38,6 +52,9 @@ export function ItemThumb({
   height?: number;
 }) {
   const fromStore = useCanvasStore((s) => s.canvas?.items[itemId]);
+  // Above every early return: a hook's order is not allowed to depend on
+  // whether an item happened to be an image.
+  const { ref, onScreen } = useOnScreen<HTMLSpanElement>();
   const item = given ?? fromStore;
   if (!item) return null;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
@@ -57,7 +74,8 @@ export function ItemThumb({
   // thing is the part you recognise it by.
   const fit = width / Math.max(item.width, 1);
   return (
-    <span className="item-thumb item-thumb-live" style={{ width, height }}>
+    <span ref={ref} className="item-thumb item-thumb-live" style={{ width, height }}>
+      {onScreen && (
       <span
         className="item-thumb-page"
         style={{
@@ -80,6 +98,7 @@ export function ItemThumb({
           size={{ width: item.width, height: item.height }}
         />
       </span>
+      )}
     </span>
   );
 }

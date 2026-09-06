@@ -76,6 +76,45 @@ interface FormatOptions {
   perRow?: number;
 }
 
+/**
+ * **Tidy these, and leave everything else where it is** (#196).
+ *
+ * `formatMoves` folds a whole canvas, and `isocan format --in <area>` already
+ * narrowed it by handing over a canvas holding only what is inside a sheet,
+ * starting at that sheet's inner corner. A selection is the same idea with a
+ * different source, so it is the same shape rather than a second arrangement:
+ * a scope, and an origin.
+ *
+ * **The origin is the selection's own top-left**, which is the decision worth
+ * stating. A tidy of six items must not move them to where the canvas starts
+ * — that would shove somebody's work across the room and, worse, straight
+ * through whatever was already there. Formatting inside the box they already
+ * occupy is the only reading that leaves the rest of the canvas true.
+ *
+ * Fewer than two known items is `null`, not an empty scope: one item is
+ * already arranged with respect to itself, and a caller that gets `null` can
+ * say "select a few things" rather than silently doing nothing.
+ *
+ * Both surfaces read this — the app's Format menu and `isocan format
+ * <items...>` — so a tidy of the same selection lands on the same
+ * coordinates whoever asked, which is the whole reason the arrangement is in
+ * core at all.
+ */
+export function formatScope(
+  canvas: CanvasContents,
+  itemIds: readonly string[],
+): { scope: CanvasContents; origin: { x: number; y: number } } | null {
+  const picked = itemIds.map((id) => canvas.items[id]).filter((one): one is Item => Boolean(one));
+  if (picked.length < 2) return null;
+  return {
+    scope: { ...canvas, items: Object.fromEntries(picked.map((one) => [one.id, one])) },
+    origin: {
+      x: Math.min(...picked.map((one) => one.x)),
+      y: Math.min(...picked.map((one) => one.y)),
+    },
+  };
+}
+
 /** What an item counts as, for arranging: something you look at, something you
  * referred to, or something that belongs to another item. */
 function role(canvas: CanvasContents, item: Item): "screen" | "reference" | "attached" {

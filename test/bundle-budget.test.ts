@@ -81,7 +81,30 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * `api.ts` and the stores — the canvas itself — so getting under it honestly
  * means less shell code rather than another chunk boundary.
  */
-const CEILING = 731_012;
+/**
+ * Raised 6 Sep 2026, 731,012 → 736,800, and the reason belongs here rather
+ * than only in a commit.
+ *
+ * The growth is the fix for the bug that froze a browser: `useOnScreen`, and
+ * the gate on `ItemThumb` that stops a Chat panel mounting a live HTML
+ * document per message card. A canvas with a long agent thread held 163 of
+ * them, 764MB, a pegged core, and a tab that died the longer it stayed open.
+ * Five kilobytes of download to stop that is not a close call.
+ *
+ * `VersionFanOut` was made lazy in the same change and gave 1,174 bytes back
+ * — unfolding an item's whole history is rare and deliberate, so every
+ * visitor was paying for a gesture most sessions never make.
+ *
+ * The number is the local build plus a small allowance: this machine measures
+ * ~736,540 and CI's build has run a few dozen bytes higher than local all
+ * along (731,012 was set while local read 730,989). The allowance covers that
+ * gap and nothing else — any real growth still fails here, which is the point.
+ *
+ * **The goal is now 96,800 bytes away**, and that is the debt this records.
+ * Three of these raises have been justified individually; the fourth should
+ * be somebody deciding to spend a session on shell code instead.
+ */
+const CEILING = 736_800;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is

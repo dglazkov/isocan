@@ -112,6 +112,7 @@ import {
   drawingViewBox,
   SHORTCUTS,
   formatMoves,
+  formatScope,
   shortcutsAsText,
   elapsedLabel,
   extractMentions,
@@ -6765,13 +6766,20 @@ program
   );
 
 program
-  .command("format [mode]")
-  .description("Tidy the canvas — `grid` straightens the lines (default), `smart` reads it")
+  .command("format [mode] [items...]")
+  .description(
+    "Tidy the canvas — `grid` straightens the lines (default), `smart` reads it. Name items to tidy only those, where they are",
+  )
   .option("--dry-run", "say what would move, move nothing")
   .option("--per-row <n>", "how many per row")
   .option("--in <area>", "tidy only what is inside this area, within it")
   .action(
-    run(async (mode: string | undefined, opts: { dryRun?: boolean; perRow?: string; in?: string }, cmd: Command) => {
+    run(async (
+      mode: string | undefined,
+      refs: string[],
+      opts: { dryRun?: boolean; perRow?: string; in?: string },
+      cmd: Command,
+    ) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const perRow = opts.perRow === undefined ? undefined : Number(opts.perRow);
@@ -6784,13 +6792,27 @@ program
       if (opts.in !== undefined && !area) {
         throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
       }
-      const scope = area
-        ? {
-            ...snapshot.canvas,
-            items: Object.fromEntries(itemsIn(snapshot.canvas, area).map((one) => [one.id, one])),
-          }
-        : snapshot.canvas;
-      const origin = area ? { x: areaInner(area).x, y: areaInner(area).y } : undefined;
+      /**
+       * Naming items tidies THOSE, in the box they already occupy (#196) —
+       * the same fold the app's Format menu reads, so a tidy of the same
+       * selection lands on the same coordinates from either surface.
+       */
+      const picked = refs.length > 0 ? formatScope(snapshot.canvas, refs.map((ref) => resolveItem(snapshot, ref).id)) : null;
+      if (refs.length > 0 && picked === null) {
+        throw new Error("name at least two items to tidy — one is already arranged with respect to itself");
+      }
+      if (picked && area) {
+        throw new Error("--in and named items are two answers to the same question: pick one");
+      }
+      const scope = picked
+        ? picked.scope
+        : area
+          ? {
+              ...snapshot.canvas,
+              items: Object.fromEntries(itemsIn(snapshot.canvas, area).map((one) => [one.id, one])),
+            }
+          : snapshot.canvas;
+      const origin = picked ? picked.origin : area ? { x: areaInner(area).x, y: areaInner(area).y } : undefined;
       if (perRow !== undefined && (!Number.isFinite(perRow) || perRow < 1)) {
         throw new Error(`--per-row wants a number: ${opts.perRow}`);
       }

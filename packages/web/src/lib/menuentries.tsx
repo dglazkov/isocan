@@ -15,6 +15,7 @@ import {
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
+import { tidyItems } from "./actions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -93,6 +94,34 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         // cost you what you had copied a minute ago.
         void pasteInto({ canvasId: ctx.canvasId, items }, ctx.canvasId, ctx.actor);
       },
+    },
+    /**
+     * **Tidy, on the ones you picked** (#196).
+     *
+     * Offered only with two or more selected, because tidying one item is
+     * arranging it with respect to itself. It runs the same fold `isocan
+     * format <items...>` runs, and lands them in the box they already occupy
+     * rather than at the canvas's own origin — a menu must not shove
+     * somebody's work across the room, or through whatever was standing
+     * there.
+     *
+     * The rows say TIDY, not `grid`. `grid` and `smart` stay the modes, but
+     * `isocan align` already means the standard thing — line items up on one
+     * edge — so a row called Align would be one word for two operations. A
+     * menu is for intent; a verb is for precision.
+     */
+    { separator: many ? "Format" : "" },
+    {
+      label: many ? `Tidy ${items.length} items` : "Tidy",
+      writes: true,
+      disabled: !many,
+      run: () => void tidyItems(ctx.canvasId, ctx.actor, ids, "grid"),
+    },
+    {
+      label: "Tidy — smart",
+      writes: true,
+      disabled: !many,
+      run: () => void tidyItems(ctx.canvasId, ctx.actor, ids, "smart"),
     },
     { separator: "" },
     {

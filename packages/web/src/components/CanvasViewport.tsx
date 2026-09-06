@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { isArea, parseUriList } from "@isocan/core";
@@ -20,7 +20,18 @@ import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
 import { canvasMenu, itemMenu } from "../lib/menuentries.tsx";
 import { ItemView } from "./ItemView.tsx";
-import { VersionFanOut } from "./VersionFanOut.tsx";
+/**
+ * **The fan is rare, so it is not in the bytes a first visit downloads.**
+ *
+ * Unfolding an item's whole version history is a thing people do
+ * occasionally and deliberately, and it carries its own card, its own
+ * animation and its own observer. Loading it with the canvas made every
+ * visitor pay for a gesture most sessions never make — and it was the
+ * difference between the entry chunk holding its bound and breaking it.
+ */
+const VersionFanOut = lazy(() =>
+  import("./VersionFanOut.tsx").then((m) => ({ default: m.VersionFanOut })),
+);
 import { CommentLayer } from "./CommentLayer.tsx";
 import { ModuleUnderlays } from "./ModuleUnderlays.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
@@ -792,7 +803,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
           />
         ))}
         {fannedItemId && canvas?.items[fannedItemId] && (
-          <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />
+          <Suspense fallback={null}>
+            <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />
+          </Suspense>
         )}
         <InkLayer />
         {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}

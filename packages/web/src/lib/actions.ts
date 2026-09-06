@@ -6,7 +6,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { openPanel } from "./panels.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
-import { formatMoves } from "@isocan/core";
+import { formatMoves, formatScope } from "@isocan/core";
 import { canEditNow } from "./capability.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
 import { MODULES, modulePages } from "../modules.ts";
@@ -251,7 +251,7 @@ export const ACTIONS: readonly Action[] = [
   {
     id: "format-smart",
     name: "Format: smart",
-    hint: "screens across, what came from each beneath it",
+    hint: "screens across, what came from each beneath it — the selection, or the canvas",
     group: "Canvas",
     available: onCanvas,
     writes: true,
@@ -358,13 +358,33 @@ function moduleActions(): Action[] {
  *
  * ONE `items.move`, which is one undo — a format you cannot take back in one
  * press is a format nobody dares run from a menu they were only browsing.
+ *
+ * **With a selection it tidies THOSE, in the box they already occupy** (#196).
+ * Somebody who has picked six screens and asked to tidy has said which six;
+ * rearranging the whole canvas instead is a menu doing something larger than
+ * it was asked for, on work that was not selected. `formatScope` is the fold
+ * both surfaces read, so the same selection lands on the same coordinates
+ * whether the ask came from here or from `isocan format <items...>`.
  */
-async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<void> {
+export async function tidyItems(
+  canvasId: string,
+  actor: Actor,
+  itemIds: readonly string[],
+  mode: "grid" | "smart",
+): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
-  if (!canvas || !ctx.canvasId) return;
-  const moves = formatMoves(canvas, { mode });
+  if (!canvas) return;
+  const scoped = formatScope(canvas, itemIds);
+  const moves = scoped
+    ? formatMoves(scoped.scope, { mode, origin: scoped.origin })
+    : formatMoves(canvas, { mode });
   if (moves.length === 0) return;
-  await sendEchoed(ctx.canvasId, ctx.actor, { type: "items.move", moves });
+  await sendEchoed(canvasId, actor, { type: "items.move", moves });
+}
+
+async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<void> {
+  if (!ctx.canvasId) return;
+  await tidyItems(ctx.canvasId, ctx.actor, ctx.selection, mode);
 }
 
 /** What can be run right now, in the order the groups are declared. On the

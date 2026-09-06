@@ -641,6 +641,13 @@ something the arrangement cannot do.
 
 **Read the argument first, because it decides which of three things this is.**
 
+**WITH ITEMS SELECTED OR ATTACHED, tidy those and nothing else** — run
+\`isocan format grid <item ids>\`. They land in the box they already occupy,
+so the rest of the canvas does not move and nothing is shoved through
+somebody else's work. Somebody who picked six screens and asked for a tidy
+has said which six; rearranging the whole canvas is doing more than was
+asked, to work that was not chosen.
+
 **\`/format\` or \`/format grid\`** — run \`isocan format grid\`. It straightens
 the lines and decides nothing: every item on one lattice, uniform gutters,
 columns the width of the widest thing so left edges agree down the canvas. It
