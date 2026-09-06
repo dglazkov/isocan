@@ -32,9 +32,40 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * same-specificity selectors and source order decided which one a person
  * actually saw.
  *
- * ## Why the ceiling is 60 and not 47
+ * ## What the sixty actually are, having looked
  *
- * Because 47 is the goal and 60 is the truth, and a test asserting the goal
+ * The measure's own note says a rise is "a question, not a verdict: is this
+ * one thing written twice, or two things that agree?" Asked, on 6 September,
+ * and the answer is mostly the second — which is why this ceiling moved by one
+ * and not by thirteen.
+ *
+ * `.btn.primary`, `.btn.active`, `.tool-btn.active`, `.stage-editor-btn.primary`,
+ * `.wb-follow.on` and `.sprint-action.primary` all carry
+ * `background/border-color/color: var(--accent…)`. Six different controls
+ * agreeing about what "on" looks like is a vocabulary, not a copy, and the
+ * sheet already refuses the merge in those words: a selector list spanning
+ * them "would be one rule pretending two different elements are the same
+ * element. The values are what agree, not the code." The same is true of the
+ * flex-row and flex-column bodies that account for most of the rest: three
+ * menus being flex columns is three menus, not one menu written three times.
+ *
+ * **One was the first kind and is now merged.** `.conn.reconnecting::before`
+ * and `.conn.offline::before` are the same element in two states wearing the
+ * same dot for the same reason — adjacent in the sheet, separated only by the
+ * comment explaining why offline is not an error. That is one treatment
+ * written twice, and it is one rule now.
+ *
+ * Three more look like the first kind and were left alone deliberately: the
+ * `.face-mark` sizing repeated across three roster rows, and `.item.ink` /
+ * `.item.textnode`'s chromeless body. Merging those means moving a rule
+ * thousands of lines, and **source order in this sheet has already cost a
+ * day**: the paper swatches were invisible because two same-specificity
+ * selectors resolved by which came later. They want a person with the app in
+ * front of them, not a script.
+ *
+ * ## Why the ceiling is 59 and not 47
+ *
+ * Because 47 is the goal and 59 is the truth, and a test asserting the goal
  * would fail on every commit from the moment it landed. That is not a guard,
  * it is a red trunk — the trade `test/bundle-budget.test.ts` reasons through
  * at length and settles the same way. So this asserts **no worse than the
@@ -50,7 +81,7 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * that measures differently from the instrument it guards is two numbers
  * with one name.
  */
-const CEILING = 60;
+const CEILING = 59;
 const GOAL = 47;
 
 describe("CSS rule bodies copied word for word", () => {

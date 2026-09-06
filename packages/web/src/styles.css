@@ -962,9 +962,11 @@ img { height: auto; }
 .toolbar .spacer { flex: 1; }
 .conn { font-size: 11px; color: var(--ink-muted); }
 .conn.live::before { content: "●"; color: var(--good); margin-right: 4px; }
-.conn.reconnecting::before { content: "●"; color: var(--warn); margin-right: 4px; }
-/* Offline is a state a person works in, so it gets a dot like the others
-   rather than reading as an error. The bar above says what it costs. */
+/* Reconnecting and offline are one treatment, not two that agree: the same
+   element, two states of it, wearing the same dot for the same reason.
+   Offline gets a dot like the others rather than reading as an error, because
+   it is a state a person works in — the bar above says what it costs. */
+.conn.reconnecting::before,
 .conn.offline::before { content: "●"; color: var(--warn); margin-right: 4px; }
 
 /* ---------- items ---------- */

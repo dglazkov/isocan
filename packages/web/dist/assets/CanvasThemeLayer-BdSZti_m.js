@@ -1,2 +1,0 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/Galaxy-9XeXURCK.js","assets/index-D1P0VH3s.js","assets/index-Dj4WTUgZ.css"])))=>i.map(i=>d[i]);
-import{K as s,ay as l,az as c,q as t,r,ao as u}from"./index-D1P0VH3s.js";const x=r.lazy(()=>u(()=>import("./Galaxy-9XeXURCK.js"),__vite__mapDeps([0,1,2])).then(a=>({default:a.Galaxy})));function p(){const a=s(o=>o.project),e=a?l(a):null,n=a?c(a):"world";return e===null?null:t.jsx(r.Suspense,{fallback:null,children:e==="galaxy"&&t.jsx(x,{anchor:n})})}export{p as CanvasThemeLayer};
