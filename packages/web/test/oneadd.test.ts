@@ -26,6 +26,17 @@ describe("the rail has one Add door", () => {
     expect(tools).not.toContain("UPLOAD");
   });
 
+  it("lights the row the field is about, not only the row you pinned", () => {
+    // Reported on a screenshot: typing showed a canvas list and "Place the
+    // canvas …" while all four pills stayed grey. The pills read `adding`,
+    // which nobody had set. They read the classifier's answer now, and the
+    // fold lives in core so the words and the lit row cannot disagree.
+    expect(popover).toContain('const lit = adding === null || adding === "any" ? addableKind(pinned) : adding;');
+    expect(popover).toContain("aria-checked={lit === row.kind}");
+    expect(popover).toContain('className={`add-kind${lit === row.kind ? " active" : ""}`}');
+    expect(popover).not.toContain("aria-checked={adding === row.kind}");
+  });
+
   it("is one shared state — the rail and ⌘K open the same popover", () => {
     expect(store).toContain('adding: AddKind | "any" | null');
     expect(actions).toContain('id: "add"');

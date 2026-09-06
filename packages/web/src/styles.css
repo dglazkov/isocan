@@ -2921,6 +2921,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .add-inherit {
   display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px;
   font-size: 11.5px; color: var(--ink-muted); line-height: 1.4; cursor: pointer;
+  white-space: normal;
 }
 .add-inherit input { margin: 2px 0 0; }
 
@@ -3393,16 +3394,18 @@ button.mt-card:hover { border-color: var(--accent); }
   transform: translateY(-50%);
   max-height: calc(100vh - 2 * var(--edge)); overflow: auto;
 }
-.add-popover .text-input { width: 320px; }
+.add-popover { width: 340px; }
+/* The field, the pills and the inherit line all size to the panel, so
+   mounting or unmounting any of them cannot move its edge. */
 .add-preview { font-size: 11px; color: var(--ink-muted); white-space: normal; min-height: 1.3em; }
-.add-kinds { display: flex; gap: 4px; }
+.add-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
 .add-kind {
   display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px;
   border: 1px solid var(--line); border-radius: 999px; background: none; cursor: pointer;
   color: var(--ink-muted); font: inherit; font-size: 11.5px;
 }
 .add-kind:hover, .add-kind:focus-visible { color: var(--ink); background: var(--chip); outline: none; }
-.add-kind.active { color: var(--ink); border-color: var(--accent); background: var(--accent-wash, var(--chip)); }
+.add-kind.active { color: var(--accent-text); border-color: transparent; background: var(--accent-wash); }
 .canvas-picker { flex-direction: column; align-items: stretch; gap: 8px; }
 .canvas-picker .text-input { width: 300px; }
 .canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: min(280px, 36vh); overflow: auto; }

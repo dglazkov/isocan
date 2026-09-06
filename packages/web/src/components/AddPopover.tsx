@@ -7,6 +7,7 @@ import {
   contextSheet,
   contextSheetSpot,
   freeSpotIn,
+  addableKind,
   addableWords,
   ago,
   classifyAddable,
@@ -190,6 +191,10 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   }
 
   const preview = addableWords(pinned);
+  // What the row shows and what the row PINS are different questions: an
+  // unpinned field still reads as something, and the pill should say so
+  // rather than sit grey under a line that already named the answer.
+  const lit = adding === null || adding === "any" ? addableKind(pinned) : adding;
   const rows: { kind: AddKind; label: string }[] = [
     { kind: "file", label: "Files" },
     { kind: "site", label: "Site" },
@@ -236,14 +241,14 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
                 key={row.kind}
                 type="button"
                 role="radio"
-                aria-checked={adding === row.kind}
-                className={`add-kind${adding === row.kind ? " active" : ""}`}
+                aria-checked={lit === row.kind}
+                className={`add-kind${lit === row.kind ? " active" : ""}`}
                 onClick={() => {
                   setAdding(row.kind);
                   setError(null);
                 }}
               >
-                <KindIcon kind={row.kind === "file" ? "document" : row.kind === "doc" ? "document" : row.kind} />
+                <KindIcon className="kind-icon" kind={row.kind === "file" ? "document" : row.kind === "doc" ? "document" : row.kind} />
                 <span>{row.label}</span>
               </button>
             ))}

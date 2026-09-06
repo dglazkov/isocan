@@ -65,6 +65,33 @@ export function classifyAddable(
 }
 
 /** The line under the field: what pressing Enter would do. */
+/**
+ * Which of the four rows a pending add is ABOUT — the pill to light while the
+ * field reads the way it currently reads.
+ *
+ * The row that is lit and the row that is PINNED are deliberately different
+ * questions. Pinning narrows the reading (`adding`); this only reports it, so
+ * a field left on "any" can still show what Enter would do without giving up
+ * the classifier that makes one field able to take anything. `search` lights
+ * Canvas because searching your canvases is what Canvas means here, and
+ * `empty` lights nothing: the field is not about anything yet, and the
+ * preview line says so in words.
+ *
+ * `file` is never returned. Files arrive by drop or by the picker, never by
+ * being typed, so no `Addable` classifies as one — that pill is only ever lit
+ * by being chosen.
+ */
+export function addableKind(a: Addable): AddKind | null {
+  switch (a.kind) {
+    case "empty":
+      return null;
+    case "search":
+      return "canvas";
+    default:
+      return a.kind;
+  }
+}
+
 export function addableWords(a: Addable): string | null {
   switch (a.kind) {
     case "doc":

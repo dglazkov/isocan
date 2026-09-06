@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addableWords, classifyAddable, looksLikeSite } from "../src/addable.ts";
+import { addableKind, addableWords, classifyAddable, looksLikeSite } from "../src/addable.ts";
 
 /**
  * **One door reads what you gave it.** The order is the order of
@@ -53,6 +53,25 @@ describe("classifying a paste", () => {
     expect(looksLikeSite("localhost")).toBe(true);
     expect(looksLikeSite("127.0.0.1:4441")).toBe(true);
     expect(looksLikeSite("notes.md")).toBe(true); // a dotted word reads as a host; a file is the picker's job
+  });
+
+  it("says which row it is about, which is not the same as which row is pinned", () => {
+    // The panel showed a canvas list and a "Place the canvas …" line while
+    // every pill sat grey, because the pills were reading `adding` — what you
+    // had pinned — and nobody had pinned anything.
+    expect(addableKind(classifyAddable("archery", canvases))).toBe("canvas");
+    expect(addableKind(classifyAddable("what did we decide", canvases))).toBe("canvas");
+    expect(addableKind(classifyAddable("lakehouse.io", canvases))).toBe("site");
+    expect(addableKind(classifyAddable(DOC, canvases))).toBe("doc");
+    // Nothing typed is not about anything: the preview line says "paste an
+    // address, drop files, or pick a kind" and no pill should contradict it.
+    expect(addableKind(classifyAddable("", canvases))).toBeNull();
+    expect(addableKind(classifyAddable("   ", canvases))).toBeNull();
+  });
+
+  it("never lights Files, because nothing you can type is a file", () => {
+    const typed = ["archery", "lakehouse.io", DOC, "what did we decide", ""];
+    for (const one of typed) expect(addableKind(classifyAddable(one, canvases))).not.toBe("file");
   });
 
   it("says what Enter would do", () => {
