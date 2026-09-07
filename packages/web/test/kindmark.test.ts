@@ -38,6 +38,23 @@ describe("the kind mark stands in for the chrome that hid", () => {
     expect(item).toContain("textMarkSize(width, height, scale) / scale");
   });
 
+  it("stops drawing once it would be too small to read", () => {
+    /**
+     * Found by looking, at 5% zoom on a real canvas: a 16x10 item was carrying
+     * an 8-pixel glyph. That is not an answer to "what is this" — it is a
+     * smudge, and a canvas of them is the smear the mark existed to replace.
+     * The text mark's own comment says it: "forty oversized glyphs are the
+     * same smear in a different hat."
+     *
+     * `hasRoomForChrome` decides when the mark takes over; without a floor of
+     * its own it went on shrinking to nothing. Below the floor the honest
+     * thing to draw is nothing — the minimap answers "what is where" at that
+     * scale, and answers it better.
+     */
+    expect(item).toContain("markPx >= KIND_MARK_MIN");
+    expect(item, "sized once, not twice").not.toMatch(/textMarkSize\(width, height, scale\)[\s\S]{0,40}textMarkSize\(/);
+  });
+
   it("does not paint state colours, because state is the outline's job", () => {
     /* The recommendation the audit landed on. `--accent` means "this one,
        wherever you are pointing at it from" — the files panel row and the

@@ -15,6 +15,7 @@ import {
   isArea,
   isCanvasItem,
   canvasIdOf,
+  KIND_MARK_MIN,
   sourceOf,
   areaGrid,
   areaInner,
@@ -334,7 +335,23 @@ function ItemViewInner({
    *  for the kinds whose small form no longer says what they are. A sheet is
    *  excluded because it is a place rather than a thing, and it keeps its own
    *  title. */
-  const kindMark = !roomy && !isText && !picture && !isAreaItem;
+  /**
+   * **And big enough to read**, which the first cut got wrong.
+   *
+   * `hasRoomForChrome` hides the chrome below 56x40 on screen, so the mark
+   * takes over from there — with no floor of its own it went on drawing all
+   * the way down. Seen at 5% zoom on a real canvas: a 16x10 item carrying an
+   * 8-pixel glyph, which is not an answer to "what is this", it is a smudge.
+   * And two hundred smudges are precisely what the text mark's own comment
+   * warns about: "forty oversized glyphs are the same smear in a different
+   * hat."
+   *
+   * Nine pixels is where a stroked 24-viewBox glyph stops being a shape. Below
+   * it the honest thing to draw is nothing — the minimap is the view that
+   * answers "what is where" at that scale, and it answers it better.
+   */
+  const markPx = textMarkSize(width, height, scale);
+  const kindMark = !roomy && !isText && !picture && !isAreaItem && markPx >= KIND_MARK_MIN;
   const tint = isAreaItem ? areaTint(item) : null;
   const grid = isAreaItem ? areaGrid(item) : null;
   const inner = isAreaItem ? areaInner(item) : null!;
@@ -1082,7 +1099,7 @@ function ItemViewInner({
           <span
             className="kind-mark"
             aria-hidden
-            style={{ "--mark": `${textMarkSize(width, height, scale) / scale}px` } as React.CSSProperties}
+            style={{ "--mark": `${markPx / scale}px` } as React.CSSProperties}
           >
             <KindIcon kind={kind} />
           </span>

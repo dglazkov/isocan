@@ -80,3 +80,17 @@ export declare function isFramedItem(item: Item): boolean;
  * is image/svg+xml is text too, and the kind vocabulary rounds that away.
  */
 export declare function editableText(mimeType: string): boolean;
+/**
+ * **The smallest a kind mark may be drawn, in screen pixels.**
+ *
+ * The mark stands in for the chrome once `hasRoomForChrome` hides it, and it
+ * needs a floor of its own or it goes on shrinking to nothing. Measured at 5%
+ * zoom on a real canvas: a 16x10 item was carrying an 8-pixel glyph, which is
+ * not an answer to "what is this" — it is a smudge, and a canvas of them is
+ * the smear the mark existed to replace.
+ *
+ * Nine is where a stroked 24-unit glyph stops reading as a shape. Below it the
+ * honest thing to draw is nothing: the minimap answers "what is where" at that
+ * scale, and it answers it better.
+ */
+export declare const KIND_MARK_MIN = 9;
