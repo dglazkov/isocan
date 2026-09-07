@@ -29,6 +29,18 @@ const ANSWERING_EVERY_MS = 10_000;
 interface Answering {
   parked: boolean;
   ids: ReadonlySet<string>;
+  /**
+   * When this answer last came back from the daemon, or 0 before the first
+   * one lands (#197 D1, built 7 Sep 2026).
+   *
+   * The poll has always known this and always threw it away, which is what
+   * made the roster overstate itself: *"answers if you comment"* is a promise
+   * with no age, and it reads the same eight seconds after a successful read
+   * as four minutes after the daemon stopped answering. Carrying the moment
+   * turns the claim into evidence, and evidence degrades honestly without
+   * anybody writing a warning.
+   */
+  at: number;
 }
 
 interface Watch {
@@ -41,7 +53,7 @@ interface Watch {
 
 const watches = new Map<string, Watch>();
 
-const NOBODY: Answering = { parked: false, ids: new Set() };
+const NOBODY: Answering = { parked: false, ids: new Set(), at: 0 };
 
 function useAnswering(canvasId: string | null): Answering {
   const [state, setState] = useState<Answering>(
@@ -66,7 +78,7 @@ function useAnswering(canvasId: string | null): Answering {
     const read = () => {
       fetchRcAnswering(canvasId)
         .then((r) => {
-          here.state = { parked: r.parked === true, ids: new Set(r.actorIds) };
+          here.state = { parked: r.parked === true, ids: new Set(r.actorIds), at: Date.now() };
           for (const listener of here.listeners) listener(here.state);
         })
         .catch(() => {
@@ -107,4 +119,17 @@ export function useAnswerable(canvasId: string | null): ReadonlySet<string> {
  * answer. */
 export function useRcParked(canvasId: string | null): boolean {
   return useAnswering(canvasId).parked;
+}
+
+/**
+ * **When we last heard from the thing that answers**, or 0 if never (#197 D1).
+ *
+ * The roster's job is to say whether a summons will land, and the honest form
+ * of that is evidence with an age rather than a state. *"standing by"* is a
+ * claim about a held socket; *"heard from 8s ago"* is a fact about this
+ * canvas, and it warns on its own at four minutes without anybody writing a
+ * warning into it.
+ */
+export function useAnsweredAt(canvasId: string | null): number {
+  return useAnswering(canvasId).at;
 }

@@ -2108,6 +2108,14 @@ button.wb-tree-file {
 .wb-dot { flex: none; width: 8px; height: 8px; border-radius: 999px; }
 /* Away: the ring without the fill — remembered, not present. */
 .wb-dot.hollow { background: none; border: 1.5px solid; }
+/* **Answerable is not enrolled** (#197 D3, 7 Sep 2026). Both were this hollow
+   ring, so "a summons will land" and "nobody is home" — the strongest and the
+   weakest thing an agent row can say — read identically at a glance. A centre
+   fills the ring: something is in there. `currentColor` is the actor's own,
+   set inline beside the border, so the dot still says WHO as well as what. */
+.wb-dot.hollow.ready {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
 .wb-row-head.as-line { cursor: default; }
 /* Derived states, worn as quiet chips beside the name. These exist only
    because statusSource crosses the wire now — a badge synthesized by

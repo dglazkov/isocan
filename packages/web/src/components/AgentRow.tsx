@@ -8,6 +8,8 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { ItemThumb } from "./ItemThumb.tsx";
+import { useAnsweredAt } from "../lib/answerable.ts";
+import { useClockSecond } from "../lib/sprint.ts";
 
 /**
  * **One agent, as a row — drawn once and shown in two places.**
@@ -25,6 +27,17 @@ import { ItemThumb } from "./ItemThumb.tsx";
 /** How long ago, in the roster's clipped vocabulary. */
 function ago(iso: string): string {
   const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
+  return `${Math.round(ms / 3_600_000)}h`;
+}
+
+/** The same clipped vocabulary as `ago`, for a moment rather than an ISO
+ *  string — what the answerable poll hands back (#197 D1). */
+function agoMs(at: number): string {
+  if (!at) return "";
+  const ms = Date.now() - at;
   if (!Number.isFinite(ms) || ms < 0) return "";
   if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
@@ -79,6 +92,12 @@ export function AgentRowView({
   const colors = useActorColors();
   const canvas = useCanvasStore((s) => s.canvas);
   const color = actorColorIn(colors, row.actorId);
+  /* Re-read on the shared clock so the age is a number that MOVES: a
+     timestamp rendered once and never again is the same overstatement in
+     slower motion. `useClockSecond` is the one tick and it stops while the
+     tab is hidden. */
+  useClockSecond();
+  const heardFrom = agoMs(useAnsweredAt(canvasId));
 
   // An enrolled row is a RECORD made visible (agents-on-demand phase 2.5):
   // standing to answer here, no session because nothing has arrived. Not
@@ -89,7 +108,7 @@ export function AgentRowView({
   if (row.state === "enrolled" || row.state === "answerable") {
     return (
       <div
-        className="wb-row away enrolled"
+        className={`wb-row away enrolled${row.state === "answerable" ? " answerable" : ""}`}
         title="Enrolled to answer on this canvas — a comment naming them reaches whatever answers for them"
         onPointerEnter={enter}
         onPointerLeave={() => setPeekAt(null)}
@@ -110,14 +129,30 @@ export function AgentRowView({
           </div>
         )}
         <span className="wb-row-head as-line">
-          <span className="wb-dot hollow" style={{ borderColor: color }} aria-hidden />
+          {/* **The two states must not look alike** (#197 D3, 7 Sep 2026).
+              Both were a hollow dot and a sub-line, so the strongest fact an
+              agent row can carry — "a summons WILL land" — read at a glance
+              exactly like the weakest, "nobody is home". The dot is what a
+              person scans; the sentence is what they read afterwards, if at
+              all. Answerable gets a centre. */}
+          <span
+            className={`wb-dot hollow${row.state === "answerable" ? " ready" : ""}`}
+            style={{ borderColor: color, ...(row.state === "answerable" ? { color } : {}) }}
+            aria-hidden
+          />
           <span className="wb-row-name">
             <b>{row.name}</b>
             <i>{row.state}</i>
           </span>
           <span className="wb-row-line">
+            {/* Evidence with an age rather than a state (#197 D1). "answers if
+                you comment" is a promise nobody dated; heard-from turns it
+                into a fact, and it warns on its own at four minutes without
+                anybody writing a warning. */}
             {row.state === "answerable"
-              ? "answers if you comment"
+              ? heardFrom
+                ? `answers if you comment · heard ${heardFrom} ago`
+                : "answers if you comment"
               : row.lastAct
                 ? `${describeAct(row.lastAct.kind, row.lastAct.subject)} · ${ago(row.lastAct.at)}`
                 : "enrolled — nobody is listening right now"}

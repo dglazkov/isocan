@@ -182,16 +182,26 @@ was the rc rather than the agent thinking.
 duration. Ask with an rc parked and its agent killed — *nothing answered*
 within the bound, not a spinner forever.
 
-### Phase 2 — Evidence with an age
+### Phase 2 — Evidence with an age ✅ built 7 Sep
 
-**Work:** D1 and D3. The answerable poll keeps its timestamp; the roster
-renders "heard from Ns ago"; answerable and enrolled stop sharing a dot.
+**Work:** D1 and D3, in `lib/answerable.ts` and `AgentRow.tsx`. The poll keeps
+`at`; the row reads *"answers if you comment · heard 8s ago"*; and answerable
+gets a filled centre in its dot, so the two states stop being told apart by a
+sub-line nobody scans.
 
-**Outcome:** the roster answers "will this land?" at a glance and degrades
-honestly as the number grows.
+**Outcome:** the claim carries its own evidence, and it degrades without
+anybody writing a warning — at eight seconds it reassures, at four minutes the
+number is the warning.
 
-**Proof:** a web test that the two states render differently, and that a
-stale poll shows its age rather than a stale claim.
+**Two things worth keeping.** The age is shown BESIDE the promise rather than
+instead of it: a row that said only "heard 8s ago" would be a timestamp, and a
+timestamp says nothing about whether a summons lands. And it re-renders on the
+shared one-second tick, because a moment rendered once and never again is the
+same overstatement in slower motion.
+
+**Proof:** `packages/web/test/answerable.test.ts` — the poll keeps the moment,
+the row shows it beside the claim, falls back to the bare promise before the
+first answer lands, and the two states differ by more than words.
 
 ### Phase 3 — The queue can fail ✅ built 6 Sep
 

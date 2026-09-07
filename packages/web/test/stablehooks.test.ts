@@ -121,6 +121,7 @@ const ALLOWED = new Map<string, string>([
   ["useHasReactions", "zustand selector — boolean"],
   ["useAnswerable", "a Set held in module state, not rebuilt per render"],
   ["useRcParked", "boolean off the same module state"],
+  ["useAnsweredAt", "a number — when the poll last answered; no identity to be unstable"],
   ["useVotesHiddenOn", "boolean"],
   ["useContentOrigin", "a string"],
   // A ref holds the built frame across renders on purpose: rebuilding the src
