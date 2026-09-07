@@ -26,6 +26,7 @@ export * from "./browseritem.js";
 export * from "./itemrefs.js";
 export * from "./identity.js";
 export * from "./filenames.js";
+export * from "./blobrefs.js";
 export * from "./kinds.js";
 export * from "./touches.js";
 export * from "./elapsed.js";

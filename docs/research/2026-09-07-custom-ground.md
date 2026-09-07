@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-09-07
 issue: 204
 see: ui-refresh
@@ -8,7 +8,8 @@ note: a custom tile is a blob named by a canvas property, and the garbage collec
 
 # A ground of your own: custom tiles, and what a custom cursor can be
 
-**7 September 2026.** Research. Nothing built.
+**7 September 2026.** Research. **Phase 1 is built** — the gc fix below,
+which had to come first; the rest is designed and unstarted.
 
 > "For the background feature… there should be a 'custom' setting where the
 > user can set a tile and cursor and then it takes on its own?"
@@ -35,11 +36,27 @@ project.update { properties: { theme: "custom", tile: "<sha256>" } }
 — is unreachable the moment it is set, and the canvas silently loses its
 background within the hour. Nothing errors; the ground just goes.
 
-This has to be fixed before any of the rest is worth building, and the fix
-should be a **rule rather than a special case**: a named fold in core —
-`blobsNamedBy(canvas)` — that gc consults alongside items and trash. Written as
-"which properties name blobs" it also covers the next feature that wants one,
-where teaching gc about `tile` specifically would have to be done again.
+**Fixed 7 Sep 2026, before the feature rather than after the bug report:**
+`blobsInProperties` in `core/src/blobrefs.ts`, consulted by `reachableHashes`.
+It matches by SHAPE — a 64-character hex string in any property value — rather
+than by a list of blessed keys, because a list is a second thing to keep right
+and its failure is silent.
+
+Two notes from building it.
+
+**It takes the whole `CanvasState`, not `CanvasContents`.** A canvas's own
+properties live on the RECORD (`state.project`); the contents carry only items,
+threads and trash. A signature over the contents could not have seen the thing
+it exists for — the same distinction that made the themed cursor read
+`s.project` rather than `s.canvas`.
+
+**And `export.ts` got there first, on the other surface.** `blobsNamedBy(log)`
+finds every blob the LOG names, *"by shape rather than by op type… so a new op
+that names bytes is backed up the day it ships rather than the day somebody
+remembers this."* The same argument, made earlier, for backup instead of
+sweeping. Two surfaces name blobs and both are now matched by shape; the names
+are kept apart because a caller wanting one would be badly served by the
+other.
 
 ## The tile: what is already true
 
@@ -114,8 +131,9 @@ canvas six people would share one pointer.
 
 ## Decisions
 
-**D1. Fix gc first, as a rule.** `blobsNamedBy(canvas)` in core, consulted by
-`reachableHashes`. Nothing else in this note is safe to build before it.
+**D1. Fix gc first, as a rule.** ✅ Done 7 Sep — `blobsInProperties` in
+`core/src/blobrefs.ts`, with a test that a property-named blob survives a real
+sweep at `graceMs: 0`, and is swept once the property lets go.
 
 **D2. A custom ground defaults to pinned.** Seams are the failure a person
 cannot debug, and pinning makes them impossible. World-anchored stays available
@@ -136,8 +154,7 @@ somebody picks the file.
 
 ## Phases
 
-1. **`blobsNamedBy` and gc.** The blocking fix, with a test that a
-   property-named blob survives a sweep. Worth doing on its own.
+1. ~~**`blobsNamedBy` and gc.**~~ ✅ Done 7 Sep as `blobsInProperties`.
 2. **A custom tile, pinned, with the scrim.** Upload, set two properties,
    render. The whole visible feature for the tile half.
 3. **The cursor library.** Names in `themeCursor`, a picker in the Background

@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 38 still open** — of which 26 partly
-built, 12 designed, 0 blocked, and
+**21 built · 38 still open** — of which 27 partly
+built, 11 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -16,11 +16,12 @@ read lately.
 3 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>26</sub>
+## Partly built <sub>27</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A canvas that watches its own repository](docs/research/2026-08-30-repo-admin-canvas.md) | 2026-08-30 | the read half is built, and both sources are watched — commits and the repo's own canvas; CI still cannot reach a canvas · see on-demand · [#148](https://github.com/dglazkov/isocan/issues/148) |
+| research | [A ground of your own: custom tiles, and what a custom cursor can be](docs/research/2026-09-07-custom-ground.md) | 2026-09-07 | a custom tile is a blob named by a canvas property, and the garbage collector does not know properties name blobs — it would sweep the background within the hour. The cursor half is the interesting one and the answer is probably to choose rather than upload. · see ui-refresh · [#204](https://github.com/dglazkov/isocan/issues/204) |
 | research | [Agents you can trust: liveness you can see, and tiers that hand off](docs/research/2026-09-06-agents-you-can-trust.md) | 2026-09-06 | two halves of one question — whether an agent will actually answer (evidence with an age, and a receipt for every summons) and how a cheap tier and an expensive tier divide the work (findings, a queue that can fail, verdicts that become guards) · see standing-agents, on-demand, personas, evals · [#197](https://github.com/dglazkov/isocan/issues/197) |
 | research | [An inbox for the person](docs/research/2026-08-29-the-inbox.md) | 2026-08-29 | step 1 built: isocan inbox · [#147](https://github.com/dglazkov/isocan/issues/147) |
 | research | [Attaching a directory without the CLI](docs/research/2026-08-26-attaching-a-directory.md) | 2026-08-29 | 1-3 built; the hosted case is not · see workbench · [#141](https://github.com/dglazkov/isocan/issues/141) |
@@ -47,11 +48,10 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue · [#146](https://github.com/dglazkov/isocan/issues/146) |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open · see evals, personas · [#138](https://github.com/dglazkov/isocan/issues/138) |
 
-## Designed, not built <sub>12</sub>
+## Designed, not built <sub>11</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| research | [A ground of your own: custom tiles, and what a custom cursor can be](docs/research/2026-09-07-custom-ground.md) | 2026-09-07 | a custom tile is a blob named by a canvas property, and the garbage collector does not know properties name blobs — it would sweep the background within the hour. The cursor half is the interesting one and the answer is probably to choose rather than upload. · see ui-refresh · [#204](https://github.com/dglazkov/isocan/issues/204) |
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind · [#137](https://github.com/dglazkov/isocan/issues/137) |
 | research | [Analytics: what the oplog cannot already tell us](docs/research/2026-09-07-analytics.md) | 2026-09-07 | not to be built yet — the finding is that isocan already has three measurement systems and an event stream, and the honest first question is what none of them can answer · see evals, personas · [#200](https://github.com/dglazkov/isocan/issues/200) |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |

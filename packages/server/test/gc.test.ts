@@ -94,6 +94,44 @@ describe("blob GC", () => {
     expect(await blobStatus(orphanHash)).toBe(404);
   });
 
+  it("keeps a blob that only a canvas property names", async () => {
+    /**
+     * The gap this closes, before anything fell into it.
+     *
+     * `reachableHashes` marked item versions, the trash and retained log
+     * entries — and nothing else named a blob, so nothing suffered. A custom
+     * background (#204) is a tile stored as a canvas PROPERTY pointing at an
+     * uploaded blob, and a home sweeps itself on an hour's timer: the ground
+     * would be unreachable the second it was set, and the canvas would lose it
+     * within the hour with nothing logged and nothing to see.
+     *
+     * The upload is aged past the grace period on purpose — otherwise this
+     * passes for the wrong reason, protected by freshness rather than by the
+     * property, and would go on passing if the property were never read.
+     */
+    await seed();
+    const tileHash = await uploadBlob("# a background tile\n", "tile.png");
+    await op({ type: "project.update", patch: { properties: { tile: tileHash } } });
+
+    const report = await gc({ graceMs: 0 });
+    expect(report.sweptBlobs, "nothing was swept").toBe(0);
+    expect(await blobStatus(tileHash), "the tile is still served").toBe(200);
+  });
+
+  it("sweeps it again once the property lets go", async () => {
+    // The other half: retained BECAUSE of the property, not forever. A ground
+    // somebody cleared is bytes nobody needs.
+    await seed();
+    const tileHash = await uploadBlob("# a background tile\n", "tile2.png");
+    await op({ type: "project.update", patch: { properties: { tile: tileHash } } });
+    expect((await gc({ graceMs: 0 })).sweptBlobs).toBe(0);
+
+    await op({ type: "project.update", patch: { removeProperties: ["tile"] } });
+    const after = await gc({ graceMs: 0 });
+    expect(after.sweptBlobs).toBe(1);
+    expect(await blobStatus(tileHash)).toBe(404);
+  });
+
   it("grace period protects fresh uploads (the upload→item.add gap)", async () => {
     await seed();
     const pendingHash = await uploadBlob("# about to become an item\n", "pending.md");

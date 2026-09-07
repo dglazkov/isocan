@@ -26,7 +26,22 @@ export declare const DEFAULT_GRACE_MS: number;
  * Returns entries in log order.
  */
 export declare function chooseRetained(entries: LogEntry[], keepOps: number): LogEntry[];
-/** The mark set: live state ∪ trash ∪ retained entries (ops and inverses). */
+/**
+ * The mark set: live state ∪ trash ∪ retained entries (ops and inverses) ∪
+ * **anything a property names**.
+ *
+ * That last one was missing and nothing suffered, because nothing names a blob
+ * from a property today. It would have suffered the moment something did: a
+ * home sweeps itself on an hour's timer, so a custom background tile (#204)
+ * stored as a property pointing at an uploaded blob is unreachable the second
+ * it is set — the canvas loses its ground within the hour, with nothing logged
+ * and nothing to see.
+ *
+ * Added before the feature rather than after the bug report, and as a rule
+ * rather than a special case, so the next thing that names bytes from a
+ * property is retained on the day it ships. `blobsInProperties` says how it
+ * decides, and why it errs toward keeping.
+ */
 export declare function reachableHashes(state: CanvasState, retained: LogEntry[]): Set<string>;
 /**
  * The interval an innkeeper configured, or the default.
