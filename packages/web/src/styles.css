@@ -4192,6 +4192,12 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: 11.5px; line-height: 1.4;
 }
 .onit.waiting { background: transparent; padding: 6px 9px; color: var(--ink-muted); }
+/* Past the bound with nothing (#197 phase 1). Warm rather than alarming: the
+   request may still be fine and the agent merely slow, so this is the app
+   declining to keep implying an answer is coming — not an error. It is the one
+   place in the thread that says something is wrong, so it earns a colour. */
+.onit.waiting.overdue { color: var(--ink); }
+.onit.waiting.overdue .onit-dot { background: var(--warn); }
 .onit-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .onit-row b { font-weight: 600; }
 .onit-row span { color: var(--ink-soft); min-width: 0; }

@@ -140,8 +140,21 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * the ratchet is for: a raise that is one line, in the diff, with the reason
  * beside it, rather than a hundred kilobytes arriving as a hundred unremarked
  * commits.
+ *
+ * **692,500 (7 Sep, +407).** `core/summons.ts` and the clock `OnIt` now reads,
+ * for #197 phase 1 — the receipt that lets a summons say "nothing answered"
+ * instead of "Sent. One agent is listening." forever. Four hundred bytes for
+ * the difference between silence and a fact.
+ *
+ * Three raises in one day is itself a finding, and Dion named the right shape
+ * for it: **this should trigger an effort to slim down without blocking a
+ * release, and only a MAJOR jump should stop one** — a jump being the shape of
+ * a mistake (an eager import of something large) rather than a decision. Not
+ * built; the catch is that a soft tier needs somewhere it can still fail, and
+ * the queue that would hold it only sees findings once the nightly persona PR
+ * is merged. See #198's neighbours.
  */
-const CEILING = 691_500;
+const CEILING = 692_500;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is

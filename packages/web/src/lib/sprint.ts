@@ -61,8 +61,17 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-/** The current second, shared. */
-function useClockSecond(): number {
+/**
+ * **The current second, shared** — one interval for every subscriber, and it
+ * stops while the tab is hidden (`everyWhileVisible`, above).
+ *
+ * Exported because it is not really about sprints: anything whose display is a
+ * function of the CLOCK needs a re-render nothing else will cause. `OnIt` is
+ * the second caller — how long a summons has gone unanswered is exactly that
+ * shape. It lives here rather than in its own file because this is where the
+ * single shared tick already is, and two ticking intervals would be two.
+ */
+export function useClockSecond(): number {
   return useSyncExternalStore(subscribe, () => nowSecond, () => nowSecond);
 }
 

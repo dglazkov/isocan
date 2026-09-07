@@ -1,9 +1,19 @@
-import { listeners, summonedBy, workersOn, type Actor, type CommentThread } from "@isocan/core";
+import {
+  ANSWER_WITHIN_MS,
+  listeners,
+  summonedBy,
+  waitingLine,
+  wokenLine,
+  workersOn,
+  type Actor,
+  type CommentThread,
+} from "@isocan/core";
 import { undo } from "../lib/api.ts";
 import { makeComment } from "./CommentLayer.tsx";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor } from "../lib/presence.ts";
+import { useClockSecond } from "../lib/sprint.ts";
 
 /**
  * Who picked this thread up, live, under the last thing said in it.
@@ -36,6 +46,9 @@ export function OnIt({
 }) {
   const sessions = useCanvasStore((s) => s.sessions);
   const colors = useActorColors();
+  // Above the early returns: a hook's order may not depend on whether anybody
+  // happens to be working right now.
+  const second = useClockSecond();
   const working = workersOn(sessions, thread.id);
 
   if (working.length > 0) {
@@ -66,38 +79,66 @@ export function OnIt({
   // Nothing has been asked, or it has already been answered.
   if (!waiting) return null;
 
+  // How long the ask has gone unanswered. No new state: the last comment in
+  // the thread IS the ask, so its timestamp is when you asked.
+  const last = thread.comments[thread.comments.length - 1];
+  const waitedMs = last ? Math.max(0, second * 1000 - Date.parse(last.createdAt)) : 0;
+
   // Woken, but not a word yet. Worth saying on its own: it is the difference
   // between "did that go anywhere?" and "give it a second". It also needs
   // nothing from the agent, so an older build that never claims a thread
   // still does not read as silence.
   const woken = summonedBy(sessions, thread);
   if (woken.length > 0) {
+    /**
+     * **Woken, and still nothing — now with a deadline** (#197 phase 1).
+     *
+     * This said "waiting for them to pick this up" and went on saying it for
+     * as long as the silence lasted: a promise with no expiry, which is the
+     * thing the standing-agents note opens by naming. Past the bound it stops
+     * promising and says what it knows.
+     *
+     * The clock belongs HERE and not on the branch below, which was where it
+     * went first. Below means the daemon woke nobody — so "nothing answered"
+     * there would blame an agent for not replying to something nobody asked
+     * it. Found by looking at a real canvas with a parked `wait`, not by
+     * reading.
+     */
     const names = woken.map((session) => session.label ?? session.actor.name);
+    const overdue = waitedMs >= ANSWER_WITHIN_MS;
     return (
-      <div className="onit waiting" aria-live="polite">
+      <div className={`onit waiting${overdue ? " overdue" : ""}`} aria-live="polite">
         <div className="onit-row">
           <span className="onit-dot idle" />
-          <span>
-            {names.join(", ")} {names.length === 1 ? "was" : "were"} woken — waiting for{" "}
-            {names.length === 1 ? "them" : "one of them"} to pick this up.
-          </span>
+          <span>{wokenLine(names, waitedMs)}</span>
         </div>
       </div>
     );
   }
 
+  /**
+   * **Nothing has picked it up — and now the clock is part of the sentence**
+   * (#197 phase 1).
+   *
+   * This branch used to say "Sent. One agent is listening." and go on saying
+   * it, however long the silence ran. True, and useless past a point: it
+   * describes the ROOM rather than the request, which is exactly the
+   * complaint the standing-agents note opens with — silence that cannot be
+   * told apart from thinking.
+   *
+   * The wait needs no new state: the last comment in the thread is the ask,
+   * so its timestamp is when you asked. `useSecond` re-renders this once a
+   * second and stops entirely while the tab is hidden.
+   */
+  // No clock on this one, on purpose: reaching here means nobody was woken,
+  // and a line that aged into "nothing answered" would be an accusation about
+  // a request that was never delivered to anybody.
   const parked = listeners(sessions).length;
   return (
     <div className="onit waiting" aria-live="polite">
       <div className="onit-row">
         <span className="onit-dot idle" />
-        <span>
-          {parked === 0
-            ? "Nobody is parked — this waits on the thread for the next agent."
-            : parked === 1
-              ? "Sent. One agent is listening."
-              : `Sent. ${parked} agents are listening.`}
-        </span>
+        <span>{waitingLine(parked)}</span>
         {/* Nothing has read it yet, so it can simply stop existing. Undoable
             like any other op — this is `comment.remove`, not a shred. */}
         <button className="onit-cancel" onClick={() => void retract(canvasId, actor, thread)}>
