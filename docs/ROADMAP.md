@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 33 still open** — of which 26 partly
-built, 7 designed, 0 blocked, and
+**21 built · 35 still open** — of which 26 partly
+built, 9 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -47,12 +47,14 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue · [#146](https://github.com/dglazkov/isocan/issues/146) |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open · see evals, personas · [#138](https://github.com/dglazkov/isocan/issues/138) |
 
-## Designed, not built <sub>7</sub>
+## Designed, not built <sub>9</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind · [#137](https://github.com/dglazkov/isocan/issues/137) |
+| research | [Analytics: what the oplog cannot already tell us](docs/research/2026-09-07-analytics.md) | 2026-09-07 | not to be built yet — the finding is that isocan already has three measurement systems and an event stream, and the honest first question is what none of them can answer · see evals, personas · [#200](https://github.com/dglazkov/isocan/issues/200) |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
+| research | [Internationalization: which words, for whom](docs/research/2026-09-07-internationalization.md) | 2026-09-07 | low priority and deliberately not built — the interesting finding is that this codebase has two audiences for its words, and only one of them is human · see personas, ui-refresh · [#199](https://github.com/dglazkov/isocan/issues/199) |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary · [#139](https://github.com/dglazkov/isocan/issues/139) |
 | research | [Mobile web: a phone talks to the canvas](docs/research/2026-09-05-mobile-web.md) | 2026-09-05 | measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with a finger, the chrome overlaps, the Chat fits by accident and the deck fits on purpose; the field draws one line (a phone views, comments and presents; a tablet edits); recommends touch physics for every coarse pointer, a phone face built from the Chat, the viewer and the deck, and no native app. Nothing built · see multi-identity, workbench, on-demand, ui-refresh · [#182](https://github.com/dglazkov/isocan/issues/182) |
 | research | [Modules: adding a kind of thing, and taking it away again](docs/research/2026-09-04-modules.md) | 2026-09-04 | the closed registries are counted; recommends internal modules first, Mermaid as the first node type, runtime loading third, sandboxes last. Became the modules project (docs/projects/modules) on 4 Sep; phase 1 built the same night · see modules, extensions, workbench, iso-api, mindmap, atlas · [#156](https://github.com/dglazkov/isocan/issues/156) |
