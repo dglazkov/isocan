@@ -158,6 +158,47 @@ export function isAnswered(outcome) {
 export const ANSWER_DAYS = 3;
 
 /**
+ * **The same question, asked again every night.**
+ *
+ * A persona writes one finding per MISSED goal, every run — so a bound that
+ * stays missed writes a new `unanswered` row nightly. Answered per row, that
+ * is a daily chore for a question nobody's answer changed, and a guard that
+ * nags every morning is a guard somebody turns off. `docs/reviews/README.md`
+ * says the same thing from the other side: *a finding that keeps reappearing
+ * needs a guard rather than a third mention.*
+ *
+ * So a bound-derived finding is identified by **the goal and the bound**, not
+ * by its text — the value moves nightly and the question does not. Answer "the
+ * entry chunk is past 640000" once and later nights are the same answer still
+ * standing.
+ *
+ * Returns null for anything a person wrote in their own words, which has no
+ * identity beyond itself and is asked once.
+ */
+export function findingKey(what) {
+  const m = /^(.*) is (-?[\d.]+)\S* , ?past (-?[\d.]+)/.exec(what.replace(/,\s*past/, " , past"));
+  return m ? { goal: m[1].trim(), bound: m[3], value: Number(m[2]) } : null;
+}
+
+/**
+ * **How much worse a number may get before the answer stops covering it.**
+ *
+ * The failure this exists for: on 6 September the entry chunk went
+ * 600,420 → 768,993 across six nights while every report said MISSED and
+ * nobody read them. Identity alone would have let one early "accepted" cover
+ * all six, which is the treadmill fixed by creating a coma.
+ *
+ * Ten per cent. The 6 Sep drift was +28%, so it would have been asked again —
+ * which is the test of a number like this: it has to catch the thing it was
+ * written for.
+ *
+ * Assumes an `at most` goal, where growth is worse. Every goal declared today
+ * is one; a future `at least` goal would need the sign flipped, and it should
+ * fail loudly here rather than silently cover a collapse.
+ */
+export const WORSE_BY = 0.1;
+
+/**
  * The findings that have gone past their answer-by date.
  *
  * Pure, and takes `today`, so the guard can be shown to actually catch
@@ -171,6 +212,24 @@ export const ANSWER_DAYS = 3;
  * mostly bound rows, so excluding them here would exempt the exact case.
  */
 export function findUnanswered(pages, days = ANSWER_DAYS, today = new Date()) {
+  /**
+   * Every answered bound-finding, by identity, remembering the SMALLEST value
+   * anybody said yes to. Smallest rather than latest: the question a person
+   * answered was about the number in front of them, and drift is measured from
+   * there rather than from whatever it has since become.
+   */
+  const settled = new Map();
+  for (const page of pages) {
+    for (const finding of page.findings) {
+      if (!isAnswered(finding.outcome)) continue;
+      const key = findingKey(finding.what);
+      if (key === null) continue;
+      const id = `${key.goal}|${key.bound}`;
+      const seen = settled.get(id);
+      if (seen === undefined || key.value < seen) settled.set(id, key.value);
+    }
+  }
+
   const late = [];
   for (const page of pages) {
     // `2026-08-24b` — a second run in one day. The suffix sorts; it is not a date.
@@ -180,6 +239,13 @@ export function findUnanswered(pages, days = ANSWER_DAYS, today = new Date()) {
     if (age <= days) continue;
     for (const finding of page.findings) {
       if (isAnswered(finding.outcome)) continue;
+      const key = findingKey(finding.what);
+      if (key !== null) {
+        const answeredAt = settled.get(`${key.goal}|${key.bound}`);
+        // Somebody has already answered this question at this bound, and the
+        // number has not got materially worse since. The answer stands.
+        if (answeredAt !== undefined && key.value <= answeredAt * (1 + WORSE_BY)) continue;
+      }
       late.push({ file: page.file, persona: page.persona, date: page.date, what: finding.what, age });
     }
   }

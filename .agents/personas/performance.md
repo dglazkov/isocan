@@ -23,6 +23,26 @@ goal:
     at most: 640000
     measured by: node scripts/measure.mjs bundle-bytes
     baseline: 600420, 2026-09-02, 6bb8994
+  # **The soft half of the size gate** (7 Sep 2026).
+  #
+  # The suite used to stop any excess over the last agreed number, and in two
+  # days that number was raised seven times — every raise deliberate, every one
+  # with a reason. Seven is the finding: a bound edited that often teaches
+  # somebody to edit it without reading it, which is exactly how the first
+  # hundred kilobytes arrived while six nightly reports said so.
+  #
+  # So the suite now stops only a JUMP — the size of an accident — and a CREEP
+  # comes here instead. It is a question somebody must answer within three days
+  # (`test/review-queue.test.ts`), and the answer is where CEILING moves, in
+  # `scripts/bundle-ceiling.mjs`, with its reason attached to the decision
+  # rather than buried in a diff.
+  #
+  # `at most: 0` because the metric reports the DEBT, not the size: it is zero
+  # whenever the chunk is at or under the ceiling.
+  - name: bytes past the last size somebody agreed to
+    at most: 0
+    measured by: node scripts/measure.mjs bundle-over-ceiling
+    baseline: 0, 2026-09-07, ea12371
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *

@@ -3,6 +3,9 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+// @ts-expect-error — a .mjs module with no types, shared with `measure.mjs` so
+// the number this suite enforces and the number the persona measures are one.
+import { CEILING, GOAL, JUMP } from "../scripts/bundle-ceiling.mjs";
 
 /**
  * **What a first visit downloads, as a thing that can redden a commit.**
@@ -179,12 +182,11 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * is the whole of the argument for tiering this rather than continuing to edit
  * a number by hand.
  */
-const CEILING = 696_100;
-
-/** The performance persona's goal, restated here only so the failure message
- * can say how far there is left to go. `.agents/personas/performance.md` is
- * where it is declared and decided. */
-const GOAL = 640_000;
+/* CEILING, GOAL and JUMP moved to `scripts/bundle-ceiling.mjs` on 7 Sep 2026,
+   because two readers need them now: this suite, which stops a JUMP, and
+   `measure.mjs`, whose `bundle-over-ceiling` turns a creep into a persona
+   finding. Two copies of the number the whole file is about would be the
+   drift this repo keeps writing lessons about. */
 
 /** Everything a change to the web bundle could come from. */
 const SOURCES = ["packages/web/src", "packages/web/index.html", "packages/web/vite.config.ts"];
@@ -247,21 +249,46 @@ describe("what a first visit downloads", () => {
       expect(Number.isFinite(bytes), "measure.mjs did not answer a number").toBe(true);
 
       const overGoal = bytes - GOAL;
-      expect(
-        bytes,
-        `the entry chunk grew to ${bytes.toLocaleString()} bytes, past the agreed ` +
-          `${CEILING.toLocaleString()}.\n` +
-          `  If the growth is deliberate, raise CEILING in this file and say why in the commit.\n` +
-          `  If it is not, that is ${(bytes - CEILING).toLocaleString()} bytes a first visit ` +
-          `now waits for that it did not before.\n` +
-          `  The goal is ${GOAL.toLocaleString()} and this is ${overGoal.toLocaleString()} over it.`,
-      ).toBeLessThanOrEqual(CEILING);
+      const over = bytes - CEILING;
 
-      // Not an assertion: the gap to the goal is a fact worth printing on every
-      // run, so it is visible when it closes rather than only when it widens.
+      /**
+       * **Only a JUMP stops a release now** (7 Sep 2026).
+       *
+       * This asserted the ceiling exactly, and in two days it was raised seven
+       * times — every raise deliberate, every one with a reason beside it.
+       * Seven is itself the finding: a bound edited that often teaches
+       * somebody to edit it without reading it, which is how the first hundred
+       * kilobytes arrived while six nightly reports said so.
+       *
+       * So the two questions are separated. A creep is a conversation — it
+       * becomes a `bundle-over-ceiling` finding that must be answered within
+       * three days, and answering it is where CEILING moves with its reason. A
+       * jump is a mistake, and shipping a mistake is worse than waiting for
+       * somebody to look at it.
+       */
+      expect(
+        over,
+        `the entry chunk jumped ${over.toLocaleString()} bytes past the agreed ` +
+          `${CEILING.toLocaleString()} — more than ${JUMP.toLocaleString()} at once.\n` +
+          `  That is the size of an accident rather than a decision: something large became\n` +
+          `  eager. Look for a static import of a page, a parser, or a library that used to\n` +
+          `  sit behind a boundary.\n` +
+          `  If it really is deliberate, raise CEILING in scripts/bundle-ceiling.mjs and say\n` +
+          `  why in the commit.`,
+      ).toBeLessThan(JUMP);
+
+      // Not assertions. A creep stops nobody here by design, so this is the
+      // only place a person sees it before the nightly asks about it.
+      if (over > 0) {
+        console.log(
+          `bundle: ${bytes.toLocaleString()} bytes — ${over.toLocaleString()} past the agreed ` +
+            `${CEILING.toLocaleString()}. Not a blocker; the performance persona will ask, and ` +
+            `answering that finding is where the ceiling moves.`,
+        );
+      }
       if (bytes > GOAL) {
         console.log(
-          `bundle: ${bytes.toLocaleString()} bytes — ${overGoal.toLocaleString()} over the ${GOAL.toLocaleString()} goal (ceiling ${CEILING.toLocaleString()})`,
+          `bundle: ${overGoal.toLocaleString()} over the ${GOAL.toLocaleString()} goal`,
         );
       }
     },

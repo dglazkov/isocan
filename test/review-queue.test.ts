@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error — a .mjs script with no types, imported for its parser on
 // purpose: a second copy of "what `unanswered` means" is the thing this guard
 // exists to prevent one level up.
-import { ANSWER_DAYS, findUnanswered, reviewPages } from "../scripts/reviews.mjs";
+import { ANSWER_DAYS, WORSE_BY, findUnanswered, findingKey, reviewPages } from "../scripts/reviews.mjs";
 
 /**
  * **The queue can fail.**
@@ -115,5 +115,104 @@ describe("no finding sits unanswered", () => {
     // old, and this guard must never create pressure to delete it.
     expect(findUnanswered(page("2026-01-01", "accepted — guarded from today"), ANSWER_DAYS, now)).toEqual([]);
     expect(findUnanswered(page("2026-01-01", "rejected — measures evidence, not proof"), ANSWER_DAYS, now)).toEqual([]);
+  });
+});
+
+/**
+ * **The same question, asked again every night.**
+ *
+ * A persona writes one finding per missed goal per run, so a bound that stays
+ * missed writes a new `unanswered` row every night. Answered row by row that is
+ * a daily chore for a question nobody's answer changed — and a guard that nags
+ * every morning is a guard somebody turns off, which would undo the whole
+ * point of making the queue able to fail.
+ *
+ * This is what makes it safe to let the nightly reports reach `main` at all.
+ */
+describe("an answer covers the nights that repeat it", () => {
+  const page = (date: string, what: string, outcome: string) => ({
+    file: `${date}-fixture.md`,
+    date,
+    persona: "fixture",
+    goals: [],
+    findings: [{ what, outcome }],
+  });
+  const now = new Date("2026-09-20T12:00:00Z");
+  const chunk = (n: number) => `the entry chunk a first visit downloads is ${n}, past 640000`;
+
+  it("identifies a bound-finding by its goal and bound, not its text", () => {
+    // The value moves nightly; the question does not.
+    expect(findingKey(chunk(722753))).toMatchObject({ goal: "the entry chunk a first visit downloads", bound: "640000" });
+    expect(findingKey(chunk(722753))?.value).toBe(722753);
+  });
+
+  it("has no identity for a finding somebody wrote in their own words", () => {
+    // Prose is asked once and answered once; there is nothing to match it to.
+    expect(findingKey("the header row jumps 7px on select")).toBeNull();
+  });
+
+  it("lets one answer stand for later nights at the same bound", () => {
+    const pages = [
+      page("2026-09-01", chunk(700000), "accepted — splitting is spent, tracked in #185"),
+      page("2026-09-02", chunk(701000), "unanswered"),
+      page("2026-09-03", chunk(702000), "unanswered"),
+    ];
+    expect(findUnanswered(pages, ANSWER_DAYS, now)).toEqual([]);
+  });
+
+  it("asks again when the number gets materially worse", () => {
+    /**
+     * The failure this whole file exists for: 600,420 → 768,993 across six
+     * nights while every report said MISSED. Identity alone would have let one
+     * early "accepted" cover all six — a treadmill fixed by inducing a coma.
+     *
+     * That drift was +28%, so it has to be asked again. This is the case that
+     * proves the bound catches the thing it was written for.
+     */
+    const pages = [
+      page("2026-09-01", chunk(600420), "accepted — the split is planned"),
+      page("2026-09-06", chunk(768993), "unanswered"),
+    ];
+    const late = findUnanswered(pages, ANSWER_DAYS, now);
+    expect(late).toHaveLength(1);
+    expect(late[0].what).toContain("768993");
+  });
+
+  it("holds the worse-by boundary on both sides", () => {
+    const covered = [page("2026-09-01", chunk(100000), "accepted"), page("2026-09-06", chunk(100000 * (1 + WORSE_BY)), "unanswered")];
+    expect(findUnanswered(covered, ANSWER_DAYS, now), "exactly at the line is still covered").toEqual([]);
+    const past = [page("2026-09-01", chunk(100000), "accepted"), page("2026-09-06", chunk(100000 * (1 + WORSE_BY) + 1), "unanswered")];
+    expect(findUnanswered(past, ANSWER_DAYS, now), "a hair past it is asked again").toHaveLength(1);
+  });
+
+  it("measures drift from the smallest number anybody said yes to", () => {
+    /* Otherwise a series of small accepted steps launders a large one: answer
+       at 100k, again at 109k, again at 119k, and nothing is ever "materially
+       worse" than the step before it. The question a person answered was about
+       the number in front of them. */
+    const pages = [
+      page("2026-09-01", chunk(100000), "accepted"),
+      page("2026-09-02", chunk(109000), "accepted"),
+      page("2026-09-03", chunk(118000), "unanswered"),
+    ];
+    expect(findUnanswered(pages, ANSWER_DAYS, now)).toHaveLength(1);
+  });
+
+  it("does not let an answer for one goal cover another", () => {
+    const pages = [
+      page("2026-09-01", chunk(700000), "accepted"),
+      page("2026-09-02", "CSS rule bodies copied word for word from elsewhere is 60, past 47", "unanswered"),
+    ];
+    expect(findUnanswered(pages, ANSWER_DAYS, now)).toHaveLength(1);
+  });
+
+  it("asks again when somebody tightens the bound", () => {
+    // A new bound is a new question — which is what makes tightening one an
+    // act with a consequence rather than a note.
+    const pages = [
+      page("2026-09-01", chunk(700000), "accepted"),
+      page("2026-09-02", "the entry chunk a first visit downloads is 700000, past 600000", "unanswered"),
+    ];
+    expect(findUnanswered(pages, ANSWER_DAYS, now)).toHaveLength(1);
   });
 });

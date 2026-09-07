@@ -22,6 +22,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CEILING } from "./bundle-ceiling.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const run = (cmd, args, opts = {}) =>
@@ -192,6 +193,26 @@ const METRICS = {
    * So it reads the module script out of the built HTML, which is the one
    * artifact that knows which chunk the browser fetches first.
    */
+  /**
+   * **How far past the last agreed number the entry chunk has crept.**
+   *
+   * The soft half of the split described in `scripts/bundle-ceiling.mjs`. The
+   * suite stops a JUMP; this is what turns a creep into a question somebody
+   * has to answer within three days rather than a blocked release.
+   *
+   * Zero when the chunk is at or under the ceiling, so the goal reads
+   * `at most: 0` and the number itself is the size of the debt.
+   */
+  "bundle-over-ceiling": {
+    what: "bytes the entry chunk has crept past the last number somebody agreed to",
+    take: () => Math.max(0, statSync(path.join(repo, entryChunk())).size - CEILING),
+    breakIt: {
+      get file() {
+        return entryChunk();
+      },
+      apply: (t) => `${t}\n// selftest\n${"x".repeat(2_000_000)}\n`,
+    },
+  },
   "bundle-bytes": {
     what: "the entry chunk, in bytes — what a first visit downloads before anything renders",
     take: () => statSync(path.join(repo, entryChunk())).size,
