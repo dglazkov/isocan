@@ -310,6 +310,15 @@ function CanvasRow({ row, nowMs }: { row: SwitchRow; nowMs: number }) {
           lit ? <mark key={i}>{text}</mark> : <span key={i}>{text}</span>,
         )}
       </span>
+      {/**
+        * **Said, because it is offered** (#194). `rankCanvases` keeps archived
+        * canvases out of the list this window shows with an empty field and
+        * puts them under every live match once something is typed — so the
+        * only way one reaches this row is that somebody typed its name, and
+        * the honest thing is to take them there and say what it is. Unmarked,
+        * it would be a canvas they put away arriving as though they hadn't.
+        */}
+      {row.shelved && <span className="shelf-tag">Archived</span>}
       {row.canvas.description && <span className="palette-hint">{row.canvas.description}</span>}
       {when && <span className="palette-when">{when}</span>}
     </>

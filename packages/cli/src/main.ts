@@ -4695,10 +4695,21 @@ canvas
          `updated` was a full ISO stamp, which is a machine's answer to a
          question a person asked — and it said nothing about WHAT happened. */
       const nowMs = Date.now();
+      /**
+       * **The column `--with-archived` promises** (#194). That flag's own
+       * help says "both, with a column saying which", and for a while it
+       * printed a table where the two were indistinguishable — a widened
+       * view that answers the question it was widened to ask with a shrug.
+       *
+       * Only under `--with-archived`: with the default scope every row is
+       * live and under `--archived` every row is archived, and a column of
+       * one repeated value is a column that says nothing.
+       */
       const rows = (list: Canvas[]) =>
         list.map((p) => ({
           id: p.id + (p.id === config.defaultProjectId ? " *" : ""),
           title: truncate(p.title, 30),
+          ...(scope === "all" ? { shelf: isShelved(p) ? "archived" : "" } : {}),
           description: truncate(p.description, 30),
           last: `${actorNameIn(names, p.updatedBy)} ${opWords(p.lastOp) ?? "did something"}`,
           when: ago(p.updatedAt, nowMs) || "just now",

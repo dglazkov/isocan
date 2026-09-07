@@ -455,7 +455,10 @@ img { height: auto; }
   display: flex; flex-direction: column; gap: 5px;
   padding: 16px 16px 12px; color: inherit; text-decoration: none;
 }
-.canvas-card h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.015em; }
+.canvas-card h3 {
+  margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.015em;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
 .canvas-card .desc {
   color: var(--ink-muted); font-size: 12.5px; line-height: 1.45;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -5581,6 +5584,27 @@ button.mt-card:hover { border-color: var(--accent); }
   color: var(--ink-muted); font-size: 11px; font-family: inherit;
 }
 .palette-none { margin: 0; padding: 12px 10px; color: var(--ink-soft); font-size: 13px; }
+
+/**
+ * **The archive, said out loud** (#194).
+ *
+ * One chip, wherever a canvas somebody put away can appear beside one they
+ * did not: the switcher's rows, which offer archived canvases under every
+ * live match once something is typed, and the home screen's cards under
+ * `Archived`, which shows both. One rule rather than one per surface — two
+ * would end up two different words for one state, which is how this codebase
+ * got `faceMark`/`initial`.
+ *
+ * Quiet on purpose. It is a fact about the row, not a warning: archiving
+ * changes what you see and nothing about what exists.
+ */
+.shelf-tag {
+  flex: none;
+  padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--chip);
+  color: var(--ink-soft); font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.03em;
+}
 
 /**
  * **The switcher: the launcher's second face.**

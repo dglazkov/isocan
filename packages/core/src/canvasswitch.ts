@@ -1,5 +1,6 @@
 import type { Canvas } from "./model.ts";
 import { sortCanvases } from "./canvassort.ts";
+import { isShelved } from "./shelf.ts";
 
 /**
  * **Jumping to another canvas, from wherever you are.**
@@ -36,6 +37,10 @@ export interface SwitchRow {
    *  exists. With a query the ranking is by match and this is a hint; without
    *  one it is the group the row sits in. */
   recent: boolean;
+  /** Whether this one is archived (#194). Only ever true with a query, and
+   *  the row that carries it says so on screen: a canvas somebody put away
+   *  arriving unmarked among the live ones is the shelf failing quietly. */
+  shelved: boolean;
 }
 
 /**
@@ -113,6 +118,27 @@ function startsWord(text: string, at: number): boolean {
  * An id in `recentIds` that no canvas carries is skipped rather than shown:
  * a canvas deleted, or one whose home is not this origin, is not somewhere
  * this list can take you.
+ *
+ * ## Archived canvases: out of the list, in reach of a search (#194)
+ *
+ * The shelf is a fix for a list that only grows, so **with no query there is
+ * no shelf here** — that case IS a list, and it is the one the home screen
+ * hides them from. A switcher that kept showing them would have made Archive
+ * a change to one list and not the other, which is the same as not working.
+ *
+ * **With a query they are all offered, under every live match, marked.** A
+ * typed query is a statement of intent, and refusing to find a canvas
+ * somebody named is the other half of this feature failing — the issue's own
+ * title asks for a search that can reach in. This is the shape the file
+ * already uses one paragraph down for descriptions: *a second chance, not a
+ * first*. Ordered by a sort key rather than a score penalty, because "below
+ * every live match" is the rule, and a penalty large enough to mean that is a
+ * number somebody has to keep large enough.
+ *
+ * So there is no scope control, no toggle and no prefix to learn. What makes
+ * that safe is the marking: `shelved` rides on the row, and a surface that
+ * draws these must say so, or a canvas somebody put away comes back
+ * indistinguishable from one they did not.
  */
 export function rankCanvases(
   canvases: readonly Canvas[],
@@ -132,31 +158,39 @@ export function rankCanvases(
       candidates.filter((canvas) => !rank.has(canvas.id)),
       "recent",
     );
+    // No query is the list case, and the list is where the shelf is the
+    // point: a canvas put away is out of this one too.
+    const live = (canvas: Canvas) => !isShelved(canvas);
     return [
-      ...recent.map((canvas) => ({ canvas, positions: [], recent: true })),
-      ...rest.map((canvas) => ({ canvas, positions: [], recent: false })),
+      ...recent.filter(live).map((canvas) => ({ canvas, positions: [], recent: true, shelved: false })),
+      ...rest.filter(live).map((canvas) => ({ canvas, positions: [], recent: false, shelved: false })),
     ];
   }
   const hits = candidates.flatMap((canvas) => {
+    const shelved = isShelved(canvas);
     const onTitle = fuzzyMatch(trimmed, canvas.title);
-    if (onTitle) return [{ canvas, positions: onTitle.positions, score: onTitle.score }];
+    if (onTitle) return [{ canvas, shelved, positions: onTitle.positions, score: onTitle.score }];
     // The description is a second chance, not a first: a match there ranks
     // under any match on a title, and lights nothing up.
     const onDescription = canvas.description ? fuzzyMatch(trimmed, canvas.description) : null;
-    if (onDescription) return [{ canvas, positions: [], score: onDescription.score - 100 }];
+    if (onDescription) return [{ canvas, shelved, positions: [], score: onDescription.score - 100 }];
     return [];
   });
   hits.sort(
     (a, b) =>
+      // Archived last, whatever it scored: this is a rule, not a preference,
+      // and a score penalty big enough to be one is a number to keep big.
+      Number(a.shelved) - Number(b.shelved) ||
       b.score - a.score ||
       (rank.get(a.canvas.id) ?? Infinity) - (rank.get(b.canvas.id) ?? Infinity) ||
       b.canvas.updatedAt.localeCompare(a.canvas.updatedAt) ||
       a.canvas.id.localeCompare(b.canvas.id),
   );
-  return hits.map(({ canvas, positions }) => ({
+  return hits.map(({ canvas, positions, shelved }) => ({
     canvas,
     positions,
     recent: rank.has(canvas.id),
+    shelved,
   }));
 }
 

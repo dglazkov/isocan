@@ -232,6 +232,10 @@ export function CanvasListPage({
    * answers a question nobody asked.
    */
   const [showArchived, setShowArchived] = useState(false);
+  /** Enough canvases to want a filter and a sort. */
+  const browsing = (canvases?.length ?? 0) > BROWSE_FROM;
+  /** Anything on the shelf — the one thing `Archived` should depend on. */
+  const hasShelf = (canvases ?? []).some(isShelved);
   /* Filter first, then sort: sorting what will be thrown away is work nobody
      sees, and at a hundred canvases the difference is real. */
   const shown = useMemo(
@@ -532,7 +536,21 @@ export function CanvasListPage({
                     canvas uses, which is also what stops Delete sitting one
                     pixel from Open. */}
                 <Link className="card-open" to={canvasPath(canvas.id)}>
-                  <h3>{canvas.title}</h3>
+                  {/**
+                    * **Which of these did I put away?** (#194). `Archived`
+                    * widens this grid to everything rather than swapping to
+                    * the shelf alone — deliberately, since somebody hunting
+                    * for one is usually not sure they archived it — and a
+                    * mixed grid where the two look identical answers the
+                    * question it was widened to ask with a shrug. The `···`
+                    * row saying Unarchive is an answer you have to go and
+                    * find; this one is on the card. Same chip the switcher's
+                    * rows carry, same word.
+                    */}
+                  <h3>
+                    {canvas.title}
+                    {isShelved(canvas) && <span className="shelf-tag">Archived</span>}
+                  </h3>
                   {canvas.description && <div className="desc">{canvas.description}</div>}
                   {/**
                    * **What last happened here, as a sentence.**
@@ -762,7 +780,8 @@ export function CanvasListPage({
         </div>
       </div>
       {/**
-       * **Only when the list is big enough to need it.**
+       * **Only when the list is big enough to need it — or when there is a
+       * shelf.**
        *
        * Six canvases do not need a search box and a sort menu; a hundred are
        * unusable without them. Chrome that appears when it becomes useful is
@@ -773,37 +792,51 @@ export function CanvasListPage({
        * The threshold is on the number the person HAS, not the number shown —
        * otherwise typing a query that matches three canvases would remove the
        * box you are typing into.
+       *
+       * **`browsing` is that threshold; `hasShelf` is a second, separate
+       * reason for this row to exist** (#194), and it had to be split out
+       * after watching it fail. `Archived` shipped INSIDE the size gate, so
+       * on a home of eight or fewer canvases archiving one made it vanish
+       * with no control anywhere in the app to bring it back — a visibility
+       * change that was, on a small home, a one-way door. Nothing about "is
+       * there a shelf" has anything to do with "is this list long", and
+       * nesting the two made the smaller question inherit the larger one's
+       * answer.
        */}
-      {(canvases?.length ?? 0) > BROWSE_FROM && (
+      {(browsing || hasShelf) && (
         <div className="canvas-browse">
-          <input
-            className="text-input canvas-filter"
-            type="search"
-            placeholder={`Filter ${canvases!.length} canvases…`}
-            aria-label="Filter canvases by name"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          {browsing && (
+            <input
+              className="text-input canvas-filter"
+              type="search"
+              placeholder={`Filter ${canvases!.length} canvases…`}
+              aria-label="Filter canvases by name"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
           <div className="canvas-sorts" role="group" aria-label="Order">
-            {CANVAS_SORTS.map((option) => (
-              <button
-                key={option}
-                className={`btn quiet${option === sort ? " on" : ""}`}
-                aria-pressed={option === sort}
-                onClick={() => chooseSort(option)}
-              >
-                {CANVAS_SORT_LABEL[option]}
-              </button>
-            ))}
+            {browsing &&
+              CANVAS_SORTS.map((option) => (
+                <button
+                  key={option}
+                  className={`btn quiet${option === sort ? " on" : ""}`}
+                  aria-pressed={option === sort}
+                  onClick={() => chooseSort(option)}
+                >
+                  {CANVAS_SORT_LABEL[option]}
+                </button>
+              ))}
             {/**
               * **Show archived** (#194). Widens the list to everything rather
               * than swapping to the shelf alone: somebody hunting for one they
               * put away is usually not sure they did, and a view that hides
               * the live ones answers a question nobody asked. Offered only
               * when there is a shelf, so the control appears the day it means
-              * something.
+              * something — and now on any home with one, however short its
+              * list.
               */}
-            {(canvases ?? []).some(isShelved) && (
+            {hasShelf && (
               <button
                 className={`btn quiet${showArchived ? " on" : ""}`}
                 aria-pressed={showArchived}

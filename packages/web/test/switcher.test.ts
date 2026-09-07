@@ -137,6 +137,39 @@ describe("the list", () => {
   });
 });
 
+/**
+ * **What makes offering an archived canvas safe** (#194).
+ *
+ * `rankCanvases` keeps them out of the switcher's list and puts them under
+ * every live match once something is typed — that half is core's, and
+ * `core/test/canvasswitch.test.ts` holds it. The half that lives here is that
+ * the row SAYS SO. Take that away and the design stops being defensible: a
+ * canvas somebody put away comes back looking exactly like one they did not,
+ * on a screen whose whole job is telling canvases apart at a glance.
+ *
+ * Two surfaces show them beside live ones — this window, and the home
+ * screen's grid under `Archived` — so both are checked, against one chip.
+ */
+describe("an archived canvas says it is archived", () => {
+  const list = bare(read("../src/pages/CanvasListPage.tsx"));
+
+  it("marks the switcher's row", () => {
+    expect(palette).toContain('row.shelved && <span className="shelf-tag">Archived</span>');
+  });
+
+  it("marks the home screen's card", () => {
+    expect(list).toContain('isShelved(canvas) && <span className="shelf-tag">Archived</span>');
+  });
+
+  it("is one chip and one word, not one per surface", () => {
+    // Two rules would end up two different words for one state — the way
+    // this codebase got `faceMark`/`initial`.
+    const sheet = rules(withoutComments());
+    expect(sheet.filter((r) => r.selector.includes(".shelf-tag"))).toHaveLength(1);
+    expect(sheet.some((r) => r.selector === ".shelf-tag")).toBe(true);
+  });
+});
+
 describe("the move", () => {
   it("is timed in one place and drawn in the other, to the same numbers", () => {
     const css = withoutComments();

@@ -33,6 +33,10 @@ export interface SwitchRow {
      *  exists. With a query the ranking is by match and this is a hint; without
      *  one it is the group the row sits in. */
     recent: boolean;
+    /** Whether this one is archived (#194). Only ever true with a query, and
+     *  the row that carries it says so on screen: a canvas somebody put away
+     *  arriving unmarked among the live ones is the shelf failing quietly. */
+    shelved: boolean;
 }
 /**
  * Where a query's letters land in a title, and how well.
@@ -69,6 +73,27 @@ export declare function fuzzyMatch(query: string, text: string): {
  * An id in `recentIds` that no canvas carries is skipped rather than shown:
  * a canvas deleted, or one whose home is not this origin, is not somewhere
  * this list can take you.
+ *
+ * ## Archived canvases: out of the list, in reach of a search (#194)
+ *
+ * The shelf is a fix for a list that only grows, so **with no query there is
+ * no shelf here** — that case IS a list, and it is the one the home screen
+ * hides them from. A switcher that kept showing them would have made Archive
+ * a change to one list and not the other, which is the same as not working.
+ *
+ * **With a query they are all offered, under every live match, marked.** A
+ * typed query is a statement of intent, and refusing to find a canvas
+ * somebody named is the other half of this feature failing — the issue's own
+ * title asks for a search that can reach in. This is the shape the file
+ * already uses one paragraph down for descriptions: *a second chance, not a
+ * first*. Ordered by a sort key rather than a score penalty, because "below
+ * every live match" is the rule, and a penalty large enough to mean that is a
+ * number somebody has to keep large enough.
+ *
+ * So there is no scope control, no toggle and no prefix to learn. What makes
+ * that safe is the marking: `shelved` rides on the row, and a surface that
+ * draws these must say so, or a canvas somebody put away comes back
+ * indistinguishable from one they did not.
  */
 export declare function rankCanvases(canvases: readonly Canvas[], query: string, recentIds: readonly string[], except?: string | null): SwitchRow[];
 /**

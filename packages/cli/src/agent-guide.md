@@ -1964,7 +1964,11 @@ NOT undoable — confirm on the thread first, and never delete a canvas you did
 not make). **`canvas archive` is the one to reach for instead**: it takes a
 canvas out of the list and changes nothing else — the address, the history,
 the agents and any view link all keep working, and `--undo` puts it back.
-`canvas list --archived` finds what is on the shelf. `canvas background
+`canvas list --archived` finds what is on the shelf, `--with-archived` shows
+both with a column saying which, and `--with-archived --filter <text>`
+searches across the two. Every other verb reaches an archived canvas by name
+with no flag at all, so a canvas somebody archives while you are parked on it
+is still the canvas you are standing on. `canvas background
 <galaxy|farm|mountains|ocean|none>` sets the ground a canvas stands on, and
 bare `canvas background` says what it is wearing — everybody on the canvas
 sees the same one, so it is a change to ask about rather than assume,

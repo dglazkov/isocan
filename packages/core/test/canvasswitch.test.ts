@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Canvas } from "../src/model.ts";
 import { fuzzyMatch, litRuns, rankCanvases } from "../src/canvasswitch.ts";
+import { shelvePatch } from "../src/shelf.ts";
 
 /**
  * **The switcher leads with where you were, and takes a few letters to find
@@ -115,6 +116,63 @@ describe("the list the switcher shows", () => {
     // (description). The title match must come first.
     const both = rankCanvases(all, "re", []);
     expect(both[0]!.canvas.id).toBe("c_home");
+  });
+});
+
+/**
+ * **A canvas somebody put away, and a switcher that is two things at once**
+ * (#194).
+ *
+ * With an empty field this window is a LIST, and the shelf exists because a
+ * list that only grows stops meaning "my canvases" — so an archived canvas is
+ * out of it, exactly as it is out of the home screen. With something typed it
+ * is a SEARCH, and the issue's title asks for one that can reach in: refusing
+ * to find a canvas whose name somebody just typed is the other half of this
+ * feature failing.
+ *
+ * Both halves have to hold at once, which is why they are tested together.
+ */
+describe("the shelf, in a window that is a list and a search", () => {
+  const shelved = (one: Canvas): Canvas => ({ ...one, properties: shelvePatch("2026-06-01T00:00:00Z").properties! });
+  const all = [
+    canvas("c_lake", "Lake House", "2026-03-01T00:00:00Z"),
+    shelved(canvas("c_lab", "Lab notes", "2026-04-01T00:00:00Z")),
+  ];
+
+  it("keeps it out of the list, however lately it was visited", () => {
+    // Recency is the strongest reason a row is offered, so it is the one that
+    // would smuggle an archived canvas back in.
+    expect(rankCanvases(all, "", ["c_lab", "c_lake"]).map((r) => r.canvas.id)).toEqual(["c_lake"]);
+    expect(rankCanvases(all, "", []).map((r) => r.canvas.id)).toEqual(["c_lake"]);
+  });
+
+  it("finds it once something is typed — that is the reaching in", () => {
+    const rows = rankCanvases(all, "lab", []);
+    expect(rows.map((r) => r.canvas.id)).toEqual(["c_lab"]);
+    expect(rows[0]!.shelved).toBe(true);
+    // And the letters still light, because it is a real match, not a
+    // consolation row.
+    expect(rows[0]!.positions).toEqual([0, 1, 2]);
+  });
+
+  it("puts it under every live match, whatever it scored", () => {
+    /* "Lab notes" is the better match for "la" by a distance — a prefix, two
+       letters together — and it still comes second. The rule is not "usually
+       lower": a person scanning for the canvas they are working on must never
+       have to look past one they put away. */
+    const rows = rankCanvases(all, "la", []);
+    expect(rows.map((r) => r.canvas.id)).toEqual(["c_lake", "c_lab"]);
+    expect(rows.map((r) => r.shelved)).toEqual([false, true]);
+  });
+
+  it("says so on every row it hands over", () => {
+    // The marking is what makes offering them safe, so `shelved` is asserted
+    // as a fact of the row rather than left to the surface to work out. A
+    // surface reading `properties` itself would be the second fold this
+    // module exists to prevent.
+    for (const row of rankCanvases(all, "l", [])) {
+      expect(row.shelved).toBe(row.canvas.id === "c_lab");
+    }
   });
 });
 

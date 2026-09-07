@@ -96,6 +96,42 @@ describe("browsing a hundred", () => {
   });
 });
 
+/**
+ * **Archive was a one-way door on a small home** (#194).
+ *
+ * `Archived` shipped nested inside the size gate, so on a home of
+ * `BROWSE_FROM` canvases or fewer the control did not exist — archive one
+ * there and it left the list with nothing anywhere in the app to bring it
+ * back. Only the CLI could, which is the isomorphism failing in the direction
+ * that strands a person rather than an agent.
+ *
+ * Found by opening the app on a home of four and clicking Archive, which is
+ * the only way it could have been found: every unit here passed, because the
+ * two conditions were each correct and only their NESTING was wrong.
+ *
+ * The rule the guard holds is the one the bug broke: **the shelf's control
+ * asks about the shelf, and nothing else.**
+ */
+describe("the shelf's control does not depend on the list being long", () => {
+  it("gates Archived on there being a shelf, on its own", () => {
+    expect(bare).toMatch(/const hasShelf = \(canvases \?\? \[\]\)\.some\(isShelved\)/);
+    expect(bare).toMatch(/\{hasShelf && \(/);
+  });
+
+  it("opens the row for either reason", () => {
+    // `browsing || hasShelf` — a home with four canvases and one archived has
+    // a row; a home with four and none has no furniture at all.
+    expect(bare).toMatch(/\{\(browsing \|\| hasShelf\) && \(/);
+  });
+
+  it("still keeps the filter and the sort behind the size gate", () => {
+    /* The other half of the split: a row that appeared because of a shelf must
+       not bring a search box and a sort menu with it onto a home of four. */
+    expect(bare).toMatch(/\{browsing && \(\s*<input/);
+    expect(bare).toMatch(/\{browsing &&\s*CANVAS_SORTS\.map/);
+  });
+});
+
 describe("the browse controls' stylesheet", () => {
   const sheet = rules(withoutComments()).filter((r) => /\.canvas-(browse|filter|sorts|none)/.test(r.selector));
 
