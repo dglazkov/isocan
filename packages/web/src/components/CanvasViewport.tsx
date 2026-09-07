@@ -359,11 +359,30 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         zoomDownAt.current = 0;
       }
     }
-    // A keyup that never comes is the failure mode: press P, switch windows,
-    // and the release lands somewhere else while your drawing stays wet and
-    // invisible to everyone. Losing the window ends the hold and settles it.
+    /**
+     * **A keyup that never comes is the failure mode.** Press P, switch
+     * windows, and the release lands somewhere else while your drawing stays
+     * wet and invisible to everyone. Losing the window ends the hold and
+     * settles it.
+     *
+     * All THREE momentary holds, not just the pen. Space and Z are the same
+     * bug with a quieter symptom: hold either, switch tabs, let go over
+     * there, and you come back to a canvas stuck in Hand or Zoom with no
+     * key held and nothing on screen saying why. The pen was fixed when it
+     * cost a lost drawing; the other two were left because they only cost
+     * confusion, which is the reason bugs like this survive.
+     */
     function onBlur() {
       if (penHeld.current) endPenHold();
+      if (spacePrevTool.current !== null) {
+        useUiStore.getState().setActiveTool(spacePrevTool.current);
+        spacePrevTool.current = null;
+      }
+      if (zoomPrevTool.current !== null) {
+        useUiStore.getState().setActiveTool(zoomPrevTool.current);
+        zoomPrevTool.current = null;
+        zoomDownAt.current = 0;
+      }
     }
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);

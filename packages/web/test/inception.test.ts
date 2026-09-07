@@ -17,7 +17,9 @@ const kinds = read("../src/lib/kinds.ts");
 describe("a canvas on a canvas is a picture of a place", () => {
   it("is drawn from the other canvas's snapshot, pulled while on screen, never framed", () => {
     expect(card).toContain("getSnapshot(canvasId)");
-    expect(card).toContain("setInterval(() => void pull(), PULL_MS)");
+    // Through `everyWhileVisible`: a card for a canvas you cannot see is a
+    // card nobody is reading, and it was pulling every 30s regardless.
+    expect(card).toContain("everyWhileVisible(() => void pull(), PULL_MS)");
     expect(view).toContain("if (canvasOf) {");
     expect(view).toContain("<CanvasCard");
     expect(view).toContain("canvasId={canvasOf}");

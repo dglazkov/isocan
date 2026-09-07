@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchRcAnswering } from "./api.ts";
+import { everyWhileVisible } from "./whilevisible.ts";
 
 /**
  * **Who a live rc answers for on this canvas** — core's `roster()` fourth
@@ -33,7 +34,8 @@ interface Answering {
 interface Watch {
   state: Answering;
   readers: number;
-  timer: ReturnType<typeof setInterval> | null;
+  /** Stops the poll — what `everyWhileVisible` hands back, not a handle. */
+  timer: (() => void) | null;
   listeners: Set<(state: Answering) => void>;
 }
 
@@ -74,16 +76,17 @@ function useAnswering(canvasId: string | null): Answering {
              knowing. */
         });
     };
+    // `everyWhileVisible` reads once itself, and reads again the moment the
+    // tab comes back — "is anybody listening" is the answer stale hurts most.
     if (here.timer === null) {
-      read();
-      here.timer = setInterval(read, ANSWERING_EVERY_MS);
+      here.timer = everyWhileVisible(read, ANSWERING_EVERY_MS);
     }
 
     return () => {
       here.listeners.delete(setState);
       here.readers -= 1;
       if (here.readers > 0) return;
-      if (here.timer !== null) clearInterval(here.timer);
+      if (here.timer !== null) here.timer();
       // Dropped rather than kept: this is a fact about a connection that is
       // open right now, and a stale answer to "is anybody listening" is the
       // one answer worse than none.

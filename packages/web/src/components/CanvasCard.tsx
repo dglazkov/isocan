@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CanvasContents, Item } from "@isocan/core";
 import { isArea, isCanvasItem, itemKind } from "@isocan/core";
 import { blobUrl, fetchPresenceWhere, getSnapshot } from "../lib/api.ts";
+import { everyWhileVisible } from "../lib/whilevisible.ts";
 
 /**
  * **A canvas, drawn small and live** (`docs/projects/inception/design.md`).
@@ -89,11 +90,10 @@ export function CanvasCard({
         });
       }
     };
-    void pull();
-    const timer = setInterval(() => void pull(), PULL_MS);
+    const stop = everyWhileVisible(() => void pull(), PULL_MS);
     return () => {
       live = false;
-      clearInterval(timer);
+      stop();
     };
   }, [canvasId, elsewhere]);
 

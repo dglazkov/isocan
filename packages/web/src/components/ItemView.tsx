@@ -39,6 +39,7 @@ import {
   paperOf,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
+import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
@@ -116,6 +117,22 @@ function ItemViewInner({
   settling?: boolean;
 }) {
   const navigate = useNavigate();
+  /**
+   * **A live item is only live while it is somewhere near the window** (the
+   * 6 September freeze, second half).
+   *
+   * The Chat panel's thumbnails were gated first, and that was the smaller
+   * half: `CanvasViewport` maps EVERY item to one of these unconditionally,
+   * so a canvas of six HTML screens holds six real documents from the moment
+   * it loads, on screen or not, focused or not. On the canvas that froze
+   * that came to 4.6MB of HTML — one item a 3.3MB photo gallery — and images
+   * decode to a great deal more than they download as.
+   *
+   * The margin is a screen's worth rather than the thumbnail's 200px: on a
+   * canvas you arrive somewhere by panning, and content should be there when
+   * you get there rather than appearing after you stop.
+   */
+  const { ref: liveRef, onScreen: nearWindow } = useOnScreen<HTMLDivElement>("800px");
   const colors = useActorColors();
   const names = useActorNames();
   // The curtain applies to the WALL — the Vote sheet's contents — and only
@@ -270,6 +287,16 @@ function ItemViewInner({
   // node IS its words, so a card around them would be a card around a
   // sentence somebody typed onto a canvas.
   const isText = isTextItem(item);
+  /**
+   * The kinds whose body is a real document rather than drawn markup — the
+   * ones worth standing down when they are nowhere near the window. `liveDoc`
+   * joins them: a Google Doc shown live is somebody else's page in a frame.
+   *
+   * Off `kind` above rather than a second `itemKind` call, which also means a
+   * module whose icon is a screen stands down too — conservative in the
+   * direction that costs a reload rather than a gigabyte.
+   */
+  const heavy = kind === "screen" || kind === "site" || kind === "canvas" || liveDoc;
   // A speaker note names its slide on the canvas (core/slides.ts).
   const noteTargetId = noteTarget(item);
   const noteSlideTitle = useCanvasStore((s) => (noteTargetId ? (s.canvas?.items[noteTargetId]?.title ?? "a slide") : null));
@@ -968,7 +995,7 @@ function ItemViewInner({
           {SLIDE_EMOJI} Notes for {noteSlideTitle}
         </span>
       )}
-      <div className={`item-content${entered ? "" : " inert"}`}>
+      <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
         {/**
          * Too far away to read: draw the mark, not the words.
          *
@@ -987,6 +1014,18 @@ function ItemViewInner({
           >
             T
           </span>
+        ) : heavy && !nearWindow ? (
+          /**
+           * Far away, or the tab is in the background: the box stays exactly
+           * where it is and what it holds stands down.
+           *
+           * Only the three kinds that mount a REAL document — a screen, a
+           * framed site, a canvas on a canvas. Markdown, images and text are
+           * left alone deliberately: they cost little, the browser already
+           * manages decoded images for us, and tearing them down on every pan
+           * would trade a memory problem for a flicker one.
+           */
+          <span className="item-standby" aria-hidden="true" />
         ) : (
         <VersionContent
           canvasId={canvasId}

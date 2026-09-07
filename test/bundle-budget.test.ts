@@ -130,8 +130,18 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  *
  * **The goal is 49,550 away** — close enough to be a target rather than a
  * debt. Same rule: this comes down, not up.
+ *
+ * **691,500 (6 Sep, +856).** `lib/whilevisible.ts`, which stops every
+ * repeating fetch while the tab is hidden. Paid deliberately and in the entry
+ * chunk on purpose: it is imported by the presence poll and the sprint clock,
+ * both of which a first visit runs, so deferring it would defer the thing that
+ * makes a background tab quiet. Under a kilobyte to stop a hidden tab polling
+ * the daemon forever is the right side of this trade — and this is the shape
+ * the ratchet is for: a raise that is one line, in the diff, with the reason
+ * beside it, rather than a hundred kilobytes arriving as a hundred unremarked
+ * commits.
  */
-const CEILING = 690_000;
+const CEILING = 691_500;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is

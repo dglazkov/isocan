@@ -23,6 +23,10 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// The bound the report announces is the bound the guard enforces — imported
+// rather than retyped, so a raised `ANSWER_DAYS` cannot leave every page
+// promising the old number.
+import { ANSWER_DAYS } from "./reviews.mjs";
 /**
  * **The personas are read through the CLI, not parsed again here.**
  *
@@ -153,8 +157,9 @@ function runOne(persona) {
       ? missed.map((r) => `| ${r.goal.name} is ${r.value}${r.goal.unit ?? ""}, past ${r.goal.bound.value}${r.goal.unit ?? ""} | unanswered |`)
       : ["| — | — |"]),
     "",
-    "`unanswered` until somebody writes `accepted` or `rejected`. Nothing counts",
-    "them yet, and nothing should until there are enough to mean something.",
+    `\`unanswered\` until somebody writes \`accepted\` or \`rejected\`. **After ${ANSWER_DAYS} days`,
+    "an unanswered row fails `npm test`** — the queue can fail, so a correct report",
+    "cannot be quietly ignored the way six nights of them were (#197).",
     "",
     "---",
     "",

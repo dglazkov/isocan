@@ -89,22 +89,109 @@ function read(file) {
   return { goals, findings };
 }
 
-const pages = [];
-for (const file of readdirSync(dir)) {
-  const m = NAME.exec(file);
-  if (!m) continue;
-  const parsed = read(file);
-  if (parsed === null) continue;
-  pages.push({ file, date: m[1], persona: m[2], ...parsed });
+/**
+ * Every automated run, newest first — a persona's name breaks the tie so a
+ * day's rows are stable rather than ordered by whatever readdir felt like.
+ *
+ * Exported because `test/review-queue.test.ts` asks the same pages a different
+ * question, and a second parser would be a second definition of `unanswered`.
+ */
+export function reviewPages() {
+  const pages = [];
+  for (const file of readdirSync(dir)) {
+    const m = NAME.exec(file);
+    if (!m) continue;
+    const parsed = read(file);
+    if (parsed === null) continue;
+    pages.push({ file, date: m[1], persona: m[2], ...parsed });
+  }
+  pages.sort((a, b) => (a.date === b.date ? a.persona.localeCompare(b.persona) : b.date.localeCompare(a.date)));
+  return pages;
 }
 
-// Newest first, and a persona's name breaks the tie so a day's rows are stable
-// rather than ordered by whatever readdir felt like.
-pages.sort((a, b) => (a.date === b.date ? a.persona.localeCompare(b.persona) : b.date.localeCompare(a.date)));
+/**
+ * **Whether somebody has actually said something about a finding.**
+ *
+ * Answered means the cell begins with `accepted` or `rejected` — a decision,
+ * usually followed by the reason. **Everything else is unanswered**, including
+ * an empty cell, the bare word `unanswered`, `TBD`, and a misspelling of
+ * `accepted`.
+ *
+ * That direction is the point. This started as `outcome === "unanswered"`, an
+ * exact match, and the first attempt to prove the guard could catch anything
+ * failed against it: back-dating a real finding to `unanswered — the metric
+ * was retired` left a row that was plainly unanswered and that neither the
+ * index nor the guard could see. An exact match on the OPEN state fails open —
+ * any trailing word, and a finding disappears from the queue silently. Testing
+ * for the CLOSED state fails closed: a typo makes the queue louder, not
+ * shorter, which is the only safe direction for something whose job is to
+ * notice that nobody is looking.
+ *
+ * It reclassifies nothing today: all 26 findings on file begin with one of the
+ * two words.
+ */
+export function isAnswered(outcome) {
+  const said = (outcome ?? "").trim().toLowerCase();
+  return said.startsWith("accepted") || said.startsWith("rejected");
+}
+
+/**
+ * **How long a finding may sit before it reddens a commit.**
+ *
+ * The number that makes the queue able to fail (#197, D6). Chosen against the
+ * failure it exists to prevent: on 6 September 2026, 26 findings sat
+ * `unanswered` across **six nights** while the number one of them described
+ * went 600,420 → 768,993. Every report was correct, every report was written,
+ * and nothing made anybody read them. So the bound has to be shorter than six
+ * — a limit the failure would have passed is not a limit.
+ *
+ * Three days: a finding filed on Monday night is due by Thursday night, which
+ * is two clear days plus the night it arrived. Deliberately uncomfortable.
+ * `unanswered` is not a backlog to clear for tidiness — answering is one word,
+ * `accepted` or `rejected`, and the point of the discomfort is that a person
+ * decides rather than the report scrolling away.
+ *
+ * Raising this is allowed and is one line with a reason beside it, the same
+ * shape as `CEILING` in `test/bundle-budget.test.ts`. What must not happen
+ * again is six nights of correct reports nobody read.
+ */
+export const ANSWER_DAYS = 3;
+
+/**
+ * The findings that have gone past their answer-by date.
+ *
+ * Pure, and takes `today`, so the guard can be shown to actually catch
+ * something — a test that only ever asserts "the real queue is empty" would
+ * pass just as happily if this function always returned nothing, which is the
+ * vacuous guard this repo has already deleted two of.
+ *
+ * A finding a missed bound generated counts the same as one a persona wrote.
+ * The index tells them apart for display, because a bound's row repeats what
+ * the Missed column already said — but 6 September's unanswered pile was
+ * mostly bound rows, so excluding them here would exempt the exact case.
+ */
+export function findUnanswered(pages, days = ANSWER_DAYS, today = new Date()) {
+  const late = [];
+  for (const page of pages) {
+    // `2026-08-24b` — a second run in one day. The suffix sorts; it is not a date.
+    const stamped = Date.parse(`${page.date.slice(0, 10)}T00:00:00Z`);
+    if (Number.isNaN(stamped)) continue;
+    const age = Math.floor((today.getTime() - stamped) / 86_400_000);
+    if (age <= days) continue;
+    for (const finding of page.findings) {
+      if (isAnswered(finding.outcome)) continue;
+      late.push({ file: page.file, persona: page.persona, date: page.date, what: finding.what, age });
+    }
+  }
+  // Oldest first: the one that has been ignored longest is the one to read.
+  return late.sort((a, b) => b.age - a.age);
+}
+
+const pages = reviewPages();
 
 const missedTotal = pages.filter((p) => p.goals.some((g) => g.verdict === "MISSED")).length;
 const openTotal = pages.reduce(
-  (n, p) => n + p.findings.filter((f) => f.outcome === "unanswered").length,
+  (n, p) => n + p.findings.filter((f) => !isAnswered(f.outcome)).length,
   0,
 );
 const broken = pages.filter((p) => p.goals.some((g) => g.verdict.startsWith("instrument"))).length;
@@ -123,6 +210,11 @@ const lines = [
   "`rejected` on yet, and a finding that keeps reappearing needs a guard rather than",
   "a third mention.",
   "",
+  `**A finding older than ${ANSWER_DAYS} days with no answer fails \`npm test\`**`,
+  "(`test/review-queue.test.ts`, #197). The column used to be ignorable, so it was",
+  "decorative: 26 findings sat here across six nights while the number one of them",
+  "described grew by a hundred kilobytes.",
+  "",
   "| Date | Persona | Goals | Missed | Unanswered |",
   "| --- | --- | --- | --- | --- |",
 ];
@@ -130,7 +222,7 @@ const lines = [
 for (const p of pages) {
   const missed = p.goals.filter((g) => g.verdict === "MISSED");
   const brokenHere = p.goals.filter((g) => g.verdict.startsWith("instrument"));
-  const open = p.findings.filter((f) => f.outcome === "unanswered");
+  const open = p.findings.filter((f) => !isAnswered(f.outcome));
   const held = p.goals.filter((g) => g.verdict === "held").length;
   // A finding a bound generated says the same thing the Missed column already
   // says. Listing both makes the index a wall that reads as repetition, which
@@ -163,6 +255,15 @@ for (const p of pages) {
 lines.push("", END);
 const block = lines.join("\n");
 
+// Everything above is pure: reading pages and building a string. Everything
+// below writes files and calls `process.exit`, so it runs only when this is
+// the program — `test/review-queue.test.ts` imports the module for its parser
+// and must not rewrite the index or take the process down with it.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}
+
+function main() {
 const current = existsSync(out) ? readFileSync(out, "utf8") : "";
 if (!current.includes(BEGIN) || !current.includes(END)) {
   console.error(
@@ -187,3 +288,4 @@ writeFileSync(out, page);
 console.log(
   `docs/reviews/README.md — ${pages.length} runs, ${openTotal} findings unanswered, ${missedTotal} runs with a missed bound`,
 );
+}

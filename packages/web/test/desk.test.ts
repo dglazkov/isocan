@@ -25,7 +25,10 @@ describe("a desk's chip reads the sprint it belongs to", () => {
   it("pulls the sprint's snapshot on a timer, and keeps the last one on a failed pull", () => {
     const hook = lib.slice(lib.indexOf("export function useRemoteSprint"), lib.indexOf("export async function handInFromDesk"));
     expect(hook).toContain("getSnapshot(canvasId)");
-    expect(hook).toContain("setInterval(pull, DESK_PULL_MS)");
+    // Through `everyWhileVisible`, so a background tab stops asking the
+    // desk for a snapshot it cannot show — and re-reads on return rather
+    // than leaving a returning reader up to 15s behind.
+    expect(hook).toContain("everyWhileVisible(pull, DESK_PULL_MS)");
     expect(hook).toContain(".catch(() => {");
   });
 

@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-09-06
 issue: 197
 see: standing-agents, on-demand, personas, evals
@@ -8,7 +8,8 @@ note: two halves of one question — whether an agent will actually answer (evid
 
 # Agents you can trust: liveness you can see, and tiers that hand off
 
-**6 September 2026.** Research. Nothing built.
+**6 September 2026.** Research. **Phase 3 is built** (`test/review-queue.test.ts`);
+the rest is designed and owed.
 
 Two questions, asked together because they turn out to be the same question
 asked at two scales:
@@ -192,17 +193,34 @@ honestly as the number grows.
 **Proof:** a web test that the two states render differently, and that a
 stale poll shows its age rather than a stale claim.
 
-### Phase 3 — The queue can fail
+### Phase 3 — The queue can fail ✅ built 6 Sep
 
-**Work:** D6. A test over `docs/reviews/` asserting no finding older than N
-days is `unanswered`, with the same shape as the bundle ratchet: the number,
-the bound, and what to do written into the failure message.
+**Work:** D6, in `test/review-queue.test.ts`. **N is 3 days**, chosen against
+the failure it exists to prevent: the pile sat for six nights, so a bound the
+failure would have passed is not a bound. It lives beside the parser in
+`scripts/reviews.mjs` as `ANSWER_DAYS`, and the report template and the index
+both interpolate it — the number a page promises is the number the guard
+enforces.
 
-**Outcome:** the escalation stops depending on somebody remembering. This is
-the phase that would have prevented 6 September.
+**A bound, not a ratchet** — the one place this differs from the bundle. That
+was only possible because the queue had been drained to zero hours earlier; the
+next time findings pile up, the same test could only be added at whatever the
+pile happened to be. *A guard is cheapest to install at the moment the thing it
+guards is already true*, which is worth carrying into phases 1 and 2.
 
-**Proof:** mutation — mark a finding unanswered and back-date it; the suite
-reddens and says which.
+**Outcome:** the escalation stops depending on somebody remembering.
+
+**Proof:** mutation — a real finding was back-dated and marked unanswered, and
+the suite reddened naming the file, the age and the words of the finding.
+
+**And the mutation found a hole while proving it.** The first run of that
+mutation *passed*. `unanswered` was matched exactly, so
+`unanswered — the metric was retired` was a plainly-open row that neither the
+index nor the guard could see: **an exact match on the OPEN state fails open.**
+It now tests for the CLOSED state — answered means the cell begins `accepted`
+or `rejected`, and everything else, a typo included, stays in the queue. This
+is the generalisable half: *a guard against neglect must fail closed, because
+the failure it guards against is nobody looking.*
 
 ### Phase 4 — Repetition is visible
 
@@ -230,9 +248,10 @@ one.
   thread is durable and visible to everybody; it is also noise on a canvas
   where agents are asked constantly. Phase 1 should try the thread and be
   willing to move it.
-- **What N is**, for both "older than N days" and the receipt's timeout. Both
-  want a real canvas to choose them, and both should be one number in core
-  rather than two guesses in two surfaces.
+- **What the receipt's timeout is.** The other half of this — "older than N
+  days" — was settled at 3 by phase 3, and `ANSWER_DAYS` is the shape the
+  receipt's bound should copy: one exported number that the thing announcing it
+  and the thing enforcing it both read.
 - **Whether the cheap tier should ever write code.** D9 refuses it for now on
   cost grounds, not principle. The thing that would change the answer is a
   cheap tier whose changes arrive with guards that fail without them — at

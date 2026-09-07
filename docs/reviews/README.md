@@ -75,6 +75,11 @@ backlog to be cleared for tidiness — it is the row nobody has said `accepted` 
 `rejected` on yet, and a finding that keeps reappearing needs a guard rather than
 a third mention.
 
+**A finding older than 3 days with no answer fails `npm test`**
+(`test/review-queue.test.ts`, #197). The column used to be ignorable, so it was
+decorative: 26 findings sat here across six nights while the number one of them
+described grew by a hundred kilobytes.
+
 | Date | Persona | Goals | Missed | Unanswered |
 | --- | --- | --- | --- | --- |
 | [2026-09-06](2026-09-06-accessibility.md) | accessibility | 2/2 held | — | — |

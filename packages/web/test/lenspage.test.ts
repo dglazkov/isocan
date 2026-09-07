@@ -196,10 +196,15 @@ describe("the lens says who is live", () => {
     expect(bare).not.toMatch(/new WebSocket|subscribe\(/);
   });
 
-  it("stops polling when the page goes away", () => {
+  it("stops polling when the page goes away, and while nobody is looking", () => {
     /* An interval that outlives its page is a leak that only shows up after
-       somebody has navigated around for an hour. */
-    expect(bare).toMatch(/clearInterval\(timer\)/);
+       somebody has navigated around for an hour. The teardown is now the stop
+       `everyWhileVisible` hands back, which also covers the second case: a
+       background tab kept asking who was present for as long as it stayed
+       open, and coming back re-reads rather than showing a stale dot. */
+    expect(bare).toContain("everyWhileVisible");
+    expect(bare).toMatch(/stop\(\);/);
+    expect(bare, "a bare interval is the thing this replaced").not.toContain("setInterval(");
   });
 
   it("names the canvas on a subject's page, rather than only counting", () => {

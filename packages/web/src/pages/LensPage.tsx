@@ -38,6 +38,7 @@ import { actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts"
 import { ItemThumb } from "../components/ItemThumb.tsx";
 import { HomeGlyph } from "../components/Glyphs.tsx";
 import { useActorMarks } from "../lib/marks.ts";
+import { everyWhileVisible } from "../lib/whilevisible.ts";
 
 /**
  * **What somebody has made, across every canvas — and it is not a canvas.**
@@ -227,11 +228,12 @@ export function LensPage() {
              of the page is about what happened, and none of it needs a dot. */
         });
     };
-    read();
-    const timer = setInterval(read, PRESENCE_EVERY_MS);
+    // Reads once now, stops while the tab is hidden, and reads again the
+    // moment it comes back — a returning reader sees who is here, not who was.
+    const stop = everyWhileVisible(read, PRESENCE_EVERY_MS);
     return () => {
       live = false;
-      clearInterval(timer);
+      stop();
     };
   }, []);
 

@@ -20,6 +20,7 @@ import { flashNotice, sendEchoed, useCanvasStore } from "../stores/canvasStore.t
 import { useUiStore } from "../stores/uiStore.ts";
 import { screenToWorld } from "./viewport.ts";
 import { glideToBox } from "./zoomactions.ts";
+import { everyWhileVisible } from "./whilevisible.ts";
 
 /**
  * **The sprint, as the app reads it** — one derivation (core's
@@ -35,23 +36,27 @@ import { glideToBox } from "./zoomactions.ts";
  */
 
 let subscribers = 0;
-let timer: ReturnType<typeof setInterval> | null = null;
+let stopClock: (() => void) | null = null;
 let nowSecond = Math.floor(Date.now() / 1000);
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   if (subscribers++ === 0) {
-    timer = setInterval(() => {
+    // A countdown nobody can see does not need to tick, and the tick is a
+    // re-render of every subscriber. Coming back re-reads the clock first, so
+    // the number is right the instant you look at it rather than up to a
+    // second — or, in a throttled background tab, up to a minute — behind.
+    stopClock = everyWhileVisible(() => {
       nowSecond = Math.floor(Date.now() / 1000);
       for (const l of listeners) l();
     }, 1000);
   }
   return () => {
     listeners.delete(listener);
-    if (--subscribers === 0 && timer) {
-      clearInterval(timer);
-      timer = null;
+    if (--subscribers === 0 && stopClock) {
+      stopClock();
+      stopClock = null;
     }
   };
 }
@@ -198,11 +203,10 @@ export function useRemoteSprint(canvasId: string | null): {
           // A pull that failed leaves the last one standing: a stale clock is
           // better than a chip that blinks out on every blip.
         });
-    void pull();
-    const timer = setInterval(pull, DESK_PULL_MS);
+    const stop = everyWhileVisible(pull, DESK_PULL_MS);
     return () => {
       live = false;
-      clearInterval(timer);
+      stop();
     };
   }, [canvasId]);
   const canvas = remote && remote.id === canvasId ? remote.canvas : null;
