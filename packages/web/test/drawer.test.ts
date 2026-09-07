@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { keyFor } from "@isocan/core";
+import { keyFor, THEMES, themeLabel } from "@isocan/core";
 import { chromeMenu } from "../src/lib/menuentries.tsx";
 import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
 
@@ -43,7 +43,7 @@ const menu = (over = {}) =>
     anchor: "world" as const,
     toggleAnchor: () => {},
     openSwitcher: () => {},
-    cycleTheme: () => {},
+    setTheme: () => {},
     toWorkbench: () => {},
     ...over,
   });
@@ -78,6 +78,43 @@ describe("the drawer holds everything it took", () => {
       "Switch canvas",
     );
     expect(keyFor("Switch canvas"), "and that name must resolve to a real key").toBe("⌘O");
+  });
+
+  it("offers the backgrounds as a set, not as a thing that cycles", () => {
+    /**
+     * This was one row that CYCLED: click for the next ground, wrapping
+     * through none. The argument was that the set is small and the answer is
+     * visible the moment it changes.
+     *
+     * Dion asked for a submenu (7 Sep) and using it makes the flaw plain —
+     * **cycling never shows you the set.** Three grounds cost three clicks to
+     * see, and getting back to the one you liked meant going round again.
+     */
+    const row = menu().find((e): e is MenuAction => "label" in e && e.label === "Background");
+    expect(row, "Background is a row").toBeTruthy();
+    const kids = row!.submenu ?? [];
+    const labels = kids.filter((e): e is MenuAction => "label" in e).map((e) => e.label);
+    for (const theme of THEMES) expect(labels, `${theme} is offered by name`).toContain(themeLabel(theme));
+    expect(labels).toContain("Clear");
+    expect(kids.some((e) => "separator" in e), "a rule before Sticky").toBe(true);
+    const sticky = kids.find((e): e is MenuAction => "label" in e && e.label === "Sticky");
+    expect(sticky?.checked, "Sticky is checkable, not a sentence").toBeTypeOf("boolean");
+  });
+
+  it("shows which ground is on without opening anything", () => {
+    // The point of the parent row: "what is it now" should not cost a hover.
+    expect(menu({ theme: "galaxy" }).find((e): e is MenuAction => "label" in e && e.label === "Background")?.value)
+      .toBe("Space Galaxy");
+    expect(menu({ theme: null }).find((e): e is MenuAction => "label" in e && e.label === "Background")?.value)
+      .toBe("None");
+  });
+
+  it("keeps Sticky unavailable until there is a ground for it to describe", () => {
+    const sticky = (m: MenuEntry[]) =>
+      (m.find((e): e is MenuAction => "label" in e && e.label === "Background")?.submenu ?? [])
+        .find((e): e is MenuAction => "label" in e && e.label === "Sticky");
+    expect(sticky(menu({ theme: null }))?.disabled).toBe(true);
+    expect(sticky(menu({ theme: "ocean" }))?.disabled).toBe(false);
   });
 
   it("no longer keeps those in the bar", () => {

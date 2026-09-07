@@ -60,6 +60,21 @@ export declare const THEMES: readonly ["galaxy", "ocean", "mountains"];
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
 export type CanvasTheme = (typeof THEMES)[number];
+/**
+ * **What a ground is called where a person picks it.**
+ *
+ * The ids are the interface — `isocan canvas background galaxy` takes one, and
+ * an id is what the canvas stores — but an id is not a name, and a menu that
+ * says "galaxy" is a menu showing you its variable. So the labels live here
+ * beside the ids rather than in the component that happens to need them first,
+ * for the reason every other label fold in this package exists: the day a
+ * second surface offers this, "galaxy" must not become two different words.
+ *
+ * `Space Galaxy` is Dion's, 7 Sep. The other two are plain on purpose — a
+ * ground is a backdrop, and a menu of poetic names is a menu you have to
+ * decode before you can choose.
+ */
+export declare function themeLabel(theme: CanvasTheme): string;
 /** Is this one of the grounds this build can draw — the parse both surfaces
  *  use, so the CLI refuses exactly what the app would not render. */
 export declare function isTheme(value: string): value is CanvasTheme;
@@ -108,7 +123,3 @@ export declare function themePatch(theme: CanvasTheme): MetaPatch;
 /** Take it off — a removal, so a canvas with no theme is byte-for-byte a
  *  canvas that never had one. */
 export declare function noThemePatch(): MetaPatch;
-/** The next one along, for the control that flips through them. Wraps, and
- *  passing `null` starts at the first — so one button can go
- *  none → galaxy → farm → mountains → ocean → none. */
-export declare function nextTheme(current: CanvasTheme | null): CanvasTheme | null;

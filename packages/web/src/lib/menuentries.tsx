@@ -1,5 +1,5 @@
 import type { Actor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
-import { contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
+import { contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -483,9 +483,14 @@ export function chromeMenu(ctx: {
   cursorGlow: boolean;
   /** What ground this canvas is wearing, or null for the dot grid. */
   theme: CanvasTheme | null;
-  /** Next ground along, wrapping through none. The caller owns the write,
-   *  because this module builds entries and sends no ops. */
-  cycleTheme: () => void | Promise<void>;
+  /**
+   * Put a named ground on, or `null` to clear it. The caller owns the write,
+   * because this module builds entries and sends no ops.
+   *
+   * Replaced `cycleTheme` on 7 Sep: a submenu names each ground, so "the next
+   * one along" stopped being a thing anybody asks for.
+   */
+  setTheme: (theme: CanvasTheme | null) => void | Promise<void>;
   /** Open the switcher — the same face ⌘O opens. */
   openSwitcher: () => void;
   /** Whether the ground travels with the canvas or stays behind the glass. */
@@ -589,36 +594,63 @@ export function chromeMenu(ctx: {
     },
     {
       /**
-       * **The canvas's ground** (#195): flip through the seeded themes and
-       * back to none. One row rather than a picker, because the set is small
-       * and the answer is visible the moment it changes — a menu that opens a
-       * dialog to choose between four things somebody can just SEE is a
-       * dialog for the developer's benefit.
+       * **The canvas's ground, as a set you can see** (#195, reshaped 7 Sep).
+       *
+       * This was one row that CYCLED — click it and you got the next ground,
+       * wrapping through none. The argument was that the set is small and the
+       * answer is visible the moment it changes, so a picker would be a dialog
+       * for the developer's benefit.
+       *
+       * Dion asked for a submenu instead, and using it makes the reason plain:
+       * cycling never shows you the SET. To see three grounds you clicked three
+       * times, and to get back to the one you liked you kept going. A submenu
+       * shows what there is, marks what is on, and the parent row carries the
+       * current name so the answer needs no opening at all.
        *
        * A canvas fact, not a browser one: everybody on it sees the same
-       * ground. That is the opposite of the glow below, and the two sit
-       * together deliberately so the difference is legible.
+       * ground. That is the opposite of the glow below, and the two still sit
+       * together so the difference stays legible.
        */
-      label: ctx.theme === null ? "Background…" : `Background: ${ctx.theme}`,
+      label: "Background",
+      value: ctx.theme === null ? "None" : themeLabel(ctx.theme),
       writes: true,
-      run: () => void ctx.cycleTheme(),
-    },
-    {
-      /**
-       * **Which of the two things a background is** (#195).
-       *
-       * Travelling: the ground belongs to the canvas, so a field stays under
-       * whatever is standing in it and a pen is somewhere you can come back
-       * to. Pinned: the ground is behind the glass and items move across it,
-       * and the dot grid returns to say where you are — because with a fixed
-       * backdrop nothing else does.
-       *
-       * Offered only when there is a ground, since it describes one.
-       */
-      label: ctx.anchor === "window" ? "Background stays put" : "Background moves with the canvas",
-      writes: true,
-      disabled: ctx.theme === null,
-      run: () => void ctx.toggleAnchor(),
+      run: () => {},
+      submenu: [
+        ...THEMES.map((theme) => ({
+          label: themeLabel(theme),
+          checked: ctx.theme === theme,
+          writes: true,
+          run: () => void ctx.setTheme(theme),
+        })),
+        {
+          label: "Clear",
+          checked: ctx.theme === null,
+          writes: true,
+          run: () => void ctx.setTheme(null),
+        },
+        { separator: "" },
+        {
+          /**
+           * **Sticky: the ground stays behind the glass** (#195's two modes,
+           * named the way Dion names them).
+           *
+           * Unticked, the ground belongs to the canvas — a field stays under
+           * whatever is standing in it, and a pen is somewhere you can come
+           * back to. Ticked, the ground never moves and the items travel
+           * across it; the dot grid returns to say where you are, because with
+           * a fixed backdrop nothing else does.
+           *
+           * A tick rather than the sentence it replaced: inside a set, a row
+           * whose label changes under the pointer is harder to read than one
+           * whose MARK does.
+           */
+          label: "Sticky",
+          checked: ctx.anchor === "window",
+          writes: true,
+          disabled: ctx.theme === null,
+          run: () => void ctx.toggleAnchor(),
+        },
+      ],
     },
     {
       /**

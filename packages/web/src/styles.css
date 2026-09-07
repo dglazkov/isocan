@@ -4984,6 +4984,31 @@ button.mt-card:hover { border-color: var(--accent); }
    next is a menu you cannot learn. */
 .context-item:disabled { opacity: 0.4; cursor: default; }
 .context-item.danger { color: var(--danger); }
+
+/* **A row whose children open beside it** (7 Sep). The first nested menu here.
+
+   `position: relative` on the wrapper and absolute on the panel, so the
+   children hang off the row rather than off the menu — a submenu anchored to
+   the menu would sit at the wrong height for every row but the first. */
+.context-sub { position: relative; display: flex; }
+.context-sub > .context-item { width: 100%; }
+.context-submenu {
+  position: absolute; left: calc(100% + 4px); top: -5px;
+  /* Nothing else in a menu overlaps a menu, so this is the one place a
+     stacking order inside `--z-popover` has to be stated. */
+  z-index: 1;
+}
+/* The chevron claims the far edge the way an accelerator does, and the current
+   value sits just inside it — so "what is it now" is answerable without
+   opening the thing. */
+.menu-more { margin-left: auto; color: var(--ink-soft); font-size: 13px; line-height: 1; }
+.menu-value { margin-left: auto; color: var(--ink-soft); font-size: 11.5px; }
+.menu-value + .menu-more { margin-left: 6px; }
+/* The tick says what is TRUE, where the rest of the row says what would
+   happen. A fixed width so the ticked and unticked rows keep one left edge —
+   a column that appears and disappears makes a list jump as you read it. */
+.menu-check { margin-left: auto; width: 12px; text-align: right; color: var(--accent-text); font-size: 12px; }
+.context-item.checked { color: var(--ink); }
 .context-item kbd {
   font: inherit; font-size: 11px; color: var(--ink-soft);
   /* The accelerator is a label, not a key you press here. */

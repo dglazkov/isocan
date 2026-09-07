@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { anchorOf, anchorPatch, noThemePatch, nextTheme, themeOf, themePatch, workbenchPath, type Actor } from "@isocan/core";
+import { anchorOf, anchorPatch, noThemePatch, themeOf, themePatch, workbenchPath, type Actor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
@@ -123,11 +123,10 @@ export function Toolbar({
                    * takes it off.
                    */
                   openSwitcher: () => useUiStore.getState().setPaletteOpen("canvases"),
-                  cycleTheme: async () => {
-                    const next = nextTheme(themeOf(canvas));
+                  setTheme: async (theme) => {
                     await sendEchoed(canvas.id, actor, {
                       type: "project.update",
-                      patch: next === null ? noThemePatch() : themePatch(next),
+                      patch: theme === null ? noThemePatch() : themePatch(theme),
                     });
                   },
                   canEdit,

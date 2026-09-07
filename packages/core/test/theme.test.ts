@@ -5,8 +5,8 @@ import {
   anchorOf,
   anchorPatch,
   THEME_PROP,
+  themeLabel,
   isTheme,
-  nextTheme,
   noThemePatch,
   themeOf,
   themePatch,
@@ -44,18 +44,18 @@ describe("what ground a canvas stands on", () => {
     expect(noThemePatch().properties).toBeUndefined();
   });
 
-  it("flips through every ground and back to none, so one control does both", () => {
-    const seen: (string | null)[] = [];
-    let at: ReturnType<typeof nextTheme> = null;
-    for (let i = 0; i <= THEMES.length; i++) {
-      at = nextTheme(at);
-      seen.push(at);
-    }
-    expect(seen).toEqual([...THEMES, null]);
-  });
 
-  it("starts at the first ground from none", () => {
-    expect(nextTheme(null)).toBe(THEMES[0]);
+  it("names every ground for a person, not just for a program", () => {
+    /* The ids are the interface — `isocan canvas background galaxy` takes one
+       — but a menu that says "galaxy" is a menu showing you its variable. The
+       labels live beside the ids so a second surface cannot invent a second
+       word for the same ground. */
+    for (const theme of THEMES) {
+      const label = themeLabel(theme);
+      expect(label, `${theme} needs a name`).toBeTruthy();
+      expect(label[0], `${theme}'s name is written for a reader`).toBe(label[0]!.toUpperCase());
+    }
+    expect(themeLabel("galaxy")).toBe("Space Galaxy");
   });
 
   it("keeps galaxy first, because it is the one that needs no artist", () => {

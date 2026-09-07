@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { keyFor } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 
@@ -37,6 +37,28 @@ export interface MenuAction {
    *  it is not offered at all — not dimmed, because a reader is not "not
    *  right now", they are never — see `offered` in menuentries. */
   writes?: boolean;
+  /**
+   * **A checkable row: on or off, rather than a thing that happens.**
+   *
+   * Distinct from a label that reads its own state ("Turn off cursor glow"),
+   * and better where the row belongs to a SET — inside the background
+   * submenu, "Sticky" with a tick says what is true now and what clicking
+   * would change, without the label moving under the pointer.
+   *
+   * `undefined` means this row is not checkable at all, which is not the same
+   * as `false`.
+   */
+  checked?: boolean;
+  /**
+   * **Rows that live under this one.** A row with a submenu does nothing
+   * itself: `run` is not called, the children are the whole point, and the
+   * parent shows the current choice beside its own name so the answer is
+   * legible without opening it.
+   */
+  submenu?: MenuEntry[];
+  /** What the parent row shows to the right of its label — the chosen one,
+   *  where a submenu names a set with a current member. */
+  value?: string;
 }
 
 export type MenuEntry = MenuAction | { separator: string };
@@ -111,11 +133,14 @@ export function ContextMenu({
           <div className="context-sep" key={`sep-${i}`}>
             {entry.separator}
           </div>
+        ) : entry.submenu ? (
+          <Submenu key={entry.label} entry={entry} marks={marks} onClose={onClose} />
         ) : (
           <button
             key={entry.label}
-            role="menuitem"
-            className={`context-item${entry.danger ? " danger" : ""}`}
+            role={entry.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+            aria-checked={entry.checked === undefined ? undefined : entry.checked}
+            className={`context-item${entry.danger ? " danger" : ""}${entry.checked === true ? " checked" : ""}`}
             disabled={entry.disabled === true}
             onClick={() => {
               onClose();
@@ -124,9 +149,101 @@ export function ContextMenu({
           >
             {marks && <span className="menu-icon">{entry.icon}</span>}
             <span>{entry.label}</span>
+            {/* The tick is the only thing on the row that says what is TRUE
+                rather than what would happen, so it sits where the eye scans
+                for state — after the words, before the accelerator. */}
+            {entry.checked !== undefined && (
+              <span className="menu-check" aria-hidden>
+                {entry.checked ? "✓" : ""}
+              </span>
+            )}
             {entry.shortcutFor && <kbd>{keyFor(entry.shortcutFor) ?? ""}</kbd>}
           </button>
         ),
+      )}
+    </div>
+  );
+}
+
+/**
+ * **A row whose children open beside it.**
+ *
+ * The first nested menu in this app, and it is deliberately small. It opens on
+ * hover AND on click, because those are two different people: a pointer that
+ * drifts across the row expects it, and a person who has just tabbed to it
+ * needs a key that works. It closes when the pointer leaves the pair, not the
+ * row, or the children would vanish on the way to them.
+ *
+ * The parent shows the current member beside its own name (`value`), so the
+ * answer to "what is it now" needs no opening — which is the whole reason this
+ * shape beats the cycling row it replaces: a row that cycles makes you click
+ * three times to see three options, and never shows you the set.
+ */
+function Submenu({
+  entry,
+  marks,
+  onClose,
+}: {
+  entry: MenuAction;
+  marks: boolean;
+  onClose: () => void;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  const children = entry.submenu ?? [];
+  return (
+    <div
+      className="context-sub"
+      onPointerEnter={() => setOpen(true)}
+      onPointerLeave={() => setOpen(false)}
+    >
+      <button
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`context-item${open ? " open" : ""}`}
+        disabled={entry.disabled === true}
+        onClick={() => setOpen((was) => !was)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") setOpen(true);
+          if (e.key === "ArrowLeft") setOpen(false);
+        }}
+      >
+        {marks && <span className="menu-icon">{entry.icon}</span>}
+        <span>{entry.label}</span>
+        {entry.value !== undefined && <span className="menu-value">{entry.value}</span>}
+        <span className="menu-more" aria-hidden>
+          ›
+        </span>
+      </button>
+      {open && (
+        <div className="context-menu context-submenu" role="menu">
+          {children.map((child, i) =>
+            "separator" in child ? (
+              <div className="context-sep" key={`sep-${i}`}>
+                {child.separator}
+              </div>
+            ) : (
+              <button
+                key={child.label}
+                role={child.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+                aria-checked={child.checked === undefined ? undefined : child.checked}
+                className={`context-item${child.checked === true ? " checked" : ""}`}
+                disabled={child.disabled === true}
+                onClick={() => {
+                  onClose();
+                  child.run();
+                }}
+              >
+                <span>{child.label}</span>
+                {child.checked !== undefined && (
+                  <span className="menu-check" aria-hidden>
+                    {child.checked ? "✓" : ""}
+                  </span>
+                )}
+              </button>
+            ),
+          )}
+        </div>
       )}
     </div>
   );

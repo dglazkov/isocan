@@ -153,8 +153,15 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * built; the catch is that a soft tier needs somewhere it can still fail, and
  * the queue that would hold it only sees findings once the nightly persona PR
  * is merged. See #198's neighbours.
+ *
+ * **693,800 (7 Sep, +956).** The background submenu — the first nested menu in
+ * this app, plus `themeLabel`. Four raises in one day, none of them careless,
+ * which is the argument for the tiering rather than against it: a bound that
+ * has to be edited four times to ship four deliberate things is teaching
+ * people to edit it without reading it, and that is how the hundred kilobytes
+ * arrived the first time.
  */
-const CEILING = 692_500;
+const CEILING = 693_800;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is
