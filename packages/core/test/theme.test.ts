@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  GROUND_MAX_BYTES,
+  GROUND_PROP,
+  GROUND_SCRIM,
+  groundIsPlace,
+  groundOf,
+  groundPatch,
+  hasGround,
+  noGroundPatch,
   THEMES,
   THEME_ANCHOR_PROP,
   anchorOf,
@@ -41,7 +49,9 @@ describe("what ground a canvas stands on", () => {
     expect(themePatch("galaxy").properties?.[THEME_PROP]).toBe("galaxy");
     // A removal rather than a "none" value: a canvas with no theme must be
     // byte-for-byte a canvas that never had one.
-    expect(noThemePatch().removeProperties).toEqual([THEME_PROP]);
+    // Every key a ground can leave: "none" is one answer to "what is this
+    // canvas standing on", not one answer per kind of ground (#204 phase 2).
+    expect(noThemePatch().removeProperties).toEqual([THEME_PROP, GROUND_PROP, THEME_ANCHOR_PROP]);
     expect(noThemePatch().properties).toBeUndefined();
   });
 
@@ -136,5 +146,106 @@ describe("the cursor a ground gives everybody", () => {
     for (const theme of [...THEMES, null]) {
       expect(themeCursor(theme)).not.toMatch(/#|rgb|fill|hsl/);
     }
+  });
+});
+
+/**
+ * **A ground of your own** (#204 phase 2).
+ *
+ * > "For the background feature… there should be a 'custom' setting where the
+ * > user can set a tile and cursor and then it takes on its own?"
+ *
+ * The three seeded grounds are generated: they cost nothing, tile forever by
+ * construction, and are dark on purpose so white cards read on them. A picture
+ * somebody supplies is none of those, and the rules below are what make it
+ * safe anyway.
+ */
+describe("a picture somebody supplied", () => {
+  const wearing = (properties: Record<string, string>) => ({ properties });
+  const hash = "a".repeat(64);
+
+  it("is read by its shape, so nothing has to register the key", () => {
+    /* `blobsInProperties` retains a blob named by ANY property whose value is
+       a 64-character hex string, so this key needs no registration anywhere —
+       and the parse insists on the same shape for the same reason. A property
+       hand-edited to a filename should show the ground it always showed, not
+       a broken picture. */
+    expect(groundOf(wearing({ [GROUND_PROP]: hash }))).toBe(hash);
+    expect(groundOf(wearing({ [GROUND_PROP]: "sunset.jpg" }))).toBeNull();
+    expect(groundOf(wearing({ [GROUND_PROP]: hash.toUpperCase() }))).toBeNull();
+    expect(groundOf(wearing({}))).toBeNull();
+  });
+
+  it("is a canvas's ONE ground: each patch drops the other", () => {
+    // A canvas that is a galaxy AND a photograph is not a feature, it is a
+    // bug somebody has to explain — the same argument `THEME_PROP` makes
+    // about being one property rather than two.
+    expect(groundPatch(hash).removeProperties).toContain(THEME_PROP);
+    expect(themePatch("galaxy").removeProperties).toContain(GROUND_PROP);
+    expect(noThemePatch().removeProperties).toEqual(
+      expect.arrayContaining([THEME_PROP, GROUND_PROP, THEME_ANCHOR_PROP]),
+    );
+  });
+
+  it("writes no anchor — the pinning is in how it is drawn", () => {
+    /**
+     * The bug this replaced, caught by running the two commands in a row and
+     * reading the properties back: `groundPatch` wrote `themeAnchor: window`
+     * beside the hash, so setting a picture and then choosing Space Galaxy
+     * left the GALAXY pinned — by a choice nobody made, that nothing said, and
+     * that could only be undone by unticking something you never ticked.
+     *
+     * An implicit choice written down as an explicit one outlives the thing
+     * that implied it.
+     */
+    expect(groundPatch(hash).properties).toEqual({ [GROUND_PROP]: hash });
+    expect(Object.keys(groundPatch(hash).properties ?? {})).not.toContain(THEME_ANCHOR_PROP);
+    // And a deliberate pin survives a change of seeded ground, which is the
+    // other half: only the IMPLICIT one is refused a home.
+    expect(themePatch("ocean").removeProperties).not.toContain(THEME_ANCHOR_PROP);
+  });
+
+  it("is never a place, whatever an anchor says", () => {
+    /* A picture is drawn once and `cover`, so it does not pan — calling it a
+       place would be a lie the dot grid pays for. A seeded ground answers with
+       its anchor, as it always has. */
+    expect(groundIsPlace(wearing({ [GROUND_PROP]: hash }))).toBe(false);
+    expect(groundIsPlace(wearing({ [GROUND_PROP]: hash, [THEME_ANCHOR_PROP]: "world" }))).toBe(false);
+    expect(groundIsPlace(wearing({ [THEME_PROP]: "galaxy" }))).toBe(true);
+    expect(groundIsPlace(wearing({ [THEME_PROP]: "galaxy", [THEME_ANCHOR_PROP]: "window" }))).toBe(false);
+    expect(groundIsPlace(wearing({}))).toBe(false);
+  });
+
+  it("answers `hasGround` for either kind", () => {
+    /* The one question the viewport asks before downloading a chunk to draw a
+       ground. Asked as a disjunction at the call site, it grows a third arm in
+       whichever file somebody remembers — and it nearly shipped gated on
+       `themeOf` alone, which would have drawn nothing at all for a picture. */
+    expect(hasGround(wearing({ [GROUND_PROP]: hash }))).toBe(true);
+    expect(hasGround(wearing({ [THEME_PROP]: "ocean" }))).toBe(true);
+    expect(hasGround(wearing({}))).toBe(false);
+  });
+
+  it("comes off leaving nothing behind", () => {
+    expect(noGroundPatch()).toEqual({ removeProperties: [GROUND_PROP] });
+  });
+
+  it("keeps a scrim past the contrast floor, and a stated weight", () => {
+    /**
+     * The floor is 3:1 for a white card against the worst case, a pure white
+     * image: `1.05 / (L + 0.05) >= 3` with `L` the sRGB-transfer luminance of
+     * `1 - a`, which solves to `a >= 0.42`. This asserts the derivation rather
+     * than the constant, so somebody lowering the scrim has to break the
+     * reason and not just the number.
+     */
+    const luminance = (v: number) => ((v + 0.055) / 1.055) ** 2.4;
+    const worstCard = 1.05 / (luminance(1 - GROUND_SCRIM) + 0.05);
+    expect(worstCard).toBeGreaterThanOrEqual(3);
+    // And past the floor on purpose: a floor is not a design, and at 0.42 a
+    // busy photograph still competes with the work standing on it.
+    expect(worstCard).toBeGreaterThan(6);
+    // A number, because the cost is real: everybody on the canvas downloads
+    // this on every cold load, forever.
+    expect(GROUND_MAX_BYTES).toBeGreaterThan(0);
   });
 });

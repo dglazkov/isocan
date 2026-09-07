@@ -526,6 +526,11 @@ export function chromeMenu(ctx: {
    * one along" stopped being a thing anybody asks for.
    */
   setTheme: (theme: CanvasTheme | null) => void | Promise<void>;
+  /** Whether this canvas stands on a picture somebody supplied (#204 phase 2). */
+  ownGround: boolean;
+  /** Ask for a file and stand the canvas on it. The caller owns the picker
+   *  and the upload for `setTheme`'s reason: this module builds entries. */
+  pickGround: () => void | Promise<void>;
   /** Open the switcher — the same face ⌘O opens. */
   openSwitcher: () => void;
   /** Whether the ground travels with the canvas or stays behind the glass. */
@@ -647,19 +652,37 @@ export function chromeMenu(ctx: {
        * together so the difference stays legible.
        */
       label: "Background",
-      value: ctx.theme === null ? "None" : themeLabel(ctx.theme),
+      value: ctx.ownGround ? "Yours" : ctx.theme === null ? "None" : themeLabel(ctx.theme),
       writes: true,
       run: () => {},
       submenu: [
         ...THEMES.map((theme) => ({
           label: themeLabel(theme),
-          checked: ctx.theme === theme,
+          checked: !ctx.ownGround && ctx.theme === theme,
           writes: true,
           run: () => void ctx.setTheme(theme),
         })),
         {
+          /**
+           * **A ground of your own** (#204 phase 2). The ellipsis is the
+           * promise: this one opens a file picker rather than changing the
+           * canvas the moment it is clicked, which is the one row here that
+           * does not.
+           *
+           * It sits with the seeded grounds and not under a separate heading
+           * because it is the same choice — what is this canvas standing on —
+           * and its tick reads the same way theirs do. What it does NOT get is
+           * a size warning beside it: the refusal names the number if the file
+           * is too big, and a menu row is not where somebody reads a budget.
+           */
+          label: "A picture of yours…",
+          checked: ctx.ownGround,
+          writes: true,
+          run: () => void ctx.pickGround(),
+        },
+        {
           label: "Clear",
-          checked: ctx.theme === null,
+          checked: !ctx.ownGround && ctx.theme === null,
           writes: true,
           run: () => void ctx.setTheme(null),
         },
@@ -682,7 +705,16 @@ export function chromeMenu(ctx: {
           label: "Sticky",
           checked: ctx.anchor === "window",
           writes: true,
-          disabled: ctx.theme === null,
+          /**
+           * Off for a picture of your own, and that is the feature rather than
+           * a gap: a ground that travels with the canvas REPEATS, and a
+           * photograph that is not seamless repeats as a grid of its own edges
+           * — the one failure a person cannot debug and did not cause. So a
+           * custom ground is pinned and stays pinned. Un-pinning it is #204
+           * phase 4, for somebody who has actually made a tile, with the seam
+           * risk stated where they choose it.
+           */
+          disabled: ctx.ownGround || ctx.theme === null,
           run: () => void ctx.toggleAnchor(),
         },
       ],

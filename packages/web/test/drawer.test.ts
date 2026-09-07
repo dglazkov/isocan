@@ -25,6 +25,11 @@ const toolbar = readFileSync(
 const labels = (entries: MenuEntry[]) =>
   entries.filter((e): e is MenuAction => "label" in e).map((e) => e.label);
 
+const sticky = (m: MenuEntry[]) =>
+  (m.find((e): e is MenuAction => "label" in e && e.label === "Background")?.submenu ?? []).find(
+    (e): e is MenuAction => "label" in e && e.label === "Sticky",
+  );
+
 const menu = (over = {}) =>
   chromeMenu({
     canvasId: "prj_1",
@@ -40,6 +45,8 @@ const menu = (over = {}) =>
     minimapOpen: true,
     cursorGlow: true,
     theme: null,
+    ownGround: false,
+    pickGround: () => {},
     anchor: "world" as const,
     toggleAnchor: () => {},
     openSwitcher: () => {},
@@ -110,11 +117,56 @@ describe("the drawer holds everything it took", () => {
   });
 
   it("keeps Sticky unavailable until there is a ground for it to describe", () => {
-    const sticky = (m: MenuEntry[]) =>
-      (m.find((e): e is MenuAction => "label" in e && e.label === "Background")?.submenu ?? [])
-        .find((e): e is MenuAction => "label" in e && e.label === "Sticky");
     expect(sticky(menu({ theme: null }))?.disabled).toBe(true);
     expect(sticky(menu({ theme: "ocean" }))?.disabled).toBe(false);
+  });
+
+  /**
+   * **A ground of your own** (#204 phase 2). The picker sits with the seeded
+   * grounds because it is the same choice — what is this canvas standing on —
+   * and the parent row has to answer for it too, or "what is it now" starts
+   * lying the moment somebody uses the feature.
+   */
+  describe("a picture of yours", () => {
+    const background = (m: MenuEntry[]) =>
+      m.find((e): e is MenuAction => "label" in e && e.label === "Background");
+    const kids = (m: MenuEntry[]) =>
+      (background(m)?.submenu ?? []).filter((e): e is MenuAction => "label" in e);
+    const own = (m: MenuEntry[]) => kids(m).find((e) => e.label === "A picture of yours…");
+
+    it("is offered beside the seeded grounds, and asks before it acts", () => {
+      // The ellipsis is the promise: this row opens a file picker rather than
+      // changing the canvas the moment it is clicked, which is the one row in
+      // this submenu that does not.
+      expect(own(menu())).toBeTruthy();
+      expect(own(menu())!.label.endsWith("…"), "an ellipsis, because it asks").toBe(true);
+      let asked = 0;
+      own(menu({ pickGround: () => (asked += 1) }))!.run();
+      expect(asked, "choosing it opens the picker rather than writing an op").toBe(1);
+    });
+
+    it("says so on the parent row, and unticks the seeded grounds", () => {
+      /* The failure this prevents: a canvas standing on somebody's photograph
+         still reporting "Space Galaxy" and ticking it, because the theme
+         property is only cleared on the canvas and not in what the menu was
+         handed. */
+      expect(background(menu({ ownGround: true }))?.value).toBe("Yours");
+      expect(own(menu({ ownGround: true }))?.checked).toBe(true);
+      const galaxyRow = kids(menu({ ownGround: true, theme: "galaxy" })).find(
+        (e) => e.label === themeLabel("galaxy"),
+      );
+      expect(galaxyRow?.checked, "a picture wins over a stale theme").toBe(false);
+      expect(kids(menu({ ownGround: true })).find((e) => e.label === "Clear")?.checked).toBe(false);
+    });
+
+    it("cannot be un-pinned, because a picture that repeats shows its seams", () => {
+      /* #204 D2. A world-anchored ground tiles forever, and a photograph that
+         is not seamless tiles into a grid of its own edges — the one failure a
+         person cannot debug and did not cause. Phase 4 opens this, with the
+         risk stated where it is chosen. */
+      expect(sticky(menu({ ownGround: true }))?.disabled).toBe(true);
+      expect(sticky(menu({ ownGround: true, theme: null }))?.disabled).toBe(true);
+    });
   });
 
   it("keeps a submenu on screen, the way the parent menu keeps itself", () => {

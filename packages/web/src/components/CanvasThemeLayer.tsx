@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { anchorOf, themeOf } from "@isocan/core";
+import { anchorOf, groundOf, themeOf } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
@@ -27,11 +27,29 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 const Galaxy = lazy(() => import("./themes/Galaxy.tsx").then((m) => ({ default: m.Galaxy })));
 const Ocean = lazy(() => import("./themes/Ocean.tsx").then((m) => ({ default: m.Ocean })));
 const Mountains = lazy(() => import("./themes/Mountains.tsx").then((m) => ({ default: m.Mountains })));
+const CustomGround = lazy(() =>
+  import("./themes/CustomGround.tsx").then((m) => ({ default: m.CustomGround })),
+);
 
 export function CanvasThemeLayer() {
   const project = useCanvasStore((s) => s.project);
   const theme = project ? themeOf(project) : null;
   const anchor = project ? anchorOf(project) : "world";
+  /**
+   * **A picture wins over a name, and core makes sure there is never both**
+   * (#204 phase 2). `themePatch` drops the ground and `groundPatch` drops the
+   * theme, so this order is a tiebreak that should never be reached — it is
+   * written down anyway, because a canvas hand-edited into wearing two grounds
+   * should draw one of them rather than both, stacked, at half a frame each.
+   */
+  const ground = project ? groundOf(project) : null;
+  if (ground !== null && project) {
+    return (
+      <Suspense fallback={null}>
+        <CustomGround canvasId={project.id} hash={ground} />
+      </Suspense>
+    );
+  }
   if (theme === null) return null;
   return (
     <Suspense fallback={null}>

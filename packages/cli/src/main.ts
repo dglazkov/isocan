@@ -114,6 +114,10 @@ import {
   formatMoves,
   inScope,
   anchorOf,
+  GROUND_MAX_BYTES,
+  groundOf,
+  groundPatch,
+  hasGround,
   anchorPatch,
   isTheme,
   noThemePatch,
@@ -4795,15 +4799,51 @@ canvas
 
 canvas
   .command("background [theme]")
-  .description(`The ground this canvas stands on — ${THEMES.join(", ")}, or \`none\` to remove it`)
+  .description(`The ground this canvas stands on — ${THEMES.join(", ")}, a picture with --picture, or \`none\``)
   .option("--moves", "the ground travels with the canvas, so a place stays under what stands on it (default)")
   .option("--pinned", "the ground stays behind the glass and items move across it; the dot grid returns")
+  .option("--picture <file>", "an image of your own to stand the canvas on — pinned, and darkened so cards still read")
   .action(
-    run(async (theme: string | undefined, opts: { moves?: boolean; pinned?: boolean }, cmd: Command) => {
+    run(async (theme: string | undefined, opts: { moves?: boolean; pinned?: boolean; picture?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       if (opts.moves && opts.pinned) {
         throw new Error("--moves and --pinned are the two answers to one question: pick one");
+      }
+      /**
+       * **A ground of your own** (#204 phase 2), and the same op the app's
+       * `Background > Picture…` sends — `groundPatch`, which pins it and drops
+       * any seeded theme, so neither surface decides either of those for
+       * itself.
+       *
+       * The size is REFUSED here rather than at the door, and the refusal says
+       * the number: the generated grounds cost nothing, and a picture is
+       * downloaded by everybody on this canvas on every cold load, forever.
+       * That is a cost worth stating before taking the file.
+       */
+      if (opts.picture !== undefined) {
+        if (theme !== undefined) {
+          throw new Error(`--picture and \`${theme}\` are two answers to one question: pick one`);
+        }
+        const data = await fs.readFile(opts.picture);
+        const filename = path.basename(opts.picture);
+        const mimeType = mimeFor(filename);
+        if (!mimeType.startsWith("image/")) {
+          throw new Error(`a ground has to be an image; ${filename} is ${mimeType}`);
+        }
+        if (data.byteLength > GROUND_MAX_BYTES) {
+          throw new Error(
+            `${filename} is ${Math.round(data.byteLength / 1000)}kB — a ground may be ${GROUND_MAX_BYTES / 1_000_000}MB, ` +
+              "because everybody on this canvas downloads it on every cold load",
+          );
+        }
+        const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
+        await sendOp(ctx, p.id, { type: "project.update", patch: groundPatch(upload.blobHash) });
+        return console.log(
+          `${p.id} stands on ${filename} (${Math.round(data.byteLength / 1000)}kB) — ` +
+            "pinned so it cannot show a seam, and darkened so cards still read. " +
+            "`isocan canvas background none` takes it off",
+        );
       }
       /**
        * How the ground behaves is its own question, so it can be asked
@@ -4811,7 +4851,13 @@ canvas
        * canvas already wearing one changes only that.
        */
       if (opts.moves || opts.pinned) {
-        if (themeOf(p) === null) throw new Error(`"${p.title}" has no background to pin — set one first`);
+        if (!hasGround(p)) throw new Error(`"${p.title}" has no background to pin — set one first`);
+        // A picture is pinned because an unseamless one tiles into a grid of
+        // its own edges, which is the one failure a person cannot debug.
+        // Un-pinning it is phase 4, with that risk stated where it is chosen.
+        if (groundOf(p) !== null && opts.moves) {
+          throw new Error("a picture of your own stays pinned — a ground that repeats shows its own seams");
+        }
         await sendOp(ctx, p.id, {
           type: "project.update",
           patch: anchorPatch(opts.pinned ? "window" : "world"),
@@ -4822,12 +4868,14 @@ canvas
       // No argument is a question, not a change: `isocan canvas background`
       // says what it is wearing, which is what a person types first.
       if (theme === undefined) {
+        const picture = groundOf(p);
+        if (picture !== null) return console.log(`a picture of yours (${picture.slice(0, 12)}…), pinned`);
         const now = themeOf(p);
-        if (now === null) return console.log(`none — ${THEMES.join(", ")} are the grounds it can wear`);
+        if (now === null) return console.log(`none — ${THEMES.join(", ")} are the grounds it can wear, or --picture <file>`);
         return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"})`);
       }
       if (theme !== "none" && !isTheme(theme)) {
-        throw new Error(`not a background: ${theme} — ${THEMES.join(", ")}, or none`);
+        throw new Error(`not a background: ${theme} — ${THEMES.join(", ")}, none, or --picture <file>`);
       }
       await sendOp(ctx, p.id, {
         type: "project.update",

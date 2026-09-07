@@ -48,6 +48,12 @@
      white sky is a different picture rather than a light-mode one. Declared in
      both blocks so no colour lives only behind a media query. */
   --theme-space: #05060c;
+  /* A ground somebody supplied, and the scrim over it (#204 phase 2). Black
+     in both themes on purpose, like the three above: the seeded grounds are
+     dark whatever the app is wearing, because a picture with a light band
+     beside it is a ground with an edge. */
+  --ground-under: #000000;
+  --ground-scrim: #000000;
   --card: #ffffff;
   --line: #e2e3dd;
   --line-soft: #eff0ea;
@@ -221,6 +227,12 @@
      white sky is a different picture rather than a light-mode one. Declared in
      both blocks so no colour lives only behind a media query. */
   --theme-space: #05060c;
+  /* A ground somebody supplied, and the scrim over it (#204 phase 2). Black
+     in both themes on purpose, like the three above: the seeded grounds are
+     dark whatever the app is wearing, because a picture with a light band
+     beside it is a ground with an edge. */
+  --ground-under: #000000;
+  --ground-scrim: #000000;
   --card: #1b1e23;
   --line: #2c313a;
   --line-soft: #23272e;
@@ -856,6 +868,31 @@ img { height: auto; }
   background-image: var(--stars); background-size: var(--stars-size); background-position: var(--stars-pos);
   opacity: var(--star-fade, 1);
 }
+/**
+ * **A ground somebody supplied** (#204 phase 2). Two layers, and they are two
+ * elements rather than one shorthand because they want different sizes: the
+ * picture is `cover`, the scrim is a flat fill, and `cover, auto` in one
+ * `background` is a place for the two to fall out of step.
+ *
+ * `cover` and not `repeat`: a custom ground is PINNED (`groundPatch` in core),
+ * so it is drawn once behind the glass and can never show the seam an
+ * unseamless photograph tiles into. Black under it, so a picture with
+ * transparency or one that does not fill the aspect ratio lands on the same
+ * dark the seeded grounds have — never on the app's own panel colour, which
+ * would put a light band beside the scrimmed image.
+ *
+ * The scrim's opacity is written by the component from `GROUND_SCRIM`, so the
+ * derivation lives in core beside the number rather than here beside the
+ * paint. Declared with a fallback for the reason the starfield's four values
+ * are: `var()` with no definition drops the whole declaration silently, and a
+ * scrim that vanished would be a legibility rule nobody could see was gone.
+ */
+.canvas-theme-custom { background-color: var(--ground-under); }
+.canvas-ground-picture {
+  position: absolute; inset: 0;
+  background-repeat: no-repeat; background-position: center; background-size: cover;
+}
+.canvas-ground-scrim { position: absolute; inset: 0; background: var(--ground-scrim); opacity: 0.7; }
 
 /* ---------- toolbar ---------- */
 /* **The bar is a layout, not a surface.**

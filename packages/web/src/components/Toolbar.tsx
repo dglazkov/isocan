@@ -1,9 +1,20 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { anchorOf, anchorPatch, noThemePatch, themeOf, themePatch, workbenchPath, type Actor } from "@isocan/core";
-import { sendOp } from "../lib/api.ts";
+import {
+  GROUND_MAX_BYTES,
+  anchorOf,
+  anchorPatch,
+  groundOf,
+  groundPatch,
+  noThemePatch,
+  themeOf,
+  themePatch,
+  workbenchPath,
+  type Actor,
+} from "@isocan/core";
+import { sendOp, uploadBlob } from "../lib/api.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
-import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useUnreadNews } from "./WhatsNew.tsx";
 import { showMenu } from "../lib/chromemenu.tsx";
@@ -52,6 +63,21 @@ export function Toolbar({
   const shareRef = useDismissOnOutside<HTMLDivElement>(shareOpen, () =>
     useUiStore.getState().setShareOpen(false),
   );
+  /**
+   * **The picker for a ground of your own** (#204 phase 2).
+   *
+   * A hidden input the menu row clicks, which is how the rail's File button
+   * already asks for a file — a browser only opens a file dialog from a real
+   * user gesture on a real input, so this cannot be `showOpenFilePicker` in a
+   * menu callback on every browser that matters.
+   *
+   * The size is refused HERE and the refusal names the number, because the
+   * cost is real and specific: the seeded grounds are generated and cost
+   * nothing, and a picture is downloaded by everybody on this canvas on every
+   * cold load, forever. `GROUND_MAX_BYTES` is core's, so `isocan canvas
+   * background --picture` refuses exactly the same file with the same number.
+   */
+  const groundInput = useRef<HTMLInputElement>(null);
 
   return (
     /**
@@ -129,6 +155,8 @@ export function Toolbar({
                       patch: theme === null ? noThemePatch() : themePatch(theme),
                     });
                   },
+                  ownGround: groundOf(canvas) !== null,
+                  pickGround: () => groundInput.current?.click(),
                   canEdit,
                   toWorkbench: () => navigate(workbenchPath(canvas.id)),
                 }),
@@ -168,6 +196,41 @@ export function Toolbar({
           content on it. */}
       <CanvasPresence actor={actor} onIdentity={onIdentity} />
       </div>
+      {canvas && (
+        <input
+          ref={groundInput}
+          type="file"
+          hidden
+          accept="image/*"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            // Reset first: picking the SAME file twice must fire `change` the
+            // second time, and an input that still holds it will not.
+            e.target.value = "";
+            if (!file) return;
+            if (file.size > GROUND_MAX_BYTES) {
+              setNotice(
+                `“${file.name}” is ${Math.round(file.size / 1000)}kB — a background may be ` +
+                  `${GROUND_MAX_BYTES / 1_000_000}MB, because everybody on this canvas downloads it ` +
+                  "on every cold load.",
+              );
+              return;
+            }
+            try {
+              const up = await uploadBlob(canvas.id, file, file.name);
+              await sendEchoed(canvas.id, actor, {
+                type: "project.update",
+                patch: groundPatch(up.blobHash),
+              });
+            } catch {
+              // The same sentence shape every other upload failure here uses:
+              // name the file, say what did not happen, and leave the canvas
+              // exactly as it was.
+              setNotice(`“${file.name}” could not be made the background just now.`);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

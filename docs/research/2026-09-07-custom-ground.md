@@ -155,12 +155,52 @@ somebody picks the file.
 ## Phases
 
 1. ~~**`blobsNamedBy` and gc.**~~ ✅ Done 7 Sep as `blobsInProperties`.
-2. **A custom tile, pinned, with the scrim.** Upload, set two properties,
-   render. The whole visible feature for the tile half.
+2. ~~**A custom tile, pinned, with the scrim.**~~ ✅ Done 7 Sep — and it is
+   **one** property, not two. See below.
 3. **The cursor library.** Names in `themeCursor`, a picker in the Background
    submenu, and more shapes.
 4. **World-anchored custom tiles.** For somebody with a real seamless tile,
    with the seam risk stated where they choose it.
+
+## What phase 2 actually shipped, where it differs from the plan
+
+**7 September 2026.** `isocan canvas background --picture <file>`, and
+`Background > A picture of yours…` in the app. Three departures, each because
+building it said something the plan could not.
+
+**`ground`, not `tile`.** A pinned ground does not repeat, so for the whole of
+this phase the picture is a backdrop drawn once and `cover` — and a key called
+`tile` promises repetition only phase 4 delivers. `ground` is the word every
+sentence about this feature already uses, and it stays true when phase 4 makes
+it actually tile.
+
+**One property, not two.** D2 says a custom ground defaults to pinned, and the
+first build wrote `themeAnchor: window` beside the hash to say so. That is a
+fact about the picture written down as a fact about the CANVAS, and it outlives
+the picture: set a picture, then choose Space Galaxy, and the galaxy was pinned
+— by a choice nobody made, that nothing said, and that could only be undone by
+unticking something you never ticked. Found by running the two commands in a
+row and reading the properties back. The pinning now lives in `groundIsPlace`,
+which is also the single function phase 4 changes.
+
+**The scrim's derivation was wrong and the number was right.** D3 says fixed
+opacity calibrated against the seeded grounds. It shipped as 0.7 with an
+argument that 0.7 is the 3:1 minimum — which treats an sRGB value as a relative
+luminance. Run properly, 3:1 is met at **0.42**; 0.7 is a choice past the floor,
+because a floor is not a design and at 0.42 a busy photograph still competes
+with the work standing on it. Measured on a deliberately near-white photograph:
+the ground went 246 → 74 (ratio 0.301 against the 0.3 the overlay promises) and
+a white card reads 8.9:1. The lesson is the shape rather than the arithmetic —
+**the number was right and its reason was not**, which is the more dangerous
+half, and only a measurement separates them.
+
+**And one thing found in passing, which is #195's and not this note's:** the
+dot grid does NOT come back under a pinned ground, though `THEME_ANCHOR_PROP`'s
+comment says it does. The dots are the viewport's `background-image` and every
+ground is an opaque child element covering it, so they are painted and then
+hidden — for the seeded grounds as much as for a picture. Nothing here depends
+on it (a picture is not a place because it does not pan), but the claim is on
+`main` and is false.
 
 ## What this leaves open
 

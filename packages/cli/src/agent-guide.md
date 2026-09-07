@@ -1969,9 +1969,14 @@ both with a column saying which, and `--with-archived --filter <text>`
 searches across the two. Every other verb reaches an archived canvas by name
 with no flag at all, so a canvas somebody archives while you are parked on it
 is still the canvas you are standing on. `canvas background
-<galaxy|farm|mountains|ocean|none>` sets the ground a canvas stands on, and
+<galaxy|mountains|ocean|none>` sets the ground a canvas stands on, and
 bare `canvas background` says what it is wearing — everybody on the canvas
-sees the same one, so it is a change to ask about rather than assume,
+sees the same one, so it is a change to ask about rather than assume.
+`canvas background --picture <file>` stands it on an image of your own
+instead: pinned so it cannot show a seam, and darkened so cards still read on
+it. That picture is downloaded by everybody on the canvas on every cold load,
+so there is a size limit and the command says the weight it just added — ask
+on the thread before putting one on somebody else's canvas,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `design [--css|--tokens] [set|check]`,

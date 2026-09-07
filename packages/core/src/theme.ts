@@ -145,15 +145,199 @@ export function anchorPatch(anchor: ThemeAnchor): MetaPatch {
     : { removeProperties: [THEME_ANCHOR_PROP] };
 }
 
-/** Wear one. */
+/** Wear one — and drop any picture, because a canvas wears ONE ground
+ *  (`GROUND_PROP` below). */
 export function themePatch(theme: CanvasTheme): MetaPatch {
-  return { properties: { [THEME_PROP]: theme } };
+  return { properties: { [THEME_PROP]: theme }, removeProperties: [GROUND_PROP] };
 }
 
 /** Take it off — a removal, so a canvas with no theme is byte-for-byte a
- *  canvas that never had one. */
+ *  canvas that never had one. Clears a custom ground too: "none" is one
+ *  answer to "what is this canvas standing on", not two. */
 export function noThemePatch(): MetaPatch {
-  return { removeProperties: [THEME_PROP] };
+  return { removeProperties: [THEME_PROP, GROUND_PROP, THEME_ANCHOR_PROP] };
+}
+
+/**
+ * **A ground of your own** (#204 phase 2).
+ *
+ * > "For the background feature… there should be a 'custom' setting where the
+ * > user can set a tile and cursor and then it takes on its own?"
+ *
+ * The tile half. The cursor half is phase 3 and is a LIBRARY rather than an
+ * upload, because a cursor filled with the viewer's identity colour cannot be
+ * a photograph — see `themeCursor` above and #195.
+ *
+ * ## The picture is the fact; there is no `theme: custom`
+ *
+ * A canvas wearing a picture is a canvas with `ground` set to the sha256 of
+ * the bytes. Nothing writes `theme: custom`, because a theme name with no
+ * picture behind it is a ground this build cannot draw — the exact failure
+ * `THEMES` exists to prevent, and the reason `farm` is still not in that list.
+ *
+ * **`ground`, not `tile`**, which is what the research note proposed. A
+ * pinned ground does not repeat (D2, below), so for the whole of this phase
+ * the picture is a backdrop rather than a tile — and a key called `tile`
+ * would promise repetition that only phase 4 delivers. `ground` is the word
+ * the feature already uses in every sentence about it, including this file's
+ * own heading, and it stays true when phase 4 makes it actually tile.
+ *
+ * **A canvas wears ONE ground**, which is the invariant `THEME_PROP`'s own
+ * comment defends, so the two patches below each clear the other. That rule
+ * lives here rather than at the two call sites: a canvas that is a galaxy AND
+ * a photograph is not a feature, it is a bug somebody has to explain.
+ *
+ * ## The gc had to be taught first
+ *
+ * A blob named only by a property was unreachable, so a custom ground would
+ * have been swept within the hour with nothing said. `blobsInProperties`
+ * (`core/blobrefs.ts`) matches a 64-character hex string in any property
+ * value, which is why this key needs no registration anywhere — and why the
+ * parse below insists on that shape rather than accepting any string.
+ */
+export const GROUND_PROP = "ground";
+
+/** A content address, and the shape `blobsInProperties` sweeps by. Anything
+ *  else reads as no tile at all: a property somebody hand-edited to a filename
+ *  should show the ground it has always shown, not a broken picture. */
+const SHA256 = /^[0-9a-f]{64}$/;
+
+/** The picture this canvas stands on, or null. */
+export function groundOf(canvas: { properties?: Record<string, string> }): string | null {
+  const value = canvas.properties?.[GROUND_PROP];
+  return value !== undefined && SHA256.test(value) ? value : null;
+}
+
+/**
+ * **The biggest a tile may be**, and it is stated rather than discovered.
+ *
+ * The generated grounds cost zero bytes. A picture is downloaded by everybody
+ * on the canvas, on every cold load, forever — so this is a real cost with a
+ * number, and both surfaces say the number before taking the file rather than
+ * refusing after it (#204, D6).
+ *
+ * Two megabytes: comfortably a photograph at a sensible size, comfortably not
+ * a raw camera file. Held here so `isocan canvas background --tile` and the
+ * app's picker refuse the same file.
+ */
+export const GROUND_MAX_BYTES = 2_000_000;
+
+/**
+ * **How dark the scrim over a custom ground is** (#204, D3).
+ *
+ * Every seeded ground is dark on purpose — `#05060c`, `#0b2733`, `#2b2825` —
+ * so white item cards read as objects standing on them. Somebody's holiday
+ * photograph will not be, and the result is a canvas where nothing is legible.
+ *
+ * The fix is not a warning telling somebody to be a designer. It is one rule
+ * the app applies: a black overlay between the picture and the items.
+ *
+ * **The floor is 0.42, and it is not where this sits.** The worst case is a
+ * pure white image, whose sRGB value under an overlay of opacity `a` is
+ * `1 - a`; a white card needs 3:1 against it — the threshold for a graphical
+ * object having a discernible boundary, which is what "reads as an object
+ * standing on it" means. Relative luminance is not the value itself, so the
+ * inequality runs through the sRGB transfer function:
+ *
+ *     1.05 / (L + 0.05) >= 3   ->   L <= 0.3
+ *     L = ((1 - a + 0.055) / 1.055) ^ 2.4 <= 0.3   ->   a >= 0.42
+ *
+ * **0.7 because a floor is not a design.** At 0.42 a busy photograph is still
+ * bright enough to compete with the work standing on it, and every seeded
+ * ground is far past that — `#05060c` puts a white card at about 19:1. 0.7
+ * lands in between and keeps the picture plainly a picture at thirty per cent
+ * of its own brightness.
+ *
+ * **Measured, not asserted** (7 Sep, on a deliberately near-white photograph):
+ * the ground went from a mean of 246 to 74 — a ratio of 0.301 against the 0.3
+ * the overlay promises — and a white card reads 8.9:1 against it. The first
+ * version of this comment derived 0.7 as the 3:1 minimum by treating the sRGB
+ * value as the luminance, and the measurement is what caught it: the number
+ * was right and its reason was not, which is the more dangerous half.
+ *
+ * Fixed rather than adjustable on purpose: fixed is the honest start, and if
+ * it turns out wrong for a whole class of image that is evidence, not a
+ * reason to ship a slider first.
+ */
+export const GROUND_SCRIM = 0.7;
+
+/**
+ * Wear a picture. One property, and deliberately **not** the anchor.
+ *
+ * A picture is pinned (#204, D2): a world-anchored ground tiles forever, so a
+ * photograph that is not seamless shows a grid of its own edges — the one
+ * failure a person cannot debug and did not cause. World-anchored custom
+ * grounds are phase 4, for somebody who has actually made a tile, with the
+ * seam risk stated where they choose it.
+ *
+ * **But it is pinned by how it is DRAWN, not by a property**, and the first
+ * version got that wrong: it wrote `themeAnchor: window` alongside the hash,
+ * which is a fact about the canvas rather than about the picture. Set a
+ * picture, then switch to Space Galaxy, and the galaxy was pinned — by a
+ * choice nobody made, that nothing said, and that could only be undone by
+ * finding a tickbox and unticking something you never ticked. Caught by
+ * running the two commands in a row and reading the properties back.
+ *
+ * So the implicit choice is not written down at all. `groundIsPlace` below is
+ * what the picture's pinning actually comes from, and phase 4 changes that one
+ * function rather than hunting for anchors this wrote.
+ */
+export function groundPatch(hash: string): MetaPatch {
+  return { properties: { [GROUND_PROP]: hash }, removeProperties: [THEME_PROP] };
+}
+
+/** Take it off, so a canvas with no picture is byte-for-byte a canvas that
+ *  never had one. */
+export function noGroundPatch(): MetaPatch {
+  return { removeProperties: [GROUND_PROP] };
+}
+
+/**
+ * **Is this canvas standing on anything?** — the one question the viewport
+ * asks before it downloads a chunk to draw a ground, and the one the layer
+ * asks before it draws.
+ *
+ * Here rather than `themeOf(p) !== null || groundOf(p) !== null` at each site,
+ * because that disjunction is the thing that grows a third arm the day a
+ * fourth kind of ground exists, and it grows it in whichever files somebody
+ * remembers. It is also the mistake this phase nearly shipped: the viewport
+ * gated the whole theme layer on `themeOf`, so a canvas wearing a picture and
+ * no theme would have mounted nothing at all.
+ */
+export function hasGround(canvas: { properties?: Record<string, string> }): boolean {
+  return themeOf(canvas) !== null || groundOf(canvas) !== null;
+}
+
+/**
+ * **Is the ground a PLACE, or a backdrop?** — the one question the dot grid
+ * depends on (#195), and the one that decides whether a ground pans with the
+ * work.
+ *
+ * A seeded ground answers with its anchor: `world` and it is a place, so the
+ * grid steps aside; `window` and it is a backdrop, so the grid is left in
+ * place.
+ *
+ * **The grid being left in place is not the same as being SEEN**, and that is
+ * worth writing down here because #195's own note claims it is. The dots are
+ * the viewport's `background-image`, and every ground — seeded or supplied —
+ * is an opaque child element covering it, so under a pinned ground the dots
+ * are painted and then hidden. Measured 7 Sep on a pinned galaxy. Nothing here
+ * depends on it: a picture is not a place because it is drawn once and
+ * `cover` and does not pan, which is true whatever the grid does.
+ *
+ * **A picture of somebody's own is never a place, whatever the anchor says**
+ * (#204 phase 2), because it is drawn once and `cover` rather than tiled — a
+ * photograph that is not seamless would repeat as a grid of its own edges.
+ * Answered here rather than by writing `themeAnchor` when a picture is set:
+ * an implicit choice written down as an explicit one outlives the thing that
+ * implied it, which it did — a canvas that wore a picture and was then given
+ * a galaxy kept the pinning nobody chose.
+ *
+ * Phase 4, which lets somebody with a real tile anchor one to the world, is a
+ * change to this function and nothing else.
+ */
+export function groundIsPlace(canvas: { properties?: Record<string, string> }): boolean {
+  return themeOf(canvas) !== null && anchorOf(canvas) === "world";
 }
 
 
