@@ -173,8 +173,13 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * **695,200 (7 Sep, +16).** Hold-to-borrow for H and T, which is smaller than
  * the code it replaced — the +16 is the comment explaining why tool keys now
  * live in one file.
+ *
+ * **696,100 (7 Sep, +561).** Folding a chat message by clicking its date.
+ * Seventh raise in two days, every one deliberate and every one read — which
+ * is the whole of the argument for tiering this rather than continuing to edit
+ * a number by hand.
  */
-const CEILING = 695_200;
+const CEILING = 696_100;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is

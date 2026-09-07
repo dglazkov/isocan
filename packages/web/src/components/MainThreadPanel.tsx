@@ -45,6 +45,7 @@ export { PANEL_MIN_WIDTH } from "../stores/uiStore.ts";
 
 import { PanelResizer } from "./PanelResizer.tsx";
 import { PanelHead } from "./PanelHead.tsx";
+import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
 
 /**
  * What the message is about: the current selection, shown as chips over the
@@ -502,24 +503,30 @@ function Panel({
                   {actorNameIn(names, comment.author)}
                 </span>
               )}
-              <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
+              <CommentWhen comment={comment} />
               {workedFor(comment) && (
                 <span className="worked" title={`Posted, then rewritten ${workedFor(comment)} later`}>
                   edited · {workedFor(comment)}
                 </span>
               )}
-              <div className="body">
-                <CommandChip body={comment.body} />
-                <Markdown rehypePlugins={chips}>
-                  {withoutCommand(comment.body)}
-                </Markdown>
-              </div>
-              {canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
-              {(comment.items ?? [])
-                .filter((id, i, all) => all.indexOf(id) === i)
-                .map((itemId) => (
-                  <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} />
-                ))}
+              {/* Folded: the first line stands in for the message, so a thread
+                  of folded reports is still a list you can navigate rather
+                  than a column of names. Everything under it goes — the item
+                  cards especially, which are the tallest thing here. */}
+              <CommentFold comment={comment}>
+                <div className="body">
+                  <CommandChip body={comment.body} />
+                  <Markdown rehypePlugins={chips}>
+                    {withoutCommand(comment.body)}
+                  </Markdown>
+                </div>
+                {canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
+                {(comment.items ?? [])
+                  .filter((id, i, all) => all.indexOf(id) === i)
+                  .map((itemId) => (
+                    <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} />
+                  ))}
+              </CommentFold>
             </div>
           ))}
           {thread && (

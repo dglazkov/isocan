@@ -2538,7 +2538,29 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   border: 1px solid var(--chip-line); background: var(--chip);
   border-radius: 999px; padding: 0 6px;
 }
-.comment .when { color: var(--ink-soft); font-size: 10px; margin-left: 5px; }
+/* The date is a disclosure now (7 Sep): clicking it folds the message away.
+   It is a <button>, so the browser's button styling has to be undone — and
+   deliberately NOT replaced with anything that shouts. A timestamp that looked
+   like a control would put a second loud thing in a header whose job is the
+   name beside it; this reads as a date until you are near it. */
+.comment .when {
+  color: var(--ink-soft); font-size: 10px; margin-left: 5px;
+  background: none; border: none; padding: 0;
+  font-family: inherit; line-height: inherit;
+  cursor: pointer; border-radius: 3px;
+}
+.comment .when:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+/* A folded message keeps its first line, so a thread of them stays a list you
+   can read down rather than a column of names and times. One line, clipped —
+   a preview that wrapped would make folding change the height it saved. */
+.comment-folded {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; padding: 2px 0 0;
+  font: inherit; font-size: 12px; color: var(--ink-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+}
+.comment-folded:hover { color: var(--ink); }
 /* Comment bodies render as markdown — same idiom as .md-view, sized down. */
 .comment .body { margin: 2px 0 0; }
 .comment .body > :first-child { margin-top: 0; }

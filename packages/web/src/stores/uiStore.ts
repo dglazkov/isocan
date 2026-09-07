@@ -210,6 +210,17 @@ interface UiStore {
    *  browser, like the theme: taste, not a canvas fact. */
   hiddenChrome: string[];
   setChromeHidden: (id: string, hidden: boolean) => void;
+  /**
+   * **Messages this reader has folded away**, by comment id.
+   *
+   * A view state and nothing more — not stored on the canvas, because two
+   * people reading one thread are not reading it for the same reason, and one
+   * of them collapsing a long agent report should not fold it for everybody.
+   * Not persisted either: a thread you come back to tomorrow should look like
+   * the thread, not like the shape you left it in and have since forgotten.
+   */
+  collapsedComments: string[];
+  toggleComment: (id: string) => void;
   /** Bumped when a runtime module arrives after first paint (modules phase
    *  3), so the slots that read the module list re-render. Never stored. */
   modulesGeneration: number;
@@ -594,6 +605,7 @@ export const useUiStore = create<UiStore>((set) => {
     marksOpen: false,
     historyOpen: false,
     hiddenChrome: readHiddenChrome(),
+    collapsedComments: [],
     modulesGeneration: 0,
     bumpModules: () => set((s) => ({ modulesGeneration: s.modulesGeneration + 1 })),
     liveDocs: readIdList(LIVE_DOCS_KEY),
@@ -687,6 +699,12 @@ export const useUiStore = create<UiStore>((set) => {
         writeHiddenChrome(hiddenChrome);
         return { hiddenChrome };
       }),
+    toggleComment: (id) =>
+      set((s) => ({
+        collapsedComments: s.collapsedComments.includes(id)
+          ? s.collapsedComments.filter((one) => one !== id)
+          : [...s.collapsedComments, id],
+      })),
     setDocLive: (itemId, live) =>
       set((s) => {
         const liveDocs = live

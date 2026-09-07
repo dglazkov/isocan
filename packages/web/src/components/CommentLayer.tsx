@@ -27,6 +27,7 @@ import { CommandChip, awaitingReply, withoutCommand } from "./MainThreadPanel.ts
 import { OnIt } from "./OnIt.tsx";
 import { liveActorIds } from "../lib/presence.ts";
 import { useActorMarks } from "../lib/marks.ts";
+import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
 
 /** Comment payload with @Name mentions and #Title item references resolved
  * against what's visible on the canvas — actors in the state plus the live
@@ -367,18 +368,20 @@ function ThreadPopover({
         {thread.comments.map((comment) => (
           <div className="comment" key={comment.id}>
             <span className="who">{actorNameIn(names, comment.author)}</span>
-            <span className="when">{new Date(comment.createdAt).toLocaleString()}</span>
+            <CommentWhen comment={comment} />
             {workedFor(comment) && (
               <span className="worked" title={`Posted, then rewritten ${workedFor(comment)} later`}>
                 edited · {workedFor(comment)}
               </span>
             )}
-            <div className="body">
-              <CommandChip body={comment.body} />
-              <Markdown rehypePlugins={chips}>
-                {withoutCommand(comment.body)}
-              </Markdown>
-            </div>
+            <CommentFold comment={comment}>
+              <div className="body">
+                <CommandChip body={comment.body} />
+                <Markdown rehypePlugins={chips}>
+                  {withoutCommand(comment.body)}
+                </Markdown>
+              </div>
+            </CommentFold>
           </div>
         ))}
         <OnIt
