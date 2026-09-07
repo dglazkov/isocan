@@ -3,7 +3,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { markOf } from "@isocan/core";
+import { markOf, themeCursor, themeOf } from "@isocan/core";
 import { useActorMarks } from "../lib/marks.ts";
 import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
@@ -34,6 +34,10 @@ export function CursorLayer() {
   const colors = useActorColors();
   const marks = useActorMarks();
   const sessions = useCanvasStore((s) => s.sessions);
+  // The ground everybody on this canvas is standing on decides the shape
+  // (#195). A selector rather than the whole canvas: this re-renders on every
+  // cursor move, and reading `canvas` here would re-render on every op.
+  const cursorPath = useCanvasStore((s) => themeCursor(s.project ? themeOf(s.project) : null));
   const viewport = useUiStore((s) => s.viewport);
   const animated = useRef(new Map<string, Anim>());
   const [, force] = useState(0);
@@ -200,8 +204,11 @@ export function CursorLayer() {
             className={`remote-cursor${quiet ? " quiet" : ""}`}
             style={{ left: screen.x, top: screen.y }}
           >
+            {/* The ground gives everybody the same shape and takes nobody's
+                colour (#195): `fill` is still the actor's, because that is the
+                signal saying who is who. */}
             <svg width="18" height="20" viewBox="0 0 18 20">
-              <path d="M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z" fill={color} strokeWidth="1" />
+              <path d={cursorPath} fill={color} strokeWidth="1" />
             </svg>
             <span className="cursor-chip" style={{ background: color }}>
               {mark && <b className="cursor-mark">{mark}</b>}

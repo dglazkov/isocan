@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Actor } from "@isocan/core";
+import { themeCursor, themeOf } from "@isocan/core";
+import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useActorColor } from "../lib/colors.ts";
 import { actorName } from "../lib/names.ts";
@@ -58,6 +60,7 @@ export function OwnCursor({ actor }: { actor: Actor }) {
    * go. Inside a component it is always the wrong one.
    */
   const color = useActorColor(actor.id);
+  const cursorPath = useCanvasStore((s) => themeCursor(s.project ? themeOf(s.project) : null));
   const shown = tool === "select" && !commentMode;
 
   useEffect(() => {
@@ -124,8 +127,10 @@ export function OwnCursor({ actor }: { actor: Actor }) {
   if (!shown) return null;
   return (
     <div className="own-cursor" ref={ref} aria-hidden style={{ opacity: 0 }}>
+      {/* Your own cursor wears the canvas's ground too — otherwise the one
+          pointer you look at all day is the one that never joins in (#195). */}
       <svg width="18" height="20" viewBox="0 0 18 20">
-        <path d="M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z" fill={color} strokeWidth="1" />
+        <path d={cursorPath} fill={color} strokeWidth="1" />
       </svg>
       <span className="cursor-chip" style={{ background: color }}>
         {actorName(actor)}

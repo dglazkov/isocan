@@ -165,8 +165,12 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * shipped without the edge-avoidance the parent has had since it was written,
  * and a screenshot of the real thing near the bottom of a window is what
  * found it. Fifth raise in a day, same argument.
+ *
+ * **694,800 (7 Sep, +203).** `themeCursor` — the half of #195 its own title
+ * named and that shipped without being built. Sixth raise, and the last one
+ * before the tiering is worth doing rather than talked about.
  */
-const CEILING = 694_300;
+const CEILING = 694_800;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is

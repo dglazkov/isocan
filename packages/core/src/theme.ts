@@ -156,3 +156,53 @@ export function noThemePatch(): MetaPatch {
   return { removeProperties: [THEME_PROP] };
 }
 
+
+/**
+ * **The cursor a ground gives everybody** — the other half of #195, and the
+ * half its own title names: *"a background you can stand screens on, and a
+ * cursor that belongs to it"*. Built 7 Sep, after Dion noticed it missing:
+ * *"the cursors also haven't changed? Eg for space galaxy they didn't change
+ * to a rocket."*
+ *
+ * One property still, not two. The theme IS the fact — a canvas cannot be a
+ * galaxy with a sheep, because "two properties would let a canvas be a farm
+ * with rockets, which is not a feature, it is a bug somebody has to explain".
+ *
+ * ## The shape is drawn, the colour is not
+ *
+ * Every path here is filled with the ACTOR'S colour by the caller, and that is
+ * the constraint the issue is emphatic about: seven `IDENTITY_COLORS` also
+ * land on items during remote selection, so a themed cursor that carried its
+ * own colour would delete the one signal saying who is who. A fish tinted with
+ * your colour is delightful; a fish that makes six people identical is a
+ * regression dressed as a feature.
+ *
+ * ## Why not a rocket
+ *
+ * The issue suggests one, and it does not survive. Drawn and looked at: at 18
+ * pixels a rocket silhouette IS an arrow — the fins never register, and both
+ * candidates read as a slightly ragged pointer at every size up to 32. A
+ * sparkle does read, instantly and at every size, and its long upper-left ray
+ * is a proper pointer tip rather than a compromise. Space, and a cursor, in
+ * one shape.
+ *
+ * The three that ship are the three that survived being looked at; `farm`
+ * would want a sheep and wants the same artist its grass does.
+ */
+export function themeCursor(theme: CanvasTheme | null): string {
+  switch (theme) {
+    case "galaxy":
+      // A four-point star whose upper-left ray is long enough to point with.
+      return "M1.5 0.5 C6 6 7.5 7.5 13 10.5 C8.5 11.8 7.2 13 5.5 19 C4.6 13.4 3.4 11.8 0.6 10.2 C3.6 8.2 4.8 6.2 1.5 0.5 Z";
+    case "ocean":
+      // Nose at the hotspot, tail behind — it swims the way the pointer points.
+      return "M1.5 0.5 C8 3 13 8 14.5 13.5 C10 14.5 5 12 1.8 7.5 Z M13.5 13 L17.5 12 L16 17 Z";
+    case "mountains":
+      // A summit flag: the pole's top is the tip, which is the one shape here
+      // that was legible at 18px on the first try.
+      return "M1.5 0.5 L3.1 0.9 L3.1 19 L1.5 19 Z M3.6 1.4 L13.5 4.6 L3.6 9.2 Z";
+    default:
+      // No ground, no costume. The arrow every cursor here has always been.
+      return "M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z";
+  }
+}

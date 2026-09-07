@@ -5,6 +5,7 @@ import {
   anchorOf,
   anchorPatch,
   THEME_PROP,
+  themeCursor,
   themeLabel,
   isTheme,
   noThemePatch,
@@ -91,5 +92,49 @@ describe("how a ground behaves", () => {
     expect(anchorPatch("window").properties?.[THEME_ANCHOR_PROP]).toBe("window");
     expect(anchorPatch("world").removeProperties).toEqual([THEME_ANCHOR_PROP]);
     expect(anchorPatch("world").properties).toBeUndefined();
+  });
+});
+
+describe("the cursor a ground gives everybody", () => {
+  /**
+   * The half of #195 its own title names — *"and a cursor that belongs to
+   * it"* — and the half that shipped without being built. Dion found it:
+   * "the cursors also haven't changed? Eg for space galaxy they didn't change
+   * to a rocket."
+   */
+  it("gives every ground a shape of its own", () => {
+    const shapes = new Set(THEMES.map((t) => themeCursor(t)));
+    expect(shapes.size, "no two grounds share a cursor").toBe(THEMES.length);
+    for (const theme of THEMES) {
+      expect(themeCursor(theme), `${theme} has a path`).toMatch(/^M[\d.]/);
+      expect(themeCursor(theme), `${theme} is not the plain arrow`).not.toBe(themeCursor(null));
+    }
+  });
+
+  it("leaves a canvas with no ground wearing the arrow it always had", () => {
+    // The shape people know, unchanged. A cursor that changes on a canvas
+    // nobody themed would be a costume nobody asked for.
+    expect(themeCursor(null)).toBe("M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z");
+  });
+
+  it("starts every cursor at the hotspot, so the thing still points", () => {
+    /* A cursor's tip is where the click lands. A shape whose mass sits below
+       and right of (1.5, 0.5) is a decoration you have to aim; every path
+       here begins there for that reason — including the sparkle, whose long
+       upper-left ray is a pointer before it is a star. */
+    for (const theme of [...THEMES, null]) {
+      expect(themeCursor(theme).startsWith("M1.5 0.5"), `${theme} points`).toBe(true);
+    }
+  });
+
+  it("carries no colour of its own", () => {
+    /* The constraint the issue is emphatic about: seven IDENTITY_COLORS also
+       land on items during remote selection, so a cursor that brought its own
+       colour would delete the one signal saying who is who. "A sheep tinted
+       with your colour is delightful; a sheep that makes six people identical
+       is a regression dressed as a feature." */
+    for (const theme of [...THEMES, null]) {
+      expect(themeCursor(theme)).not.toMatch(/#|rgb|fill|hsl/);
+    }
   });
 });

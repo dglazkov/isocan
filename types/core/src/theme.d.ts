@@ -123,3 +123,36 @@ export declare function themePatch(theme: CanvasTheme): MetaPatch;
 /** Take it off — a removal, so a canvas with no theme is byte-for-byte a
  *  canvas that never had one. */
 export declare function noThemePatch(): MetaPatch;
+/**
+ * **The cursor a ground gives everybody** — the other half of #195, and the
+ * half its own title names: *"a background you can stand screens on, and a
+ * cursor that belongs to it"*. Built 7 Sep, after Dion noticed it missing:
+ * *"the cursors also haven't changed? Eg for space galaxy they didn't change
+ * to a rocket."*
+ *
+ * One property still, not two. The theme IS the fact — a canvas cannot be a
+ * galaxy with a sheep, because "two properties would let a canvas be a farm
+ * with rockets, which is not a feature, it is a bug somebody has to explain".
+ *
+ * ## The shape is drawn, the colour is not
+ *
+ * Every path here is filled with the ACTOR'S colour by the caller, and that is
+ * the constraint the issue is emphatic about: seven `IDENTITY_COLORS` also
+ * land on items during remote selection, so a themed cursor that carried its
+ * own colour would delete the one signal saying who is who. A fish tinted with
+ * your colour is delightful; a fish that makes six people identical is a
+ * regression dressed as a feature.
+ *
+ * ## Why not a rocket
+ *
+ * The issue suggests one, and it does not survive. Drawn and looked at: at 18
+ * pixels a rocket silhouette IS an arrow — the fins never register, and both
+ * candidates read as a slightly ragged pointer at every size up to 32. A
+ * sparkle does read, instantly and at every size, and its long upper-left ray
+ * is a proper pointer tip rather than a compromise. Space, and a cursor, in
+ * one shape.
+ *
+ * The three that ship are the three that survived being looked at; `farm`
+ * would want a sheep and wants the same artist its grass does.
+ */
+export declare function themeCursor(theme: CanvasTheme | null): string;
