@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 36 still open** — of which 26 partly
-built, 10 designed, 0 blocked, and
+**21 built · 38 still open** — of which 26 partly
+built, 12 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -47,10 +47,11 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue · [#146](https://github.com/dglazkov/isocan/issues/146) |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open · see evals, personas · [#138](https://github.com/dglazkov/isocan/issues/138) |
 
-## Designed, not built <sub>10</sub>
+## Designed, not built <sub>12</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
+| research | [A ground of your own: custom tiles, and what a custom cursor can be](docs/research/2026-09-07-custom-ground.md) | 2026-09-07 | a custom tile is a blob named by a canvas property, and the garbage collector does not know properties name blobs — it would sweep the background within the hour. The cursor half is the interesting one and the answer is probably to choose rather than upload. · see ui-refresh · [#204](https://github.com/dglazkov/isocan/issues/204) |
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind · [#137](https://github.com/dglazkov/isocan/issues/137) |
 | research | [Analytics: what the oplog cannot already tell us](docs/research/2026-09-07-analytics.md) | 2026-09-07 | not to be built yet — the finding is that isocan already has three measurement systems and an event stream, and the honest first question is what none of them can answer · see evals, personas · [#200](https://github.com/dglazkov/isocan/issues/200) |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
@@ -61,6 +62,7 @@ and the done column should not be flattered by either.
 | research | [Project and canvas: one word each](docs/research/2026-09-06-project-and-canvas.md) | 2026-09-06 | designed 6 Sep — one word each: a CANVAS is the surface, a PROJECT is the directory that holds it (one today, several later), a SPACE is an access grouping. Counted 331 "project" against 4,879 "canvas" in source; every survivor is inventoried and sorted into keep (the wire, the marker), rename (code that names the surface), and reword (help text, README). Nothing renamed yet · see switcher, roles, multiuser · [#135](https://github.com/dglazkov/isocan/issues/135) |
 | research | [Retiring a name](docs/research/2026-08-25-retiring-a-name.md) | 2026-08-29 |  · [#140](https://github.com/dglazkov/isocan/issues/140) |
 | research | [Semantic zoom: what a canvas becomes when you stand back](docs/research/2026-09-07-semantic-zoom.md) | 2026-09-07 | the canvas already does four kinds of zoom-responsive drawing and every one of them SUBTRACTS — the thing maps actually do is substitute, and that needs a unit to substitute for · see ui-refresh, mindmap · [#203](https://github.com/dglazkov/isocan/issues/203) |
+| research | [Small personas: cheap agents, an idle trigger, and a registry of what to explore](docs/research/2026-09-07-small-personas.md) | 2026-09-07 | the cheap tier #197 claims already exists does not — all nine personas are opus at xhigh. This is what a small persona would need: an idle trigger, a cost that is declared, permission to write where a guard already exists, and a registry of what to explore that is not the findings queue. · see personas, standing-agents, on-demand · [#205](https://github.com/dglazkov/isocan/issues/205) |
 
 ## Built <sub>21</sub>
 
