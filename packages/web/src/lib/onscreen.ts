@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 /**
  * **Is this element worth holding a live document for right now.**
@@ -119,5 +119,5 @@ export function useOnScreen<T extends Element>(
     };
   }, [node, margin, grace]);
 
-  return { ref: setNode, onScreen };
+  return useMemo(() => ({ ref: setNode, onScreen }), [onScreen]);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { SETTLING_MS, settlingItems } from "./writequeue.ts";
 
@@ -26,7 +26,7 @@ import { SETTLING_MS, settlingItems } from "./writequeue.ts";
 export function useSettling(): Set<string> {
   const queue = useCanvasStore((s) => s.queue);
   const canvas = useCanvasStore((s) => s.canvas);
-  const [, tick] = useState(0);
+  const [beat, tick] = useState(0);
 
   const waiting = queue.some((write) => write.seq === undefined && !write.refused);
   useEffect(() => {
@@ -37,5 +37,15 @@ export function useSettling(): Set<string> {
     return () => clearInterval(timer);
   }, [waiting]);
 
-  return settlingItems(queue, Date.now(), canvas);
+  // Memoised on the beat rather than rebuilt per render: a fresh Set out of a
+  // hook is the hazard `test/stablehooks.test.ts` exists for, and the clock
+  // only moves this when the timer above says so.
+  return useMemo(() => {
+    // `beat` is read, not merely listed: the real input is the clock, which no
+    // dependency array can name, and the beat above is its proxy — the timer
+    // ticks, this recomputes, and lateness moves. Listing it without reading it
+    // is a dependency `exhaustive-deps` cannot see the point of.
+    void beat;
+    return settlingItems(queue, Date.now(), canvas);
+  }, [queue, canvas, beat]);
 }

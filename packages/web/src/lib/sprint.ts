@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Actor, Canvas, CanvasContents, Item, Paper, SprintState } from "@isocan/core";
 import {
   PAPER_SIZE,
@@ -73,7 +73,7 @@ export function useSprint(): { state: SprintState | null; nowMs: number } {
   // Derived on every store change; cheap, because the fold stops at the first
   // `/sprint` line it meets walking back from the end of the Chat.
   const state = canvas ? sprintState(canvas) : null;
-  return { state, nowMs: second * 1000 };
+  return useMemo(() => ({ state, nowMs: second * 1000 }), [state, second]);
 }
 
 /**
