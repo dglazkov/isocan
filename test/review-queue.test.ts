@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — a .mjs script with no types, imported for its parser on
 // purpose: a second copy of "what `unanswered` means" is the thing this guard
 // exists to prevent one level up.
-import { ANSWER_DAYS, WORSE_BY, findUnanswered, findingKey, reviewPages } from "../scripts/reviews.mjs";
+import { ANSWER_DAYS, REPEAT_FROM, WORSE_BY, askedAgain, findUnanswered, findingKey, reviewPages } from "../scripts/reviews.mjs";
 
 /**
  * **The queue can fail.**
@@ -214,5 +215,121 @@ describe("an answer covers the nights that repeat it", () => {
       page("2026-09-02", "the entry chunk a first visit downloads is 700000, past 600000", "unanswered"),
     ];
     expect(findUnanswered(pages, ANSWER_DAYS, now)).toHaveLength(1);
+  });
+});
+
+/**
+ * **Repetition, counted** (#197 phase 4).
+ *
+ * `docs/reviews/README.md` has said since the index existed that *a finding
+ * that keeps reappearing needs a guard rather than a third mention* — and
+ * nothing counted, so the only way to see a third mention was to read
+ * seventy-eight rows and notice the same words in six of them. That is exactly
+ * the noticing that did not happen while the entry chunk grew by a hundred
+ * kilobytes across those six nights.
+ *
+ * The index now carries the count. What these hold is that it counts the right
+ * thing, because the wrong thing is easy and plausible in three directions: by
+ * finding rather than by night, by text rather than by question, and only for
+ * the nights nobody answered.
+ */
+describe("a question asked again and again", () => {
+  const page = (date: string, what: string, outcome = "unanswered") => ({
+    file: `${date}-fixture.md`,
+    date,
+    persona: "fixture",
+    goals: [],
+    findings: [{ what, outcome }],
+  });
+  const chunk = (n: number) => `the entry chunk a first visit downloads is ${n}, past 640000`;
+  const nights = (n: number) =>
+    Array.from({ length: n }, (_, i) => page(`2026-09-0${i + 1}`, chunk(600000 + i)));
+
+  it("counts the nights, and says nothing until the third", () => {
+    expect(askedAgain(nights(REPEAT_FROM - 1))).toEqual([]);
+    const asked = askedAgain(nights(REPEAT_FROM));
+    expect(asked).toHaveLength(1);
+    expect(asked[0].runs).toBe(REPEAT_FROM);
+  });
+
+  it("identifies the question the way every other answer here does", () => {
+    // The value moves nightly and the question does not — the same fold
+    // `findUnanswered` settles answers by. A second notion of sameness is how
+    // six nights of one question read as six findings.
+    expect(askedAgain(nights(4))[0]).toMatchObject({
+      goal: "the entry chunk a first visit downloads",
+      bound: "640000",
+    });
+    // Prose has no identity, so it is asked once however often it is written.
+    const prose = ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"].map((d) =>
+      page(d, "the header row jumps 7px on select"),
+    );
+    expect(askedAgain(prose)).toEqual([]);
+  });
+
+  it("counts a night once, however many times that run wrote it", () => {
+    const twice = {
+      ...page("2026-09-01", chunk(700000)),
+      findings: [{ what: chunk(700000), outcome: "unanswered" }, { what: chunk(700001), outcome: "unanswered" }],
+    };
+    expect(askedAgain([twice, page("2026-09-02", chunk(700002))], 2)[0].runs).toBe(2);
+  });
+
+  it("counts answered nights too — the treadmill is the finding", () => {
+    /* This is the direction that would quietly make the section useless. A
+       question answered `accepted` every week is not a solved question; it is
+       the one with the strongest case for a guard, and excluding it would hide
+       exactly that. */
+    const answered = nights(4).map((p) => ({
+      ...p,
+      findings: p.findings.map((f) => ({ ...f, outcome: "accepted — tracked in #185" })),
+    }));
+    expect(askedAgain(answered)[0].runs).toBe(4);
+    expect(askedAgain(answered)[0].answered).toBe(true);
+  });
+
+  it("reads first and last from the dates, not from the caller's order", () => {
+    // The index hands it pages newest first; a naive first/last would report
+    // the newest as the night it started and the oldest value as current.
+    const backwards = [...nights(4)].reverse();
+    expect(askedAgain(backwards)[0]).toMatchObject({
+      first: "2026-09-01",
+      firstValue: 600000,
+      last: "2026-09-04",
+      value: 600003,
+    });
+  });
+
+  it("puts the most-repeated question first", () => {
+    const pages = [
+      ...nights(4),
+      page("2026-09-01", "CSS rule bodies copied word for word from elsewhere is 49, past 47"),
+      page("2026-09-02", "CSS rule bodies copied word for word from elsewhere is 51, past 47"),
+      page("2026-09-03", "CSS rule bodies copied word for word from elsewhere is 55, past 47"),
+      page("2026-09-04", "CSS rule bodies copied word for word from elsewhere is 60, past 47"),
+      page("2026-09-05", "CSS rule bodies copied word for word from elsewhere is 60, past 47"),
+    ];
+    expect(askedAgain(pages).map((r) => r.runs)).toEqual([5, 4]);
+  });
+});
+
+/**
+ * **One answer to "is this from a bound"** — the index used to keep a second
+ * one, `/\bis\b.*,\s*past\b/`, to decide which findings get their words in
+ * the table. It was looser than `findingKey` (no digits required), so the two
+ * could disagree about a sentence, and a disagreement there is a row counted in
+ * one place and not the other. `docs/reviews/lessons.md` #5 is this shape.
+ */
+describe("what counts as a bound-derived finding", () => {
+  it("is decided by findingKey and nothing else", () => {
+    const source = readFileSync(new URL("../scripts/reviews.mjs", import.meta.url), "utf8");
+    expect(source).not.toMatch(/const fromBound =/);
+    expect(source).toContain("open.filter((f) => findingKey(f.what) === null)");
+  });
+
+  it("refuses a sentence that only looks like one", () => {
+    // The looser pattern matched this; the parser does not, and the parser is
+    // what every other answer in this file is built on.
+    expect(findingKey("the outline is drawn past the edge on select")).toBeNull();
   });
 });

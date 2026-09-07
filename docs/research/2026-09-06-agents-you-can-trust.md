@@ -232,15 +232,36 @@ or `rejected`, and everything else, a typo included, stays in the queue. This
 is the generalisable half: *a guard against neglect must fail closed, because
 the failure it guards against is nobody looking.*
 
-### Phase 4 — Repetition is visible
+### Phase 4 — Repetition is visible ✅ built 7 Sep
 
-**Work:** D10. `scripts/reviews.mjs` counts how many runs carry each finding
-and says so in the index: *"this is the 6th time"*.
+**Work:** D10, as `askedAgain` in `scripts/reviews.mjs` and a short table above
+the runs. Identity is `findingKey`'s and nothing else — the fold phase 3
+already settles answers by, so "the same question" means one thing in the
+index, in the guard, and in `findUnanswered`.
 
-**Outcome:** a finding that keeps returning argues for its own guard without
-anybody noticing the pattern by hand.
+**Not a count in a cell.** The first shape was a repeat number beside each
+finding, and a number in a cell of a seventy-eight-row table is a number nobody
+adds up — which is the adding-up this phase exists to remove. As its own list
+it makes one claim: *these four questions have been asked three nights or more*,
+so they want a guard rather than another answer. The threshold is 3 because
+that is the number `docs/reviews/README.md` already names.
 
-**Proof:** the index names a repeat count that matches the reports.
+**Answered nights count**, and that is the decision worth keeping. The section
+is not "nobody has replied" — the Unanswered column says that — it is "this
+keeps coming back", and a question answered `accepted` four weeks running is
+the treadmill with the strongest case for a guard. Excluding those would have
+hidden exactly the rows it found: on 7 Sep all four were answered, and the
+oldest has been asked six nights while its number went 49 → 60.
+
+**And it removed a second answer to its own question.** The index kept a
+regex — `/\bis\b.*,\s*past\b/` — to decide which findings are bound-derived,
+next to `findingKey`, which decides the same thing. It was looser (no digits
+required), so the two could disagree about a sentence; lessons #5 is this
+shape. One fold now.
+
+**Proof:** `test/review-queue.test.ts`, mutation-tested in the three directions
+that are easy and plausible — counting by finding rather than by night, by text
+rather than by question, and only the unanswered nights. All three killed.
 
 ### Phase 5 — The expensive tier is triggered by the queue
 

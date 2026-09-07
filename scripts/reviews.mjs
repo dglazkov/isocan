@@ -199,6 +199,67 @@ export function findingKey(what) {
 export const WORSE_BY = 0.1;
 
 /**
+ * **A question asked a third time is asking for a guard** (#197 phase 4).
+ *
+ * The README has said so since the index existed — *a finding that keeps
+ * reappearing needs a guard rather than a third mention* — and nothing
+ * counted. So the pattern was only visible to somebody who read seventy-eight
+ * rows and noticed the same words in six of them, which is exactly the noticing
+ * that did not happen while the entry chunk grew by a hundred kilobytes.
+ *
+ * Three, because that is the number the sentence above already names. Below it
+ * a repeat is a bound that is still missed; at it, the repetition is the
+ * finding.
+ */
+export const REPEAT_FROM = 3;
+
+/**
+ * **How many runs have carried each question, for the questions carried more
+ * than once.**
+ *
+ * Identity is `findingKey`'s and nothing else — the same fold `findUnanswered`
+ * settles answers by, so "the same question" means one thing here, in the
+ * guard, and in the index. A second notion of sameness is how six nights of
+ * one question read as six findings.
+ *
+ * **Answered nights count.** The claim is not "nobody has replied" — that is
+ * the Unanswered column's job — it is "this keeps coming back", and a question
+ * answered `accepted` three months running is the treadmill this exists to
+ * make visible. `answered` rides along so a reader can tell the two apart
+ * without a second pass.
+ *
+ * Counted by PAGE rather than by finding: a persona that wrote the same bound
+ * twice in one run has still only asked once that night.
+ */
+export function askedAgain(pages, from = REPEAT_FROM) {
+  const seen = new Map();
+  // Oldest first, so `first` and `last` mean what they say however the caller
+  // ordered its pages.
+  for (const page of [...pages].sort((a, b) => a.date.localeCompare(b.date))) {
+    const here = new Map();
+    for (const finding of page.findings) {
+      const key = findingKey(finding.what);
+      if (key === null) continue;
+      here.set(`${key.goal}|${key.bound}`, { key, finding });
+    }
+    for (const [id, { key, finding }] of here) {
+      const row = seen.get(id) ?? {
+        goal: key.goal, bound: key.bound, runs: 0, first: page.date, last: page.date,
+        firstValue: key.value, value: key.value, answered: false,
+      };
+      row.runs += 1;
+      row.last = page.date;
+      row.value = key.value;
+      row.answered = isAnswered(finding.outcome);
+      seen.set(id, row);
+    }
+  }
+  return [...seen.values()]
+    .filter((row) => row.runs >= from)
+    .sort((a, b) => b.runs - a.runs || a.goal.localeCompare(b.goal));
+}
+
+/**
  * The findings that have gone past their answer-by date.
  *
  * Pure, and takes `today`, so the guard can be shown to actually catch
@@ -281,9 +342,46 @@ const lines = [
   "decorative: 26 findings sat here across six nights while the number one of them",
   "described grew by a hundred kilobytes.",
   "",
+];
+
+/**
+ * **Asked again** (#197 phase 4), above the runs rather than inside them.
+ *
+ * A count in a cell of a seventy-eight-row table is a number nobody adds up,
+ * and adding it up by eye is the work this exists to remove. As its own short
+ * list it makes one claim a person can act on: these questions have been asked
+ * this many times, so they want a guard rather than another answer.
+ *
+ * Omitted entirely when nothing repeats, because a heading over an empty table
+ * is a section that trains people to skip the region it lives in.
+ */
+const repeats = askedAgain(pages);
+if (repeats.length > 0) {
+  lines.push(
+    `**${repeats.length} question${repeats.length === 1 ? " has" : "s have"} been asked ` +
+      `${REPEAT_FROM} nights or more.**`,
+    "A number that keeps missing the same bound stops being news: it is a bound to",
+    "either enforce or move, and the repetition is the argument for doing one of them.",
+    "`accepted` on the newest night does not end it — an answer that has to be given",
+    "again every week is the treadmill, not the fix.",
+    "",
+    "| Asked | Bound | Nights | Now | First asked |",
+    "| --- | --- | --- | --- | --- |",
+  );
+  for (const row of repeats) {
+    lines.push(
+      `| ${row.goal} | ${row.bound} | **${row.runs}** | ${row.value}` +
+        (row.answered ? " (answered)" : "") +
+        ` | ${row.first}, at ${row.firstValue} |`,
+    );
+  }
+  lines.push("");
+}
+
+lines.push(
   "| Date | Persona | Goals | Missed | Unanswered |",
   "| --- | --- | --- | --- | --- |",
-];
+);
 
 for (const p of pages) {
   const missed = p.goals.filter((g) => g.verdict === "MISSED");
@@ -294,8 +392,13 @@ for (const p of pages) {
   // says. Listing both makes the index a wall that reads as repetition, which
   // is how an index stops being read — so the count carries those and only a
   // finding somebody WROTE gets its words in the table.
-  const fromBound = /\bis\b.*,\s*past\b/;
-  const written = open.filter((f) => !fromBound.test(f.what));
+  //
+  // Asked through `findingKey` rather than a regex of its own. It was a second
+  // pattern (`/\bis\b.*,\s*past\b/`) for a question this file already
+  // answers, and it was looser — no digits required — so the two could disagree
+  // about whether a sentence containing "is … past" was a bound. Two answers to
+  // "is this from a bound" is how one row ends up counted here and not there.
+  const written = open.filter((f) => findingKey(f.what) === null);
   lines.push(
     `| [${p.date}](${p.file}) | ${p.persona} | ` +
       // `market-researcher` has no standing number and the README says so out

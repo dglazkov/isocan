@@ -96,6 +96,19 @@ a third mention.
 decorative: 26 findings sat here across six nights while the number one of them
 described grew by a hundred kilobytes.
 
+**4 questions have been asked 3 nights or more.**
+A number that keeps missing the same bound stops being news: it is a bound to
+either enforce or move, and the repetition is the argument for doing one of them.
+`accepted` on the newest night does not end it — an answer that has to be given
+again every week is the treadmill, not the fix.
+
+| Asked | Bound | Nights | Now | First asked |
+| --- | --- | --- | --- | --- |
+| CSS rule bodies copied word for word from elsewhere | 47 | **6** | 60 (answered) | 2026-08-31, at 49 |
+| exports nothing outside their own file uses | 0 | **4** | 52 (answered) | 2026-09-03, at 25 |
+| exports with no comment above them | 253 | **4** | 360 (answered) | 2026-09-03, at 301 |
+| the entry chunk a first visit downloads | 640000 | **4** | 722753 (answered) | 2026-09-03, at 648435 |
+
 | Date | Persona | Goals | Missed | Unanswered |
 | --- | --- | --- | --- | --- |
 | [2026-09-06](2026-09-06-accessibility.md) | accessibility | 2/2 held | — | — |
