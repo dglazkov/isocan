@@ -6869,7 +6869,25 @@ program
   );
 
 program
-  .command("format [mode] [items...]")
+  /**
+   * **`tidy`, and `format` is what it used to be called** (7 Sep 2026).
+   *
+   * The verb was `format` and its own description began "Tidy the canvas" —
+   * so the operation had two names before anybody tried to use it. The web
+   * menu said Tidy, its separator said Format, and the agent guide carried a
+   * tool example labelled "Tidy" whose `does` was `/format`: three words for
+   * two operations, disagreeing with each other on screen.
+   *
+   * Dion named the distinction that settles it. **Tidy is where there is room
+   * to move things**; align is "align to what — vertical? horizontal?" and is
+   * incomplete until you say. Two operations, and now two words.
+   *
+   * `format` stays as an alias rather than a deprecation, because it is named
+   * in `agent-guide.md` and agents have it in their habits — a contract, and
+   * the cost of keeping it is one line.
+   */
+  .command("tidy [mode] [items...]")
+  .alias("format")
   .description(
     "Tidy the canvas — `grid` straightens the lines (default), `smart` reads it. Name items to tidy only those, where they are",
   )

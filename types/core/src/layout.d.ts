@@ -21,8 +21,24 @@ export interface Move {
     x: number;
     y: number;
 }
-type AlignEdge = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
+/**
+ * The six edges `align` can line things up on — the CLI's `--to` takes one of
+ * these words, so they are the vocabulary rather than a convenience. Exported
+ * on 7 Sep because the web app grew an Align menu and had to name the same
+ * six; `alignLabel` turns each into the word a person reads.
+ */
+export type AlignEdge = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
 export type Axis = "h" | "v";
+/**
+ * **What each edge is called where a person picks it** (7 Sep 2026).
+ *
+ * `hcenter` and `vcenter` are exact and unreadable — the CLI takes them
+ * because a flag wants one unambiguous token, and a menu must not. Dion's
+ * words for the confusion this fixes: *align feels more like "align to what…
+ * vertical? horizontal?"* — so the menu answers that by showing the six,
+ * named the way the rest of the world names them.
+ */
+export declare function alignLabel(edge: AlignEdge): string;
 export declare const ALIGN_EDGES: readonly AlignEdge[];
 /**
  * Align to the group's own extreme: "left" means the leftmost item's edge, not
@@ -36,4 +52,3 @@ export declare function alignMoves(boxes: LayoutBox[], edge: AlignEdge): Move[];
  * means. The outermost two hold still: they define the run.
  */
 export declare function distributeMoves(boxes: LayoutBox[], axis: Axis): Move[];
-export {};

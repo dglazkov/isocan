@@ -1,6 +1,6 @@
 import type { NavigateFunction } from "react-router-dom";
-import type { Actor } from "@isocan/core";
-import { canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
+import type { Actor, AlignEdge } from "@isocan/core";
+import { alignMoves, canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -364,7 +364,7 @@ function moduleActions(): Action[] {
  * rearranging the whole canvas instead is a menu doing something larger than
  * it was asked for, on work that was not selected. `formatScope` is the fold
  * both surfaces read, so the same selection lands on the same coordinates
- * whether the ask came from here or from `isocan format <items...>`.
+ * whether the ask came from here or from `isocan tidy <items...>`.
  */
 export async function tidyItems(
   canvasId: string,
@@ -378,6 +378,31 @@ export async function tidyItems(
   const moves = scoped
     ? formatMoves(scoped.scope, { mode, origin: scoped.origin })
     : formatMoves(canvas, { mode });
+  if (moves.length === 0) return;
+  await sendEchoed(canvasId, actor, { type: "items.move", moves });
+}
+
+/**
+ * **Line the selection up on one edge** — `isocan align --to <edge>`, as a
+ * menu (7 Sep 2026).
+ *
+ * It was CLI-only, which is why three words for two operations felt like a
+ * mess: from the app you could Tidy but not Align, so the distinction had
+ * nowhere to show itself. One `items.move`, like tidying, so it is one undo.
+ */
+export async function alignItems(
+  canvasId: string,
+  actor: Actor,
+  itemIds: readonly string[],
+  edge: AlignEdge,
+): Promise<void> {
+  const canvas = useCanvasStore.getState().canvas;
+  if (!canvas) return;
+  const boxes = itemIds
+    .map((id) => canvas.items[id])
+    .filter((one): one is NonNullable<typeof one> => Boolean(one))
+    .map((one) => ({ id: one.id, x: one.x, y: one.y, width: one.width, height: one.height }));
+  const moves = alignMoves(boxes, edge);
   if (moves.length === 0) return;
   await sendEchoed(canvasId, actor, { type: "items.move", moves });
 }

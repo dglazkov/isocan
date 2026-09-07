@@ -25,6 +25,18 @@ export interface SlashCommand {
     usage: string;
     /** What the agent should do. Markdown — this is the skill. */
     body: string;
+    /**
+     * **Names this command used to have**, so a rename does not break the
+     * habit of everybody who learned the old one.
+     *
+     * Not shown in the menu and not offered as a completion: an old name is a
+     * door that still opens, not a second thing to choose between. `/format`
+     * became `/tidy` on 7 Sep because the command's own description had always
+     * begun "Tidy the canvas" — one operation with two names before anybody
+     * tried to use it — and `/format` is written in canvases, in habits, and in
+     * the agent guide.
+     */
+    aka?: string[];
     /** Shipped with isocan, written by this home, or carried by a loaded module (core/modules.ts). */
     source: "built-in" | "home" | "module";
     /**

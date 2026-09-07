@@ -66,7 +66,7 @@ export const LEDGER: readonly LedgerRow[] = [
   {
     did: "Tidy the whole canvas",
     note: "Screens across, children under parents",
-    command: "isocan format",
+    command: "isocan tidy",
   },
   {
     did: "Point a mini-browser at your dev server",

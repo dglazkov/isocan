@@ -686,7 +686,7 @@ else's canvas and their tool is already there, because the tool is ON the
 canvas. Nothing was installed.
 
 ```json
-{ "kind": "tool", "label": "Tidy", "icon": "broom", "does": "/format" }
+{ "kind": "tool", "label": "Tidy", "icon": "broom", "does": "/tidy" }
 ```
 
 The one rule the whole design turns on: **a tool may only ask for what a
@@ -945,7 +945,7 @@ when its centre is inside it. Nothing is stored on either side, so dragging a
 thing out is all it takes, and dragging the sheet in the app carries what is
 on it. `isocan area new <title>` lays one; `isocan area ls` names them and
 says how much each holds; `--in <area>` on `text`, `add`, `mv`, `ls` and
-`format` places into, reads from and tidies within one.
+`tidy` places into, reads from and tidies within one.
 
 ```sh
 isocan area new "Sketches" --tint yellow --note "Sketch alone; hand in at the bell."
@@ -954,7 +954,7 @@ isocan text "HMW skip the password" --in "Experts"   # placed inside, at the fir
 isocan add sketch.html --in Sketches      # the same for a file
 isocan mv <item> --in Vote                # onto a sheet
 isocan ls --in Sketches                   # what is on it
-isocan format --in Sketches               # tidy the sheet's contents, within it
+isocan tidy --in Sketches                 # tidy the sheet's contents, within it
 ```
 
 A spot found inside a sheet is *chosen*: the daemon never tidies it out. A
@@ -1691,7 +1691,7 @@ isocan fit <items...>                  # grow items to the size their content wa
   hand, so it OUTRANKS the command's defaults wherever the two disagree. They
   are looking at the canvas; you are not.
 
-  `/format` halfway through a sentence is somebody TALKING about the command,
+  `/tidy` halfway through a sentence is somebody TALKING about the command,
   not asking for it. Only the start of the message counts. If a command names
   something you cannot find, ask on the thread rather than picking a target —
   doing the right work to the wrong screen is worse than a question.
@@ -1725,8 +1725,8 @@ isocan fit <items...>                  # grow items to the size their content wa
   trash (`--keep` leaves them), which is two ops and so two undos. It refuses
   an SVG this canvas did not draw, because moving somebody's artwork silently
   is worse than saying no.
-- **Tidying is a verb, not a judgement call.** `isocan format` arranges the
-  whole canvas the way `/format` means: screens in a row keeping their reading
+- **Tidying is a verb, not a judgement call.** `isocan tidy` arranges the
+  whole canvas the way `/tidy` means: screens in a row keeping their reading
   order, whatever was made FROM a screen in a column under it, images and video
   gathered below. It is one `items.move`, so it is one undo, and it is a fixed
   point — running it on a formatted canvas moves nothing. `--dry-run` says what
@@ -1735,7 +1735,7 @@ isocan fit <items...>                  # grow items to the size their content wa
 - **Say what a thing came from.** When you build an item FROM another one — a
   variation, a spec written from a sketch, a page split out of a page — add
   `--prop parent=<source item id>`. It costs one property and it is what makes
-  the canvas a tree instead of a pile: `/format` hangs children under their
+  the canvas a tree instead of a pile: `/tidy` hangs children under their
   parent, and anyone can see where a screen came from.
 - **Read the room before you act.** `isocan activity [who]` is what has been
   happening here, newest first — who made what, who edited it, who said what
@@ -1952,7 +1952,7 @@ holding.
 
 Put every asset on the canvas — `isocan add icon.png --title "App icon"
 --prop parent=<the screen it came from>` — so it hangs under its source when
-anyone runs `isocan format`, instead of landing in a folder nobody opens.
+anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 
 ## Quick reference of the whole surface
 

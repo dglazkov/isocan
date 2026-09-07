@@ -232,7 +232,7 @@ file you have already added; that makes a second item with no shared history.
 
 Say where a thing came from with `--prop parent=<source item id>` — it costs one
 property and it is what makes the canvas a tree instead of a pile. Then
-`isocan format` arranges the whole thing: screens in a row keeping their reading
+`isocan tidy` arranges the whole thing: screens in a row keeping their reading
 order, whatever was made *from* a screen in a column under it, images and video
 gathered below. It is one operation, so it is one undo, and running it twice
 changes nothing.

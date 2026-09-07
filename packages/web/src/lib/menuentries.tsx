@@ -1,5 +1,5 @@
 import type { Actor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
-import { contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
+import { contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -15,7 +15,7 @@ import {
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
-import { tidyItems } from "./actions.ts";
+import { alignItems, tidyItems } from "./actions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -110,7 +110,18 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
      * edge — so a row called Align would be one word for two operations. A
      * menu is for intent; a verb is for precision.
      */
-    { separator: many ? "Format" : "" },
+    /**
+     * **"Arrange", because "Format" was the third word for two things**
+     * (7 Sep 2026).
+     *
+     * The heading said Format and the rows beneath it said Tidy — one
+     * operation naming itself twice, in the space of two lines. The CLI verb
+     * is `tidy` now (with `format` kept as an alias), and the heading names
+     * the FAMILY rather than either member, because there are two members and
+     * they are genuinely different: tidy decides new positions, align needs
+     * an edge before it can do anything at all.
+     */
+    { separator: many ? "Arrange" : "" },
     {
       label: many ? `Tidy ${items.length} items` : "Tidy",
       writes: true,
@@ -122,6 +133,30 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       writes: true,
       disabled: !many,
       run: () => void tidyItems(ctx.canvasId, ctx.actor, ids, "smart"),
+    },
+    {
+      /**
+       * **Align, which the app could not do at all until now.**
+       *
+       * `isocan align --to <edge>` has always existed; nothing in the web app
+       * reached it, so the one operation whose whole nature is "to WHAT?" was
+       * the one you could not see the answers to. A submenu is the shape that
+       * fixes it — the six edges are the question, so showing them IS the
+       * explanation.
+       *
+       * Named for people rather than for the flag: `hcenter` and `vcenter` are
+       * exact and unreadable, and `alignLabel` in core keeps the two surfaces
+       * from inventing different words for one edge.
+       */
+      label: "Align",
+      writes: true,
+      disabled: !many,
+      run: () => {},
+      submenu: ALIGN_EDGES.map((edge) => ({
+        label: alignLabel(edge),
+        writes: true,
+        run: () => void alignItems(ctx.canvasId, ctx.actor, ids, edge),
+      })),
     },
     { separator: "" },
     {

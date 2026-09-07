@@ -27,6 +27,18 @@ export interface SlashCommand {
   usage: string;
   /** What the agent should do. Markdown — this is the skill. */
   body: string;
+  /**
+   * **Names this command used to have**, so a rename does not break the
+   * habit of everybody who learned the old one.
+   *
+   * Not shown in the menu and not offered as a completion: an old name is a
+   * door that still opens, not a second thing to choose between. `/format`
+   * became `/tidy` on 7 Sep because the command's own description had always
+   * begun "Tidy the canvas" — one operation with two names before anybody
+   * tried to use it — and `/format` is written in canvases, in habits, and in
+   * the agent guide.
+   */
+  aka?: string[];
   /** Shipped with isocan, written by this home, or carried by a loaded module (core/modules.ts). */
   source: "built-in" | "home" | "module";
   /**
@@ -95,7 +107,15 @@ export function matchCommands(
 /** Look one up by name — the registry is small, and the answer has to be the
  * same for the menu, the CLI, and the agent reading the comment. */
 export function findCommand(commands: SlashCommand[], name: string): SlashCommand | null {
-  return commands.find((c) => c.name === name.toLowerCase()) ?? null;
+  const wanted = name.toLowerCase();
+  return (
+    commands.find((c) => c.name === wanted) ??
+    // An old name still opens the door. Checked second, so a command that
+    // takes a name another one used to have wins it — the current vocabulary
+    // outranks the history of it.
+    commands.find((c) => c.aka?.includes(wanted)) ??
+    null
+  );
 }
 
 /**
@@ -291,7 +311,7 @@ Lead with benefits, not features. Say what the person gets, not what the app
 contains.
 
 Everything lands on the canvas — \`isocan add icon.png --title "App icon"
---prop parent=<the screen it came from>\` — so \`isocan format\` hangs the set
+--prop parent=<the screen it came from>\` — so \`isocan tidy\` hangs the set
 under its source. Finish with one comment:
 the five deliverables, which way each image was made, and two or three
 follow-ups worth doing.`,
@@ -628,7 +648,8 @@ If you had not started, say so in one line. That is the best possible outcome
 of a cancellation and it costs them nothing to hear.`,
   },
   {
-    name: "format",
+    name: "tidy",
+    aka: ["format"],
     description: "Tidy the canvas — grid (default), smart, or your own instructions",
     usage: "[grid|smart|note]",
     source: "built-in",

@@ -117,8 +117,24 @@ describe("the built-ins", () => {
   });
 
   it("are findable by the name a person types, in any case", () => {
-    expect(findCommand(DEFAULT_COMMANDS, "FORMAT")?.name).toBe("format");
+    expect(findCommand(DEFAULT_COMMANDS, "TIDY")?.name).toBe("tidy");
     expect(findCommand(DEFAULT_COMMANDS, "nope")).toBeNull();
+  });
+
+  it("still opens the door for a name a command used to have", () => {
+    /* `/format` became `/tidy` on 7 Sep — the command's own description had
+       always begun "Tidy the canvas", so the operation had two names before
+       anybody tried to use it. But `/format` is written in canvases, in
+       habits and in the agent guide, and a rename that breaks those is a
+       rename that gets reverted. An old name is a door that still opens; it
+       is not offered in the menu, because it is not a second thing to
+       choose. */
+    expect(findCommand(DEFAULT_COMMANDS, "format")?.name).toBe("tidy");
+    expect(findCommand(DEFAULT_COMMANDS, "FORMAT")?.name).toBe("tidy");
+    expect(
+      DEFAULT_COMMANDS.map((c) => c.name),
+      "the old name is not a row of its own",
+    ).not.toContain("format");
   });
 });
 
