@@ -11284,6 +11284,35 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         for (const [id, row] of Object.entries(lastRoster)) known.set(id, row.actor.name);
       }
       const roster = lastRoster;
+      /**
+       * **Anybody the roster names and nobody has claimed** (6 Sep 2026).
+       *
+       * `claimAgent` used to run in exactly two places: once at start for
+       * `opening`, and inside the `agent.enroll` branch below — which is
+       * guarded by `entry.seq > startTip`. Between reading `opening` (the
+       * roster) and computing `startTip` sit four hundred lines and several
+       * round trips to the daemon, so an enrolment landing in that window is
+       * in NEITHER set: absent from `opening`, and at or below `startTip` so
+       * the branch skips it. The roster read above then learns the agent's
+       * name and never claims a cursor for it, and the dispatch loop below
+       * skips every agent with no dispatch row — forever.
+       *
+       * The visible result is an rc that says *"answering on X"*, looks
+       * healthy, and silently never answers for that agent, while the line it
+       * printed promises *"this rc picks it up without a restart"*. It is the
+       * suspected cause of `rc.test.ts`'s "a web add gets its rc half from the
+       * parked rc" failing on CI three times, each on an unrelated commit and
+       * each passing locally — a loaded machine widens the window.
+       *
+       * Reconciling from the roster closes it whatever the ordering, because
+       * it asks the question that actually matters — *is anybody enrolled here
+       * that I am not answering for?* — rather than trying to catch every path
+       * by which they could have arrived. `claimAgent` returns early when a
+       * dispatch exists, so this costs nothing on a settled lap.
+       */
+      for (const record of Object.values(roster)) {
+        if (!dispatches.has(record.actor.id)) await claimAgent(record.actor.id);
+      }
       for (const entry of batch.entries) {
         const op = entry.envelope.op;
         const by = entry.envelope.actor;

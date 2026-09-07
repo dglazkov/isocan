@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { keyFor } from "@isocan/core";
 import { chromeMenu } from "../src/lib/menuentries.tsx";
 import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
 
@@ -41,6 +42,7 @@ const menu = (over = {}) =>
     theme: null,
     anchor: "world" as const,
     toggleAnchor: () => {},
+    openSwitcher: () => {},
     cycleTheme: () => {},
     toWorkbench: () => {},
     ...over,
@@ -52,6 +54,30 @@ describe("the drawer holds everything it took", () => {
     for (const control of ["Chat", "Files", "Agents", "Context", "Workbench", "Trash", "minimap", "shortcuts"]) {
       expect(found, `${control} must be reachable from the drawer`).toContain(control);
     }
+  });
+
+  it("offers switching canvases, and names the key that does it", () => {
+    /**
+     * Switching lived only on a caret beside the canvas's name, and the caret
+     * was unreadable for a specific reason: clicking the NAME opens the rename
+     * editor, so two adjacent controls, both labelled only by their shape,
+     * meant entirely different things. Dion could not tell which was which and
+     * asked where the background settings were — they were behind the other
+     * one (6 Sep 2026).
+     *
+     * The row carries a word AND the accelerator, which is the half a glyph
+     * could never do: somebody who finds it once learns ⌘O and stops needing
+     * the menu. That second half is the assertion worth holding, because a row
+     * that loses its `shortcutFor` still looks completely correct.
+     */
+    expect(labels(menu())).toContain("Switch canvas…");
+    const row = menu().find(
+      (e): e is MenuAction => "label" in e && e.label === "Switch canvas…",
+    );
+    expect(row?.shortcutFor, "the row must teach the key, not just do the thing").toBe(
+      "Switch canvas",
+    );
+    expect(keyFor("Switch canvas"), "and that name must resolve to a real key").toBe("⌘O");
   });
 
   it("no longer keeps those in the bar", () => {

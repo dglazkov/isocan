@@ -5513,12 +5513,6 @@ button.mt-card:hover { border-color: var(--accent); }
   color: var(--ink-soft); font-size: 11px;
 }
 /* The caret beside the canvas's name: quiet until pointed at, like the name. */
-.canvas-name .canvas-switch {
-  padding: 4px 3px; margin-right: 6px; border-color: transparent;
-  background: transparent; color: var(--ink-soft);
-}
-.canvas-name .canvas-switch:hover:enabled { background: var(--chip); border-color: var(--chip-line); color: var(--ink); }
-.canvas-name .canvas-switch:disabled { visibility: hidden; }
 
 /**
  * **Switching, as a move rather than a cut** (`lib/canvasswitch.ts`).

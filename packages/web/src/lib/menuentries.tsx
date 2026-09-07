@@ -486,6 +486,8 @@ export function chromeMenu(ctx: {
   /** Next ground along, wrapping through none. The caller owns the write,
    *  because this module builds entries and sends no ops. */
   cycleTheme: () => void | Promise<void>;
+  /** Open the switcher — the same face ⌘O opens. */
+  openSwitcher: () => void;
   /** Whether the ground travels with the canvas or stays behind the glass. */
   anchor: ThemeAnchor;
   toggleAnchor: () => void | Promise<void>;
@@ -563,6 +565,27 @@ export function chromeMenu(ctx: {
       label: ctx.minimapOpen ? "Hide minimap" : "Show minimap",
       icon: <MinimapGlyph size={14} />,
       run: () => ui().setMinimapOpen(!ctx.minimapOpen),
+    },
+    {
+      /**
+       * **Switching canvases, where somebody can find it** (6 Sep 2026).
+       *
+       * It lived only on a caret beside the canvas's name, and that caret was
+       * unreadable for a reason worth writing down: clicking the NAME opens
+       * the rename editor, so the two controls sit adjacent and mean entirely
+       * different things. Every app with several documents puts a caret next
+       * to the title, but there it is ONE control opening a menu — here it was
+       * a second button whose only label was its shape, beside a `···` whose
+       * only label was its shape.
+       *
+       * A row here carries a word and, through `shortcutFor`, the key — which
+       * is the part the caret could never do. Somebody who finds this once
+       * learns ⌘O and stops needing the menu, which is the right direction for
+       * a thing done many times a day.
+       */
+      label: "Switch canvas…",
+      shortcutFor: "Switch canvas",
+      run: () => ctx.openSwitcher(),
     },
     {
       /**

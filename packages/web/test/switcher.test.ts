@@ -27,6 +27,7 @@ const bare = (src: string) =>
 const page = bare(read("../src/pages/CanvasPage.tsx"));
 const palette = bare(read("../src/components/CommandPalette.tsx"));
 const crumb = bare(read("../src/components/CanvasCrumb.tsx"));
+const menuentries = bare(read("../src/lib/menuentries.tsx"));
 
 describe("what this browser was on lately", () => {
   const a = { id: "c_a", title: "Acme" };
@@ -80,9 +81,22 @@ describe("the doors", () => {
     expect(palette).toMatch(/if \(row\.action\.id === SWITCH_ACTION\) \{\s*onMode\("canvases"\);\s*return;/);
   });
 
-  it("the caret beside the name opens the same window", () => {
-    expect(crumb).toContain('setPaletteOpen("canvases")');
-    expect(crumb).toContain('aria-label="Switch canvas"');
+  it("the ··· menu's row opens the same window, and the caret is gone", () => {
+    /**
+     * The caret beside the canvas name was the third door until 6 Sep 2026.
+     * It was removed because it and the `···` were adjacent glyphs meaning
+     * different things, with nothing on either to say which — and clicking the
+     * NAME opens the rename editor, so the caret was not part of the name the
+     * way it is in every app that shape was borrowed from.
+     *
+     * The negative half is the half worth holding: a caret quietly returning
+     * to the bar puts the ambiguity back, and it would look like an
+     * improvement in the diff.
+     */
+    expect(menuentries).toContain('label: "Switch canvas…"');
+    expect(menuentries).toContain('shortcutFor: "Switch canvas"');
+    expect(crumb, "the caret is gone from the bar").not.toContain("canvas-switch");
+    expect(crumb, "and so is its label").not.toContain('aria-label="Switch canvas"');
   });
 
   it("prints one key everywhere it is offered", () => {

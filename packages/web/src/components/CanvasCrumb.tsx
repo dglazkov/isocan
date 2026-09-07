@@ -14,7 +14,7 @@ const IdentityMenu = lazy(() => import("./IdentityMenu.tsx").then((m) => ({ defa
  * never open, and it was riding in the entry chunk on every visit.
  */
 const ShareDialog = lazy(() => import("./ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })));
-import { ChevronGlyph, ShareGlyph } from "./Glyphs.tsx";
+import { ShareGlyph } from "./Glyphs.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 
 /**
@@ -61,23 +61,22 @@ export function CanvasTitle({ actor }: { actor: Actor }) {
       >
         {canvas?.title ?? "…"}
       </button>
-      {/* **The switcher's handle, beside the name it would replace.** A
-          canvas's name with a caret is the shape every app with several
-          documents uses for "the others are under here", and it is the one
-          entry point that does not need a key to be found. Two glyphs wide,
-          and the only thing in the bar that grew: the drawer's `···` and the
-          rail already hold everything else that goes somewhere. Shown to a
-          reader too — switching is not a write. */}
-      <button
-        className="btn canvas-switch"
-        title="Switch canvas (⌘O)"
-        aria-label="Switch canvas"
-        aria-haspopup="dialog"
-        disabled={!canvas}
-        onClick={() => useUiStore.getState().setPaletteOpen("canvases")}
-      >
-        <ChevronGlyph />
-      </button>
+      {/* **The switcher's handle used to be here, and it was unreadable.**
+          The argument for it was sound as far as it went — a name with a caret
+          is the shape every app with several documents uses, and it needs no
+          key to be found. What it missed is that in those apps the name AND
+          the caret are one control opening one menu. Here, clicking the name
+          opens the RENAME editor, so the caret was a second button, meaning
+          something else, labelled only by its shape, beside a `···` also
+          labelled only by its shape.
+
+          The result was exactly what you would predict and it took a while to
+          hear: on 6 Sep 2026 Dion said he could not tell which did which, and
+          in the same conversation asked where the background settings were —
+          they were behind the other glyph.
+
+          Switching now lives in the `···` menu, where it carries a word and
+          ⌘O, and the bar is back to one glyph. See `menuentries.tsx`. */}
       {editing && canvas && (
         <div className="canvas-popover">
           <CanvasEditor

@@ -122,6 +122,7 @@ export function Toolbar({
                    * none, so the row that puts one on is also the row that
                    * takes it off.
                    */
+                  openSwitcher: () => useUiStore.getState().setPaletteOpen("canvases"),
                   cycleTheme: async () => {
                     const next = nextTheme(themeOf(canvas));
                     await sendEchoed(canvas.id, actor, {
