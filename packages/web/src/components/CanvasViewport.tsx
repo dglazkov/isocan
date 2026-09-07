@@ -157,6 +157,23 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   // does not settle, so every stroke of the hold lands in one drawing.
   const penPrevTool = useRef<Tool | null>(null);
   const penDownAt = useRef(0);
+  /**
+   * **The other hold-to-borrow tools, in one mechanism** (7 Sep 2026).
+   *
+   * Space, P and Z each grew their own pair of refs because each carries
+   * something extra — Space is hold-only, P keeps the ink wet for the whole
+   * press, Z latches on a tap. H and T carry nothing extra, so they share one.
+   *
+   * They had no hold at all until now, and worse: they were plain TOGGLES
+   * living in `CanvasPage`'s key handler with no `e.repeat` guard, so holding
+   * H flipped hand → select → hand → select for as long as you held it. Dion:
+   * *"if I hold down H for hand, it jumps between the V/select and the H
+   * tool... P works correctly. T does the bouncing."*
+   *
+   * The cause is the same thing that made P right and H wrong: tool keys were
+   * handled in two files with two different shapes. They are handled here now.
+   */
+  const holdTool = useRef<{ code: string; prev: Tool; downAt: number } | null>(null);
   const penHeld = useRef(false);
   // Pending settle: the ink becomes an item when this fires (see INK_SETTLE_MS).
   const settleTimer = useRef<number | null>(null);
@@ -327,6 +344,21 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         ui.setActiveTool("pen");
         ui.setPenSession(true);
       }
+      /**
+       * **H and T: tap to latch, hold to borrow** — the shape P and Z already
+       * had, and the shape Space has without the tap half.
+       *
+       * `e.repeat` is the fix for the bouncing on its own; the hold is the fix
+       * for what Dion actually wanted, which is Space's behaviour on the tool
+       * he reaches for while panning.
+       */
+      const momentary: Record<string, Tool> = { KeyH: "hand", KeyT: "text" };
+      const wants = momentary[e.code];
+      if (wants && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.repeat && holdTool.current === null) {
+        const ui = useUiStore.getState();
+        holdTool.current = { code: e.code, prev: ui.activeTool, downAt: Date.now() };
+        ui.setActiveTool(wants);
+      }
       if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey) {
         const ui = useUiStore.getState();
         if (ui.activeTool !== "zoom") {
@@ -337,6 +369,15 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       }
     }
     function up(e: KeyboardEvent) {
+      const held = holdTool.current;
+      if (held && e.code === held.code) {
+        const ui = useUiStore.getState();
+        // A hold hands the tool back; a tap keeps it, and pressing the same key
+        // again returns to Select — the toggle H and T have always had.
+        if (wasHeld(held.downAt, Date.now())) ui.setActiveTool(held.prev);
+        else if (held.prev === ui.activeTool) ui.setActiveTool("select");
+        holdTool.current = null;
+      }
       if (e.code === "Space" && spacePrevTool.current !== null) {
         useUiStore.getState().setActiveTool(spacePrevTool.current);
         spacePrevTool.current = null;
@@ -373,6 +414,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
      * confusion, which is the reason bugs like this survive.
      */
     function onBlur() {
+      if (holdTool.current !== null) {
+        useUiStore.getState().setActiveTool(holdTool.current.prev);
+        holdTool.current = null;
+      }
       if (penHeld.current) endPenHold();
       if (spacePrevTool.current !== null) {
         useUiStore.getState().setActiveTool(spacePrevTool.current);

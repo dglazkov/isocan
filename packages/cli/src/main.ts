@@ -1131,6 +1131,11 @@ program
 
 program
   .command("serve")
+  // `stop` and `restart` are verbs; the one that starts the daemon is `serve`.
+  // Anybody holding the other two reaches for `start` and gets an error and a
+  // "did you mean restart, share?" that helps nobody. So `start` works, and
+  // help still teaches `serve` — the same bargain as `project` and `format`.
+  .alias("start")
   .description("Run the state daemon (auto-started by other commands; --foreground attaches)")
   .option("--foreground", "run in the foreground (default: detach)")
   .option("--force", "stop whatever daemon is on the port and take it over")

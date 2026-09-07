@@ -721,10 +721,12 @@ function CanvasSurface({
         zoomToFit();
       } else if (e.code === "KeyV" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
         ui.setActiveTool("select"); // V is Select, the way every canvas has it
-      } else if (e.key.toLowerCase() === "h" && !e.metaKey && !e.ctrlKey) {
-        ui.setActiveTool(ui.activeTool === "hand" ? "select" : "hand");
-      } else if (e.key.toLowerCase() === "t" && !e.metaKey && !e.ctrlKey) {
-        ui.setActiveTool(ui.activeTool === "text" ? "select" : "text");
+      /* H and T used to toggle here, with no `e.repeat` guard — so holding
+         either one flipped between it and Select for as long as you held it.
+         They are hold-to-borrow tools now, beside Space, P and Z in
+         `CanvasViewport`, which is where every tool key belongs: two files
+         handling tool keys with two different shapes is exactly why P was
+         right and H was wrong. */
       } else if (e.key.toLowerCase() === "f" && !e.metaKey && !e.ctrlKey) {
         // Focus: fill the screen with what you are looking at. With nothing
         // selected there is only one honest reading of "focus" — everything.
@@ -799,9 +801,15 @@ function CanvasSurface({
             else ui.setPendingComment({ ...anchorOffset(item), anchorItemId: ids[0]! });
           }
         }
-      } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
+      } else if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey && !e.repeat) {
+        /* `!e.repeat` for the reason H and T moved out of this handler: keydown
+           repeats while a key is held, so a toggle without it flips many times
+           a second. Comment mode stays a toggle rather than becoming a
+           hold-to-borrow tool — it is a MODE you work in, not a tool you
+           borrow for one gesture, and holding C to place one comment would
+           fight the click that places it. */
         ui.setCommentMode(!ui.commentMode);
-      } else if (e.key === "?" && !e.metaKey && !e.ctrlKey) {
+      } else if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.repeat) {
         // The key every app with shortcuts has trained people to try.
         e.preventDefault();
         ui.setHelpOpen(!ui.helpOpen);

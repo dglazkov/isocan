@@ -232,12 +232,125 @@ are invisible until the thing is in the app:
   standing on top, the ground is too light or too busy, whatever it looks like
   on its own.
 
-## What is not an image job
+---
 
-**The themed cursor.** Galaxy is a sparkle, ocean a fish, mountains a summit
-flag (`themeCursor` in `packages/core/src/theme.ts`), and `farm` would want a
-sheep. These are ~18px SVG paths filled with **the viewer's own identity
-colour**, so they cannot be generated images — a cursor carrying its own colour
-would delete the one signal that says who is who. A sheep here means a single
-filled path, drawn to read at 18 pixels, which took six candidates and two
-rounds of looking for the three that shipped.
+# Prompts for themed cursors
+
+The other half of #195: a ground gives everybody a cursor. Galaxy is a sparkle,
+ocean a fish, mountains a summit flag (`themeCursor` in
+`packages/core/src/theme.ts`); `farm` has none, and wants a sheep.
+
+**These are not the same kind of job as the grounds, and one prompt cannot do
+them.** A cursor here is a single SVG path, about 18 pixels tall, filled at
+runtime with **the viewer's own identity colour**. So there are two routes, and
+the second is the one that ships:
+
+1. **An image model** produces a silhouette to look at and judge. Useful for
+   deciding what a sheep should look like at all. Its output cannot be used
+   directly.
+2. **A model that writes SVG** produces the path itself. This is what goes in
+   the code.
+
+Do 1 first if the shape is not obvious, then 2.
+
+## What a cursor here must be
+
+Every prompt below carries these. If you edit one, keep them.
+
+- **One filled path, no strokes, no gradients, no colour.** The fill is applied
+  at runtime — seven `IDENTITY_COLORS` also land on items during remote
+  selection, so a cursor carrying its own colour would delete the one signal
+  saying who is who.
+- **`viewBox="0 0 18 20"`, and the path starts at `M1.5 0.5`.** That point is
+  the hotspot: where the click actually lands. A shape whose mass sits below
+  and right of it is a decoration you have to aim.
+- **It must read at 18 pixels.** This is the whole difficulty, and it is worth
+  saying twice.
+
+## The evidence, so nobody repeats it
+
+The issue suggests a **rocket** for galaxy. It does not work, and it took
+drawing two of them to be sure: **at 18px a rocket silhouette IS an arrow.**
+The fins never register, and both candidates read as a slightly ragged pointer
+at every size from 18 up to 32. A sparkle reads instantly at every size, and
+its long upper-left ray is a proper pointer tip rather than a compromise.
+
+Six candidates were drawn and looked at across four sizes to get the three that
+shipped. **Expect to reject most of what comes back**, and judge it at 18px on
+a dark ground, never at the size the model renders it.
+
+## 9. A sheep for `farm` — silhouette to look at
+
+```
+A minimal, solid black silhouette of a sheep on a pure white background,
+viewed from the side, facing left.
+
+Extremely simplified — the fewest shapes that still read unmistakably as a
+sheep: a rounded fleecy body, a small head, short legs. No wool texture, no
+facial features, no ears in profile, no grass, no shadow, no outline, no
+gradient, no grey. Pure black on pure white only.
+
+It must remain recognisable when shrunk to 18 pixels tall, so avoid any detail
+thinner than about a twentieth of the height.
+
+Square, 512x512, centred, no border, no text.
+```
+
+## 10. A sheep for `farm` — the actual path
+
+```
+Write a single SVG path for a cursor icon of a sheep, to these exact rules:
+
+- viewBox is "0 0 18 20". Output only the `d` attribute value, nothing else.
+- The path must START at M1.5 0.5 — that point is the cursor's hotspot, where
+  the click lands, and it must be a discernible tip or nose, not a corner of a
+  blob.
+- One filled path only. No stroke, no fill attribute, no colour, no gradient,
+  no groups, no transforms. Subpaths are allowed (a body plus a head, say).
+- The shape must read unmistakably as a sheep when rendered 18 pixels tall on
+  a dark background. Nothing thinner than about 0.8 units, because at that
+  size it disappears.
+- The mass should sit down and to the right of the hotspot, so the thing reads
+  as pointing up-left the way a cursor does.
+
+Give me three different candidates, each as a single line of path data, and
+nothing else.
+```
+
+## 11. A different cursor for an existing ground
+
+Use this to replace a sparkle, fish or flag. Swap the bracketed subject.
+
+```
+Write a single SVG path for a cursor icon of [SUBJECT], to these exact rules:
+
+- viewBox is "0 0 18 20". Output only the `d` attribute value, nothing else.
+- The path must START at M1.5 0.5 — the cursor's hotspot, where the click
+  lands. That point has to be a real tip: a nose, a point, or the end of a
+  long ray, never a corner of a blob.
+- One filled path only. No stroke, no fill, no colour, no gradient, no groups,
+  no transforms. Subpaths allowed.
+- It must read unmistakably at 18 pixels tall on a dark background. Nothing
+  thinner than about 0.8 units.
+- The mass sits down and to the right of the hotspot, so it points up-left the
+  way a cursor does.
+
+Note: shapes that are broadly triangular do not work here — they read as the
+ordinary arrow pointer and say nothing. Prefer a silhouette with one
+distinctive feature that survives being tiny.
+
+Give me three different candidates, each as a single line of path data, and
+nothing else.
+```
+
+## Checking a cursor before it ships
+
+Render each candidate at **18, 22, 26 and 32 pixels**, on the dark ground it
+will actually sit on, and ask two questions:
+
+- **At 18px, is it still the thing?** Not "can I tell what it is because I know
+  what I asked for" — would somebody else name it.
+- **Does it point?** Cover everything except the top-left few pixels. If there
+  is no clear tip there, the hotspot is a guess and every click will feel off.
+
+The three that shipped were the three that survived this. The rockets did not.

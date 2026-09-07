@@ -188,6 +188,28 @@ describe("restart", () => {
   });
 });
 
+/**
+ * `stop` and `restart` are verbs, and the one that starts the daemon is
+ * `serve` — so `isocan start` was an error whose "did you mean" offered
+ * `restart, share`. The alias closes that without teaching a second name:
+ * help still says `serve`, the way `project` and `format` are kept working
+ * and kept out of help.
+ */
+describe("start", () => {
+  it("is `serve` — the verb anybody holding `stop` reaches for", async () => {
+    const started = await isocan("start");
+    expect(started.code).toBe(0);
+    expect(started.stdout).toContain("daemon started");
+    expect((await status()).ok).toBe(true);
+  });
+
+  it("stays out of help, which teaches `serve`", async () => {
+    const help = (await isocan("--help")).stdout;
+    expect(help).toContain("serve");
+    expect(help).not.toMatch(/^\s+start\b/m);
+  });
+});
+
 describe("a daemon that outlived its build", () => {
   it("is reported by status, and warned about once — not on every command", async () => {
     const other = await startOtherCopy();
