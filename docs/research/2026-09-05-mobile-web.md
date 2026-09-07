@@ -143,10 +143,8 @@ which has been zero for every feature this fortnight and should stay so.
 Staged, each stage a thing a person can use, none needing the next.
 
 **Stage 0 — touch physics for every coarse pointer, and the chrome
-un-broken at 375.** *(The touch half is built, 7 Sep 2026 — one finger pans,
-two pinch, a tap clears. The chrome half is not: the minimap and the zoom
-cluster still overlap at 375, and the identity badge is still cut off by the
-right edge. Screenshotted on a 375×812 Android emulation the same afternoon.)* In `CanvasViewport`: a single pointer of type `touch`
+un-broken at 375.** *(Built 7 Sep 2026, except the touch targets and the rail
+fold — see below.)* In `CanvasViewport`: a single pointer of type `touch`
 that lands on empty canvas pans; a second pointer starts a pinch about the
 midpoint (replace, do not extend, the marquee — Excalidraw's line-between-
 the-fingers bug is what happens when the first gesture keeps running);
@@ -221,6 +219,41 @@ The one thing the note asked for and did not get is **long-press for the
 context menu**. It wants a device to judge the hold time against, and the
 gesture it competes with (a pan that starts slowly) is exactly the one just
 built.
+
+## And the chrome, un-broken at 375
+
+Two of the three things this note measured on 5 Sep, fixed the same afternoon
+as the touch half.
+
+**The front page scrolled sideways.** Its header row was 428px of content in a
+327px box, so the identity button — the way to see who you are and to leave —
+sat off the right edge of the phone. `flex-wrap: wrap`, and not a breakpoint:
+the row already knows when it has run out, and a breakpoint is a second
+opinion about the same fact in pixels that stop being true when somebody adds
+a button here.
+
+**The minimap and the zoom row overlapped by 27 pixels.** They stack now below
+460px. Two things worth keeping:
+
+- **Stacking, not folding.** This note recommends folding the map, and the
+  fold writes `isocan.minimap` to localStorage — so a WIDTH would decide a
+  PREFERENCE, which then follows the person to their desktop as a setting they
+  never chose and cannot connect to anything they did. Stacking is CSS, holds
+  no state, and comes back on rotation.
+- **460 is arithmetic, and it is approximate on purpose.** The two meet around
+  405 — around, because the zoom row is as wide as the percentage it happens to
+  be showing, so "100%" and "25%" collide at different widths, and a breakpoint
+  set at the collision would be set at one of them. 460 clears the widest
+  reading with 51 measured pixels to spare. Not this note's 640: between 405
+  and 640 the clusters sit 231px apart, and moving chrome there is chrome
+  moving for no reason.
+
+**Not fixed: the touch targets.** Fourteen controls are still under the 44px
+floor, the smallest 20×20. That is not one declaration — at 375px you cannot
+give all fourteen 44px without changing the layout, and adjacent ones (the
+zoom's − and +) would swallow each other's hit areas if each simply grew. It
+wants the rail fold this stage also names, which is a design pass rather than
+a fix.
 
 ## What this leaves open
 

@@ -142,6 +142,10 @@
      Chrome that floats keeps the same distance from the edge it floats
      against, whichever edge that is. */
   --edge: 20px;
+  /* How tall the zoom row is. A length, so it has no dark twin. Declared
+     because the minimap has to clear it on a narrow window, and a second
+     opinion about this height is how the two come to overlap again. */
+  --zoom-row: 43px;
   /* How far a control sits inside the pill that holds it. One number, all four
      sides — see `.bar-cluster`. */
   --pill-inset: 4px;
@@ -420,8 +424,20 @@ img { height: auto; }
   max-width: 1000px; margin: 0 auto; padding: var(--edge) 24px 64px;
   min-height: 100%;
 }
+/**
+ * **It wraps** (#182 stage 0). Measured 7 Sep at 375x812: this row's content
+ * was 428px in a 327px box, so the front page scrolled sideways and the
+ * identity button — the way to see who you are and to leave — sat off the
+ * right edge of a phone.
+ *
+ * `flex-wrap` rather than a media query, because the row already knows when it
+ * has run out: the `.spacer` pushes `who` to the far end at any width where
+ * they fit, and wrapping changes nothing until they do not. A breakpoint would
+ * be a second opinion about the same fact, expressed in pixels that stop being
+ * true the moment somebody adds a button here.
+ */
 .canvases-head {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
   margin-bottom: 32px;
 }
 .canvases-head h1 {
@@ -3308,11 +3324,45 @@ button.mt-card:hover { border-color: var(--accent); }
      container yields, and the things that are actually drawn claim back. */
   pointer-events: none;
 }
+
 /* …except while the edge is being DRAGGED, when the width changes every frame
    and an ease means the map trails your hand and settles a fifth of a second
    after you stop. The ease is for the one step of opening and closing. */
 .minimap-dock:not(.placed) { transition: none; }
 .canvas-page.resizing-panel .minimap-dock { transition: none; }
+
+/**
+ * **The two things at the bottom of the canvas stop sitting on each other**
+ * (#182 stage 0).
+ *
+ * Measured 7 Sep at 375x812: the minimap occupies x 20-188 and the zoom row
+ * x 161-355, so **27 pixels of one are drawn over the other** — the map's
+ * bottom-right corner under the zoom cluster's left end, on every phone, since
+ * both were placed against opposite edges of a window wide enough for both.
+ *
+ * They stack rather than fold. Folding the map is what the mobile note
+ * recommends and it writes `isocan.minimap` to localStorage — a width
+ * deciding a PREFERENCE, which would then follow the person to their desktop
+ * and be a setting they never chose and cannot connect to anything they did.
+ * Stacking is CSS, holds no state, and comes back on rotation.
+ *
+ * **460, and the number is arithmetic rather than a phone.** The map's right
+ * edge is 20 + 168 = 188; the zoom row's is `width - 20 - its own width`, so
+ * they meet somewhere around 405. AROUND, and that is the point: the row is
+ * as wide as the percentage it is showing, so "100%" and "25%" collide at
+ * different widths. A breakpoint set at the collision would be set at one of
+ * them.
+ *
+ * So 460 — past the widest reading of it, with 51 measured pixels still
+ * between the two clusters when the rule fires, which is room for one of them
+ * to grow by a button. Deliberately NOT the mobile note's 640: between 405
+ * and 640 the two sit a comfortable 231px apart, and moving chrome there
+ * would be chrome moving for no reason. Measured at 640, 461, 460, 403 and
+ * 375 the day it was written.
+ */
+@media (max-width: 460px) {
+  .minimap-dock { bottom: calc(var(--edge) + var(--zoom-row) + 8px); }
+}
 .minimap-panel {
   /* Claimed back from the dock above — this one is drawn, so it is clickable
      (the folded rule below hands it straight back). */
@@ -3706,6 +3756,9 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; align-items: center; gap: 5px; padding: 5px 7px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: var(--shadow-pop);
+  /* Its own height, declared, so the minimap can clear it on a narrow window
+     without a second opinion about how tall this is (`--zoom-row`). */
+  box-sizing: border-box; min-height: var(--zoom-row);
 }
 .zoom-group { position: relative; display: flex; align-items: center; gap: 1px; }
 .zoom-step {

@@ -115,3 +115,51 @@ describe("the browser's own gestures stay off", () => {
     expect(surface?.body).toContain("touch-action: none");
   });
 });
+
+/**
+ * **The chrome at 375** (#182 stage 0, the other half).
+ *
+ * Measured 7 Sep on a 375×812 Android emulation, and both were live:
+ *
+ * - The front page's header row was 428px of content in a 327px box, so the
+ *   page scrolled sideways and the identity button — the way to see who you
+ *   are and to leave — sat off the right edge of the phone.
+ * - The minimap (x 20–188) and the zoom row (x 161–355) overlapped by
+ *   **27 pixels**, one drawn over the other, on every phone.
+ *
+ * Held here rather than by a screenshot because both are one declaration each,
+ * and a declaration is the thing that goes missing in a refactor.
+ */
+describe("the chrome fits a phone", () => {
+  const sheet = rules(withoutComments());
+  const rule = (selector: string) => sheet.find((r) => r.selector === selector);
+
+  it("wraps the front page's header instead of scrolling the page sideways", () => {
+    /* `flex-wrap`, not a breakpoint: the row already knows when it has run
+       out, and a breakpoint would be a second opinion about the same fact in
+       pixels that stop being true when somebody adds a button. */
+    expect(rule(".canvases-head")?.body).toContain("flex-wrap: wrap");
+  });
+
+  it("lifts the minimap clear of the zoom row on a narrow window", () => {
+    const lifted = sheet.find(
+      (r) => r.selector === ".minimap-dock" && r.body.includes("var(--zoom-row)"),
+    );
+    expect(lifted, "a narrow-window rule stacks them").toBeTruthy();
+    expect(lifted!.at.join(" "), "and only on a narrow window").toMatch(/max-width/);
+  });
+
+  it("reads the zoom row's height from the row itself", () => {
+    /**
+     * The two are one number with two homes, which is the shape this codebase
+     * keeps writing lessons about. `--zoom-row` is declared once, the row is
+     * held to it with `min-height`, and the minimap's offset is computed from
+     * it — so a taller zoom row cannot start overlapping the map again while
+     * both declarations stay individually correct.
+     */
+    expect(rule(".zoom-controls")?.body).toContain("min-height: var(--zoom-row)");
+    // `box-sizing` or the min-height is about the content box and the padding
+    // pushes it past the number the minimap was told.
+    expect(rule(".zoom-controls")?.body).toContain("box-sizing: border-box");
+  });
+});
