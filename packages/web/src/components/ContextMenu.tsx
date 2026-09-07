@@ -189,7 +189,36 @@ function Submenu({
   onClose: () => void;
 }): ReactNode {
   const [open, setOpen] = useState(false);
+  const panel = useRef<HTMLDivElement | null>(null);
   const children = entry.submenu ?? [];
+
+  /**
+   * **Kept on screen, the way the parent menu keeps itself** (7 Sep 2026).
+   *
+   * The parent has clamped itself since it was written; the child shipped
+   * without it and it took looking at the thing to notice — a `···` menu
+   * opened near the bottom of the window put "Sticky" on the edge, and a
+   * canvas is a surface people right-click anywhere on.
+   *
+   * Flips to the LEFT rather than sliding, when there is no room to the
+   * right: a submenu that slides ends up covering the row it belongs to, and
+   * then the pointer leaving the child crosses the parent and re-opens it.
+   * Vertically it slides, because nothing is covered by moving up.
+   */
+  useEffect(() => {
+    const el = panel.current;
+    if (!open || !el) return;
+    el.style.left = "";
+    el.style.right = "";
+    el.style.top = "";
+    const r = el.getBoundingClientRect();
+    if (r.right > window.innerWidth - 8) {
+      el.style.left = "auto";
+      el.style.right = "calc(100% + 4px)";
+    }
+    const over = el.getBoundingClientRect().bottom - (window.innerHeight - 8);
+    if (over > 0) el.style.top = `${-5 - over}px`;
+  }, [open, children.length]);
   return (
     <div
       className="context-sub"
@@ -216,7 +245,7 @@ function Submenu({
         </span>
       </button>
       {open && (
-        <div className="context-menu context-submenu" role="menu">
+        <div className="context-menu context-submenu" role="menu" ref={panel}>
           {children.map((child, i) =>
             "separator" in child ? (
               <div className="context-sep" key={`sep-${i}`}>

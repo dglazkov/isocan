@@ -117,6 +117,30 @@ describe("the drawer holds everything it took", () => {
     expect(sticky(menu({ theme: "ocean" }))?.disabled).toBe(false);
   });
 
+  it("keeps a submenu on screen, the way the parent menu keeps itself", () => {
+    /**
+     * The parent has clamped itself to the window since it was written. The
+     * child shipped without it, and it took a screenshot to notice — a `···`
+     * opened near the bottom put the last row on the edge, and a canvas is a
+     * surface people right-click anywhere on.
+     *
+     * Asserted on the source because the geometry needs a real layout, and a
+     * jsdom-free suite cannot measure one. What it holds is that the code
+     * exists at all, which is what was missing.
+     */
+    const menu = readFileSync(
+      fileURLToPath(new URL("../src/components/ContextMenu.tsx", import.meta.url)),
+      "utf8",
+    );
+    const sub = menu.slice(menu.indexOf("function Submenu"));
+    expect(sub, "the child measures itself").toContain("getBoundingClientRect");
+    expect(sub, "and knows where the window ends").toContain("window.innerWidth");
+    expect(sub, "on both axes").toContain("window.innerHeight");
+    // Flips rather than slides horizontally: a submenu that slid would cover
+    // the row it hangs off, and leaving it would cross the parent and reopen.
+    expect(sub).toContain('el.style.right = "calc(100% + 4px)"');
+  });
+
   it("no longer keeps those in the bar", () => {
     // A control in both places is not a drawer, it is a duplicate — and the
     // duplicate is what makes people believe the drawer is optional and stop

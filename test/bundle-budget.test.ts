@@ -160,8 +160,13 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * has to be edited four times to ship four deliberate things is teaching
  * people to edit it without reading it, and that is how the hundred kilobytes
  * arrived the first time.
+ *
+ * **694,300 (7 Sep, +272).** Keeping a submenu on screen — the child menu
+ * shipped without the edge-avoidance the parent has had since it was written,
+ * and a screenshot of the real thing near the bottom of a window is what
+ * found it. Fifth raise in a day, same argument.
  */
-const CEILING = 693_800;
+const CEILING = 694_300;
 
 /** The performance persona's goal, restated here only so the failure message
  * can say how far there is left to go. `.agents/personas/performance.md` is
