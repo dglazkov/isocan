@@ -11272,7 +11272,26 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         });
       }
       const lapTip = batch.cursors[p.id] ?? 0;
-      const snapshot = batch.entries.length > 0 ? await ctx.client.snapshot(p.id) : null;
+      /**
+       * **Also when we are answering for nobody** (7 Sep 2026).
+       *
+       * The roster is otherwise only re-read on a lap that carried entries,
+       * and that leaves the startup window unrecoverable. `opening` is read
+       * four hundred lines before `startTip`; an enrolment landing between
+       * them is absent from `opening` AND at or below the tip, so the
+       * long-poll delivers nothing for it — no entries, no snapshot, and
+       * `lastRoster` stays as the roster that never had them. The reconcile
+       * below then iterates a list that cannot contain the agent it is looking
+       * for, which is why the first attempt at this fix did not stop the
+       * failure it was written for.
+       *
+       * An rc with no dispatches is doing nothing else, so re-reading costs
+       * nothing where it matters, and "nobody is enrolled yet" is exactly the
+       * state that has to be able to heal itself — the line the rc prints
+       * promises it does.
+       */
+      const snapshot =
+        batch.entries.length > 0 || dispatches.size === 0 ? await ctx.client.snapshot(p.id) : null;
       // The roster survives quiet laps. The instrumented CI failure that
       // forced this: both agents mid-turn, both replies landing in ONE lap
       // — consumed into pending — and every later lap empty, so a
@@ -11311,7 +11330,28 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
        * dispatch exists, so this costs nothing on a settled lap.
        */
       for (const record of Object.values(roster)) {
-        if (!dispatches.has(record.actor.id)) await claimAgent(record.actor.id);
+        if (dispatches.has(record.actor.id)) continue;
+        /**
+         * The SAME two things the enrol branch below does, and the first
+         * version of this did only one of them.
+         *
+         * Claiming a cursor makes the rc dispatch to the agent; `adoptRcAgent`
+         * records where and how it runs. An agent picked up here without the
+         * adoption has a cursor and no record — which is why the test watching
+         * for "· where and how supplied" kept timing out with the fix in
+         * place, and it was right to: the line is missing because the RECORD
+         * is missing, not because the narration is.
+         */
+        const adopted = await adoptRcAgent(ctx.home, {
+          canvasId: p.id,
+          actorId: record.actor.id,
+          name: record.actor.name,
+          harness: null,
+          cwd: rcCwd,
+          sessionId: null,
+        });
+        if (adopted) console.log(rcLine(tag, `${record.actor.name} · where and how supplied — ${rcCwd}`));
+        await claimAgent(record.actor.id);
       }
       for (const entry of batch.entries) {
         const op = entry.envelope.op;

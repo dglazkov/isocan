@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -594,3 +594,38 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
   }, 30_000);
 });
 
+/**
+ * **An agent is taken up the same way however the rc noticed it.**
+ *
+ * This guards a mistake I made twice in one evening while chasing the flake
+ * above. Taking up an agent is TWO things — `adoptRcAgent` records where and
+ * how it runs, `claimAgent` holds its cursor so dispatch reaches it — and the
+ * roster reconcile did only the second. An agent picked up that way had a
+ * cursor and no record, so the test above went on timing out with the "fix"
+ * in place, and it was right to: the narration was missing because the RECORD
+ * was, not the other way round.
+ *
+ * Source-shape, deliberately. The path only runs when an enrolment lands
+ * inside the rc's own startup, and that window cannot be forced from outside
+ * without controlling internal timing — so what is asserted is that the two
+ * paths agree, which is the property that was broken.
+ */
+describe("both ways of taking up an agent do the same two things", () => {
+  const main = readFileSync(fileURLToPath(new URL("../src/main.ts", import.meta.url)), "utf8");
+
+  it("adopts AND claims, on the enrol entry and on the roster reconcile alike", () => {
+    const adopts = main.match(/adoptRcAgent\(ctx\.home, \{/g) ?? [];
+    const claims = main.match(/await claimAgent\(/g) ?? [];
+    // Two adoption sites: the enrol entry and the reconcile. If a third
+    // appears, it needs its own claim beside it — which is the point.
+    expect(adopts.length, "every take-up adopts").toBeGreaterThanOrEqual(2);
+    expect(claims.length, "and every one of them claims too").toBeGreaterThanOrEqual(adopts.length);
+  });
+
+  it("says the same sentence either way, so a reader cannot tell them apart", () => {
+    // The line is how a person knows an agent was taken up at all. Two
+    // wordings would make the rc's narration depend on which path noticed.
+    const said = main.match(/· where and how supplied — \$\{rcCwd\}/g) ?? [];
+    expect(said.length).toBeGreaterThanOrEqual(2);
+  });
+});
