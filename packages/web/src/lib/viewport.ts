@@ -42,6 +42,47 @@ export function pan(vp: Viewport, dx: number, dy: number): Viewport {
   return { ...vp, tx: vp.tx + dx, ty: vp.ty + dy };
 }
 
+/** Two fingers, as the canvas sees them. */
+export interface TwoPoints {
+  a: { x: number; y: number };
+  b: { x: number; y: number };
+}
+
+/**
+ * **A pinch: two fingers moving from one pair of points to another** (#182
+ * stage 0).
+ *
+ * One gesture doing two things at once, and both already have a fold here —
+ * so this composes them rather than doing its own arithmetic: the distance
+ * between the fingers is the zoom FACTOR, applied about where they were
+ * (`zoomAt`, which is what keeps the point under your fingers still), and the
+ * movement of their midpoint is a `pan`. A pinch that only spread would zoom
+ * about a fixed point and slide the canvas out from under the hand doing it.
+ *
+ * Order matters and is the part that reads wrong if you swap it: zoom FIRST,
+ * about the OLD midpoint, then translate by how far the midpoint travelled.
+ * Zooming about the new midpoint would apply the pan twice, once scaled.
+ *
+ * Fingers that have not moved apart return the pan alone, and a degenerate
+ * pair — two reports at the same coordinates, which a touchscreen does emit —
+ * returns the viewport untouched rather than a factor of infinity.
+ *
+ * Pure, and here rather than in the component, because the assertion worth
+ * making about a pinch is arithmetic: two synthetic touches in, one transform
+ * out. Driving it through a real browser proves the wiring and says nothing
+ * about whether the point under the fingers stayed put.
+ */
+export function pinch(vp: Viewport, from: TwoPoints, to: TwoPoints): Viewport {
+  const spread = (p: TwoPoints) => Math.hypot(p.a.x - p.b.x, p.a.y - p.b.y);
+  const mid = (p: TwoPoints) => ({ x: (p.a.x + p.b.x) / 2, y: (p.a.y + p.b.y) / 2 });
+  const was = spread(from);
+  if (was === 0) return vp;
+  const before = mid(from);
+  const after = mid(to);
+  const zoomed = zoomAt(vp, before.x, before.y, spread(to) / was);
+  return pan(zoomed, after.x - before.x, after.y - before.y);
+}
+
 /** Put a world point in the middle of the window, keeping the zoom. */
 export function centerOn(
   vp: Viewport,

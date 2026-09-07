@@ -6,7 +6,7 @@ import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
-import { pan, screenToWorld, worldToScreen, zoomAt } from "../lib/viewport.ts";
+import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints } from "../lib/viewport.ts";
 import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFailure, addFiles } from "../lib/upload.ts";
@@ -503,6 +503,45 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     );
   }
 
+  /**
+   * **Fingers currently down on the canvas** (#182 stage 0), by pointer id.
+   *
+   * Touch only. A mouse has one pointer and none of the two-finger reasoning
+   * below applies to it — every mouse gesture on this canvas behaves exactly
+   * as it did, which is the constraint that makes this change safe to ship
+   * without a device in the room.
+   */
+  const fingers = useRef(new Map<number, { x: number; y: number }>());
+  /**
+   * How to abandon the one-finger gesture in flight, when a second finger
+   * arrives and turns it into a pinch.
+   *
+   * Named for what it must do rather than what it is: **replace the first
+   * gesture, do not extend it.** A pan that keeps running while a pinch zooms
+   * is the line-between-the-fingers bug, where the canvas both follows one
+   * finger and scales about both, and it is what happens when the second
+   * pointer is treated as an addition.
+   */
+  const abandonGesture = useRef<(() => void) | null>(null);
+
+  /** The two fingers a pinch is about, oldest first so the pair is stable
+   *  across a move — a third finger is ignored rather than joining. */
+  function twoFingers(): TwoPoints | null {
+    const [a, b] = [...fingers.current.values()];
+    return a && b ? { a, b } : null;
+  }
+
+  /** What a press on empty canvas that turned out to be a TAP does: the same
+   *  thing a click on the background has always done. Shared by the marquee
+   *  and by the touch pan that replaced it, so a phone and a mouse agree
+   *  about what "I pressed nothing" means. */
+  function clearBackgroundFocus() {
+    const state = useUiStore.getState();
+    state.select(null);
+    state.setOpenThread(null);
+    state.setPendingComment(null);
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
@@ -511,6 +550,26 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     // A press during a coast stops it where it is — nobody waits for the
     // canvas to finish moving.
     stopCoast();
+
+    /**
+     * **Two fingers are a pinch, whatever the first one had started** (#182
+     * stage 0). Zoom on this canvas was the +/- buttons and a trackpad; a
+     * phone has neither.
+     *
+     * Before every tool branch below, because a pinch is not a tool: spreading
+     * two fingers while the Pen is up should zoom rather than draw a line
+     * between them. A third finger is ignored — it is a palm, or a person
+     * steadying the phone, and neither is a gesture.
+     */
+    if (e.pointerType === "touch") {
+      fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.current.size === 2) {
+        startPinch();
+        return;
+      }
+      if (fingers.current.size > 2) return;
+    }
+
     const wantsPan = e.button === 1 || (activeTool === "hand" && e.button === 0);
 
     if (activeTool === "zoom" && e.button === 0) {
@@ -576,8 +635,82 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     if (wantsPan) {
       startPan(e);
     } else if (isBackground && e.button === 0) {
-      startMarquee(e);
+      /**
+       * **A finger on empty canvas MOVES the canvas** (#182 stage 0).
+       *
+       * It used to start a marquee, which is why an isocan canvas could not be
+       * moved with a finger at all: `touch-action: none` switches the
+       * browser's own pan off, correctly for a canvas that handles touch
+       * itself and a trap for one that does not, and the Hand tool — the way
+       * out on a mouse — is a 24px button on a rail.
+       *
+       * A marquee is a mouse gesture. It needs a pointer you can place
+       * precisely, it wants Shift to add, and on a phone the thing you want
+       * from a blank patch of canvas is to go somewhere else. So on a coarse
+       * pointer the marquee is REPLACED rather than sharing the gesture: one
+       * finger pans, and a press that never moves still clears the selection,
+       * so a tap means what a click has always meant.
+       */
+      if (e.pointerType === "touch") startPan(e, { tapClears: true });
+      else startMarquee(e);
     }
+  }
+
+  /**
+   * **A pinch: two fingers, tracked as a pair** (#182 stage 0).
+   *
+   * The arithmetic is `pinch` in `lib/viewport.ts` — zoom about where the
+   * fingers were, then translate by how far their midpoint travelled — so
+   * what lives here is only the bookkeeping: abandon whatever one finger had
+   * started, follow both, and hand back to nothing when a finger lifts.
+   *
+   * **Lifting one finger ENDS the gesture rather than becoming a pan**, and
+   * that is deliberate. Continuing as a one-finger pan from a hand that is
+   * mid-pinch means the canvas lurches on the frame the second finger leaves,
+   * because the remaining finger is nowhere near where a pan would have
+   * started. Ending is a canvas that stops; the person puts a finger back
+   * down and pans, which costs nothing.
+   */
+  function startPinch() {
+    abandonGesture.current?.();
+    const el = ref.current!;
+    stopCoast();
+    let last = twoFingers();
+    if (!last) return;
+    setPanning(true);
+
+    function onMove(ev: PointerEvent) {
+      if (!fingers.current.has(ev.pointerId)) return;
+      fingers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      const now = twoFingers();
+      if (!now || !last) return;
+      const ui = useUiStore.getState();
+      ui.setViewport(pinch(ui.viewport, last, now));
+      last = now;
+    }
+    function done(ev: PointerEvent) {
+      fingers.current.delete(ev.pointerId);
+      if (fingers.current.size >= 2) {
+        // A third finger lifted and two are still down: keep pinching, but
+        // re-read the pair, because it may not be the pair it was.
+        last = twoFingers();
+        return;
+      }
+      stop();
+    }
+    function stop() {
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", done);
+      el.removeEventListener("pointercancel", done);
+      abandonGesture.current = null;
+      setPanning(false);
+      // No coast off a pinch: a flick out of a zoom is a hand leaving the
+      // screen, not a throw.
+    }
+    abandonGesture.current = stop;
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", done);
+    el.addEventListener("pointercancel", done);
   }
 
   /** One stroke, from pen-down to pen-up. Samples land in world coordinates
@@ -655,13 +788,15 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     coasting.current = requestAnimationFrame(frame);
   }
 
-  function startPan(e: React.PointerEvent) {
+  function startPan(e: React.PointerEvent, opts: { tapClears?: boolean } = {}) {
     e.preventDefault();
     stopCoast();
     const el = ref.current!;
     el.setPointerCapture(e.pointerId);
     setPanning(true);
-    let last = { x: e.clientX, y: e.clientY };
+    const from = { x: e.clientX, y: e.clientY };
+    let last = { ...from };
+    let moved = false;
     // The last moments of the drag, for the flick's speed at release.
     const samples: Sample[] = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
 
@@ -669,21 +804,39 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       const dx = ev.clientX - last.x;
       const dy = ev.clientY - last.y;
       last = { x: ev.clientX, y: ev.clientY };
+      // The same 4px the marquee uses before it believes a press was a drag:
+      // a finger resting on glass reports movement, so a tap that pans by two
+      // pixels must still be a tap.
+      if (!moved && Math.hypot(ev.clientX - from.x, ev.clientY - from.y) >= 4) moved = true;
       samples.push({ t: performance.now(), x: ev.clientX, y: ev.clientY });
       if (samples.length > 12) samples.shift();
       const ui = useUiStore.getState();
       ui.setViewport(pan(ui.viewport, dx, dy));
     }
     function onUp(ev: PointerEvent) {
-      el.releasePointerCapture(ev.pointerId);
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      setPanning(false);
-      const v = flickVelocity(samples, performance.now());
+      fingers.current.delete(ev.pointerId);
+      stop(ev.pointerId);
+      // A press that never moved is a TAP, and on a coarse pointer this
+      // gesture replaced the marquee — so it owes the marquee's answer to
+      // "I pressed nothing".
+      if (!moved && opts.tapClears) clearBackgroundFocus();
+      const v = moved ? flickVelocity(samples, performance.now()) : null;
       if (v) startCoast(v);
     }
+    function stop(pointerId: number) {
+      if (el.hasPointerCapture(pointerId)) el.releasePointerCapture(pointerId);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      abandonGesture.current = null;
+      setPanning(false);
+    }
+    // What a second finger calls to take the gesture over. It must not coast:
+    // the hand did not let go, it added a finger.
+    abandonGesture.current = () => stop(e.pointerId);
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
   }
 
   /** The Zoom tool's drag: rubber-band a region, then fit it and hand the
@@ -762,12 +915,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       el.removeEventListener("pointerup", onUp);
       const state = useUiStore.getState();
       state.setMarquee(null);
-      if (!moved && !additive) {
-        // Plain background click: clear selection / close things.
-        state.select(null);
-        state.setOpenThread(null);
-        state.setPendingComment(null);
-      }
+      // Plain background click: clear selection / close things. Shared with
+      // the touch pan that replaced this gesture on a coarse pointer, so a
+      // tap and a click mean the same thing.
+      if (!moved && !additive) clearBackgroundFocus();
     }
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerup", onUp);
@@ -864,6 +1015,22 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         publishCursor(screenToWorld(ui.viewport, e.clientX, e.clientY));
       }}
       onPointerLeave={() => publishCursor(null)}
+      /**
+       * **Every finger that goes down has to come back up** (#182 stage 0).
+       *
+       * `startPan` and the pinch each forget their own pointer, but a touch
+       * that started something ELSE — a stroke, an item drag, a tap on a
+       * card — never reaches either. Without this the map keeps a finger
+       * nobody is holding, and the NEXT single touch counts as the second and
+       * starts a pinch against a ghost.
+       *
+       * Here rather than inside each gesture because it is not about any of
+       * them: it is the bookkeeping for `pointerType === "touch"`, and a
+       * gesture that forgot to prune would be a bug in a place nobody would
+       * think to look. Deleting twice is free; deleting never is the bug.
+       */
+      onPointerUp={(e) => fingers.current.delete(e.pointerId)}
+      onPointerCancel={(e) => fingers.current.delete(e.pointerId)}
       onDragOver={(e) => {
         e.preventDefault();
         dragAlive();

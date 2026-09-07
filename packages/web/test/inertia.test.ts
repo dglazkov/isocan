@@ -57,9 +57,24 @@ describe("a flick coasts; a stop stops", () => {
 
 describe("the viewport honours the three conditions", () => {
   it("coasts on release, and a press or a wheel stops the coast where it is", () => {
-    expect(viewport).toContain("const v = flickVelocity(samples, performance.now());");
+    expect(viewport).toContain("flickVelocity(samples, performance.now())");
     expect(viewport).toContain("stopCoast();");
     expect(viewport).toMatch(/function stopCoast\(\)/);
+  });
+
+  it("does not coast off a press that never moved", () => {
+    /**
+     * Added 7 Sep with touch (#182 stage 0), and it is a touch problem rather
+     * than a general one: a finger resting on glass reports movement, so a TAP
+     * arrives with a handful of jittery samples and a real velocity. Coasting
+     * off those sends the canvas drifting away from somebody who only meant to
+     * deselect — the same gesture, on a mouse, produces one sample and no
+     * velocity at all, which is why this never mattered before.
+     *
+     * The 4px test that decides `moved` is the marquee's own, so a tap means
+     * the same thing to both gestures.
+     */
+    expect(viewport).toContain("const v = moved ? flickVelocity(samples, performance.now()) : null;");
   });
 
   it("does not coast under reduced motion", () => {

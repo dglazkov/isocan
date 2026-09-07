@@ -143,7 +143,10 @@ which has been zero for every feature this fortnight and should stay so.
 Staged, each stage a thing a person can use, none needing the next.
 
 **Stage 0 — touch physics for every coarse pointer, and the chrome
-un-broken at 375.** In `CanvasViewport`: a single pointer of type `touch`
+un-broken at 375.** *(The touch half is built, 7 Sep 2026 — one finger pans,
+two pinch, a tap clears. The chrome half is not: the minimap and the zoom
+cluster still overlap at 375, and the identity badge is still cut off by the
+right edge. Screenshotted on a 375×812 Android emulation the same afternoon.)* In `CanvasViewport`: a single pointer of type `touch`
 that lands on empty canvas pans; a second pointer starts a pinch about the
 midpoint (replace, do not extend, the marquee — Excalidraw's line-between-
 the-fingers bug is what happens when the first gesture keeps running);
@@ -188,6 +191,36 @@ comment, or both.
 the stage editor stays a desktop instrument and the phone face never offers
 it. A second, mobile document model: the phone reads the same log through
 the same reducer, or it is not isocan.
+
+## What the touch half shipped, and what it decided
+
+**7 September 2026.** `pinch` in `web/lib/viewport.ts` and the pointer
+bookkeeping in `CanvasViewport`. Driven with real `Input.dispatchTouchEvent`
+on a 375×812 Android emulation before it landed: a one-finger drag moved the
+world transform, two fingers spreading 80px to 176px scaled by 2.2, and **the
+world point under the fingers drifted 0 world pixels**.
+
+Three decisions the recommendation did not settle.
+
+**Lifting one finger ENDS the gesture rather than becoming a pan.** Continuing
+as a one-finger pan from a hand that is mid-pinch lurches the canvas on the
+frame the second finger leaves, because the remaining finger is nowhere near
+where a pan would have started. Ending is a canvas that stops; the person puts
+a finger back down, which costs nothing.
+
+**A pinch does not coast.** A flick out of a zoom is a hand leaving the screen,
+not a throw.
+
+**Every finger is pruned at the viewport, not inside each gesture.** The pan
+and the pinch each forget their own pointer, but a touch that starts something
+else — a stroke, an item drag, a tap on a card — reaches neither, and the map
+then holds a finger nobody is touching so the next single touch counts as the
+second. Found by driving two separate single touches in a row.
+
+The one thing the note asked for and did not get is **long-press for the
+context menu**. It wants a device to judge the hold time against, and the
+gesture it competes with (a pan that starts slowly) is exactly the one just
+built.
 
 ## What this leaves open
 
