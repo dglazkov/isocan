@@ -1100,7 +1100,19 @@ img { height: auto; }
    invisible, but a screenshot or a note earns the same courtesy.
    (Not while the Pen is up: there you are drawing over items, not aiming.) */
 .canvas-viewport:not(.pen) .item:hover {
-  outline: 1px dashed var(--accent); outline-offset: 2px;
+  /* Counter-scaled, like every other outline here (7 Sep 2026). This one was
+     left in WORLD units when `.selected`, `.entered` and `.peeked` were fixed,
+     so at 10% zoom a 1px dashed line is a tenth of a screen pixel and the
+     preview of the box you would get is invisible exactly when a canvas is
+     crowded enough to need it. Dion: "when moused over you can't tell the
+     border as it's too small at this zoom level. We had this issue with
+     selected border and then we fixed it."
+
+     Kept at 1px rather than matched to selection's 2px: hover is a preview of
+     what a click would give you, and a preview as heavy as the thing it
+     previews stops being one. */
+  outline: calc(1px / var(--scale, 1)) dashed var(--accent);
+  outline-offset: calc(2px / var(--scale, 1));
 }
 .canvas-viewport:not(.pen) .item.selected:hover { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
 /* …and pointing at a running item does not turn it back into a selected one. */
@@ -4812,6 +4824,23 @@ button.mt-card:hover { border-color: var(--accent); }
    "text lives here" while the canvas is read as a whole — not to compete with
    the screens they annotate. Its size is set per node, in world units that
    resolve to a bounded number of SCREEN pixels. */
+/* **What kind of thing this is, once the chrome has gone** (7 Sep 2026).
+   The kind icon lives in the titlebar, and the titlebar is hidden below
+   `hasRoomForChrome` — so the signal vanished at exactly the zoom where a wall
+   of pale rectangles is hardest to read. Centred and quiet: it is an answer to
+   "what is this", not a badge competing with the content under it. */
+.kind-mark {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.kind-mark svg {
+  width: var(--mark); height: var(--mark);
+  color: var(--ink-soft);
+  /* Quiet by TOKEN like the text mark next door, not by opacity — a contrast
+     decision behind an alpha is one no colour test can see. */
+}
+
 .text-mark {
   display: flex; align-items: center; justify-content: center;
   width: 100%; height: 100%;

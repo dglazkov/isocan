@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { isTextItem } from "@isocan/core";
+import { canvasIdOf, isDesignSystem, isTextItem, sourceOf } from "@isocan/core";
 
 import { useUiStore } from "../stores/uiStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -134,13 +134,27 @@ function FanCard({
       </div>
       <div className="fan-body">
         {onScreen && (
+          /* The same facts `ItemView` hands it, or a version draws as
+             something the item never was. `designSystem` was the one missing
+             (7 Sep 2026): a DESIGN.md carries its tokens as swatches on the
+             canvas and every older version fanned out beside it as a wall of
+             raw markdown — "version: alpha name: Stitch description:…". Three
+             other callers pass it (ItemView, ArtifactStage, Viewer) and this
+             was the fourth that did not, which is the drift a shared component
+             exists to prevent. `canvasOf` and its source go with it for the
+             same reason: a canvas card's earlier versions should be the place
+             drawn small, not the address as text. */
           <VersionContent
             canvasId={canvasId}
             blobHash={version.blobHash}
             mimeType={version.mimeType}
             filename={version.filename}
             entered={false}
+            designSystem={isDesignSystem(item)}
             textNode={isTextItem(item)}
+            canvasOf={canvasIdOf(item)}
+            canvasSource={sourceOf(item)}
+            size={{ width: item.width, height: item.height }}
           />
         )}
       </div>

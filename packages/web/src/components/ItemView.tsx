@@ -252,6 +252,30 @@ function ItemViewInner({
     return titleRoom(item, others, strip, TITLE_GAP_PX / scale);
   });
   const kind = iconKindFor(item);
+  /**
+   * **The mark that says what this is, once the chrome has gone** (7 Sep 2026).
+   *
+   * `.item-titlebar` is `display: none` below `hasRoomForChrome`, and the kind
+   * icon lives in it — so at exactly the zoom where a wall of cards is hardest
+   * to read, every signal of what each one IS disappears at once. Dion asked
+   * for "clear differences based on the type of node"; this is where the
+   * difference actually went.
+   *
+   * Not the border, which was the obvious answer and the wrong one. Border
+   * carries what a thing IS and outline carries what is HAPPENING to it, and
+   * `--accent` means "this one, wherever you are pointing at it from" — the
+   * files panel row and the minimap peek use it too. Colouring hover by type
+   * would spend that invariant, and it would be a fourth colour language on
+   * pixels that already carry three.
+   *
+   * **Pictures are exempt.** An image, a video and a drawing already say what
+   * they are at any size — their small form IS the signal. It is the pale
+   * rectangles that become indistinguishable: a document, a screen, a site, a
+   * canvas card. So the mark stands in for content that has stopped saying
+   * what it is, which is the same rule `textIsLegible` already applies to
+   * words.
+   */
+  const picture = kind === "image" || kind === "video" || kind === "drawing";
   // Where this item belongs on disk, and what this machine's disk says —
   // the canvas fact and the per-machine one, kept apart by `backingOf`.
   const disk = useCanvasStore((s) => s.backing);
@@ -306,6 +330,11 @@ function ItemViewInner({
   // transparent to the pointer except for its title strip and handles, so a
   // tool used inside it still reaches the canvas. See `core/area.ts`.
   const isAreaItem = isArea(item);
+  /** See `picture` above: the mark appears once the chrome has gone, and only
+   *  for the kinds whose small form no longer says what they are. A sheet is
+   *  excluded because it is a place rather than a thing, and it keeps its own
+   *  title. */
+  const kindMark = !roomy && !isText && !picture && !isAreaItem;
   const tint = isAreaItem ? areaTint(item) : null;
   const grid = isAreaItem ? areaGrid(item) : null;
   const inner = isAreaItem ? areaInner(item) : null!;
@@ -1043,6 +1072,21 @@ function ItemViewInner({
         />
         )}
 
+        {/* Over the content rather than instead of it: a pale block says
+            little at this size but it is not nothing, and replacing it would
+            trade one lost signal for another. Counter-scaled and sized off the
+            item by the same rule the text mark uses, so it never claims more
+            room than the thing it stands for — forty oversized glyphs are the
+            same smear in a different hat. */}
+        {kindMark && (
+          <span
+            className="kind-mark"
+            aria-hidden
+            style={{ "--mark": `${textMarkSize(width, height, scale) / scale}px` } as React.CSSProperties}
+          >
+            <KindIcon kind={kind} />
+          </span>
+        )}
         {worker && <div className="work-sheen" />}
       </div>
       {/* ONE row under the item, and everything that wants to be there.

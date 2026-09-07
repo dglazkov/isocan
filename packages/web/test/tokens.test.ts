@@ -181,6 +181,10 @@ describe("every token used is a token defined", () => {
       "--mention-color",
       "--text-size",
       "--text-face",
+      // `--mark` is the kind mark's size, computed per item from its box and
+      // the zoom (`textMarkSize`) — a number no stylesheet can know, for the
+      // same reason `--scale` is not in one.
+      "--mark",
     ]);
     const known = defined(rules);
     const missing = used(rules).filter((u) => !known.has(u.name) && !setInJs.has(u.name));
