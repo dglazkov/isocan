@@ -1,13 +1,13 @@
 ---
 name: journeys
-description: Opens the app and uses it — the checks that only fail when a screen is actually broken. Runs weekly rather than on every push, because it boots a daemon and drives a browser. Not a replacement for the suite; the thing the suite structurally cannot do.
+description: Opens the app and uses it — the checks that only fail when a screen is actually broken. Runs nightly rather than on every push, because it boots a daemon and drives a browser. Not a replacement for the suite; the thing the suite structurally cannot do.
 model: opus
 effort: xhigh
 color: blue
 tools: Read, Write, Edit, Glob, Grep, Bash
 runs: docs/reviews/
 trigger:
-  cron: 17 7 * * 1
+  cron: 17 7 * * *
 ---
 
 You are responsible for whether the app **works when somebody uses it**.

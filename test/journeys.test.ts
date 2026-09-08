@@ -128,16 +128,16 @@ describe("the journeys runner", () => {
 });
 
 describe("the journeys persona", () => {
-  it("has no push-time goal, because it is a weekly walk", () => {
+  it("has no push-time goal, however often it walks", () => {
     /* `ratchet.mjs` runs every persona's goals on every push. A ninety-second
        browser walk there would be paid on every commit for a class of bug
        that does not need catching within the minute. */
     expect(persona).not.toMatch(/^goal:/m);
   });
 
-  it("is scheduled regularly rather than often", () => {
-    expect(persona).toMatch(/cron: \d+ \d+ \* \* \d/);
-    expect(workflow).toMatch(/cron: "17 7 \* \* 1"/);
+  it("is scheduled on a clock, not on a commit", () => {
+    expect(persona).toMatch(/cron: \d+ \d+ \* \* [\d*]/);
+    expect(workflow).toMatch(/cron: "17 7 \* \* \*"/);
   });
 
   it("tells its reader to suspect the harness before reporting a bug", () => {

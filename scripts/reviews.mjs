@@ -398,7 +398,14 @@ if (repeats.length > 0) {
 const cadence = cadenceRows();
 const offCadence = cadence.filter((r) => r.verdict !== "agrees");
 lines.push(
-  `**Nine personas, fired by \`${firedCrons().join(", ")}\`.**` +
+  // Only the schedules a persona actually names: the repository has other
+  // crons (the changelog, the grades) and listing them here would be a
+  // sentence about the wrong thing.
+  `**${cadence.length} personas, fired by ` +
+    [...new Set(cadence.map((r) => r.cron).filter(Boolean))]
+      .map((cron) => `\`${cron}\` (${firedCrons().get(cron) ?? "nothing"})`)
+      .join(" and ") +
+    ".**" +
     (offCadence.length === 0
       ? " Every one declares the cadence that actually runs it."
       : ` ${offCadence.length} ${offCadence.length === 1 ? "declares" : "declare"} something else.`),

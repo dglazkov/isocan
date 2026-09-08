@@ -49,7 +49,7 @@ const { PERSONA_DIR, parsePersona } = await import("@isocan/core");
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const REVIEWS = path.join(repo, "docs/reviews");
-const WORKFLOW = path.join(repo, ".github/workflows/persona.yml");
+const WORKFLOWS = path.join(repo, ".github/workflows");
 
 /** A dated run page: `2026-09-06-reviewer.md`, with an optional suffix for a
  *  second run in one day. The same shape `scripts/reviews.mjs` reads. */
@@ -78,11 +78,26 @@ export function declaredTriggers(dir = path.join(repo, PERSONA_DIR)) {
   return out;
 }
 
-/** Every cron `.github/workflows/persona.yml` actually fires on. */
-export function firedCrons(file = WORKFLOW) {
-  const src = readFileSync(file, "utf8");
-  const schedule = /schedule:\s*\n([\s\S]*?)(?:\n\s{2}\w|\n\w)/.exec(src)?.[1] ?? "";
-  return [...schedule.matchAll(/^\s*-\s*cron:\s*["']?([^"'\n#]+?)["']?\s*$/gm)].map((m) => m[1].trim());
+/**
+ * **Every cron in every workflow that could fire a persona.**
+ *
+ * All of them, not `persona.yml` alone — and that correction is the first
+ * thing this reading got wrong about itself. `journeys` has its OWN workflow
+ * (`journeys.yml`), so reading only the nightly reported it as "declares a
+ * cron nothing fires" when the cron it declared was fired, weekly, by a file
+ * this function was not looking at. A reading that cannot see half the
+ * schedule invents drift, which is worse than not reading at all.
+ */
+export function firedCrons(dir = WORKFLOWS) {
+  const out = new Map();
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"))) {
+    const src = readFileSync(path.join(dir, file), "utf8");
+    const schedule = /schedule:\s*\n([\s\S]*?)(?:\n\s{2}\w|\n\w)/.exec(src)?.[1] ?? "";
+    for (const m of schedule.matchAll(/^\s*-\s*cron:\s*["']?([^"'\n#]+?)["']?\s*$/gm)) {
+      out.set(m[1].trim(), file);
+    }
+  }
+  return out;
 }
 
 /** The newest dated page each persona wrote, or null. */
@@ -101,10 +116,15 @@ export function lastRuns(dir = REVIEWS) {
  * One row per persona: what it says, what fires it, when it last wrote, and
  * the verdict — which is about the DECLARATION, not about the number.
  */
-export function cadenceRows(today = new Date()) {
-  const declared = declaredTriggers();
-  const fires = firedCrons();
-  const last = lastRuns();
+export function cadenceRows(today = new Date(), sources = {}) {
+  // The three readings are injectable so a guard can build a canvas that does
+  // not exist in the tree. A negative control that needs a REAL defect to be
+  // present passes only while something is broken — which is how it stops
+  // being a control the day somebody fixes it.
+  const declared = sources.declared ?? declaredTriggers();
+  const fires = sources.fires ?? firedCrons();
+  const firedBy = (cron) => fires.get(cron) ?? null;
+  const last = sources.last ?? lastRuns();
   const rows = [];
   for (const [name, { count, persona }] of [...declared].sort()) {
     const trigger = persona.trigger;
@@ -115,8 +135,8 @@ export function cadenceRows(today = new Date()) {
     if (count > 1) verdict = "declared twice";
     else if (count === 0) verdict = ran ? "runs, declares nothing" : "not declared";
     else if (cron === null) verdict = ran ? `runs, declares ${trigger?.kind}` : trigger?.kind ?? "manual";
-    else if (!fires.includes(cron)) verdict = "declares a cron nothing fires";
-    rows.push({ name, cron, declaredTimes: count, firedBy: fires, lastRan: ran, ageDays: age, verdict });
+    else if (!fires.has(cron)) verdict = "declares a cron nothing fires";
+    rows.push({ name, cron, declaredTimes: count, firedBy: firedBy(cron), lastRan: ran, ageDays: age, verdict });
   }
   return rows;
 }
@@ -126,7 +146,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(rows, null, 2));
   } else {
-    console.log(`the workflow fires: ${firedCrons().join(", ") || "(nothing)"}\n`);
+    console.log([...firedCrons()].map(([c, f]) => `${f}: ${c}`).join("\n") + "\n");
     for (const r of rows) {
       const when = r.lastRan ? `${r.lastRan} (${r.ageDays}d)` : "never";
       console.log(`${r.name.padEnd(18)} ${String(r.cron ?? "—").padEnd(14)} last ${when.padEnd(20)} ${r.verdict}`);

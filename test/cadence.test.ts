@@ -52,27 +52,39 @@ describe("what a persona says about when it runs", () => {
     expect(silentlyScheduled, "it has run, so it has a cadence — write it down").toEqual([]);
   });
 
-  it("reads the workflow that actually fires them", () => {
-    // The other half of the reconciliation, and the half that can rot
-    // silently: if this stops finding the schedule, every row below reads
-    // "declares a cron nothing fires" and the guard becomes noise.
-    expect(firedCrons(), "the nightly's schedule is readable").not.toEqual([]);
-    for (const cron of firedCrons()) expect(cron).toMatch(/^[\d*,/ -]+$/);
+  it("reads EVERY workflow that fires a persona, not just the nightly", () => {
+    /**
+     * The other half of the reconciliation, and the half that can rot
+     * silently: if this stops finding a schedule, every row below reads
+     * "declares a cron nothing fires" and the guard becomes noise.
+     *
+     * It did exactly that on the day it was written. `journeys` has its OWN
+     * workflow, so reading only `persona.yml` reported it as declaring a cron
+     * nothing fires — when the cron it declared was fired, on schedule, by a
+     * file the reading was not looking at. **A reading that cannot see half
+     * the schedule invents drift**, which is worse than not reading at all.
+     */
+    const fires = firedCrons();
+    expect(fires.size, "at least one schedule is readable").toBeGreaterThan(0);
+    for (const [cron] of fires) expect(cron).toMatch(/^[\d*,/ -]+$/);
+    expect(
+      new Set(fires.values()).size,
+      "more than one workflow schedules something — read them all",
+    ).toBeGreaterThan(1);
   });
 
   /**
-   * **A ratchet, not a bound, and the difference is honest.**
+   * **Zero, and it was one for an afternoon.**
    *
-   * `journeys` declares `17 7 * * 1` and runs nightly, so this is red on
-   * arrival — and a guard that is red on arrival is a red trunk rather than a
-   * guard (`test/bundle-budget.test.ts` made the same call for the same
-   * reason). Whether the journeys should walk weekly or nightly is a decision
-   * about cost, not a typo, and #206's phase 1 exists to put it in front of
-   * somebody rather than to answer it.
-   *
-   * What the number stops is a TENTH persona joining it quietly.
+   * This shipped as a ratchet at 1, because `journeys` read as declaring a
+   * cron nothing fires — and it turned out the reading was wrong rather than
+   * the persona: `journeys.yml` was firing it and `firedCrons` was only
+   * looking at `persona.yml`. Fixing the reading took it to zero on its own,
+   * which is the better outcome and the one worth remembering: **a ratchet
+   * left above its floor can be hiding a broken instrument rather than an
+   * accepted debt.**
    */
-  const AGREED_MISMATCHES = 1;
+  const AGREED_MISMATCHES = 0;
 
   it(`has no more than ${AGREED_MISMATCHES} declaring a cron nothing fires`, () => {
     const mismatched = cadenceRows()
@@ -80,18 +92,40 @@ describe("what a persona says about when it runs", () => {
       .map((r: { name: string; cron: string }) => `${r.name} says ${r.cron}`);
     expect(
       mismatched.length,
-      `${mismatched.join("; ")} — the workflow fires ${firedCrons().join(", ")}. ` +
+      `${mismatched.join("; ")} — the workflows fire ` +
+        [...firedCrons()].map(([cron, file]) => `${cron} (${file})`).join(", ") +
+        ". " +
         "Either the file is wrong, or the schedule is; lowering this number is how you win.",
     ).toBeLessThanOrEqual(AGREED_MISMATCHES);
   });
 
-  it("can see a mismatch, rather than passing because it looks at nothing", () => {
-    /* The three assertions above are about a set that is nearly empty, and a
-       guard whose subject is usually empty has to show it can still see. This
-       repo has deleted two that asserted something vacuously true. */
-    const rows = cadenceRows();
-    expect(rows.length, "there are personas to read").toBeGreaterThan(5);
-    expect(rows.some((r: { verdict: string }) => r.verdict === "declares a cron nothing fires")).toBe(true);
-    expect(rows.every((r: { name: string }) => typeof r.name === "string")).toBe(true);
+  it("can see a mismatch, on a tree where one exists", () => {
+    /**
+     * The assertions above are about a set that is now empty, and a guard
+     * whose subject is empty has to show it can still see — this repo has
+     * deleted two that asserted something vacuously true.
+     *
+     * Built from synthetic readings rather than from the real tree, because
+     * the first version of this control asserted that a real mismatch EXISTS,
+     * which passed only while something was broken and failed the moment it
+     * was fixed. A control that needs a live defect is not a control.
+     */
+    const rows = cadenceRows(new Date("2026-09-08T00:00:00Z"), {
+      declared: new Map([
+        ["punctual", { count: 1, persona: { trigger: { kind: "schedule", cron: "43 8 * * *" } } }],
+        ["adrift", { count: 1, persona: { trigger: { kind: "schedule", cron: "9 4 * * 3" } } }],
+        ["twice", { count: 2, persona: { trigger: { kind: "schedule", cron: "43 8 * * *" } } }],
+        ["silent", { count: 0, persona: { trigger: undefined } }],
+      ]),
+      fires: new Map([["43 8 * * *", "persona.yml"]]),
+      last: new Map([["punctual", "2026-09-07"], ["adrift", "2026-09-07"], ["twice", "2026-09-07"], ["silent", "2026-09-07"]]),
+    });
+    const verdict = (name: string) => rows.find((r: { name: string }) => r.name === name)?.verdict;
+    expect(verdict("punctual")).toBe("agrees");
+    expect(verdict("adrift")).toBe("declares a cron nothing fires");
+    expect(verdict("twice")).toBe("declared twice");
+    expect(verdict("silent")).toBe("runs, declares nothing");
+    expect(rows.find((r: { name: string }) => r.name === "punctual")?.firedBy).toBe("persona.yml");
+    expect(rows.find((r: { name: string }) => r.name === "punctual")?.ageDays).toBe(1);
   });
 });
