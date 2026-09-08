@@ -42,3 +42,55 @@ describe("the review index is derived, not written", () => {
     expect(page).toContain("scripts/reviews.mjs");
   });
 });
+
+/**
+ * **A lesson's number is its name, and a name has to be free** (#206 phase 5).
+ *
+ * Found by the decisions index the moment it was generated: `lessons.md` had
+ * **three lesson 16s**, two 17s, two 18s and two 20s — and a stray 36 and 37
+ * sitting between 29 and 30. So `see lessons.md #16` pointed at three
+ * different lessons, and it was already going wrong in the tree:
+ * `titlebar.test.ts` means the second one, `tokens.test.ts` the third, and
+ * `docs/changelog/2026-09-01.md` the first.
+ *
+ * **The same shape as lesson 41, arriving through a number instead of a file
+ * name.** Appending to a numbered list is a claim that the next number is
+ * free, and nothing announced that it was not — so four lessons written on
+ * 8 Sep took 36–39 and two of them collided. Those are 40–43 now.
+ *
+ * A ratchet rather than a bound, because the four inherited collisions want
+ * reference archaeology rather than a rename: each has to be read to say which
+ * lesson its citations meant.
+ */
+describe("a lesson number means one lesson", () => {
+  const numbers = () =>
+    [...readFileSync(fileURLToPath(new URL("../docs/reviews/lessons.md", import.meta.url)), "utf8")
+      .matchAll(/^\|\s*(\d+)\s*\|\s*\*\*/gm)].map((m) => Number(m[1]));
+
+  /** 16, 17, 18 and 20 were already doubled before this guard existed. */
+  const INHERITED = 4;
+
+  it(`has no more than ${INHERITED} numbers used twice`, () => {
+    const seen = new Map<number, number>();
+    for (const n of numbers()) seen.set(n, (seen.get(n) ?? 0) + 1);
+    const doubled = [...seen].filter(([, count]) => count > 1).map(([n]) => n);
+    expect(
+      doubled.length,
+      `lessons ${doubled.join(", ")} are used more than once — "see lessons.md #${doubled[0]}" ` +
+        "then names more than one lesson. Take the next FREE number, not the next one after the last row.",
+    ).toBeLessThanOrEqual(INHERITED);
+  });
+
+  it("can see a collision, and reads a table that is actually there", () => {
+    // The other half: a matcher that found nothing would report no duplicates
+    // forever, which is the vacuous guard this repo has deleted two of.
+    expect(numbers().length, "there are lessons to count").toBeGreaterThan(30);
+    const doubled = (ns: number[]) => {
+      const seen = new Map<number, number>();
+      for (const n of ns) seen.set(n, (seen.get(n) ?? 0) + 1);
+      return [...seen].filter(([, c]) => c > 1).map(([n]) => n);
+    };
+    expect(doubled([1, 2, 2, 3])).toEqual([2]);
+    expect(doubled([1, 2, 3])).toEqual([]);
+  });
+});

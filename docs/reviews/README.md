@@ -123,6 +123,16 @@ again every week is the treadmill, not the fix.
 | qa-tester | `43 8 * * *` | 2026-09-07 · 1d ago |  |
 | reviewer | `43 8 * * *` | 2026-09-07 · 1d ago |  |
 
+**Of the questions each persona asked, how many a person kept.** A fold over
+the outcome column and nothing else, so the only way to move it is to answer
+differently. `open` is not a bad mark — it says something about the reader.
+
+| Persona | Kept | Accepted | Rejected | Open |
+| --- | --- | --- | --- | --- |
+| architect | 100% | 1 | 0 | 0 |
+| reviewer | 100% | 3 | 0 | 2 |
+| performance | 0% | 0 | 1 | 1 |
+
 | Date | Persona | Goals | Missed | Unanswered |
 | --- | --- | --- | --- | --- |
 | [2026-09-07](2026-09-07-accessibility.md) | accessibility | 2/2 held | — | — |

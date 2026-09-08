@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error — a .mjs script with no types, imported for its parser on
 // purpose: a second copy of "what `unanswered` means" is the thing this guard
 // exists to prevent one level up.
-import { ANSWER_DAYS, REPEAT_FROM, WORSE_BY, askedAgain, findUnanswered, findingKey, reviewPages } from "../scripts/reviews.mjs";
+import { ANSWER_DAYS, REPEAT_FROM, WORSE_BY, askedAgain, findUnanswered, findingKey, reviewPages, trustRows } from "../scripts/reviews.mjs";
 
 /**
  * **The queue can fail.**
@@ -331,5 +331,83 @@ describe("what counts as a bound-derived finding", () => {
     // The looser pattern matched this; the parser does not, and the parser is
     // what every other answer in this file is built on.
     expect(findingKey("the outline is drawn past the edge on select")).toBeNull();
+  });
+});
+
+/**
+ * **Trust: of the questions a persona asked, how many a person kept**
+ * (#206 phase 6, D4).
+ *
+ * It could not be computed before the outcomes were being decided, and the
+ * reason is the whole point — `docs/projects/evals/plan.md` measured the
+ * absence directly, nine fan-outs and two choices, and the arithmetic was
+ * never the hard part.
+ *
+ * **Uneditable by construction.** A trust figure somebody can adjust is a
+ * score, not a reading. This one is a fold over the outcome column and over
+ * nothing else, so the only way to move it is to answer differently.
+ */
+describe("of the questions a persona asked, how many were kept", () => {
+  const page = (date: string, persona: string, findings: Array<{ what: string; outcome: string }>) => ({
+    file: `${date}-${persona}.md`,
+    date,
+    persona,
+    goals: [],
+    findings,
+  });
+  const chunk = (n: number) => `the entry chunk a first visit downloads is ${n}, past 640000`;
+  const row = (rows: ReturnType<typeof trustRows>, persona: string) =>
+    rows.find((r: { persona: string }) => r.persona === persona);
+
+  it("counts one question once, however many nights it was asked", () => {
+    /**
+     * `askedAgain`'s reason, applied to a reputation: a bound missed for six
+     * nights is one thing a person accepted once. Counting the nights would
+     * let a persona earn six marks for filing the same finding again, which is
+     * a number that rewards repetition rather than judgement.
+     */
+    const rows = trustRows([
+      page("2026-09-01", "performance", [{ what: chunk(700000), outcome: "unanswered" }]),
+      page("2026-09-02", "performance", [{ what: chunk(710000), outcome: "unanswered" }]),
+      page("2026-09-03", "performance", [{ what: chunk(722753), outcome: "accepted — splitting is spent" }]),
+    ]);
+    expect(row(rows, "performance")).toMatchObject({ accepted: 1, rejected: 0, open: 0, kept: 1 });
+  });
+
+  it("moves a question between columns rather than counting it twice", () => {
+    // Six open nights and then an answer is one accepted question, not seven
+    // things.
+    const rows = trustRows([
+      page("2026-09-01", "copy", [{ what: "the header row jumps 7px on select", outcome: "unanswered" }]),
+      page("2026-09-02", "copy", [{ what: "the header row jumps 7px on select", outcome: "rejected — by design" }]),
+    ]);
+    expect(row(rows, "copy")).toMatchObject({ accepted: 0, rejected: 1, open: 0 });
+  });
+
+  it("says nothing rather than inventing a number", () => {
+    /* A persona whose findings nobody has answered has no reading, and `null`
+       is the honest answer — "0%" would be a persona punished for a reader's
+       backlog. `a measurement that cannot fail reports success forever`; one
+       that reports a number it does not have is the same fault inverted. */
+    const rows = trustRows([page("2026-09-01", "qa-tester", [{ what: "something is off", outcome: "unanswered" }])]);
+    expect(row(rows, "qa-tester")).toMatchObject({ answered: 0, open: 1, kept: null });
+  });
+
+  it("keeps two personas' reputations apart", () => {
+    const rows = trustRows([
+      page("2026-09-01", "reviewer", [{ what: "exports with no comment above them is 331, past 253", outcome: "accepted" }]),
+      page("2026-09-01", "performance", [{ what: chunk(700000), outcome: "rejected — measured wrong" }]),
+    ]);
+    expect(row(rows, "reviewer")).toMatchObject({ accepted: 1, kept: 1 });
+    expect(row(rows, "performance")).toMatchObject({ rejected: 1, kept: 0 });
+  });
+
+  it("reads the real queue without throwing", () => {
+    // The fold runs over whatever is actually in docs/reviews/, which is the
+    // shape a fixture cannot promise.
+    for (const r of trustRows()) {
+      expect(typeof r.persona).toBe("string");
+      expect(r.kept === null || (r.kept >= 0 && r.kept <= 1)).toBe(true);
+    }
   });
 });

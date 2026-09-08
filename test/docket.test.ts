@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // @ts-expect-error — a .mjs script with no types, imported for its folds on
 // purpose: a second copy of "which findings are one question" is the thing
 // this guard exists to prevent one level up.
-import { MARKS, decisionsIn, openQuestions, slugOf, writeOutcomes } from "../scripts/docket.mjs";
+import { CLAIM, MARKS, claimsIn, decisionsIn, openQuestions, slugOf, writeOutcomes } from "../scripts/docket.mjs";
 
 /**
  * **The docket: the one thing decided ON the canvas** (#206 phases 2 and 3).
@@ -127,6 +127,46 @@ describe("what the canvas answers", () => {
   });
 });
 
+/**
+ * **Taking a question is not answering it** (#206 phase 4).
+ *
+ * The half that does not exist anywhere else: presence and `narrate` already
+ * say where somebody is standing, and nothing says what they are standing
+ * there for.
+ */
+describe("who is on it", () => {
+  const item = (slug: string, reactions: Record<string, string[]>) => ({
+    id: "itm_1",
+    title: "a question",
+    properties: { docket: slug },
+    reactions,
+  });
+  const names = { usr_di: "Di", usr_fable: "Fable" };
+
+  it("reads a claim, and more than one person can be on it", () => {
+    const taken = claimsIn([item("q-chunk", { [CLAIM]: ["usr_di", "usr_fable"] })], names);
+    expect(taken.get("q-chunk")).toEqual(["Di", "Fable"]);
+  });
+
+  it("is not a verdict, and does not close anything", () => {
+    /* Somebody can take a question, work a week, and hand it back, and nothing
+       about the question has changed. So a claim must never reach the run
+       pages — the repository keeps DECISIONS, which are permanent; work in
+       flight is true this afternoon and false tomorrow. */
+    const claimed = [item("q-chunk", { [CLAIM]: ["usr_di"] })];
+    expect(decisionsIn(claimed, names), "a claim is not an answer").toEqual([]);
+    expect(Object.keys(MARKS), "and it is not one of the two verdict marks").not.toContain(CLAIM);
+  });
+
+  it("and a verdict is not a claim", () => {
+    expect(claimsIn([item("q-chunk", { "✅": ["usr_di"] })], names).size).toBe(0);
+  });
+
+  it("says nothing about an item that is not on the docket", () => {
+    expect(claimsIn([{ id: "itm_2", title: "a panel", properties: { board: "build" }, reactions: { [CLAIM]: ["usr_di"] } }], names).size).toBe(0);
+  });
+});
+
 describe("the canvas decides; the repo keeps", () => {
   let dir: string;
   beforeEach(() => {
@@ -190,6 +230,17 @@ describe("the canvas decides; the repo keeps", () => {
     const text = readFileSync(path.join(dir, "2026-09-01-performance.md"), "utf8");
     expect(text).toContain("accepted — decided on the canvas by Di");
     expect(text.split("\n").find((l) => l.includes("CSS rule bodies"))).toContain("| unanswered |");
+  });
+
+  it("never writes a claim into a page", () => {
+    /* The line between the two halves, asserted from the writing side: a
+       claim is not a decision, so `writeOutcomes` can only ever be handed
+       verdicts and a page must never learn who picked something up. */
+    const pages = [page("2026-09-01", "performance", [{ what: chunk(700000), outcome: "unanswered" }])];
+    write("2026-09-01-performance.md", [`| ${chunk(700000)} | unanswered |`]);
+    const claimed = [{ id: "itm_1", title: "q", properties: { docket: slugOf("the entry chunk a first visit downloads|640000") }, reactions: { [CLAIM]: ["usr_di"] } }];
+    expect(writeOutcomes(decisionsIn(claimed, { usr_di: "Di" }), dir, pages)).toEqual([]);
+    expect(readFileSync(path.join(dir, "2026-09-01-performance.md"), "utf8")).toContain("| unanswered |");
   });
 
   it("writes nothing when there is nothing to decide", () => {

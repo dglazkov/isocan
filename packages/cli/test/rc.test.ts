@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
 import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
@@ -64,7 +64,30 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  /**
+   * **Reap first, then remove.** A test that reached its own `rc.kill` has
+   * nothing here; a test that did not leaves a parked process, and removing
+   * its home underneath it leaves the process running with a deleted working
+   * directory — quieter than the `ENOTEMPTY` it used to cause, and worse,
+   * because the noise WAS the signal that something was still alive.
+   *
+   * `SIGKILL` after a grace period, not just `SIGINT`: an rc mid-turn is
+   * exactly the case that ignores a polite ask, and a teardown that waits
+   * forever is a hang rather than a failure.
+   */
+  for (const child of started.splice(0)) {
+    if (child.exitCode !== null || child.signalCode !== null) continue;
+    child.kill("SIGINT");
+    await Promise.race([
+      new Promise<void>((resolve) => child.once("exit", () => resolve())),
+      new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+    ]);
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  }
   await daemon.close();
+  // And the daemon an rc started for itself, which is not this file's `daemon`
+  // and so survives closing that one.
+  await stopDaemons(Number(new URL(base).port), home).catch(() => {});
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
@@ -89,16 +112,34 @@ interface Run {
   stderr: string;
 }
 
+/**
+ * **Everything this file has started that is still alive.**
+ *
+ * Every test here kills its own `rc` on its last line, and that is enough
+ * right up until a test fails or times out before reaching it — at which point
+ * a parked rc outlives the run, and the NEXT run's rc finds it holding the
+ * cursor: *"another park adopted Sian's cursor — standing down for it."* The
+ * failure lands on a later, innocent test, which is why it reads as the suite
+ * being unreliable rather than as one thing.
+ *
+ * Two of these were found alive on 8 Sep 2026, from runs 37 minutes apart,
+ * with an `rc` and a `serve` each — `ps` and `lsof` said their working
+ * directories were `/T/isocan-rc-*`, so they were nobody's but this file's.
+ */
+const started: ChildProcess[] = [];
+
 function spawnCli(args: string[], extraEnv: Record<string, string> = {}): ChildProcess {
   // The runner's own harness variables must not leak in: this suite asserts
   // the same person/agent split under every harness, park.test.ts's rule.
   const env = { ...process.env };
   for (const name of harnessVars) delete env[name];
-  return spawn(process.execPath, [cliBin, ...args], {
+  const child = spawn(process.execPath, [cliBin, ...args], {
     env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv },
     cwd: home,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  started.push(child);
+  return child;
 }
 
 function collect(child: ChildProcess): Promise<Run> {

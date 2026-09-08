@@ -56,9 +56,28 @@ const argv = process.argv.slice(2);
 const DRY = argv.includes("--dry-run");
 const READ_ONLY = argv.includes("--read-only");
 
-/** ✅ accepts, ❌ rejects. Two marks and no more: a docket where six emoji
- *  mean six things is a docket nobody can read at a glance. */
+/** ✅ accepts, ❌ rejects. Two marks and no more for a VERDICT: a docket where
+ *  six emoji mean six things is a docket nobody can read at a glance. */
 export const MARKS = { "✅": "accepted", "❌": "rejected" };
+
+/**
+ * **✋ — I am taking this** (#206 phase 4).
+ *
+ * A third mark, and the only one that is not a verdict, which is why it is
+ * separate rather than a third entry above: a verdict CLOSES a question and a
+ * claim does not. Somebody can take a question, work for a week, and hand it
+ * back, and nothing about the question has changed.
+ *
+ * **A claim lives on the canvas and nowhere else, and that is the line.** The
+ * repository keeps DECISIONS, because they are permanent and belong in a
+ * history with an author. Work in flight is transient — it is true this
+ * afternoon and false tomorrow — and a canvas is exactly where live state
+ * belongs. Committing it would be a git history of people picking things up.
+ *
+ * Presence and `narrate` already say where somebody is STANDING. This is the
+ * half that does not exist: what they are standing there for.
+ */
+export const CLAIM = "✋";
 
 /**
  * **The open questions**, one per `findingKey` identity, newest value first.
@@ -120,13 +139,19 @@ export function cardHtml(q) {
   .bound { color: #5d666b; font-size: 12.5px; margin-top: 4px; }
   .who { color: #8b9490; font-size: 11.5px; margin-top: 12px; }
   .ask { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e4e6e0; color: #5d666b; font-size: 12.5px; }
+  .taken { margin-top: 10px; padding: 7px 10px; border-radius: 6px; background: #e8ecfb; color: #1f3fd0; font-size: 12.5px; }
   b { color: #16191b; }
 </style>
 <p class="goal">${escapeHtml(q.goal)}</p>
 <div class="now">${escapeHtml(String(q.value))}</div>
 <div class="bound">past <b>${escapeHtml(q.bound)}</b> · ${escapeHtml(nights)}, since ${escapeHtml(q.since)}</div>
 <div class="who">${escapeHtml(q.persona)} · latest reading ${escapeHtml(q.latest)}</div>
-<div class="ask">React <b>✅</b> to accept this, <b>❌</b> to reject it. Your answer is written into the run pages and committed.</div>`;
+<div class="ask">React <b>✅</b> to accept this, <b>❌</b> to reject it. Your answer is written into the run pages and committed.</div>
+<div class="ask">React <b>✋</b> to say you are taking it. That stays here; it is not committed.</div>${
+    q.takenBy && q.takenBy.length > 0
+      ? `\n<div class="taken">✋ taken by <b>${escapeHtml(q.takenBy.join(", "))}</b></div>`
+      : ""
+  }`;
 }
 
 function escapeHtml(s) {
@@ -153,6 +178,24 @@ export function decisionsIn(items, names = {}) {
     // a snapshot carries. It was a Map for one draft and the walk caught it.
     const who = (item.reactions[emoji] ?? []).map((id) => names[id] ?? id);
     out.push({ slug, verdict, who, itemId: item.id, title: item.title });
+  }
+  return out;
+}
+
+/**
+ * **Who has taken each question**, by docket slug (#206 phase 4).
+ *
+ * Read the same way a verdict is — from item STATE, so it is idempotent and a
+ * missed op costs nothing — and NOT written anywhere. A claim is true this
+ * afternoon and false tomorrow; the canvas is where that belongs.
+ */
+export function claimsIn(items, names = {}) {
+  const out = new Map();
+  for (const item of items) {
+    const slug = item.properties?.docket;
+    if (!slug) continue;
+    const held = item.reactions?.[CLAIM] ?? [];
+    if (held.length > 0) out.set(slug, held.map((id) => names[id] ?? id));
   }
   return out;
 }
@@ -271,7 +314,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
   // Then publish what is still open, and retire what is not.
   const open = openQuestions();
-  const want = new Map(open.map((q) => [slugOf(q.id), q]));
+  const taken = claimsIn(items, names);
+  const want = new Map(open.map((q) => [slugOf(q.id), { ...q, takenBy: taken.get(slugOf(q.id)) ?? [] }]));
+  for (const [slug, who] of taken) {
+    if (want.has(slug)) console.log(`✋ ${who.join(", ")} · ${want.get(slug).goal}`);
+  }
   const COL = 460;
   let i = 0;
   for (const [slug, q] of want) {

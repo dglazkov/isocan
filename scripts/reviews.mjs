@@ -260,6 +260,58 @@ export function askedAgain(pages, from = REPEAT_FROM) {
 }
 
 /**
+ * **Trust: of the findings a persona filed, how many did a person keep.**
+ *
+ * #206 phase 6, and D4 — **derived, and uneditable by construction.** A trust
+ * figure somebody can adjust is a score, not a reading; this one is a fold
+ * over the outcome column and over nothing else, so the only way to move it is
+ * to answer differently.
+ *
+ * It could not be computed before phase 3, and the reason is the whole point:
+ * `docs/projects/evals/plan.md` measured the absence directly — nine fan-outs
+ * and two choices — and the arithmetic was never the hard part. The outcomes
+ * were not being decided.
+ *
+ * **Counted by QUESTION, not by row**, for `askedAgain`'s reason: a bound
+ * missed for six nights is one thing a person accepted once, and counting the
+ * nights would let a persona earn six marks for filing the same finding again.
+ *
+ * `open` is not a bad mark. A question nobody has answered yet says something
+ * about the reader, not about the persona that asked it.
+ */
+export function trustRows(pages = reviewPages()) {
+  const byPersona = new Map();
+  const seen = new Map();
+  for (const page of [...pages].sort((a, b) => a.date.localeCompare(b.date))) {
+    for (const finding of page.findings) {
+      const key = findingKey(finding.what);
+      const id = key === null ? `${page.persona}|prose|${finding.what}` : `${key.goal}|${key.bound}`;
+      const row = byPersona.get(page.persona) ?? { persona: page.persona, accepted: 0, rejected: 0, open: 0 };
+      byPersona.set(page.persona, row);
+      const was = seen.get(id);
+      const now = isAnswered(finding.outcome)
+        ? /^\s*accepted/i.test(finding.outcome)
+          ? "accepted"
+          : "rejected"
+        : "open";
+      if (was === now) continue;
+      // One question moves between columns rather than appearing in two: a
+      // finding that sat open for six nights and was then accepted is one
+      // accepted question, not six open ones and an accepted one.
+      if (was) row[was] -= 1;
+      row[now] += 1;
+      seen.set(id, now);
+    }
+  }
+  return [...byPersona.values()]
+    .map((r) => {
+      const answered = r.accepted + r.rejected;
+      return { ...r, answered, kept: answered === 0 ? null : r.accepted / answered };
+    })
+    .sort((a, b) => (b.kept ?? -1) - (a.kept ?? -1) || a.persona.localeCompare(b.persona));
+}
+
+/**
  * The findings that have gone past their answer-by date.
  *
  * Pure, and takes `today`, so the guard can be shown to actually catch
@@ -420,6 +472,30 @@ for (const row of cadence) {
   );
 }
 lines.push("");
+
+/**
+ * **Trust** (#206 phase 6): of the questions each persona asked, how many a
+ * person kept. Derived and uneditable — the only way to move it is to answer
+ * differently — and it says nothing at all until there are answers, because a
+ * number invented from nothing is the one thing this project's rules forbid.
+ */
+const trust = trustRows(pages).filter((r) => r.answered > 0 || r.open > 0);
+if (trust.some((r) => r.answered > 0)) {
+  lines.push(
+    "**Of the questions each persona asked, how many a person kept.** A fold over",
+    "the outcome column and nothing else, so the only way to move it is to answer",
+    "differently. `open` is not a bad mark — it says something about the reader.",
+    "",
+    "| Persona | Kept | Accepted | Rejected | Open |",
+    "| --- | --- | --- | --- | --- |",
+  );
+  for (const r of trust) {
+    lines.push(
+      `| ${r.persona} | ${r.kept === null ? "—" : `${Math.round(r.kept * 100)}%`} | ${r.accepted} | ${r.rejected} | ${r.open} |`,
+    );
+  }
+  lines.push("");
+}
 
 lines.push(
   "| Date | Persona | Goals | Missed | Unanswered |",

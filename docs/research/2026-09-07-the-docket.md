@@ -293,22 +293,69 @@ commit through the watcher; the run page is edited; the guard is untouched. This
 is the phase the whole note is for, and the first moment the canvas is somewhere
 work happens rather than somewhere work is displayed.
 
-**Phase 4 — The claim.** *I am taking this* — a person or an agent, on a row.
-Presence and `narrate` already say where somebody is standing; this says what
-they are standing there **for**, which is the half that does not exist. Cheap
-once phase 3's write path works, and it is what makes the surface shared.
+**Phase 4 — The claim.** ✅ Built 8 Sep. ✋ on a card says *I am taking this*,
+by a person or an agent, and it shows on the card. **A claim lives on the
+canvas and nowhere else, and that is the line**: the repository keeps
+DECISIONS, because they are permanent and belong in a history with an author;
+work in flight is true this afternoon and false tomorrow, and committing it
+would be a git history of people picking things up.
 
-**Phase 5 — Decisions, projected.** Research notes already carry structured
-`## Decisions` sections and lessons are already numbered with (shape, cost,
-guard). This is a derivation, not a new artifact — and the decisions index has
-been unstarted on the board for a while for want of somewhere to put it.
+**Phase 5 — Decisions, projected.** ✅ Built 8 Sep. `scripts/decisions.mjs`
+derives `docs/decisions.md` from the `**Dn.**` lines every design already
+carries and from the numbered lessons — 36 decisions across 5 documents, and
+46 lessons. Derived for `ROADMAP.md`'s reason: a fifth hand-kept place is a
+fifth place to disagree.
 
-**Phase 6 — Trust, folded.** D4. Only once phases 3 and 5 have been running
-long enough that the fold has something to say.
+**And it found something the moment it ran.** `lessons.md` had **three lesson
+16s**, two 17s, two 18s and two 20s — so *"see lessons.md #16"* named three
+different lessons, and the citations were already going wrong:
+`titlebar.test.ts` means the second, `tokens.test.ts` the third, and
+`docs/changelog/2026-09-01.md` the first. It is lesson 41's shape arriving
+through a number instead of a file name — appending to a numbered list is a
+claim that the next number is free, and nothing announced that it was not.
+Four lessons written that day took 36–39 and two collided; they are 40–43 now,
+and `test/reviews.test.ts` ratchets the inherited four.
 
-**Phase 7 — CI reaches the canvas.** The on-demand address hook, so the docket
-is fresh when every laptop is shut. Deliberately last: everything above works
-from a watching checkout.
+**Phase 6 — Trust, folded.** ✅ Built 8 Sep, in the reviews index: of the
+questions each persona asked, how many a person kept. Counted **by question,
+not by row** — a bound missed six nights is one thing accepted once, and
+counting nights would reward repetition over judgement. `open` is not a bad
+mark; it says something about the reader. And a persona nobody has answered
+gets `—` rather than 0%, because a number invented from nothing is the fault
+this project's rules exist to prevent, inverted.
+
+**Phase 7 — CI reaches the canvas.** Designed, **not built, and it needs an
+action only Dion can take.**
+
+The mechanism exists and is already proved twice in this repository:
+`ISOCAN_DIRECT=<url>` works a canvas with no daemon and no replica, straight
+to a home over HTTP — `packages/cli/test/shelf.test.ts` and `ground.test.ts`
+both run that way. What CI has no way to get is an IDENTITY at the door. The
+door judges badge-less `/api/` requests and exempts a `bearer`, so the shape is
+a long-lived bearer minted once for the nightly and held as a repository
+secret.
+
+    # .github/workflows/persona.yml, after the pages are written
+    - name: Put the night's questions on the docket
+      if: ${{ secrets.ISOCAN_BEARER != '' }}
+      env:
+        ISOCAN_DIRECT: https://isocan.io
+        ISOCAN_BOARD_CANVAS: prj_…
+        ISOCAN_BEARER: ${{ secrets.ISOCAN_BEARER }}
+      run: node scripts/docket.mjs --no-commit
+
+**Gated on the secret so it is inert until the secret exists**, which is the
+same shape sheep's station project uses for its ⚑ steps. Left unbuilt rather
+than half-built because minting a long-lived credential for a public
+repository's CI is a decision about blast radius, not a plumbing task: a
+bearer that can write to a canvas is a bearer that can write to that canvas
+from anywhere, and it would sit in a settings page for as long as nobody
+revoked it.
+
+**And nothing above waits on it.** The docket is fresh whenever a machine with
+a checkout is watching, and stale only when every laptop is shut — the same
+limitation the morning brief has had since #148, which already wrote the
+crontab for it.
 
 ## What this leaves open
 
