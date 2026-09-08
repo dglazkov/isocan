@@ -17,17 +17,35 @@ const page = read("../src/pages/CanvasPage.tsx");
 const actions = read("../src/lib/actions.ts");
 
 describe("the top fade", () => {
-  it("is the ground token fading to nothing — white on light, near-black on dark, by construction", () => {
+  it("fades from the ground it is washing, and names no colour of its own", () => {
+    /**
+     * It used to fade from `--ground` — the APP's page ground — which is
+     * right on a canvas with no ground and wrong on every canvas with one.
+     * Reported 8 Sep 2026 from a Space Galaxy canvas in the light theme: a
+     * white bar dissolving into a starfield. The invariant is that the fade
+     * begins at the colour of whatever it is over, so the assertion is that
+     * the canvas's own ground comes FIRST and the app's is only the fallback.
+     */
     const rule = css.slice(css.indexOf(".top-fade {"), css.indexOf("}", css.indexOf(".top-fade {")));
-    expect(rule).toContain("linear-gradient(to bottom, var(--ground), transparent)");
-    expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    expect(rule).toContain("linear-gradient(to bottom, var(--canvas-ground, var(--ground)), transparent)");
+    expect(rule, "a colour of its own is a colour that cannot follow the ground").not.toMatch(
+      /#[0-9a-f]{3,8}\b|rgba?\(/i,
+    );
+    expect(page, "the page must hand it the canvas's ground").toContain("--canvas-ground");
   });
 
   it("lies over the items and under the chrome, and is not a pointer target", () => {
     const rule = css.slice(css.indexOf(".top-fade {"), css.indexOf("}", css.indexOf(".top-fade {")));
     expect(rule).toContain("z-index: var(--z-canvas)");
     expect(rule).toContain("pointer-events: none");
-    expect(page).toContain('<div className="top-fade" aria-hidden />');
+    /* The element itself: named, and hidden from the accessibility tree —
+       it is a wash, and a screen reader has no ground to read it against.
+       Asserted as its two facts rather than as one line of JSX, because the
+       line grew a style attribute and the facts did not change. */
+    expect(page).toContain('className="top-fade"');
+    expect(page.slice(page.indexOf('className="top-fade"')), "still hidden from a reader").toMatch(
+      /^[^>]*aria-hidden/,
+    );
   });
 
   it("is chrome you can turn off: in the registry, with the palette as its other door", () => {

@@ -185,6 +185,12 @@ describe("every token used is a token defined", () => {
       // the zoom (`textMarkSize`) — a number no stylesheet can know, for the
       // same reason `--scale` is not in one.
       "--mark",
+      // `--canvas-ground` is the colour THIS canvas is standing on, which is a
+      // canvas property (`lib/groundtone.ts`) rather than anything a
+      // stylesheet knows. Read as `var(--canvas-ground, var(--ground))`, so a
+      // canvas with no ground of its own falls back to the app's page ground
+      // and the declaration never drops.
+      "--canvas-ground",
     ]);
     const known = defined(rules);
     const missing = used(rules).filter((u) => !known.has(u.name) && !setInJs.has(u.name));

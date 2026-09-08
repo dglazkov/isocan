@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { type CSSProperties, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
@@ -31,6 +31,7 @@ import { checkForUpdate } from "../lib/appversion.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { pageTitle } from "../lib/title.ts";
+import { groundTone } from "../lib/groundtone.ts";
 import { itemThread } from "../components/CommentLayer.tsx";
 
 /**
@@ -193,6 +194,10 @@ function CanvasSurface({
   // A module's page (ModulePage.tsx): the segment names which.
   const pageSegment = useMatch(MODULE_PAGE_ROUTE)?.params.segment ?? null;
   const topFadeHidden = useChromeHidden("canvas.topfade");
+  /* The token the canvas's own ground paints with, so the wash under the
+     top controls is the colour of what it is washing. Null on a canvas with
+     no ground, where the stylesheet's `--ground` fallback is right. */
+  const fadeTone = useCanvasStore((s) => groundTone(s.project ?? null));
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const historyOpen = useUiStore((s) => s.historyOpen);
@@ -910,8 +915,19 @@ function CanvasSurface({
       </div>
       {/* A wash of the ground under the top controls, so they read over a
           busy canvas (lib/hideable.ts, "canvas.topfade"). Over the items,
-          under every piece of chrome, and no pointer target at all. */}
-      {!topFadeHidden && <div className="top-fade" aria-hidden />}
+          under every piece of chrome, and no pointer target at all.
+
+          The colour is the canvas's own ground where it has one, not the
+          app's page ground: a starfield is dark in either app theme, and the
+          fade was washing it white from the top edge. `groundTone` names the
+          same token the ground itself paints with, so the two cannot drift. */}
+      {!topFadeHidden && (
+        <div
+          className="top-fade"
+          aria-hidden
+          style={fadeTone === null ? undefined : ({ "--canvas-ground": `var(${fadeTone})` } as CSSProperties)}
+        />
+      )}
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}

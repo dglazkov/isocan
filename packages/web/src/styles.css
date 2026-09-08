@@ -854,6 +854,17 @@ img { height: auto; }
 .canvas-theme-galaxy {
   background-color: var(--theme-space);
   --stars: none; --stars-size: auto; --stars-pos: 0 0; --star-fade: 0;
+  --clouds: none; --clouds-size: auto; --clouds-pos: 0 0;
+}
+/* The nebulae, under the stars and over the ground. `::before` rather than a
+   fourth star gradient because they want their own tile sizes — thousands of
+   world units against the stars' hundreds — and because a cloud painted over
+   the stars is fog. They share `--star-fade`: the ground going quiet when you
+   stand back is one behaviour, not two curves. */
+.canvas-theme-galaxy::before {
+  content: ""; position: absolute; inset: 0;
+  background-image: var(--clouds); background-size: var(--clouds-size); background-position: var(--clouds-pos);
+  opacity: var(--star-fade, 1);
 }
 /* The stars fade with zoom; the ground does not. Painted as a second layer so
    the fade is one composited opacity rather than three gradients redrawn. */
@@ -5123,10 +5134,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---- the right-click menu ----------------------------------------------
    Screen space, above everything, and deliberately plain: a menu is read in
-   the half-second before a click, so it earns nothing from decoration. The
-   frosted ground is the one the app already uses for floating chrome
-   (`--panel`, already paired with a blur in four other places), so this adds
-   no token. */
+   the half-second before a click, so it earns nothing from decoration. */
 .context-menu {
   /* `--z-popover` is documented as "menus, thread popovers, peek cards — a
      click opened it", which is exactly this. `--z-dialog` is reserved for the
@@ -5134,7 +5142,40 @@ button.mt-card:hover { border-color: var(--accent); }
      who-are-you dialog would be that reservation spent for nothing. */
   position: fixed; z-index: var(--z-popover);
   min-width: 208px; padding: 5px;
-  background: var(--panel); backdrop-filter: blur(8px);
+  /**
+   * **A menu carries its own ground** (8 Sep 2026).
+   *
+   * This was `var(--panel)` with a blur — the frosted slab every other
+   * floating surface wears. Dion opened Background ▸ and reported that the
+   * submenu *"doesn't show the same hover color as the main menu so it's hard
+   * to see"*, and the two halves of one menu really were different colours.
+   *
+   * `--panel` is `rgba(255, 255, 255, 0.92)`, so what it RENDERS depends on
+   * what is behind it — and a right-click menu is the one piece of chrome that
+   * can open over anything. His main menu sat over the chat panel and rendered
+   * ~#fdfdfc; the submenu hung 4px past its right edge over a Space Galaxy
+   * ground and rendered ~#ebebeb. `--chip-hover` is opaque `#e9eae4`, chosen
+   * against the first: on the second it is a contrast ratio of **1.02**, which
+   * is not a faint highlight, it is no highlight.
+   *
+   * It is not a submenu bug and it is not only dark grounds. The same menu
+   * opened over a photograph in the dark theme puts `--panel` at ~#2c2f34 and
+   * `--chip-hover` at #2f343d — the same collision, mirrored. Anywhere the
+   * ground is unknowable, an opaque hover token is a coin flip.
+   *
+   * So the fix is not a second hover colour for menus, which would give
+   * "the row you are pointing at" two spellings. It is that a list of rows you
+   * point at must not take its colour from the canvas: `--panel` layered over
+   * an opaque `--card` renders one value everywhere, within a hair of what the
+   * menu already looked like on the app's own chrome. The blur goes with it —
+   * nothing shows through an opaque stack, so it was buying a compositing
+   * layer for an effect nobody could see.
+   *
+   * `.floats` keeps the frost, deliberately. A panel is a surface you read;
+   * a menu is a set of targets you point at, and only the second has a state
+   * that can be cancelled out by whatever it happens to be over.
+   */
+  background: linear-gradient(var(--panel), var(--panel)), var(--card);
   border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop);
   display: flex; flex-direction: column; gap: 1px;
@@ -6094,15 +6135,30 @@ button.mt-card:hover { border-color: var(--accent); }
 .fullscreen-notes-toggle.on { border-color: var(--accent); color: var(--accent-text); }
 
 /* ---------- the top fade (lib/hideable.ts, "canvas.topfade") ---------- */
-/* A wash of the page's own ground from the top edge, so the title, the faces
-   and Share read over a busy canvas — white on light, near-black on dark,
-   because it is `--ground` and not a colour of its own. Over the items
-   (`--z-canvas`) and under every piece of chrome; no pointer target, so a
-   drag that starts under it still starts on the canvas. */
+/**
+ * A wash of the ground from the top edge, so the title, the faces and Share
+ * read over a busy canvas. Over the items (`--z-canvas`) and under every
+ * piece of chrome; no pointer target, so a drag that starts under it still
+ * starts on the canvas.
+ *
+ * **The ground it washes is the CANVAS's, not the app's** (8 Sep 2026). This
+ * was `var(--ground)` alone — the page's ground, near-white in the light
+ * theme — and Dion reported it from a canvas standing on Space Galaxy: *"when
+ * the background is dark, the top fade should be dark, and when it's light it
+ * should be light."* A ground is not the app's theme. `.canvas-theme-galaxy`
+ * says so two hundred lines up — *"Space is dark whatever the app's theme
+ * is"* — so in light mode the fade was a white bar dissolving into a
+ * starfield, which is the exact artefact a fade exists to prevent.
+ *
+ * `lib/groundtone.ts` writes `--canvas-ground` as the same token the ground
+ * itself paints with, so the wash and the thing it washes cannot drift; the
+ * fallback here is what a canvas with no ground of its own gets, and is why
+ * this stayed right for every canvas until one wore a sky.
+ */
 .top-fade {
   position: absolute; top: 0; left: 0; right: 0; height: 96px;
   z-index: var(--z-canvas); pointer-events: none;
-  background: linear-gradient(to bottom, var(--ground), transparent);
+  background: linear-gradient(to bottom, var(--canvas-ground, var(--ground)), transparent);
 }
 
 /* ---------- a diagram, drawn from its text (modules/mermaid) ---------- */
