@@ -311,3 +311,11 @@ from a watching checkout.
   nine personas are opus at xhigh, so "cheap finds, expensive decides" remains
   a shape nothing uses. A docket makes the handoff visible; it does not create
   the tier.
+
+- **The other answer to "where is everything", refused on purpose.** herdr
+  aggregates agents that live on machines into one terminal client, over SSH,
+  and it is good at it — 700,000 downloads. It is the alternative shape for
+  this note's request and it is not the one taken, because it is a window onto
+  several places and a canvas is one place; and because a display is what #148
+  says gets looked at twice. Surveyed in
+  [Herding machines](2026-09-07-herding-machines.md).

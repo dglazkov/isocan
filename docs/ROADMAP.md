@@ -12,7 +12,7 @@ built, 12 designed, 0 blocked, and
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
-6 more are `noted` — read, absorbed, owing nothing — and
+7 more are `noted` — read, absorbed, owing nothing — and
 3 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
@@ -91,12 +91,13 @@ and the done column should not be flattered by either.
 | **project** | [workbench](docs/projects/workbench/design.md) | 2026-08-29 |  · see workbench |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 | the text stage built 26–27 Aug (the V0, then the parse5 upgrade — edits name a node by ordinal and splice by source range); element properties built 4 Sep — click an element in the frozen frame, edit its class and inline styles, saved as attribute splices by the same rule · see atlas |
 
-## Noted — read, owing nothing <sub>6</sub>
+## Noted — read, owing nothing <sub>7</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [Agents on the canvas: what the field shipped in a year](docs/research/2026-08-23-agents-on-the-canvas.md) | 2026-08-30 | the category converged on MCP + a skill, which isocan has; edges deliberately declined |
 | research | [Antigravity over ACP](docs/research/2026-09-04-antigravity-acp.md) | 2026-09-04 | measured 4 Sep — Google ships an official ACP server for Antigravity (registry entry 20 Aug, 1.1.1 on 3 Sep) as a 316 MB per-platform zip from dl.google.com, not npm; it speaks ACP 1 with session load/resume, keeps its own login apart from the IDE's and the CLI's, and its Google login rejected this account as "not eligible for Antigravity". First call: not worth building on. Revisited the same evening: the server's gemini-api-key method skips the gate, so it is built on a key · see harnesses, on-demand |
+| research | [Herding machines, when the thing you are herding has no machine](docs/research/2026-09-07-herding-machines.md) | 2026-09-07 | herdr aggregates agents that live on MACHINES, over SSH, into one terminal. isocan and sheep have each already dissolved that problem rather than solved it — a canvas is the aggregator, and a cell has an address instead of a machine. Nothing to adopt here; one real gap it does name, and it is sheep's, not isocan's. Also: "herd" would mean two things one layer apart. · see standing-agents, personas, on-demand |
 | research | [Local agents on the canvas](docs/research/2026-08-24-local-agents.md) | 2026-08-30 | the finding IS the answer: isocan hands agents a CLI, so any model that can run one joins |
 | research | [React Flow and tldraw, measured rather than remembered](docs/research/2026-08-31-react-flow-and-tldraw.md) | 2026-08-31 | measured both libraries; React Flow is a real option for the map only, tldraw collides with the oplog · see mindmap, ui-refresh |
 | research | [Skills worth stealing: what the ecosystem has built](docs/research/agent-skills.md) | 2026-08-30 | import/read/skip verdicts recorded per repo |
