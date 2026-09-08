@@ -1974,7 +1974,10 @@ bare `canvas background` says what it is wearing — everybody on the canvas
 sees the same one, so it is a change to ask about rather than assume.
 `canvas background --picture <file>` stands it on an image of your own
 instead: pinned so it cannot show a seam, and darkened so cards still read on
-it. That picture is downloaded by everybody on the canvas on every cold load,
+it. `--cursor <name>` picks the pointer everyone on THAT canvas wears — a
+seeded ground names its own, so this is only for a picture — and it is chosen
+from a library rather than uploaded, because every shape is filled with each
+viewer's own colour and an image cannot be tinted. That picture is downloaded by everybody on the canvas on every cold load,
 so there is a size limit and the command says the weight it just added — ask
 on the thread before putting one on somebody else's canvas,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,

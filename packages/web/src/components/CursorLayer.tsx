@@ -3,7 +3,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { markOf, themeCursor, themeOf } from "@isocan/core";
+import { canvasCursor, markOf } from "@isocan/core";
 import { useActorMarks } from "../lib/marks.ts";
 import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
@@ -37,7 +37,7 @@ export function CursorLayer() {
   // The ground everybody on this canvas is standing on decides the shape
   // (#195). A selector rather than the whole canvas: this re-renders on every
   // cursor move, and reading `canvas` here would re-render on every op.
-  const cursorPath = useCanvasStore((s) => themeCursor(s.project ? themeOf(s.project) : null));
+  const cursorPath = useCanvasStore((s) => s.project ? canvasCursor(s.project) : canvasCursor({}));
   const viewport = useUiStore((s) => s.viewport);
   const animated = useRef(new Map<string, Anim>());
   const [, force] = useState(0);

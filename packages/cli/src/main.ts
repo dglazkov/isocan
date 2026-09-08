@@ -114,7 +114,12 @@ import {
   formatMoves,
   inScope,
   anchorOf,
+  CURSORS,
+  cursorOf,
+  cursorPatch,
   GROUND_MAX_BYTES,
+  isCursor,
+  noCursorPatch,
   groundOf,
   groundPatch,
   hasGround,
@@ -4803,12 +4808,41 @@ canvas
   .option("--moves", "the ground travels with the canvas, so a place stays under what stands on it (default)")
   .option("--pinned", "the ground stays behind the glass and items move across it")
   .option("--picture <file>", "an image of your own to stand the canvas on — pinned, and darkened so cards still read")
+  .option("--cursor <name>", `the pointer everyone wears on a canvas standing on a picture of its own — ${CURSORS.join(", ")}`)
   .action(
-    run(async (theme: string | undefined, opts: { moves?: boolean; pinned?: boolean; picture?: string }, cmd: Command) => {
+    run(async (theme: string | undefined, opts: { moves?: boolean; pinned?: boolean; picture?: string; cursor?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       if (opts.moves && opts.pinned) {
         throw new Error("--moves and --pinned are the two answers to one question: pick one");
+      }
+      /**
+       * **The cursor half** (#204 phase 3). Chosen from a library, never
+       * uploaded: every shape is filled with the viewer's own identity colour,
+       * and an image cannot be tinted — six people would share one pointer,
+       * which deletes the only signal saying who is who.
+       *
+       * Only where the ground is a picture, and that is #195's rule rather
+       * than a limitation: a seeded ground NAMES its cursor, so a canvas
+       * cannot be a galaxy with a fish.
+       */
+      if (opts.cursor !== undefined) {
+        if (!isCursor(opts.cursor)) {
+          throw new Error(`not a cursor: ${opts.cursor} — ${CURSORS.join(", ")}`);
+        }
+        if (groundOf(p) === null) {
+          throw new Error(
+            themeOf(p) !== null
+              ? `"${p.title}" wears ${themeOf(p)}, and a seeded ground names its own cursor — set a picture first, or clear the ground`
+              : `"${p.title}" has no ground of its own — \`--picture <file>\` first, then choose a cursor for it`,
+          );
+        }
+        await sendOp(ctx, p.id, {
+          type: "project.update",
+          patch: opts.cursor === "arrow" ? noCursorPatch() : cursorPatch(opts.cursor),
+        });
+        console.log(`${p.id}'s pointer is ${opts.cursor}`);
+        if (theme === undefined) return;
       }
       /**
        * **A ground of your own** (#204 phase 2), and the same op the app's
@@ -4869,7 +4903,13 @@ canvas
       // says what it is wearing, which is what a person types first.
       if (theme === undefined) {
         const picture = groundOf(p);
-        if (picture !== null) return console.log(`a picture of yours (${picture.slice(0, 12)}…), pinned`);
+        if (picture !== null) {
+          const worn = cursorOf(p);
+          return console.log(
+            `a picture of yours (${picture.slice(0, 12)}…), pinned` +
+              (worn ? `, everyone pointing with a ${worn}` : ""),
+          );
+        }
         const now = themeOf(p);
         if (now === null) return console.log(`none — ${THEMES.join(", ")} are the grounds it can wear, or --picture <file>`);
         return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"})`);

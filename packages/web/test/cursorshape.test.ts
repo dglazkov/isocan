@@ -15,12 +15,21 @@ const own = read("../src/components/OwnCursor.tsx");
  * having it.
  */
 describe("the cursor wears the ground", () => {
-  it("draws whatever the theme says, in both places", () => {
-    // Two components draw a cursor and they must not drift: `themeCursor` in
-    // core is the one fold, the same rule the minimap's kind colours were
-    // rewritten for on 6 Sep.
+  it("draws whatever the canvas says, in both places", () => {
+    /**
+     * Two components draw a cursor and they must not drift: core holds the one
+     * fold, the same rule the minimap's kind colours were rewritten for on
+     * 6 Sep.
+     *
+     * The fold is `canvasCursor` since 8 Sep, not `themeCursor` — a canvas
+     * standing on a picture of its own has no theme to derive a pointer from,
+     * so the question moved up a level and the answer now takes the canvas.
+     * This named the old function and failed on components that were still
+     * correct; **the invariant is that neither spells a path itself**, and
+     * that is what the second line has always actually checked.
+     */
     for (const [name, src] of [["CursorLayer", layer], ["OwnCursor", own]] as const) {
-      expect(src, `${name} asks core for the shape`).toContain("themeCursor(");
+      expect(src, `${name} asks core for the shape`).toContain("canvasCursor(");
       expect(src, `${name} spells no path of its own`).not.toMatch(/d="M1\.5 0\.5/);
     }
   });
@@ -41,7 +50,11 @@ describe("the cursor wears the ground", () => {
        on the canvas changed — the shape of the bug that burned a core for two
        days on 6 Sep. */
     for (const src of [layer, own]) {
-      expect(src).toMatch(/useCanvasStore\(\(s\) => themeCursor\(/);
+      // The selector must RESOLVE to the path, so its result is a string and
+      // zustand compares by value. Taking the project would make every op a
+      // re-render of every cursor.
+      expect(src).toMatch(/useCanvasStore\(\(s\) =>[^)]*canvasCursor\(/);
+      expect(src, "and never the whole project").not.toMatch(/useCanvasStore\(\(s\) => s\.project\)/);
     }
   });
 });

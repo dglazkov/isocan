@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  CURSORS,
+  CURSOR_PROP,
+  canvasCursor,
+  cursorLabel,
+  cursorOf,
+  cursorPatch,
+  cursorShape,
+  isCursor,
+  noCursorPatch,
   GROUND_MAX_BYTES,
   GROUND_PROP,
   GROUND_SCRIM,
@@ -247,5 +256,78 @@ describe("a picture somebody supplied", () => {
     // A number, because the cost is real: everybody on the canvas downloads
     // this on every cold load, forever.
     expect(GROUND_MAX_BYTES).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * **A cursor you choose, when the ground is a picture** (#204 phase 3).
+ *
+ * The other half of *"the user can set a tile and cursor"*. The tile shipped
+ * on 7 Sep and a canvas standing on somebody's photograph still got the plain
+ * arrow, because `themeCursor` derives the pointer from the THEME and a
+ * picture has no theme name to derive from.
+ */
+describe("the pointer a canvas wears", () => {
+  const wearing = (properties: Record<string, string>) => ({ properties });
+  const hash = "a".repeat(64);
+
+  it("lets a seeded ground name its own cursor, and refuses to be overruled", () => {
+    /**
+     * `THEME_PROP`'s invariant, enforced here rather than hoped for: a theme
+     * names the ground AND the cursor because "galaxy" is the fact, and two
+     * properties would let a canvas be a farm with rockets. So a `cursor`
+     * property set beside a seeded theme changes nothing.
+     */
+    const galaxy = wearing({ [THEME_PROP]: "galaxy", [CURSOR_PROP]: "fish" });
+    expect(canvasCursor(galaxy)).toBe(themeCursor("galaxy"));
+    expect(canvasCursor(galaxy)).not.toBe(cursorShape("fish"));
+  });
+
+  it("reads the chosen one where the ground is a picture, which names nothing", () => {
+    const own = wearing({ [GROUND_PROP]: hash, [CURSOR_PROP]: "crescent" });
+    expect(canvasCursor(own)).toBe(cursorShape("crescent"));
+  });
+
+  it("is the plain arrow when nothing has been chosen", () => {
+    expect(canvasCursor(wearing({ [GROUND_PROP]: hash }))).toBe(themeCursor(null));
+    expect(canvasCursor(wearing({}))).toBe(themeCursor(null));
+  });
+
+  it("refuses a name nothing can draw", () => {
+    // `THEMES`' reason: a canvas wearing a name this build cannot draw would
+    // be a pointer that vanishes.
+    expect(cursorOf(wearing({ [CURSOR_PROP]: "sheep" }))).toBeNull();
+    expect(isCursor("sheep")).toBe(false);
+    expect(canvasCursor(wearing({ [GROUND_PROP]: hash, [CURSOR_PROP]: "sheep" }))).toBe(themeCursor(null));
+  });
+
+  it("stores a choice and removes it again", () => {
+    expect(cursorPatch("drop").properties).toEqual({ [CURSOR_PROP]: "drop" });
+    expect(noCursorPatch()).toEqual({ removeProperties: [CURSOR_PROP] });
+  });
+
+  it("gives every shape a distinct silhouette and a name", () => {
+    /* Two entries that look alike at the size they are used is a picker that
+       costs a decision and returns nothing — which is why a leaf and a petal
+       were drawn, rendered at 18, and rejected for being the fish without its
+       tail. */
+    const shapes = new Set(CURSORS.map((c) => cursorShape(c)));
+    expect(shapes.size, "no two cursors share a path").toBe(CURSORS.length);
+    for (const c of CURSORS) expect(cursorLabel(c)).toMatch(/^[A-Z]/);
+  });
+
+  it("starts every shape at the hotspot, so the thing still points", () => {
+    // A cursor's tip is where the click lands; mass below and right of
+    // (1.5, 0.5) is a decoration you have to aim.
+    for (const c of CURSORS) {
+      expect(cursorShape(c).startsWith("M1.5 0.5"), `${c} points`).toBe(true);
+    }
+  });
+
+  it("carries no colour of its own", () => {
+    /* The constraint #195 is emphatic about, and the reason a cursor is CHOSEN
+       rather than uploaded: an image cannot be tinted, so six people would
+       share one pointer and the only signal saying who is who would be gone. */
+    for (const c of CURSORS) expect(cursorShape(c)).not.toMatch(/#|rgb|fill|hsl/);
   });
 });

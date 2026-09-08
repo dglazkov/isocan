@@ -407,6 +407,154 @@ export function groundIsPlace(canvas: { properties?: Record<string, string> }): 
  * The three that ship are the three that survived being looked at; `farm`
  * would want a sheep and wants the same artist its grass does.
  */
+/**
+ * **A cursor you choose, when the ground is a picture** (#204 phase 3).
+ *
+ * > "there should be a 'custom' setting where the user can set a tile and
+ * > cursor and then it takes on its own?"
+ *
+ * ## Why this does not break "one property, not two"
+ *
+ * `THEME_PROP`'s comment is emphatic and right: a theme names the ground AND
+ * the cursor, because "farm" is the fact, and two properties would let a
+ * canvas be a farm with rockets. That rule is untouched here — **a seeded
+ * ground still names its own cursor and this property cannot override one.**
+ *
+ * The gap is that a canvas standing on a PICTURE has no name to derive a
+ * cursor from, so it got the plain arrow. There is nothing to contradict, so
+ * there is nothing to protect: this is the name that is missing, not a second
+ * name competing with one.
+ *
+ * ## Chosen, never uploaded (#204, D4)
+ *
+ * Every shape here is filled at runtime with the viewer's own identity colour,
+ * and that is the constraint #195 is emphatic about — the seven
+ * `IDENTITY_COLORS` also land on items during remote selection, so a cursor
+ * carrying its own colour would delete the one signal saying who is who. An
+ * uploaded PNG cannot be tinted, so on that canvas six people would share one
+ * pointer. The refusal is worth stating out loud rather than leaving as an
+ * absence.
+ *
+ * And it is genuinely hard to draw for: at 18 pixels a rocket silhouette IS an
+ * arrow — that was tried, across four sizes, and never worked. Asking somebody
+ * to author one is asking them to fail; offering a library is the same feature
+ * with the failure removed.
+ */
+export const CURSOR_PROP = "cursor";
+
+/** The shapes this build can draw. Not a string, for `THEMES`' reason: a
+ *  canvas wearing a name nothing can draw is a pointer that vanishes. */
+export const CURSORS = ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent"] as const;
+
+/** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
+ *  reason: a name nothing can draw is a pointer that vanishes. */
+export type CanvasCursor = (typeof CURSORS)[number];
+
+/** Is this a shape this build can draw — the parse both surfaces use, so the
+ *  CLI refuses exactly what the app would not render. */
+export function isCursor(value: string): value is CanvasCursor {
+  return (CURSORS as readonly string[]).includes(value);
+}
+
+/** What a shape is called where somebody picks it. Beside the ids for
+ *  `themeLabel`'s reason: a menu that says "sparkle" is showing its variable. */
+export function cursorLabel(cursor: CanvasCursor): string {
+  switch (cursor) {
+    case "arrow":
+      return "Arrow";
+    case "sparkle":
+      return "Sparkle";
+    case "fish":
+      return "Fish";
+    case "flag":
+      return "Flag";
+    case "drop":
+      return "Drop";
+    case "heart":
+      return "Heart";
+    case "crescent":
+      return "Crescent";
+  }
+}
+
+/** The chosen shape, or null when nothing has been chosen. */
+export function cursorOf(canvas: { properties?: Record<string, string> }): CanvasCursor | null {
+  const value = canvas.properties?.[CURSOR_PROP];
+  return value !== undefined && isCursor(value) ? value : null;
+}
+
+/** Wear one; `arrow` is a choice rather than an absence, so it is stored. */
+export function cursorPatch(cursor: CanvasCursor): MetaPatch {
+  return { properties: { [CURSOR_PROP]: cursor } };
+}
+
+/** Back to whatever the ground implies. */
+export function noCursorPatch(): MetaPatch {
+  return { removeProperties: [CURSOR_PROP] };
+}
+
+/** One shape, by name. */
+export function cursorShape(cursor: CanvasCursor): string {
+  switch (cursor) {
+    case "sparkle":
+      return themeCursor("galaxy");
+    case "fish":
+      return themeCursor("ocean");
+    case "flag":
+      return themeCursor("mountains");
+    case "arrow":
+      return themeCursor(null);
+    /**
+     * **Three drawn for the library, 8 Sep 2026, and five rejected.**
+     *
+     * Every one was rendered at 18, 24 and 32 on both grounds and looked at,
+     * because that is the only way this is ever decided — #195 learned it from
+     * a rocket that never worked, and the same failure came back twice here:
+     * a PENCIL at 18 is a diagonal sliver, and a PIN is an arrow with a notch.
+     * A BOLT was too thin to see at all.
+     *
+     * The other rejection is subtler and worth keeping: a LEAF and a PETAL
+     * both read perfectly well, and both are the fish's silhouette without its
+     * tail. Two entries in a library that look alike at the size they are used
+     * is a picker that costs a decision and returns nothing.
+     */
+    case "drop":
+      // A teardrop hanging from the hotspot: the point IS the tip.
+      return "M1.5 0.5 C1.5 0.5 13 9 13 13.5 A5.9 5.9 0 0 1 1.3 13.5 C1.3 10 1.5 0.5 1.5 0.5 Z";
+    case "heart":
+      return "M1.5 0.5 C1.5 0.5 4.5 3.6 8.4 5.2 C12.6 6.9 15.6 9.4 14.4 13 C13.3 16.4 8.6 17.6 6 14.6 C4.6 18 0.8 17 0.6 13.4 C0.4 9.6 1.5 0.5 1.5 0.5 Z";
+    case "crescent":
+      // The upper horn is the hotspot, which makes this the sharpest tip of
+      // the three — a crescent points better than it has any right to.
+      return "M1.5 0.5 C10.5 2.6 15.5 9 14 15.5 C13.4 18.2 10.4 19.4 8.2 18 C12.4 13.6 9.6 5.4 1.5 0.5 Z";
+  }
+}
+
+/**
+ * **The one fold both surfaces call: what pointer does this canvas wear?**
+ *
+ * Order is the rule, not a preference. A seeded ground names its cursor and
+ * wins, so a galaxy cannot be given a fish — that is `THEME_PROP`'s invariant
+ * and this is where it is enforced rather than hoped for. Only a canvas
+ * standing on a picture, which names nothing, reads the chosen one.
+ */
+export function canvasCursor(canvas: { properties?: Record<string, string> }): string {
+  const theme = themeOf(canvas);
+  if (theme !== null) return themeCursor(theme);
+  const chosen = cursorOf(canvas);
+  return chosen !== null ? cursorShape(chosen) : themeCursor(null);
+}
+
+/**
+ * **The cursor a SEEDED ground gives everybody** — the shapes the long note
+ * above argues for, keyed by theme.
+ *
+ * Kept as its own function rather than folded into `canvasCursor`, because
+ * this is the half that must not be overridable: a theme names its cursor,
+ * and `cursorShape` reads the same three paths through the library's names so
+ * that a picked "sparkle" and a galaxy's cursor can never become two drawings
+ * of the same idea.
+ */
 export function themeCursor(theme: CanvasTheme | null): string {
   switch (theme) {
     case "galaxy":

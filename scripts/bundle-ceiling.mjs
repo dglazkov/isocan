@@ -37,6 +37,13 @@
  * early when no module has a web half, it is 64,271 bytes lighter and under
  * the 640,000 goal for the first time since the goal existed.
  *
+ * **636,000 → 637,100 the same afternoon, and this is the gate working rather
+ * than failing.** #204 phase 3 added a cursor library — three shapes and the
+ * fold that chooses between them — for 1,015 bytes. A creep, so it asked
+ * instead of blocking, and this is the answer: a feature Dion asked for, paid
+ * in a kilobyte, and still 2,985 bytes under the goal. The gate exists so that
+ * a raise costs somebody a sentence; this is the sentence.
+ *
  * The second only works because the queue reaches `main` now and an answer
  * covers the nights that repeat it. Before 7 Sep it would have been a warning
  * into a void.
@@ -44,7 +51,7 @@
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 636_000;
+export const CEILING = 637_100;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.
