@@ -155,9 +155,9 @@ export function contentPorts(
  */
 export const CONTENT_CSP = [
   "default-src 'none'",
-  // 48 of 76 screens run an inline script; none load a remote one.
-  "script-src 'unsafe-inline'",
-  "style-src 'unsafe-inline' https://fonts.googleapis.com",
+  // Allow inline scripts and frontend prototyping CDNs (Tailwind Play CDN, Tailwind v4 browser)
+  "script-src 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net",
+  "style-src 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
   "font-src https://fonts.gstatic.com data:",
   "img-src data: blob:",
   "media-src data: blob:",

@@ -155,6 +155,8 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
     expect(CONTENT_CSP).toContain("script-src 'unsafe-inline'"); // 48 of 76
     expect(CONTENT_CSP).toContain("https://fonts.googleapis.com"); // the only host
     expect(CONTENT_CSP).toContain("https://fonts.gstatic.com");
+    expect(CONTENT_CSP).toContain("https://cdn.tailwindcss.com");
+    expect(CONTENT_CSP).toContain("https://cdn.jsdelivr.net");
     // The exfiltration channels, closed — and an image URL is exfiltration
     // with extra steps, so images are data:/blob: only.
     expect(CONTENT_CSP).toContain("connect-src 'none'");
