@@ -695,8 +695,11 @@ export function chromeMenu(ctx: {
            * Unticked, the ground belongs to the canvas — a field stays under
            * whatever is standing in it, and a pen is somewhere you can come
            * back to. Ticked, the ground never moves and the items travel
-           * across it; the dot grid returns to say where you are, because with
-           * a fixed backdrop nothing else does.
+           * across it — which IS what says where you are, together with the
+           * minimap. The dot grid does not come back; every ground covers it,
+           * pinned or not, and putting it back over a starfield or a
+           * photograph was measured and is worse. See `THEME_ANCHOR_PROP` in
+           * core.
            *
            * A tick rather than the sentence it replaced: inside a set, a row
            * whose label changes under the pointer is harder to read than one

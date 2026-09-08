@@ -97,11 +97,45 @@ export declare function themeOf(canvas: {
  * background, and it is the better one for a canvas whose ground is
  * atmosphere rather than a place.
  *
- * **The dot grid comes back for `window`**, and that is the point rather than
- * a side effect: with a fixed backdrop the only thing left saying where you
- * are is the grid, so hiding it would take away the last spatial reference at
- * the exact moment the ground stopped providing one. Under `world` the ground
- * IS the reference, so the grid would be a second one arguing with it.
+ * **The dot grid does NOT come back for `window`**, and this comment claimed
+ * from the day it was written (6 Sep 2026) that it did. What `window`
+ * actually skips is one line — `.canvas-viewport.themed { background-image:
+ * none }` — and skipping it changes nothing you can see, because every
+ * ground is an opaque, full-bleed CHILD of the viewport, and a child paints
+ * over its parent's background. So the dots are drawn and then covered, for
+ * every ground, pinned or not. Measured 7 Sep 2026 on a pinned galaxy at a
+ * real daemon: `.canvas-viewport` keeps its dot `background-image`, `.themed`
+ * is correctly absent, and not one dot reaches the screen. `groundIsPlace`
+ * below has said so since it was written; this paragraph is the half that was
+ * still lying.
+ *
+ * **The argument it made was good and the answer was wrong.** A pinned ground
+ * really does stop saying where you are, so something else has to — but it is
+ * not the grid, and putting the grid back is worse than leaving it covered.
+ * Both variants were rendered before this was written down. Over a starfield
+ * the dots read as more stars, in a regular lattice, and the sky is gone: two
+ * grounds arguing, which is the exact failure the stylesheet's own note
+ * predicts. On the app's dark theme the same dots are `#2b2f36` on `#05060c`
+ * and barely register — still ambiguous with stars, and no longer a reference
+ * either. Over a photograph they are worse again: a screen of light dots that
+ * punches through the dark parts of somebody's picture and vanishes over the
+ * light ones, so the reference appears and disappears with the image under it.
+ * A grid that is invisible, or indistinguishable from the ground, is not a
+ * spatial reference; it is damage to the ground.
+ *
+ * **What says where you are under a pinned ground is the items and the
+ * minimap.** The items are the strong one, and they are not a consolation:
+ * items travelling across a sky that does not move IS the picture `window` is
+ * for, the same way the ground travelling under them is the picture `world` is
+ * for. The minimap, with its viewport rectangle, is what answers "where in the
+ * whole canvas" — and it folds away, so it is the second reference rather than
+ * the first.
+ *
+ * Under `world` the ground itself is the reference, which is why the grid is
+ * explicitly turned off there: a grid and a moving ground would be two of them
+ * arguing. Under `window` it is turned off by accident of stacking. Both are
+ * the behaviour we want; only one of them is written down where it happens,
+ * and `ground-covers-grid.test.ts` is what now holds the accident still.
  *
  * Absent means `world`, so every canvas already wearing a ground keeps
  * behaving exactly as it did.

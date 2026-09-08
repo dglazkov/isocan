@@ -96,10 +96,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
      at all. Everything that draws one is behind it. */
   const themed = useCanvasStore((s) => (s.project ? hasGround(s.project) : false));
   /**
-   * The dot grid goes away only for a ground that TRAVELS with the canvas
-   * (#195). A ground pinned to the window leaves nothing else saying where
-   * you are, so the grid stays and moves — which is the whole difference
-   * between a place and a backdrop.
+   * `themed` here turns the grid off in the STYLESHEET, and only for a ground
+   * that travels with the canvas (#195). A pinned ground skips that rule and
+   * the grid still does not show: the ground is an opaque `inset: 0` child of
+   * this element, so it covers the parent background either way. Measured
+   * 7 Sep 2026, after the comment on `THEME_ANCHOR_PROP` had claimed for a day
+   * that the grid came back — read that one before changing this line.
    */
   const isPlace = useCanvasStore((s) => s.project !== null && groundIsPlace(s.project));
   /* One timer for the whole canvas — see `useSettling`. The set is usually

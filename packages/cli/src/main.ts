@@ -4801,7 +4801,7 @@ canvas
   .command("background [theme]")
   .description(`The ground this canvas stands on — ${THEMES.join(", ")}, a picture with --picture, or \`none\``)
   .option("--moves", "the ground travels with the canvas, so a place stays under what stands on it (default)")
-  .option("--pinned", "the ground stays behind the glass and items move across it; the dot grid returns")
+  .option("--pinned", "the ground stays behind the glass and items move across it")
   .option("--picture <file>", "an image of your own to stand the canvas on — pinned, and darkened so cards still read")
   .action(
     run(async (theme: string | undefined, opts: { moves?: boolean; pinned?: boolean; picture?: string }, cmd: Command) => {

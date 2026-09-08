@@ -2604,6 +2604,32 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 }
 /* .comment renders in the thread popover AND the main-thread panel. */
 .comment { margin-bottom: 8px; overflow-wrap: anywhere; }
+/**
+ * **Where it went** — a message that folding MOVED, marked for a moment.
+ *
+ * Fold a long report and the thread can lurch by more than a screen: the panel
+ * loses more content than it had slack to scroll, `scrollTop` is clamped, and
+ * every message moves at once (measured: 1,205px). Nothing can hold it still —
+ * see `CommentWhen.tsx` — so the message says where it landed instead.
+ *
+ * Inset so the wash reads as being about THIS message rather than about the
+ * panel, and it paints under the whole row including the folded one-liner. A
+ * tint rather than an outline: an outline at this size is a selection, and
+ * nothing has been selected.
+ */
+.comment.moved {
+  animation: comment-moved 900ms ease-out;
+  border-radius: 6px;
+}
+@keyframes comment-moved {
+  from { background: var(--accent-wash); }
+  to { background: transparent; }
+}
+/* A step, not a fade — which is what asking for less motion means here. The
+   class is removed on the same timer either way, so it still goes away. */
+@media (prefers-reduced-motion: reduce) {
+  .comment.moved { animation: none; background: var(--accent-wash); }
+}
 .comment .who { font-weight: 700; font-size: 11px; }
 /* The system voice (phase 5): machinery reporting — a fixed chip, no actor
    color, a quiet tint on the whole message, so "Sian couldn't answer" can
