@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { Canvas } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { reservePort } from "../../../test/ports.ts";
 
 /**
  * **Direct mode: a machine with no daemon of its own** (phase 11, Scene 6).
@@ -43,6 +44,20 @@ let badge: TestBadge;
 let machine: string;
 let work: string;
 
+/**
+ * The port the direct machine would use if it ever started a daemon. Nothing
+ * in this file ever binds it, and that is the point: `daemonStarted()` asks
+ * whether anything answers here, and the answer must always be no.
+ *
+ * It still comes from the registry rather than being picked, because a port
+ * has two readers and only one of them is this file. `afterEach` hands it to
+ * `stopDaemons`, which kills whoever answers on the number it is given — so a
+ * literal outside a worker's slice is a way to end another worker's daemon and
+ * fail an unrelated file, whether or not anything here ever listens on it
+ * (`test/ports.ts`).
+ */
+let directPort: number;
+
 beforeEach(async () => {
   homeStore = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-direct-home-"));
   machine = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-direct-machine-"));
@@ -51,6 +66,7 @@ beforeEach(async () => {
   const address = homeDaemon.app.server.address();
   homePort = typeof address === "object" && address ? address.port : 0;
   homeUrl = `http://127.0.0.1:${homePort}`;
+  directPort = await reservePort();
   badge = await mintTestBadge(homeUrl);
 });
 
@@ -59,18 +75,11 @@ afterEach(async () => {
   await stopDaemons(homePort, homeStore).catch(() => {});
   // Whatever a test may have started on the direct machine, so a leak fails
   // the next test rather than this one.
-  await stopDaemons(DIRECT_PORT, machine).catch(() => {});
+  await stopDaemons(directPort, machine).catch(() => {});
   for (const dir of [homeStore, machine, work]) {
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
-
-/**
- * A port the direct machine would use if it ever started a daemon — chosen so
- * it cannot collide with the home's, and never bound by anything in this file.
- * The point is that nothing ever answers here.
- */
-const DIRECT_PORT = 4497;
 
 function isocan(
   args: string[],
@@ -81,7 +90,7 @@ function isocan(
     env: {
       ...process.env,
       ISOCAN_HOME: machine,
-      ISOCAN_PORT: String(DIRECT_PORT),
+      ISOCAN_PORT: String(directPort),
       // Scene 6's agent claims its own actor against its harness session id,
       // which is also what lets a non-TTY process have an identity at all.
       CLAUDE_CODE_SESSION_ID: "sonia-1",
@@ -107,7 +116,7 @@ function isocan(
 /** Did anything come up on the direct machine's port? The negative assertion
  * this whole file is built around. */
 async function daemonStarted(): Promise<boolean> {
-  const res = await fetch(`http://127.0.0.1:${DIRECT_PORT}/healthz`, {
+  const res = await fetch(`http://127.0.0.1:${directPort}/healthz`, {
     signal: AbortSignal.timeout(500),
   }).catch(() => null);
   return res?.ok ?? false;
