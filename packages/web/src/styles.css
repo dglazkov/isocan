@@ -41,8 +41,15 @@
   /* Open water and high ground (#195), the same on either theme and for the
      same reason as space: these are pictures, not surfaces that follow the
      app's theme. Dark enough that white item cards read as objects on top. */
-  --theme-ocean: #0b2733;
-  --theme-rock: #2b2825;
+  /* Measured from the tiles themselves, 8 Sep 2026 — each is its picture's
+     own mean colour, so the ground behind an image that has not arrived yet
+     is the colour of the image, and so the top fade over it (groundtone.ts)
+     is too. Before the art these were chosen by eye and were the target the
+     prompts named; now they are read off what the artist sent back. */
+  --theme-ocean: #314852;
+  --theme-rock: #2f2e28;
+  --theme-farm: #353423;
+  --theme-sand: #ab703b;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -224,8 +231,15 @@
   /* Open water and high ground (#195), the same on either theme and for the
      same reason as space: these are pictures, not surfaces that follow the
      app's theme. Dark enough that white item cards read as objects on top. */
-  --theme-ocean: #0b2733;
-  --theme-rock: #2b2825;
+  /* Measured from the tiles themselves, 8 Sep 2026 — each is its picture's
+     own mean colour, so the ground behind an image that has not arrived yet
+     is the colour of the image, and so the top fade over it (groundtone.ts)
+     is too. Before the art these were chosen by eye and were the target the
+     prompts named; now they are read off what the artist sent back. */
+  --theme-ocean: #314852;
+  --theme-rock: #2f2e28;
+  --theme-farm: #353423;
+  --theme-sand: #ab703b;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -868,28 +882,37 @@ img { height: auto; }
 }
 /* The stars fade with zoom; the ground does not. Painted as a second layer so
    the fade is one composited opacity rather than three gradients redrawn. */
-/* Ocean and mountains: the same two-layer shape as the starfield — a ground
-   that never fades, and a pattern layer that does. Their grounds are quiet,
-   mid-dark colours chosen so items keep their contrast on top; a background
-   somebody has to turn off to read the canvas is not a background. */
-.canvas-theme-ocean {
-  background-color: var(--theme-ocean);
-  --swell: none; --swell-pos: 0 0; --swell-fade: 0;
+/**
+ * **The painted grounds** (#195's art, 8 Sep 2026). Ocean, mountains, farm and
+ * desert differ only in the picture and its world size, and both of those are
+ * written by `PaintedGround.tsx` — so the shared half wears a name of its own
+ * and each ground's rule says only what is true about that ground.
+ *
+ * A grouped selector would have been the obvious way to write it and is the
+ * wrong one: `oneblock.test.ts` holds every class to a single canonical block,
+ * because a class appearing in two places is how `.face.away .face-mark` lost
+ * its scope and dimmed every face on the canvas (lessons.md #1).
+ *
+ * `background-color` is each tile's own mean colour, measured off the file
+ * rather than picked: it is what shows for the moment before a 139–663KB JPEG
+ * arrives, and what the top fade over it is drawn from (`lib/groundtone.ts`).
+ * A ground whose holding colour is not its picture's flashes a different
+ * ground on every cold load.
+ *
+ * The three values below are declared here as well as written by the
+ * component, for the reason the starfield states above: `var()` with no
+ * definition drops the whole declaration silently, so a component that stopped
+ * setting one would give a rule nobody could see was gone. The safe picture is
+ * the flat colour with no tile, which is a ground rather than a blank.
+ */
+.canvas-theme-painted {
+  background-image: var(--tile); background-size: var(--tile-size); background-position: var(--tile-pos);
+  --tile: none; --tile-size: auto; --tile-pos: 0 0;
 }
-.canvas-theme-ocean::after {
-  content: ""; position: absolute; inset: 0;
-  background-image: var(--swell); background-position: var(--swell-pos);
-  opacity: var(--swell-fade, 1);
-}
-.canvas-theme-mountains {
-  background-color: var(--theme-rock);
-  --ridge: none; --ridge-pos: 0 0; --ridge-fade: 0;
-}
-.canvas-theme-mountains::after {
-  content: ""; position: absolute; inset: 0;
-  background-image: var(--ridge); background-position: var(--ridge-pos);
-  opacity: var(--ridge-fade, 1);
-}
+.canvas-theme-ocean { background-color: var(--theme-ocean); }
+.canvas-theme-mountains { background-color: var(--theme-rock); }
+.canvas-theme-farm { background-color: var(--theme-farm); }
+.canvas-theme-desert { background-color: var(--theme-sand); }
 .canvas-theme-galaxy::after {
   content: ""; position: absolute; inset: 0;
   background-image: var(--stars); background-size: var(--stars-size); background-position: var(--stars-pos);

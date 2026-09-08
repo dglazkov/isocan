@@ -29,12 +29,15 @@ import { type CanvasTheme, THEMES, groundOf, themeOf } from "@isocan/core";
  * `mountains` paints `--theme-rock`), so it is a real table — and a table that
  * is missing a row is a fade that silently falls back to the app's ground,
  * which is the bug this fixes. `groundtone.test.ts` requires a row for every
- * name in `THEMES`.
+ * name in `THEMES`. It earned that keep within a day: farm and desert
+ * landed on 8 Sep and the guard is what said this table had to grow.
  */
 const TONE: Record<CanvasTheme, string> = {
   galaxy: "--theme-space",
   ocean: "--theme-ocean",
   mountains: "--theme-rock",
+  farm: "--theme-farm",
+  desert: "--theme-sand",
 };
 
 /**

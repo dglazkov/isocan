@@ -45,9 +45,16 @@ describe("the wash over a canvas knows what it is washing", () => {
      */
     for (const theme of THEMES) {
       const tone = groundTone({ properties: themePatch(theme).properties as Record<string, string> })!;
-      const rule = rules().find((r) => selectorsOf(r).includes(`.canvas-theme-${theme}`));
-      expect(rule, `.canvas-theme-${theme} must have a rule`).toBeTruthy();
-      expect(rule!.body, `${theme}'s ground must paint with ${tone}`).toContain(`var(${tone})`);
+      /* Every rule that names the class, not the first: the painted grounds
+         share one rule for the tile and take a line each for their colour, so
+         "the first rule matching" is a fact about source order rather than
+         about what the ground paints with. */
+      const painting = rules()
+        .filter((r) => selectorsOf(r).includes(`.canvas-theme-${theme}`))
+        .map((r) => r.body)
+        .join("\n");
+      expect(painting, `.canvas-theme-${theme} must have a rule`).not.toBe("");
+      expect(painting, `${theme}'s ground must paint with ${tone}`).toContain(`var(${tone})`);
     }
   });
 

@@ -78,6 +78,30 @@ recurred.
 
 ## The habits, from bugs with no test to give
 
+- **An asset is not what its extension says, and nothing checks until it is
+  served.** Seven background tiles arrived on 8 Sep 2026; three were named
+  `.png` and all seven were JPEGs inside (`file` and the `ffd8` magic both say
+  so, and macOS Preview shows none of it). It cost nothing here because they
+  were re-encoded on the way in — but the static server's type map is keyed on
+  the extension, so a mislabelled asset goes out as the wrong `Content-Type`
+  and renders anyway, until the day anything sets `nosniff`. That is lesson #8
+  and the `.webp` story wearing a third coat: the default answer to something
+  unrecognised is a cheerful one. **Run `file` on anything a person hands you
+  before it enters the tree, and name it what it is.**
+
+- **A tile that looks seamless is not seamless. Lay it against itself.**
+  `docs/theme-art-prompts.md` said to do this a fortnight before there was
+  anything to do it to, and it was right: of seven tiles, the space one has a
+  visible brightness step down the join — invisible in the file, obvious the
+  moment it is 2×2 — and the mountains one is seamless but repeats a
+  *recognisable* massif, which is the same failure a person notices rather than
+  measures. Both are one `ffmpeg` hstack/vstack away from being obvious and
+  neither is visible any other way. There is no guard for this and there should
+  not be a bad one: the strip-average metric that catches the space seam calls
+  farmland a seam too, and a check that cries wolf on the best tile in the set
+  is worse than a habit. **Tile it, look at it, and size the world tile so a
+  landmark you cannot remove lands off the edge of a working viewport.**
+
 - **Work committed to local `main` instead of its branch is invisible, and
   nothing warns.** Four sessions each created a branch, never checked it out,
   committed to `main`, and never pushed — so four differently-named branches

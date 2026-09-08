@@ -49,14 +49,27 @@ export declare const THEME_PROP = "theme";
  * The grounds this build can actually draw. `none` is not a member — it is the
  * absence of the property, so removing a theme leaves nothing behind.
  *
- * **Farm is deliberately not here yet**, and that is the rule rather than an
- * omission: a canvas wearing a name nothing can draw shows the dot grid with
- * no way to explain itself, and cycling through the picker would hit a step
- * that appears to do nothing. Grass and hedgerows read as DRAWN in a way
- * procedural texture does not, so farm waits for artwork — and adding it is
- * this list plus a component, with nothing else to change (#195, 6 Sep).
+ * **The artist arrived on 8 September 2026**, and this list is what that
+ * bought. It read `galaxy, ocean, mountains` for a fortnight with a comment
+ * saying farm was *deliberately* absent — *"a canvas wearing a name nothing
+ * can draw shows the dot grid with no way to explain itself"* — and that
+ * comment was right to hold the line and is now spent, exactly as it said it
+ * would be: *"adding it is this list plus a component, with nothing else to
+ * change"*. It was.
+ *
+ * Five grounds, and one of them is still generated. **`galaxy` keeps its
+ * procedural starfield rather than taking the painted tile it was offered**,
+ * for the one reason that outranks a nicer picture: measured 2×2 against
+ * itself, the painted space tile has a visible seam — a brightness step down
+ * the join, edge gap 8 against an interior control of 0. An infinite canvas
+ * finds a seam within one pan. The generated sky has none by construction and
+ * costs no download, which was always its argument.
+ *
+ * The other four are pictures now (`packages/web/public/grounds/`). Ocean and
+ * mountains had procedural stand-ins and this is the drop-in the stopgap was
+ * written for; farm and desert never could have been generated at all.
  */
-export declare const THEMES: readonly ["galaxy", "ocean", "mountains"];
+export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert"];
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
 export type CanvasTheme = (typeof THEMES)[number];

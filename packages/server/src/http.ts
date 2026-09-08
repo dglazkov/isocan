@@ -268,6 +268,11 @@ export const STATIC_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".webp": "image/webp",
+  // The painted grounds (#195's art, 8 Sep 2026). Four tiles under
+  // `public/grounds/`, and the guard named this extension a fortnight before
+  // one arrived — "this must fail when somebody adds an .avif, a .woff2 or a
+  // .jpg" — which is what it did, on the commit that added them.
+  ".jpg": "image/jpeg",
   ".ico": "image/x-icon",
   // The handwriting face and the licence that has to travel with it.
   ".woff2": "font/woff2",

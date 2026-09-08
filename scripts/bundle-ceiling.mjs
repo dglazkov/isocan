@@ -44,14 +44,28 @@
  * in a kilobyte, and still 2,985 bytes under the goal. The gate exists so that
  * a raise costs somebody a sentence; this is the sentence.
  *
- * The second only works because the queue reaches `main` now and an answer
- * covers the nights that repeat it. Before 7 Sep it would have been a warning
- * into a void.
+ * **637,100 → 637,600, and the interesting part is what it did NOT cost.**
+ * #195's painted grounds landed on 8 Sep: four JPEG tiles, two new grounds,
+ * and two hand-written procedural components deleted. The art is 1.26MB and
+ * **none of it is in this number** — a tile is a file in `public/grounds/`
+ * fetched only by a canvas wearing that ground, so a canvas on the dot grid
+ * downloads none of them and a canvas on a starfield downloads none of them
+ * either. What the entry chunk actually paid is 453 bytes of core: two more
+ * names in `THEMES`, their labels, their cursor cases and their tone rows.
+ *
+ * That is the shape worth copying rather than the number: a feature that
+ * looked like megabytes cost half a kilobyte, because the megabytes were put
+ * where a first visit does not go. A creep, so it asked instead of blocking,
+ * and this is the sentence it asked for.
+ *
+ * The second gate only works because the queue reaches `main` now and an
+ * answer covers the nights that repeat it. Before 7 Sep it would have been a
+ * warning into a void.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 637_100;
+export const CEILING = 637_600;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.
