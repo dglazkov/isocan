@@ -96,15 +96,10 @@ The shape each one states; the cost and the guard are in the file.
 - **14** — A check whose answer cannot be "no".
 - **15** — Two measuring systems meeting at a state boundary.
 - **16** — A cache read as the truth it caches, in the one moment two processes hold it.
-- **16** — An existence check that any RELATIVE can satisfy.
-- **16** — A bad value that does not throw, and then serializes to something legal.
 - **17** — A floor that exceeds what exists is not a floor, it is an overlap with a reason.
-- **17** — Deduplicating by a key that is finer than the thing being deduplicated.
 - **18** — A scan justified by "the answer is usually near the front", tested only at the front.
-- **18** — New chrome takes its room from a shared budget, so it silently moves the threshold where OTHER chrome disappears — and anything hidden as a pair disappears together.
 - **19** — `var(--typo)` is not a wrong value, it is NO value.
 - **20** — `element.click()` is not a click.
-- **20** — The instrument answers cheerfully too.
 - **21** — A version break that only hits WRITES is a quiet one.
 - **22** — A positioning box claims a hit area for pixels it never paints.
 - **23** — `void somePromise()` starts a writer that `close()` does not know about.
@@ -122,10 +117,15 @@ The shape each one states; the cost and the guard are in the file.
 - **35** — The one step that CANNOT be shared is the one that drifts — and a correct reason written beside a setting hides the second reason it is there.
 - **36** — A hook that returns a fresh object or array is a loaded gun; the shot is fired in another file, on another day, by somebody who never saw it.
 - **37** — Reading the code cannot find a performance bug; the profiler finds it in one step.
+- **38** — An existence check that any RELATIVE can satisfy.
+- **39** — A bad value that does not throw, and then serializes to something legal.
 - **40** — Two conditions that are each correct can still be wrong about each other. A condition nested inside an unrelated one inherits its answer — and every unit test passes, because no unit is wrong.
 - **41** — A new file's NAME is a claim that nothing already owns it, and writing one makes that claim silently.
 - **42** — A test can fail AFTER it has passed, and the file it lands on is arbitrary.
 - **43** — A test can be flaky BY CONSTRUCTION: a fixture that is random, mutated by a rule that does not guarantee a change.
 - **44** — A test that kills what it spawned on its last line has no teardown at all — it has a happy path.
+- **45** — Deduplicating by a key that is finer than the thing being deduplicated.
+- **46** — New chrome takes its room from a shared budget, so it silently moves the threshold where OTHER chrome disappears — and anything hidden as a pair disappears together.
+- **47** — The instrument answers cheerfully too.
 
 <!-- end generated -->

@@ -10,6 +10,17 @@ goal:
     at most: 1
     measured by: node scripts/measure.mjs core-runtime-deps
     baseline: 1, 2026-08-29, 6b1afaf
+  # The product's central claim, as a number that can fail: every shared fact
+  # is an Operation EITHER surface can send. A canvas the web app can change in
+  # a way the CLI cannot is a canvas an agent is a second-class citizen on —
+  # and it would be invisible, because both surfaces would go on working
+  # perfectly by themselves. Audited 8 Sep 2026 and it was already zero, which
+  # is why this is a bound rather than a ratchet: a guard is cheapest to
+  # install at the moment the thing it guards is already true.
+  - name: operations a person can send and an agent cannot
+    at most: 0
+    measured by: node scripts/measure.mjs web-only-ops
+    baseline: 0, 2026-09-08, 05449de0
   # 29 → 31 on 2026-08-30: `agent.enroll` and `agent.withdraw`, added by
   # `c52da17` (phase 2 of agents-on-demand). Deliberate vocabulary, not drift —
   # an agent's standing on a canvas has to live in canvas state, because

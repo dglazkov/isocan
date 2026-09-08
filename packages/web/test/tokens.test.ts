@@ -127,7 +127,7 @@ describe("drawing a design system", () => {
  * Caught the day full screen was built. `.fullscreen` asked for `var(--bg)`,
  * which this stylesheet has never had — the palette calls it `--ground` — so
  * an element whose entire job was to COVER the canvas was transparent, and the
- * canvas showed through the thing hiding it. Same shape as lessons.md #16: a
+ * canvas showed through the thing hiding it. Same shape as lessons.md #39: a
  * bad value that never threw.
  */
 describe("every token used is a token defined", () => {

@@ -85,6 +85,38 @@ const METRICS = {
       apply: (t) => t + "\n// selftest\ntype Extra =\n  | { type: \"selftest.noop\" };\n",
     },
   },
+  /**
+   * **The product's central claim, as a number that can fail.**
+   *
+   * *Every shared fact is an Operation either surface can send.* A canvas the
+   * web app can change in a way the CLI cannot is a canvas an agent is a
+   * second-class citizen on — and it would be invisible, because both
+   * surfaces would go on working perfectly by themselves.
+   *
+   * Zero, not a ratchet, and it can be zero because it is zero today: all 33
+   * operations are reachable from the CLI, directly or through undo. The one
+   * asymmetry is `agent.enroll`, which the CLI sends and the web does not, and
+   * that is agent-custody's design rather than a gap — the web ASKS and the rc
+   * enrols.
+   */
+  "web-only-ops": {
+    what: "operations a person can send and an agent cannot — the isomorphism, as a number",
+    take() {
+      const out = run("node", [path.join(repo, "scripts/isomorphism.mjs"), "--json"]);
+      return JSON.parse(out).webOnly.length;
+    },
+    breakIt: {
+      /**
+       * **Take an existing operation away from the CLI**, rather than adding a
+       * new one — because a new operation nobody sends is `unreachable`, not
+       * web-only, and would move a different number. `trash.empty` is one of
+       * the twelve with no inverse, so losing it from the CLI genuinely leaves
+       * a person able to do something an agent cannot.
+       */
+      file: "packages/cli/src/main.ts",
+      apply: (t) => t.replaceAll('"trash.empty"', '"trash.emptied"'),
+    },
+  },
   "a11y-failures": {
     what: "controls with no accessible name, targets under 24px, images with no alt — the front door",
     take() {
