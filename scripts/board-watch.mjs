@@ -102,6 +102,27 @@ function refresh() {
   const why = [...reasons].join(", ") || "change";
   reasons.clear();
   say(`refreshing — ${why}`);
+  /**
+   * **The docket first, because it is the half that reads FROM the canvas**
+   * (#206 phase 3).
+   *
+   * `canvas-board.mjs` publishes panels; `docket.mjs` also collects the
+   * decisions somebody made on them — a ✅ or ❌ on an open question — writes
+   * the verdict into the run pages, and commits. So the read has to happen
+   * before the write, or a republish could land on top of a reaction nobody
+   * had picked up yet.
+   *
+   * Its failures are said and not fatal: a docket that cannot reach the canvas
+   * is a reason to still refresh the panels, not a reason to stop watching.
+   */
+  try {
+    execFileSync("node", [path.join(repo, "scripts/docket.mjs")], {
+      cwd: repo,
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+  } catch {
+    say("the docket would not run — panels refreshing anyway");
+  }
   const child = spawn(
     "node",
     [

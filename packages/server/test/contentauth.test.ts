@@ -221,7 +221,19 @@ describe("a home with a content host: the hosted shape, end to end", () => {
     expect(JSON.parse(bare.body).code).toBe("unsigned-read");
 
     const { urls } = await mint();
-    const tampered = urls[blobHash]!.replace(/sig=./, "sig=A");
+    /**
+     * **Flip the first character to one it is not** — not to a fixed letter.
+     *
+     * This was `.replace(/sig=./, "sig=A")`, and a signature is `base64url`,
+     * so one signature in sixty-four already began with `A`: the "tampered"
+     * URL was then byte-for-byte the real one, the home correctly served it,
+     * and the test failed asserting that a valid read is refused. **A test
+     * that is flaky by construction**, at about 1.6% a run, arriving under
+     * whatever name the suite happened to be running — found 8 Sep 2026 by
+     * `scripts/flakes.mjs`, which is what it is for.
+     */
+    const tampered = urls[blobHash]!.replace(/sig=(.)/, (_, first) => `sig=${first === "A" ? "B" : "A"}`);
+    expect(tampered, "the forgery has to actually differ").not.toBe(urls[blobHash]);
     expect((await onContentOrigin(tampered)).statusCode).toBe(403);
 
     // Signed with this home's real key, for a moment that has passed: the one

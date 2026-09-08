@@ -507,6 +507,23 @@ export class CanvasHandle {
     });
   }
 
+  /**
+   * **Into the trash, not out of existence** — `item.delete` is the soft one,
+   * so `isocan restore` and undo both still reach it.
+   *
+   * Added for the docket (#206 phase 2), which is the first consumer that had
+   * to take something OFF a canvas: a question somebody has answered is no
+   * longer a question, the run page keeps the record, and a card that stays
+   * forever is the silting `docs/research/2026-08-30-repo-admin-canvas.md`
+   * names as the way this goes wrong in week two. `add` and `edit` had been
+   * enough for every earlier caller because a board only ever grew.
+   */
+  async remove(itemId: string): Promise<void> {
+    return this.reach(async () => {
+      await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "item.delete", itemId });
+    });
+  }
+
   /** Properties on, properties off, a resize — the slice of `isocan set` a
    * script reaches for. Same ops, so the same undo. */
   async set(itemId: string, patch: SetSpec): Promise<void> {
