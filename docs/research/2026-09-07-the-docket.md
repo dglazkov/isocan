@@ -256,11 +256,31 @@ visit.
 
 Ordered by what unblocks the rest, and by what is cheapest to undo.
 
-**Phase 1 — Cadence, observed.** A guard that refuses a persona declaring
-`trigger` twice (there is one in the tree today), and a derived reading of
-*declared versus last actually run*. No canvas, no new concepts, and it fixes a
-live bug. It is also the smallest complete row of the five, which makes it the
-right place to learn the row's shape.
+**Phase 1 — Cadence, observed.** ✅ Built 7 Sep 2026. `scripts/cadence.mjs`
+reads what each persona declares against what actually fires it and when it
+last wrote a page; `test/cadence.test.ts` guards the declaration;
+`docs/reviews/README.md` carries the table above the runs.
+
+**It found more than the duplicate it was written for.** `trigger` is read by
+exactly two things in the tree — `isocan persona ls` and the board's panel —
+and **both only display it**. `.github/workflows/persona.yml` holds one
+hardcoded cron and runs `persona-run.mjs --all`, which filters on nothing. So
+a persona could say anything about when it runs, be believed by every reader,
+and be contradicted by the machine. **Three of nine were wrong:**
+
+- `design-auditor` declared `trigger` **twice**, so the file said 08:23 while
+  the workflow ran it at 08:43 and the line above was dead text. Fixed.
+- `market-researcher` declared **nothing** — `manual` everywhere it was shown,
+  while it wrote a page every night for nine nights. Fixed.
+- `journeys` declares Mondays and runs nightly. **Not fixed**, because that is
+  a decision about what a browser walk should cost rather than a typo, and this
+  phase exists to put it in front of somebody. Held as a ratchet at 1.
+
+**Making `trigger` load-bearing is deliberately not in this phase.** The fix
+for a declaration nothing reads is either to make the reader honour it or to
+make the declaration true, and only the second is safe to do without deciding
+how often the journeys walk. A filter that got "is it due" subtly wrong would
+stop a persona silently, which is the failure this row exists to end.
 
 **Phase 2 — The docket as a derived panel.** Every open finding, its number,
 its bound, its persona, its age, and how many nights it has been asked — all of

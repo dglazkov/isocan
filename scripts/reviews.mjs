@@ -314,6 +314,8 @@ export function findUnanswered(pages, days = ANSWER_DAYS, today = new Date()) {
   return late.sort((a, b) => b.age - a.age);
 }
 
+const { cadenceRows, firedCrons } = await import("./cadence.mjs");
+
 const pages = reviewPages();
 
 const missedTotal = pages.filter((p) => p.goals.some((g) => g.verdict === "MISSED")).length;
@@ -377,6 +379,40 @@ if (repeats.length > 0) {
   }
   lines.push("");
 }
+
+/**
+ * **When each persona says it runs, against when it last did** (#206 phase 1).
+ *
+ * Above the runs because it is a fact about the MACHINE rather than about any
+ * one night: a cron that silently stops looks exactly like a quiet week, and
+ * until this was written nothing anywhere reconciled a declaration against the
+ * past. `trigger` is read by `isocan persona ls` and the board's panel, and
+ * both only display it — nothing schedules from it.
+ *
+ * The staleness column reports and does not fail: a run whose pull request is
+ * still open reads a day behind through no fault of the persona. What IS
+ * guarded is the declaration itself (`test/cadence.test.ts`), because declared
+ * twice and not declared at all are true or false in the tree and nowhere
+ * else.
+ */
+const cadence = cadenceRows();
+const offCadence = cadence.filter((r) => r.verdict !== "agrees");
+lines.push(
+  `**Nine personas, fired by \`${firedCrons().join(", ")}\`.**` +
+    (offCadence.length === 0
+      ? " Every one declares the cadence that actually runs it."
+      : ` ${offCadence.length} ${offCadence.length === 1 ? "declares" : "declare"} something else.`),
+  "",
+  "| Persona | Says | Last ran | |",
+  "| --- | --- | --- | --- |",
+);
+for (const row of cadence) {
+  const when = row.lastRan ? `${row.lastRan} · ${row.ageDays}d ago` : "never";
+  lines.push(
+    `| ${row.name} | \`${row.cron ?? "—"}\` | ${when} | ${row.verdict === "agrees" ? "" : `**${row.verdict}**`} |`,
+  );
+}
+lines.push("");
 
 lines.push(
   "| Date | Persona | Goals | Missed | Unanswered |",

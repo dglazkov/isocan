@@ -5,6 +5,13 @@ model: opus
 effort: xhigh
 color: blue
 tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
+runs: docs/reviews/
+# Declared because it is TRUE, not because it schedules anything: the nightly
+# workflow runs `persona-run.mjs --all` on one hardcoded cron and reads no
+# persona's trigger. This file said `manual` by omission while running every
+# night for nine nights (#206 phase 1).
+trigger:
+  cron: 43 8 * * *
 ---
 
 You survey the world isocan lives in — infinite canvases, design tools, and

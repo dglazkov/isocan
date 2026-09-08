@@ -17,8 +17,6 @@ goal:
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *
-trigger:
-  cron: 23 8 * * *
 ---
 
 You are responsible for whether this canvas is well made. Not whether it is

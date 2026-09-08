@@ -109,6 +109,20 @@ again every week is the treadmill, not the fix.
 | exports with no comment above them | 253 | **4** | 360 (answered) | 2026-09-03, at 301 |
 | the entry chunk a first visit downloads | 640000 | **4** | 722753 (answered) | 2026-09-03, at 648435 |
 
+**Nine personas, fired by `43 8 * * *`.** 1 declares something else.
+
+| Persona | Says | Last ran | |
+| --- | --- | --- | --- |
+| accessibility | `43 8 * * *` | 2026-09-06 · 2d ago |  |
+| architect | `43 8 * * *` | 2026-09-06 · 2d ago |  |
+| copy | `43 8 * * *` | 2026-09-06 · 2d ago |  |
+| design-auditor | `43 8 * * *` | 2026-09-06 · 2d ago |  |
+| journeys | `17 7 * * 1` | 2026-09-06 · 2d ago | **declares a cron nothing fires** |
+| market-researcher | `43 8 * * *` | 2026-09-06 · 2d ago |  |
+| performance | `43 8 * * *` | 2026-09-06 · 2d ago |  |
+| qa-tester | `43 8 * * *` | 2026-09-06 · 2d ago |  |
+| reviewer | `43 8 * * *` | 2026-09-06 · 2d ago |  |
+
 | Date | Persona | Goals | Missed | Unanswered |
 | --- | --- | --- | --- | --- |
 | [2026-09-06](2026-09-06-accessibility.md) | accessibility | 2/2 held | — | — |
