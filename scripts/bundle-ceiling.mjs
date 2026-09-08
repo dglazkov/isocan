@@ -28,6 +28,15 @@
  *   which must be answered within three days (`test/review-queue.test.ts`),
  *   and answering it is where CEILING gets raised with its reason.
  *
+ * **696,100 → 636,000 on 8 Sep 2026, and it went DOWN**, which had not
+ * happened before: one namespace import (`import * as core` in
+ * `web/lib/runtimeModules.ts`, publishing the host object runtime modules
+ * read) asked for every export of `@isocan/core` and pinned all of it into
+ * the first paint — 51.5% of the chunk, `recap.ts` and `evals.ts` included,
+ * which this app never calls. Fetched inside the guard that already returns
+ * early when no module has a web half, it is 64,271 bytes lighter and under
+ * the 640,000 goal for the first time since the goal existed.
+ *
  * The second only works because the queue reaches `main` now and an answer
  * covers the nights that repeat it. Before 7 Sep it would have been a warning
  * into a void.
@@ -35,7 +44,7 @@
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 696_100;
+export const CEILING = 636_000;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

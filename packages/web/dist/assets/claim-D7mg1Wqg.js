@@ -1,0 +1,1 @@
+function r(t,e){return t?t.canvasId===e?"adopt":"taken":"free"}function n(t){return t.title&&t.title.trim()!==""?t.title:t.canvasId}function a(t,e){return`${t} already belongs to ${n(e)}`}export{r as b,n as c,a as t};
