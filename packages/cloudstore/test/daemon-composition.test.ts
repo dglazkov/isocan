@@ -57,7 +57,7 @@ if (!gate.ok && requireEmulator()) {
       if (!saved.ISOCAN_STORE) delete process.env.ISOCAN_STORE;
       delete process.env.ISOCAN_GCP_PROJECT;
       delete process.env.ISOCAN_BUCKET;
-      await fs.rm(home, { recursive: true, force: true });
+      await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     });
 
     test("builds a daemon on CloudStore and CloudDesk, and answers", async () => {

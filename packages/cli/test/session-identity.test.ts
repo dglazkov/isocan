@@ -45,8 +45,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await daemon.close();
   await stopDaemons(port, home).catch(() => {});
-  await fs.rm(home, { recursive: true, force: true });
-  await fs.rm(work, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /**
@@ -345,7 +345,7 @@ describe("leaving is leaving", () => {
     await asAgent(claude("s-1"), "identity", "--name", "Iona", "--session");
     await asAgent(claude("s-1"), "canvas", "create", "Surfaces");
     await asAgent(claude("s-1"), "session", "start", "--canvas", "Surfaces", "--label", "Iona 🤖");
-    await fs.rm(path.join(home, "sessions"), { recursive: true, force: true });
+    await fs.rm(path.join(home, "sessions"), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
     const ended = await asAgent(claude("s-1"), "session", "end", "--canvas", "Surfaces");
     expect(ended.stdout).toContain("session ended");

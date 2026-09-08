@@ -51,7 +51,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 const door = async (body: unknown, headers: Record<string, string> = {}) => {
@@ -769,7 +769,7 @@ describe("the pre-badge home", () => {
    * `desk/` at all. */
   async function seedLegacy(boundAt: string): Promise<void> {
     await daemon.close();
-    await fs.rm(p.deskDir(home), { recursive: true, force: true });
+    await fs.rm(p.deskDir(home), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     await fs.writeFile(
       p.actorsFile(home),
       JSON.stringify({
@@ -1123,7 +1123,7 @@ describe("the door is metered", () => {
        */
     } finally {
       await wide.close();
-      await fs.rm(wideHome, { recursive: true, force: true });
+      await fs.rm(wideHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 

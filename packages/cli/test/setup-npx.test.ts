@@ -68,7 +68,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await stopDaemons(port, home).catch(() => {});
-  for (const dir of [home, work, cache]) await fs.rm(dir, { recursive: true, force: true });
+  for (const dir of [home, work, cache]) await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function setup(extraEnv: Record<string, string> = {}): Promise<{
@@ -152,7 +152,7 @@ describe("the default home a fresh machine gets", () => {
 
   afterEach(async () => {
     await elsewhere.close();
-    await fs.rm(elsewhereHome, { recursive: true, force: true });
+    await fs.rm(elsewhereHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("writes it on a machine that has never held a canvas, and says so", async () => {

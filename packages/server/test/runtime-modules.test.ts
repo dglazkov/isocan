@@ -47,7 +47,7 @@ const get = (url: string) => fetch(`${base}${url}`, { headers: badge.headers });
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("what the home advertises", () => {

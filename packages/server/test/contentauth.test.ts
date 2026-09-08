@@ -104,7 +104,7 @@ describe("the per-home key", () => {
 
   afterEach(async () => {
     await daemon.close();
-    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("is minted once and answers the same forever, concurrent askers included", async () => {
@@ -167,7 +167,7 @@ describe("a home with a content host: the hosted shape, end to end", () => {
 
   afterEach(async () => {
     await daemon.close();
-    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   const mint = async (hashes: string[] = [blobHash]): Promise<SignedBlobsResponse> => {
@@ -404,7 +404,7 @@ describe("a home with no content host is byte-for-byte the home before this", ()
 
   afterEach(async () => {
     await daemon.close();
-    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("advertises a loopback base that asks for no signature", async () => {

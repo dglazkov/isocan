@@ -84,7 +84,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** The handler's answer, unfollowed. `redirect: "manual"` is load-bearing:

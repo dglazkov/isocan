@@ -82,7 +82,7 @@ afterEach(async () => {
   await daemon?.close().catch(() => {});
   daemon = null;
   await new Promise<void>((resolve) => stub.close(() => resolve()));
-  await fs.rm(homeDir, { recursive: true, force: true });
+  await fs.rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** A replica that sweeps briskly and would not probe again for an hour, so

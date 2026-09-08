@@ -51,7 +51,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.ISOCAN_NO_UPGRADE;
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 async function config(values: Record<string, unknown>): Promise<void> {

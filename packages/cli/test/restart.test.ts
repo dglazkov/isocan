@@ -30,8 +30,8 @@ afterEach(async () => {
   // In-process, and awaited: a detached daemon outliving the worker is how a
   // test run ends with "Channel closed" instead of a summary.
   await stopDaemons(port, home).catch(() => {});
-  await fs.rm(home, { recursive: true, force: true });
-  await fs.rm(work, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -150,7 +150,7 @@ async function startOtherCopy(): Promise<{ root: string; stop: () => Promise<voi
     root,
     stop: async () => {
       if (daemon.exitCode === null) daemon.kill("SIGKILL");
-      await fs.rm(root, { recursive: true, force: true });
+      await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
   };
 }

@@ -51,7 +51,7 @@ describe("loading the table is not dialling", () => {
     home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-homeroute-"));
   });
   afterEach(async () => {
-    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("answers homeOf from disk without opening a single connection", async () => {

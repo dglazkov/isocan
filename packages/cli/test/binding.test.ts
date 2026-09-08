@@ -47,8 +47,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
-  await fs.rm(work, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 interface Run {
@@ -156,7 +156,7 @@ describe("the handshake binds a directory to its canvas", () => {
       await expect(marker(fakeHome)).rejects.toThrow();
       expect(await canvases()).toHaveLength(0);
     } finally {
-      await fs.rm(fakeHome, { recursive: true, force: true });
+      await fs.rm(fakeHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 });
@@ -211,7 +211,7 @@ describe("isocan use and the narrowed defaults", () => {
       const showBound = await cli(work, {}, "--json", "canvas", "show");
       expect((JSON.parse(showBound.stdout) as Canvas).title).toBe("Roadmap");
     } finally {
-      await fs.rm(other, { recursive: true, force: true });
+      await fs.rm(other, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 
@@ -300,8 +300,8 @@ describe("wait is on one canvas", () => {
       expect(refused.code).toBe(1);
       expect(refused.stderr).toContain("--canvas");
     } finally {
-      await fs.rm(other, { recursive: true, force: true });
-      await fs.rm(unbound, { recursive: true, force: true });
+      await fs.rm(other, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      await fs.rm(unbound, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 });

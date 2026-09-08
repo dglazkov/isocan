@@ -147,7 +147,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("minting is for the admitted, and only for what they hold", () => {
@@ -480,7 +480,7 @@ describe("an unmatched /api path says so, in JSON, with a code", () => {
       expect(asked).toBe(true);
     } finally {
       await replica.close();
-      await fs.rm(replicaDir, { recursive: true, force: true });
+      await fs.rm(replicaDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 
@@ -590,7 +590,7 @@ describe("on a replica", () => {
       expect(atHome.some((entry) => entry.envelope.actor.id === jordan.id)).toBe(true);
     } finally {
       await replica.close();
-      await fs.rm(replicaDir, { recursive: true, force: true });
+      await fs.rm(replicaDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 
@@ -645,7 +645,7 @@ describe("on a replica", () => {
       expect((await redeem(await fresh(), token)).status).toBe(200);
     } finally {
       await replica.close();
-      await fs.rm(replicaDir, { recursive: true, force: true });
+      await fs.rm(replicaDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 });

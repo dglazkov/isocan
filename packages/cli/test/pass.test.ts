@@ -94,7 +94,7 @@ afterEach(async () => {
   await stopDaemons(homePort, homeDir).catch(() => {});
   await Promise.allSettled(
     [homeDir, homeWork, awayDir, awayWork, fakeBrowser].map((dir) =>
-      fs.rm(dir, { recursive: true, force: true }),
+      fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
     ),
   );
 });

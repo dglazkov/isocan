@@ -158,7 +158,7 @@ beforeEach(async () => {
 afterEach(async () => {
   globalThis.fetch = realFetch;
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** An op written by the minting tab, as Jordan. */

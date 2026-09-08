@@ -52,7 +52,7 @@ afterEach(async () => {
   await here?.close();
   await there?.close();
   await Promise.allSettled(
-    [homeDir, thereDir, work, scratch].map((dir) => fs.rm(dir, { recursive: true, force: true })),
+    [homeDir, thereDir, work, scratch].map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })),
   );
 });
 

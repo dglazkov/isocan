@@ -17,7 +17,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-module-build-"));
 
 afterAll(async () => {
-  await fs.rm(out, { recursive: true, force: true });
+  await fs.rm(out, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("scripts/module-build.mjs", () => {

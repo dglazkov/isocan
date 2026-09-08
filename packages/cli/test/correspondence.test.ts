@@ -118,7 +118,7 @@ afterEach(async () => {
   await laptop.close();
   await homeDaemon.close();
   await Promise.allSettled(
-    [upstreamDir, laptopDir, work].map((dir) => fs.rm(dir, { recursive: true, force: true })),
+    [upstreamDir, laptopDir, work].map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })),
   );
 });
 

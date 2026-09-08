@@ -26,7 +26,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("the row's life", () => {

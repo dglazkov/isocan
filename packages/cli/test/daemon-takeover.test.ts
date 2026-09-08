@@ -190,7 +190,7 @@ afterEach(async () => {
   if (squatter && squatter.exitCode === null && squatter.signalCode === null) {
     squatter.kill("SIGKILL");
   }
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("taking the port from a stale daemon", () => {

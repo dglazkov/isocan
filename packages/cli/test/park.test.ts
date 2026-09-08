@@ -72,8 +72,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await stopDaemons(port, home);
-  await fs.rm(home, { recursive: true, force: true });
-  await fs.rm(work, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("parking through a daemon restart", () => {

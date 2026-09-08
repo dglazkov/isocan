@@ -99,7 +99,7 @@ afterEach(async () => {
   await D?.daemon.close().catch(() => {});
   await Promise.allSettled([H1?.daemon.close(), H2?.daemon.close()]);
   await Promise.allSettled(
-    [h1Dir, h2Dir, dDir].map((dir) => fs.rm(dir, { recursive: true, force: true })),
+    [h1Dir, h2Dir, dDir].map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })),
   );
 });
 

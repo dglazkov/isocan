@@ -29,7 +29,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await fs.rm(root, { recursive: true, force: true });
+  await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 async function plant(rel: string, content = "x"): Promise<void> {
@@ -162,9 +162,9 @@ describe("the binding", () => {
     );
     expect(await boundDirs(home, "prj_yes")).toEqual([path.resolve(bound)]);
     expect(await boundDirs(home, "prj_other")).toEqual([]);
-    await fs.rm(home, { recursive: true, force: true });
-    await fs.rm(bound, { recursive: true, force: true });
-    await fs.rm(stale, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await fs.rm(bound, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await fs.rm(stale, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 });
 
@@ -196,7 +196,7 @@ describe("pickList", () => {
   });
 
   afterEach(async () => {
-    await fs.rm(sandbox, { recursive: true, force: true });
+    await fs.rm(sandbox, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("lists directories, and only directories", async () => {
@@ -387,7 +387,7 @@ describe("writeBound", () => {
     expect(out.refusal).toBe("symlink");
     // Nothing was written out there.
     expect(await fs.readdir(outside)).toEqual([]);
-    await fs.rm(outside, { recursive: true, force: true });
+    await fs.rm(outside, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("refuses a symlinked FILE as the destination", async () => {
@@ -399,7 +399,7 @@ describe("writeBound", () => {
     expect(out.ok).toBe(false);
     expect(out.refusal).toBe("symlink");
     expect(await fs.readFile(target, "utf8")).toBe("theirs");
-    await fs.rm(outside, { recursive: true, force: true });
+    await fs.rm(outside, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("refuses to write over a directory", async () => {

@@ -135,7 +135,7 @@ describe("build stamp", () => {
       scratch = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-githead-"));
     });
     afterEach(async () => {
-      await fsp.rm(scratch, { recursive: true, force: true });
+      await fsp.rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     });
 
     /** A clone: `.git` is a directory, and the ref is a loose file. */

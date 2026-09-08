@@ -134,6 +134,15 @@ This is also where #205's two unbuilt pieces belong: `trigger: { idle: … }`
 (per-canvas idle from presence, machine idle for repo-wide work) and a declared
 budget in `rcLimits`' shape. Both are cadence, and cadence is a row.
 
+**And the first thing that needs the row is the suite's own flake rate.**
+`scripts/flakes.mjs` (8 Sep) runs the whole suite N times against an unchanged
+tree and names every test that failed in some runs and not others. It cannot be
+a persona `goal`, because `scripts/ratchet.mjs` takes every goal on every push
+and twelve runs is twenty-five minutes — the objection `test/journeys.test.ts`
+already makes by name. So it is a measurement that MUST live on a schedule, has
+a number that can fail, and today has nowhere to be declared. That is this row,
+exactly.
+
 ## The naming, settled before any code
 
 **`ledger` is taken twice in this codebase.** `packages/web/src/lib/ledger.ts`

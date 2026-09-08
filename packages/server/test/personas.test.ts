@@ -23,7 +23,7 @@ beforeEach(async () => {
   await fs.mkdir(path.join(root, ".agents", "personas"), { recursive: true });
 });
 afterEach(async () => {
-  await fs.rm(root, { recursive: true, force: true });
+  await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("reading", () => {
@@ -59,7 +59,7 @@ describe("reading", () => {
     try {
       expect(await readPersonas(bare)).toEqual([]);
     } finally {
-      await fs.rm(bare, { recursive: true, force: true });
+      await fs.rm(bare, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 });
@@ -76,7 +76,7 @@ describe("writing", () => {
     try {
       expect((await writePersona(bare, "percy", persona("percy"))).ok).toBe(true);
     } finally {
-      await fs.rm(bare, { recursive: true, force: true });
+      await fs.rm(bare, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 

@@ -32,7 +32,7 @@ storeConformance("FileStore", async () => {
     },
     done: async () => {
       await store.close();
-      await fs.rm(home, { recursive: true, force: true });
+      await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
   };
 });
@@ -49,7 +49,7 @@ describe("FileStore — what only a disk can be asked", () => {
 
   afterEach(async () => {
     await store.close();
-    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("the snapshot keeps pace with the log — a file boot replays nothing", async () => {

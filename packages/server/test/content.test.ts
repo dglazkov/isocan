@@ -111,7 +111,7 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
 
   afterEach(async () => {
     await daemon.close();
-    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("blob responses keep every header the inline route sent", async () => {
@@ -223,7 +223,7 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
       expect(off.contentBase).toBe(null);
     } finally {
       await off.close();
-      await fs.rm(offHome, { recursive: true, force: true });
+      await fs.rm(offHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 });

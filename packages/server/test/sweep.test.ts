@@ -80,7 +80,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await desk.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("revoking a grant expels the people it let in", () => {

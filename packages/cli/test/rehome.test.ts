@@ -75,7 +75,7 @@ afterEach(async () => {
   await replica.close();
   await home.close();
   await Promise.allSettled(
-    [homeDir, upstreamDir, work].map((dir) => fs.rm(dir, { recursive: true, force: true })),
+    [homeDir, upstreamDir, work].map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })),
   );
 });
 
@@ -223,7 +223,7 @@ describe("a marker that disagrees with what this machine recorded", () => {
       expect(await otherHome.engine.listCanvases()).toEqual([]);
     } finally {
       await otherHome.close();
-      await fs.rm(second, { recursive: true, force: true });
+      await fs.rm(second, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 });

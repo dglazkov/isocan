@@ -111,7 +111,7 @@ afterEach(async () => {
   await daemon?.close().catch(() => {});
   await stopDaemons(port, isocanHome).catch(() => {});
   if (fakeHome) await new Promise<void>((resolve) => fakeHome.close(() => resolve()));
-  await Promise.allSettled([isocanHome, work].map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  await Promise.allSettled([isocanHome, work].map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })));
 });
 
 interface Run {

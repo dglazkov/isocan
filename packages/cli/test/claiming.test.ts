@@ -49,8 +49,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await daemon.close();
   await stopDaemons(port, home).catch(() => {});
-  await fs.rm(home, { recursive: true, force: true });
-  await fs.rm(work, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** The CLI as the person runs it: no TTY, no harness session — which is what

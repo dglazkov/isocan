@@ -78,7 +78,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** A token exactly as Identity Platform mints one for this project. */

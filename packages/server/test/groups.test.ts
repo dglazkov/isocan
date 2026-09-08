@@ -161,7 +161,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("making a group", () => {
@@ -500,7 +500,7 @@ describe("a home with no attester", () => {
       expect(why.error).toMatch(/cannot admit a group/);
     } finally {
       await bare.close();
-      await fs.rm(bareDir, { recursive: true, force: true });
+      await fs.rm(bareDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 });
@@ -558,7 +558,7 @@ describe("on a replica", () => {
       expect((await daemon.desk.group(group.id))?.deletedAt).toBeDefined();
     } finally {
       await replica.close();
-      await fs.rm(replicaDir, { recursive: true, force: true });
+      await fs.rm(replicaDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 });

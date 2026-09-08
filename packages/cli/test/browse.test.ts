@@ -58,7 +58,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {

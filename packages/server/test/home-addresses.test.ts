@@ -46,7 +46,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   delete process.env.ISOCAN_HOME_URL;
 });
 

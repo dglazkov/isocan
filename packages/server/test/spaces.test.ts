@@ -153,7 +153,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("making a space", () => {
@@ -609,7 +609,7 @@ describe("on a replica", () => {
       expect(((await shared.json()) as GrantResponse).reached).toBe(1);
     } finally {
       await replica.close();
-      await fs.rm(replicaDir, { recursive: true, force: true });
+      await fs.rm(replicaDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 
@@ -648,7 +648,7 @@ describe("on a replica", () => {
     } finally {
       await rig.close();
       await other.close();
-      await Promise.allSettled([otherDir, rigDir].map((d) => fs.rm(d, { recursive: true, force: true })));
+      await Promise.allSettled([otherDir, rigDir].map((d) => fs.rm(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })));
     }
   }, 30_000);
 });

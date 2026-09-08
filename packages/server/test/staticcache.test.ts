@@ -35,7 +35,7 @@ describe("what the app server lets a browser keep", () => {
 
   afterEach(async () => {
     await daemon.close();
-    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("tells the browser to revalidate the page every time", async () => {

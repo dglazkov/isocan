@@ -59,8 +59,8 @@ afterEach(async () => {
   }
   await daemon.close().catch(() => {});
   await stopDaemons(port, home).catch(() => {});
-  await fs.rm(home, { recursive: true, force: true });
-  await fs.rm(work, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** A canvas with its handle and a way to write to it as somebody else. */

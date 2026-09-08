@@ -80,7 +80,7 @@ afterEach(async () => {
   await homeDaemon.close();
   await Promise.allSettled(
     [upstreamDir, firstDir, secondDir, firstWork, secondWork].map((dir) =>
-      fs.rm(dir, { recursive: true, force: true }),
+      fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
     ),
   );
 });

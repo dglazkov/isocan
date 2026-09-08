@@ -36,7 +36,7 @@ afterEach(async () => {
   // for a reason that has nothing to do with what it asserts.
   if (daemon) await daemon.close();
   daemon = undefined;
-  if (home) await fs.rm(home, { recursive: true, force: true });
+  if (home) await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function baseOf(d: Daemon): string {

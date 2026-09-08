@@ -47,7 +47,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllGlobals();
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 const ask = (url: string) => fetch(`${base}${DOC_EXPORT_ROUTE}?url=${encodeURIComponent(url)}`, { headers: badge.headers });

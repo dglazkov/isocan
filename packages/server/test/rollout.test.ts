@@ -53,7 +53,7 @@ afterEach(async () => {
   delete process.env["K_REVISION"];
   await b?.close();
   await a.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 async function op(base: string, operation: Operation, canvasId: string | null = "prj_1"): Promise<void> {

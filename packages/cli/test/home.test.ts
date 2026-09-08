@@ -62,7 +62,7 @@ afterEach(async () => {
   await stopDaemons(port, isocanHome).catch(() => {});
   await upstream.close();
   await Promise.allSettled(
-    [isocanHome, upstreamDir, work].map((dir) => fs.rm(dir, { recursive: true, force: true })),
+    [isocanHome, upstreamDir, work].map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })),
   );
 });
 
@@ -312,7 +312,7 @@ describe("one daemon, both roles at once", () => {
       ) as { address: string };
       expect(local.address).toBe(`http://127.0.0.1:${port}/p/${marker.projectId}`);
     } finally {
-      await fs.rm(localDir, { recursive: true, force: true });
+      await fs.rm(localDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 });
@@ -354,7 +354,7 @@ describe("what a configured home puts in the marker", () => {
       ) as Record<string, unknown>;
       expect(marker).toMatchObject({ title: "Acme Sprint Board", home: homeBase });
     } finally {
-      await fs.rm(elsewhere, { recursive: true, force: true });
+      await fs.rm(elsewhere, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 });

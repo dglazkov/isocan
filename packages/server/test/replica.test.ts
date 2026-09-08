@@ -78,8 +78,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await daemon?.close();
   await upstream?.close();
-  await fs.rm(home, { recursive: true, force: true });
-  if (upstreamHome) await fs.rm(upstreamHome, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  if (upstreamHome) await fs.rm(upstreamHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   delete process.env.ISOCAN_HOME_URL;
 });
 

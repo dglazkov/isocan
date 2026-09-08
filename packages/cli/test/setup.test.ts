@@ -40,8 +40,8 @@ afterEach(async () => {
   // detached: closing the handle we started is not enough to leave the
   // machine as we found it.
   await stopDaemons(port, home).catch(() => {});
-  await fs.rm(home, { recursive: true, force: true });
-  await fs.rm(work, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {

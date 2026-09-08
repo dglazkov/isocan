@@ -77,7 +77,7 @@ afterEach(async () => {
   // the next test rather than this one.
   await stopDaemons(directPort, machine).catch(() => {});
   for (const dir of [homeStore, machine, work]) {
-    await fs.rm(dir, { recursive: true, force: true });
+    await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 

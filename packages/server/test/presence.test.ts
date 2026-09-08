@@ -199,7 +199,7 @@ describe("presence over the daemon", () => {
 
   afterEach(async () => {
     await daemon.close();
-    await fs.rm(home, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   async function post(url: string, body: unknown) {

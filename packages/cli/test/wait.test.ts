@@ -92,7 +92,7 @@ afterEach(async () => {
   proxy.closeAllConnections();
   await new Promise<void>((resolve) => proxy.close(() => resolve()));
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 async function post(url: string, body: unknown): Promise<any> {

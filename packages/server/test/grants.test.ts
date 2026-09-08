@@ -119,7 +119,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
-  await fs.rm(home, { recursive: true, force: true });
+  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe("a canvas is born with the link grant", () => {
@@ -678,7 +678,7 @@ describe("on a replica", () => {
       expect((await get(jordan, `/api/projects/${CANVAS}/canvas`)).status).toBe(403);
     } finally {
       await replica.close();
-      await fs.rm(replicaDir, { recursive: true, force: true });
+      await fs.rm(replicaDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
 });
