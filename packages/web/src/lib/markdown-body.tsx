@@ -1,7 +1,18 @@
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import type { PluggableList } from "unified";
+
+/**
+ * URL transform that permits image data URIs (data:image/...) in src attributes,
+ * falling back to ReactMarkdown's default secure sanitizer for all other URLs.
+ */
+function safeUrlTransform(url: string, key: string): string {
+  if (key === "src" && /^data:image\/(png|jpe?g|gif|webp|svg\+xml|avif|bmp|ico);base64,/i.test(url)) {
+    return url;
+  }
+  return defaultUrlTransform(url);
+}
 
 /**
  * **The markdown renderer, and everything it drags with it.**
@@ -33,6 +44,7 @@ export default function MarkdownBody({
   return (
     <ReactMarkdown
       remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}
+      urlTransform={safeUrlTransform}
       {...(rehypePlugins ? { rehypePlugins } : {})}
     >
       {children}

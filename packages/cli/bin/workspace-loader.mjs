@@ -50,5 +50,5 @@ function moduleSource(specifier) {
 
 export function resolve(specifier, context, next) {
   const url = sources.get(specifier) ?? moduleSource(specifier);
-  return url ? { url, shortCircuit: true } : next(specifier, context);
+  return url ? next(url, context) : next(specifier, context);
 }

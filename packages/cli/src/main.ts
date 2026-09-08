@@ -423,6 +423,7 @@ import {
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
+import { inlineHtmlAssets, inlineMarkdownAssets } from "./inline.ts";
 import {
   collectProp,
   formatBytes,
@@ -5244,9 +5245,16 @@ program
         // `add` can start an empty canvas, so it may bind this directory to
         // a fresh canvas when nothing else answers (#60).
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
-        const data = await fs.readFile(file);
+        let data = await fs.readFile(file);
         const filename = path.basename(file);
         const mimeType = mimeFor(filename);
+        if (mimeType === "text/html") {
+          const inlined = await inlineHtmlAssets(file, data.toString("utf8"));
+          data = Buffer.from(inlined, "utf8");
+        } else if (mimeType === "text/markdown") {
+          const inlined = await inlineMarkdownAssets(file, data.toString("utf8"));
+          data = Buffer.from(inlined, "utf8");
+        }
         if (opts.drawing && mimeType !== DRAWING_MIME) {
           throw new Error(`--drawing needs an SVG; ${filename} is ${mimeType}`);
         }
@@ -5303,6 +5311,31 @@ program
         await noteMissingDesignSystem(ctx, p.id);
       },
     ),
+  );
+
+program
+  .command("inline <file>")
+  .description("Inline referenced local images in an HTML or Markdown file as base64 data URIs")
+  .option("-o, --output <file>", "write to output file instead of stdout")
+  .action(
+    run(async (file: string, opts: { output?: string }) => {
+      const raw = await fs.readFile(file, "utf8");
+      const filename = path.basename(file);
+      const mimeType = mimeFor(filename);
+      const inlined =
+        mimeType === "text/markdown"
+          ? await inlineMarkdownAssets(file, raw)
+          : await inlineHtmlAssets(file, raw);
+      if (opts.output) {
+        await fs.writeFile(opts.output, inlined, "utf8");
+        console.error(`Wrote inlined file to ${opts.output}`);
+      } else {
+        process.stdout.on("error", (err: any) => {
+          if (err?.code === "EPIPE") process.exit(0);
+        });
+        process.stdout.write(inlined);
+      }
+    }),
   );
 
 /**
@@ -7192,9 +7225,18 @@ program
       let filename: string;
       let mimeType: string;
       if (file) {
-        data = await fs.readFile(file);
+        const raw = await fs.readFile(file);
         filename = path.basename(file);
         mimeType = mimeFor(filename);
+        if (mimeType === "text/html") {
+          const inlined = await inlineHtmlAssets(file, raw.toString("utf8"));
+          data = Buffer.from(inlined, "utf8");
+        } else if (mimeType === "text/markdown") {
+          const inlined = await inlineMarkdownAssets(file, raw.toString("utf8"));
+          data = Buffer.from(inlined, "utf8");
+        } else {
+          data = raw;
+        }
       } else {
         const editor = process.env.EDITOR ?? process.env.VISUAL;
         if (!editor) throw new Error("no $EDITOR set — pass a file instead");

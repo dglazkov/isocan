@@ -1983,7 +1983,7 @@ on the thread before putting one on somebody else's canvas,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `design [--css|--tokens] [set|check]`,
-`add [--drawing]`, `browse <url>`, `edit`, `mv [--by]`, `align`, `distribute`,
+`add [--drawing]`, `browse <url>`, `edit`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
