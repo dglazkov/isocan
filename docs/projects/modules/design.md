@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-04
 see: modules, extensions, workbench, mindmap, iso-api, atlas
-note: designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep. Phase 5, sandboxes, waits on three gates: the content origin (CLEARED 6 Sep, live on prod), extension actors (which extensions stage 4 found has no subject to attribute until a panel ACTS, so it waits on that rather than on the calendar) and compute consent
+note: designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep; phase 4.5 (WebHost, overlays, drops, the module API's own version and a PROPOSED list) built 9 Sep from #156's field report. Phase 5, sandboxes, waits on three gates: the content origin (CLEARED 6 Sep, live on prod), extension actors (which extensions stage 4 found has no subject to attribute until a panel ACTS, so it waits on that rather than on the calendar) and compute consent
 ---
 # Modules — a package that contributes to both surfaces, and can be taken away
 
@@ -97,8 +97,19 @@ Slots, in the order they are needed:
    mime test, mounted before the built-in chain so a module can own a mime
    the built-ins would otherwise call a document. Lazy — a renderer is a
    `React.lazy` chunk loaded when its kind is first seen, never at boot.
-3. **Panel**, **page**, **inspector**, **tool**: designed in the research
-   note's manifest and the extensions design; each lands when a module asks.
+3. **Page** and **inspector** (phase 4): a cover route of a module's own, and
+   a reader beside the workbench's stage.
+4. **Overlay** and **drop** (phase 4.5, proposed): screen space against a
+   named edge, and a claim on a dragged mime. Both landed because a module
+   asked — which is what "each lands when a module asks" meant, and the first
+   time somebody outside this repo did the asking.
+5. **Panel** and **tool**: still designed and unbuilt. A dock panel or a rail
+   tool is a shell change today.
+
+**Reading is free; writing is a slot's own question.** Until 9 Sep every one of
+these except `actions` was read-only, which nobody noticed while no module had
+an interactive surface. `WebHost` (phase 4.5) is what a component changes
+anything through, and it is handed only to the slots a person interacts with.
 
 ### The CLI contract
 

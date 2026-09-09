@@ -134,7 +134,7 @@ not list them; each surface lays them in for itself, so an agent reading
 the composer's menu or `isocan command list` sees them, and an agent
 reading the raw route does not.
 
-## `web.tsx` — the `WebModule` record and the five slots
+## `web.tsx` — the `WebModule` record and the seven slots
 
 The shell owns the slots and maps over its module list to fill them. Every
 slot is handed **facts as props, never stores**: a module component gets a
@@ -144,13 +144,16 @@ run without the shell's source.
 
 ```ts
 import type { ComponentType } from "react";
-import type { InspectorFacts, PageFacts, RendererFacts, UnderlayFacts, WebModule } from "@isocan/core";
+import type {
+  InspectorFacts, OverlayFacts, PageFacts, RendererFacts, UnderlayFacts, WebModule,
+} from "@isocan/core";
 
 export const myWeb: WebModule<
   ComponentType<UnderlayFacts>,
   ComponentType<RendererFacts>,
   ComponentType<InspectorFacts>,
-  ComponentType<PageFacts>
+  ComponentType<PageFacts>,
+  ComponentType<OverlayFacts>
 > = {
   core: myModule,
   underlays: [Lines],
@@ -158,11 +161,13 @@ export const myWeb: WebModule<
   actions: [tidy],
   inspectors: [{ kinds: ["whiteboard"], label: "Layers", component: Layers }],
   pages: [{ segment: "boards", label: "Whiteboards", hint: "every board on this canvas", component: Boards }],
+  overlays: [{ region: "left", label: "Shapes", component: ShapeTray }],   // proposed
+  drops: [{ mimes: ["application/vnd.acme.shape-id"], run: dropShape }],   // proposed
 };
 export default myWeb;
 ```
 
-The four type parameters are the component types of the four component
+The five type parameters are the component types of the five component
 slots; leave a parameter off (it defaults to `never`) when you do not fill
 that slot, as `mermaid` does with `WebModule<ComponentType<UnderlayFacts>,
 ComponentType<RendererFacts>>`.
@@ -172,8 +177,46 @@ ComponentType<RendererFacts>>`.
 | `underlays` | inside `.world`, before the items, in world units | `UnderlayFacts { canvas, drag }` — `drag` is `{ itemIds, dx, dy } \| null`, the live gesture, so a line can ride it before the replica moves | Draw under the items: a node is chromeless text and a line over it strikes through the words. The mind map's lines. |
 | `renderers` | `VersionContent`, ahead of the built-in chain, on the card and on the stage | `RendererFacts { canvasId, blobHash, mimeType, filename, entered, url, readText }` | Key your effects on `blobHash`, not on `readText` — the shell may hand a fresh closure per render for the same bytes, and the first Mermaid renderer refetched on every presence tick. Put a heavy library behind `React.lazy` in a separate file so a canvas without your kind never downloads it. |
 | `actions` | the ⌘K palette's Canvas group | `ModuleActionFacts { canvas, selection }` | `run` returns the ops to send (or nothing); the shell sends them echoed, so a tidy is an `items.move` the terminal sees as the same op. Every module action writes and is withheld on the read-only canvas. `available` decides whether it is offered. |
-| `inspectors` | beside the workbench's stage, when the open item's kind is one you name | `InspectorFacts { canvasId, item, readText }` | Read, do not write. The documents module's Outline. |
-| `pages` | a cover route at `x/<segment>` under the canvas's path, with the shell's bar (← Canvas, your label, your hint) above your component | `PageFacts { canvasId, canvas }` | Reachable from ⌘K ("Open <label>") and `isocan open --page <segment>`. Link to items with `workbenchItemPath` / `itemPath` from core; never spell `/p/`. |
+| `inspectors` | beside the workbench's stage, when the open item's kind is one you name | `InspectorFacts { canvasId, item, readText, host }` | **Writes now** (9 Sep 2026) — it read and could not write until `host` landed, which made "change the thing you are inspecting" impossible. The documents module's Outline; the stickers module changes a sticker with `item.addVersion`. |
+| `pages` | a cover route at `x/<segment>` under the canvas's path, with the shell's bar (← Canvas, your label, your hint) above your component | `PageFacts { canvasId, canvas, host }` | Reachable from ⌘K ("Open <label>") and `isocan open --page <segment>`. Link to items with `workbenchItemPath` / `itemPath` from core; never spell `/p/`. |
+| `overlays` **(proposed)** | screen space above the viewport, against a `region` you name — `"left"` or `"right"` | `OverlayFacts { canvasId, canvas, host }` | You name an EDGE; the shell owns where that edge is, and two overlays in one region stack in module order. You cannot position yourself, deliberately: two modules that both could is how a canvas ends up with two trays on top of each other. The stickers tray. |
+| `drops` **(proposed)** | the canvas's drop handler, ahead of the built-ins, by mime | `DropFacts { canvasId, data, mimeType, at, host }` | `run` returns ops (or nothing — a claim on a mime is not a promise about its payload). Native OS file drops never reach you: those are the shell's own gesture. First match wins in module order. |
+
+### `host` — how a component changes anything **(proposed)**
+
+Every slot that a person interacts with — overlays, inspectors and pages — is
+handed a `WebHost` beside its facts. Two members, and no more:
+
+```ts
+interface WebHost {
+  send: (ops: readonly Operation[], group?: string) => Promise<void>;
+  putBlob: (bytes: Blob, filename: string) => Promise<{ blobHash: string; size: number }>;
+}
+```
+
+`send` is the same door `ModuleAction.run` returns into, so a write from a
+component is an ordinary op: echoed, undoable, groupable, and visible to the
+terminal as the same op. One `group` for one undo.
+
+`putBlob` is the only thing an operation cannot say. `item.add` and
+`item.addVersion` both name a `blobHash`, and a blob is minted through a
+channel that is not an op — so without it a module could express every canvas
+change EXCEPT the ones that need new content, which is most of what a
+node-type module does. Mint the bytes, then say what to do with them:
+
+```tsx
+const put = await host.putBlob(new Blob([text], { type: MY_MIME }), "shape.json");
+await host.send([
+  { type: "item.add", itemId: newItemId(), version: { …, blobHash: put.blobHash, size: put.size },
+    width: 120, height: 120, placement: { x, y }, title: "Square" },
+]);
+```
+
+Two steps rather than one `dropFile(file, at)` helper, and the second step is
+where your title, size, properties and grouping live — none of which a host
+helper could have known. Underlays and renderers DRAW and are not handed a
+host; if you need one there, say so, and it is a review question rather than a
+private import.
 
 Colours and spacing in anything you render come from the app's tokens
 (`var(--ink)`, `var(--card)`, `var(--line)`, `var(--ink-soft)`,
@@ -337,7 +380,10 @@ does not load runtime modules; whether it ever should is a decision the
 ## What is not there yet
 
 No panel or tool slot — a dock panel or a rail tool is still a shell change.
-No inspector on the canvas, only in the workbench. No per-module CSS file.
+No inspector on the canvas, only in the workbench (an overlay is the way to
+put something beside the work today). No per-module CSS file, and an overlay
+that needs positioning still needs a rule in `styles.css` — the stickers tray
+shipped invisible for a day because the region had no CSS at all.
 No way for a card to name the module a file came from when that module is
 absent. A prose editor for documents, deferred. Sandboxes, which wait on the
 content origin, extension actors and compute consent. Each is listed in

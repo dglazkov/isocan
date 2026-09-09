@@ -150,6 +150,75 @@ card that names the module a file came from when the module is absent —
 the mime does not carry the name, and inventing a registry of departed
 modules is a second copy of a fact.
 
+## Phase 4.5 — writing from a component, and saying how early this is ✅
+
+*Built 9 Sep 2026, from [#156's field report](https://github.com/dglazkov/isocan/issues/156#issuecomment-5603055567).*
+
+@romannurik built a sticker item type against the real API and listed five
+things he had to change in core to do it. Followed back to their causes they
+were two, and one of the five needed no API change at all.
+
+**The API could read from five places and write from one.**
+`ModuleAction.run` returning `readonly Operation[]` was the only occurrence of
+that type in the whole module API — underlays, renderers, inspectors and pages
+were read-only by construction, and four of those five are components a person
+interacts with. That was invisible while the modules were a mind map, a
+renderer and an outline, none of which changes anything from inside a
+component; it stopped being invisible the moment somebody built a tray you
+drag things out of. It also contradicted this design's own rule that **module
+state is an item, visible and versioned** — most of the places a module could
+put UI could not write an item.
+
+**And no operation carries bytes.** `item.add` and `item.addVersion` both name
+a `blobHash`, minted through a channel that is not an op, so a module could
+express every canvas change except the ones needing new content. One cause,
+two symptoms, which is why the report asked for both a `dropFile` and an
+`addVersion`.
+
+`WebHost` is the answer and the web twin of `CliHost`, which has existed since
+modules did — the asymmetry was the bug. Two members: `send`, the door the
+palette already used, and `putBlob`. Handed to overlays, inspectors and pages;
+underlays and renderers draw and are not, and the day one needs it that is a
+review question rather than a private import.
+
+**Deliberately not the helpers that were asked for.** `dropFile` and
+`addVersion` each bundle mint-place-send, so a module cannot set its own title,
+group two writes into one undo, or want a version instead of an item without a
+second helper — which is how a per-slot helper list starts. The stickers
+rewrite is the evidence: it names its items ("Fire", not "fire.sticker"), drops
+in one undo, and changes a sticker in place with an op that already existed.
+
+**Two new slots and one that was not a slot at all.** `overlays` is screen
+space against a named EDGE — the shell owns where that edge is, because two
+modules positioning themselves is how a canvas ends up with two trays on top of
+each other. `drops` lets a module claim a dragged mime, the way it already
+claims mimes for kinds; native OS file drops stay the shell's. The canvas
+inspector needed no API change — `moduleInspectorsFor` and `InspectorFacts`
+already carried everything, and only `Workbench.tsx` mounted it.
+
+**Versioning, because runtime modules make this real.** `MODULE_API_VERSION`
+is decoupled from the app's and bumped 0.1.0 → 0.2.0, which is the first
+refusal the engines check has ever produced: it was pinned to the root
+package's 0.1.0, so the number it compared against was a constant. `PROPOSED`
+names `overlays`, `drops` and `host`; a manifest using one is refused unless
+the person adding it passes `--proposed`, and an unknown proposal is refused by
+name. VS Code's two-surface bargain in the shape this can afford. See
+[`design.md`](design.md#versioning-two-surfaces-one-of-them-frozen).
+
+**`@isocan/stickers` ships behind Settings → Experiments**, off, fetched only
+when switched on — five emoji, a tray, an inspector, `isocan sticker drop`. It
+is deliberately not a useful feature: it is the smallest real module that needs
+all three proposed slots, and it is how we will notice when one of them is
+wrong.
+
+**Two bugs the work found in itself.** The experiment gate was a plain import
+gated at render, which gates the drawing and not the download — measured, it
+cost every first visit 6,227 bytes including everybody who never switched it
+on. And the overlay slot shipped with no CSS at all: the tray was in the DOM,
+in its region, `position: static`, a 1280×178 block nobody could see, past
+lint, typecheck, 3,936 tests and two byte checks. Neither was findable without
+building the built thing and looking at it.
+
 ## Phase 5 — sandboxes
 
 Gated, and the gates are named: the content origin, extension actors, and the
