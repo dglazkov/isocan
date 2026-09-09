@@ -113,15 +113,15 @@ again every week is the treadmill, not the fix.
 
 | Persona | Says | Last ran | |
 | --- | --- | --- | --- |
-| accessibility | `43 8 * * *` | 2026-09-08 · 0d ago |  |
-| architect | `43 8 * * *` | 2026-09-08 · 0d ago |  |
-| copy | `43 8 * * *` | 2026-09-08 · 0d ago |  |
-| design-auditor | `43 8 * * *` | 2026-09-08 · 0d ago |  |
-| journeys | `17 7 * * *` | 2026-09-08 · 0d ago |  |
-| market-researcher | `43 8 * * *` | 2026-09-08 · 0d ago |  |
-| performance | `43 8 * * *` | 2026-09-08 · 0d ago |  |
-| qa-tester | `43 8 * * *` | 2026-09-08 · 0d ago |  |
-| reviewer | `43 8 * * *` | 2026-09-08 · 0d ago |  |
+| accessibility | `43 8 * * *` | 2026-09-08 · 1d ago |  |
+| architect | `43 8 * * *` | 2026-09-08 · 1d ago |  |
+| copy | `43 8 * * *` | 2026-09-08 · 1d ago |  |
+| design-auditor | `43 8 * * *` | 2026-09-08 · 1d ago |  |
+| journeys | `17 7 * * *` | 2026-09-08 · 1d ago |  |
+| market-researcher | `43 8 * * *` | 2026-09-08 · 1d ago |  |
+| performance | `43 8 * * *` | 2026-09-08 · 1d ago |  |
+| qa-tester | `43 8 * * *` | 2026-09-08 · 1d ago |  |
+| reviewer | `43 8 * * *` | 2026-09-08 · 1d ago |  |
 
 **Of the questions each persona asked, how many a person kept.** A fold over
 the outcome column and nothing else, so the only way to move it is to answer

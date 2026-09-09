@@ -99,6 +99,14 @@ import {
   extractItemRefs,
   ALIGN_EDGES,
   itemKinds,
+  auditScreen,
+  offSystemTotal,
+  type ScreenAudit,
+  designStanding,
+  DESIGN_SYSTEM_LIMIT,
+  designSkipPatch,
+  designUnskipPatch,
+  designSkipped,
   registerModule,
   ISOCAN_VERSION,
   enginesSatisfied,
@@ -5129,6 +5137,103 @@ function pickOne<T extends string>(
 }
 
 /**
+ * **The audit runs when the screen lands, not when somebody remembers.**
+ *
+ * > "When I ask for screens I would love for an audit to run after and get
+ * > scores as well as instructions on how to improve"
+ *
+ * `/design-audit` produced zero documents on six canvases because it is a step
+ * a person has to type. This is the same question asked at the only moment it
+ * is free: the screen is in hand, the system is one fetch away, and whoever
+ * added it is still here.
+ *
+ * It scores ONLY the screen that just arrived. `isocan design audit` scores the
+ * canvas, and a wall of other people's findings after adding one file is a wall
+ * somebody learns to scroll past.
+ *
+ * Silent on a clean screen. A line that says "nothing wrong" after every add is
+ * how a person stops reading the ones that say something — and silence here is
+ * unambiguous, because the add already printed its own success.
+ *
+ * Best-effort throughout, on stderr, and never a reason the add fails: the item
+ * is stored by the time this runs, so an error here would report a failure that
+ * did not happen.
+ */
+async function scoreScreenOnArrival(
+  ctx: Ctx,
+  canvasId: string,
+  itemId: string,
+  mimeType: string,
+  data: Buffer,
+): Promise<void> {
+  if (ctx.json || mimeType !== "text/html") return;
+  try {
+    const snapshot = await ctx.client.snapshot(canvasId);
+    const system = designSystem(snapshot.canvas);
+    if (!system) return;
+    const version = system.versions.find((v) => v.id === system.currentVersionId) ?? system.versions[0];
+    if (!version) return;
+    const doc = parseDesign((await ctx.client.downloadBlob(canvasId, version.blobHash)).toString("utf8"));
+    const audit = auditScreen(data.toString("utf8"), doc.tokens);
+    if (audit.offSystem.length === 0) return;
+    console.error(
+      `note: ${audit.offSystem.length} value${audit.offSystem.length === 1 ? "" : "s"} here that ` +
+        `${doc.tokens.name ?? system.title} never named ` +
+        `(${audit.onSystem} on-system). Worst first:`,
+    );
+    for (const off of audit.offSystem.slice(0, 4)) {
+      console.error(`  ${off.value}  ${off.kind}, ${off.count}x, line ${off.line}`);
+    }
+    if (audit.offSystem.length > 4) console.error(`  …and ${audit.offSystem.length - 4} more`);
+    console.error(`  isocan design --css   the tokens to build against, ready to paste`);
+    console.error(`  isocan get ${itemId} screen.html   to fix it in place`);
+  } catch {
+    // Scoring is a courtesy. It must never be the reason an add reports failure.
+  }
+}
+
+/**
+ * **Past a point, the note stops asking and starts refusing** (8 Sep 2026).
+ *
+ * `noteMissingDesignSystem` below has printed a courtesy line since the
+ * feature landed, and measured across six live canvases it changed nothing:
+ * 37 of 61 screens sit on a canvas with no design system, one of them at 24
+ * screens. That is the same failure the size gate had before it was split —
+ * *"seven raises teach somebody to edit a number without reading it"* — and it
+ * takes the same fix, in the same two halves: **a creep asks, a jump blocks.**
+ *
+ * The refusal is deliberately placed BEFORE `uploadBlob`. Refusing after the
+ * bytes are stored would leave an orphan blob for a screen that was never
+ * added, and a gate whose failure mode is litter is a gate somebody disables.
+ *
+ * Only screens, and only `text/html` — the one thing on a canvas a design
+ * system governs. A note, a picture and a drawing are not designs to be
+ * consistent with, and refusing them would make this a gate about uploading
+ * rather than a gate about design.
+ *
+ * Three ways past it, and all three are the work rather than a way around it:
+ * write one, derive one from what is already there, or say on the canvas that
+ * this canvas does not want one. There is no flag: a flag leaves no trace, has
+ * to be passed every time, and tells the next person nothing.
+ */
+function refuseUnsystematisedScreen(
+  canvas: CanvasContents,
+  project: { id: string; title: string; properties?: Record<string, string> },
+  mimeType: string,
+): void {
+  if (mimeType !== "text/html") return;
+  const screens = Object.values(canvas.items).filter((item) => itemKind(item) === "screen").length;
+  if (designStanding(canvas, screens, project) !== "overdue") return;
+  throw new Error(
+    `${project.title} has ${screens} screens and no design system, which is past ` +
+      `${DESIGN_SYSTEM_LIMIT} — every one of them decided something nobody wrote down.\n` +
+      "  ask for `/design-system`      derive one from the screens already here\n" +
+      "  isocan design set <file>      write one you have\n" +
+      "  isocan design skip            this canvas does not want one, on the record",
+  );
+}
+
+/**
  * **Say it at the moment it matters, not in a document.**
  *
  * The agent guide has always said to read the design system before building a
@@ -5258,6 +5363,7 @@ program
         if (opts.drawing && mimeType !== DRAWING_MIME) {
           throw new Error(`--drawing needs an SVG; ${filename} is ${mimeType}`);
         }
+        refuseUnsystematisedScreen(snapshot.canvas, p, mimeType);
         await narrate(ctx, p.id, { status: `adding ${truncate(filename, 24)}…` });
         const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
 
@@ -5309,6 +5415,7 @@ program
         if (ctx.json) return printJson({ itemId, placement: placed });
         console.log(`added ${itemId} (${filename}) at ${placed.x},${placed.y}`);
         await noteMissingDesignSystem(ctx, p.id);
+        await scoreScreenOnArrival(ctx, p.id, itemId, mimeType, data);
       },
     ),
   );
@@ -8596,6 +8703,127 @@ tokens in the front matter, the reasoning in the sections.
 None yet? \`/design-system\` in a composer asks an agent to derive one from the
 screens already on the canvas — what they ALREADY do, rather than a system
 somebody invented and imposed.`,
+  );
+
+/**
+ * **Saying no, and where that decision lives.**
+ *
+ * The gate on `isocan add` refuses a screen past `DESIGN_SYSTEM_LIMIT`, and a
+ * gate with no way past it is a gate people route around. The route this does
+ * NOT offer is a flag: `--no-design-system` on the add would leave no trace,
+ * would have to be passed every time, and would tell the next person nothing
+ * about why this canvas is the way it is.
+ *
+ * So the answer is a canvas property, which versions, which both surfaces can
+ * read, and which makes "we decided against one" a fact about the canvas
+ * rather than a habit of whoever is typing. Some canvases should take it — a
+ * canvas of historical pages each reproducing a different era has screens that
+ * are SUPPOSED to disagree, and a system derived from them is a system made of
+ * averages.
+ */
+/**
+ * **The audit that has never run, as a number instead of a document.**
+ *
+ * `/design-audit` is a good command and, measured across six live canvases on
+ * 8 Sep 2026, has produced exactly zero documents. A step somebody has to
+ * remember to type is a step that does not happen — which is the same finding
+ * as the note above it, and takes the same fix: give it a number, so it can be
+ * watched instead of remembered.
+ *
+ * This is deliberately the SMALL half of that command. It does not grade
+ * hierarchy, rhythm or whether the copy says anything; those need a reader and
+ * `/design-audit` still exists for them. It answers the one question that is
+ * arithmetic — which values a screen used that the system never named — and it
+ * is the question `designsystem.ts` opens with: six type scales and four blues.
+ *
+ * `--json` is what a standing agent or a future persona reads. The human form
+ * leads with the screens that are worst, because a list nobody can act on in
+ * order is a list nobody acts on.
+ */
+style
+  .command("audit")
+  .description("Which values the screens here use that the design system never named")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const system = designSystem(snapshot.canvas);
+      if (!system) {
+        throw new Error(
+          `${p.title} has no design system, so there is nothing to audit against — ` +
+            "ask for /design-system, or `isocan design skip` if this canvas does not want one",
+        );
+      }
+      const current =
+        system.versions.find((v) => v.id === system.currentVersionId) ?? system.versions[0];
+      if (!current) throw new Error(`${system.title} has no current version`);
+      const doc = parseDesign((await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8"));
+
+      const screens = Object.values(snapshot.canvas.items).filter(
+        (item) => itemKind(item) === "screen",
+      );
+      const rows: { id: string; title: string; audit: ScreenAudit }[] = [];
+      for (const screen of screens) {
+        const version =
+          screen.versions.find((v) => v.id === screen.currentVersionId) ?? screen.versions[0];
+        if (!version) continue;
+        const html = (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8");
+        rows.push({ id: screen.id, title: screen.title, audit: auditScreen(html, doc.tokens) });
+      }
+
+      const total = offSystemTotal(rows.map((r) => r.audit));
+      if (ctx.json) {
+        return printJson({
+          system: doc.tokens.name ?? system.title,
+          screens: rows.length,
+          offSystem: total,
+          items: rows.map((r) => ({ itemId: r.id, title: r.title, ...r.audit })),
+        });
+      }
+
+      if (rows.length === 0) return console.log(`no screens on ${p.title} yet`);
+      console.log(
+        `${total} off-system value${total === 1 ? "" : "s"} across ${rows.length} screen${rows.length === 1 ? "" : "s"}, ` +
+          `against ${doc.tokens.name ?? system.title}`,
+      );
+      for (const row of [...rows].sort((a, b) => b.audit.offSystem.length - a.audit.offSystem.length)) {
+        if (row.audit.offSystem.length === 0) {
+          console.log(`\n  ${row.title} — clean (${row.audit.onSystem} on-system values)`);
+          continue;
+        }
+        console.log(`\n  ${row.title} — ${row.audit.offSystem.length}`);
+        for (const off of row.audit.offSystem.slice(0, 8)) {
+          console.log(`    ${off.value}  (${off.kind}, ${off.count}x, line ${off.line})`);
+        }
+        if (row.audit.offSystem.length > 8) {
+          console.log(`    …and ${row.audit.offSystem.length - 8} more`);
+        }
+      }
+    }),
+  );
+
+style
+  .command("skip")
+  .description("This canvas does not want a design system — on the record, not as a flag")
+  .option("--undo", "take it back: the note and the gate return")
+  .action(
+    run(async (opts: { undo?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p } = await canvasAndSnapshot(ctx);
+      const already = designSkipped(p);
+      if (opts.undo && !already) throw new Error(`${p.title} has not skipped a design system`);
+      if (!opts.undo && already) return console.log(`${p.title} already has no design system, deliberately`);
+      await sendOp(ctx, p.id, {
+        type: "project.update",
+        patch: opts.undo ? designUnskipPatch() : designSkipPatch(),
+      });
+      if (ctx.json) return printJson({ canvasId: p.id, skipped: !opts.undo });
+      console.log(
+        opts.undo
+          ? `${p.title} wants a design system again — \`/design-system\` derives one from the screens here`
+          : `${p.title} will not be asked for a design system again — \`isocan design skip --undo\` takes it back`,
+      );
+    }),
   );
 
 style

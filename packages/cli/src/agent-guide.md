@@ -1638,6 +1638,22 @@ isocan fit <items...>                  # grow items to the size their content wa
   tokens nobody kept, values that are not colours, contrast that fails. Run it
   before you grade a screen against it, and before you hand a system back.
 
+  `isocan design audit` says whether the SCREENS hold up: which values each one
+  uses that the system never named, worst screen first. It is the arithmetic
+  half of `/design-audit` and nothing more — a colour is in the palette or it is
+  not — so a clean score means coherent, never good. You do not have to run it
+  after adding a screen; adding one runs it for you and prints what that screen
+  invented.
+
+  **Past six screens with no design system, `isocan add` refuses an HTML file.**
+  Two screens gets you a note, because the second screen is where a choice
+  becomes a convention. Six is where a note that has been ignored stops being
+  worth printing. Write one, ask for `/design-system` to derive one from what is
+  already there, or `isocan design skip` if this canvas genuinely does not want
+  one — a canvas of historical pages has screens that are SUPPOSED to disagree.
+  There is no flag: the decision belongs on the canvas where the next person
+  can see it, not in whoever's shell history.
+
   Build to it, and say in your reply which parts of it you used. If it does
   not cover something you had to decide, say THAT too: the gaps are what the
   next version of the style should close. If the canvas has no design system,

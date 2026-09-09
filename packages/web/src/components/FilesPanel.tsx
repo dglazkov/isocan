@@ -97,12 +97,16 @@ function rowsOf(canvas: CanvasContents, filter: string): Array<[ItemKind, Row[]]
  */
 function NoDesignSystem({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
+  const project = useCanvasStore((s) => s.project);
   const [asked, setAsked] = useState(false);
   const screens = useMemo(
     () => (canvas ? Object.values(canvas.items).filter((i) => itemKind(i) === "screen").length : 0),
     [canvas],
   );
-  if (!canvas || !needsDesignSystem(canvas, screens)) return null;
+  /* The project as well as the canvas: the system is an item, the decision
+     NOT to have one is a canvas property, and a surface that reads only the
+     first keeps asking a canvas that has already answered. */
+  if (!canvas || !needsDesignSystem(canvas, screens, project ?? undefined)) return null;
   return (
     <div className="files-nudge">
       <b>

@@ -49,6 +49,7 @@ export * from "./onit.js";
 export * from "./slop.js";
 export * from "./skillsource.js";
 export * from "./designsystem.js";
+export * from "./designaudit.js";
 export * from "./extensions.js";
 export * from "./media.js";
 export * from "./designmd.js";
