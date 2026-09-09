@@ -1,4 +1,4 @@
-import type { Actor, Comment, CommentThread, ItemVersion } from "./model.js";
+import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.js";
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
  * app or the CLI can perform is one of these, sent to the daemon's single
@@ -14,6 +14,8 @@ export interface NewVersion {
     mimeType: string;
     filename: string;
     size: number;
+    /** Optional visual face (canvas iframe presentation, visualizer, inlined HTML). */
+    visual?: VisualFace;
 }
 /**
  * Where to put a new item. Clients may pass an anchor (their locally selected

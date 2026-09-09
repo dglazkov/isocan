@@ -38,6 +38,7 @@ import {
   renamedFilename,
   titleRoom,
   paperOf,
+  visualFaceOf,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
@@ -1072,22 +1073,25 @@ function ItemViewInner({
            * would trade a memory problem for a flicker one.
            */
           <span className="item-standby" aria-hidden="true" />
-        ) : (
-        <VersionContent
-          canvasId={canvasId}
-          blobHash={current.blobHash}
-          mimeType={current.mimeType}
-          filename={current.filename}
-          entered={entered}
-          designSystem={isDesignSystem(item)}
-          textNode={isText}
-          canvasOf={canvasIdOf(item)}
-          canvasSource={source}
-          size={{ width, height }}
-          reloadToken={reloadToken}
-          liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
-        />
-        )}
+        ) : (() => {
+          const visual = visualFaceOf(current);
+          return (
+            <VersionContent
+              canvasId={canvasId}
+              blobHash={visual.blobHash}
+              mimeType={visual.mimeType}
+              filename={visual.filename ?? current.filename}
+              entered={entered}
+              designSystem={isDesignSystem(item)}
+              textNode={isText}
+              canvasOf={canvasIdOf(item)}
+              canvasSource={source}
+              size={{ width, height }}
+              reloadToken={reloadToken}
+              liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
+            />
+          );
+        })()}
 
         {/* Over the content rather than instead of it: a pale block says
             little at this size but it is not nothing, and replacing it would

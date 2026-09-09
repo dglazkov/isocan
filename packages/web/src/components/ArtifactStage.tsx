@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import type { Backing } from "@isocan/core";
-import { backingOf, deckStep, editableText, isDesignSystem, isTextItem } from "@isocan/core";
+import { backingOf, deckStep, editableText, isDesignSystem, isTextItem, sourceFaceOf, visualFaceOf } from "@isocan/core";
 import { homeAnswered, writeItem } from "../lib/api.ts";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -204,6 +204,10 @@ export function ArtifactStage({
   // and only offered on the SAVED preview: with the editor open, the buffer
   // is the source of truth and two pens on one file is a conflict machine.
   const [textEditing, setTextEditing] = useState(false);
+  const [previewFace, setPreviewFace] = useState<"visual" | "source">("visual");
+  useEffect(() => {
+    setPreviewFace("visual");
+  }, [itemId]);
   /**
    * **Every hook above the early returns**, and this one taught the rule the
    * hard way: it sat beside the `showDraft` it feeds, which is below `if
@@ -226,6 +230,7 @@ export function ArtifactStage({
   }
 
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
+  const hasVisual = current.visual !== undefined;
   const editable = editableText(current.mimeType) && canEdit;
   // Not a hook — a derivation, so it may live where it is used.
   const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
@@ -254,12 +259,13 @@ export function ArtifactStage({
           .filter((hash): hash is string => Boolean(hash))
       : [];
 
+  const face = hasVisual && previewFace === "source" ? sourceFaceOf(current) : visualFaceOf(current);
   const saved = (
     <VersionContent
       canvasId={canvasId}
-      blobHash={current.blobHash}
-      mimeType={current.mimeType}
-      filename={current.filename}
+      blobHash={face.blobHash}
+      mimeType={face.mimeType}
+      filename={face.filename ?? current.filename}
       entered={true}
       designSystem={isDesignSystem(item)}
       textNode={isTextItem(item)}
@@ -269,8 +275,9 @@ export function ArtifactStage({
   );
 
   // Not editable: one pane, no headers, no folds — a png has no editor to
-  // put away, so it gets the whole stage without ceremony.
-  if (!editable) return <div className="artifact-stage">{saved}</div>;
+  // put away, so it gets the whole stage without ceremony. Non-local environments
+  // (!disk.bound) also disallow editing dual-face artifacts entirely.
+  if (!editable || (hasVisual && !disk.bound)) return <div className="artifact-stage">{saved}</div>;
 
   const showDraft = panes.edit && draft !== null && current.mimeType === "text/html";
   /**
@@ -300,17 +307,19 @@ export function ArtifactStage({
    * somebody has decided to work. The panes come back exactly as they were.
    */
   if (textEditing && offerTextEdit) {
-    return (
-      <div className="artifact-stage">
-        <TextEditFrame
-          key={item.id}
-          canvasId={canvasId}
-          item={item}
-          actor={actor}
-          onDone={() => setTextEditing(false)}
-        />
-      </div>
-    );
+    if (!hasVisual) {
+      return (
+        <div className="artifact-stage">
+          <TextEditFrame
+            key={item.id}
+            canvasId={canvasId}
+            item={item}
+            actor={actor}
+            onDone={() => setTextEditing(false)}
+          />
+        </div>
+      );
+    }
   }
 
   return (
@@ -401,6 +410,24 @@ export function ArtifactStage({
                         : ` — v${item.versions.length}`}
                     </i>
                   </span>
+                  {hasVisual && (
+                    <div className="stage-toggle-group" role="group" aria-label="Preview face">
+                      <button
+                        type="button"
+                        className={`stage-toggle-btn${previewFace === "visual" ? " active" : ""}`}
+                        onClick={() => setPreviewFace("visual")}
+                      >
+                        {current.mimeType === "text/markdown" ? "Visualizer" : "Visual"}
+                      </button>
+                      <button
+                        type="button"
+                        className={`stage-toggle-btn${previewFace === "source" ? " active" : ""}`}
+                        onClick={() => setPreviewFace("source")}
+                      >
+                        {current.mimeType === "text/markdown" ? "Markdown" : "Source"}
+                      </button>
+                    </div>
+                  )}
                   <span className="spacer" />
                   {/**
                    * **Write this item out to the directory bound here** — the
@@ -432,7 +459,7 @@ export function ArtifactStage({
                   {surface === "fullscreen" && (
                     <NeighbourPad canvasId={canvasId} itemId={item.id} />
                   )}
-                  {offerTextEdit && (
+                  {offerTextEdit && !hasVisual && (
                     <button
                       className="stage-editor-btn"
                       onClick={() => setTextEditing(true)}

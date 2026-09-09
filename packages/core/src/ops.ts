@@ -1,4 +1,4 @@
-import type { Actor, Comment, CommentThread, ItemVersion } from "./model.ts";
+import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.ts";
 
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
@@ -16,6 +16,8 @@ export interface NewVersion {
   mimeType: string;
   filename: string;
   size: number;
+  /** Optional visual face (canvas iframe presentation, visualizer, inlined HTML). */
+  visual?: VisualFace;
 }
 
 /**

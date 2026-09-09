@@ -180,7 +180,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // "Authentication required" until `authenticate` names gemini-api-key,
     // which the server itself answers from GEMINI_API_KEY.
     await isocan("rc", "add", "Sian", "--harness", "fake");
-    const wants = { FAKE_ACP_AUTH: "gemini-api-key" };
+    const wants = { FAKE_ACP_AUTH: "gemini-api-key", GEMINI_API_KEY: "" };
     const refused = await collect(spawnCli(["rc", "turn", "Sian", "hello"], wants));
     expect(refused.code).toBe(1);
     expect(refused.stderr).toContain("Fake wants a login before a session (methods: gemini-api-key)");

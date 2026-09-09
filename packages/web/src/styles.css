@@ -2315,6 +2315,20 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .stage-pane-bar .spacer { flex: 1; }
 .stage-pane-name { font-weight: 600; color: var(--ink); }
 .stage-pane-name i { font-style: normal; font-weight: 400; color: var(--ink-soft); }
+.stage-toggle-group {
+  display: inline-flex; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card);
+  padding: 1px; gap: 1px;
+}
+.stage-toggle-btn {
+  font: inherit; font-size: 10.5px; cursor: pointer;
+  padding: 1px 7px; border-radius: 999px; border: none;
+  background: transparent; color: var(--ink-muted);
+}
+.stage-toggle-btn:hover { color: var(--ink); }
+.stage-toggle-btn.active {
+  background: var(--chip); color: var(--ink); font-weight: 600;
+}
 .stage-pane-fold {
   flex: none; font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
   width: 22px; height: 21px; border-radius: 999px;

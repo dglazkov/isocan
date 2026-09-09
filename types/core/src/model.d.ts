@@ -65,16 +65,52 @@ export interface Canvas {
      */
     lastOp?: string;
 }
+export interface VisualFace {
+    /** sha256 of visual content; stored at blobs/<hash>.<ext> */
+    blobHash: string;
+    mimeType: string;
+    filename?: string;
+    size?: number;
+}
 export interface ItemVersion {
     id: string;
-    /** sha256 of content; stored at blobs/<hash>.<ext> */
+    /** sha256 of content; stored at blobs/<hash>.<ext>. The source face of the artifact. */
     blobHash: string;
     mimeType: string;
     filename: string;
     size: number;
+    /**
+     * The visual face of the artifact, if distinct from the source.
+     * When present, canvas cards, fullscreen, and stage preview render this face.
+     * When absent, renderers fall back to the source face (blobHash).
+     */
+    visual?: VisualFace;
     createdAt: string;
     createdBy: Actor;
 }
+/**
+ * The face to render visually on the canvas card, in full screen, and in the
+ * workbench preview pane. Falls back to the source face (blobHash) when no
+ * distinct visual face is defined.
+ */
+export declare function visualFaceOf(version: ItemVersion): {
+    blobHash: string;
+    mimeType: string;
+    filename: string;
+    size: number;
+};
+/**
+ * The source face of the artifact: shown in the workbench editor, inspected via
+ * `isocan get`, and synchronized with disk via `isocan save`.
+ */
+export declare function sourceFaceOf(version: ItemVersion): {
+    blobHash: string;
+    mimeType: string;
+    filename: string;
+    size: number;
+};
+/** Is the visual face distinct from the source face? */
+export declare function hasDistinctVisualFace(version: ItemVersion): boolean;
 export interface Item {
     id: string;
     /** World coordinates, top-left corner. */

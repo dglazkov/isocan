@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Actor, Item } from "@isocan/core";
-import { newVersionId } from "@isocan/core";
+import type { Actor, Item, NewVersion } from "@isocan/core";
+import { newVersionId, sourceFaceOf } from "@isocan/core";
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
@@ -69,6 +69,7 @@ export function StageEditor({
   onFold?: (() => void) | undefined;
 }) {
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
+  const source = sourceFaceOf(current);
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   // The version the OPEN BUFFER is edits of — deliberately not live state:
@@ -107,7 +108,7 @@ export function StageEditor({
     let live = true;
     const key = draftKey(canvasId, item.id, baseVersion.current);
     void (async () => {
-      const text = await readBlobText(canvasId, current.blobHash).catch(() => null);
+      const text = await readBlobText(canvasId, source.blobHash).catch(() => null);
       let restored: string | null = null;
       try {
         restored = localStorage.getItem(key);
@@ -134,7 +135,7 @@ export function StageEditor({
             // highlight style with it: the later highlighter wins, so this
             // needs no surgery on the setup bundle.
             isocanSyntax,
-            languageFor(current.mimeType, current.filename),
+            languageFor(source.mimeType, source.filename),
             EditorView.lineWrapping,
             keymap.of([
               {
@@ -190,15 +191,16 @@ export function StageEditor({
     try {
       const upload = await uploadBlob(
         canvasId,
-        new Blob([doc], { type: current.mimeType }),
-        current.filename,
+        new Blob([doc], { type: source.mimeType }),
+        source.filename,
       );
-      const version = {
+      const version: NewVersion = {
         id: newVersionId(),
         blobHash: upload.blobHash,
-        mimeType: current.mimeType,
-        filename: current.filename,
+        mimeType: source.mimeType,
+        filename: source.filename,
         size: upload.size,
+        ...(current.visual ? { visual: current.visual } : {}),
       };
       const op = { type: "item.addVersion", itemId: item.id, version } as const;
       await sendEchoed(canvasId, actor, op);
@@ -227,7 +229,7 @@ export function StageEditor({
       // The buffer is only replaced by text we actually have. A revert that
       // could not read the file used to overwrite the draft with whatever
       // came back — a refusal's json — and then call the buffer clean.
-      const text = await readBlobText(canvasId, current.blobHash).catch(() => null);
+      const text = await readBlobText(canvasId, source.blobHash).catch(() => null);
       if (text === null) {
         setNotice("Could not read the saved version — your draft is still here.");
         return;
@@ -245,7 +247,7 @@ export function StageEditor({
     return (
       <div className="stage-editor">
         <div className="stage-editor-bar">
-          <span className="stage-editor-file">{current.filename}</span>
+          <span className="stage-editor-file">{source.filename}</span>
           <span className="spacer" />
           {onFold && (
             <button
@@ -266,7 +268,7 @@ export function StageEditor({
   return (
     <div className="stage-editor">
       <div className="stage-editor-bar">
-        <span className="stage-editor-file">{current.filename}</span>
+        <span className="stage-editor-file">{source.filename}</span>
         {landedUnder && (
           <span className="stage-editor-note">
             v{item.versions.length} landed while you edited — your save stacks on top

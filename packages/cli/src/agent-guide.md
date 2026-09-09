@@ -921,7 +921,15 @@ isocan add ./deck.pdf                                  # a file
 isocan add https://docs.google.com/document/d/<id>/edit  # a document
 isocan add "Sports schedule"                           # a canvas card, by title
 isocan add https://example.com/status --as site        # a site, said plainly
+isocan add design.md --visual design-system.html       # dual-face: source + visual
 ```
+
+When an artifact has two faces — a source face for editing in the workbench and a
+distinct visual face for rendering in iframes and presentations (such as an interactive
+companion visualizer for a markdown doc) — pass `--visual <file>`. For HTML files
+with local image assets, `isocan add` handles this automatically: images are inlined
+into the visual face while leaving the clean source face intact for disk backing.
+
 
 ## A Google Doc on the canvas
 
@@ -1051,6 +1059,8 @@ The first is a canvas fact — it replicates, it travels to a teammate who
 clones the repo, and it costs nothing if the file is never written. The second
 touches a real filesystem, and only ever on the machine the canvas lives on.
 `--file ''` takes the backing off again; the item stays exactly where it is.
+If the item also has a visual face, `isocan set <item> --visual-file <path>`
+records its backing path, and `isocan save` writes both files to disk.
 
 **Ask before you back something.** A path in somebody's repo is theirs, not
 the canvas's, and "I made you a file" is a surprise nobody asked for. Backing
@@ -1072,7 +1082,9 @@ somebody who only promoted a version is a confusing thing to be told.
 
 **The file on disk is not the item.** `isocan get <item>` hands back the
 version the stack points at — the PROMOTED one, which is **not necessarily
-the newest**. The file in the tree is only ever whatever was last written
+the newest**. By default, `isocan get` outputs the source face (e.g. clean markdown
+or un-inlined HTML); `isocan get <item> --visual` outputs the visual face if one
+is present. The file in the tree is only ever whatever was last written
 there, and nothing writes it automatically: `save` and the app's save button
 are the only two things that do. So the moment somebody promotes v9 of a
 twelve-version item, `get` gives you v9 and the file still holds v12, and it
@@ -2027,7 +2039,7 @@ on the thread before putting one on somebody else's canvas,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `design [--css|--tokens] [set|check]`,
-`add [--drawing]`, `browse <url>`, `edit`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
+`add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,

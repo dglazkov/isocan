@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem } from "@isocan/core";
+import { deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem, visualFaceOf } from "@isocan/core";
 import { connectToCanvas, disconnect, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
@@ -164,18 +164,21 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
           <div className="page-note">
             {itemId ? "That item is not on this canvas any more." : "Nothing here yet."}
           </div>
-        ) : (
-          <VersionContent
-            canvasId={canvasId}
-            blobHash={current.blobHash}
-            mimeType={current.mimeType}
-            filename={current.filename}
-            entered={true}
-            designSystem={isDesignSystem(item)}
-            textNode={isTextItem(item)}
-            reloadToken={0}
-          />
-        )}
+        ) : (() => {
+          const visual = visualFaceOf(current);
+          return (
+            <VersionContent
+              canvasId={canvasId}
+              blobHash={visual.blobHash}
+              mimeType={visual.mimeType}
+              filename={visual.filename ?? current.filename}
+              entered={true}
+              designSystem={isDesignSystem(item)}
+              textNode={isTextItem(item)}
+              reloadToken={0}
+            />
+          );
+        })()}
       </div>
     </div>
   );

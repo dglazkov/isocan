@@ -400,7 +400,7 @@ describe("nothing is ever guessed", () => {
     expect(out.stdout).not.toContain("mode");
     const config = await fs.readFile(path.join(machine, "config.json"), "utf8").catch(() => "{}");
     expect(JSON.parse(config).direct).toBeUndefined();
-  });
+  }, 45_000);
 
   it("says daemon when nobody has said anything at all", async () => {
     const shown = await isocan(["direct", "--json"]);

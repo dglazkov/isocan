@@ -81,6 +81,7 @@ import {
   DOOR_ROUTE,
   FILENAME_HEADER,
   fileOf,
+  visualFileOf,
   FREE_NAME_ROUTE,
   actorNameIn,
   attestationSatisfying,
@@ -4003,7 +4004,33 @@ export function registerRoutes(
         .status(result.refusal === "drifted" ? 409 : 400)
         .send({ error: sentence[result.refusal ?? "unwritable"], code: result.refusal });
     }
-    return { root, path: rel, wrote: current.blobHash };
+
+    const visualRel = visualFileOf(item);
+    let visualResult: { path: string; wrote: string } | undefined;
+    if (visualRel && current.visual) {
+      const vStream = await store.openBlob(id, current.visual.blobHash);
+      if (vStream) {
+        const vChunks: Buffer[] = [];
+        for await (const chunk of vStream) vChunks.push(Buffer.from(chunk as Buffer));
+        const vBytes = Buffer.concat(vChunks);
+        const vOurs = force
+          ? [(await hashBound(root, visualRel, hashOf)) ?? ""]
+          : item.versions
+              .map((v) => v.visual?.blobHash)
+              .filter((h): h is string => typeof h === "string");
+        const vRes = await writeBound(root, visualRel, vBytes, vOurs, hashOf);
+        if (vRes.ok) {
+          visualResult = { path: visualRel, wrote: current.visual.blobHash };
+        }
+      }
+    }
+
+    return {
+      root,
+      path: rel,
+      wrote: current.blobHash,
+      ...(visualResult ? { visualPath: visualResult.path, wroteVisual: visualResult.wrote } : {}),
+    };
   });
 
   /**
@@ -4024,9 +4051,15 @@ export function registerRoutes(
     if (bound.length > 0) {
       for (const item of Object.values(snapshot.canvas.items)) {
         const rel = fileOf(item);
-        if (!rel || onDisk[rel] !== undefined) continue;
-        const hash = await hashBound(bound[0]!, rel, hashOf);
-        if (hash !== null) onDisk[rel] = hash;
+        if (rel && onDisk[rel] === undefined) {
+          const hash = await hashBound(bound[0]!, rel, hashOf);
+          if (hash !== null) onDisk[rel] = hash;
+        }
+        const vRel = visualFileOf(item);
+        if (vRel && onDisk[vRel] === undefined) {
+          const hash = await hashBound(bound[0]!, vRel, hashOf);
+          if (hash !== null) onDisk[vRel] = hash;
+        }
       }
     }
     return { bound: bound.length > 0, onDisk };

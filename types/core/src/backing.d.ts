@@ -17,6 +17,8 @@ import type { Item } from "./model.js";
  */
 /** The path this item is the file at, relative to the bound root. */
 export declare const FILE_PROP = "file";
+/** The path this item's companion visualizer is at, relative to the bound root. */
+export declare const VISUAL_FILE_PROP = "visualFile";
 /**
  * Where this item belongs on disk, or null when it belongs nowhere — which
  * is the default and stays perfectly useful.
@@ -26,6 +28,11 @@ export declare const FILE_PROP = "file";
  * moment a teammate cloned the repo somewhere else.
  */
 export declare function fileOf(item: Item): string | null;
+/**
+ * Where this item's visualizer file belongs on disk, or null when it belongs
+ * nowhere. Relative to the bound root.
+ */
+export declare function visualFileOf(item: Item): string | null;
 /**
  * What one machine's disk says about a tracked item.
  *
@@ -54,6 +61,8 @@ type BackingState = "written" | "behind" | "drifted" | "absent" | "unbound";
 export interface Backing {
     path: string;
     state: BackingState;
+    visualPath?: string | undefined;
+    visualState?: BackingState | undefined;
 }
 /**
  * Combine the canvas's intent with a machine's answer.

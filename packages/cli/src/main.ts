@@ -167,6 +167,11 @@ import {
   harvestPreferences,
   cleanFilePath,
   FILE_PROP,
+  VISUAL_FILE_PROP,
+  sourceFaceOf,
+  visualFaceOf,
+  visualFileOf,
+  type VisualFace,
   copyProperties,
   duplicatePlacements,
   newGroupId,
@@ -5341,6 +5346,10 @@ program
     "--drawing",
     "an SVG you drew: lands as ink (no card, no titlebar) like the web app's Pen",
   )
+  .option(
+    "--visual <file>",
+    "companion visualizer file to render on the canvas (e.g. design-system.html for design.md)",
+  )
   .action(
     run(
       async (
@@ -5356,6 +5365,7 @@ program
           description?: string;
           prop: Record<string, string>;
           drawing?: boolean;
+          visual?: string;
         },
         cmd: Command,
       ) => {
@@ -5396,26 +5406,65 @@ program
         // `add` can start an empty canvas, so it may bind this directory to
         // a fresh canvas when nothing else answers (#60).
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
-        let data = await fs.readFile(file);
+        const rawSource = await fs.readFile(file);
         const filename = path.basename(file);
         const mimeType = mimeFor(filename);
-        if (mimeType === "text/html") {
-          const inlined = await inlineHtmlAssets(file, data.toString("utf8"));
-          data = Buffer.from(inlined, "utf8");
-        } else if (mimeType === "text/markdown") {
-          const inlined = await inlineMarkdownAssets(file, data.toString("utf8"));
-          data = Buffer.from(inlined, "utf8");
-        }
         if (opts.drawing && mimeType !== DRAWING_MIME) {
           throw new Error(`--drawing needs an SVG; ${filename} is ${mimeType}`);
         }
         refuseUnsystematisedScreen(snapshot.canvas, p, mimeType);
         await narrate(ctx, p.id, { status: `adding ${truncate(filename, 24)}…` });
-        const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
 
+        // Check if there is a distinct visual face (explicit --visual, or HTML with inlined assets)
+        let visualFace: VisualFace | undefined;
+        let visualData: Buffer | undefined;
+        if (opts.visual) {
+          const visRaw = await fs.readFile(opts.visual);
+          const visFilename = path.basename(opts.visual);
+          const visMime = mimeFor(visFilename);
+          let visData = visRaw;
+          if (visMime === "text/html") {
+            const inlined = await inlineHtmlAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          } else if (visMime === "text/markdown") {
+            const inlined = await inlineMarkdownAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          }
+          const visUpload = await ctx.client.uploadBlob(p.id, visData, visMime, visFilename);
+          visualFace = {
+            blobHash: visUpload.blobHash,
+            mimeType: visMime,
+            filename: visFilename,
+            size: visUpload.size,
+          };
+          visualData = visData;
+        } else if (mimeType === "text/html") {
+          const inlined = await inlineHtmlAssets(file, rawSource.toString("utf8"));
+          if (inlined !== rawSource.toString("utf8")) {
+            const inlinedData = Buffer.from(inlined, "utf8");
+            const visUpload = await ctx.client.uploadBlob(p.id, inlinedData, mimeType, filename);
+            visualFace = {
+              blobHash: visUpload.blobHash,
+              mimeType,
+              filename,
+              size: visUpload.size,
+            };
+            visualData = inlinedData;
+          }
+        }
+
+        const upload = await ctx.client.uploadBlob(p.id, rawSource, mimeType, filename);
+
+        const visualFileProp = opts.visual ? cleanFilePath(opts.visual) ?? path.basename(opts.visual) : undefined;
+        const fileProp = opts.visual ? cleanFilePath(file) ?? path.basename(file) : undefined;
         // `kind=drawing` is the convention the web app's Pen writes, and what
         // both clients read to render ink without a card (core/drawing.ts).
-        const properties = { ...opts.prop, ...(opts.drawing ? DRAWING_PROPERTIES : {}) };
+        const properties = {
+          ...opts.prop,
+          ...(fileProp && !opts.prop[FILE_PROP] ? { [FILE_PROP]: fileProp } : {}),
+          ...(visualFileProp ? { [VISUAL_FILE_PROP]: visualFileProp } : {}),
+          ...(opts.drawing ? DRAWING_PROPERTIES : {}),
+        };
 
         // Ink knows where it goes. A drawing's viewBox IS its world box — that
         // is the invariant the Pen writes and `merge` reads back — so unless
@@ -5425,7 +5474,7 @@ program
         // they are, and two of them cannot be merged into one honest picture.
         const inkBox =
           opts.drawing && opts.at === undefined && opts.size === undefined
-            ? drawingViewBox(data.toString("utf8"))
+            ? drawingViewBox(rawSource.toString("utf8"))
             : null;
         const { width, height } = inkBox
           ? {
@@ -5449,6 +5498,7 @@ program
             mimeType,
             filename,
             size: upload.size,
+            ...(visualFace ? { visual: visualFace } : {}),
           },
           width,
           height,
@@ -5461,7 +5511,13 @@ program
         if (ctx.json) return printJson({ itemId, placement: placed });
         console.log(`added ${itemId} (${filename}) at ${placed.x},${placed.y}`);
         await noteMissingDesignSystem(ctx, p.id);
-        await scoreScreenOnArrival(ctx, p.id, itemId, mimeType, data);
+        await scoreScreenOnArrival(
+          ctx,
+          p.id,
+          itemId,
+          visualFace ? visualFace.mimeType : mimeType,
+          visualData ?? rawSource,
+        );
       },
     ),
   );
@@ -6800,8 +6856,9 @@ program
   // NOT --version: that is the program's own flag, and a subcommand that
   // borrows it prints the CLI's version instead of your file.
   .option("--rev <ref>", "a version id or its number in the stack (default: the current one)")
+  .option("--visual", "get the visual face instead of the source face")
   .action(
-    run(async (ref: string, out: string | undefined, opts: { rev?: string }, cmd: Command) => {
+    run(async (ref: string, out: string | undefined, opts: { rev?: string; visual?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
@@ -6810,11 +6867,12 @@ program
           ? item.versions.find((v) => v.id === item.currentVersionId)
           : item.versions.find((v) => v.id === opts.rev) ?? item.versions[Number(opts.rev) - 1];
       if (!version) throw new Error(`no version ${opts.rev} on ${item.id}`);
-      const data = await ctx.client.downloadBlob(p.id, version.blobHash);
+      const face = opts.visual ? visualFaceOf(version) : sourceFaceOf(version);
+      const data = await ctx.client.downloadBlob(p.id, face.blobHash);
       if (out) {
         await fs.writeFile(out, data);
         if (ctx.json) return printJson({ itemId: item.id, versionId: version.id, path: out, bytes: data.length });
-        return console.log(`wrote ${out} (${formatBytes(data.length)} — ${version.filename})`);
+        return console.log(`wrote ${out} (${formatBytes(data.length)} — ${face.filename})`);
       }
       // No path: the bytes themselves, so it pipes.
       process.stdout.write(data);
@@ -7340,6 +7398,14 @@ program
     "back this item with a file at <path>, relative to the bound directory (--file '' unbacks it)",
   )
   .option(
+    "--visual-file <path>",
+    "back this item's visualizer with a file at <path> (--visual-file '' unbacks it)",
+  )
+  .option(
+    "--visual <file>",
+    "attach or update companion visualizer blob with <file>",
+  )
+  .option(
     "--keep-filename",
     "rename the item but leave the file under its old name (default: the file follows the title)",
   )
@@ -7355,6 +7421,8 @@ program
           size?: string;
           keepFilename?: boolean;
           file?: string;
+          visualFile?: string;
+          visual?: string;
         },
         cmd: Command,
       ) => {
@@ -7386,7 +7454,55 @@ program
             patch.properties = { ...(patch.properties ?? {}), [FILE_PROP]: clean };
           }
         }
+        if (opts.visualFile !== undefined) {
+          if (opts.visualFile.trim() === "") {
+            patch.removeProperties = [...(patch.removeProperties ?? []), VISUAL_FILE_PROP];
+          } else {
+            const clean = cleanFilePath(opts.visualFile);
+            if (!clean) {
+              throw new Error(
+                `${opts.visualFile} is not a path this canvas can name — relative to the bound directory, no dot segments`,
+              );
+            }
+            patch.properties = { ...(patch.properties ?? {}), [VISUAL_FILE_PROP]: clean };
+          }
+        }
         let did = false;
+        if (opts.visual) {
+          const visRaw = await fs.readFile(opts.visual);
+          const visFilename = path.basename(opts.visual);
+          const visMime = mimeFor(visFilename);
+          let visData = visRaw;
+          if (visMime === "text/html") {
+            const inlined = await inlineHtmlAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          } else if (visMime === "text/markdown") {
+            const inlined = await inlineMarkdownAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          }
+          const visUpload = await ctx.client.uploadBlob(p.id, visData, visMime, visFilename);
+          const current = item.versions.find((v) => v.id === item.currentVersionId)!;
+          const versionId = newVersionId();
+          await sendOp(ctx, p.id, {
+            type: "item.addVersion",
+            itemId: item.id,
+            version: {
+              id: versionId,
+              blobHash: current.blobHash,
+              mimeType: current.mimeType,
+              filename: current.filename,
+              size: current.size,
+              visual: {
+                blobHash: visUpload.blobHash,
+                mimeType: visMime,
+                filename: visFilename,
+                size: visUpload.size,
+              },
+            },
+          });
+          console.log(`updated visual face on ${item.id} (${visFilename})`);
+          did = true;
+        }
         if (Object.keys(patch).length > 0) {
           // Renaming an item renames its file — the same act the web app
           // performs, through the same op, or the two would disagree about
@@ -7427,8 +7543,9 @@ program
 program
   .command("edit <item> [file]")
   .description("Create a new version — from a file, or in $EDITOR")
+  .option("--visual <file>", "companion visualizer file to render on the canvas")
   .action(
-    run(async (ref: string, file: string | undefined, _opts: unknown, cmd: Command) => {
+    run(async (ref: string, file: string | undefined, opts: { visual?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
@@ -7441,6 +7558,7 @@ program
         status: `editing "${truncate(item.title || item.id, 24)}"…`,
       });
 
+      let visualFace: VisualFace | undefined;
       let data: Buffer;
       let filename: string;
       let mimeType: string;
@@ -7448,15 +7566,63 @@ program
         const raw = await fs.readFile(file);
         filename = path.basename(file);
         mimeType = mimeFor(filename);
-        if (mimeType === "text/html") {
+        data = raw;
+        if (opts.visual) {
+          const visRaw = await fs.readFile(opts.visual);
+          const visFilename = path.basename(opts.visual);
+          const visMime = mimeFor(visFilename);
+          let visData = visRaw;
+          if (visMime === "text/html") {
+            const inlined = await inlineHtmlAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          } else if (visMime === "text/markdown") {
+            const inlined = await inlineMarkdownAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          }
+          const visUpload = await ctx.client.uploadBlob(p.id, visData, visMime, visFilename);
+          visualFace = {
+            blobHash: visUpload.blobHash,
+            mimeType: visMime,
+            filename: visFilename,
+            size: visUpload.size,
+          };
+        } else if (mimeType === "text/html") {
           const inlined = await inlineHtmlAssets(file, raw.toString("utf8"));
-          data = Buffer.from(inlined, "utf8");
-        } else if (mimeType === "text/markdown") {
-          const inlined = await inlineMarkdownAssets(file, raw.toString("utf8"));
-          data = Buffer.from(inlined, "utf8");
-        } else {
-          data = raw;
+          if (inlined !== raw.toString("utf8")) {
+            const inlinedData = Buffer.from(inlined, "utf8");
+            const visUpload = await ctx.client.uploadBlob(p.id, inlinedData, mimeType, filename);
+            visualFace = {
+              blobHash: visUpload.blobHash,
+              mimeType,
+              filename,
+              size: visUpload.size,
+            };
+          }
+        } else if (current.visual) {
+          visualFace = current.visual;
         }
+      } else if (opts.visual) {
+        data = await ctx.client.downloadBlob(p.id, current.blobHash);
+        filename = current.filename;
+        mimeType = current.mimeType;
+        const visRaw = await fs.readFile(opts.visual);
+        const visFilename = path.basename(opts.visual);
+        const visMime = mimeFor(visFilename);
+        let visData = visRaw;
+        if (visMime === "text/html") {
+          const inlined = await inlineHtmlAssets(opts.visual, visRaw.toString("utf8"));
+          visData = Buffer.from(inlined, "utf8");
+        } else if (visMime === "text/markdown") {
+          const inlined = await inlineMarkdownAssets(opts.visual, visRaw.toString("utf8"));
+          visData = Buffer.from(inlined, "utf8");
+        }
+        const visUpload = await ctx.client.uploadBlob(p.id, visData, visMime, visFilename);
+        visualFace = {
+          blobHash: visUpload.blobHash,
+          mimeType: visMime,
+          filename: visFilename,
+          size: visUpload.size,
+        };
       } else {
         const editor = process.env.EDITOR ?? process.env.VISUAL;
         if (!editor) throw new Error("no $EDITOR set — pass a file instead");
@@ -7466,12 +7632,41 @@ program
         const status = spawnSync(editor, [tmp], { stdio: "inherit", shell: false });
         if (status.status !== 0) throw new Error(`${editor} exited with ${status.status}`);
         data = await fs.readFile(tmp);
-        if (data.equals(original)) {
+        if (data.equals(original) && !opts.visual) {
           console.log("no changes — no new version created");
           return;
         }
         filename = current.filename;
         mimeType = current.mimeType;
+        if (opts.visual) {
+          const visRaw = await fs.readFile(opts.visual);
+          const visFilename = path.basename(opts.visual);
+          const visMime = mimeFor(visFilename);
+          let visData = visRaw;
+          if (visMime === "text/html") {
+            const inlined = await inlineHtmlAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          }
+          const visUpload = await ctx.client.uploadBlob(p.id, visData, visMime, visFilename);
+          visualFace = {
+            blobHash: visUpload.blobHash,
+            mimeType: visMime,
+            filename: visFilename,
+            size: visUpload.size,
+          };
+        } else if (mimeType === "text/html" && current.visual) {
+          const inlined = await inlineHtmlAssets(tmp, data.toString("utf8"));
+          const inlinedData = Buffer.from(inlined, "utf8");
+          const visUpload = await ctx.client.uploadBlob(p.id, inlinedData, mimeType, filename);
+          visualFace = {
+            blobHash: visUpload.blobHash,
+            mimeType,
+            filename,
+            size: visUpload.size,
+          };
+        } else if (current.visual) {
+          visualFace = current.visual;
+        }
       }
 
       const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
@@ -7479,7 +7674,14 @@ program
       await sendOp(ctx, p.id, {
         type: "item.addVersion",
         itemId: item.id,
-        version: { id: versionId, blobHash: upload.blobHash, mimeType, filename, size: upload.size },
+        version: {
+          id: versionId,
+          blobHash: upload.blobHash,
+          mimeType,
+          filename,
+          size: upload.size,
+          ...(visualFace ? { visual: visualFace } : {}),
+        },
       });
       console.log(`new version ${versionId} of ${item.id} (${item.versions.length + 1} total)`);
     }),
