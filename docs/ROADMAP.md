@@ -6,9 +6,9 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 41 still open** — of which 27 partly
+**21 built · 42 still open** — of which 27 partly
 built, 14 designed, 0 blocked, and
-**0 with no verdict recorded at all**, which is the number worth
+**1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
@@ -66,6 +66,12 @@ and the done column should not be flattered by either.
 | research | [Small personas: cheap agents, an idle trigger, and a registry of what to explore](docs/research/2026-09-07-small-personas.md) | 2026-09-07 | the cheap tier #197 claims already exists does not — all nine personas are opus at xhigh. This is what a small persona would need: an idle trigger, a cost that is declared, permission to write where a guard already exists, and a registry of what to explore that is not the findings queue. · see personas, standing-agents, on-demand · [#205](https://github.com/dglazkov/isocan/issues/205) |
 | research | [The docket: what a project knows about itself](docs/research/2026-09-07-the-docket.md) | 2026-09-07 | six systems already run this project and none of them knows about the others — a persona declares a cadence nothing observes, a finding carries an outcome nothing can decide except by hand-editing markdown, and the board that shows it all is read-only ON PURPOSE. The spine is one rule from #148 applied to five kinds of row: derived, or decided, never both. The canvas decides and the repo keeps, so the guard never has to reach a network. No new op. · see personas, standing-agents, on-demand, evals · [#206](https://github.com/dglazkov/isocan/issues/206) |
 | research | [What a sticker module found](docs/research/2026-09-09-module-write-and-slots.md) | 2026-09-09 | five gaps reported from outside by romannurik, who built a sticker module against the real API. They are symptoms of one asymmetry — the module API can read from five places and write from exactly one, the palette action — and of one absent capability, because no operation carries bytes. The web half also has no host object, where the CLI half has `CliHost` and an explicit rule for promoting helpers into it. Recommends a `WebHost` with two members (`send`, `putBlob`), an `overlays` slot, a drop-mime registry, and notes that the canvas inspector needs no API change at all. · see modules, extensions, workbench · [#156](https://github.com/dglazkov/isocan/issues/156) |
+
+## No verdict recorded <sub>1</sub>
+
+| | What | Since | |
+| --- | --- | --- | --- |
+| research | [Into somebody else's window](docs/research/2026-09-09-agent-managers.md) | 2026-09-09 | measured 9 Sep — isocan.io sends no frame-ancestors and no X-Frame-Options, so any manager may already frame it, and one does. The gate is not framing, it is ADMISSION: the badge cookie is SameSite=Lax with no Partitioned and the web app has no bearer path at all (0 hits for Authorization in packages/web/src), so in a partitioning browser an embedded canvas is anonymous, cannot persist a badge, mints a fresh one per load, and walks into the per-address mint meter. Four doors weighed; the recommendation is MCP for the vocabulary, MCP Apps (SEP-1865, stable since 26 Jan) for the surface, the plain iframe as the fallback that already works, and no per-vendor extension — the harnesses constraint, inverted · see harnesses, context, memory, iso-api, on-demand · [#220](https://github.com/dglazkov/isocan/issues/220) |
 
 ## Built <sub>21</sub>
 
