@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-09
 issue: 220
 see: harnesses, context, memory, iso-api
-note: isocan inside an agent manager or IDE. Phase 1 built 9 Sep — the framed badge is partitioned (SameSite=None; Secure; Partitioned) so a pane can keep the badge it is handed, and `isocan embed` prints the pass-bearing address to paste into one. Phases 2 (an MCP server over @isocan/api) and 3 (MCP Apps) are designed in the research note and unbuilt; phase 4 is a decision, not work — no per-IDE extension, which is the harnesses constraint inverted
+note: isocan inside an agent manager or IDE. Phase 1 built 9 Sep, and the guide doctrine corrected the same day — "the canvas is the only channel" had a precondition that expires inside a manager, where the terminal is a watched window — the framed badge is partitioned (SameSite=None; Secure; Partitioned) so a pane can keep the badge it is handed, and `isocan embed` prints the pass-bearing address to paste into one. Phases 2 (an MCP server over @isocan/api) and 3 (MCP Apps) are designed in the research note and unbuilt; phase 4 is a decision, not work — no per-IDE extension, which is the harnesses constraint inverted
 ---
 
 # Embed: isocan in somebody else's window
@@ -73,6 +73,39 @@ behaviour it has today**: admitted for the visit the pass bought, starting over
 on a reload. That is a real limit of `http://127.0.0.1:4441` rather than an
 oversight. The way out is a hosted address, and `isocan embed`'s own output
 says so.
+
+## The doctrine this project moved · **9 Sep 2026**
+
+Not a phase — a correction the first screenshot forced, and worth its own
+heading because it changes what every agent is told rather than what any code
+does.
+
+The guide's central rule read *"the canvas is the only channel — the human is
+watching the web app, not your terminal, so anything you say outside a comment
+is said to nobody."* That was written for a harness terminal nobody reads. In
+an agent manager the terminal is a first-class window the person is actively
+using, so the premise is false — and the corollary it implied, *put everything
+in the shared room*, fills that room with DM-shaped content.
+
+The evidence was in the ask itself: a canvas Chat holding **seven** of one
+agent's own "🎨 Hiro is online on this canvas and ready to design!" while the
+real conversation went on in the pane beside it. Nothing in isocan emits those;
+an agent wrote them, following a rule whose precondition had quietly expired —
+and step 3 of the same protocol already says *presence narrates itself*.
+
+So the rule keeps the half that was always load-bearing — **the canvas is the
+channel that KEEPS**, because it is the record and it is shared — and a new
+section, *Who is at your terminal*, carries the branch. The test is mechanical
+rather than a judgement call: `adapterEnv` scrubs every harness variable and
+sets `ISOCAN_HARNESS=agent`, so that value means the rc summoned you and
+nobody is there; anything else means a person opened the conversation. Then
+there are two channels, and they are **a team room and a DM** rather than two
+chats to keep in sync — the canvas takes the record, the conversation takes
+the steering, presence takes neither, and a DM answer gets written down once
+it becomes a decision.
+
+What does not change is the loop. You still park; being talked to directly is
+not being sent home.
 
 ## Phase 2 — the MCP server · next
 
