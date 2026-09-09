@@ -1198,6 +1198,41 @@ program
     }),
   );
 
+/**
+ * **`isocan mcp` — the canvas, for an agent isocan did not install** (#220,
+ * phase 2).
+ *
+ * An agent manager launches an MCP server by spawning a command and speaking
+ * JSON-RPC over its pipes, so the surface needs a command to be. This is it,
+ * and it is deliberately one line of work: everything the tools do lives in
+ * `@isocan/mcp`, where a test can drive it without a subprocess.
+ *
+ * **Plumbing, not a canvas verb.** Nobody types this — it goes in a manager's
+ * config (`"command": "isocan", "args": ["mcp"]`) and is spawned from there.
+ * An agent that HAS this CLI on its PATH should use the CLI; this exists for
+ * the agent that does not, which by construction is never the agent reading
+ * the guide.
+ *
+ * **stdout belongs to the protocol.** `--json` and the printers are not
+ * reachable from here, and nothing in this action may print: a stray line
+ * lands inside a JSON-RPC frame and the host disconnects with a parse error a
+ * long way from its cause. The banner an interactive command would show goes
+ * to stderr in `serveStdio`, or nowhere.
+ */
+program
+  .command("mcp")
+  .description(
+    "Speak MCP on stdio, so an agent in another tool can read this canvas (spawned by an agent manager, not typed)",
+  )
+  .action(
+    run(async () => {
+      const { serveStdio } = await import("@isocan/mcp");
+      await serveStdio({ version: buildStamp().version });
+      // Resolves when the transport closes, which is when the host hung up.
+      await new Promise<void>(() => {});
+    }),
+  );
+
 program
   .command("serve")
   // `stop` and `restart` are verbs; the one that starts the daemon is `serve`.

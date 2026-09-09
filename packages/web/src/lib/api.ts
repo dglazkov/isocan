@@ -147,19 +147,6 @@ export function onReBadge(fn: () => Promise<unknown>): void {
 }
 
 /**
- * Go to the door and be handed a cookie. The page load already badges this
- * browser — the daemon sets the cookie on the HTML document — so this is
- * belt-and-braces: it heals a cookie that was cleared mid-session, and the
- * visible property is that NOTHING is visible. One 401 in the network log,
- * one door call, the retried request at 200, and the canvas does not flinch.
- *
- * The re-claim is what keeps that true now that the home checks who is
- * speaking: a fresh badge holds no claims, and the request about to be
- * replayed asserts the actor this tab has held all along. Without it, badge
- * recovery is a 401 followed by a `not-your-actor` on the first action after
- * it — the canvas would flinch, once, for good.
- */
-/**
  * Are we somebody's pane rather than somebody's tab? (#220.)
  *
  * `window.top` throws on a cross-origin access in no browser that matters —
@@ -176,6 +163,19 @@ function isFramed(): boolean {
   }
 }
 
+/**
+ * Go to the door and be handed a cookie. The page load already badges this
+ * browser — the daemon sets the cookie on the HTML document — so this is
+ * belt-and-braces: it heals a cookie that was cleared mid-session, and the
+ * visible property is that NOTHING is visible. One 401 in the network log,
+ * one door call, the retried request at 200, and the canvas does not flinch.
+ *
+ * The re-claim is what keeps that true now that the home checks who is
+ * speaking: a fresh badge holds no claims, and the request about to be
+ * replayed asserts the actor this tab has held all along. Without it, badge
+ * recovery is a 401 followed by a `not-your-actor` on the first action after
+ * it — the canvas would flinch, once, for good.
+ */
 export async function knockOnDoor(): Promise<boolean> {
   try {
     const res = await fetch(DOOR_ROUTE, {

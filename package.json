@@ -35,12 +35,14 @@
   },
   "//": "The runtime deps the CLI needs are declared HERE as well as in packages/cli, so that `npm i -g github:dglazkov/isocan#release` (no publishing) resolves them: a git install installs the root package only. @types/node rides along for the API's consumers — `connect()`'s surface names Buffer, so an install must carry the type. The workspaces themselves are deliberately NOT dependencies — bin/workspace-loader.mjs resolves them by path, because link dependencies break every reinstall. `workspaces` and `prepare` are why installs come from the release branch and not from here: npm's git installer empties the install directory for any package it thinks it must build first (#47, scripts/release.mjs).",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^22.13.1",
     "commander": "^13.1.0",
     "fastify": "^5.2.1",
     "nanoid": "^5.0.9",
     "tsx": "^4.19.2",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^4.5.1"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

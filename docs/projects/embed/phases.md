@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-09
 issue: 220
 see: harnesses, context, memory, iso-api
-note: isocan inside an agent manager or IDE. Phase 1 built 9 Sep, and the guide doctrine corrected the same day — "the canvas is the only channel" had a precondition that expires inside a manager, where the terminal is a watched window — the framed badge is partitioned (SameSite=None; Secure; Partitioned) so a pane can keep the badge it is handed, and `isocan embed` prints the pass-bearing address to paste into one. Phases 2 (an MCP server over @isocan/api) and 3 (MCP Apps) are designed in the research note and unbuilt; phase 4 is a decision, not work — no per-IDE extension, which is the harnesses constraint inverted
+note: isocan inside an agent manager or IDE. Phase 1 built 9 Sep, and the guide doctrine corrected the same day — "the canvas is the only channel" had a precondition that expires inside a manager, where the terminal is a watched window — the framed badge is partitioned (SameSite=None; Secure; Partitioned) so a pane can keep the badge it is handed, and `isocan embed` prints the pass-bearing address to paste into one. Phase 2 read half built the same day — @isocan/mcp, six read tools over @isocan/api, isocan mcp as the command a manager spawns, identity = whoever the machine already is (the person by default, which reverses this doc first answer); its write half waits on addressability rather than permission. Phase 3 (MCP Apps) unbuilt; phase 4 is a decision, not work — no per-IDE extension, which is the harnesses constraint inverted
 ---
 
 # Embed: isocan in somebody else's window
@@ -20,7 +20,7 @@ inside C, and A is what C falls back to on a host that does not speak it.
 
 ## Where we are
 
-**Phase 1 is closed. Phase 2 is next.**
+**Phase 1 is closed. Phase 2's read half is built; its write half waits on addressability, and `read_context` and MCP resources are what the read half still owes.**
 
 ---
 
@@ -107,7 +107,82 @@ it becomes a decision.
 What does not change is the loop. You still park; being talked to directly is
 not being sent home.
 
-## Phase 2 — the MCP server · next
+## Phase 2 — the MCP server · **read half built 9 Sep 2026**
+
+**What shipped.** `@isocan/mcp` — six read tools over `@isocan/api`, and
+`isocan mcp` as the command an agent manager spawns. Paste this into a
+manager's MCP config and an agent in it can read the canvas:
+
+```json
+{
+  "mcpServers": {
+    "isocan": { "command": "isocan", "args": ["mcp"] }
+  }
+}
+```
+
+Started in a project directory, it answers about that directory's canvas with
+no argument at all — the marker walk, the home default and the only-one rule,
+exactly as every CLI command resolves a canvas. `list_canvases`,
+`read_canvas`, `read_item`, `read_threads`, `read_activity`, `who`.
+
+**Identity: whoever this machine already is** — which is the decision below,
+reversed from where this doc first landed, and the walk confirms it: a live
+server answered `"you": "Dion"`. A harness session in the environment makes it
+that agent; with none, it is the machine's PERSON, exactly as the CLI behaves
+with no session. `connect()`'s ambient walk already did this, so it cost
+nothing.
+
+**Two things the shape is deliberate about.** The connection is made *per tool
+call* rather than at startup, so a daemon that is not up yet is a refusal the
+caller can fix and retry rather than a server that is up and permanently
+broken. And every tool returns its refusal as an `isError` result carrying the
+API's own typed sentence — a tool that throws hands the model a stack trace; a
+tool that answers hands it something to act on.
+
+**Read-only, and a test holds it there.** The write verbs are a few lines away
+in `@isocan/api`; what they wait on is below.
+
+### Who is an agent that arrives over MCP — settled
+
+The first draft of this doc made enrolment mandatory before an MCP client
+could write. **That was wrong, and the CLI says so.** `~/.isocan/identity.json`
+is the person's, an agent identity is opt-in and deliberate, and
+`resolveExplicitIdentity` puts it in writing: *"a script that names who it is
+must never quietly run as the machine's person because the name was not
+claimed yet."* The default has always been the person. Requiring enrolment for
+MCP would have been a stricter rule than the CLI has ever had, invented for
+one surface.
+
+So: **the person by default**, and Dion's reading is the right one — an MCP
+client is somebody driving a tool.
+
+What the write half still needs is not permission but **addressability**, and
+it is narrower than a gate. `isocan wait` routes on identity: a comment wakes
+an agent that is @-mentioned or that wrote in the thread. An agent writing as
+the person cannot be addressed, cannot be woken, and its `/ask` reads as the
+person asking themselves. That is the same on the CLI, and the CLI's answer is
+the one to copy: an agent that means to stay and take feedback claims a name.
+So the write half wants a tool that is the MCP spelling of `isocan identity
+--session` — and the open question is only whether MCP hands the server
+anything per-conversation to hang it on automatically (`clientInfo` on
+`initialize` is per-application, not per-thread).
+
+### What the read half still owes
+
+The reading surface the [context](../context/design.md) project's stage 3
+actually specified is `isocan context` — the design system, the bound
+directory, the recap, the Chat, pinned items, the guide's version — and this
+phase shipped the canvas's own reads instead. They overlap and are not the
+same list; `read_context` is the tool that closes stage 3, and it is the next
+one to add.
+
+MCP **resources** are also unbuilt. Tools are what every host supports, so
+they came first; a canvas exposed as a resource is what lets a host attach it
+without a model deciding to call anything, and it is the piece an external
+memory index would actually read.
+
+## Phase 2 — the original plan, kept for the reasoning
 
 A pane is a surface for a **person**. It gives the manager's **agent**
 nothing: an agent in Jetski or Antigravity looking at a canvas in the next tab

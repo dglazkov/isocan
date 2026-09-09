@@ -1,13 +1,10 @@
 {
-  "name": "@isocan/cli",
+  "name": "@isocan/mcp",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "bin": {
-    "isocan": "./bin/isocan.js"
-  },
   "exports": {
-    "./modulehost": "./src/modulehost.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -15,10 +12,8 @@
   "dependencies": {
     "@isocan/api": "*",
     "@isocan/core": "*",
-    "@isocan/mcp": "*",
-    "@isocan/server": "*",
-    "commander": "^13.1.0",
-    "tsx": "^4.19.2"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.5.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.1"
