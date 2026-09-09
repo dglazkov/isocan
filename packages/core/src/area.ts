@@ -138,7 +138,7 @@ export function findArea(canvas: CanvasContents, ref: string): Item | null {
   return areas.find((a) => a.title.toLowerCase().startsWith(needle)) ?? null;
 }
 
-export interface AreaSpot {
+interface AreaSpot {
   x: number;
   y: number;
   areaId?: string;
