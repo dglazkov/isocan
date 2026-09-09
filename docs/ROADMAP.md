@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 40 still open** — of which 27 partly
-built, 13 designed, 0 blocked, and
+**21 built · 41 still open** — of which 27 partly
+built, 14 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -48,7 +48,7 @@ and the done column should not be flattered by either.
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue · [#146](https://github.com/dglazkov/isocan/issues/146) |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open · see evals, personas · [#138](https://github.com/dglazkov/isocan/issues/138) |
 
-## Designed, not built <sub>13</sub>
+## Designed, not built <sub>14</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -65,6 +65,7 @@ and the done column should not be flattered by either.
 | research | [Sheep as standing agents](docs/research/2026-09-08-sheep-as-standing-agents.md) | 2026-09-08 | a standing agent's one structural weakness is that `isocan rc` is a process on a MACHINE, and a sheep is a session in a cell that is not. But the obvious join — the summons calling the cell's address — is a shape on-demand's design already withdrew on custody grounds, and the reconciliation is that custody is about who started it and whose credentials it uses, not which computer it is on. Start with personas as the cheap tier: no parking, no summons, no custody question, and a gap that is real today. · see standing-agents, on-demand, personas, agent-custody · [#210](https://github.com/dglazkov/isocan/issues/210) |
 | research | [Small personas: cheap agents, an idle trigger, and a registry of what to explore](docs/research/2026-09-07-small-personas.md) | 2026-09-07 | the cheap tier #197 claims already exists does not — all nine personas are opus at xhigh. This is what a small persona would need: an idle trigger, a cost that is declared, permission to write where a guard already exists, and a registry of what to explore that is not the findings queue. · see personas, standing-agents, on-demand · [#205](https://github.com/dglazkov/isocan/issues/205) |
 | research | [The docket: what a project knows about itself](docs/research/2026-09-07-the-docket.md) | 2026-09-07 | six systems already run this project and none of them knows about the others — a persona declares a cadence nothing observes, a finding carries an outcome nothing can decide except by hand-editing markdown, and the board that shows it all is read-only ON PURPOSE. The spine is one rule from #148 applied to five kinds of row: derived, or decided, never both. The canvas decides and the repo keeps, so the guard never has to reach a network. No new op. · see personas, standing-agents, on-demand, evals · [#206](https://github.com/dglazkov/isocan/issues/206) |
+| research | [What a sticker module found](docs/research/2026-09-09-module-write-and-slots.md) | 2026-09-09 | five gaps reported from outside by romannurik, who built a sticker module against the real API. They are symptoms of one asymmetry — the module API can read from five places and write from exactly one, the palette action — and of one absent capability, because no operation carries bytes. The web half also has no host object, where the CLI half has `CliHost` and an explicit rule for promoting helpers into it. Recommends a `WebHost` with two members (`send`, `putBlob`), an `overlays` slot, a drop-mime registry, and notes that the canvas inspector needs no API change at all. · see modules, extensions, workbench · [#156](https://github.com/dglazkov/isocan/issues/156) |
 
 ## Built <sub>21</sub>
 
