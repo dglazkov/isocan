@@ -3741,6 +3741,37 @@ button.mt-card:hover { border-color: var(--accent); }
    same way when there is room and pins to the top edge when there is not,
    so what overflows is at the bottom, once, and the height rules below
    make sure it rarely does. */
+/**
+ * **Where a module's overlay sits** (#156, 9 Sep 2026).
+ *
+ * A module names an EDGE and the shell owns where that edge is — the rule
+ * `ModuleOverlays` exists to enforce, because two modules positioning
+ * themselves is how a canvas ends up with two trays on top of each other.
+ *
+ * Centred vertically against its edge, like the tool rail opposite, and
+ * offset past the rail so a module's tray does not sit on the app's buttons.
+ * `--z-float` is the rail's own layer: an overlay is chrome, and chrome that
+ * outranked a dialog would be a module covering something the app promised.
+ *
+ * **The column takes no pointer events and each overlay takes them back.** A
+ * full-height strip that swallowed clicks would make a band of canvas
+ * unreachable down one side — and nobody would connect a dead strip to a tray
+ * they switched on days earlier.
+ *
+ * Written a day after the slot, because the slot shipped without it: the
+ * component rendered, the tests passed, the bytes were right, and the tray
+ * was a 1280x178 static block at the top of the page that nobody could see.
+ */
+.module-overlays {
+  position: absolute; top: var(--edge); bottom: var(--edge);
+  margin: auto 0; height: fit-content; z-index: var(--z-float);
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.module-overlays-left { left: calc(var(--edge) + 44px); }
+.module-overlays-right { right: calc(var(--edge) + 44px); }
+.module-overlay { pointer-events: auto; }
+
 .tool-rail {
   position: absolute; right: var(--edge); top: var(--edge); bottom: var(--edge);
   margin: auto 0; height: fit-content; z-index: var(--z-float);
