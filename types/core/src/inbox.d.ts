@@ -98,11 +98,57 @@ export interface AgentRules {
      * `items` also empty: comments only — the enrolled default. `["*"]` is
      * everything, `wait --all-ops`'s spelling. */
     ops?: string[];
+    /**
+     * **Whose word wakes this agent** — actor ids. Absent, empty, or
+     * `["*"]` means anyone admitted here, which is what every enrolment
+     * written before this field means and what a team's agent wants; a list
+     * is a NARROWING (`docs/research/2026-09-04-sheepdog.md`, "whom it
+     * listens to").
+     *
+     * It is a gate on the SPEAKER, and `items`/`ops` are filters on what
+     * changed — a different question, which is why it is a third field here
+     * and an outer gate in `dispatchReason` rather than a third clause in
+     * the composition. A mention pierces every filter, deliberately; it must
+     * not pierce this one, or a pet agent its owner pays for answers every
+     * stranger on a shared canvas.
+     *
+     * `["*"]` is the same spelling `ops` uses for "everything", said
+     * explicitly so a person can turn a gate off without deleting a field.
+     */
+    listen?: string[];
 }
+/** The `listen` spelling for "anyone" — `ops`'s idiom, one definition. */
+export declare const LISTEN_ANYONE = "*";
 /** The stored rules field, read tolerantly — it has been opaque since
  * phase 2, and a malformed hand-me-down must cost the filter, not the
  * summons. */
 export declare function rulesOf(raw: unknown): AgentRules;
+/**
+ * **Does this agent's gate admit that speaker?**
+ *
+ * The predicate on its own, because two surfaces ask it for two reasons:
+ * `dispatchReason` asks it to decide a turn, and a facepile asks it to say
+ * *listens to Dion* beside a name. A gate one of them applied and the other
+ * could not describe is the failure the sheepdog design names first — *"a
+ * silent gate: a person mentions a sheepdog that does not listen to them
+ * and nothing says so."*
+ *
+ * No gate is the default and stays the default: an enrolment with no
+ * `listen` admits everyone, so nothing written before this field goes deaf.
+ */
+export declare function listensTo(rules: AgentRules | null | undefined, authorId: string, 
+/** The registry's joins, when the caller holds them — a gate naming
+ * `Dimitri 2` must still admit Dimitri. */
+joined?: ActorJoins): boolean;
+/**
+ * How every surface says the gate — null when there is none to say, so a
+ * caller can append it without asking whether there is anything to append.
+ *
+ * `nameOf` resolves an actor id to the name that reader would show; ids are
+ * the fallback, never a blank, because a gate nobody can read is the silent
+ * gate wearing a different hat.
+ */
+export declare function listenWords(rules: AgentRules | null | undefined, nameOf: (actorId: string) => string | undefined): string | null;
 /**
  * **THE routing composition, stated once** (agents-on-demand phase 4).
  * `reasonFor` is the is-this-for-me predicate; this is the whole rule a
@@ -110,6 +156,9 @@ export declare function rulesOf(raw: unknown): AgentRules;
  *
  * - your own ops never wake you — otherwise an agent that writes what it
  *   watches for wakes itself, forever;
+ * - a speaker outside the gate is not here at all: `listen` is applied
+ *   BEFORE everything below, so an op from outside it is neither a summons
+ *   nor a change, and never reaches the ceiling to be counted against it;
  * - a comment for you (`reasonFor`) is a SUMMONS, and it comes through any
  *   filter — the human reaching you is never the noise you asked to be
  *   spared;

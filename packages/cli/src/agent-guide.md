@@ -333,6 +333,18 @@ add is an op everyone can read. If a person tells you "you're done here",
 What any standing agent answers for — its routing rules, and the truths
 that hold through every rule set — is readable with `isocan agent rules`.
 
+**Whose word wakes it** is a separate question from what it watches, and it
+has its own answer: `--listen`. Absent, an agent answers anyone admitted
+here, which is what a team's agent wants. `isocan agent add <name> --listen
+me` gives it a gate instead, and `--listen me,Usama` names a few. A gate is
+the one thing a mention does NOT pierce: outside it an op is not a summons,
+is not a change, and is never counted against the agent's hourly ceiling.
+`isocan agent rules` says the gate first, and so does `isocan who` — if a
+person tells you an agent ignored them, read those before guessing.
+
+A person can change a gate everywhere an agent stands in one gesture, which
+is theirs and not yours: `isocan rc listen <name> --to me|everyone|<names>`.
+
 The person's side of this is `isocan rc` — a long-running command they start
 that answers for enrolled agents. It is not your verb: inside a harness
 session it refuses, and everything you need is the `agent` spelling above.
