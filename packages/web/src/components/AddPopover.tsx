@@ -145,7 +145,11 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
         const id = await addAreaItem(canvasId, actor, CONTEXT_SHEET_TITLE, spot, CONTEXT_SHEET_SIZE);
         sheet = { id, title: CONTEXT_SHEET_TITLE, ...spot, ...CONTEXT_SHEET_SIZE, properties: { kind: "area" } } as unknown as Item;
       }
-      at = { ...freeSpotIn(canvas, sheet, CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height), chosen: true };
+      const spot = freeSpotIn(canvas, sheet, CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height);
+      if (spot.resizedArea) {
+        await sendEchoed(canvasId, actor, { type: "item.resize", itemId: sheet.id, width: spot.resizedArea.width, height: spot.resizedArea.height });
+      }
+      at = { ...spot, chosen: true };
     }
     done(
       await addCanvasItem(canvasId, actor, target.origin ?? window.location.origin, target.id, target.title, at, inherit ? "inherit" : null),
