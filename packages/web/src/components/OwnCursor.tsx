@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
+import { useCanvasCursor } from "../lib/wearscursor.ts";
 import type { Actor } from "@isocan/core";
-import { canvasCursor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useActorColor } from "../lib/colors.ts";
@@ -60,7 +60,7 @@ export function OwnCursor({ actor }: { actor: Actor }) {
    * go. Inside a component it is always the wrong one.
    */
   const color = useActorColor(actor.id);
-  const cursorPath = useCanvasStore((s) => s.project ? canvasCursor(s.project) : canvasCursor({}));
+  const cursorPath = useCanvasCursor();
   const shown = tool === "select" && !commentMode;
 
   useEffect(() => {

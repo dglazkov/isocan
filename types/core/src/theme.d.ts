@@ -404,7 +404,7 @@ export declare function groundIsPlace(canvas: {
 export declare const CURSOR_PROP = "cursor";
 /** The shapes this build can draw. Not a string, for `THEMES`' reason: a
  *  canvas wearing a name nothing can draw is a pointer that vanishes. */
-export declare const CURSORS: readonly ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent"];
+export declare const CURSORS: readonly ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep"];
 /** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
  *  reason: a name nothing can draw is a pointer that vanishes. */
 export type CanvasCursor = (typeof CURSORS)[number];
@@ -422,27 +422,57 @@ export declare function cursorOf(canvas: {
 export declare function cursorPatch(cursor: CanvasCursor): MetaPatch;
 /** Back to whatever the ground implies. */
 export declare function noCursorPatch(): MetaPatch;
-/** One shape, by name. */
-export declare function cursorShape(cursor: CanvasCursor): string;
 /**
- * **The one fold both surfaces call: what pointer does this canvas wear?**
+ * **Which pointer this canvas wears — the NAME, not the drawing** (9 Sep 2026).
  *
- * Order is the rule, not a preference. A seeded ground names its cursor and
- * wins, so a galaxy cannot be given a fish — that is `THEME_PROP`'s invariant
- * and this is where it is enforced rather than hoped for. Only a canvas
- * standing on a picture, which names nothing, reads the chosen one.
+ * > "A cursor should only be loaded if a theme is loaded"
+ *
+ * This returned an SVG path until Dion read the size gate's answer and asked
+ * that. He is right, and the fix is a boundary rather than a lazy import: the
+ * path data was 7 shapes in core, which every first visit downloaded, and a
+ * canvas on the dot grid draws exactly one of them. Core is imported eagerly
+ * by everything; there is no honest way to make part of it arrive later.
+ *
+ * So the paths went to the surface that draws them
+ * (`web/src/lib/cursorart.ts`, fetched only when the answer here is not
+ * `arrow`) and core kept the DECISION, which is the half both surfaces need
+ * and the half that carries the rule.
+ *
+ * It is the same seam the design system already uses — core holds the tokens,
+ * the surface renders them — and it reads better than what it replaced: the
+ * CLI never drew a cursor, so it was carrying seven path strings to print
+ * sentences about grounds.
+ *
+ * ## The order is the rule, not a preference
+ *
+ * A seeded ground names its cursor and wins, so a galaxy cannot be given a
+ * fish — that is `THEME_PROP`'s invariant, and this is where it is enforced
+ * rather than hoped for. Only a canvas standing on a picture, which names
+ * nothing, reads the chosen one.
  */
-export declare function canvasCursor(canvas: {
+export declare function canvasCursorName(canvas: {
     properties?: Record<string, string>;
-}): string;
+}): CanvasCursor;
 /**
- * **The cursor a SEEDED ground gives everybody** — the shapes the long note
- * above argues for, keyed by theme.
+ * **The cursor a SEEDED ground gives everybody**, keyed by theme.
  *
- * Kept as its own function rather than folded into `canvasCursor`, because
- * this is the half that must not be overridable: a theme names its cursor,
- * and `cursorShape` reads the same three paths through the library's names so
- * that a picked "sparkle" and a galaxy's cursor can never become two drawings
- * of the same idea.
+ * Its own function rather than folded into `canvasCursorName`, because this is
+ * the half that must not be overridable: a theme names its cursor, and the
+ * library's names are the same names, so a picked "sparkle" and a galaxy's
+ * cursor can never become two drawings of one idea.
+ *
+ * **Farm got its sheep on 9 Sep; desert still borrows the crescent.** Dion
+ * asked for both, and only one of them is possible.
+ *
+ * A sun cannot be a cursor here, and the reason is structural rather than a
+ * failure of drawing: a sun is radially symmetric and a cursor has to point.
+ * Two attempts were drawn and rendered at 18, 24 and 32px — pulling one ray
+ * out to the hotspot makes a spike by construction, and what you get is a
+ * COMET, which also happens to be the sparkle's cousin. A cactus was tried for
+ * the same slot and has no natural top-left tip at all.
+ *
+ * So the crescent stays, and it is not a placeholder: a desert moon is a good
+ * story, and the shape is the sharpest tip in the library. What desert would
+ * actually want is a shape somebody thinks of that nobody has yet.
  */
-export declare function themeCursor(theme: CanvasTheme | null): string;
+export declare function themeCursorName(theme: CanvasTheme | null): CanvasCursor;

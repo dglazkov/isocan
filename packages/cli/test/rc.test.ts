@@ -74,15 +74,30 @@ afterEach(async () => {
    * `SIGKILL` after a grace period, not just `SIGINT`: an rc mid-turn is
    * exactly the case that ignores a polite ask, and a teardown that waits
    * forever is a hang rather than a failure.
+   *
+   * **And then WAIT for it to be gone** (9 Sep 2026). Sending a signal is not
+   * tearing down; observing the exit is. The first version fired `SIGKILL` and
+   * returned, so the next test's `beforeEach` could raise a daemon while the
+   * last test's rc was still in the process table — and an rc that outlives
+   * its daemon by a few milliseconds reconnects to whatever is on that port
+   * next and registers a park. What the innocent later test then sees is
+   * *"another park adopted Sian's cursor — standing down for it"*, which is
+   * precisely the line that reddened the release for `ce10535c` on CI, where
+   * there is no previous RUN to leak from and so no other explanation.
+   *
+   * That is lesson #44 one step further than it went: it put every spawn on a
+   * list the teardown drains, and draining meant asking rather than checking.
    */
   for (const child of started.splice(0)) {
     if (child.exitCode !== null || child.signalCode !== null) continue;
+    const gone = new Promise<void>((resolve) => child.once("exit", () => resolve()));
     child.kill("SIGINT");
-    await Promise.race([
-      new Promise<void>((resolve) => child.once("exit", () => resolve())),
-      new Promise<void>((resolve) => setTimeout(resolve, 2000)),
-    ]);
-    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    await Promise.race([gone, new Promise<void>((resolve) => setTimeout(resolve, 2000))]);
+    if (child.exitCode !== null || child.signalCode !== null) continue;
+    child.kill("SIGKILL");
+    // Bounded, for the teardown-that-hangs reason above — but a SIGKILL that
+    // has not landed within a second is a machine in trouble, not a slow rc.
+    await Promise.race([gone, new Promise<void>((resolve) => setTimeout(resolve, 1000))]);
   }
   await daemon.close();
   // And the daemon an rc started for itself, which is not this file's `daemon`

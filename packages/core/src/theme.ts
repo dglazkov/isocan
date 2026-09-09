@@ -461,7 +461,7 @@ export const CURSOR_PROP = "cursor";
 
 /** The shapes this build can draw. Not a string, for `THEMES`' reason: a
  *  canvas wearing a name nothing can draw is a pointer that vanishes. */
-export const CURSORS = ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent"] as const;
+export const CURSORS = ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep"] as const;
 
 /** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
  *  reason: a name nothing can draw is a pointer that vanishes. */
@@ -491,6 +491,8 @@ export function cursorLabel(cursor: CanvasCursor): string {
       return "Heart";
     case "crescent":
       return "Crescent";
+    case "sheep":
+      return "Sheep";
   }
 }
 
@@ -510,103 +512,76 @@ export function noCursorPatch(): MetaPatch {
   return { removeProperties: [CURSOR_PROP] };
 }
 
-/** One shape, by name. */
-export function cursorShape(cursor: CanvasCursor): string {
-  switch (cursor) {
-    case "sparkle":
-      return themeCursor("galaxy");
-    case "fish":
-      return themeCursor("ocean");
-    case "flag":
-      return themeCursor("mountains");
-    case "arrow":
-      return themeCursor(null);
-    /**
-     * **Three drawn for the library, 8 Sep 2026, and five rejected.**
-     *
-     * Every one was rendered at 18, 24 and 32 on both grounds and looked at,
-     * because that is the only way this is ever decided — #195 learned it from
-     * a rocket that never worked, and the same failure came back twice here:
-     * a PENCIL at 18 is a diagonal sliver, and a PIN is an arrow with a notch.
-     * A BOLT was too thin to see at all.
-     *
-     * The other rejection is subtler and worth keeping: a LEAF and a PETAL
-     * both read perfectly well, and both are the fish's silhouette without its
-     * tail. Two entries in a library that look alike at the size they are used
-     * is a picker that costs a decision and returns nothing.
-     */
-    case "drop":
-      // A teardrop hanging from the hotspot: the point IS the tip.
-      return "M1.5 0.5 C1.5 0.5 13 9 13 13.5 A5.9 5.9 0 0 1 1.3 13.5 C1.3 10 1.5 0.5 1.5 0.5 Z";
-    case "heart":
-      return "M1.5 0.5 C1.5 0.5 4.5 3.6 8.4 5.2 C12.6 6.9 15.6 9.4 14.4 13 C13.3 16.4 8.6 17.6 6 14.6 C4.6 18 0.8 17 0.6 13.4 C0.4 9.6 1.5 0.5 1.5 0.5 Z";
-    case "crescent":
-      // The upper horn is the hotspot, which makes this the sharpest tip of
-      // the three — a crescent points better than it has any right to.
-      return "M1.5 0.5 C10.5 2.6 15.5 9 14 15.5 C13.4 18.2 10.4 19.4 8.2 18 C12.4 13.6 9.6 5.4 1.5 0.5 Z";
-  }
-}
-
 /**
- * **The one fold both surfaces call: what pointer does this canvas wear?**
+ * **Which pointer this canvas wears — the NAME, not the drawing** (9 Sep 2026).
  *
- * Order is the rule, not a preference. A seeded ground names its cursor and
- * wins, so a galaxy cannot be given a fish — that is `THEME_PROP`'s invariant
- * and this is where it is enforced rather than hoped for. Only a canvas
- * standing on a picture, which names nothing, reads the chosen one.
+ * > "A cursor should only be loaded if a theme is loaded"
+ *
+ * This returned an SVG path until Dion read the size gate's answer and asked
+ * that. He is right, and the fix is a boundary rather than a lazy import: the
+ * path data was 7 shapes in core, which every first visit downloaded, and a
+ * canvas on the dot grid draws exactly one of them. Core is imported eagerly
+ * by everything; there is no honest way to make part of it arrive later.
+ *
+ * So the paths went to the surface that draws them
+ * (`web/src/lib/cursorart.ts`, fetched only when the answer here is not
+ * `arrow`) and core kept the DECISION, which is the half both surfaces need
+ * and the half that carries the rule.
+ *
+ * It is the same seam the design system already uses — core holds the tokens,
+ * the surface renders them — and it reads better than what it replaced: the
+ * CLI never drew a cursor, so it was carrying seven path strings to print
+ * sentences about grounds.
+ *
+ * ## The order is the rule, not a preference
+ *
+ * A seeded ground names its cursor and wins, so a galaxy cannot be given a
+ * fish — that is `THEME_PROP`'s invariant, and this is where it is enforced
+ * rather than hoped for. Only a canvas standing on a picture, which names
+ * nothing, reads the chosen one.
  */
-export function canvasCursor(canvas: { properties?: Record<string, string> }): string {
+export function canvasCursorName(canvas: { properties?: Record<string, string> }): CanvasCursor {
   const theme = themeOf(canvas);
-  if (theme !== null) return themeCursor(theme);
-  const chosen = cursorOf(canvas);
-  return chosen !== null ? cursorShape(chosen) : themeCursor(null);
+  if (theme !== null) return themeCursorName(theme);
+  return cursorOf(canvas) ?? "arrow";
 }
 
 /**
- * **The cursor a SEEDED ground gives everybody** — the shapes the long note
- * above argues for, keyed by theme.
+ * **The cursor a SEEDED ground gives everybody**, keyed by theme.
  *
- * Kept as its own function rather than folded into `canvasCursor`, because
- * this is the half that must not be overridable: a theme names its cursor,
- * and `cursorShape` reads the same three paths through the library's names so
- * that a picked "sparkle" and a galaxy's cursor can never become two drawings
- * of the same idea.
+ * Its own function rather than folded into `canvasCursorName`, because this is
+ * the half that must not be overridable: a theme names its cursor, and the
+ * library's names are the same names, so a picked "sparkle" and a galaxy's
+ * cursor can never become two drawings of one idea.
+ *
+ * **Farm got its sheep on 9 Sep; desert still borrows the crescent.** Dion
+ * asked for both, and only one of them is possible.
+ *
+ * A sun cannot be a cursor here, and the reason is structural rather than a
+ * failure of drawing: a sun is radially symmetric and a cursor has to point.
+ * Two attempts were drawn and rendered at 18, 24 and 32px — pulling one ray
+ * out to the hotspot makes a spike by construction, and what you get is a
+ * COMET, which also happens to be the sparkle's cousin. A cactus was tried for
+ * the same slot and has no natural top-left tip at all.
+ *
+ * So the crescent stays, and it is not a placeholder: a desert moon is a good
+ * story, and the shape is the sharpest tip in the library. What desert would
+ * actually want is a shape somebody thinks of that nobody has yet.
  */
-export function themeCursor(theme: CanvasTheme | null): string {
+export function themeCursorName(theme: CanvasTheme | null): CanvasCursor {
   switch (theme) {
     case "galaxy":
-      // A four-point star whose upper-left ray is long enough to point with.
-      return "M1.5 0.5 C6 6 7.5 7.5 13 10.5 C8.5 11.8 7.2 13 5.5 19 C4.6 13.4 3.4 11.8 0.6 10.2 C3.6 8.2 4.8 6.2 1.5 0.5 Z";
+      return "sparkle";
     case "ocean":
-      // Nose at the hotspot, tail behind — it swims the way the pointer points.
-      return "M1.5 0.5 C8 3 13 8 14.5 13.5 C10 14.5 5 12 1.8 7.5 Z M13.5 13 L17.5 12 L16 17 Z";
+      return "fish";
     case "mountains":
-      // A summit flag: the pole's top is the tip, which is the one shape here
-      // that was legible at 18px on the first try.
-      return "M1.5 0.5 L3.1 0.9 L3.1 19 L1.5 19 Z M3.6 1.4 L13.5 4.6 L3.6 9.2 Z";
-    /**
-     * **Farm and desert borrow from the library rather than getting shapes of
-     * their own**, and that is stated rather than hidden (8 Sep 2026).
-     *
-     * The rule above is that a theme NAMES its cursor, so a ground arriving
-     * without one would leave a farm wearing the same plain arrow as a canvas
-     * with no ground at all — two different facts, one pointer. These two are
-     * the honest fix available today: a drop is a seed on a field, a crescent
-     * is a desert moon, and both have already survived being looked at at 18,
-     * 24 and 32px, which is the only test this has ever passed on.
-     *
-     * What they actually want is a SHEEP and a SUN, and neither is drawn.
-     * `docs/theme-art-prompts.md` has said farm wants an artist since 6 Sep
-     * and the grass arrived before the animal. Drawing two more shapes without
-     * being able to look at them is precisely how the rocket, the pencil and
-     * the pin got as far as they did.
-     */
+      return "flag";
     case "farm":
-      return cursorShape("drop");
+      return "sheep";
     case "desert":
-      return cursorShape("crescent");
+      return "crescent";
     default:
-      // No ground, no costume. The arrow every cursor here has always been.
-      return "M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z";
+      // No ground, no costume.
+      return "arrow";
   }
 }

@@ -58,6 +58,26 @@
  * where a first visit does not go. A creep, so it asked instead of blocking,
  * and this is the sentence it asked for.
  *
+ * **637,600 → 637,400 on 9 Sep, and it went DOWN because the raise above was
+ * answered rather than accepted.** Dion, reading that entry: *"A cursor should
+ * only be loaded if a theme is loaded."* He is right, and it cost 609 bytes to
+ * agree with him — the seven cursor paths were in `@isocan/core/theme.ts`,
+ * which every first visit downloads, and a canvas on the dot grid draws
+ * exactly one of them.
+ *
+ * Core is one barrel with no subpath exports, so nothing in it can arrive
+ * later; the paths moved to the surface that draws them
+ * (`web/src/lib/cursorart.ts`, behind an `import()`) and core kept the
+ * decision. The first attempt at the split SAVED 12 BYTES AND COST 81, because
+ * the arrow was exported from the same module and a bundler merges a module
+ * imported both ways — which is why `arrow.ts` exists and why the guard reads
+ * the built chunks instead of the imports.
+ *
+ * Worth keeping as the shape rather than the number: a raise that gets
+ * answered is the gate working exactly as designed. The ceiling went up for a
+ * feature, somebody read the sentence, and it came back down further than it
+ * went up.
+ *
  * The second gate only works because the queue reaches `main` now and an
  * answer covers the nights that repeat it. Before 7 Sep it would have been a
  * warning into a void.
@@ -65,7 +85,7 @@
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 637_600;
+export const CEILING = 637_400;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

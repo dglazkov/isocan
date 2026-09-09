@@ -2,11 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   CURSORS,
   CURSOR_PROP,
-  canvasCursor,
+  canvasCursorName,
   cursorLabel,
   cursorOf,
   cursorPatch,
-  cursorShape,
   isCursor,
   noCursorPatch,
   GROUND_MAX_BYTES,
@@ -22,7 +21,7 @@ import {
   anchorOf,
   anchorPatch,
   THEME_PROP,
-  themeCursor,
+  themeCursorName,
   themeLabel,
   isTheme,
   noThemePatch,
@@ -121,40 +120,24 @@ describe("the cursor a ground gives everybody", () => {
    * "the cursors also haven't changed? Eg for space galaxy they didn't change
    * to a rocket."
    */
-  it("gives every ground a shape of its own", () => {
-    const shapes = new Set(THEMES.map((t) => themeCursor(t)));
-    expect(shapes.size, "no two grounds share a cursor").toBe(THEMES.length);
+  it("gives every ground a cursor of its own", () => {
+    /* Distinctness is the point and it survives the move to names: two grounds
+       sharing a pointer is two grounds you cannot tell apart by pointing. The
+       PATHS moved to `web/src/lib/cursorart.ts` on 9 Sep — a cursor is only
+       fetched when a ground is worn — so what they look like is asserted
+       there, and what a ground CHOOSES is asserted here. */
+    const worn = new Set(THEMES.map((t) => themeCursorName(t)));
+    expect(worn.size, "no two grounds share a cursor").toBe(THEMES.length);
     for (const theme of THEMES) {
-      expect(themeCursor(theme), `${theme} has a path`).toMatch(/^M[\d.]/);
-      expect(themeCursor(theme), `${theme} is not the plain arrow`).not.toBe(themeCursor(null));
+      expect(themeCursorName(theme), `${theme} is not the plain arrow`).not.toBe("arrow");
+      expect(CURSORS, `${theme} names a shape this build can draw`).toContain(themeCursorName(theme));
     }
   });
 
   it("leaves a canvas with no ground wearing the arrow it always had", () => {
-    // The shape people know, unchanged. A cursor that changes on a canvas
+    // The pointer people know, unchanged. A cursor that changes on a canvas
     // nobody themed would be a costume nobody asked for.
-    expect(themeCursor(null)).toBe("M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z");
-  });
-
-  it("starts every cursor at the hotspot, so the thing still points", () => {
-    /* A cursor's tip is where the click lands. A shape whose mass sits below
-       and right of (1.5, 0.5) is a decoration you have to aim; every path
-       here begins there for that reason — including the sparkle, whose long
-       upper-left ray is a pointer before it is a star. */
-    for (const theme of [...THEMES, null]) {
-      expect(themeCursor(theme).startsWith("M1.5 0.5"), `${theme} points`).toBe(true);
-    }
-  });
-
-  it("carries no colour of its own", () => {
-    /* The constraint the issue is emphatic about: seven IDENTITY_COLORS also
-       land on items during remote selection, so a cursor that brought its own
-       colour would delete the one signal saying who is who. "A sheep tinted
-       with your colour is delightful; a sheep that makes six people identical
-       is a regression dressed as a feature." */
-    for (const theme of [...THEMES, null]) {
-      expect(themeCursor(theme)).not.toMatch(/#|rgb|fill|hsl/);
-    }
+    expect(themeCursorName(null)).toBe("arrow");
   });
 });
 
@@ -279,26 +262,34 @@ describe("the pointer a canvas wears", () => {
      * property set beside a seeded theme changes nothing.
      */
     const galaxy = wearing({ [THEME_PROP]: "galaxy", [CURSOR_PROP]: "fish" });
-    expect(canvasCursor(galaxy)).toBe(themeCursor("galaxy"));
-    expect(canvasCursor(galaxy)).not.toBe(cursorShape("fish"));
+    expect(canvasCursorName(galaxy)).toBe(themeCursorName("galaxy"));
+    expect(canvasCursorName(galaxy)).not.toBe("fish");
   });
 
   it("reads the chosen one where the ground is a picture, which names nothing", () => {
     const own = wearing({ [GROUND_PROP]: hash, [CURSOR_PROP]: "crescent" });
-    expect(canvasCursor(own)).toBe(cursorShape("crescent"));
+    expect(canvasCursorName(own)).toBe("crescent");
   });
 
   it("is the plain arrow when nothing has been chosen", () => {
-    expect(canvasCursor(wearing({ [GROUND_PROP]: hash }))).toBe(themeCursor(null));
-    expect(canvasCursor(wearing({}))).toBe(themeCursor(null));
+    expect(canvasCursorName(wearing({ [GROUND_PROP]: hash }))).toBe("arrow");
+    expect(canvasCursorName(wearing({}))).toBe("arrow");
   });
 
   it("refuses a name nothing can draw", () => {
-    // `THEMES`' reason: a canvas wearing a name this build cannot draw would
-    // be a pointer that vanishes.
-    expect(cursorOf(wearing({ [CURSOR_PROP]: "sheep" }))).toBeNull();
-    expect(isCursor("sheep")).toBe(false);
-    expect(canvasCursor(wearing({ [GROUND_PROP]: hash, [CURSOR_PROP]: "sheep" }))).toBe(themeCursor(null));
+    /**
+     * `THEMES`' reason: a canvas wearing a name this build cannot draw would
+     * be a pointer that vanishes.
+     *
+     * **This case used "sheep" as its impossible name until 9 Sep 2026**, when
+     * the sheep was drawn and the fixture became real. Worth a sentence rather
+     * than a silent swap: a negative test whose example can quietly turn
+     * positive is a test that stops asserting anything, and the only reason it
+     * failed loudly here is that `isCursor` is a parse over a closed list.
+     */
+    expect(cursorOf(wearing({ [CURSOR_PROP]: "tractor" }))).toBeNull();
+    expect(isCursor("tractor")).toBe(false);
+    expect(canvasCursorName(wearing({ [GROUND_PROP]: hash, [CURSOR_PROP]: "tractor" }))).toBe("arrow");
   });
 
   it("stores a choice and removes it again", () => {
@@ -306,28 +297,11 @@ describe("the pointer a canvas wears", () => {
     expect(noCursorPatch()).toEqual({ removeProperties: [CURSOR_PROP] });
   });
 
-  it("gives every shape a distinct silhouette and a name", () => {
-    /* Two entries that look alike at the size they are used is a picker that
-       costs a decision and returns nothing — which is why a leaf and a petal
-       were drawn, rendered at 18, and rejected for being the fish without its
-       tail. */
-    const shapes = new Set(CURSORS.map((c) => cursorShape(c)));
-    expect(shapes.size, "no two cursors share a path").toBe(CURSORS.length);
+  it("names every shape it offers, in words a picker can show", () => {
+    /* The paths moved to the surface that draws them; what stays here is that
+       every name in the library is a name and not an id. `cursorart.test.ts`
+       holds the silhouettes. */
     for (const c of CURSORS) expect(cursorLabel(c)).toMatch(/^[A-Z]/);
-  });
-
-  it("starts every shape at the hotspot, so the thing still points", () => {
-    // A cursor's tip is where the click lands; mass below and right of
-    // (1.5, 0.5) is a decoration you have to aim.
-    for (const c of CURSORS) {
-      expect(cursorShape(c).startsWith("M1.5 0.5"), `${c} points`).toBe(true);
-    }
-  });
-
-  it("carries no colour of its own", () => {
-    /* The constraint #195 is emphatic about, and the reason a cursor is CHOSEN
-       rather than uploaded: an image cannot be tinted, so six people would
-       share one pointer and the only signal saying who is who would be gone. */
-    for (const c of CURSORS) expect(cursorShape(c)).not.toMatch(/#|rgb|fill|hsl/);
+    expect(new Set(CURSORS.map(cursorLabel)).size, "no two cursors share a word").toBe(CURSORS.length);
   });
 });
