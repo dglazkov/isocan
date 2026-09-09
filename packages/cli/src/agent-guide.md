@@ -1483,10 +1483,37 @@ this canvas. It is not the address, and the difference is the whole point:
   it is admitted **whether or not the link grant is on**, and by default
   arrives speaking as the actor this CLI speaks as.
 
+- `isocan embed` prints an **address carrying the same credential**. You hand
+  that to a *window* — an agent manager's pane, an IDE panel, a tab beside the
+  conversation you are having. Not a terminal: a `npx` line pasted into an
+  address bar does nothing, and an address pasted into a terminal does worse.
+
 ```sh
 isocan pass               # the whole command to paste on the other machine
 isocan pass --admit-only  # admit it, but hand over no identity
+isocan embed              # the address to paste into a pane or an IDE panel
+isocan embed --admit-only # let the window in, but hand it no identity
 ```
+
+### When somebody asks you to put the canvas beside them
+
+If the person you are working with is in an agent manager or an IDE — you are
+in one, so they may well be — they can watch this canvas in a pane next to
+your conversation rather than in a window of its own. `isocan embed` is the
+address for that, and it is worth offering unprompted the first time you make
+something worth looking at.
+
+Two things to say when you hand it over, because both will otherwise look like
+bugs. **It admits the window once**, within the pass's few minutes; after it
+opens, the pane holds its own badge and the plain `isocan share` address is
+the one to keep. And **the pane's badge is its own** — a window inside
+somebody else's page cannot share this browser's, so a canvas open in a pane
+and in a tab is two surfaces, not one. That is deliberate: a credential handed
+to a window somebody else owns should not be the one your own tab is holding.
+
+On a **local daemon over plain HTTP** the isolation cannot be arranged at all,
+so an embedded local canvas is admitted for the visit it was given and starts
+over on a reload. Hand out a hosted address for a pane where you have one.
 
 **A pass is a credential. Treat it like one.**
 

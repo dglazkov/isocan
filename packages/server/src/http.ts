@@ -175,6 +175,7 @@ import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
 import {
   badgeCookie,
+  framedRequest,
   isSecureRequest,
   mintBadge,
   originAllowed,
@@ -936,7 +937,11 @@ export function registerRoutes(
       // value of HttpOnly is that page JavaScript cannot read the credential,
       // and returning it in JSON hands it straight back.
       const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
-      reply.header("Set-Cookie", badgeCookie(token, secure));
+      // Framed is STATED here and sniffed on the page path, for the reason
+      // `carrier` is stated: this route is `fetch`ed by the app, whose
+      // `Sec-Fetch-Dest` is `empty` either way. Only the page knows.
+      const framed = ((req.body ?? {}) as DoorRequest).framed === true;
+      reply.header("Set-Cookie", badgeCookie(token, secure, framed));
       return { badgeId: record.badgeId } satisfies DoorResponse;
     }
     return { badgeId: record.badgeId, secret: token.slice(record.badgeId.length + 1) } satisfies DoorResponse;
@@ -4659,7 +4664,9 @@ function registerPages(
         const { record, token } = mintBadge("cookie");
         await desk.put(record);
         const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
-        reply.header("Set-Cookie", badgeCookie(token, secure));
+        // A canvas opened in an agent manager's pane arrives HERE first, and
+        // this is the one request that can still tell it is a frame (#220).
+        reply.header("Set-Cookie", badgeCookie(token, secure, framedRequest(req.headers)));
       }
     }
     return send(reply, path.join(dist, "index.html")); // SPA fallback

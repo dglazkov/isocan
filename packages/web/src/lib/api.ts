@@ -159,12 +159,34 @@ export function onReBadge(fn: () => Promise<unknown>): void {
  * recovery is a 401 followed by a `not-your-actor` on the first action after
  * it — the canvas would flinch, once, for good.
  */
+/**
+ * Are we somebody's pane rather than somebody's tab? (#220.)
+ *
+ * `window.top` throws on a cross-origin access in no browser that matters —
+ * the reference itself is always readable, only its CONTENTS are walled — but
+ * a frame with `sandbox` and no `allow-same-origin` can make even the compare
+ * throw, and the honest answer when we cannot tell is the conservative one:
+ * assume a tab, and keep the cookie every existing client already gets.
+ */
+function isFramed(): boolean {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true; // it threw because there IS a parent, and it is not ours
+  }
+}
+
 export async function knockOnDoor(): Promise<boolean> {
   try {
     const res = await fetch(DOOR_ROUTE, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ carrier: "cookie" }),
+      // `framed` is the one fact about this request that only the page holds
+      // (#220): by the time the door sees it, `Sec-Fetch-Dest` says `empty`
+      // whether we are in an agent manager's pane or a tab of our own. A
+      // framed page needs a partitioned cookie or it is handed a badge into a
+      // jar it cannot read back — see `badgeCookie`.
+      body: JSON.stringify({ carrier: "cookie", framed: isFramed() }),
     });
     if (!res.ok) return false;
     await reclaimNow();
