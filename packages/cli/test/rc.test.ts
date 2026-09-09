@@ -241,6 +241,89 @@ describe("the enrolment record, in two halves", () => {
     });
   });
 
+  /**
+   * **The speaker gate, through the verbs** (sheepdog, "whom it listens
+   * to"). The routing rule itself is pinned in `core/test/agents.test.ts`,
+   * where it belongs — a dispatch cascade asserting a predicate is the
+   * end-to-end-pretending-to-be-a-unit-test this file already learned about.
+   * What these pin is the part only the CLI can get wrong: that the gate is
+   * WRITTEN where every surface reads it, that one gesture reaches every
+   * canvas the agent stands on, and that a person who looks can see it.
+   */
+  it("`--listen me` writes the gate into canvas state and says so", async () => {
+    const run = await isocan("agent", "add", "Sian", "--listen", "me");
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("listens to Nico");
+
+    const agents = await snapshotAgents();
+    const row = Object.values(agents).find((a) => a.actor.name === "Sian") as
+      | { rules?: { listen?: string[] } }
+      | undefined;
+    // In canvas state, not a machine file: a gate a mentioner cannot see is
+    // the silent gate the design refuses.
+    expect(row?.rules?.listen).toEqual([nico.id]);
+
+    // And it is readable where somebody looks after being ignored.
+    const who = await isocan("--canvas", "prj_1", "who");
+    expect(who.stdout).toContain("listens to Nico");
+    const rules = await isocan("--canvas", "prj_1", "agent", "rules", "Sian");
+    expect(rules.stdout).toContain("listens to Nico");
+  });
+
+  it("`rc listen --to` reaches every canvas the agent stands on, in one gesture", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Q" },
+    });
+    await isocan("--canvas", "prj_1", "rc", "add", "Percy");
+    await isocan("--canvas", "prj_2", "rc", "add", "Percy");
+
+    // No gate is where every enrolment starts — nothing written before this
+    // field goes deaf.
+    const before = await isocan("--json", "rc", "listen", "Percy");
+    expect(JSON.parse(before.stdout).map((r: { listens: string }) => r.listens)).toEqual([
+      "everyone",
+      "everyone",
+    ]);
+
+    const set = await isocan("rc", "listen", "Percy", "--to", "me,Dimitri");
+    expect(set.stderr).toBe("");
+    expect(set.code).toBe(0);
+    expect(set.stdout).toContain("on 2 canvases");
+
+    const gateOn = async (canvasId: string) => {
+      const res = await fetch(`${base}/api/projects/${canvasId}/canvas`, { headers: badge.headers });
+      const snapshot = (await res.json()) as {
+        canvas: { agents?: Record<string, { actor: { name: string }; rules?: { listen?: string[] } }> };
+      };
+      return Object.values(snapshot.canvas.agents ?? {}).find((a) => a.actor.name === "Percy")?.rules
+        ?.listen;
+    };
+    // The same gate in both rooms — "listens to Nico" must not mean two
+    // different things one canvas apart.
+    expect(await gateOn("prj_1")).toEqual([nico.id, dimitri.id]);
+    expect(await gateOn("prj_2")).toEqual([nico.id, dimitri.id]);
+
+    // Off again, said out loud rather than by deleting the field.
+    await isocan("rc", "listen", "Percy", "--to", "everyone");
+    expect(await gateOn("prj_1")).toEqual(["*"]);
+    const after = await isocan("--json", "rc", "listen", "Percy");
+    expect(JSON.parse(after.stdout)[0].listens).toBe("everyone");
+  });
+
+  it("a gate naming somebody nobody here answers to is refused, not written half-way", async () => {
+    await isocan("--canvas", "prj_1", "rc", "add", "Percy");
+    const run = await isocan("rc", "listen", "Percy", "--to", "Nobody");
+    expect(run.code).not.toBe(0);
+    expect(run.stderr).toContain('answers to "Nobody"');
+    const agents = await snapshotAgents();
+    const row = Object.values(agents).find((a) => a.actor.name === "Percy") as
+      | { rules?: { listen?: string[] } }
+      | undefined;
+    expect(row?.rules?.listen).toBeUndefined();
+  });
+
   it("withdrawal takes both halves back and leaves the history", async () => {
     await isocan("agent", "add", "Sian");
     const run = await isocan("agent", "remove", "Sian");

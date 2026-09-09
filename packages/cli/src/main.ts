@@ -262,6 +262,8 @@ import {
   PARK_ADOPTED_CODE,
   dispatchReason,
   isSystemActor,
+  LISTEN_ANYONE,
+  listenWords,
   newId,
   rulesOf,
   SYSTEM_ACTOR,
@@ -10079,7 +10081,11 @@ program
       // For the STATE column: blocked derives from open asks, which live in
       // threads — one snapshot, so the column and the workbench roster answer
       // from the same canvas the same way (core/roster.ts, one derivation).
-      const { canvas } = await ctx.client.snapshot(p.id);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const { canvas } = snapshot;
+      // The registry's current names, for saying an agent's gate in the same
+      // words the facepile uses.
+      const nameOf = nameResolver(snapshot);
       // Said on stderr, before the answer and in both shapes: it qualifies
       // what follows, and an agent reading `--json` off stdout needs the
       // caveat as much as a person reading the table does.
@@ -10115,10 +10121,18 @@ program
         .filter((a) => !liveActorIds.has(a.actor.id))
         .map((a) => {
           const row = rcRows.find((r) => r.canvasId === p.id && r.actorId === a.actor.id);
+          // The gate, in the roster — because the roster is where somebody
+          // looks after a mention went unanswered, and a gate nobody can read
+          // is the silent gate the sheepdog design refuses. PRESENT ONLY WHEN
+          // THERE IS ONE: no gate is the overwhelmingly common case, and a
+          // `"listens": null` on every standing row would be a change to a
+          // shape readers already parse in exchange for saying nothing.
+          const listens = listenWords(rulesOf(a.rules), nameOf);
           return {
             actor: a.actor,
             state: answering.has(a.actor.id) ? ("answerable" as const) : ("enrolled" as const),
             harness: row ? (row.harness ?? machineDefault) : null,
+            ...(listens ? { listens } : {}),
           };
         });
       if (ctx.json) return printJson({ sessions, standing });
@@ -10152,10 +10166,13 @@ program
           cursor: "—",
           selection: "—",
           activity: "—",
+          // The gate qualifies the promise rather than replacing it: "answers
+          // if you comment" is false for everybody outside it, and a roster
+          // that says it anyway is the thing a person acts on and is wrong.
           status:
-            a.state === "answerable"
+            (a.state === "answerable"
               ? "answers if you comment"
-              : "enrolled — nobody is listening right now",
+              : "enrolled — nobody is listening right now") + (a.listens ? ` · ${a.listens}` : ""),
           seen: "—",
         })),
       ]);
@@ -10819,6 +10836,91 @@ command or reply. No \`session start\` needed after a wake.`,
  * where a summoned turn gives it something real to anchor to.
  */
 
+/**
+ * An actor id → the name this canvas would show, for `listenWords`. The
+ * registry's current name, not the one stamped on an old op — a gate that
+ * says who somebody USED to be is a gate nobody can act on.
+ *
+ * **The registry is asked FIRST, and that is the fix rather than the
+ * tidy-up.** `collectCanvasActors` walks canvas state, so it knows the
+ * people who have written something here — which is exactly not the person
+ * a fresh gate usually names: enrolling an agent and pointing it at
+ * yourself is often the first thing you do on a canvas, and it left `who`
+ * printing *listens to usr_nico*. An unreadable gate is the silent gate in
+ * different clothes, so the map that knows everyone the home knows is the
+ * one that answers.
+ */
+function actorNamesOn(snapshot: CanvasSnapshotResponse): Map<string, string> {
+  const names = new Map<string, string>(Object.entries(snapshot.names ?? {}));
+  for (const actor of collectCanvasActors(snapshot.canvas)) {
+    if (!names.has(actor.id)) names.set(actor.id, actorNameIn(snapshot.names, actor));
+  }
+  return names;
+}
+
+function nameResolver(snapshot: CanvasSnapshotResponse): (actorId: string) => string | undefined {
+  const names = actorNamesOn(snapshot);
+  return (actorId) => names.get(actorId);
+}
+
+/**
+ * **`--listen` / `--to`, as a person types it** — `me`, `everyone`, or a
+ * comma-separated list of names and ids (which may itself contain `me`).
+ *
+ * Resolved against the UNION of the canvases the gate is being written to,
+ * not one canvas at a time, because the gate is a fact about the agent
+ * rather than about a room: `listens to Dion` must mean the same person on
+ * all twenty of them or it means nothing. A name that resolves nowhere is a
+ * refusal naming the flag — a gate quietly written with an unresolvable
+ * name is a gate that admits nobody, which is the silent failure this
+ * whole feature exists to avoid.
+ *
+ * Returns the `listen` array to store: `["*"]` for everyone, said
+ * explicitly rather than by deleting the field, so `rc listen --to
+ * everyone` is legible as a decision in the op log.
+ */
+async function resolveListen(ctx: Ctx, canvasIds: readonly string[], spec: string): Promise<string[]> {
+  const wanted = spec
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
+  if (wanted.length === 0) throw new Error("--listen wants somebody: `me`, `everyone`, or names");
+  if (wanted.length === 1 && wanted[0]!.toLowerCase() === "everyone") return [LISTEN_ANYONE];
+  if (wanted.some((w) => w.toLowerCase() === "everyone")) {
+    throw new Error('"everyone" is the whole answer or none of it — it cannot be one name in a list');
+  }
+  // Only walked when a name actually needs resolving: `--listen me` is the
+  // common case and costs nothing.
+  const needsNames = wanted.some((w) => w.toLowerCase() !== "me");
+  const known: { id: string; name: string }[] = [];
+  if (needsNames) {
+    for (const canvasId of canvasIds) {
+      // The registry, not just who has written here: the person a gate names
+      // is very often somebody who has done nothing on this canvas yet — the
+      // owner who enrolled the agent five seconds ago, most of all.
+      for (const [id, name] of actorNamesOn(await ctx.client.snapshot(canvasId))) {
+        known.push({ id, name });
+      }
+    }
+  }
+  const ids: string[] = [];
+  for (const who of wanted) {
+    if (who.toLowerCase() === "me") {
+      ids.push(ctx.actor.id);
+      continue;
+    }
+    const hit = known.find((a) => a.id === who || a.name.toLowerCase() === who.toLowerCase());
+    if (!hit) {
+      throw new Error(
+        `nobody on ${canvasIds.length === 1 ? "this canvas" : "these canvases"} answers to "${who}" ` +
+          "— `isocan who --all` lists them; an actor id also works",
+      );
+    }
+    ids.push(hit.id);
+  }
+  return [...new Set(ids)];
+}
+
 /** Both add verbs land here; `contained` is the agent spelling's rule. */
 /**
  * The enrolment's two moves plus its records, shared by the verbs and the
@@ -10875,7 +10977,7 @@ async function mintAndEnrol(
 async function enrolAgent(
   cmd: Command,
   name: string,
-  opts: { dir?: string; harness?: string; rules?: string },
+  opts: { dir?: string; harness?: string; rules?: string; listen?: string },
   contained: boolean,
 ): Promise<void> {
   const ctx = await ctxOf(cmd);
@@ -10889,11 +10991,21 @@ async function enrolAgent(
   // The rc half's harness: a flag (rc add), else the enrolling caller's own
   // — an agent enrolls an agent like itself — else null, "not yet said".
   const harness = opts.harness ?? ctx.harness ?? null;
-  const rules: unknown = opts.rules !== undefined ? JSON.parse(opts.rules) : undefined;
+  const handed: unknown = opts.rules !== undefined ? JSON.parse(opts.rules) : undefined;
+  // `--listen` is sugar over the same field `--rules` writes by hand, laid
+  // ON TOP of it, so the two flags together are legible rather than a race:
+  // the specific flag wins the key it names, and nothing else is touched.
+  const listen = opts.listen !== undefined ? await resolveListen(ctx, [p.id], opts.listen) : undefined;
+  const rules: unknown =
+    listen === undefined
+      ? handed
+      : { ...(handed && typeof handed === "object" ? handed : {}), listen };
   const agent = await mintAndEnrol(ctx, p.id, name, { cwd, harness, rules });
-  if (ctx.json) return printJson({ enrolled: agent, canvasId: p.id });
+  const gate = listenWords(rulesOf(rules), (id) => (id === ctx.actor.id ? ctx.actor.name : undefined));
+  if (ctx.json) return printJson({ enrolled: agent, canvasId: p.id, ...(listen ? { listen } : {}) });
   console.log(
-    `enrolled ${agent.name} — answerable on "${p.title}". A running \`isocan rc\` picks this up without a restart; nothing runs until something arrives.`,
+    `enrolled ${agent.name} — answerable on "${p.title}"${gate ? ` · ${gate}` : ""}. ` +
+      "A running `isocan rc` picks this up without a restart; nothing runs until something arrives.",
   );
 }
 
@@ -10942,8 +11054,9 @@ agentCommand
   .command("add <name>")
   .description("Enrol an agent beside yourself — on this canvas, in this directory")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
+  .option("--listen <who>", "whose word wakes it: me, everyone (default), or names/ids, comma-separated")
   .action(
-    run(async (name: string, opts: { rules?: string }, cmd: Command) =>
+    run(async (name: string, opts: { rules?: string; listen?: string }, cmd: Command) =>
       enrolAgent(cmd, name, opts, true),
     ),
   );
@@ -10960,7 +11073,8 @@ agentCommand
     run(async (name: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
-      const agents = Object.values((await ctx.client.snapshot(p.id)).canvas.agents ?? {});
+      const snapshot = await ctx.client.snapshot(p.id);
+      const agents = Object.values(snapshot.canvas.agents ?? {});
       const wanted = name
         ? agents.filter((a) => a.actor.name.toLowerCase() === name.toLowerCase() || a.actor.id === name)
         : agents;
@@ -10974,20 +11088,27 @@ agentCommand
         console.log(`nobody is enrolled on "${p.title}"`);
         return;
       }
+      const nameOf = nameResolver(snapshot);
       for (const a of wanted) {
         const rules = rulesOf(a.rules);
         const parts: string[] = [];
         if (rules.items?.length) parts.push(`changes touching ${rules.items.join(", ")}`);
         if (rules.ops?.length) parts.push(`ops: ${rules.ops.join(", ")}`);
+        // The gate is said FIRST and separately, not folded into the filter
+        // list: it answers a different question (who, not what), and it is
+        // the one line that explains a mention going unanswered.
+        const gate = listenWords(rules, nameOf);
         console.log(
-          `${a.actor.name} — ${parts.length > 0 ? parts.join("; ") : "comments addressed to them (the default)"}`,
+          `${a.actor.name} — ${gate ? `${gate}; ` : ""}` +
+            `${parts.length > 0 ? parts.join("; ") : "comments addressed to them (the default)"}`,
         );
       }
       // The standing truths, once — they hold through every rule set, and
       // "readable in one place" means the exceptions are readable too.
       console.log(
         "(always: a comment naming an agent — or landing in the Chat, or in a thread they are part of — " +
-          "comes through any rule set; an agent's own ops never wake it)",
+          "comes through any rule set; an agent's own ops never wake it. A gate is the exception that " +
+          "outranks all of it: outside it, nothing wakes them and nothing is charged)",
       );
     }),
   );
@@ -11059,10 +11180,124 @@ rcCommand
   .option("--dir <path>", "the agent's working directory (default: here)")
   .option("--harness <name>", "how its sessions start: claude-code, pi, codex or antigravity (default: yours, else unsaid)")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
+  .option("--listen <who>", "whose word wakes it: me, everyone (default), or names/ids, comma-separated")
   .action(
-    run(async (name: string, opts: { dir?: string; harness?: string; rules?: string }, cmd: Command) =>
+    run(async (name: string, opts: { dir?: string; harness?: string; rules?: string; listen?: string }, cmd: Command) =>
       enrolAgent(cmd, name, opts, false),
     ),
+  );
+
+/**
+ * **`isocan rc listen <name> --to <who>` — the gate, changed everywhere at
+ * once** (the sheepdog design's *"whom it listens to"*, on the machine's
+ * own agents).
+ *
+ * The gate lives in canvas state, on the enrolment, because a person who
+ * mentions an agent that will not answer them must be able to SEE why —
+ * the design's first failure mode is a silent gate, and a machine-local
+ * setting is silent by construction. But a gate is a fact about the AGENT,
+ * not about a room, so a person must never have to type it twenty times:
+ * this verb writes the same gate to every canvas the agent stands on, and
+ * `--canvas` narrows it to one when that is really what was meant.
+ *
+ * What it is NOT: the sheepdog's on/off switch. That one is flipped from a
+ * phone, in a hurry, and N ops with a failure in the middle would leave a
+ * pet half asleep — which is exactly why the design puts it in a kennel
+ * record at the home rather than on the enrolments. `listen` changes
+ * rarely and reads on every surface, so the enrolment is the right home
+ * for it and the wrong home for the switch.
+ */
+rcCommand
+  .command("listen <name>")
+  .description("Whose word wakes an agent — read it, or set it everywhere they stand")
+  .option("--to <who>", "me, everyone, or names/ids comma-separated; omit to read what stands")
+  .addHelpText(
+    "after",
+    `
+Without --to this reads: one line per canvas this machine's records say the
+agent stands on, and what its gate says there. With --to it writes the same
+gate to all of them, so a gate cannot mean two things in two rooms.
+
+Outside the gate nothing happens at all: an op from somebody it does not
+admit is not a summons, is not a change, and is never counted against the
+agent's hourly ceiling. A mention pierces every other filter; it does not
+pierce this one.
+
+  isocan rc listen Scout --to me            only you can wake her
+  isocan rc listen Scout --to me,Usama      you and Usama
+  isocan rc listen Scout --to everyone      the gate off, said out loud
+  isocan --canvas <ref> rc listen Scout --to me    one canvas only`,
+  )
+  .action(
+    run(async (name: string, opts: { to?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const pointed = canvasRefOf(cmd.optsWithGlobals() as { canvas?: string; project?: string }, null) !== undefined;
+      // Where this agent stands, from the machine's own records — the same
+      // set `rc --all` answers on. Pointing at one canvas narrows it, for
+      // the person who really does want one room to differ.
+      const rows = (await readRcAgents(ctx.home)).filter(
+        (r) => r.name.toLowerCase() === name.toLowerCase(),
+      );
+      const canvasIds = pointed ? [(await resolveCanvas(ctx)).id] : [...new Set(rows.map((r) => r.canvasId))];
+      if (canvasIds.length === 0) {
+        throw new Error(
+          `this machine has no enrolment for "${name}" — \`isocan rc add ${name}\` stands one up, ` +
+            "and only the machine that answers for an agent can speak for its gate",
+        );
+      }
+      const canvases = await ctx.client.listCanvases();
+      const titleOf = (id: string) => canvases.find((c) => c.id === id)?.title ?? id;
+
+      if (opts.to === undefined) {
+        const read: { canvas: string; canvasId: string; listens: string }[] = [];
+        for (const canvasId of canvasIds) {
+          const snapshot = await ctx.client.snapshot(canvasId);
+          const record = Object.values(snapshot.canvas.agents ?? {}).find(
+            (a) => a.actor.name.toLowerCase() === name.toLowerCase(),
+          );
+          read.push({
+            canvas: titleOf(canvasId),
+            canvasId,
+            listens: record
+              ? (listenWords(rulesOf(record.rules), nameResolver(snapshot)) ?? "everyone")
+              : "— not enrolled here",
+          });
+        }
+        if (ctx.json) return printJson(read);
+        return printTable(read.map((r) => ({ canvas: r.canvas, listens: r.listens })));
+      }
+
+      const listen = await resolveListen(ctx, canvasIds, opts.to);
+      const written: string[] = [];
+      for (const canvasId of canvasIds) {
+        const snapshot = await ctx.client.snapshot(canvasId);
+        const record = Object.values(snapshot.canvas.agents ?? {}).find(
+          (a) => a.actor.name.toLowerCase() === name.toLowerCase(),
+        );
+        if (!record) continue;
+        // Re-enrolment updates the record in place (`agent.enroll`), so the
+        // gate rides the op everybody already reads. The other rule keys are
+        // carried through untouched: this verb owns one key.
+        await ctx.client.sendOp(canvasId, ctx.actor, {
+          type: "agent.enroll",
+          agent: record.actor,
+          rules: { ...rulesOf(record.rules), listen },
+        });
+        written.push(titleOf(canvasId));
+      }
+      const gate = listenWords({ listen }, nameResolver(await ctx.client.snapshot(canvasIds[0]!))) ?? "listens to everyone";
+      if (ctx.json) return printJson({ agent: name, listen, canvases: written });
+      if (written.length === 0) {
+        throw new Error(
+          `"${name}" has rc records here but no standing on ${canvasIds.length === 1 ? "that canvas" : "any of those canvases"} — ` +
+            "the home half is the authority, and `isocan rc` reaps records it no longer backs",
+        );
+      }
+      console.log(
+        `${name} ${gate} — on ${written.length} canvas${written.length === 1 ? "" : "es"} (${written.join(", ")}). ` +
+          "A running `isocan rc` reads this on its next lap; nothing needs restarting.",
+      );
+    }),
   );
 
 rcCommand

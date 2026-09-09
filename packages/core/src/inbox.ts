@@ -145,7 +145,28 @@ export interface AgentRules {
    * `items` also empty: comments only — the enrolled default. `["*"]` is
    * everything, `wait --all-ops`'s spelling. */
   ops?: string[];
+  /**
+   * **Whose word wakes this agent** — actor ids. Absent, empty, or
+   * `["*"]` means anyone admitted here, which is what every enrolment
+   * written before this field means and what a team's agent wants; a list
+   * is a NARROWING (`docs/research/2026-09-04-sheepdog.md`, "whom it
+   * listens to").
+   *
+   * It is a gate on the SPEAKER, and `items`/`ops` are filters on what
+   * changed — a different question, which is why it is a third field here
+   * and an outer gate in `dispatchReason` rather than a third clause in
+   * the composition. A mention pierces every filter, deliberately; it must
+   * not pierce this one, or a pet agent its owner pays for answers every
+   * stranger on a shared canvas.
+   *
+   * `["*"]` is the same spelling `ops` uses for "everything", said
+   * explicitly so a person can turn a gate off without deleting a field.
+   */
+  listen?: string[];
 }
+
+/** The `listen` spelling for "anyone" — `ops`'s idiom, one definition. */
+export const LISTEN_ANYONE = "*";
 
 /** The stored rules field, read tolerantly — it has been opaque since
  * phase 2, and a malformed hand-me-down must cost the filter, not the
@@ -156,7 +177,57 @@ export function rulesOf(raw: unknown): AgentRules {
     Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined;
   const items = strings((raw as { items?: unknown }).items);
   const ops = strings((raw as { ops?: unknown }).ops);
-  return { ...(items ? { items } : {}), ...(ops ? { ops } : {}) };
+  const listen = strings((raw as { listen?: unknown }).listen);
+  return {
+    ...(items ? { items } : {}),
+    ...(ops ? { ops } : {}),
+    ...(listen ? { listen } : {}),
+  };
+}
+
+/**
+ * **Does this agent's gate admit that speaker?**
+ *
+ * The predicate on its own, because two surfaces ask it for two reasons:
+ * `dispatchReason` asks it to decide a turn, and a facepile asks it to say
+ * *listens to Dion* beside a name. A gate one of them applied and the other
+ * could not describe is the failure the sheepdog design names first — *"a
+ * silent gate: a person mentions a sheepdog that does not listen to them
+ * and nothing says so."*
+ *
+ * No gate is the default and stays the default: an enrolment with no
+ * `listen` admits everyone, so nothing written before this field goes deaf.
+ */
+export function listensTo(
+  rules: AgentRules | null | undefined,
+  authorId: string,
+  /** The registry's joins, when the caller holds them — a gate naming
+   * `Dimitri 2` must still admit Dimitri. */
+  joined?: ActorJoins,
+): boolean {
+  const listen = rules?.listen ?? [];
+  if (listen.length === 0 || listen.includes(LISTEN_ANYONE)) return true;
+  return listen.some((id) => sameActor(joined, id, authorId));
+}
+
+/**
+ * How every surface says the gate — null when there is none to say, so a
+ * caller can append it without asking whether there is anything to append.
+ *
+ * `nameOf` resolves an actor id to the name that reader would show; ids are
+ * the fallback, never a blank, because a gate nobody can read is the silent
+ * gate wearing a different hat.
+ */
+export function listenWords(
+  rules: AgentRules | null | undefined,
+  nameOf: (actorId: string) => string | undefined,
+): string | null {
+  const listen = rules?.listen ?? [];
+  if (listen.length === 0 || listen.includes(LISTEN_ANYONE)) return null;
+  const names = listen.map((id) => nameOf(id) ?? id);
+  if (names.length === 1) return `listens to ${names[0]}`;
+  if (names.length === 2) return `listens to ${names[0]} and ${names[1]}`;
+  return `listens to ${names[0]} and ${names.length - 1} others`;
 }
 
 /**
@@ -166,6 +237,9 @@ export function rulesOf(raw: unknown): AgentRules {
  *
  * - your own ops never wake you — otherwise an agent that writes what it
  *   watches for wakes itself, forever;
+ * - a speaker outside the gate is not here at all: `listen` is applied
+ *   BEFORE everything below, so an op from outside it is neither a summons
+ *   nor a change, and never reaches the ceiling to be counted against it;
  * - a comment for you (`reasonFor`) is a SUMMONS, and it comes through any
  *   filter — the human reaching you is never the noise you asked to be
  *   spared;
@@ -194,6 +268,10 @@ export function dispatchReason(
   // "Sian couldn't answer" landing in Sian's own thread would re-summon
   // Sian — the failure message waking the failure, forever (phase 5).
   if (isSystemActor(authorId)) return null;
+  // The speaker gate, outside the composition and before it. Order is the
+  // whole point: a mention pierces every filter below, and the one thing it
+  // must not pierce is whose word this agent answers to.
+  if (!listensTo(agent.rules, authorId, agent.joined)) return null;
   if (op.type === "thread.create" || op.type === "thread.reply") {
     const thread = canvas?.threads[op.threadId];
     const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined);
