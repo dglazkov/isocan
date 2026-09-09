@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Actor } from "@isocan/core";
+import type { Actor, Placement } from "@isocan/core";
 import { groundIsPlace, hasGround, isArea, parseUriList } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -45,6 +45,8 @@ const VersionFanOut = lazy(() =>
 );
 import { CommentLayer } from "./CommentLayer.tsx";
 import { ModuleUnderlays } from "./ModuleUnderlays.tsx";
+import { ModuleOverlays } from "./ModuleOverlays.tsx";
+import { CanvasInspector } from "./CanvasInspector.tsx";
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
 /**
@@ -960,7 +962,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     if (droppingTimer.current) clearTimeout(droppingTimer.current);
     setDropping(false);
     if (!canEditNow()) return; // a reader has nowhere to put a file
-    const files = Array.from(e.dataTransfer.files);
+    let files = Array.from(e.dataTransfer.files);
+    const sticker = e.dataTransfer.getData("application/x-isocan-sticker");
+    if (files.length === 0 && sticker) {
+      files = [new File([`${sticker}\n`], "sticker.sticker", { type: "text/vnd.isocan.sticker" })];
+    }
     const ui = useUiStore.getState();
     const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
 
@@ -1019,6 +1025,24 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         placeableArea(),
         glideToBox,
       );
+    }
+  }
+
+  async function dropFile(file: File, placement?: Placement): Promise<string[]> {
+    const p =
+      placement ??
+      (useUiStore.getState().selectedItemIds.length === 1
+        ? { anchorItemId: useUiStore.getState().selectedItemIds[0]! }
+        : screenToWorld(useUiStore.getState().viewport, window.innerWidth / 2, window.innerHeight / 2));
+    try {
+      // Not chosen: dropping from the tray places the sticker in the middle of
+      // the window or beside the selection, so the daemon may tidy it clear.
+      const ids = await addFiles(canvasId, actor, [file], p);
+      if (ids.length > 0) useUiStore.getState().setSelection(ids);
+      return ids;
+    } catch {
+      setNotice("That sticker could not be added.");
+      return [];
     }
   }
 
@@ -1116,6 +1140,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       <GuideLines />
       <EdgeRadar canvasId={canvasId} />
       <SketchBar canvasId={canvasId} actor={actor} />
+      <ModuleOverlays canvasId={canvasId} actor={actor} dropFile={dropFile} />
+      <CanvasInspector canvasId={canvasId} actor={actor} />
       {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
       {menu && (
         <ContextMenu

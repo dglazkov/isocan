@@ -1,6 +1,6 @@
 import type { ContextPiece } from "./context.ts";
-import type { CanvasContents, Item } from "./model.ts";
-import type { Operation } from "./ops.ts";
+import type { CanvasContents, Item, Actor } from "./model.ts";
+import type { Operation, Placement } from "./ops.ts";
 import type { SlashCommand } from "./commands.ts";
 
 /**
@@ -184,6 +184,8 @@ export interface InspectorFacts {
   canvasId: string;
   item: Item;
   readText: () => Promise<string>;
+  actor?: Actor | undefined;
+  addVersion?: ((file: File) => Promise<void>) | undefined;
 }
 
 export interface ModuleInspector<I> {
@@ -212,7 +214,18 @@ export interface ModulePage<P> {
   component: P;
 }
 
-export interface WebModule<C, R = never, I = never, P = never> {
+/**
+ * **What an overlay is handed**: the canvas identity, the current actor,
+ * and a callback to drop/add files onto the canvas. Overlays mount in screen
+ * space above the canvas viewport (e.g. floating docks, sticker trays).
+ */
+export interface OverlayFacts {
+  canvasId: string;
+  actor: Actor;
+  dropFile?: ((file: File, placement?: Placement) => Promise<string[]>) | undefined;
+}
+
+export interface WebModule<C, R = never, I = never, P = never, O = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
@@ -225,6 +238,8 @@ export interface WebModule<C, R = never, I = never, P = never> {
   inspectors?: readonly ModuleInspector<I>[];
   /** Whole sections of the app, each a cover route with an address. */
   pages?: readonly ModulePage<P>[];
+  /** Drawn above the canvas in screen coordinates (floating docks, trays). */
+  overlays?: readonly O[];
 }
 
 /**

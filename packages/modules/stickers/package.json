@@ -1,0 +1,22 @@
+{
+  "name": "@isocan/stickers",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Emoji stickers: drop one of 5 emoji onto the canvas from the web tray, drag-and-drop, or the CLI",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}
+

@@ -4,6 +4,7 @@ import {
   type InspectorFacts,
   type ModuleInspector,
   type ModulePage,
+  type OverlayFacts,
   type PageFacts,
   type RendererFacts,
   type UnderlayFacts,
@@ -12,6 +13,7 @@ import {
 import { mindmapWeb } from "@isocan/mindmap/web";
 import { mermaidWeb } from "@isocan/mermaid/web";
 import { documentsWeb } from "@isocan/documents/web";
+import { stickersWeb } from "@isocan/stickers/web";
 import { useUiStore } from "./stores/uiStore.ts";
 
 /**
@@ -35,10 +37,11 @@ export type ShellModule = WebModule<
   ComponentType<UnderlayFacts>,
   ComponentType<RendererFacts>,
   ComponentType<InspectorFacts>,
-  ComponentType<PageFacts>
+  ComponentType<PageFacts>,
+  ComponentType<OverlayFacts>
 >;
 
-const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb];
+const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, stickersWeb];
 
 /** Read at render time: the same array, so a runtime module shows up in
  *  every slot the moment it is added. */

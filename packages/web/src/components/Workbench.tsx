@@ -103,6 +103,14 @@ export function Workbench({
   const inspectors = openItem ? moduleInspectorsFor(itemKind(openItem)) : [];
   const openHash = openItem ? (openItem.versions.find((v) => v.id === openItem.currentVersionId) ?? openItem.versions[0])?.blobHash ?? null : null;
   const readOpenItem = useCallback(() => (openHash ? readBlobText(canvasId, openHash) : Promise.resolve("")), [canvasId, openHash]);
+  const addVersion = useCallback(
+    async (file: File) => {
+      if (!openItem) return;
+      const { addVersionFromFile } = await import("../lib/upload.ts");
+      await addVersionFromFile(canvasId, actor, openItem.id, file);
+    },
+    [canvasId, actor, openItem],
+  );
   const [rail, setRail] = useState(() => readRail(canvasId));
   const setRailKept = (folded: boolean) => {
     setRail(folded);
@@ -227,7 +235,7 @@ export function Workbench({
               return (
                 <section key={inspector.label} className="wb-inspector-section">
                   <h3>{inspector.label}</h3>
-                  <Body canvasId={canvasId} item={openItem} readText={readOpenItem} />
+                  <Body canvasId={canvasId} item={openItem} readText={readOpenItem} actor={actor} addVersion={addVersion} />
                 </section>
               );
             })}
