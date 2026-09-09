@@ -20,7 +20,7 @@ import {
 import { checkFrameable, exportDoc, listCanvases } from "../lib/api.ts";
 import { BROWSER_SIZE, addAreaItem, addBrowserItem, addCanvasItem, addDocumentItem } from "../lib/upload.ts";
 import { placeableArea, spotInView } from "../lib/spot.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { KindIcon } from "./KindIcon.tsx";
 

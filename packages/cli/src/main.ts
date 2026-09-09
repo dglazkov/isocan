@@ -7293,7 +7293,7 @@ program
             })),
           );
         }
-        if (areaResize) {
+        if (area && areaResize) {
           console.log(`area "${area.title}" will resize from ${area.width}x${area.height} to ${areaResize.width}x${areaResize.height}`);
         }
         return;
