@@ -155,9 +155,22 @@ presence; machine idle for repo-wide work. Named separately from the start.
 **D3. A persona declares what it may spend**, in the shape `rcLimits` already
 uses. Cheap becomes a number.
 
-**D4. A small persona may open a PR only where a pre-existing guard would fail
-if the change were wrong**, and never writes that guard. Dependency bumps yes;
-"performance work" no.
+**D4. A small persona may open a PR and may not merge it** — decided by Dion,
+9 Sep 2026: *"Let it open a PR but not merge it."*
+
+That is a different line from the one this note first drew, and a better one.
+The original rule was about the CHANGE — a PR only where a pre-existing guard
+would fail if the change were wrong — which asks a small model to judge whether
+its own work is the guarded kind, and that judgement is exactly what a small
+model is not for. The new rule is about the ACT, and it needs no judgement at
+all: propose, never land.
+
+It also fits what already exists rather than adding to it. A nightly persona's
+page auto-merges because the diff is confined to `docs/reviews/` and cannot
+break anything by construction (`personas.yml`); a small persona's code change
+is the opposite case, so it stops at a PR and a person is the merge button. The
+guard reasoning survives as advice about what is worth attempting, rather than
+as a gate the writer has to apply to itself.
 
 **D5. The registry is not the queue and must not fail a build.** Ideas that
 redden a commit stop being written down.
@@ -172,8 +185,8 @@ this asks for is not. Both surfaces, and the guide names it.
    format is missing before changing the format.
 2. **The idle trigger**, per-canvas first, since presence already answers it.
 3. **A declared budget**, in `rcLimits`' shape.
-4. **The write rule** — D4, with the dependency checker as its first and
-   narrowest case.
+4. **The write rule** — D4: it opens a PR, it does not merge one. The
+   dependency checker is still the first and narrowest thing to try.
 5. **The registry**, derived, with dates and evidence and no ability to fail a
    build.
 6. **`isocan persona new`.**

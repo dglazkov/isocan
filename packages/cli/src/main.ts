@@ -237,6 +237,9 @@ import {
   contextPieces,
   contextReport,
   convergePlan,
+  preferPatch,
+  unpreferPatch,
+  preferredOver,
   isRefusal,
   openAsks,
   itemThread,
@@ -278,6 +281,7 @@ import {
   MEMORY_PROP,
   type LinkedCanvas,
   type CanvasContents,
+  type MetaPatch,
   canvasIdOf,
   isCanvasItem,
   markLabel,
@@ -7473,6 +7477,56 @@ async function readStdin(): Promise<string> {
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
   return Buffer.concat(chunks).toString("utf8");
 }
+
+/**
+ * **The eye test's verb** (9 Sep 2026).
+ *
+ * > "Let me run an A/B 'eye test' and quickly pick left vs right and flip
+ * > through alternatives"
+ *
+ * Deliberately not `choose`, which is next to it and does something else:
+ * `choose` folds a winner into its source and trashes the siblings, once, at
+ * the end. This costs nothing, changes no picture, and is meant to happen
+ * twenty times — which is what makes an eye test possible at all. Fold the two
+ * together and every glance would destroy four items.
+ *
+ * The CLI half lands first because the picking UI is the web's, and a data
+ * model shaped by the screen that happens to read it first is a data model
+ * that cannot answer anything else. This is also the surface that will run the
+ * question these are FOR — what the winners have in common — long after the
+ * clicking is done somewhere else.
+ */
+program
+  .command("prefer <winner>")
+  .description("The eye test: this one over that one, recorded and not folded")
+  .requiredOption("--over <items...>", "what it was chosen over")
+  .option("--undo", "take a preference back")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (ref: string, opts: { over: string[]; undo?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const winner = resolveItem(snapshot, ref);
+      const losers = opts.over.map((one) => resolveItem(snapshot, one));
+
+      const patch = opts.undo
+        ? losers.reduce<MetaPatch | null>((acc, l) => acc ?? unpreferPatch(winner, l.id), null)
+        : preferPatch(winner, losers.map((l) => l.id));
+      if (patch === null) {
+        const already = opts.undo ? "was not preferred over" : "is already preferred over";
+        throw new Error(`"${winner.title}" ${already} ${losers.map((l) => `"${l.title}"`).join(", ")}`);
+      }
+      await sendOp(ctx, p.id, { type: "item.update", itemId: winner.id, patch });
+      const now = preferredOver({ ...winner, properties: { ...winner.properties, ...(patch.properties ?? {}) } });
+      if (ctx.json) return printJson({ itemId: winner.id, preferredOver: opts.undo ? [] : now });
+      console.log(
+        opts.undo
+          ? `took it back — "${winner.title}" no longer beats "${losers[0]!.title}"`
+          : `"${winner.title}" over ${losers.map((l) => `"${l.title}"`).join(", ")}`,
+      );
+    }),
+  );
 
 program
   .command("choose <item>")

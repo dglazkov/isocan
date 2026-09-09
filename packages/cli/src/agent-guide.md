@@ -463,7 +463,23 @@ The same list is a panel on the canvas, so the person can see what you see.
 
 ## Choosing between variations
 
-Explore with `/variation`, then `isocan choose <item>` says **this one won**:
+`isocan prefer <winner> --over <other>` says **I liked this one better**, and
+that is all it says: nothing moves, nothing is trashed, no picture changes. It
+is the cheap half, meant to happen twenty times — left, right, next pair — and
+that is why it is separate from `choose` below, which is final.
+
+Use it whenever a person tells you which of several they prefer, even in
+passing, because until this existed nothing on a canvas knew what anybody
+LIKED. The design system supplies coherence and `/design-audit` supplies a
+floor; neither is taste. Twenty preferences are a question worth asking: what
+do the winners have in common, and should the design system say it out loud?
+
+Preferring the same pair twice is one fact and refuses rather than writing it
+again; `--undo` takes one back. The record survives `choose` trashing the
+loser, because the trash is a place rather than a deletion.
+
+Then, when the exploration is over: `isocan choose <item>` says **this one
+won**:
 the winner's content becomes a new version of the screen it was made from, and
 every sibling — the winner included — goes to the trash.
 

@@ -50,6 +50,7 @@ export * from "./slop.ts";
 export * from "./skillsource.ts";
 export * from "./designsystem.ts";
 export * from "./designaudit.ts";
+export * from "./preference.ts";
 export * from "./extensions.ts";
 export * from "./media.ts";
 export * from "./designmd.ts";

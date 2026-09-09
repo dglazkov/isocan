@@ -165,6 +165,22 @@ goes nowhere a person reads.
 
 **D7. A new word for the bridge**, chosen before anything is named.
 
+**D8. A sheep shows up on the canvas.** Decided by Dion, 9 Sep 2026: *"I think
+the sheep should show up... it's an agent that can do things."*
+
+This was the note's own first open question, and the argument against was that
+"a Cloudflare cell" is not a name anybody wants in the facepile. That argument
+was about a NAME, and it answered a question about identity with an objection
+about presentation — which is backwards. The test is the one the sentence
+gives: a thing that can do things on this canvas is somebody you should be able
+to see, address and stand down. Plumbing you cannot see is plumbing you cannot
+stop.
+
+So a sheep enrols like any other agent, wears a name a person chose, and its
+being a cell rather than a laptop is an implementation detail nobody in the
+facepile needs to read. What that leaves is not "should it appear" but "what is
+it called", which is D7's question and was always the real one.
+
 ## Phases
 
 1. **One persona in a sheep.** #205's dependency checker, `model: haiku`, tight
@@ -182,11 +198,6 @@ goes nowhere a person reads.
 
 ## What this leaves open
 
-- **Whether a sheep should be an actor or a machine.** A parked rc answers *for*
-  enrolled agents; it is not itself one. So does a sheep appear on the canvas
-  at all, or is it invisible plumbing behind agents who do? The facepile says
-  who is standing by, and "a Cloudflare cell" is not a name anybody wants to
-  see there.
 - **What happens when the laptop comes back.** Two rcs parked for the same
   agent is the case `standing-agents` already handles — *"another park adopted
   Sian's cursor — standing down for it"* — but it has never been exercised
