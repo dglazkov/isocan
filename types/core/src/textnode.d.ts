@@ -119,6 +119,15 @@ export declare function textSizeOf(item: Item): number;
  */
 export declare const TEXT_FACES: readonly ["sans", "mono", "serif", "hand"];
 export type TextFace = (typeof TEXT_FACES)[number];
+/**
+ * **What a face is called where somebody picks one** (9 Sep 2026).
+ *
+ * Beside the ids for `themeLabel`'s reason: an id is the interface and a menu
+ * that says "sans" is a menu showing you its variable. Three of these are the
+ * word already; `hand` is the one that is not, and it is the reason this
+ * exists rather than a `capitalize()` at the call site.
+ */
+export declare function textFaceLabel(face: TextFace): string;
 export declare const TEXT_FACE_STACK: Record<TextFace, string>;
 /**
  * How much bigger a face has to be drawn to hold the ladder's promise.
@@ -159,6 +168,10 @@ export declare function textFaceOf(item: Item): TextFace;
  */
 export declare const PAPERS: readonly ["yellow", "pink", "blue", "green", "grey"];
 export type Paper = (typeof PAPERS)[number];
+/** What a paper is called where somebody picks one. Every id is already the
+ *  word, and this exists so a second surface offering these cannot spell them
+ *  differently — the fold `themeLabel` and `cursorLabel` already are. */
+export declare function paperLabel(paper: Paper): string;
 export declare const PAPER_PROP = "paper";
 /** The paper this node is written on, or null for none — a plain text node. */
 export declare function paperOf(item: Item): Paper | null;

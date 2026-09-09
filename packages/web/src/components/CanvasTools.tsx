@@ -7,6 +7,8 @@ import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
 import { AddPopover } from "./AddPopover.tsx";
 import { hideMenu, showMenu, useChromeHidden } from "../lib/chromemenu.tsx";
+import { openContextMenu } from "./ContextMenu.tsx";
+import { textToolMenu } from "../lib/textmenu.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -206,6 +208,19 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
             aria-label={t.label}
             aria-pressed={activeTool === t.tool}
             onClick={() => setActiveTool(t.tool)}
+            /* Right-click a tool for its own settings. Only Text has any: the
+               pen's one choice is the ink-well below, and the rest have none,
+               so the event falls through to the rail's own menu rather than
+               growing an empty one. */
+            onContextMenu={
+              t.tool === "text"
+                ? (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openContextMenu({ x: e.clientX, y: e.clientY }, textToolMenu());
+                  }
+                : undefined
+            }
           >
             {t.icon}
             {t.tool === "pen" && <span className="ink-chip" style={{ background: ink }} />}

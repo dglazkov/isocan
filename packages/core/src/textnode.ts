@@ -158,6 +158,27 @@ export function textSizeOf(item: Item): number {
 export const TEXT_FACES = ["sans", "mono", "serif", "hand"] as const;
 export type TextFace = (typeof TEXT_FACES)[number];
 
+/**
+ * **What a face is called where somebody picks one** (9 Sep 2026).
+ *
+ * Beside the ids for `themeLabel`'s reason: an id is the interface and a menu
+ * that says "sans" is a menu showing you its variable. Three of these are the
+ * word already; `hand` is the one that is not, and it is the reason this
+ * exists rather than a `capitalize()` at the call site.
+ */
+export function textFaceLabel(face: TextFace): string {
+  switch (face) {
+    case "sans":
+      return "Sans";
+    case "mono":
+      return "Mono";
+    case "serif":
+      return "Serif";
+    case "hand":
+      return "Handwriting";
+  }
+}
+
 export const TEXT_FACE_STACK: Record<TextFace, string> = {
   sans: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   mono: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -225,6 +246,13 @@ function isTextFace(value: unknown): value is TextFace {
  */
 export const PAPERS = ["yellow", "pink", "blue", "green", "grey"] as const;
 export type Paper = (typeof PAPERS)[number];
+
+/** What a paper is called where somebody picks one. Every id is already the
+ *  word, and this exists so a second surface offering these cannot spell them
+ *  differently — the fold `themeLabel` and `cursorLabel` already are. */
+export function paperLabel(paper: Paper): string {
+  return paper.charAt(0).toUpperCase() + paper.slice(1);
+}
 
 export const PAPER_PROP = "paper";
 

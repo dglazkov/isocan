@@ -55,6 +55,23 @@ export interface PendingText {
    *  so choosing a size shows you the size before it is everyone's. */
   style: TextStyle;
   face: TextFace;
+  /**
+   * **This placement borrowed the tool and gives it back** (9 Sep 2026).
+   *
+   * > "when you click away it switches to the select tool UNLESS the user was
+   * > holding down the T key when they clicked... then it STAYS on the text
+   * > tool"
+   *
+   * Set when the canvas places a node with the text tool and T was NOT being
+   * held: one node, then the tool hands itself back. Held-T says "I am placing
+   * several", and leaves the tool where it is.
+   *
+   * It rides on the pending node rather than sitting beside it in the store,
+   * because that is what scopes it correctly for free: re-wording an existing
+   * node opens a pending too (`ItemView`), and that must never move the tool.
+   * A flag on the store would have to remember which of those it belonged to.
+   */
+  oneShot?: boolean;
   /** The paper being typed on, or null/absent for a plain caption — local
    *  until it commits, like the step and the face. */
   paper?: Paper | null;
@@ -641,7 +658,24 @@ export const useUiStore = create<UiStore>((set) => {
     setRenaming: (renamingItemId) => set({ renamingItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
-    setPendingText: (pendingText) => set({ pendingText }),
+    /**
+     * **Closing a one-shot placement hands the tool back.**
+     *
+     * In the setter rather than at the call sites because there are three of
+     * them and two are in `TextComposer` alone — commit, and Escape. A rule
+     * carried out in three places is a rule that will be carried out in two.
+     *
+     * Only when the text tool is still the active one: picking another tool
+     * while the composer is open has already answered the question, and
+     * putting Select back on top of that would undo a choice the person made
+     * more recently than this.
+     */
+    setPendingText: (pendingText) =>
+      set((s) =>
+        pendingText === null && s.pendingText?.oneShot === true && s.activeTool === "text"
+          ? { pendingText, activeTool: "select" as Tool }
+          : { pendingText },
+      ),
     setClipboard: (clipboard) => set({ clipboard }),
     setContextMenu: (contextMenu) => set({ contextMenu }),
     setLastText: (lastTextStyle, lastTextFace, lastPaper) => {

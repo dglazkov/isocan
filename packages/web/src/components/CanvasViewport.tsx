@@ -173,7 +173,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * The cause is the same thing that made P right and H wrong: tool keys were
    * handled in two files with two different shapes. They are handled here now.
    */
-  const holdTool = useRef<{ code: string; prev: Tool; downAt: number } | null>(null);
+  /**
+   * The tool a held key borrowed, and whether the hold was USED — a hold that
+   * placed something is a person saying "I am doing several of these", so it
+   * latches on release instead of handing the tool back (9 Sep 2026).
+   */
+  const holdTool = useRef<{ code: string; prev: Tool; downAt: number; used?: boolean } | null>(null);
   const penHeld = useRef(false);
   // Pending settle: the ink becomes an item when this fires (see INK_SETTLE_MS).
   const settleTimer = useRef<number | null>(null);
@@ -374,7 +379,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         const ui = useUiStore.getState();
         // A hold hands the tool back; a tap keeps it, and pressing the same key
         // again returns to Select — the toggle H and T have always had.
-        if (wasHeld(held.downAt, Date.now())) ui.setActiveTool(held.prev);
+        //
+        // Unless the hold was USED. Holding T, clicking, and releasing to find
+        // yourself back in Select is the tool doing the opposite of what the
+        // gesture asked for: you held it down BECAUSE you are placing more
+        // than one.
+        if (wasHeld(held.downAt, Date.now()) && held.used !== true) ui.setActiveTool(held.prev);
         else if (held.prev === ui.activeTool) ui.setActiveTool("select");
         holdTool.current = null;
       }
@@ -612,6 +622,24 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       e.preventDefault();
       const ui = useUiStore.getState();
       const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+      /**
+       * **Holding T means "several"; clicking with the tool means "one".**
+       *
+       * > "when you click away it switches to the select tool UNLESS the user
+       * > was holding down the T key when they clicked"
+       *
+       * The tool was already tap-to-latch, hold-to-borrow. This gives the two
+       * gestures different ENDINGS as well as different beginnings: a borrowed
+       * tool that placed something keeps itself (the hold is marked used, so
+       * releasing T no longer hands it back), and a latched one puts a single
+       * node down and returns to Select when the composer closes.
+       *
+       * Read at the moment of the press, deliberately. Whether T is still down
+       * when you finish typing is not the question — you cannot type with it
+       * held, and the intent was declared when you clicked.
+       */
+      const borrowing = holdTool.current?.code === "KeyT";
+      if (borrowing && holdTool.current !== null) holdTool.current.used = true;
       ui.setPendingText({
         x: Math.round(world.x),
         y: Math.round(world.y),
@@ -622,6 +650,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         style: ui.lastTextStyle,
         face: ui.lastTextFace,
         paper: ui.lastPaper,
+        oneShot: !borrowing,
       });
       return;
     }
