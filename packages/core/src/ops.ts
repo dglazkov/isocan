@@ -34,7 +34,16 @@ export interface NewVersion {
  * else, and "commit this here" has to mean here. Absent means not chosen,
  * so every op already in a log replays exactly as it did.
  */
-export type Placement = { x: number; y: number; chosen?: boolean } | { anchorItemId: string };
+export type Placement =
+  | {
+      x: number;
+      y: number;
+      chosen?: boolean;
+      areaId?: string;
+      resizedArea?: { width: number; height: number };
+      shifts?: Array<{ itemId: string; x: number; y: number }>;
+    }
+  | { anchorItemId: string };
 
 export interface NewComment {
   id: string;

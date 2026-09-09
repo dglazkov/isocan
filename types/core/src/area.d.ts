@@ -89,21 +89,43 @@ export declare function areaOf(canvas: CanvasContents, item: Item): Item | null;
 /** An area by exact title, then by case-insensitive prefix — how `--in`
  *  names one. Null when nothing matches; the caller says so. */
 export declare function findArea(canvas: CanvasContents, ref: string): Item | null;
-/**
- * Where a new thing of this size can sit INSIDE the area without landing on
- * anything already there: the same outward search the daemon uses for the
- * whole canvas, confined to the sheet's inner region, starting at its
- * top-left. Something placed here is placed *chosen*, because the search
- * already found it clear and the daemon must not tidy it out of the area.
- *
- * A sheet too full to hold it still gets an honest answer — the inner
- * region's top-left — rather than a spot outside the area, which would
- * make "in the area" a lie the moment the wall was busy.
- */
-export declare function freeSpotIn(canvas: CanvasContents, area: Item, width: number, height: number): {
+interface AreaSpot {
     x: number;
     y: number;
-};
+    areaId?: string;
+    resizedArea?: {
+        width: number;
+        height: number;
+    };
+    shifts?: Array<{
+        itemId: string;
+        x: number;
+        y: number;
+    }>;
+}
+/**
+ * Where a new thing of this size can sit INSIDE the area without landing on
+ * anything already there.
+ *
+ * If the area has room, it takes the nearest free spot within the sheet's
+ * inner region in reading order.
+ *
+ * If the area cannot fit the new item within its current boundaries, the area
+ * AUTOMATICALLY GROWS: it finds a clear spot in reading order (flowing across
+ * the row and wrapping downward into subsequent rows) and returns the required
+ * expanded sheet dimensions in `resizedArea`. If the item is wider than the
+ * sheet, the sheet widens to accommodate it and downstream items/areas to the
+ * right are shifted to prevent overlap.
+ */
+export declare function freeSpotIn(canvas: CanvasContents, area: Item, width: number, height: number): AreaSpot;
+/**
+ * Calculate the sheet dimensions required to enclose these items with title
+ * header and insets. Returns null if the area already comfortably encloses them.
+ */
+export declare function areaEnclosing(area: Item, items: readonly Item[]): {
+    width: number;
+    height: number;
+} | null;
 /**
  * **A grid on a sheet** (sprint phase 5): rows and columns, each with a
  * name, drawn as guides inside the sheet — the storyboard is one row of
@@ -158,3 +180,4 @@ export declare function cellSpot(canvas: CanvasContents, area: Item, row: number
     x: number;
     y: number;
 };
+export {};

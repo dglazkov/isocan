@@ -58,7 +58,7 @@ export function anchorOffset(item: { width: number; height: number }): {
 /** Anything already taking up room — an item, or one just placed this pass. */
 export type Placed = Box;
 
-const overlaps = (a: Box, b: Box, pad: number): boolean =>
+export const overlaps = (a: Box, b: Box, pad: number): boolean =>
   a.x < b.x + b.width + pad &&
   b.x < a.x + a.width + pad &&
   a.y < b.y + b.height + pad &&

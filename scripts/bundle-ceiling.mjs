@@ -78,6 +78,23 @@
  * feature, somebody read the sentence, and it came back down further than it
  * went up.
  *
+ * **637,400 → 641,100 on 9 Sep, for the module API's own weight.** #156's
+ * report turned into a host a module can write through, an overlays slot, a
+ * drop registry and the experiments gate — all shell code, all in the first
+ * paint because the shell is.
+ *
+ * **The module behind the experiment is NOT in it, and that was measured
+ * rather than assumed.** Built as a plain import gated at render, stickers put
+ * 6,227 bytes into the entry chunk for everybody including the people who
+ * never switch it on — gating the drawing and not the download. It arrives
+ * through `addModule` now, the way a runtime module does, and the entry chunk
+ * carries none of it: 6,227 became 3,695, and the rest is API.
+ *
+ * Worth keeping as the rule rather than the number: **"merged but off" has to
+ * mean off**, and an experiment costing everybody bytes is not off. The gate
+ * asked, this is the sentence, and the half of the raise that was avoidable
+ * was avoided before it was written down.
+ *
  * The second gate only works because the queue reaches `main` now and an
  * answer covers the nights that repeat it. Before 7 Sep it would have been a
  * warning into a void.
@@ -85,7 +102,7 @@
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 637_400;
+export const CEILING = 641_100;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

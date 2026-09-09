@@ -35,6 +35,16 @@ export type Placement = {
     x: number;
     y: number;
     chosen?: boolean;
+    areaId?: string;
+    resizedArea?: {
+        width: number;
+        height: number;
+    };
+    shifts?: Array<{
+        itemId: string;
+        x: number;
+        y: number;
+    }>;
 } | {
     anchorItemId: string;
 };

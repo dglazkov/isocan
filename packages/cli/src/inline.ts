@@ -195,6 +195,18 @@ export async function inlineHtmlAssets(
     }
   }
 
+  // Match string literals referencing local image files (e.g. in JavaScript objects, React state, arrays)
+  const jsImageRegex = /(["'`])([^"'`\n\r]+\.(?:png|jpg|jpeg|webp|svg|gif|avif))(?:\?[^"'`\n\r]*)?\1/gi;
+  while ((match = jsImageRegex.exec(result)) !== null) {
+    const rawRef = match[2];
+    if (rawRef && !refsToReplace.has(rawRef)) {
+      const dataUri = await resolveImageToDataUri(rawRef, baseDir);
+      if (dataUri) {
+        refsToReplace.set(rawRef, dataUri);
+      }
+    }
+  }
+
   if (refsToReplace.size > 0) {
     result = result.replace(
       /\b(src|poster)=(["'])(.*?)\2/gi,
@@ -209,6 +221,14 @@ export async function inlineHtmlAssets(
       (full, quote, ref) => {
         const dataUri = refsToReplace.get(ref);
         return dataUri ? `url("${dataUri}")` : full;
+      },
+    );
+
+    result = result.replace(
+      /(["'`])([^"'`\n\r]+\.(?:png|jpg|jpeg|webp|svg|gif|avif))(?:\?[^"'`\n\r]*)?\1/gi,
+      (full, quote, ref) => {
+        const dataUri = refsToReplace.get(ref);
+        return dataUri ? `${quote}${dataUri}${quote}` : full;
       },
     );
   }

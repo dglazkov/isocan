@@ -15,7 +15,6 @@ import {
 import { mindmapWeb } from "@isocan/mindmap/web";
 import { mermaidWeb } from "@isocan/mermaid/web";
 import { documentsWeb } from "@isocan/documents/web";
-import { stickersWeb } from "@isocan/stickers/web";
 import { useUiStore } from "./stores/uiStore.ts";
 import { experimentOn } from "./lib/experiments.ts";
 
@@ -44,7 +43,7 @@ export type ShellModule = WebModule<
   ComponentType<OverlayFacts>
 >;
 
-const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, stickersWeb as ShellModule];
+const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb];
 
 /**
  * **Modules that are off until a person asks**, by slug (#156, 9 Sep 2026).
@@ -62,6 +61,39 @@ const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, stickersWeb a
 const BEHIND_EXPERIMENT: Record<string, string> = {
   stickers: "modules.stickers",
 };
+
+/**
+ * **An experiment's module is fetched, not bundled** (9 Sep 2026).
+ *
+ * It was a build-time import in `LIST`, gated at render — which gated the
+ * DRAWING and not the download: measured, stickers put 6,227 bytes into the
+ * entry chunk for everybody, including the people who never turn it on. That
+ * is not the bargain an experiment makes. "Merged but off" has to mean off.
+ *
+ * So it arrives the way a runtime module does — after first paint, through
+ * `addModule`, only when asked for. The CLI half stays a build-time import,
+ * because the terminal has no first paint and no byte budget.
+ */
+const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>> = {
+  "modules.stickers": () => import("@isocan/stickers/web") as Promise<{ default: ShellModule }>,
+};
+
+const fetched = new Set<string>();
+
+/** Import the web half of every experiment that is on and has not arrived. */
+export async function loadExperiments(): Promise<void> {
+  for (const [id, load] of Object.entries(EXPERIMENT_HALVES)) {
+    if (fetched.has(id) || !experimentOn(id)) continue;
+    fetched.add(id);
+    try {
+      addModule((await load()).default);
+    } catch {
+      // A chunk that will not load is a switch that appears to do nothing,
+      // which is bad — and an app that will not start is worse.
+      fetched.delete(id);
+    }
+  }
+}
 
 /**
  * The modules that are actually live for this person right now.

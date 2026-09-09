@@ -70,6 +70,40 @@ describe("inlineHtmlAssets", () => {
     const inlined = await inlineHtmlAssets("/tmp/nonexistent.html", html);
     expect(inlined).toBe(html);
   });
+
+  it("inlines images referenced inside JavaScript strings and objects", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "inline-js-test-"));
+    const imgPath = path.join(tmpDir, "photo.jpg");
+    const jpgBytes = Buffer.from(
+      "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=",
+      "base64",
+    );
+    await fs.writeFile(imgPath, jpgBytes);
+
+    const htmlPath = path.join(tmpDir, "spa.html");
+    const html = `<!DOCTYPE html>
+<html>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const IMAGES = {
+      hero: "photo.jpg",
+      absolute: "${imgPath}",
+      remote: "https://example.com/ext.jpg",
+      missing: "missing.jpg",
+    };
+  </script>
+</body>
+</html>`;
+
+    const inlined = await inlineHtmlAssets(htmlPath, html);
+    expect(inlined).toContain('hero: "data:image/jpeg;base64,');
+    expect(inlined).toContain('absolute: "data:image/jpeg;base64,');
+    expect(inlined).toContain('remote: "https://example.com/ext.jpg"');
+    expect(inlined).toContain('missing: "missing.jpg"');
+
+    await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
 });
 
 describe("inlineMarkdownAssets", () => {

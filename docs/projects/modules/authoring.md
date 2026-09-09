@@ -8,6 +8,34 @@ The three modules in `packages/modules/` — `mindmap`, `mermaid`,
 `documents` — are the worked examples, and each one uses a different subset
 of what is below.
 
+## How early this is — read this first
+
+**The module API is pre-1.0 and we intend to break it.** It is at
+`MODULE_API_VERSION` 0.2.0, it moved on the day a second person wrote a module
+against it, and it will move again. Nothing here is frozen.
+
+Two things follow, and they are the whole contract:
+
+**Say what you need.** `engines` in your manifest names the module API range
+you were built against — `^0.2.0`, not `*`. A build that cannot satisfy it
+refuses you with a sentence naming both versions, which is the outcome you
+want: a refusal you can read beats a module that half-loads.
+
+**Say if you use the unstable parts.** `overlays`, `drops` and `host` are
+**proposed**: they exist, they work, and they have had one caller each. A
+manifest that uses one names it in `proposed`, and `isocan module add` refuses
+it unless the person adding it passes `--proposed`. That is VS Code's bargain
+in the shape this codebase can afford — their stable API has essentially never
+broken since 1.0 because everything unfinished lives behind a list a person
+opts into, and cannot be published at all.
+
+The parts NOT on that list — kinds, renderers, actions, inspectors, pages, the
+CLI host — are older, have more than one caller each, and are where we will try
+hardest not to break you. Try hardest is not a promise yet.
+
+If you are exploring rather than shipping, do what #219 did: build it, find
+where the API stops you, and say so. That is what moved this from 0.1 to 0.2.
+
 ## The sentence, and the rule
 
 > A module is a package that contributes to both surfaces at once, and that

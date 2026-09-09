@@ -162,6 +162,9 @@ export async function handIn(canvasId: string, actor: Actor, items: readonly Ite
   for (const item of pending) {
     if (state.area && canvas && !inArea(state.area, item)) {
       const spot = freeSpotIn(canvas, state.area, item.width, item.height);
+      if (spot.resizedArea) {
+        await sendEchoed(canvasId, actor, { type: "item.resize", itemId: state.area.id, width: spot.resizedArea.width, height: spot.resizedArea.height }, group);
+      }
       await sendEchoed(canvasId, actor, { type: "item.move", itemId: item.id, x: spot.x, y: spot.y }, group);
       // The next spot has to see this one land.
       canvas = useCanvasStore.getState().canvas;

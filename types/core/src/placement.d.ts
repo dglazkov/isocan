@@ -47,6 +47,7 @@ export declare function anchorOffset(item: {
 };
 /** Anything already taking up room — an item, or one just placed this pass. */
 export type Placed = Box;
+export declare const overlaps: (a: Box, b: Box, pad: number) => boolean;
 /**
  * Where a new item can sit without landing on anything.
  *

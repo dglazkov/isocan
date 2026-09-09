@@ -108,7 +108,9 @@ import {
   designUnskipPatch,
   designSkipped,
   registerModule,
-  ISOCAN_VERSION,
+  MODULE_API_VERSION,
+  PROPOSED,
+  unknownProposals,
   enginesSatisfied,
   moduleSlug,
   modulePageUrl,
@@ -214,6 +216,7 @@ import {
   areasOf,
   findArea,
   freeSpotIn,
+  areaEnclosing,
   itemsIn,
   isArea,
   TEXT_STYLE_PROP,
@@ -701,6 +704,43 @@ async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation, group?: 
     session && canvasId !== null && session.canvasId === canvasId
       ? session.sessionId
       : undefined;
+
+  if (op.type === "item.add" && "resizedArea" in op.placement && op.placement.resizedArea) {
+    const areaId = op.placement.areaId;
+    const resizedArea = op.placement.resizedArea;
+    const shifts = op.placement.shifts;
+    const { resizedArea: _r, areaId: _a, shifts: _s, ...cleanPlacement } = op.placement;
+    const cleanOp: Operation = { ...op, placement: cleanPlacement };
+    const effectiveGroup = group ?? newGroupId();
+
+    if (shifts && shifts.length > 0) {
+      await ctx.client.sendOp(
+        canvasId,
+        ctx.actor,
+        { type: "items.move", moves: shifts },
+        clientId,
+        undefined,
+        effectiveGroup,
+      );
+    }
+    if (areaId) {
+      await ctx.client.sendOp(
+        canvasId,
+        ctx.actor,
+        {
+          type: "item.resize",
+          itemId: areaId,
+          width: resizedArea.width,
+          height: resizedArea.height,
+        },
+        clientId,
+        undefined,
+        effectiveGroup,
+      );
+    }
+    return ctx.client.sendOp(canvasId, ctx.actor, cleanOp, clientId, undefined, effectiveGroup);
+  }
+
   return ctx.client.sendOp(canvasId, ctx.actor, op, clientId, undefined, group);
 }
 
@@ -5653,13 +5693,26 @@ program
         throw new Error(`no sprint is running on "${target.title}" — nothing to hand in for`);
       }
       let placements: { item: Item; x: number; y: number }[];
+      let targetAreaResize: { width: number; height: number } | null = null;
       if (sheet) {
         let occupied = into;
         placements = [];
+        let currentSheet = sheet;
         for (const item of sources) {
-          const spot = freeSpotIn(occupied, sheet, item.width, item.height);
+          const spot = freeSpotIn(occupied, currentSheet, item.width, item.height);
           placements.push({ item, ...spot });
-          occupied = { ...occupied, items: { ...occupied.items, [`pending_${placements.length}`]: { ...item, ...spot } } };
+          if (spot.resizedArea) {
+            currentSheet = { ...currentSheet, width: spot.resizedArea.width, height: spot.resizedArea.height };
+            targetAreaResize = spot.resizedArea;
+          }
+          occupied = {
+            ...occupied,
+            items: {
+              ...occupied.items,
+              [sheet.id]: currentSheet,
+              [`pending_${placements.length}`]: { ...item, ...spot },
+            },
+          };
         }
       } else {
         placements = duplicatePlacements(into, sources, opts.at ? parseXY(opts.at) : undefined);
@@ -5667,6 +5720,14 @@ program
       // One copy is one act: eight items land as eight ops under one id, and
       // one ⌘Z takes them all back. See `LogEntry.group`.
       const group = newGroupId();
+      if (sheet && targetAreaResize) {
+        await sendOp(
+          ctx,
+          target.id,
+          { type: "item.resize", itemId: sheet.id, width: targetAreaResize.width, height: targetAreaResize.height },
+          group,
+        );
+      }
       const made: string[] = [];
       for (const { item, x, y } of placements) {
         const version = item.versions.find((v) => v.id === item.currentVersionId);
@@ -6864,10 +6925,24 @@ program
           { itemId: item.id, ...target },
           ...marks.map((mark) => ({ itemId: mark.id, x: mark.x + dx, y: mark.y + dy })),
         ];
+        const targetSpot = target as { x: number; y: number; resizedArea?: { width: number; height: number }; shifts?: Array<{ itemId: string; x: number; y: number }> };
+        const group = (into && targetSpot.resizedArea) ? newGroupId() : undefined;
+        if (targetSpot.shifts && targetSpot.shifts.length > 0) {
+          await sendOp(ctx, p.id, { type: "items.move", moves: targetSpot.shifts }, group);
+        }
+        if (into && targetSpot.resizedArea) {
+          await sendOp(
+            ctx,
+            p.id,
+            { type: "item.resize", itemId: into.id, width: targetSpot.resizedArea.width, height: targetSpot.resizedArea.height },
+            group,
+          );
+        }
         await sendOp(
           ctx,
           p.id,
           moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves },
+          group,
         );
         console.log(
           `moved ${item.id} to ${target.x},${target.y}` +
@@ -6883,6 +6958,7 @@ async function applyMoves(
   canvasId: string,
   moves: Array<{ itemId: string; x: number; y: number }>,
   done: string,
+  group?: string,
 ): Promise<void> {
   if (moves.length === 0) {
     console.log("already there — nothing moved");
@@ -6892,6 +6968,7 @@ async function applyMoves(
     ctx,
     canvasId,
     moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves },
+    group,
   );
   console.log(done);
 }
@@ -7200,21 +7277,51 @@ program
         ...(perRow === undefined ? {} : { perRow }),
         ...(origin ? { origin } : {}),
       });
+      let areaResize: { width: number; height: number } | null = null;
+      if (area) {
+        const movesMap = new Map(moves.map((m) => [m.itemId, m]));
+        const itemsWithMoves = itemsIn(snapshot.canvas, area).map((it) => {
+          const m = movesMap.get(it.id);
+          return m ? { ...it, x: m.x, y: m.y } : it;
+        });
+        areaResize = areaEnclosing(area, itemsWithMoves);
+      }
       if (opts.dryRun) {
-        if (ctx.json) return printJson(moves);
-        if (moves.length === 0) return console.error("already formatted — nothing would move");
-        return printTable(
-          moves.map((m) => ({
-            item: m.itemId,
-            title: truncate(snapshot.canvas.items[m.itemId]?.title ?? "?", 28),
-            from: `${snapshot.canvas.items[m.itemId]?.x},${snapshot.canvas.items[m.itemId]?.y}`,
-            to: `${m.x},${m.y}`,
-          })),
+        if (ctx.json) return printJson(areaResize ? { moves, areaResize } : moves);
+        if (moves.length === 0 && !areaResize) return console.error("already formatted — nothing would move");
+        if (moves.length > 0) {
+          printTable(
+            moves.map((m) => ({
+              item: m.itemId,
+              title: truncate(snapshot.canvas.items[m.itemId]?.title ?? "?", 28),
+              from: `${snapshot.canvas.items[m.itemId]?.x},${snapshot.canvas.items[m.itemId]?.y}`,
+              to: `${m.x},${m.y}`,
+            })),
+          );
+        }
+        if (area && areaResize) {
+          console.log(`area "${area.title}" will resize from ${area.width}x${area.height} to ${areaResize.width}x${areaResize.height}`);
+        }
+        return;
+      }
+      const group = (area && areaResize && moves.length > 0) ? newGroupId() : undefined;
+      if (area && areaResize) {
+        await sendOp(
+          ctx,
+          p.id,
+          { type: "item.resize", itemId: area.id, width: areaResize.width, height: areaResize.height },
+          group,
         );
       }
       // One items.move, so the whole tidy is one undo. A tidy you cannot take
       // back in one press is a tidy nobody dares run.
-      await applyMoves(ctx, p.id, moves, `formatted ${moves.length} items`);
+      await applyMoves(
+        ctx,
+        p.id,
+        moves,
+        `formatted ${moves.length} items${areaResize ? ` and expanded "${area!.title}" to ${areaResize.width}x${areaResize.height}` : ""}`,
+        group,
+      );
     }),
   );
 
@@ -9375,7 +9482,10 @@ const moduleCmd = program
 
 function describeManifest(m: ModuleManifest, dir: string): string {
   const lines = [`${m.name} ${m.version}${m.description ? ` — ${m.description}` : ""}`, `  from ${dir}`];
-  lines.push(`  needs isocan ${m.engines ?? "*"} (this is ${ISOCAN_VERSION})`);
+  lines.push(`  needs module API ${m.engines ?? "*"} (this build is ${MODULE_API_VERSION})`);
+  if (m.proposed?.length) {
+    lines.push(`  UNSTABLE: uses ${m.proposed.join(", ")} — parts of the API we intend to change`);
+  }
   for (const k of m.kinds ?? []) {
     lines.push(`  kind ${k.id}: ${k.mimes.join(", ")}${k.extensions?.length ? ` (.${k.extensions.join(", .")})` : ""} — ${k.label}`);
   }
@@ -9420,8 +9530,9 @@ moduleCmd
   .command("add <dir-or-spec>")
   .description("Install a built module from a directory or a git spec (github:owner/repo#ref) — prints what it declares, installs nothing until --yes")
   .option("--yes", "install it, having read what it declares")
+  .option("--proposed", "allow a module that uses parts of the API we intend to change")
   .action(
-    run(async (dirArg: string, opts: { yes?: boolean }, cmd: Command) => {
+    run(async (dirArg: string, opts: { yes?: boolean; proposed?: boolean }, cmd: Command) => {
       const globals = cmd.optsWithGlobals() as { json?: boolean };
       const fetched = await fetchModuleSpec(dirArg);
       try {
@@ -9432,7 +9543,7 @@ moduleCmd
     }),
   );
 
-async function addModuleFrom(dir: string, dirArg: string, opts: { yes?: boolean }, globals: { json?: boolean }): Promise<void> {
+async function addModuleFrom(dir: string, dirArg: string, opts: { yes?: boolean; proposed?: boolean }, globals: { json?: boolean }): Promise<void> {
       const file = path.join(dir, "manifest.json");
       if (!existsSync(file)) throw new Error(`${dir} has no manifest.json — build the module first (scripts/module-build.mjs)`);
       const manifest = JSON.parse(await fs.readFile(file, "utf8")) as ModuleManifest;
@@ -9441,6 +9552,28 @@ async function addModuleFrom(dir: string, dirArg: string, opts: { yes?: boolean 
       }
       const engines = enginesSatisfied(manifest.engines);
       if (!engines.ok) throw new Error(`${manifest.name} refused: ${engines.why}`);
+      /**
+       * **A module using the unstable API says so, and you say yes** (9 Sep
+       * 2026) — VS Code's proposed-API bargain, in the shape this can afford.
+       *
+       * A proposal this build has never heard of is refused by name rather
+       * than dropped: a module that asked for something that no longer exists
+       * would otherwise load without the thing it needed and fail somewhere
+       * far from here.
+       */
+      const unknown = unknownProposals(manifest.proposed);
+      if (unknown.length > 0) {
+        throw new Error(
+          `${manifest.name} refused: it wants ${unknown.join(", ")}, which this build does not offer — ` +
+            `known proposals are ${PROPOSED.join(", ")}`,
+        );
+      }
+      if (manifest.proposed?.length && !opts.proposed) {
+        throw new Error(
+          `${manifest.name} uses ${manifest.proposed.join(", ")}, which we intend to CHANGE — ` +
+            `a module built on it will break. Add it with --proposed if you want it anyway.`,
+        );
+      }
       for (const half of [manifest.web, manifest.cli, manifest.guide]) {
         if (half && !existsSync(path.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
       }

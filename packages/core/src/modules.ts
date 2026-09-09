@@ -400,11 +400,63 @@ export interface ModuleManifest {
   cli?: string;
   /** The guide section, printed after the base guide while loaded. */
   guide?: string;
+  /**
+   * The unstable parts of the API this module uses (`PROPOSED`). A module
+   * naming any is refused unless the person adding it says yes — the same
+   * bargain VS Code's proposed API makes, and the reason we can keep changing
+   * these slots without breaking somebody who never asked for them.
+   */
+  proposed?: readonly string[];
 }
 
-/** The version a module's `engines` is judged against. One place; the
- *  packaging test holds it equal to the root manifest's. */
-export const ISOCAN_VERSION = "0.1.0";
+/**
+ * **The module API's own version, which is not the app's** (9 Sep 2026).
+ *
+ * It was `ISOCAN_VERSION`, pinned by a test to the root package's version,
+ * which is 0.1.0 and has never moved. So the engines check — real, enforced on
+ * `module add`, refused with a sentence by the daemon — could never refuse
+ * anything, because the number it compares against was a constant. A bound
+ * that exists and does not bind, which is this repo's oldest shape.
+ *
+ * **Decoupled because ours will break and VS Code's does not.** VS Code can
+ * judge `engines.vscode` against the app version because their stable API has
+ * essentially never broken since 1.0: every app release is compatible, so the
+ * app version is a safe proxy for the API version. isocan's module API is
+ * pre-1.0 and changing weekly. Tying it to the app would mean either bumping
+ * the app for an API change nobody outside a module can see, or never bumping
+ * at all — which is what happened.
+ *
+ * So this moves when the module API moves, and only then.
+ *
+ * **0.1.0 → 0.2.0 on 9 Sep 2026**, and it is a break rather than an addition:
+ * `InspectorFacts` and `PageFacts` gained a required `host`, so a module built
+ * against 0.1 no longer compiles. Under semver's pre-1.0 rule a minor bump is
+ * exactly how you say that, and `^0.1.0` is refused by the check below — which
+ * is the first time it has ever refused anything.
+ */
+export const MODULE_API_VERSION = "0.2.0";
+
+/**
+ * **The parts of the API we intend to change**, named so a module can say it
+ * is using one and a home can say yes before it runs.
+ *
+ * VS Code's proposed API in the shape this codebase can afford: an extension
+ * names the proposals it uses, only runs where somebody enabled them, and
+ * cannot be published to the marketplace at all. Fast on one side of the line,
+ * frozen on the other, and the line is a list a person opts into.
+ *
+ * Everything here landed on 9 Sep for one module's sake and has had exactly
+ * one caller. That is not stability, and calling it stable because it shipped
+ * is how an API gets frozen by accident.
+ */
+export const PROPOSED = ["overlays", "drops", "host"] as const;
+
+/** Which of a manifest's proposals this build does not recognise. A module
+ *  asking for something that no longer exists is a refusal with a name, not a
+ *  module that quietly loads without the thing it needed. */
+export function unknownProposals(wanted: readonly string[] | undefined): string[] {
+  return (wanted ?? []).filter((one) => !(PROPOSED as readonly string[]).includes(one));
+}
 
 /** The name a module is addressed by on disk and in a URL: the package
  *  name's last segment — `@isocan/<name>` → `<name>`. */
@@ -438,25 +490,25 @@ function compare(a: [number, number, number], b: [number, number, number]): numb
 }
 
 /**
- * Does this isocan satisfy a module's `engines`? Three shapes, on purpose
+ * Does this build's MODULE API satisfy a module's `engines`? Three shapes, on purpose
  * no more: `*` (or nothing) is anything; `>=a.b.c` is at least; `^a.b.c` is
  * at least and the same major (same minor while the major is 0, as npm
  * reads it). A range this cannot read is a refusal that says so, because a
  * module that cannot state what it needs is not a module a home should run.
  */
-export function enginesSatisfied(range: string | undefined, version: string = ISOCAN_VERSION): { ok: true } | { ok: false; why: string } {
+export function enginesSatisfied(range: string | undefined, version: string = MODULE_API_VERSION): { ok: true } | { ok: false; why: string } {
   const have = parseVersion(version);
-  if (!have) return { ok: false, why: `this isocan's version "${version}" cannot be read` };
+  if (!have) return { ok: false, why: `this build's module API version "${version}" cannot be read` };
   const r = (range ?? "*").trim();
   if (r === "*" || r === "") return { ok: true };
   const m = /^(>=|\^)?\s*(.+)$/.exec(r);
   const want = m ? parseVersion(m[2]!) : null;
   if (!m || !want) return { ok: false, why: `cannot read the engines range "${r}" — use >=a.b.c, ^a.b.c or *` };
   const op = m[1] ?? "^";
-  if (compare(have, want) < 0) return { ok: false, why: `needs isocan ${r}, and this is ${version}` };
+  if (compare(have, want) < 0) return { ok: false, why: `needs module API ${r}, and this build is ${version}` };
   if (op === "^") {
     const sameLine = want[0] === 0 ? have[0] === 0 && have[1] === want[1] : have[0] === want[0];
-    if (!sameLine) return { ok: false, why: `needs isocan ${r}, and this is ${version}` };
+    if (!sameLine) return { ok: false, why: `needs module API ${r}, and this build is ${version}` };
   }
   return { ok: true };
 }

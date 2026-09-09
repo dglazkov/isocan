@@ -115,6 +115,26 @@ every module's `cli.ts`, and documented verbs from the base guide **and**
 every module's guide. A module verb nobody is told about does not exist,
 exactly as before.
 
+## Versioning: two surfaces, one of them frozen
+
+**`MODULE_API_VERSION` is not the app's version** (9 Sep 2026). It was, pinned
+by a test to the root package's 0.1.0, which is why the engines check — real
+and enforced — had never refused anything: the number it compared against was
+a constant.
+
+VS Code can judge `engines.vscode` against the app version because their stable
+API has essentially never broken since 1.0; every release is compatible, so the
+app version is a safe proxy. Ours breaks. Tying them means bumping the app for
+a change nobody outside a module can see, or never bumping — and it was the
+second.
+
+So the module API has its own number, moving only when it moves, and a
+**proposed** list for the parts we intend to change. A module names the
+proposals it uses and a home says yes with `--proposed`. That is the split that
+lets the older slots be treated as nearly-stable while overlays, drops and the
+host keep moving: fast on one side of the line, careful on the other, and the
+line is a list rather than a promise.
+
 ## What a module may not add
 
 **Operations, ever.** **Protocol messages.** **Server routes, at first** — a
