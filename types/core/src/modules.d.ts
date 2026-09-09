@@ -79,6 +79,68 @@ export declare function moduleKinds(): ModuleKind[];
 /** The module kind that owns a mime, if a loaded module claims it. */
 export declare function moduleKindOf(mime: string): ModuleKind | null;
 /**
+ * **What a module's components are handed to CHANGE anything** (9 Sep 2026).
+ *
+ * The web twin of `CliHost`, and it exists for the same reason that one does.
+ * Until now `ModuleAction.run` returning `readonly Operation[]` was the only
+ * place in this whole file that produced an operation: underlays, renderers,
+ * inspectors and pages were read-only by construction, and four of those five
+ * are components a person interacts with. The one that could write was a
+ * palette entry with no UI of its own.
+ *
+ * That was invisible while the modules were a mind map, a Mermaid renderer and
+ * a documents inspector, none of which changes anything from inside a
+ * component. It stopped being invisible the moment somebody built a tray you
+ * drag things out of (#156, romannurik's stickers), because dragging a sticker
+ * onto the canvas IS a write made from a panel.
+ *
+ * It also contradicted a rule the design already states — *"a hidden store:
+ * module state is an item, visible and versioned"* — since most of the places
+ * a module could put UI could not write an item.
+ *
+ * ## Two members, and why not more
+ *
+ * `send` is the same door `ModuleAction.run` returns into, so a write from a
+ * component is an `item.add` or an `item.update` like any other: echoed,
+ * undoable, groupable, and visible to the terminal as the same op. No new
+ * authority — the palette could already send these.
+ *
+ * `putBlob` is the one thing an operation cannot say. `item.add` and
+ * `item.addVersion` both name a `blobHash`, and a blob is minted through a
+ * channel that is not an op — so a module could express every canvas change
+ * EXCEPT the ones that need new content, which is what a node-type module
+ * spends its life doing.
+ *
+ * ## Deliberately not `dropFile(file, placement)`
+ *
+ * The exploration that found this asked for exactly that, and for an
+ * `addVersion` beside it. Both bundle decisions that belong to the module:
+ * mint the bytes, choose the placement, send the op. A module given `dropFile`
+ * cannot set its own title, size or properties, cannot group two writes into
+ * one undo, and needs a second helper the day it wants a version instead of an
+ * item — which is how a per-slot helper list starts. `putBlob` plus ops
+ * composes, and it is one member instead of a growing family.
+ *
+ * ## Who gets it
+ *
+ * The slots a person interacts with: overlays, inspectors and pages.
+ * Underlays and renderers DRAW, and nothing has needed to write from one yet
+ * — so they do not get it, and the day a module needs that it is a review
+ * question rather than a private import, which is the rule `CliHost` already
+ * carries and the reason this interface exists at all.
+ */
+export interface WebHost {
+    /** Sent as the viewer, through the door the palette already uses. One
+     *  `group` for one undo, exactly as a multi-op action groups today. */
+    send: (ops: readonly Operation[], group?: string) => Promise<void>;
+    /** Bytes in, a hash out — the half no operation carries. What a module does
+     *  with the hash is an `item.add` or an `item.addVersion` of its own. */
+    putBlob: (bytes: Blob, filename: string) => Promise<{
+        blobHash: string;
+        size: number;
+    }>;
+}
+/**
  * **What the web shell mounts** — the slots, as data. Generic over the
  * component type so this file stays free of React: the shell narrows `C` to
  * `ComponentType<UnderlayFacts>`, and a module's `web.tsx` types its export
@@ -144,6 +206,9 @@ export interface InspectorFacts {
     canvasId: string;
     item: Item;
     readText: () => Promise<string>;
+    /** Changing the thing you are inspecting is the point of inspecting it.
+     *  An `item.addVersion` naming a hash from `host.putBlob` is how. */
+    host: WebHost;
 }
 export interface ModuleInspector<I> {
     /** The kinds it inspects — built-in ids or a module's. */
@@ -160,6 +225,7 @@ export interface ModuleInspector<I> {
 export interface PageFacts {
     canvasId: string;
     canvas: CanvasContents;
+    host: WebHost;
 }
 export interface ModulePage<P> {
     /** The path segment: lowercase letters, digits, dashes. */
@@ -168,7 +234,82 @@ export interface ModulePage<P> {
     hint?: string;
     component: P;
 }
-export interface WebModule<C, R = never, I = never, P = never> {
+/**
+ * **What an overlay is handed**: the canvas, and the way to change it.
+ *
+ * An overlay is screen-space chrome above the viewport — a tray, a dock, a
+ * palette of things to drag out. The sixth slot, and the one the design
+ * anticipated when it said *"panel, page, inspector, tool: each lands when a
+ * module asks"*.
+ *
+ * **It is also the one with real risk, and the region is why.** `underlays`
+ * is safe because it is beneath everything in world space, where a module can
+ * only draw under the work. An overlay is the app's own chrome space, and N
+ * modules mounting floating panels wherever they like is how a shell turns
+ * into a mess — the failure the rail's and the dock's fixed lists exist to
+ * prevent. So an overlay names a REGION rather than positioning itself, the
+ * shell owns where that region is, and two modules in one region stack in
+ * module order instead of overlapping.
+ */
+export type OverlayRegion = "left" | "right";
+/** What an overlay draws with: the canvas, and the way to change it. */
+export interface OverlayFacts {
+    canvasId: string;
+    canvas: CanvasContents;
+    host: WebHost;
+}
+/**
+ * **A drag a module claims** (#156).
+ *
+ * The canvas's drop handler read `dataTransfer.files` and `text/uri-list`,
+ * both spelled into the handler, so a module could put a tray on the screen
+ * and had no way to catch what you dragged out of it.
+ *
+ * The shape is the one the module system already uses rather than a second
+ * one: a module claims MIMES for its kinds, and a drag carries mimes, so a
+ * module claims the drag mimes it accepts and is handed the data. What it
+ * returns is ops, like everything else — and with `host.putBlob` it can mint
+ * the content those ops name.
+ *
+ * Native OS file drops are not offered here. They are the shell's, they have
+ * a hundred handlers' worth of behaviour behind them (versions onto an item,
+ * a row laid out rather than a stack, the notice when one fails), and a
+ * module intercepting them would be taking over the app's own gesture rather
+ * than adding one of its own.
+ */
+export interface DropFacts {
+    canvasId: string;
+    /** The dragged payload, by the mime this drop matched. */
+    data: string;
+    mimeType: string;
+    /** Where it landed, in world units. */
+    at: {
+        x: number;
+        y: number;
+    };
+    host: WebHost;
+}
+/** One claim on a dragged mime, and what to do with what arrives. */
+export interface ModuleDrop {
+    /** The `dataTransfer` types this claims. First match wins, module order. */
+    mimes: readonly string[];
+    /** Returns the ops to send, or nothing when it decides this is not for it
+     *  after all — a claim on a mime is not a promise to handle every payload
+     *  carried under it. */
+    run: (facts: DropFacts) => Promise<readonly Operation[] | void>;
+}
+/** A tray or dock a module hangs against one edge of the canvas. Not
+ *  exported: a module names its overlays through `WebModule`, the way it
+ *  names its renderers, and nothing outside core has needed the type itself. */
+interface ModuleOverlay<O> {
+    /** Which edge it sits against. The shell decides where that is. */
+    region: OverlayRegion;
+    /** For the chrome registry, so a person can turn it off like any other
+     *  floating thing — an overlay nobody chose is chrome nobody chose. */
+    label: string;
+    component: O;
+}
+export interface WebModule<C, R = never, I = never, P = never, O = never> {
     core: CoreModule;
     /** Drawn inside `.world`, under the items, in world units. */
     underlays?: readonly C[];
@@ -181,6 +322,10 @@ export interface WebModule<C, R = never, I = never, P = never> {
     inspectors?: readonly ModuleInspector<I>[];
     /** Whole sections of the app, each a cover route with an address. */
     pages?: readonly ModulePage<P>[];
+    /** Screen-space chrome above the viewport, against a named edge. */
+    overlays?: readonly ModuleOverlay<O>[];
+    /** Drags this module catches on the canvas, by mime. */
+    drops?: readonly ModuleDrop[];
 }
 /**
  * **A runtime module's manifest** (phase 3): what `isocan module add` prints
@@ -232,3 +377,4 @@ export declare function enginesSatisfied(range: string | undefined, version?: st
     ok: false;
     why: string;
 };
+export {};

@@ -9,7 +9,7 @@ import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts"
 import { formatMoves, formatScope } from "@isocan/core";
 import { canEditNow } from "./capability.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
-import { MODULES, modulePages } from "../modules.ts";
+import { modules, modulePages } from "../modules.ts";
 
 /**
  * **The things the app does itself.**
@@ -329,7 +329,7 @@ function moduleActions(): Action[] {
       run: (ctx) => ctx.navigate(modulePagePath(ctx.canvasId!, page.segment)),
     }),
   );
-  return pages.concat(MODULES.flatMap((m) =>
+  return pages.concat(modules().flatMap((m) =>
     (m.actions ?? []).map(
       (a): Action => ({
         id: a.id,

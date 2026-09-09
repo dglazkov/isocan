@@ -7,6 +7,9 @@ import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.
 import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints } from "../lib/viewport.ts";
+import { moduleDropFor } from "../modules.ts";
+import { webHostFor } from "../lib/modulehost.ts";
+import { newGroupId } from "@isocan/core";
 import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFailure, addFiles } from "../lib/upload.ts";
@@ -963,6 +966,41 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     const files = Array.from(e.dataTransfer.files);
     const ui = useUiStore.getState();
     const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+
+    /**
+     * **A module's claim on a dragged mime, before the built-ins** (#156).
+     *
+     * Only when there are no files: a native OS drop is the shell's own
+     * gesture and a module intercepting it would be taking over the app's
+     * behaviour rather than adding its own. What is left is a drag started
+     * inside the page — a tray, a palette — which is exactly what a module
+     * needs and what nothing could catch before.
+     *
+     * The module returns ops and the shell sends them, like every other write
+     * a module makes. Its own failure is said out loud rather than left as an
+     * unhandled rejection, the way the upload's is below.
+     */
+    if (files.length === 0) {
+      const claim = moduleDropFor(Array.from(e.dataTransfer.types));
+      if (claim) {
+        const data = e.dataTransfer.getData(claim.mimeType);
+        try {
+          const host = webHostFor(canvasId, actor);
+          const ops = await claim.run({
+            canvasId,
+            data,
+            mimeType: claim.mimeType,
+            at: { x: Math.round(world.x), y: Math.round(world.y) },
+            host,
+          });
+          // One drop is one act, however many ops it took.
+          if (ops && ops.length > 0) await host.send(ops, newGroupId());
+        } catch (err) {
+          setNotice(err instanceof Error && err.message ? err.message : "That could not be dropped here.");
+        }
+        return;
+      }
+    }
 
     // A dragged link or tab arrives as text/uri-list — the same type a
     // browser item's blob stores — and lands as a projected site (#40).
