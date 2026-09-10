@@ -47,10 +47,19 @@ describe("the rail has one Add door", () => {
 
 describe("one field reads what you give it", () => {
   it("classifies through core, previews the reading, and offers four rows as a radio group", () => {
-    expect(popover).toContain("classifyAddable(query, canvases ?? [], canvasId)");
+    expect(popover).toContain("classifyAddableDraft(query, canvases ?? [], canvasId)");
     expect(popover).toContain('className="add-preview" aria-live="polite"');
     expect(popover).toContain('role="radiogroup" aria-label="What to add"');
     for (const kind of ['"file"', '"site"', '"doc"', '"canvas"']) expect(popover).toContain(`kind: ${kind}`);
+  });
+
+  it("validates a pinned site on submit, never while computing its preview", () => {
+    const draft = popover.slice(popover.indexOf("const pinned:"), popover.indexOf("const needle"));
+    const submit = popover.slice(popover.indexOf("async function submit"), popover.indexOf("const preview"));
+    expect(draft).not.toContain("normalizeSiteUrl(");
+    expect(submit).toContain("normalizeSiteUrl(what.url)");
+    expect(submit).toContain("checkFrameable(url)");
+    expect(submit).toContain("addBrowserItem(canvasId, actor, url, at)");
   });
 
   it("dispatches each kind to the item.add that surface already made", () => {

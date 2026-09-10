@@ -3816,8 +3816,8 @@ button.mt-card:hover { border-color: var(--accent); }
 .canvas-picker-meta { font-size: 10.5px; color: var(--ink-muted); }
 .canvas-picker-note { padding: 6px 8px; font-size: 11px; color: var(--ink-muted); white-space: normal; }
 .site-error {
-  position: absolute; top: calc(100% + 4px); right: 10px;
-  font-size: 10.5px; color: var(--danger); white-space: nowrap;
+  font-size: 12px; color: var(--danger); white-space: normal;
+  overflow-wrap: anywhere;
 }
 .shelf-glyph { color: var(--accent); }
 .btn.active .shelf-glyph { color: var(--accent-ink); }

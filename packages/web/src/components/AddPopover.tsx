@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { Actor, Canvas, AddKind, Addable, Item, Placement } from "@isocan/core";
 import {
   CANVAS_ITEM_SIZE,
@@ -10,7 +10,6 @@ import {
   addableKind,
   addableWords,
   ago,
-  classifyAddable,
   docFilenameFrom,
   googleDocId,
   normalizeSiteUrl,
@@ -18,6 +17,7 @@ import {
   siteLabel,
 } from "@isocan/core";
 import { checkFrameable, exportDoc, listCanvases } from "../lib/api.ts";
+import { classifyAddableDraft } from "../lib/adddraft.ts";
 import { BROWSER_SIZE, addAreaItem, addBrowserItem, addCanvasItem, addDocumentItem } from "../lib/upload.ts";
 import { placeableArea, spotInView } from "../lib/spot.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
@@ -50,6 +50,16 @@ const PLACEHOLDER: Record<AddKind | "any", string> = {
   canvas: "Search your canvases, or paste an address",
 };
 
+/** What the field is called per pinned kind — screen readers get the same
+ * narrowing the sighted placeholder does, including when a kind is pinned. */
+const ARIA_LABEL: Record<AddKind | "any", string> = {
+  any: "Address or canvas name",
+  file: "Files to add",
+  site: "Site address",
+  doc: "Google Doc address",
+  canvas: "Canvas name or address",
+};
+
 export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; actor: Actor; onFiles: () => void }) {
   const adding = useUiStore((s) => s.adding);
   const setAdding = (next: AddKind | "any" | null) => useUiStore.getState().setAdding(next);
@@ -57,6 +67,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   const [query, setQuery] = useState("");
   const [canvases, setCanvases] = useState<Canvas[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
   const [busy, setBusy] = useState(false);
   // Memory phase 1: a canvas card can carry `memory=inherit`, and the popover
   // is where the design says the tick lives — "places it, and ticks inherit".
@@ -98,10 +109,10 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
    * or, when a row pinned the kind, read AS that kind: "Site" makes any
    * words an address, "Canvas" makes them a search.
    */
-  const guess = useMemo(() => classifyAddable(query, canvases ?? [], canvasId), [query, canvases, canvasId]);
+  const guess = useMemo(() => classifyAddableDraft(query, canvases ?? [], canvasId), [query, canvases, canvasId]);
   const pinned: Addable = useMemo(() => {
     const s = query.trim();
-    if (adding === "site") return s ? { kind: "site", url: normalizeSiteUrl(s) } : { kind: "empty" };
+    if (adding === "site") return s ? { kind: "site", url: s } : { kind: "empty" };
     if (adding === "doc") {
       const id = googleDocId(s);
       return id ? guess : s ? { kind: "search", query: s } : { kind: "empty" };
@@ -174,15 +185,24 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
           ),
         );
       } else if (what.kind === "site") {
+        // A draft such as "https://" is ordinary while typing, but cannot
+        // reach the network or create an item when the form is submitted.
+        let url: string;
+        try {
+          url = normalizeSiteUrl(what.url);
+        } catch {
+          setError("Enter a valid site address, such as https://example.com or localhost:5173. Only HTTP and HTTPS are supported.");
+          return;
+        }
         const at = spotFor(BROWSER_SIZE.width, BROWSER_SIZE.height);
         // Advice before the item, never a gate: a site that refuses framing
         // would be a blank rectangle nobody could explain.
-        const verdict = await checkFrameable(what.url);
+        const verdict = await checkFrameable(url);
         if (!verdict.ok) {
-          setError(`${siteLabel(verdict.url ?? what.url)} ${verdict.why ?? "refuses to be shown in a frame"}. Nothing was added.`);
+          setError(`${siteLabel(verdict.url ?? url)} ${verdict.why ?? "refuses to be shown in a frame"}. Nothing was added.`);
           return;
         }
-        done(await addBrowserItem(canvasId, actor, what.url, at));
+        done(await addBrowserItem(canvasId, actor, url, at));
       } else if (what.kind === "canvas") {
         await placeCanvas({ id: what.canvasId, title: what.title ?? what.canvasId, origin: what.origin });
       } else if (what.kind === "search" && matches[0]) {
@@ -231,6 +251,9 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
             className="text-input"
             autoFocus
             placeholder={PLACEHOLDER[adding ?? "any"]}
+            aria-label={ARIA_LABEL[adding ?? "any"]}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -238,6 +261,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") setAdding(null);
+              if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault();
             }}
           />
           {/* What Enter would do — the one line that makes a single field safe. */}
@@ -285,7 +309,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
           <button className="btn primary" type="submit" disabled={busy || pinned.kind === "empty" || (pinned.kind === "search" && !matches[0])}>
             {pinned.kind === "doc" ? "Add document" : pinned.kind === "site" ? "Add site" : pinned.kind === "canvas" || pinned.kind === "search" ? "Place canvas" : "Add"}
           </button>
-          {error && <div className="site-error">{error}</div>}
+          {error && <div className="site-error" id={errorId} role="alert">{error}</div>}
         </form>
       )}
     </div>
