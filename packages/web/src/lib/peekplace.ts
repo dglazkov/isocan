@@ -46,6 +46,15 @@ const PEEK_ROOM = 288;
 /** The breath left between the peek's far edge and the viewport edge. */
 export const PEEK_MARGIN = 8;
 
+/**
+ * The whole answer for one opening: which side, and how tall.
+ *
+ * For `CardPeek` to WEAR — `up` becomes a class and `maxHeight` an inline
+ * style, and nothing else in the component decides either. Two fields
+ * together rather than two calls, because they are one decision: the cap is
+ * the room on the side that was chosen, so a caller that took the side and
+ * computed its own height would be free to disagree with the choice.
+ */
 export interface PeekPlacement {
   /** Open upward: more room above the card than below, and below is tight. */
   up: boolean;
@@ -53,6 +62,19 @@ export interface PeekPlacement {
   maxHeight: number;
 }
 
+/**
+ * Place one peek: give it the card's box and the window, take back the side
+ * and the cap.
+ *
+ * The reason this is a function and not four lines inside the component is
+ * that it took a real browser to find it wrong — an upward peek at 800×300
+ * ran 94px off the top edge — and a decision that expensive to discover
+ * should be cheap to re-check. Pure arithmetic, so `peekplace.test.ts`
+ * replays the measured failure without a browser at all, and the component
+ * is left with only the measuring and the wearing.
+ *
+ * Coordinates are viewport-relative, as `getBoundingClientRect` gives them.
+ */
 export function peekPlacement(
   cardTop: number,
   cardBottom: number,
