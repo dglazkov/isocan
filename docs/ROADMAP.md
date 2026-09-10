@@ -6,9 +6,9 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 43 still open** — of which 28 partly
+**21 built · 44 still open** — of which 28 partly
 built, 14 designed, 0 blocked, and
-**1 with no verdict recorded at all**, which is the number worth
+**2 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
@@ -68,11 +68,12 @@ and the done column should not be flattered by either.
 | research | [The docket: what a project knows about itself](docs/research/2026-09-07-the-docket.md) | 2026-09-07 | six systems already run this project and none of them knows about the others — a persona declares a cadence nothing observes, a finding carries an outcome nothing can decide except by hand-editing markdown, and the board that shows it all is read-only ON PURPOSE. The spine is one rule from #148 applied to five kinds of row: derived, or decided, never both. The canvas decides and the repo keeps, so the guard never has to reach a network. No new op. · see personas, standing-agents, on-demand, evals · [#206](https://github.com/dglazkov/isocan/issues/206) |
 | research | [What a sticker module found](docs/research/2026-09-09-module-write-and-slots.md) | 2026-09-09 | five gaps reported from outside by romannurik, who built a sticker module against the real API. They are symptoms of one asymmetry — the module API can read from five places and write from exactly one, the palette action — and of one absent capability, because no operation carries bytes. The web half also has no host object, where the CLI half has `CliHost` and an explicit rule for promoting helpers into it. Recommends a `WebHost` with two members (`send`, `putBlob`), an `overlays` slot, a drop-mime registry, and notes that the canvas inspector needs no API change at all. · see modules, extensions, workbench · [#156](https://github.com/dglazkov/isocan/issues/156) |
 
-## No verdict recorded <sub>1</sub>
+## No verdict recorded <sub>2</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [Into somebody else's window](docs/research/2026-09-09-agent-managers.md) | 2026-09-09 | measured 9 Sep — isocan.io sends no frame-ancestors and no X-Frame-Options, so any manager may already frame it, and one does. The gate is not framing, it is ADMISSION: the badge cookie is SameSite=Lax with no Partitioned and the web app has no bearer path at all (0 hits for Authorization in packages/web/src), so in a partitioning browser an embedded canvas is anonymous, cannot persist a badge, mints a fresh one per load, and walks into the per-address mint meter. Four doors weighed; the recommendation is MCP for the vocabulary, MCP Apps (SEP-1865, stable since 26 Jan) for the surface, the plain iframe as the fallback that already works, and no per-vendor extension — the harnesses constraint, inverted · see harnesses, context, memory, iso-api, on-demand · [#220](https://github.com/dglazkov/isocan/issues/220) |
+| research | [What the rc hands over, and how to hand over less](docs/research/2026-09-10-what-the-rc-hands-over.md) | 2026-09-10 | measured 10 Sep — a summoned agent gets the whole environment (`{ ...process.env }` minus harness variables), the person's shell on the host (fs/terminal declared unsupported means the harness uses its own), every permission auto-allowed by a regex, and codex forced to full access because its sandbox refused loopback; any admitted member of a shared canvas can ring. What the agent NEEDS is one directory, one loopback port, its own config, and the vendor's API. Three layers weighed — answer by kind and allow-list the env (no dependency), each harness's own narrowing through the ACP client isocan already is (`_meta.claudeCode.options`, `INITIAL_AGENT_MODE=agent`), and `@anthropic-ai/sandbox-runtime` around the adapter — plus the boring boundary that needs no code, a second OS user · see on-demand, harnesses, agent-custody, standing-agents |
 
 ## Built <sub>21</sub>
 
