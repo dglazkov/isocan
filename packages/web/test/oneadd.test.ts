@@ -56,6 +56,11 @@ describe("one field reads what you give it", () => {
   it("validates a pinned site on submit, never while computing its preview", () => {
     const draft = popover.slice(popover.indexOf("const pinned:"), popover.indexOf("const needle"));
     const submit = popover.slice(popover.indexOf("async function submit"), popover.indexOf("const preview"));
+    /* A `not.toContain` over a computed slice passes on an empty string, so a
+       reordering of these declarations would silently retire the guard below
+       rather than fail. Prove there is something to assert about first. */
+    expect(draft.length).toBeGreaterThan(0);
+    expect(submit.length).toBeGreaterThan(0);
     expect(draft).not.toContain("normalizeSiteUrl(");
     expect(submit).toContain("normalizeSiteUrl(what.url)");
     expect(submit).toContain("checkFrameable(url)");

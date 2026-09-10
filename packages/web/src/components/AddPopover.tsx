@@ -17,7 +17,7 @@ import {
   siteLabel,
 } from "@isocan/core";
 import { checkFrameable, exportDoc, listCanvases } from "../lib/api.ts";
-import { classifyAddableDraft } from "../lib/adddraft.ts";
+import { classifyAddableDraft, siteDraftWords } from "../lib/adddraft.ts";
 import { BROWSER_SIZE, addAreaItem, addBrowserItem, addCanvasItem, addDocumentItem } from "../lib/upload.ts";
 import { placeableArea, spotInView } from "../lib/spot.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
@@ -217,7 +217,12 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
     }
   }
 
-  const preview = addableWords(pinned);
+  // A draft wears kind "site" so the field can keep it, but the shared words
+  // read that kind as a promise the draft cannot keep — "Add  as a live site"
+  // for a half-typed `https://`, and `file:///etc/passwd` announced as a live
+  // site directly above the error refusing it. The draft speaks for itself
+  // until it is an address; then the shared words take over again.
+  const preview = pinned.kind === "site" ? (siteDraftWords(pinned.url) ?? addableWords(pinned)) : addableWords(pinned);
   // What the row shows and what the row PINS are different questions: an
   // unpinned field still reads as something, and the pill should say so
   // rather than sit grey under a line that already named the answer.
