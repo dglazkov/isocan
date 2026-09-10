@@ -335,7 +335,7 @@ export function IdentityMenu({
         })}
       </div>
       <div className="identity-menu-head">Theme</div>
-      <div className="theme-switch" role="group" aria-label="Theme">
+      <div className="theme-switch segmented" role="group" aria-label="Theme">
         {THEME_OPTS.map((opt) => (
           <button
             key={opt.value}

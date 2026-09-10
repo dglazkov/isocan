@@ -841,9 +841,17 @@ export function CanvasListPage({
               onChange={(e) => setQuery(e.target.value)}
             />
           )}
-          <div className="canvas-sorts" role="group" aria-label="Order">
-            {browsing &&
-              CANVAS_SORTS.map((option) => (
+          {/**
+            * **The ordering is one control, not three buttons.** A segmented
+            * track, so the set reads as the set: three chips side by side said
+            * "three separate things you can press" and nothing drew the fact
+            * that choosing one un-chooses the others. `role="group"` labelled
+            * `Order` is now true of everything inside it, which it was not
+            * while `Archived` sat in here.
+            */}
+          {browsing && (
+            <div className="canvas-sorts segmented" role="group" aria-label="Order">
+              {CANVAS_SORTS.map((option) => (
                 <button
                   key={option}
                   className={`btn quiet${option === sort ? " on" : ""}`}
@@ -853,25 +861,31 @@ export function CanvasListPage({
                   {CANVAS_SORT_LABEL[option]}
                 </button>
               ))}
-            {/**
-              * **Show archived** (#194). Widens the list to everything rather
-              * than swapping to the shelf alone: somebody hunting for one they
-              * put away is usually not sure they did, and a view that hides
-              * the live ones answers a question nobody asked. Offered only
-              * when there is a shelf, so the control appears the day it means
-              * something — and now on any home with one, however short its
-              * list.
-              */}
-            {hasShelf && (
-              <button
-                className={`btn quiet${showArchived ? " on" : ""}`}
-                aria-pressed={showArchived}
-                onClick={() => setShowArchived((was) => !was)}
-              >
-                Archived
-              </button>
-            )}
-          </div>
+            </div>
+          )}
+          {/**
+            * **Show archived** (#194). Widens the list to everything rather
+            * than swapping to the shelf alone: somebody hunting for one they
+            * put away is usually not sure they did, and a view that hides
+            * the live ones answers a question nobody asked. Offered only
+            * when there is a shelf, so the control appears the day it means
+            * something — and now on any home with one, however short its
+            * list.
+            *
+            * Beside the ordering track rather than inside it: this widens what
+            * is listed and the track chooses how it is sorted, and a fourth
+            * segment would have said that turning the shelf on turns an
+            * ordering off.
+            */}
+          {hasShelf && (
+            <button
+              className={`btn quiet canvas-archived${showArchived ? " on" : ""}`}
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived((was) => !was)}
+            >
+              Archived
+            </button>
+          )}
         </div>
       )}
       {/* Said out loud rather than left as an empty grid: a filter that matches
