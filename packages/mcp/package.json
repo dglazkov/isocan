@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/api": "*",
+    "@isocan/core": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1"
+  }
+}

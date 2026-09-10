@@ -131,6 +131,20 @@
   --overlay: rgba(35, 38, 43, 0.35);
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
   --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
+  /* **The same lift, drawn by `filter` instead of `box-shadow`.** A shadow
+     from `filter` follows the rendered SILHOUETTE rather than the border box,
+     which is the only way to shade a thing made of two boxes — a card with a
+     preview hanging off it — without a seam across the join. Written as two
+     drop-shadows because `drop-shadow()` has no spread: the tight one is the
+     contact edge, the wide one is the distance off the page.
+
+     **No spread is why the offset is small.** `--shadow-pop` can afford `0
+     14px 30px` because its `-14px` shrinks the shadow back inside the box;
+     the same offset here drew a full-size grey copy of the card sticking out
+     below it — an offset slab rather than a halo. Keeping the offset under
+     half the blur is what a filter has instead of spread. */
+  --lift: drop-shadow(0 1px 2px rgba(30, 34, 40, 0.10))
+    drop-shadow(0 8px 18px rgba(30, 34, 40, 0.16));
   --radius: 8px;
   /* **Roundness says how permanent a thing is.** Floating chrome is the most
      ephemeral thing on screen and wears the largest radius; the work itself
@@ -294,6 +308,10 @@
   --overlay: rgba(0, 0, 0, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
   --shadow-pop: 0 14px 30px -14px rgba(0, 0, 0, 0.75);
+  /* Deeper on graphite: a shadow on a dark ground has less room to darken,
+     so it earns its edge by being nearly opaque at the contact. */
+  --lift: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5))
+    drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55));
 }
 
 * { box-sizing: border-box; }
@@ -482,15 +500,50 @@ img { height: auto; }
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-float);
   box-shadow: var(--shadow-card);
   display: flex; flex-direction: column;
-  text-align: left; overflow: hidden;
-  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+  text-align: left;
+  /* No `overflow: hidden`: the peek is an overlay that must leave the box
+     (below — and the box would clip it). No child paints a background to the
+     corners, so nothing needed the clip; the just-made sheen rounds its own
+     corners with `border-radius: inherit`. */
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease,
+    filter 0.14s ease;
 }
-.canvas-card:hover {
+/**
+ * **Lifted: nearer, not merely highlighted.**
+ *
+ * Hover and focus are one state here, because focus is the second way the
+ * preview opens and a card that grew for the pointer but not for the keyboard
+ * would read as two different controls.
+ *
+ * The lift is doing real work rather than decorating: an open peek covers most
+ * of the card below it and leaves a sliver of that card poking out under its
+ * bottom edge, which without a shadow reads as a rendering fault — two
+ * surfaces at the same depth, one inexplicably cut off. A shadow says which is
+ * in front, and 2.5% of scale says how far.
+ */
+.canvas-card:hover,
+.canvas-card:focus-within {
   border-color: var(--accent);
-  box-shadow: var(--shadow-pop);
-  transform: translateY(-2px);
+  /* Not `box-shadow`: the card and the preview hanging off it are two boxes
+     making one surface, and two box-shadows draw a line across the join —
+     which is why the peek turned shadows off on both halves. `--lift` is
+     drawn by `filter`, so ONE shadow wraps the pair's outline and the join
+     stays invisible. */
+  box-shadow: none;
+  filter: var(--lift);
+  /* A transform is paint, never layout: the neighbours do not move a pixel
+     for it, which is the whole premise of the overlay (peekoverlay.test.ts).
+     The peek is a child, so it comes forward with the card it belongs to. */
+  transform: translateY(-2px) scale(1.025);
+  /* The lifted card — and the preview hanging off it — reads above the cards
+     it overlays. `--z-popover` names exactly this: peek cards. */
+  z-index: var(--z-popover);
 }
-@media (prefers-reduced-motion: reduce) { .canvas-card:hover { transform: none; } }
+/* The shadow is not motion and stays; the approach is, and goes. */
+@media (prefers-reduced-motion: reduce) {
+  .canvas-card:hover,
+  .canvas-card:focus-within { transform: none; }
+}
 /* The whole card is the way in — the thing you want every time should not be
    one of three equal buttons, one of which deletes. */
 .card-open {
@@ -530,7 +583,12 @@ img { height: auto; }
   gap: 8px; padding: 16px; justify-content: center;
   border-style: dashed; box-shadow: none;
 }
-.canvas-card.create:hover { transform: none; box-shadow: none; }
+/* The create card is a form, not a preview: it has no peek to lift and
+   typing in it must not push it toward you. `:focus-within` as well as
+   `:hover`, because the caret lands inside it every time somebody names a
+   canvas. */
+.canvas-card.create:hover,
+.canvas-card.create:focus-within { transform: none; box-shadow: none; filter: none; }
 .canvases-loading { color: var(--ink-muted); font-size: 13px; padding: 8px 2px; }
 .canvas-card .row { display: flex; gap: 6px; }
 .canvas-card.create {
@@ -721,12 +779,31 @@ img { height: auto; }
    would end it. */
 .surface-self { color: var(--ink-soft); font-size: 11px; }
 
-/* Light / dark / system — a segmented pill; the active segment lifts like a card. */
-.theme-switch {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
-  padding: 3px; border-radius: 8px;
+/**
+ * **Segmented: one control, one of N chosen.**
+ *
+ * Light/dark/system and the canvas list's ordering are the same control
+ * wearing different labels — a track that IS the group, and one segment
+ * inside it that is the answer. So the track is a class both wear rather than
+ * a selector list: `oneblock.test.ts` holds every bare class to a single
+ * unscoped block, which is the rule that would have to bend to write
+ * `.theme-switch, .canvas-sorts` here and then give each its own `display`.
+ * A shared look is a shared name.
+ *
+ * The ordering used to be three loose chips 2px apart, which said "three
+ * separate things you can press" and left the set — which is the meaning —
+ * undrawn. Joining this rather than growing a second segmented look is the
+ * whole point.
+ */
+.segmented {
+  gap: 3px; padding: 3px; border-radius: var(--radius);
   background: var(--chip); border: 1px solid var(--chip-line);
 }
+/* The theme's three one-word labels fit equal columns; "Recent activity"
+   beside "Name" does not, so an ordering's segments take their labels'
+   widths. That difference is the only reason these are two rules. */
+.theme-switch { display: grid; grid-template-columns: repeat(3, 1fr); }
+/* A segment carries no box of its own — the track is the box. */
 .theme-opt {
   padding: 5px 6px; border-radius: 6px; font-size: 12px; text-align: center;
   color: var(--ink-muted); background: none; border: 1px solid transparent;
@@ -744,7 +821,11 @@ img { height: auto; }
 .chrome-name { font-weight: 600; }
 .chrome-where { grid-column: 2; font-size: 11px; color: var(--ink-soft); line-height: 1.35; }
 .chrome-show-all { align-self: flex-start; font-size: 11.5px; margin-top: 2px; }
-.theme-opt.active {
+/* The chosen segment lifts out of the track like a card — the second half of
+   the shared idiom above, and the reason the track needs no divider lines:
+   what is pressed is the thing standing proud of the groove. */
+.theme-opt.active,
+.canvas-sorts .btn.on {
   color: var(--ink); background: var(--card);
   border-color: var(--chip-line); box-shadow: var(--shadow-card);
 }
@@ -5617,15 +5698,39 @@ button.mt-card:hover { border-color: var(--accent); }
   margin: 0 0 14px;
 }
 .canvas-filter { flex: 1 1 220px; min-width: 0; max-width: 340px; }
-.canvas-sorts { display: flex; gap: 2px; flex-wrap: wrap; }
-/* The chosen ordering wears the accent the way a pressed control does
-   everywhere else here — `aria-pressed` carries it for a reader. */
-/* One rule, two places: the canvas list's ordering and the lens's narrowing
+/* The ordering is a segmented control — its track, and what a chosen segment
+   looks like, are the theme switch's rules, shared up where they are written.
+   This is only what is its own: how the segments sit in the track, and the
+   `.btn` box each one has to shed to become a segment. `aria-pressed` carries
+   the choice for a reader either way. */
+.canvas-sorts { display: inline-flex; align-items: center; flex-wrap: wrap; }
+/**
+ * A segment that is not the chosen one sheds the `.btn` box: the track is the
+ * box, and a chip inside a chip is the look this replaced.
+ *
+ * `:not(.on)` first, so the pressed segment above is left alone rather than
+ * out-specified — and `:not(.primary):not(.active)` because
+ * `overrides.test.ts` holds every container that repaints a component to
+ * excluding the variants that paint themselves. Neither is used in this track
+ * today; the point of the guard is that the day one is, it does not lose its
+ * fill and take a bug report to notice.
+ */
+.canvas-sorts .btn:not(.on):not(.primary):not(.active) {
+  color: var(--ink-muted); background: none; border: 1px solid transparent;
+}
+/* The chosen one is already standing proud; only the others have anywhere
+   to go on hover. */
+.canvas-sorts .btn:not(.on):hover { color: var(--ink); background: none; }
+/* One rule, two places: the lens's narrowing and the canvas list's `Archived`
    are the same control — a chip that is currently ON — so they are written
    once. Not a coincidence of values (see `copied-rules` in `measure.mjs` for
-   when merging would be wrong): pressing either means the same thing. */
-.canvas-sorts .btn.on,
-.lens-narrow .btn.on {
+   when merging would be wrong): pressing either widens what you are looking
+   at, and neither is one-of-N. The ORDERING left this rule when it became a
+   segmented track, which is also why `Archived` had to leave the track: a
+   fourth segment beside three orderings would have promised that turning the
+   shelf on turns an ordering off. */
+.lens-narrow .btn.on,
+.canvas-archived.on {
   background: var(--accent-wash);
   color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
@@ -5880,20 +5985,66 @@ button.mt-card:hover { border-color: var(--accent); }
 /**
  * **The card's peek** — what happened here before the last thing.
  *
- * Inside the card rather than floating over it: a popover would need placing
- * against the viewport, and these are three short rows the card has room for.
+ * Attached to the card but floating over its neighbours: in flow it pushed
+ * the whole grid down on every hover, and the page jumped under the pointer.
  * It appears on pointer AND on focus, because a hover-only affordance does not
  * exist for a keyboard or a touch screen.
  */
+/* Only a rendered preview joins the card: an empty history leaves it alone.
+   Both halves use one opaque ground and perimeter, without shadows crossing
+   the join. Keep the card's border widths so its grid footprint never changes. */
+.canvas-card:has(> .card-peek) {
+  background: linear-gradient(var(--panel), var(--panel)), var(--card);
+  box-shadow: none;
+}
+.canvas-card:has(> .card-peek:not(.up)) {
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+}
+.canvas-card:has(> .card-peek.up) {
+  border-top-left-radius: 0; border-top-right-radius: 0;
+}
 .card-peek {
+  /* Out of flow, over the neighbours. The first version was a plain flex
+     child of the card — "a popover floating outside would need placing, and
+     this is a few short rows that the card has room for" — and every hover
+     grew the card by the peek's height and pushed the whole grid down: the
+     page jumped under the pointer. The card's footprint is fixed now; the
+     preview floats below it, above the rows it covers, placed by the card
+     it belongs to. */
+  position: absolute; top: 100%; left: -1px; right: -1px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin: 6px 14px 0;
-  padding-top: 6px;
-  border-top: 1px solid var(--line-soft);
+  margin: 0;
+  padding: 8px 14px 10px;
+  /* The menu's ground (8 Sep 2026): `--panel` over opaque `--card` renders
+     one value no matter which cards this opens over — a translucent peek
+     would read differently per row it covered. */
+  background: linear-gradient(var(--panel), var(--panel)), var(--card);
+  border: 1px solid;
+  border-color: inherit;
+  /* top: 100% overlaps the card's existing 1px border with this ground. */
+  border-top-width: 0;
+  border-radius: 0 0 var(--r-float) var(--r-float);
+  box-shadow: none;
+  /* Bounded: five seams is the most a peek ever shows, but on a short
+     window it scrolls rather than running off the screen. 288px is the cap
+     when the room allows it — five rows with thumbnails measure 282, which
+     240 was 42px short of, slicing the last row on every canvas whose seams
+     named items (`PEEK_CAP` carries the measurement and is asserted equal to
+     this number). The component clamps further to the actual room on the
+     chosen side (peekplace.ts) with an inline max-height. */
+  max-height: 288px;
+  overflow-y: auto;
   font-size: 11.5px;
   color: var(--ink-soft);
+}
+/* A card near the bottom edge opens its preview upward instead — the
+   component measures and wears `up` when there is more room above. */
+.card-peek.up {
+  top: auto; bottom: 100%;
+  border-top-width: 1px; border-bottom-width: 0;
+  border-radius: var(--r-float) var(--r-float) 0 0;
 }
 .card-peek-row { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
 /* A row that is a link to its item: the same quiet row, and a hover that

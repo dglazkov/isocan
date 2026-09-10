@@ -127,9 +127,16 @@ naming its variable once in `~/.isocan/config.json` under `harnessVars`.
 
 ## The session protocol
 
-**The canvas is the only channel.** The human is watching the web app, not
-your terminal — anything you say outside a comment is said to nobody. Once
-you have appeared, everything you would have told them goes in a comment.
+**The canvas is the channel that keeps.** What you put on it is the record:
+shared with everyone here, still there next week, and the only thing a person
+who was not watching can catch up on. So once you have appeared, everything
+with a claim on the work goes in a comment — what you made, what you changed,
+what you decided, and every question whose answer somebody else will need.
+
+**Whether anybody is reading your terminal is a different question, and it has
+two answers.** Read the next section before you decide the first lap is
+finished; getting it wrong is the most common way an agent is either silent or
+exhausting to work with.
 
 Steps 1–2 happen once. **Steps 3–6 are a lap, and you run laps until the
 human sends you home.** Every lap ends at step 6 — including the one you
@@ -187,6 +194,64 @@ when the human has told you the collaboration is over, and only then. Nothing
 else ends it — not an empty comment list, not a finished task, not a `wait`
 that timed out. Until those words come, the answer to "what now?" is always
 step 6.
+
+## Who is at your terminal
+
+There are two ways you can be running, and they want different things from
+you. The test is mechanical: **`ISOCAN_HARNESS=agent` in your environment
+means `isocan rc` summoned you** — that value is set by the summons and by
+nothing else. Any other value, or a session you were started in by somebody
+typing, means a person opened this conversation.
+
+**Summoned — nobody is at your terminal.** Nothing you say outside a comment
+is heard by anyone. Everything above applies without qualification: the canvas
+is the only place your words can land, so put them there.
+
+**Started by a person — you have two channels, not one.** They typed to you,
+in a terminal or an IDE or an agent manager where your conversation sits in a
+window beside the canvas. Both are watched. They are not two chats to keep in
+sync; they are **a team room and a DM**, and confusing them is what makes an
+agent tiring to work with.
+
+| | The canvas | Your conversation |
+| --- | --- | --- |
+| who sees it | everyone here, including agents, next week | one person, now |
+| what belongs there | the **record** — what you made, what changed, what you decided, a question the work will rest on | the **steering** — "amber or teal?", "y", where you are up to, an error that is theirs to fix |
+| what does not | thinking aloud, progress narration, anything you would delete tomorrow | anything somebody else will need to find later |
+
+Three rules follow. The second is the one that has actually been caught
+happening — a canvas Chat holding seven of one agent's own "I'm online and
+ready to design!" while the real conversation went on in the manager beside
+it — so start there:
+
+1. **Do not mirror.** The canvas is shared with people and agents who are not
+   in your conversation; your conversation is one person's. Copying each into
+   the other leaks a private exchange into a shared room and floods the room
+   with noise. Say a thing once, in the room it belongs to.
+2. **Never announce yourself on the canvas.** "I'm online and ready!" is a
+   presence fact, and presence has its own surface — your cursor, your label,
+   the facepile. Step 3 says it already: presence narrates itself. A Chat full
+   of an agent's own joins is the canvas equivalent of clearing your throat
+   into a microphone.
+3. **When a DM answer becomes a decision, write it down.** The fastest way to
+   settle "amber or teal?" is to ask the person in front of you — do that. But
+   the moment the answer changes the work, it belongs in a comment, because
+   the next person to open this canvas was not in your conversation. `/ask` on
+   the canvas is for the questions whose ANSWER matters later; your
+   conversation is for the ones that stop mattering the moment they are
+   answered.
+
+**What does not change either way: you still park.** `wait` is the loop, not a
+message-checking habit, and a lap that ends with a summary typed at a person
+instead of `isocan wait` is a lap that has left the canvas — and left you
+unreachable to everyone who is not in that conversation. Being talked to
+directly is not being sent home; only the words are (see "Going home").
+
+**Offer the canvas beside them.** If the person is in an IDE or an agent
+manager, they can watch this canvas in a pane next to your conversation
+instead of a window of its own. `isocan embed` is the address for it, and it
+is worth offering unprompted the first time you make something worth looking
+at — see "Passes".
 
 ## Parking is a foreground call
 
@@ -1483,10 +1548,37 @@ this canvas. It is not the address, and the difference is the whole point:
   it is admitted **whether or not the link grant is on**, and by default
   arrives speaking as the actor this CLI speaks as.
 
+- `isocan embed` prints an **address carrying the same credential**. You hand
+  that to a *window* — an agent manager's pane, an IDE panel, a tab beside the
+  conversation you are having. Not a terminal: a `npx` line pasted into an
+  address bar does nothing, and an address pasted into a terminal does worse.
+
 ```sh
 isocan pass               # the whole command to paste on the other machine
 isocan pass --admit-only  # admit it, but hand over no identity
+isocan embed              # the address to paste into a pane or an IDE panel
+isocan embed --admit-only # let the window in, but hand it no identity
 ```
+
+### When somebody asks you to put the canvas beside them
+
+If the person you are working with is in an agent manager or an IDE — you are
+in one, so they may well be — they can watch this canvas in a pane next to
+your conversation rather than in a window of its own. `isocan embed` is the
+address for that, and it is worth offering unprompted the first time you make
+something worth looking at.
+
+Two things to say when you hand it over, because both will otherwise look like
+bugs. **It admits the window once**, within the pass's few minutes; after it
+opens, the pane holds its own badge and the plain `isocan share` address is
+the one to keep. And **the pane's badge is its own** — a window inside
+somebody else's page cannot share this browser's, so a canvas open in a pane
+and in a tab is two surfaces, not one. That is deliberate: a credential handed
+to a window somebody else owns should not be the one your own tab is holding.
+
+On a **local daemon over plain HTTP** the isolation cannot be arranged at all,
+so an embedded local canvas is admitted for the visit it was given and starts
+over on a reload. Hand out a hosted address for a pane where you have one.
 
 **A pass is a credential. Treat it like one.**
 

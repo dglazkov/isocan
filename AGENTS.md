@@ -61,6 +61,65 @@ the index row; the result arrives as a pull request. It never touches a page
 somebody already wrote. Writing the day yourself is still better — you were
 there — and the workflow finds nothing to do when you have.
 
+## The night shift's pull requests
+
+Three workflows open a pull request on a schedule — `changelog.yml`,
+`grade.yml`, `persona.yml` — and until this section existed, nothing said what
+happens to yesterday's machine PR when today's lands. What that cost: five
+open machine PRs at once on 9 Sep 2026 (three grades, two changelogs), each
+waiting on a person remembering — the same failure as the hand-kept review
+index, which produced daily and drained never.
+
+The rule is one line: **a workflow's queue never holds more than one open PR,
+the newest run's, and machinery enforces that — not a person remembering.**
+What "enforces" means is per-workflow, because the three PRs are different
+kinds of thing.
+
+**Persona runs merge themselves, and only themselves.** Settled already, and
+the template for the rest: the run merges its own PR when the diff is entirely
+`docs/reviews/` and leaves anything wider for a person. The half that forces a
+person exists too, elsewhere: a finding left `unanswered` for three days
+reddens the suite (`test/review-queue.test.ts`).
+
+**Grades are the easy case.** The graders are deterministic — "nothing here is
+a judgement", says the PR body — and each night adds one dated page under
+`docs/grades/`, so nights never touch the same bytes and any drain is a clean
+merge. The run merges its own PR and then drains its predecessors oldest
+first: merging each that still merges, closing as *superseded* any that no
+longer does, with a comment naming the run that closed it. Merging is the
+default because the pages are a time series — yesterday's readings are
+yesterday's, not stale — and a conflict can only mean somebody hand-edited a
+generated page, which is what supersede is for.
+
+**Changelogs are the exception, and the reason the rule is per-workflow.** The
+entry is a judgement — "read it before merging", says the PR body — and a day
+is not made stale by a later day: Tuesday's entry is not superseded on
+Wednesday. So a changelog PR is the one machine PR that waits for a writer.
+The PR is the drafting surface; whoever writes the entry — person or agent —
+deletes the draft marker, adds the index row, and merges. Machinery owns the
+floor and the door: a draft still unmerged after three days is merged *as a
+draft*, marker intact and index row saying so — the workflow's founding
+argument is that a draft nobody has written up beats a missing day, and a
+merged draft on `main` stays editable where a closed PR does not. And the one
+supersede-close: when the day's page already exists on `main`, written by a
+person, the run closes its own PR and says so.
+
+Three bounds hold all of them:
+
+- **A workflow touches only its own branches** (`changelog/`, `grades/`,
+  `personas/`) — never another workflow's PRs, never a person's.
+- **A merge is checked, not trusted — and the check has to be run, not
+  awaited.** PRs opened by `GITHUB_TOKEN` fire no `pull_request` workflows, so
+  no machine PR has ever carried a suite check — including the persona PRs
+  that merge themselves. The merge step runs the suite against the branch
+  itself; a red suite leaves the PR for a person.
+- **Closing is reversible.** Supersede closes the PR, keeps the branch, and
+  the closing comment says how to recover it.
+
+What this changes for the morning: with the reports landing on `main` nightly,
+the job stops being "merge the queue" and becomes "read the page" — which is
+what the pages were for.
+
 ## Research
 
 `docs/research/` holds findings that took longer to reach than they take to

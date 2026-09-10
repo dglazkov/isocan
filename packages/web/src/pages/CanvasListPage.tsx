@@ -181,6 +181,22 @@ export function CanvasListPage({
   const [peeking, setPeeking] = useState<string | null>(null);
 
   /**
+   * **Escape puts a floating preview away.** The peek is an overlay now —
+   * it covers the cards under the one being read — so it owes the dismissal
+   * every overlay gets. Pointer and keyboard both: the listener is on the
+   * window because a pointer-hovered card may hold no focus at all.
+   */
+  const peekOpen = peeking !== null;
+  useEffect(() => {
+    if (!peekOpen) return;
+    const dismiss = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPeeking(null);
+    };
+    window.addEventListener("keydown", dismiss);
+    return () => window.removeEventListener("keydown", dismiss);
+  }, [peekOpen]);
+
+  /**
    * **A clock, because "8m ago" is a lie the moment it is painted.**
    *
    * Coarse on purpose: every 30s is finer than the smallest thing these labels
@@ -512,7 +528,12 @@ export function CanvasListPage({
              * is a child, and listening on the card catches all of them.
              */
             onPointerEnter={() => setPeeking(canvas.id)}
-            onPointerLeave={() => setPeeking((at) => (at === canvas.id ? null : at))}
+            onPointerLeave={(e) => {
+              /* The pointer leaving must not take a preview the keyboard is
+                 still reading: focus within the card is a second hold on it. */
+              if (e.currentTarget.contains(document.activeElement)) return;
+              setPeeking((at) => (at === canvas.id ? null : at));
+            }}
             onFocus={() => setPeeking(canvas.id)}
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -576,9 +597,14 @@ export function CanvasListPage({
                     </span>
                   </div>
                 </Link>
-                {/* Under the meta line, inside the card: a popover floating
-                    outside would need placing, and this is a few short rows
-                    that the card has room for. */}
+                {/* In the card's box but OUT of its flow. This used to sit
+                    in flow between the link and the ··· row — "the card has
+                    room for it" — and every hover grew the card by the peek's
+                    height and pushed the whole grid down: the page jumped
+                    under the pointer. `.card-peek` is absolutely positioned
+                    now and overlays the cards below; the grid never moves.
+                    The DOM position stays, so Tab still reaches the peek's
+                    rows between the open link and the ··· buttons. */}
                 <CardPeek canvasId={canvas.id} open={peeking === canvas.id} />
                 <div className="card-more">
                   {confirmingDelete === canvas.id ? (
@@ -815,9 +841,17 @@ export function CanvasListPage({
               onChange={(e) => setQuery(e.target.value)}
             />
           )}
-          <div className="canvas-sorts" role="group" aria-label="Order">
-            {browsing &&
-              CANVAS_SORTS.map((option) => (
+          {/**
+            * **The ordering is one control, not three buttons.** A segmented
+            * track, so the set reads as the set: three chips side by side said
+            * "three separate things you can press" and nothing drew the fact
+            * that choosing one un-chooses the others. `role="group"` labelled
+            * `Order` is now true of everything inside it, which it was not
+            * while `Archived` sat in here.
+            */}
+          {browsing && (
+            <div className="canvas-sorts segmented" role="group" aria-label="Order">
+              {CANVAS_SORTS.map((option) => (
                 <button
                   key={option}
                   className={`btn quiet${option === sort ? " on" : ""}`}
@@ -827,25 +861,31 @@ export function CanvasListPage({
                   {CANVAS_SORT_LABEL[option]}
                 </button>
               ))}
-            {/**
-              * **Show archived** (#194). Widens the list to everything rather
-              * than swapping to the shelf alone: somebody hunting for one they
-              * put away is usually not sure they did, and a view that hides
-              * the live ones answers a question nobody asked. Offered only
-              * when there is a shelf, so the control appears the day it means
-              * something — and now on any home with one, however short its
-              * list.
-              */}
-            {hasShelf && (
-              <button
-                className={`btn quiet${showArchived ? " on" : ""}`}
-                aria-pressed={showArchived}
-                onClick={() => setShowArchived((was) => !was)}
-              >
-                Archived
-              </button>
-            )}
-          </div>
+            </div>
+          )}
+          {/**
+            * **Show archived** (#194). Widens the list to everything rather
+            * than swapping to the shelf alone: somebody hunting for one they
+            * put away is usually not sure they did, and a view that hides
+            * the live ones answers a question nobody asked. Offered only
+            * when there is a shelf, so the control appears the day it means
+            * something — and now on any home with one, however short its
+            * list.
+            *
+            * Beside the ordering track rather than inside it: this widens what
+            * is listed and the track chooses how it is sorted, and a fourth
+            * segment would have said that turning the shelf on turns an
+            * ordering off.
+            */}
+          {hasShelf && (
+            <button
+              className={`btn quiet canvas-archived${showArchived ? " on" : ""}`}
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived((was) => !was)}
+            >
+              Archived
+            </button>
+          )}
         </div>
       )}
       {/* Said out loud rather than left as an empty grid: a filter that matches

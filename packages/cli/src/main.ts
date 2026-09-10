@@ -1198,6 +1198,41 @@ program
     }),
   );
 
+/**
+ * **`isocan mcp` — the canvas, for an agent isocan did not install** (#220,
+ * phase 2).
+ *
+ * An agent manager launches an MCP server by spawning a command and speaking
+ * JSON-RPC over its pipes, so the surface needs a command to be. This is it,
+ * and it is deliberately one line of work: everything the tools do lives in
+ * `@isocan/mcp`, where a test can drive it without a subprocess.
+ *
+ * **Plumbing, not a canvas verb.** Nobody types this — it goes in a manager's
+ * config (`"command": "isocan", "args": ["mcp"]`) and is spawned from there.
+ * An agent that HAS this CLI on its PATH should use the CLI; this exists for
+ * the agent that does not, which by construction is never the agent reading
+ * the guide.
+ *
+ * **stdout belongs to the protocol.** `--json` and the printers are not
+ * reachable from here, and nothing in this action may print: a stray line
+ * lands inside a JSON-RPC frame and the host disconnects with a parse error a
+ * long way from its cause. The banner an interactive command would show goes
+ * to stderr in `serveStdio`, or nowhere.
+ */
+program
+  .command("mcp")
+  .description(
+    "Speak MCP on stdio, so an agent in another tool can read this canvas (spawned by an agent manager, not typed)",
+  )
+  .action(
+    run(async () => {
+      const { serveStdio } = await import("@isocan/mcp");
+      await serveStdio({ version: buildStamp().version });
+      // Resolves when the transport closes, which is when the host hung up.
+      await new Promise<void>(() => {});
+    }),
+  );
+
 program
   .command("serve")
   // `stop` and `restart` are verbs; the one that starts the daemon is `serve`.
@@ -3494,6 +3529,88 @@ program
         `That line is a credential — it works once, and only for the next ${minutes} minutes.\n` +
           "Do not post it on a thread and do not commit it. To invite a PERSON, hand them the\n" +
           "address from `isocan share` instead; they arrive in a browser with nothing installed.",
+      );
+    }),
+  );
+
+/**
+ * **`isocan embed` — the address to paste into somebody else's window**
+ * (#220, phase 1).
+ *
+ * A canvas opened in an agent manager's pane — Jetski, an IDE webview, a
+ * browser tab beside a conversation — arrives as a cross-site frame, and a
+ * cross-site frame is a stranger. It cannot ride the badge cookie this
+ * machine's browser holds, because that cookie lives in a jar keyed on the
+ * TOP-LEVEL site and the top-level site is the manager's, not ours. So the
+ * pane needs to be handed an identity on its first load, and a pass is
+ * exactly the credential for that: short-lived, single-use, and endowing.
+ *
+ * **Three verbs, three acts, and the difference is who arrives.** `share`
+ * hands a PERSON an address and the door decides. `pass` hands a MACHINE a
+ * credential and prints a terminal line, because a machine is enrolled by
+ * somebody typing. `embed` hands a WINDOW a URL, because a window is not
+ * enrolled at all — it is opened, once, by being pasted into a pane. Same
+ * credential underneath `pass`, different thing to do with it, and the output
+ * differs accordingly: a URL, not a command, because a `npx` line pasted into
+ * an address bar does nothing and a URL pasted into a terminal does worse.
+ *
+ * **It works once, and after that the pane keeps itself.** The redemption
+ * mints a badge in the frame's own partitioned jar (`badgeCookie`), so a
+ * reload is free and the pane's badge is isolated from this browser's — which
+ * is the right posture for a credential handed to a window somebody else
+ * owns. The exception is a local daemon over plain HTTP, where `Partitioned`
+ * cannot be set at all: there the pane is admitted for the session it was
+ * given and a reload starts over. That is the limit `badgeCookie` records,
+ * and it is why this prints the expiry rather than pretending it is a
+ * permalink.
+ */
+program
+  .command("embed")
+  .description(
+    "Print the address to paste into an agent manager's pane or an IDE panel — the canvas, with an identity for the window",
+  )
+  .option(
+    "--admit-only",
+    "let the window in but hand it no identity — whoever opens it names themselves",
+  )
+  .action(
+    run(async (opts: { admitOnly?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      // `--canvas` is how every verb here says which one; a positional would
+      // be a second spelling of a question already answered.
+      const canvas = await resolveCanvas(ctx);
+      // A pass is minted at the home that holds the canvas and redeemed
+      // there, so the address rides that home's origin — the same one-origin
+      // rule `pass` follows, for the same reason.
+      const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
+      const actor = opts.admitOnly ? null : ctx.actor;
+      const { pass, token } = await ctx.client.mintPass(canvas.id, actor?.id);
+      const address = canvasUrlWithPass(origin, canvas.id, token);
+      const minutes = Math.round(PASS_TTL_MS / 60_000);
+
+      if (ctx.json) {
+        return printJson({
+          address,
+          // The clean one too: a pane that has already been admitted once
+          // should be pointed at this, never at a spent credential.
+          canvas: canvasUrl(origin, canvas.id),
+          expiresAt: pass.expiresAt,
+          ...(actor ? { actor } : {}),
+        });
+      }
+      printKeyValues({
+        canvas: `${canvas.title} (${canvasUrl(origin, canvas.id)})`,
+        identity: actor
+          ? `${actor.name} (${actor.id}) — the window opens as them`
+          : "none — whoever opens the window names themselves",
+        expires: `in ${minutes} minutes (${pass.expiresAt})`,
+      });
+      console.log(`\nPaste this into the pane:\n`);
+      console.log(`  ${address}\n`);
+      console.log(
+        `That address is a credential — it admits the window once, within ${minutes} minutes.\n` +
+          "After it opens, the pane holds its own badge and the plain canvas address above is\n" +
+          "the one to keep. To invite a PERSON, use `isocan share`; to enroll a MACHINE, `isocan pass`.",
       );
     }),
   );
