@@ -364,7 +364,64 @@ main.ts` gaining `commands/sprint.ts` because sprint was being edited anyway
 is the shape this should take, one family at a time, each with its own reason
 in its own commit.
 
-## Not verified
+## 9 September follow-up: the checks and the writer queue
+
+The checkout at `ca307057` passed type checking and lint but failed three
+suite checks: unused exports 40 against 39, undocumented exports 333 against
+331, and the review index. The export delta was in `peekplace.ts`: its
+side-selection threshold is private to the helper, and its exported result
+and function needed their purpose stated. No ceiling needed raising.
+
+The index failure was **time-dependent**, not a missing run: the generated
+cadence table committed `0d ago`, and the same tree checked after midnight UTC
+wanted `1d ago`. Static dates now stay in the index; the live cadence command
+still reports ages. A subprocess check with its clock advanced to 2040 holds
+that distinction. Regenerating the index alone would have fixed one day.
+
+The journeys workflow also discarded the runner's exit status and looked
+only for `FAIL` in stdout. A boot or teardown exception before the report
+could produce `failing=no`. The workflow now preserves the exit code in the
+report and treats either a nonzero exit or a `FAIL` line as needing attention.
+Six executing cases drive the workflow's own shell with a synthetic runner,
+including boot and teardown exceptions. The nightly remains advisory.
+
+**Queue coupling, measured at the engine seam.** Start an isolated daemon,
+claim a synthetic actor, and create `prj_local`. Install a `HomeDirectory`
+whose `for("prj_remote")` returns a controlled connection and whose local
+lookup returns null. Hold the connection's `submitOp` promise, submit a remote
+`project.update`, wait until it reaches the connection, then submit a local
+`project.update`. During a 251 ms hold the local write remained pending while
+`getSnapshot("prj_local")` completed. Rejecting the held remote request let
+the local write finish at 272 ms elapsed. The rejection also confirms that
+the queue recovers rather than remaining poisoned. These are observations
+from one controlled run, not latency benchmarks or a real network outage.
+
+The mechanism is direct: `Engine.submit` holds the one promise chain through
+`forwardSubmit`, including its network await. `HomeLink.fetchHome` bounds the
+fetch with a 30-second abort signal. `setActorMark` also awaits forwarding to
+all homes inside the same chain, so canvas submissions are not the only path.
+
+**A queue change is still unbuilt.** The next experiment should isolate
+per-canvas work while retaining an explicit boundary for home-wide identity
+changes. It must account for:
+
+- `settled()` at replica dial: it prevents a cursor read between a forwarded
+  birth and its local persistence. Moving network waits outside the chain
+  without replacing this barrier reopens a documented snapshot race.
+- Same-canvas submit, undo/redo, remote-entry application, snapshot adoption,
+  blob registration and GC: each must keep its ordering and exclusion rules.
+- Claims and identity updates that span canvases or homes: a per-canvas map
+  alone does not serialize these against authorization checks.
+- Re-homing and birth routing: deciding a destination and forwarding must
+  not allow a routing change to strand an in-flight write at the old home.
+
+Acceptance should use controllable promises rather than a timing benchmark:
+an independent local write completes before the remote gate opens; two writes
+to the same canvas keep order; failure releases subsequent work; and dial,
+GC, undo and identity races still pass. No operation or client protocol change
+is implied by this investigation.
+
+## Not verified in the original 6 September review
 
 Stated here rather than implied: the review's test counts (3,539 across 346
 files) and its parallel-load timeout observations were not reproduced. Both

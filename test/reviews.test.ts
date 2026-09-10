@@ -41,6 +41,21 @@ describe("the review index is derived, not written", () => {
     const page = readFileSync(`${repo}/docs/reviews/README.md`, "utf8");
     expect(page).toContain("scripts/reviews.mjs");
   });
+
+  it("stays current when only the clock moves", () => {
+    // Run the real checker under another clock. Relative ages in the
+    // committed table used to make an unchanged checkout fail at midnight.
+    const clock = `const RealDate = Date;
+      globalThis.Date = class extends RealDate {
+        constructor(...args) { super(...(args.length ? args : ["2040-01-01T00:00:00Z"])); }
+        static now() { return new RealDate("2040-01-01T00:00:00Z").getTime(); }
+      };`;
+    const out = execFileSync(process.execPath, [
+      "--import", `data:text/javascript,${encodeURIComponent(clock)}`,
+      `${repo}/scripts/reviews.mjs`, "--check",
+    ], { cwd: repo, encoding: "utf8", timeout: 60_000 });
+    expect(out).toContain("is current");
+  });
 });
 
 /**
