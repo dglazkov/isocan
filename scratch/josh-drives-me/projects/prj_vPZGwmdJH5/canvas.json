@@ -1,0 +1,3717 @@
+{
+  "lastSeq": 129,
+  "items": {
+    "itm_iXjExG0k0g": {
+      "id": "itm_iXjExG0k0g",
+      "x": 0,
+      "y": 0,
+      "width": 1800,
+      "height": 900,
+      "title": "The Route",
+      "description": "The whole 20-week mission at a glance",
+      "properties": {
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_-o1A-__fq0",
+          "blobHash": "1c026a2bc7386cde7bd3ad334cf9a8af367690fee2f8156f19d368c03add7ff3",
+          "mimeType": "text/html",
+          "filename": "route.html",
+          "size": 12444,
+          "createdAt": "2026-09-10T23:25:29.417Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        },
+        {
+          "id": "ver_4uyVGLDG8_",
+          "blobHash": "bbe558a04899a8c7cb55b72745d07e04b96327a3a6513ac7390cc60efd235edf",
+          "mimeType": "text/html",
+          "filename": "route.html",
+          "size": 12350,
+          "createdAt": "2026-09-10T23:26:51.622Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_4uyVGLDG8_",
+      "createdAt": "2026-09-10T23:25:29.417Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.872Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_4BvNF4CKWG": {
+      "id": "itm_4BvNF4CKWG",
+      "x": 0,
+      "y": 1060,
+      "width": 640,
+      "height": 1340,
+      "title": "Level 1 · Home Turf, Upgraded",
+      "description": "",
+      "properties": {
+        "level": "1",
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_mFSEqAp671",
+          "blobHash": "db157b4e873c27b015fbb263147a82421351716bd5e968ad86430446537561cd",
+          "mimeType": "text/html",
+          "filename": "level-1.html",
+          "size": 5074,
+          "createdAt": "2026-09-10T23:26:29.006Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_mFSEqAp671",
+      "createdAt": "2026-09-10T23:26:29.006Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.887Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_IaFpoXVouu": {
+      "id": "itm_IaFpoXVouu",
+      "x": 700,
+      "y": 1060,
+      "width": 640,
+      "height": 1340,
+      "title": "Level 2 · Lights & Lanes",
+      "description": "",
+      "properties": {
+        "level": "2",
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_WRjqOGiNIW",
+          "blobHash": "78c9775970ebfbd1ff28a71e7d0bc0cc40de9772510d9c55f15b75211d7371f1",
+          "mimeType": "text/html",
+          "filename": "level-2.html",
+          "size": 4947,
+          "createdAt": "2026-09-10T23:26:29.560Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_WRjqOGiNIW",
+      "createdAt": "2026-09-10T23:26:29.560Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.903Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Gf_U59sVbF": {
+      "id": "itm_Gf_U59sVbF",
+      "x": 1400,
+      "y": 1060,
+      "width": 640,
+      "height": 1340,
+      "title": "Level 3 · Parallel Universe",
+      "description": "",
+      "properties": {
+        "level": "3",
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_CLrDGZqnYK",
+          "blobHash": "b769f30cf8cf37f053964b67231140cc7b3d85e32a3f01e783c171a27ddd9cf2",
+          "mimeType": "text/html",
+          "filename": "level-3.html",
+          "size": 5034,
+          "createdAt": "2026-09-10T23:26:30.120Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_CLrDGZqnYK",
+      "createdAt": "2026-09-10T23:26:30.120Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.914Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_nMp91VKF49": {
+      "id": "itm_nMp91VKF49",
+      "x": 2100,
+      "y": 1060,
+      "width": 640,
+      "height": 1340,
+      "title": "Level 4 · Rush Hour",
+      "description": "",
+      "properties": {
+        "level": "4",
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_TA3Fb14AvT",
+          "blobHash": "ad8194bcc2fba4066c167551d5caa23c6d16d5260fea3025fb4ecadc40ba03eb",
+          "mimeType": "text/html",
+          "filename": "level-4.html",
+          "size": 5392,
+          "createdAt": "2026-09-10T23:26:30.681Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_TA3Fb14AvT",
+      "createdAt": "2026-09-10T23:26:30.681Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.930Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_0ZSB4UTEWG": {
+      "id": "itm_0ZSB4UTEWG",
+      "x": 0,
+      "y": 2480,
+      "width": 640,
+      "height": 1340,
+      "title": "Level 5 · Merge Master",
+      "description": "",
+      "properties": {
+        "level": "5",
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_7WjnYjoFRy",
+          "blobHash": "c657787d354154d297db9c62fb62b7697a1b142ae628f8f66a802782c2f8a80b",
+          "mimeType": "text/html",
+          "filename": "level-5.html",
+          "size": 5421,
+          "createdAt": "2026-09-10T23:26:31.238Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_7WjnYjoFRy",
+      "createdAt": "2026-09-10T23:26:31.238Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.945Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Zd5jsVXFT_": {
+      "id": "itm_Zd5jsVXFT_",
+      "x": 3680,
+      "y": 2220,
+      "width": 720,
+      "height": 900,
+      "title": "Skill Tree",
+      "description": "Which skills unlock which — green is what Josh has, red are the boss battles",
+      "properties": {
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver__dadAdjJol",
+          "blobHash": "b59220b019fb00b4e74104af798ea4883dab7b0e5282d85dd492426a3c1f8a59",
+          "mimeType": "text/vnd.mermaid",
+          "filename": "skill-tree.mmd",
+          "size": 962,
+          "createdAt": "2026-09-10T23:26:35.149Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver__dadAdjJol",
+      "createdAt": "2026-09-10T23:26:35.149Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:14.019Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_wbnGPi1iyu": {
+      "id": "itm_wbnGPi1iyu",
+      "x": -600,
+      "y": 0,
+      "width": 560,
+      "height": 720,
+      "title": "DESIGN.md",
+      "description": "",
+      "properties": {
+        "role": "design-system"
+      },
+      "versions": [
+        {
+          "id": "ver_Nn8w2beFfe",
+          "blobHash": "65b5970c146cb80a01789b4fd576f231e4bbae3eff5aac52a942cd34d822b90a",
+          "mimeType": "text/markdown",
+          "filename": "DESIGN.md",
+          "size": 4389,
+          "createdAt": "2026-09-10T23:27:51.226Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        },
+        {
+          "id": "ver_zNX5is7_XM",
+          "blobHash": "f0413001f44366154a0c802876a8ec406ce01fd46cbfbe5f24f9e69da4492bc6",
+          "mimeType": "text/markdown",
+          "filename": "DESIGN.md",
+          "size": 4410,
+          "createdAt": "2026-09-10T23:29:11.797Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_zNX5is7_XM",
+      "createdAt": "2026-09-10T23:27:51.226Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:11.797Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_zT77bcvHFz": {
+      "id": "itm_zT77bcvHFz",
+      "x": 700,
+      "y": 2480,
+      "width": 640,
+      "height": 1340,
+      "title": "Level 6 · Weather & Wild",
+      "description": "",
+      "properties": {
+        "level": "6",
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_MczEywhFyf",
+          "blobHash": "d0490e492713d75fea3c8ba796784437c295b57abb7addf051b517e4a34d9c44",
+          "mimeType": "text/html",
+          "filename": "level-6.html",
+          "size": 5464,
+          "createdAt": "2026-09-10T23:27:52.365Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_MczEywhFyf",
+      "createdAt": "2026-09-10T23:27:52.365Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.955Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_tBRllnRg2x": {
+      "id": "itm_tBRllnRg2x",
+      "x": 1400,
+      "y": 2480,
+      "width": 640,
+      "height": 1340,
+      "title": "Level 7 · Test Prep",
+      "description": "",
+      "properties": {
+        "level": "7",
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_QlV_59eX8q",
+          "blobHash": "20e670e4d311e00c7e8fb84272838527265d38aaeee0ba2d015062caddf01e2a",
+          "mimeType": "text/html",
+          "filename": "level-7.html",
+          "size": 5240,
+          "createdAt": "2026-09-10T23:27:52.928Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_QlV_59eX8q",
+      "createdAt": "2026-09-10T23:27:52.928Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.963Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_7g4lJScvPC": {
+      "id": "itm_7g4lJScvPC",
+      "x": 2100,
+      "y": 2480,
+      "width": 640,
+      "height": 1340,
+      "title": "Level 8 · License & Beyond",
+      "description": "",
+      "properties": {
+        "level": "8",
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_sYDhP4OVbo",
+          "blobHash": "42b1db6c882fcdb212504dd1bbbbc3afe41c317e612dc6ff57089aa1b55a57ed",
+          "mimeType": "text/html",
+          "filename": "level-8.html",
+          "size": 4883,
+          "createdAt": "2026-09-10T23:27:53.533Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_sYDhP4OVbo",
+      "createdAt": "2026-09-10T23:27:53.533Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.978Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Mx3drbmwqp": {
+      "id": "itm_Mx3drbmwqp",
+      "x": 2900,
+      "y": 1060,
+      "width": 720,
+      "height": 1200,
+      "title": "Colorado Rulebook",
+      "description": "",
+      "properties": {
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_Yd7U7eMHYp",
+          "blobHash": "e17a182b1cce6aaa8a0bc7634221c98045bdaf3b18ca826d8a1c1bc7f35e9514",
+          "mimeType": "text/html",
+          "filename": "rulebook.html",
+          "size": 5482,
+          "createdAt": "2026-09-10T23:27:54.093Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_Yd7U7eMHYp",
+      "createdAt": "2026-09-10T23:27:54.093Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:13.993Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_bVdNyoe1MO": {
+      "id": "itm_bVdNyoe1MO",
+      "x": 3680,
+      "y": 1060,
+      "width": 720,
+      "height": 1100,
+      "title": "The 30-Minute Recipe",
+      "description": "",
+      "properties": {
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_x7SCC0yhmZ",
+          "blobHash": "9de9b82e8330691809345f6c538413e4da42b33fafe482d98e6102d293634513",
+          "mimeType": "text/html",
+          "filename": "recipe.html",
+          "size": 5450,
+          "createdAt": "2026-09-10T23:27:54.680Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_x7SCC0yhmZ",
+      "createdAt": "2026-09-10T23:27:54.680Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:14.004Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_cRx3tTye4j": {
+      "id": "itm_cRx3tTye4j",
+      "x": 2900,
+      "y": 2320,
+      "width": 720,
+      "height": 1120,
+      "title": "Final Boss: The Drive Test",
+      "description": "",
+      "properties": {
+        "slide": "yes"
+      },
+      "versions": [
+        {
+          "id": "ver_aAGJ2fNCIr",
+          "blobHash": "d825578b834cd75e821bb3fad9d814c9bb0dcdf1bfb0d8f514ee48474e03744b",
+          "mimeType": "text/html",
+          "filename": "boss.html",
+          "size": 5432,
+          "createdAt": "2026-09-10T23:27:55.286Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_aAGJ2fNCIr",
+      "createdAt": "2026-09-10T23:27:55.286Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:29:14.013Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_elZv8RZqQw": {
+      "id": "itm_elZv8RZqQw",
+      "x": 0,
+      "y": 3980,
+      "width": 2760,
+      "height": 2500,
+      "title": "Mission Log",
+      "description": "",
+      "properties": {
+        "kind": "area",
+        "tint": "blue",
+        "rows": "20",
+        "cols": "4",
+        "rowNames": "W1 · Sep 14 · L1,W2 · Sep 21 · L1,W3 · Sep 28 · L2,W4 · Oct 5 · L2,W5 · Oct 12 · L3,W6 · Oct 19 · L3,W7 · Oct 26 · L4,W8 · Nov 2 · L4,W9 · Nov 9 · L4,W10 · Nov 16 · L5,W11 · Nov 23 · L5,W12 · Nov 30 · L5,W13 · Dec 7 · L6,W14 · Dec 14 · L6,W15 · Dec 21 · L6,W16 · Dec 28 · L7,W17 · Jan 4 · L7,W18 · Jan 11 · L7,W19 · Jan 18 · L8,W20 · Jan 25 · L8",
+        "colNames": "Session 1,Session 2,Session 3,Session 4"
+      },
+      "versions": [
+        {
+          "id": "ver_2c99tV-wFS",
+          "blobHash": "f0b2afe801dda01db0741a41dc67ce2b81067885de12c769c456bc3525c79891",
+          "mimeType": "text/markdown",
+          "filename": "area.md",
+          "size": 165,
+          "createdAt": "2026-09-10T23:27:58.237Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_2c99tV-wFS",
+      "createdAt": "2026-09-10T23:27:58.237Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:27:58.786Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_bfRmEpkc4B": {
+      "id": "itm_bfRmEpkc4B",
+      "x": 32,
+      "y": 4164,
+      "width": 173,
+      "height": 34,
+      "title": "L1·S1 Baseline lap",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_XqlTERUwsy",
+          "blobHash": "0b09db4e784bc051dbd8458b0b99c870f8f7a1b6e014b2cc0b45f4f278c03fcf",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 19,
+          "createdAt": "2026-09-10T23:27:59.424Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_XqlTERUwsy",
+      "createdAt": "2026-09-10T23:27:59.424Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:27:59.424Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_ijSb5NKbv4": {
+      "id": "itm_ijSb5NKbv4",
+      "x": 710,
+      "y": 4164,
+      "width": 198,
+      "height": 34,
+      "title": "L1·S2 Stops & signals",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_heQDS-qRHS",
+          "blobHash": "cea92626afa600cf921c5c52f45348cf4e55c052bc13c1268f483b7ab8396053",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 22,
+          "createdAt": "2026-09-10T23:27:59.973Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_heQDS-qRHS",
+      "createdAt": "2026-09-10T23:27:59.973Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:27:59.973Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_mzmwRiozYI": {
+      "id": "itm_mzmwRiozYI",
+      "x": 1388,
+      "y": 4164,
+      "width": 138,
+      "height": 34,
+      "title": "L1·S3 Backing",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_TKueorRbA3",
+          "blobHash": "cef202b8f20451779288796b5f5916e3777be19d168cfa9764d8c7af99ca927f",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 14,
+          "createdAt": "2026-09-10T23:28:00.535Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_TKueorRbA3",
+      "createdAt": "2026-09-10T23:28:00.535Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:00.535Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_3n2Xsktqwh": {
+      "id": "itm_3n2Xsktqwh",
+      "x": 2066,
+      "y": 4164,
+      "width": 331,
+      "height": 61,
+      "title": "L1·S4 Three-point turn ×10 on a quiet street",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_AV0aWa5RXR",
+          "blobHash": "6d133f1d616ca633b2d2519569f5006711854bd1458e56452614063021273bf9",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 46,
+          "createdAt": "2026-09-10T23:28:01.106Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_AV0aWa5RXR",
+      "createdAt": "2026-09-10T23:28:01.106Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:01.106Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_p_meYH5MXF": {
+      "id": "itm_p_meYH5MXF",
+      "x": 32,
+      "y": 4279,
+      "width": 150,
+      "height": 34,
+      "title": "L1·S5 Empty lot",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_ohqg1OJpT_",
+          "blobHash": "1a306a22e15bf8392e22bc4a40da8cc68e74fa053f84a547b8e2e6b93ca9a222",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 16,
+          "createdAt": "2026-09-10T23:28:01.674Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_ohqg1OJpT_",
+      "createdAt": "2026-09-10T23:28:01.674Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:01.674Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm__He1EHf7E9": {
+      "id": "itm__He1EHf7E9",
+      "x": 710,
+      "y": 4279,
+      "width": 337,
+      "height": 61,
+      "title": "L1·S6 Hill parking (up/down, curb/no curb), U-turn…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_P2OKllVBWy",
+          "blobHash": "d2d7d2cabfbe246b0497e3aca6b794232e6fc04fdd118fa9edce154ce01f8266",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:02.228Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_P2OKllVBWy",
+      "createdAt": "2026-09-10T23:28:02.228Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:02.228Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Dp-STsV_LM": {
+      "id": "itm_Dp-STsV_LM",
+      "x": 1388,
+      "y": 4279,
+      "width": 149,
+      "height": 34,
+      "title": "L1·S7 Lot drills",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_x2rh5WH4iC",
+          "blobHash": "a955c12b7fb092a4eeb7970d618dc8f80c832e670785ab5f10d1466a6dc9973d",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:02.786Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_x2rh5WH4iC",
+      "createdAt": "2026-09-10T23:28:02.786Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:02.786Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_b66m2MQwgr": {
+      "id": "itm_b66m2MQwgr",
+      "x": 2066,
+      "y": 4279,
+      "width": 163,
+      "height": 34,
+      "title": "L1·S8 BOSS RUN",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_tmKZflOjIT",
+          "blobHash": "24b54ee07c2ad0a160841ad9215285c049ac67232d4f5953fc4994918e070a75",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 15,
+          "createdAt": "2026-09-10T23:28:03.351Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_tmKZflOjIT",
+      "createdAt": "2026-09-10T23:28:03.351Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:03.351Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_MdHJVDmd0L": {
+      "id": "itm_MdHJVDmd0L",
+      "x": 32,
+      "y": 4394,
+      "width": 287,
+      "height": 34,
+      "title": "L2·S1 First lights at a quiet hour",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_VGkVWhdkJG",
+          "blobHash": "fb7c3f4ab2770c74f8b452f1bfaeb0960e9c741485fc03474f2f2be5f92c7dde",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 35,
+          "createdAt": "2026-09-10T23:28:03.916Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_VGkVWhdkJG",
+      "createdAt": "2026-09-10T23:28:03.916Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:03.916Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_dQfiLH0Dr8": {
+      "id": "itm_dQfiLH0Dr8",
+      "x": 710,
+      "y": 4394,
+      "width": 223,
+      "height": 34,
+      "title": "L2·S2 Left turns at lights",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_mVimp3sgsg",
+          "blobHash": "929aaca470699cf1f3a4ceb4819d82f10447d28187caecc7a9df65950d10a633",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 27,
+          "createdAt": "2026-09-10T23:28:04.472Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_mVimp3sgsg",
+      "createdAt": "2026-09-10T23:28:04.472Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:04.472Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_I3wtBU-cL4": {
+      "id": "itm_I3wtBU-cL4",
+      "x": 1388,
+      "y": 4394,
+      "width": 320,
+      "height": 61,
+      "title": "L2·S3 Lane changes ×20 on a wide, empty arterial u…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_j6EcaH2xmw",
+          "blobHash": "4f4e1c7a228750f5ca1c788ca42c8dba4052bfaffcea7892861d051df11b7ab8",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 55,
+          "createdAt": "2026-09-10T23:28:05.033Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_j6EcaH2xmw",
+      "createdAt": "2026-09-10T23:28:05.033Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:05.033Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_m8G6w6iSXC": {
+      "id": "itm_m8G6w6iSXC",
+      "x": 2066,
+      "y": 4394,
+      "width": 320,
+      "height": 61,
+      "title": "L2·S4 Following distance 3–4 s, scanning 12–15 s a…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_GIj1SwDSoX",
+          "blobHash": "af300d5b868f20b06faea2be76ae1825685babb16b6ab70c60d168fffcc9283f",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 58,
+          "createdAt": "2026-09-10T23:28:05.590Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_GIj1SwDSoX",
+      "createdAt": "2026-09-10T23:28:05.590Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:05.590Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_rgbraE9vkn": {
+      "id": "itm_rgbraE9vkn",
+      "x": 32,
+      "y": 4509,
+      "width": 320,
+      "height": 61,
+      "title": "L2·S5 School zones, crosswalks, cyclists, bus stop…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_8-PtE9qlcg",
+          "blobHash": "1ea4051127542342ad631b38a8f8aa3b5c8deb9aeb4881c3cb33dfc40d232735",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:06.214Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_8-PtE9qlcg",
+      "createdAt": "2026-09-10T23:28:06.214Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:06.214Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Y5Gwtmh7cz": {
+      "id": "itm_Y5Gwtmh7cz",
+      "x": 710,
+      "y": 4509,
+      "width": 320,
+      "height": 61,
+      "title": "L2·S6 Double-lane turns into the correct lane, cen…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_6ToVCTVYwv",
+          "blobHash": "490b3955e1bee922eaded8b51115556306d8c2c51917bdc95748b72bb059f1e9",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:06.763Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_6ToVCTVYwv",
+      "createdAt": "2026-09-10T23:28:06.763Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:06.763Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_sMPYApLurp": {
+      "id": "itm_sMPYApLurp",
+      "x": 1388,
+      "y": 4509,
+      "width": 325,
+      "height": 61,
+      "title": "L2·S7 Moderate traffic (after-school hour)",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_bZX_C5_M7H",
+          "blobHash": "1186db68acbc2d7842d1ca311152055aa9fac21bacf10e5f244e4ffcc4243892",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 43,
+          "createdAt": "2026-09-10T23:28:07.320Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_bZX_C5_M7H",
+      "createdAt": "2026-09-10T23:28:07.320Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:07.320Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_be5muBVBiu": {
+      "id": "itm_be5muBVBiu",
+      "x": 2066,
+      "y": 4509,
+      "width": 163,
+      "height": 34,
+      "title": "L2·S8 BOSS RUN",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_TZWKXkedFi",
+          "blobHash": "aeaeb76074cddd8c5368484e7b5471ca7b570dbb2f12cd152af310fd18061634",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 15,
+          "createdAt": "2026-09-10T23:28:07.879Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_TZWKXkedFi",
+      "createdAt": "2026-09-10T23:28:07.879Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:07.879Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_0qRs7-tLar": {
+      "id": "itm_0qRs7-tLar",
+      "x": 32,
+      "y": 4624,
+      "width": 320,
+      "height": 61,
+      "title": "L3·S1 Parallel park with cones, reference-point me…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_-vB7d1F6z_",
+          "blobHash": "fd6846cd21d2b1484a2d5c7eba7bd6aa96a7a19f6b13984f8edfd62cd4bd9deb",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:08.425Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_-vB7d1F6z_",
+      "createdAt": "2026-09-10T23:28:08.425Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:08.425Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_2YNCfkkJCW": {
+      "id": "itm_2YNCfkkJCW",
+      "x": 710,
+      "y": 4624,
+      "width": 331,
+      "height": 61,
+      "title": "L3·S2 Parallel ×10 between real cars on a quiet st…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_aZzAXH5TYh",
+          "blobHash": "059796d151c10cf838eeec90e18350b8c163bafaf58f374315b0f571ad1cddd1",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 55,
+          "createdAt": "2026-09-10T23:28:09.019Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_aZzAXH5TYh",
+      "createdAt": "2026-09-10T23:28:09.019Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:09.019Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_xmqDFCCV4J": {
+      "id": "itm_xmqDFCCV4J",
+      "x": 1388,
+      "y": 4624,
+      "width": 138,
+      "height": 34,
+      "title": "L3·S3 Busy lot",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_URUFNui6fH",
+          "blobHash": "3b653df739680c63fdec75d930cfbc9daeaa6942fc3267c5d84a21c9dccd9cc0",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 15,
+          "createdAt": "2026-09-10T23:28:09.574Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_URUFNui6fH",
+      "createdAt": "2026-09-10T23:28:09.574Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:09.574Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_O6zJzwzErI": {
+      "id": "itm_O6zJzwzErI",
+      "x": 2066,
+      "y": 4624,
+      "width": 276,
+      "height": 34,
+      "title": "L3·S4 Single-lane roundabouts",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_0qcMqFxRIw",
+          "blobHash": "a714b5c9690155833f723f7416a4df7697c8e8b573853eb2086e6bed3d69f7f5",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 30,
+          "createdAt": "2026-09-10T23:28:10.132Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_0qcMqFxRIw",
+      "createdAt": "2026-09-10T23:28:10.132Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:10.132Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_rQwjgaJi1x": {
+      "id": "itm_rQwjgaJi1x",
+      "x": 32,
+      "y": 4739,
+      "width": 344,
+      "height": 61,
+      "title": "L3·S5 Multi-lane roundabouts (pick the lane before…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_1P5mQ6q0Sj",
+          "blobHash": "b1a6a3a3727715e49d92ed5f58cca8aad4c18e6ae095e313dff8f65d435ad528",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:10.688Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_1P5mQ6q0Sj",
+      "createdAt": "2026-09-10T23:28:10.688Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:10.688Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_L17lGtwlGN": {
+      "id": "itm_L17lGtwlGN",
+      "x": 710,
+      "y": 4739,
+      "width": 157,
+      "height": 34,
+      "title": "🌙 L3·S6 NIGHT 1",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_uvQO9ngc9Y",
+          "blobHash": "4a83d8c5de9e10471a8162f9de38ddb7358a4e69d89eb5ac9df74e915d79c2ed",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 19,
+          "createdAt": "2026-09-10T23:28:11.254Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_uvQO9ngc9Y",
+      "createdAt": "2026-09-10T23:28:11.254Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:11.254Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_9kojSLYMYv": {
+      "id": "itm_9kojSLYMYv",
+      "x": 1388,
+      "y": 4739,
+      "width": 157,
+      "height": 34,
+      "title": "🌙 L3·S7 NIGHT 2",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_UsiZr4XDH3",
+          "blobHash": "a2e0210f9c107caf53b231ea66c49759e72b765cfec60b25afe09405310f184b",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 19,
+          "createdAt": "2026-09-10T23:28:11.833Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_UsiZr4XDH3",
+      "createdAt": "2026-09-10T23:28:11.833Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:11.833Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_zODWXO0ltY": {
+      "id": "itm_zODWXO0ltY",
+      "x": 2066,
+      "y": 4739,
+      "width": 163,
+      "height": 34,
+      "title": "L3·S8 BOSS RUN",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_WD3ozNr1CM",
+          "blobHash": "a06c43cce054ea507b2759f197ee25b3f9083376be61da45b5d88dc780be680f",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 15,
+          "createdAt": "2026-09-10T23:28:12.397Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_WD3ozNr1CM",
+      "createdAt": "2026-09-10T23:28:12.397Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:12.397Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_SKRD2JaBrS": {
+      "id": "itm_SKRD2JaBrS",
+      "x": 32,
+      "y": 4854,
+      "width": 283,
+      "height": 34,
+      "title": "L4·S1 Downtown at a quiet hour",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_RYARAHV2bD",
+          "blobHash": "9c2a62bc5293aa17e39e248e460b17629989f72bb7d65067efa2f337ab28fc95",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 31,
+          "createdAt": "2026-09-10T23:28:13.021Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_RYARAHV2bD",
+      "createdAt": "2026-09-10T23:28:13.021Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:13.021Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_lmjFjZIbmP": {
+      "id": "itm_lmjFjZIbmP",
+      "x": 710,
+      "y": 4854,
+      "width": 338,
+      "height": 34,
+      "title": "L4·S2 Unfamiliar route with navigation",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_KYloP_x2FI",
+          "blobHash": "92e6c5626bf5532cb2b174b98aa1b31db9c68ae076816fbbef0b0a2c3d3adb9c",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 39,
+          "createdAt": "2026-09-10T23:28:13.579Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_KYloP_x2FI",
+      "createdAt": "2026-09-10T23:28:13.579Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:13.579Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_a5zHA3L4ce": {
+      "id": "itm_a5zHA3L4ce",
+      "x": 1388,
+      "y": 4854,
+      "width": 247,
+      "height": 34,
+      "title": "L4·S3 Dense arterial traffic",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_7FPvEK4vAn",
+          "blobHash": "acef87f601559c17611b4b2dcce50c75ce7666c5cabe6801963e658be7a8ff9e",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 29,
+          "createdAt": "2026-09-10T23:28:14.138Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_7FPvEK4vAn",
+      "createdAt": "2026-09-10T23:28:14.138Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:14.138Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_EGS7aDpC-R": {
+      "id": "itm_EGS7aDpC-R",
+      "x": 2066,
+      "y": 4854,
+      "width": 323,
+      "height": 61,
+      "title": "L4·S4 Cyclists, bus lanes, light rail if you have…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_hVlCNeDzGt",
+          "blobHash": "7af89d2fad458c67c26f8e0240a434bab3b4943b9d00f9065267a0ad19a6a4f5",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 53,
+          "createdAt": "2026-09-10T23:28:14.710Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_hVlCNeDzGt",
+      "createdAt": "2026-09-10T23:28:14.710Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:14.710Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_QIIJ8qVylB": {
+      "id": "itm_QIIJ8qVylB",
+      "x": 32,
+      "y": 4969,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L4·S5 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_E6s2lHy5wy",
+          "blobHash": "7efc7531236941423bedd6622143dc0225db8492d21f3035b7320cf6858be21b",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:15.264Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_E6s2lHy5wy",
+      "createdAt": "2026-09-10T23:28:15.264Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:15.264Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_HLc_F1UEKv": {
+      "id": "itm_HLc_F1UEKv",
+      "x": 710,
+      "y": 4969,
+      "width": 262,
+      "height": 34,
+      "title": "L4·S6 Real rush hour (5 pm)",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_YNV4ado2Gu",
+          "blobHash": "4d6ff139b2173bec05a70c270e253a0083397272c77105355d3e602acffe9b77",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 28,
+          "createdAt": "2026-09-10T23:28:15.936Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_YNV4ado2Gu",
+      "createdAt": "2026-09-10T23:28:15.936Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:15.936Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Py5mmWODG4": {
+      "id": "itm_Py5mmWODG4",
+      "x": 1388,
+      "y": 4969,
+      "width": 320,
+      "height": 61,
+      "title": "L4·S7 Left turns in heavy traffic; yellow-light ca…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_42UgI7T0QN",
+          "blobHash": "38a617d256f1eaf99442ec8f601e104ea1883450e489ec4595fe737f8ae9b802",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:16.587Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_42UgI7T0QN",
+      "createdAt": "2026-09-10T23:28:16.587Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:16.587Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_K0ks01XIsf": {
+      "id": "itm_K0ks01XIsf",
+      "x": 2066,
+      "y": 4969,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L4·S8 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_N9CpLELW0h",
+          "blobHash": "d5e8c589c000effc4e573297b1089c0f2c9edec58ea0490e6115996fc6bb79b6",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:17.180Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_N9CpLELW0h",
+      "createdAt": "2026-09-10T23:28:17.180Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:17.180Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_u1agsMsV1q": {
+      "id": "itm_u1agsMsV1q",
+      "x": 32,
+      "y": 5084,
+      "width": 257,
+      "height": 34,
+      "title": "L4·S9 Distraction inoculation",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_I1XpGl9lEj",
+          "blobHash": "6c2f1d1a805d85fee6d83e83c65b2871d3e6e4747663850ecf24029e8fdaf98d",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 30,
+          "createdAt": "2026-09-10T23:28:17.771Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_I1XpGl9lEj",
+      "createdAt": "2026-09-10T23:28:17.771Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:17.771Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_p43bx2tnKP": {
+      "id": "itm_p43bx2tnKP",
+      "x": 710,
+      "y": 5084,
+      "width": 152,
+      "height": 34,
+      "title": "🌙 L4·S10 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_dux2cfmrdY",
+          "blobHash": "065bbaf6a41e66edb7163a047a9476c1629582daacb564b2cebbcdc99cd2c9d3",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 18,
+          "createdAt": "2026-09-10T23:28:18.353Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_dux2cfmrdY",
+      "createdAt": "2026-09-10T23:28:18.353Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:18.353Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_rVwcdGJP0Z": {
+      "id": "itm_rVwcdGJP0Z",
+      "x": 1388,
+      "y": 5084,
+      "width": 320,
+      "height": 61,
+      "title": "L4·S11 Josh picks the route and the goal",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_WbeU2-9hD2",
+          "blobHash": "89aa08fbd462384e9e289285975f3d4651a541f7d8eb3505f57270f37287195e",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 41,
+          "createdAt": "2026-09-10T23:28:18.999Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_WbeU2-9hD2",
+      "createdAt": "2026-09-10T23:28:18.999Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:18.999Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_sXDxrrZZnW": {
+      "id": "itm_sXDxrrZZnW",
+      "x": 2066,
+      "y": 5084,
+      "width": 263,
+      "height": 34,
+      "title": "🌙 L4·S12 NIGHT · BOSS RUN",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_V27_rEtAb_",
+          "blobHash": "b97c406a13d818f639276f7c36f942af482dfe59a4f6e5668a5d4b9e7437454b",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 30,
+          "createdAt": "2026-09-10T23:28:19.578Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_V27_rEtAb_",
+      "createdAt": "2026-09-10T23:28:19.578Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:19.578Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Q-vE_5Yqtc": {
+      "id": "itm_Q-vE_5Yqtc",
+      "x": 32,
+      "y": 5199,
+      "width": 344,
+      "height": 34,
+      "title": "L5·S1 Prep at 45 mph on a divided road",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_8I-K5u849Y",
+          "blobHash": "2a5bc1d73c69cd275a4847266576167fdfaab92cd083bd7543cb56bc64d19010",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 39,
+          "createdAt": "2026-09-10T23:28:20.141Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_8I-K5u849Y",
+      "createdAt": "2026-09-10T23:28:20.141Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:20.141Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_zzkyTi9iO5": {
+      "id": "itm_zzkyTi9iO5",
+      "x": 710,
+      "y": 5199,
+      "width": 196,
+      "height": 34,
+      "title": "L5·S2 FIRST MERGE",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_F7TMs6mGZ2",
+          "blobHash": "39d359a884acf51ea7fafc6fd7bd4ba32c9479b60de2d35b3b56ab9fa52832f4",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 18,
+          "createdAt": "2026-09-10T23:28:20.708Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_F7TMs6mGZ2",
+      "createdAt": "2026-09-10T23:28:20.708Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:20.708Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_kP_rV-4jOR": {
+      "id": "itm_kP_rV-4jOR",
+      "x": 1388,
+      "y": 5199,
+      "width": 290,
+      "height": 34,
+      "title": "L5·S3 20 minutes on the highway",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_wfm3YpZTzi",
+          "blobHash": "068f325dae91bd90fd7f5c117a7a3bb91a9f44521e48318075dfbb8986a84973",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 32,
+          "createdAt": "2026-09-10T23:28:21.288Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_wfm3YpZTzi",
+      "createdAt": "2026-09-10T23:28:21.288Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:21.288Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_9H7xykpo4R": {
+      "id": "itm_9H7xykpo4R",
+      "x": 2066,
+      "y": 5199,
+      "width": 294,
+      "height": 34,
+      "title": "L5·S4 Lane changes at speed ×10",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_c-Jz2wl_Zu",
+          "blobHash": "319f16e2a5df553f65b490ebe079989c67252ccfd4299fba4ef59e8c69139c1a",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 33,
+          "createdAt": "2026-09-10T23:28:21.891Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_c-Jz2wl_Zu",
+      "createdAt": "2026-09-10T23:28:21.891Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:21.891Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_LZhlVLo427": {
+      "id": "itm_LZhlVLo427",
+      "x": 32,
+      "y": 5314,
+      "width": 114,
+      "height": 34,
+      "title": "L5·S5 Exits",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_p_Tw2DvZ3e",
+          "blobHash": "859ec66cba41885e19229d48a169fca7b25e70f7039bffbf80e3ff33f5302404",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 12,
+          "createdAt": "2026-09-10T23:28:22.480Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_p_Tw2DvZ3e",
+      "createdAt": "2026-09-10T23:28:22.480Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:22.480Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_7Zg_fTzbAy": {
+      "id": "itm_7Zg_fTzbAy",
+      "x": 710,
+      "y": 5314,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L5·S6 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_J2rJ4AOAXo",
+          "blobHash": "3f55f52ce3ce93d81d7ee053c9b9805b60f3fbafe66d8c9cf9d69129e148414b",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:23.056Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_J2rJ4AOAXo",
+      "createdAt": "2026-09-10T23:28:23.056Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:23.056Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_p6OqUg2FPj": {
+      "id": "itm_p6OqUg2FPj",
+      "x": 1388,
+      "y": 5314,
+      "width": 320,
+      "height": 61,
+      "title": "L5·S7 Moderate weekday traffic (mid-morning)",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_rYlThQqrc6",
+          "blobHash": "93a9e3d8b1127d5553862c19d98b6a1786d546d1ae666abe3559103a673ba4ec",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 45,
+          "createdAt": "2026-09-10T23:28:23.612Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_rYlThQqrc6",
+      "createdAt": "2026-09-10T23:28:23.612Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:23.612Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_D7ANa_bISP": {
+      "id": "itm_D7ANa_bISP",
+      "x": 2066,
+      "y": 5314,
+      "width": 179,
+      "height": 34,
+      "title": "L5·S8 Interchanges",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_KVEH5J7UiI",
+          "blobHash": "e7611705cb5d01856344487ad376347847e73e92395f737df039f9f3fc91c5a8",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 19,
+          "createdAt": "2026-09-10T23:28:24.163Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_KVEH5J7UiI",
+      "createdAt": "2026-09-10T23:28:24.163Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:24.163Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_i6S_7hcEm0": {
+      "id": "itm_i6S_7hcEm0",
+      "x": 32,
+      "y": 5429,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L5·S9 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_l-yPQdZZ5S",
+          "blobHash": "c956c463fe5c9347f61e97f4c773c7d4afede21c5fe87ffcf1f2251d555df6c6",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:24.713Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_l-yPQdZZ5S",
+      "createdAt": "2026-09-10T23:28:24.713Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:24.713Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm__Ehf3mLAAE": {
+      "id": "itm__Ehf3mLAAE",
+      "x": 710,
+      "y": 5429,
+      "width": 188,
+      "height": 34,
+      "title": "L5·S10 Heavy traffic",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_t4FKI9LP9o",
+          "blobHash": "e02e800931ac12d535b7f8cdadf9e5a4001e5d1408dfb4487b8656c1f2bff309",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 21,
+          "createdAt": "2026-09-10T23:28:25.277Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_t4FKI9LP9o",
+      "createdAt": "2026-09-10T23:28:25.277Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:25.277Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_FxGF4dhzMW": {
+      "id": "itm_FxGF4dhzMW",
+      "x": 1388,
+      "y": 5429,
+      "width": 152,
+      "height": 34,
+      "title": "🌙 L5·S11 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_K1ArsnsGCL",
+          "blobHash": "bee7f660ce7a3477e59ceac785028c4c0a3583cdf4f06d9cccc0d78c1c4b69ac",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 18,
+          "createdAt": "2026-09-10T23:28:25.866Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_K1ArsnsGCL",
+      "createdAt": "2026-09-10T23:28:25.866Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:25.866Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_UlX9-GEV2f": {
+      "id": "itm_UlX9-GEV2f",
+      "x": 2066,
+      "y": 5429,
+      "width": 263,
+      "height": 34,
+      "title": "🌙 L5·S12 NIGHT · BOSS RUN",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_k3VCHnPTIw",
+          "blobHash": "cb4b33f89fd83a5a34b99d39f248b1a25577ba7e0019231af9ef9df424e3fd68",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 30,
+          "createdAt": "2026-09-10T23:28:26.522Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_k3VCHnPTIw",
+      "createdAt": "2026-09-10T23:28:26.522Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:26.522Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_BfvhZOSPJw": {
+      "id": "itm_BfvhZOSPJw",
+      "x": 32,
+      "y": 5544,
+      "width": 290,
+      "height": 34,
+      "title": "L6·S1 Empty snowy (or wet) lot",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_Zz-oCjjMHb",
+          "blobHash": "b942e3e464351394ada4d86d376e0b3d1b31cb199b67950f371d2305ab1c896d",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 31,
+          "createdAt": "2026-09-10T23:28:27.147Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_Zz-oCjjMHb",
+      "createdAt": "2026-09-10T23:28:27.147Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:27.147Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm__v6DGzMC1i": {
+      "id": "itm__v6DGzMC1i",
+      "x": 710,
+      "y": 5544,
+      "width": 173,
+      "height": 34,
+      "title": "L6·S2 Snow roads",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_r-uWqj0BkL",
+          "blobHash": "1ee6b29fe854fadfbfe37f0ae6fa78fc8e4da4aca4e22b7c9e3bff726024d7d3",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:27.752Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_r-uWqj0BkL",
+      "createdAt": "2026-09-10T23:28:27.752Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:27.752Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_aLr93eZ_UC": {
+      "id": "itm_aLr93eZ_UC",
+      "x": 1388,
+      "y": 5544,
+      "width": 195,
+      "height": 34,
+      "title": "L6·S3 Ice awareness",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_s6K5klXfRC",
+          "blobHash": "667a77224fab32d0ca7919a3f6b84e03453006c24e75d447579d1a64c13999e3",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 20,
+          "createdAt": "2026-09-10T23:28:28.351Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_s6K5klXfRC",
+      "createdAt": "2026-09-10T23:28:28.351Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:28.351Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_WAgQqOM3Sm": {
+      "id": "itm_WAgQqOM3Sm",
+      "x": 2066,
+      "y": 5544,
+      "width": 190,
+      "height": 34,
+      "title": "L6·S4 Mountain road",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_qyGWrQI6WS",
+          "blobHash": "ad3aa57e34933a22519201069f18dd62582935254e42a4664c07148c0b0d52b5",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 20,
+          "createdAt": "2026-09-10T23:28:28.968Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_qyGWrQI6WS",
+      "createdAt": "2026-09-10T23:28:28.968Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:28.968Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Levol62SWT": {
+      "id": "itm_Levol62SWT",
+      "x": 32,
+      "y": 5659,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L6·S5 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_JkMqfUdQ2q",
+          "blobHash": "3891f8e66c4238a188be68e11b2e2d97409df65f8bcce25e31e5bb48abf57fb2",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:29.624Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_JkMqfUdQ2q",
+      "createdAt": "2026-09-10T23:28:29.624Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:29.624Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_W1qyE39Ilp": {
+      "id": "itm_W1qyE39Ilp",
+      "x": 710,
+      "y": 5659,
+      "width": 305,
+      "height": 34,
+      "title": "L6·S6 Sun glare at sunrise/sunset",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_IiYvZrRf07",
+          "blobHash": "8c7c47ec12985790899950721732c3b971d312da4bd74a5ebb82abde785d0461",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 34,
+          "createdAt": "2026-09-10T23:28:30.343Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_IiYvZrRf07",
+      "createdAt": "2026-09-10T23:28:30.343Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:30.343Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_iDAKBiEEjc": {
+      "id": "itm_iDAKBiEEjc",
+      "x": 1388,
+      "y": 5659,
+      "width": 222,
+      "height": 34,
+      "title": "L6·S7 Gravel / dirt road",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_CWeOUCIpYc",
+          "blobHash": "c1b4875b73b9edd39a2d539538d7035d05eddd211a1267821aadccd785a43ee9",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 25,
+          "createdAt": "2026-09-10T23:28:31.019Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_CWeOUCIpYc",
+      "createdAt": "2026-09-10T23:28:31.019Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:31.019Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_6PQsdwECHQ": {
+      "id": "itm_6PQsdwECHQ",
+      "x": 2066,
+      "y": 5659,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L6·S8 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_c59w7hm1hO",
+          "blobHash": "ab81fe0e02fcf26a3d89c03d22f25a1536c2b3d2f859d9626dbeb0a8e56da853",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:31.648Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_c59w7hm1hO",
+      "createdAt": "2026-09-10T23:28:31.648Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:31.648Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_L3NRLBy5LQ": {
+      "id": "itm_L3NRLBy5LQ",
+      "x": 32,
+      "y": 5774,
+      "width": 337,
+      "height": 61,
+      "title": "L6·S9 Traction & chain laws (read the signs), then…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_p67C8Zzw9f",
+          "blobHash": "644b0f1d0ae1c726440c16d03fa7fbceb03cb5ed28aab69f4aa50768dd8b422e",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:32.244Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_p67C8Zzw9f",
+      "createdAt": "2026-09-10T23:28:32.244Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:32.244Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_c_lbe22Yim": {
+      "id": "itm_c_lbe22Yim",
+      "x": 710,
+      "y": 5774,
+      "width": 152,
+      "height": 34,
+      "title": "🌙 L6·S10 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_7F2AQ8zjkh",
+          "blobHash": "a9aef853313911d7f03b1ff742502cd90420e26780ffe1265838674c5ecc4393",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 18,
+          "createdAt": "2026-09-10T23:28:32.821Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_7F2AQ8zjkh",
+      "createdAt": "2026-09-10T23:28:32.821Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:32.821Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_mILrM9-FPY": {
+      "id": "itm_mILrM9-FPY",
+      "x": 1388,
+      "y": 5774,
+      "width": 218,
+      "height": 34,
+      "title": "L6·S11 Breakdown drill",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_n4eFtFyGvS",
+          "blobHash": "b733ffb3d290c379c5230a9e99b67f87f9976109f61572f35426c9ba8ac042df",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 23,
+          "createdAt": "2026-09-10T23:28:33.402Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_n4eFtFyGvS",
+      "createdAt": "2026-09-10T23:28:33.402Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:33.402Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_GNJjfxf6qj": {
+      "id": "itm_GNJjfxf6qj",
+      "x": 2066,
+      "y": 5774,
+      "width": 263,
+      "height": 34,
+      "title": "🌙 L6·S12 NIGHT · BOSS RUN",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_XqMGWhiwzK",
+          "blobHash": "7af6fdc4f14000cba45f522a2d89dee0aad980bc354508a95786bf72efdae3b3",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 30,
+          "createdAt": "2026-09-10T23:28:33.990Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_XqMGWhiwzK",
+      "createdAt": "2026-09-10T23:28:33.990Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:33.990Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Rl57NsBO1D": {
+      "id": "itm_Rl57NsBO1D",
+      "x": 32,
+      "y": 5889,
+      "width": 299,
+      "height": 34,
+      "title": "L7·S1 Pre-drive check rehearsal",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_YxFoqeYqq5",
+          "blobHash": "4382c43cd8c183a1f0849401580833b07a0faf94a8fc9b499254f706595ec33a",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 32,
+          "createdAt": "2026-09-10T23:28:34.565Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_YxFoqeYqq5",
+      "createdAt": "2026-09-10T23:28:34.565Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:34.565Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_hXTYlPzPdu": {
+      "id": "itm_hXTYlPzPdu",
+      "x": 710,
+      "y": 5889,
+      "width": 194,
+      "height": 34,
+      "title": "L7·S2 MOCK TEST 1",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_kIGc1Y4VLk",
+          "blobHash": "959c053609e3dcfc058d52a37333920aec48b5b729c22c1b3ab971bd8eb357c7",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 18,
+          "createdAt": "2026-09-10T23:28:35.145Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_kIGc1Y4VLk",
+      "createdAt": "2026-09-10T23:28:35.145Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:35.145Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_685DLRZLx_": {
+      "id": "itm_685DLRZLx_",
+      "x": 1388,
+      "y": 5889,
+      "width": 240,
+      "height": 34,
+      "title": "L7·S3 Fix list from mock 1",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_XmO837417g",
+          "blobHash": "ab9227a763434ab0b56204cdf382b498537201e1fe61c3fcdf60287c19b23f2f",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 27,
+          "createdAt": "2026-09-10T23:28:35.734Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_XmO837417g",
+      "createdAt": "2026-09-10T23:28:35.734Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:35.734Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_-ml5kihowI": {
+      "id": "itm_-ml5kihowI",
+      "x": 2066,
+      "y": 5889,
+      "width": 321,
+      "height": 61,
+      "title": "L7·S4 Scout the third-party school's test area and…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_iGLI1QG0pY",
+          "blobHash": "15b945c3db9ca70c42b37a8c26ccf49fe4780d24ebb87c630493659026e6eb5b",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:36.347Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_iGLI1QG0pY",
+      "createdAt": "2026-09-10T23:28:36.347Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:36.347Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_aL-PZwbyw7": {
+      "id": "itm_aL-PZwbyw7",
+      "x": 32,
+      "y": 6004,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L7·S5 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_N-Ih6_LKEg",
+          "blobHash": "d2e98cbb9eaef75a61bae554f1957cd707fd254a66bd189a5f13ebb5e3b18955",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:36.919Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_N-Ih6_LKEg",
+      "createdAt": "2026-09-10T23:28:36.919Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:36.919Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Hac9yGPDFn": {
+      "id": "itm_Hac9yGPDFn",
+      "x": 710,
+      "y": 6004,
+      "width": 194,
+      "height": 34,
+      "title": "L7·S6 MOCK TEST 2",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_jDrCrKKGr4",
+          "blobHash": "7011aa7a3e3cb7d2d65e56c74f37fd668edd59e134de419a54b127c4c5a3c24f",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 18,
+          "createdAt": "2026-09-10T23:28:37.506Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_jDrCrKKGr4",
+      "createdAt": "2026-09-10T23:28:37.506Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:37.506Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_Vk3IW3vHmb": {
+      "id": "itm_Vk3IW3vHmb",
+      "x": 1388,
+      "y": 6004,
+      "width": 204,
+      "height": 34,
+      "title": "L7·S7 Maneuvers only",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_Qmf5uhX1gF",
+          "blobHash": "9ed727ebbbcfd162fd272db8d31fe60c0acc3a6279dfbf4adf786dc7f355f965",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 21,
+          "createdAt": "2026-09-10T23:28:38.079Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_Qmf5uhX1gF",
+      "createdAt": "2026-09-10T23:28:38.079Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:38.079Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_W796IuE_xF": {
+      "id": "itm_W796IuE_xF",
+      "x": 2066,
+      "y": 6004,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L7·S8 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_x4ARe6WR9u",
+          "blobHash": "a5afc526b56840eea5587192371ee73b45e84ff95041ed7e5a0ff80d7a7a7dff",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:38.656Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_x4ARe6WR9u",
+      "createdAt": "2026-09-10T23:28:38.656Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:38.656Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_oMpHXMzHeP": {
+      "id": "itm_oMpHXMzHeP",
+      "x": 32,
+      "y": 6119,
+      "width": 324,
+      "height": 61,
+      "title": "L7·S9 MOCK TEST 3 with a different adult as examin…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_rRvkj1s5k0",
+          "blobHash": "25ea0c9690d62ac7ebe57a33c5ba2dc7663584cf7b27a4677d1dda9eb96b625b",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:39.239Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_rRvkj1s5k0",
+      "createdAt": "2026-09-10T23:28:39.239Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:39.239Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_ddAve2ikF5": {
+      "id": "itm_ddAve2ikF5",
+      "x": 710,
+      "y": 6119,
+      "width": 152,
+      "height": 34,
+      "title": "🌙 L7·S10 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_jIwouAe3Jg",
+          "blobHash": "b2646aa9674c5275bc529642cb68741c5c6b24c481356dc6c63e1638128a18b0",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 18,
+          "createdAt": "2026-09-10T23:28:39.830Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_jIwouAe3Jg",
+      "createdAt": "2026-09-10T23:28:39.830Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:39.830Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_rICCIgTGzZ": {
+      "id": "itm_rICCIgTGzZ",
+      "x": 1388,
+      "y": 6119,
+      "width": 197,
+      "height": 34,
+      "title": "L7·S11 Role reversal",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_Gr1aOj27tc",
+          "blobHash": "de2eb83c92084c9da3113cf382d5c317b23baf13c54ea9fbfc1be7bd3c802edb",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 21,
+          "createdAt": "2026-09-10T23:28:40.419Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_Gr1aOj27tc",
+      "createdAt": "2026-09-10T23:28:40.419Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:40.419Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_rNdB7kKuXT": {
+      "id": "itm_rNdB7kKuXT",
+      "x": 2066,
+      "y": 6119,
+      "width": 263,
+      "height": 34,
+      "title": "🌙 L7·S12 NIGHT · BOSS RUN",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_uYRwCn6czm",
+          "blobHash": "abec4141ff94ec20674e621ca47fdff443d25aca12300c98f76de8b115f4ad49",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 30,
+          "createdAt": "2026-09-10T23:28:41.013Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_uYRwCn6czm",
+      "createdAt": "2026-09-10T23:28:41.013Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:41.013Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_6vb9bSqeR1": {
+      "id": "itm_6vb9bSqeR1",
+      "x": 32,
+      "y": 6234,
+      "width": 320,
+      "height": 61,
+      "title": "L8·S1 Book the drive test at an approved third-par…",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_VDFs7Xp-Ws",
+          "blobHash": "ed06945326dc55c6c40ea3df2298634ec7a9d79eccc2884312adabab5ee45527",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 54,
+          "createdAt": "2026-09-10T23:28:41.588Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_VDFs7Xp-Ws",
+      "createdAt": "2026-09-10T23:28:41.588Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:41.588Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_D7qejQ612t": {
+      "id": "itm_D7qejQ612t",
+      "x": 710,
+      "y": 6234,
+      "width": 346,
+      "height": 61,
+      "title": "L8·S2 Top-up whatever the log is short on",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_O5Glo1fJ_E",
+          "blobHash": "ca9970ca1078536c6d95388859f049690421f931622aaca0720c0ed47119ee66",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 42,
+          "createdAt": "2026-09-10T23:28:42.176Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_O5Glo1fJ_E",
+      "createdAt": "2026-09-10T23:28:42.176Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:42.176Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_1x4EKHZkpJ": {
+      "id": "itm_1x4EKHZkpJ",
+      "x": 1388,
+      "y": 6234,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L8·S3 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_3GRCpBlnhm",
+          "blobHash": "cbcac3c866c28d6e0f914865ccf10e55b19a89ed2c42b6cd7dc165d5e75c2a6c",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:42.743Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_3GRCpBlnhm",
+      "createdAt": "2026-09-10T23:28:42.743Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:42.743Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_i8diMtO9bu": {
+      "id": "itm_i8diMtO9bu",
+      "x": 2066,
+      "y": 6234,
+      "width": 199,
+      "height": 34,
+      "title": "L8·S4 Solo simulation",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_XTbOuRSptE",
+          "blobHash": "3db56216e0e43adccc2243de93040a47dda025fcb36bbb0b8ec0017386c5487f",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 22,
+          "createdAt": "2026-09-10T23:28:43.305Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_XTbOuRSptE",
+      "createdAt": "2026-09-10T23:28:43.305Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:43.305Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_d5LULQnQe8": {
+      "id": "itm_d5LULQnQe8",
+      "x": 32,
+      "y": 6349,
+      "width": 297,
+      "height": 34,
+      "title": "L8·S5 The family driving contract",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_5s8Wab1cUh",
+          "blobHash": "e9450597ef77939e4073b4dc259be419f4ecef745afa004f46f95add15b4c9f2",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 34,
+          "createdAt": "2026-09-10T23:28:43.881Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_5s8Wab1cUh",
+      "createdAt": "2026-09-10T23:28:43.881Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:43.881Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_NekUS8FWnH": {
+      "id": "itm_NekUS8FWnH",
+      "x": 710,
+      "y": 6349,
+      "width": 142,
+      "height": 34,
+      "title": "🌙 L8·S6 NIGHT",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_NzcI-nqYeP",
+          "blobHash": "9c02c92f4545a354b6f0859995ed81da7c15ac5c867b611eedf622f444d6b659",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:44.495Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_NzcI-nqYeP",
+      "createdAt": "2026-09-10T23:28:44.495Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:44.495Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_v7sTAkoQvY": {
+      "id": "itm_v7sTAkoQvY",
+      "x": 1388,
+      "y": 6349,
+      "width": 162,
+      "height": 34,
+      "title": "L8·S7 Day before",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_LkIUbVF7hP",
+          "blobHash": "c49daa530b757f879015f9af4cc73ba3f488e02f8861cc5f615fbafc4d20cdaa",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 17,
+          "createdAt": "2026-09-10T23:28:45.097Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_LkIUbVF7hP",
+      "createdAt": "2026-09-10T23:28:45.097Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:45.097Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_kb2TGK2Rpn": {
+      "id": "itm_kb2TGK2Rpn",
+      "x": 2066,
+      "y": 6349,
+      "width": 163,
+      "height": 34,
+      "title": "L8·S8 BOSS RUN",
+      "description": "",
+      "properties": {
+        "kind": "text"
+      },
+      "versions": [
+        {
+          "id": "ver_gcpVf3YkeU",
+          "blobHash": "1fd8d9b996d4d8bf5db1af43519ea4cdc5b69dd78b260df16ed0215cb1a50b98",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 15,
+          "createdAt": "2026-09-10T23:28:45.776Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_gcpVf3YkeU",
+      "createdAt": "2026-09-10T23:28:45.776Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:28:45.776Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm__Ou9nik2T3": {
+      "id": "itm__Ou9nik2T3",
+      "x": -260,
+      "y": 1060,
+      "width": 220,
+      "height": 220,
+      "title": "Levels heading",
+      "description": "",
+      "properties": {
+        "kind": "text",
+        "textStyle": "heading",
+        "paper": "yellow"
+      },
+      "versions": [
+        {
+          "id": "ver_iXoCeoXVUa",
+          "blobHash": "1a01dd212cec5e6f564cfb3ca0691ef101a4148b9e379d96d0007f24b8a09ba7",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 88,
+          "createdAt": "2026-09-10T23:33:14.509Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_iXoCeoXVUa",
+      "createdAt": "2026-09-10T23:33:14.509Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:33:38.706Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_gmPOVUdYue": {
+      "id": "itm_gmPOVUdYue",
+      "x": 2900,
+      "y": 800,
+      "width": 220,
+      "height": 220,
+      "title": "Rules heading",
+      "description": "",
+      "properties": {
+        "kind": "text",
+        "textStyle": "heading",
+        "paper": "yellow"
+      },
+      "versions": [
+        {
+          "id": "ver_R2XJLLVnEJ",
+          "blobHash": "3a4d4dcbbfddc450c37a0512ec88b43d0df6dc469f3b2dcd9d6bf4023fce4aed",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 95,
+          "createdAt": "2026-09-10T23:33:15.116Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_R2XJLLVnEJ",
+      "createdAt": "2026-09-10T23:33:15.116Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:33:39.270Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "itm_4Sn4Wdsz0v": {
+      "id": "itm_4Sn4Wdsz0v",
+      "x": -260,
+      "y": 3980,
+      "width": 220,
+      "height": 220,
+      "title": "Mission log heading",
+      "description": "",
+      "properties": {
+        "kind": "text",
+        "textStyle": "heading",
+        "paper": "yellow"
+      },
+      "versions": [
+        {
+          "id": "ver_QGOc0WHmSs",
+          "blobHash": "7badf531b8e19ec2ba1ae0764ad3c48744bc955951e68f73af7696089e1ec401",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 131,
+          "createdAt": "2026-09-10T23:33:15.762Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_QGOc0WHmSs",
+      "createdAt": "2026-09-10T23:33:15.762Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:33:39.835Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    }
+  },
+  "threads": {
+    "thr_RIqAqUE_ic": {
+      "id": "thr_RIqAqUE_ic",
+      "x": 1800,
+      "y": 0,
+      "anchorItemId": "itm_iXjExG0k0g",
+      "comments": [
+        {
+          "id": "cmt_x75Mhv-hGN",
+          "author": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          },
+          "body": "Mission plotted. Start with #The Route, then the eight level cards left-to-right (each ends in a boss battle), then #Colorado Rulebook, #The 30-Minute Recipe and #Final Boss: The Drive Test. #Skill Tree shows what unlocks what. The #Mission Log sheet has one cell per session for 20 weeks — react ✅ on a cell when it's logged.\n\nJudgment calls: 40 hrs ÷ 2 hrs/week = 20 weeks, so the plan starts Mon Sep 14 and ends Jan 31; snow lands in Level 6 (December) on purpose. Highway waits until Level 5, after lane changes and gap choice are solid. The 20 🌙 sessions cover Colorado's 10 night hours exactly.\n\nTwo things only you know: when Josh's permit was issued (12-month hold gates the test date) and whether the 6 hrs with a driving school are done. The odometer on #The Route has a ?? for the permit — tell me and I'll fill it in. The whole thing is a slide deck too: arrows in full screen.",
+          "createdAt": "2026-09-10T23:29:42.454Z",
+          "items": [
+            "itm_iXjExG0k0g",
+            "itm_Zd5jsVXFT_",
+            "itm_Mx3drbmwqp",
+            "itm_bVdNyoe1MO",
+            "itm_cRx3tTye4j",
+            "itm_elZv8RZqQw"
+          ]
+        },
+        {
+          "id": "cmt_E31m0vhrz7",
+          "author": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          },
+          "body": "Built on a local daemon: isocan.io refused this sandbox's connections (egress policy, HTTP 403), so the canvas could not be born at the hosted home. The whole canvas — history, blobs, this thread — is exported to scratch/josh-drives-me on branch claude/josh-driving-plan-jve2oj; `isocan import scratch/josh-drives-me --to https://isocan.io` restores it there intact.",
+          "createdAt": "2026-09-10T23:34:48.258Z"
+        }
+      ],
+      "createdAt": "2026-09-10T23:29:42.454Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "main": true
+    }
+  },
+  "agents": {}
+}

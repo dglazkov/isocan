@@ -1,0 +1,1 @@
+W1 · Sep 14 · L1,W2 · Sep 21 · L1,W3 · Sep 28 · L2,W4 · Oct 5 · L2,W5 · Oct 12 · L3,W6 · Oct 19 · L3,W7 · Oct 26 · L4,W8 · Nov 2 · L4,W9 · Nov 9 · L4,W10 · Nov 16 · L5,W11 · Nov 23 · L5,W12 · Nov 30 · L5,W13 · Dec 7 · L6,W14 · Dec 14 · L6,W15 · Dec 21 · L6,W16 · Dec 28 · L7,W17 · Jan 4 · L7,W18 · Jan 11 · L7,W19 · Jan 18 · L8,W20 · Jan 25 · L8

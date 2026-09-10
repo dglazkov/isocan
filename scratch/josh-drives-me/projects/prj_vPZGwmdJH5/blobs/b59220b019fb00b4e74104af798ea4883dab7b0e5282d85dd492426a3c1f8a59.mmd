@@ -1,0 +1,28 @@
+flowchart LR
+  classDef have fill:#1f3d2a,stroke:#5bd18a,color:#e8ffe8
+  classDef next fill:#3a2a10,stroke:#ffcf5a,color:#fff3d0
+  classDef later fill:#1c1c22,stroke:#8d8778,color:#f2efe6
+  classDef boss fill:#3a0d12,stroke:#ff3b3b,color:#ffe0e0
+
+  A[Quiet streets ✅]:::have --> B[Precision stops & signals]:::next
+  A --> C[Backing & 3-point turn]:::next
+  A --> D[Speed control by feel]:::next
+  B --> E[Traffic lights & unprotected lefts]:::later
+  D --> F[Lane changes · SMOG]:::later
+  C --> G[Parallel & reverse parking]:::later
+  E --> H[Roundabouts]:::later
+  E --> I[City & rush hour]:::later
+  F --> I
+  D --> J[Gap choice & following distance]:::later
+  F --> K{{Highway merge}}:::boss
+  J --> K
+  D --> K
+  I --> L[Night driving 🌙]:::later
+  K --> M[Highway at night 🌙]:::later
+  L --> N[Snow · ice · mountains 🏔️]:::later
+  M --> N
+  G --> O{{Mock tests}}:::boss
+  H --> O
+  I --> O
+  N --> O
+  O --> P{{THE DRIVE TEST 🏁}}:::boss

@@ -1,0 +1,19 @@
+{
+  "id": "prj_vPZGwmdJH5",
+  "title": "Josh Drives Me (Crazy?)",
+  "description": "A 20-week, 4×30-min mission plan taking Josh from sleepy-street driver to a Colorado license. Coached by Kitt.",
+  "properties": {
+    "theme": "mountains"
+  },
+  "createdAt": "2026-09-10T23:17:48.295Z",
+  "createdBy": {
+    "id": "usr_klu4w9yAPQ",
+    "name": "Kitt"
+  },
+  "updatedAt": "2026-09-10T23:34:48.258Z",
+  "updatedBy": {
+    "id": "usr_klu4w9yAPQ",
+    "name": "Kitt"
+  },
+  "lastOp": "thread.reply"
+}

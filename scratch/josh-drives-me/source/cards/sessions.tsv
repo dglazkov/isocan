@@ -1,0 +1,80 @@
+1	1	L1·S1 Baseline lap
+1	2	L1·S2 Stops & signals
+1	3	L1·S3 Backing
+1	4	L1·S4 Three-point turn ×10 on a quiet street
+2	1	L1·S5 Empty lot
+2	2	L1·S6 Hill parking (up/down, curb/no curb), U-turn…
+2	3	L1·S7 Lot drills
+2	4	L1·S8 BOSS RUN
+3	1	L2·S1 First lights at a quiet hour
+3	2	L2·S2 Left turns at lights
+3	3	L2·S3 Lane changes ×20 on a wide, empty arterial u…
+3	4	L2·S4 Following distance 3–4 s, scanning 12–15 s a…
+4	1	L2·S5 School zones, crosswalks, cyclists, bus stop…
+4	2	L2·S6 Double-lane turns into the correct lane, cen…
+4	3	L2·S7 Moderate traffic (after-school hour)
+4	4	L2·S8 BOSS RUN
+5	1	L3·S1 Parallel park with cones, reference-point me…
+5	2	L3·S2 Parallel ×10 between real cars on a quiet st…
+5	3	L3·S3 Busy lot
+5	4	L3·S4 Single-lane roundabouts
+6	1	L3·S5 Multi-lane roundabouts (pick the lane before…
+6	2	🌙 L3·S6 NIGHT 1
+6	3	🌙 L3·S7 NIGHT 2
+6	4	L3·S8 BOSS RUN
+7	1	L4·S1 Downtown at a quiet hour
+7	2	L4·S2 Unfamiliar route with navigation
+7	3	L4·S3 Dense arterial traffic
+7	4	L4·S4 Cyclists, bus lanes, light rail if you have…
+8	1	🌙 L4·S5 NIGHT
+8	2	L4·S6 Real rush hour (5 pm)
+8	3	L4·S7 Left turns in heavy traffic; yellow-light ca…
+8	4	🌙 L4·S8 NIGHT
+9	1	L4·S9 Distraction inoculation
+9	2	🌙 L4·S10 NIGHT
+9	3	L4·S11 Josh picks the route and the goal
+9	4	🌙 L4·S12 NIGHT · BOSS RUN
+10	1	L5·S1 Prep at 45 mph on a divided road
+10	2	L5·S2 FIRST MERGE
+10	3	L5·S3 20 minutes on the highway
+10	4	L5·S4 Lane changes at speed ×10
+11	1	L5·S5 Exits
+11	2	🌙 L5·S6 NIGHT
+11	3	L5·S7 Moderate weekday traffic (mid-morning)
+11	4	L5·S8 Interchanges
+12	1	🌙 L5·S9 NIGHT
+12	2	L5·S10 Heavy traffic
+12	3	🌙 L5·S11 NIGHT
+12	4	🌙 L5·S12 NIGHT · BOSS RUN
+13	1	L6·S1 Empty snowy (or wet) lot
+13	2	L6·S2 Snow roads
+13	3	L6·S3 Ice awareness
+13	4	L6·S4 Mountain road
+14	1	🌙 L6·S5 NIGHT
+14	2	L6·S6 Sun glare at sunrise/sunset
+14	3	L6·S7 Gravel / dirt road
+14	4	🌙 L6·S8 NIGHT
+15	1	L6·S9 Traction & chain laws (read the signs), then…
+15	2	🌙 L6·S10 NIGHT
+15	3	L6·S11 Breakdown drill
+15	4	🌙 L6·S12 NIGHT · BOSS RUN
+16	1	L7·S1 Pre-drive check rehearsal
+16	2	L7·S2 MOCK TEST 1
+16	3	L7·S3 Fix list from mock 1
+16	4	L7·S4 Scout the third-party school's test area and…
+17	1	🌙 L7·S5 NIGHT
+17	2	L7·S6 MOCK TEST 2
+17	3	L7·S7 Maneuvers only
+17	4	🌙 L7·S8 NIGHT
+18	1	L7·S9 MOCK TEST 3 with a different adult as examin…
+18	2	🌙 L7·S10 NIGHT
+18	3	L7·S11 Role reversal
+18	4	🌙 L7·S12 NIGHT · BOSS RUN
+19	1	L8·S1 Book the drive test at an approved third-par…
+19	2	L8·S2 Top-up whatever the log is short on
+19	3	🌙 L8·S3 NIGHT
+19	4	L8·S4 Solo simulation
+20	1	L8·S5 The family driving contract
+20	2	🌙 L8·S6 NIGHT
+20	3	L8·S7 Day before
+20	4	L8·S8 BOSS RUN

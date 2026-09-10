@@ -1,0 +1,227 @@
+[
+  {
+    "item": {
+      "id": "itm_X9opMow4Et",
+      "x": 0,
+      "y": -210,
+      "width": 917,
+      "height": 642,
+      "title": "Canvas title",
+      "description": "",
+      "properties": {
+        "kind": "text",
+        "textStyle": "display"
+      },
+      "versions": [
+        {
+          "id": "ver_V8nMEnJiaN",
+          "blobHash": "e65e482eabf1e50b993cdd6fb670041eeaa03a338aa7ecb695460150784d7c61",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 28,
+          "createdAt": "2026-09-10T23:26:26.812Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_V8nMEnJiaN",
+      "createdAt": "2026-09-10T23:26:26.812Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:26:26.812Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "deletedAt": "2026-09-10T23:33:13.890Z",
+    "deletedBy": {
+      "id": "usr_klu4w9yAPQ",
+      "name": "Kitt"
+    }
+  },
+  {
+    "item": {
+      "id": "itm_d4UPpT8Mnl",
+      "x": 0,
+      "y": -70,
+      "width": 509,
+      "height": 219,
+      "title": "Canvas subtitle",
+      "description": "",
+      "properties": {
+        "kind": "text",
+        "textStyle": "heading"
+      },
+      "versions": [
+        {
+          "id": "ver_01Tp_dbjED",
+          "blobHash": "bc99257421bc3c4308f90d96f8b795d4ba9fb1bf851a41d27dc666df6f7178d6",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 94,
+          "createdAt": "2026-09-10T23:26:27.352Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_01Tp_dbjED",
+      "createdAt": "2026-09-10T23:26:27.352Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:26:27.352Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "deletedAt": "2026-09-10T23:33:13.890Z",
+    "deletedBy": {
+      "id": "usr_klu4w9yAPQ",
+      "name": "Kitt"
+    }
+  },
+  {
+    "item": {
+      "id": "itm_nVlKgUX2lK",
+      "x": 0,
+      "y": 980,
+      "width": 686,
+      "height": 325,
+      "title": "Levels heading",
+      "description": "",
+      "properties": {
+        "kind": "text",
+        "textStyle": "title"
+      },
+      "versions": [
+        {
+          "id": "ver_NqkpeaTaSO",
+          "blobHash": "4516220186d81275127c3257156b24d1e2b057e63ce5163df082c29b9cc4dfc3",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 59,
+          "createdAt": "2026-09-10T23:26:27.895Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_NqkpeaTaSO",
+      "createdAt": "2026-09-10T23:26:27.895Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:26:27.895Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "deletedAt": "2026-09-10T23:33:13.890Z",
+    "deletedBy": {
+      "id": "usr_klu4w9yAPQ",
+      "name": "Kitt"
+    }
+  },
+  {
+    "item": {
+      "id": "itm_lN8l9lUNZQ",
+      "x": 2900,
+      "y": 980,
+      "width": 640,
+      "height": 219,
+      "title": "Rules heading",
+      "description": "",
+      "properties": {
+        "kind": "text",
+        "textStyle": "title"
+      },
+      "versions": [
+        {
+          "id": "ver_8h5hq-cai2",
+          "blobHash": "f37cd8ed1d0e21943140645180cc6fe0e0998592861a3237e405c3c94b8164d0",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 26,
+          "createdAt": "2026-09-10T23:26:28.449Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_8h5hq-cai2",
+      "createdAt": "2026-09-10T23:26:28.449Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:26:28.449Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "deletedAt": "2026-09-10T23:33:13.890Z",
+    "deletedBy": {
+      "id": "usr_klu4w9yAPQ",
+      "name": "Kitt"
+    }
+  },
+  {
+    "item": {
+      "id": "itm_QpLOAeji-E",
+      "x": 0,
+      "y": 3900,
+      "width": 698,
+      "height": 642,
+      "title": "Mission log heading",
+      "description": "",
+      "properties": {
+        "kind": "text",
+        "textStyle": "title"
+      },
+      "versions": [
+        {
+          "id": "ver_F-CUt9uYQZ",
+          "blobHash": "5b6abce3c48173c7b5799b29facc42583da68a29a31555b72790abbbaad7f046",
+          "mimeType": "text/markdown",
+          "filename": "text.md",
+          "size": 123,
+          "createdAt": "2026-09-10T23:27:57.689Z",
+          "createdBy": {
+            "id": "usr_klu4w9yAPQ",
+            "name": "Kitt"
+          }
+        }
+      ],
+      "currentVersionId": "ver_F-CUt9uYQZ",
+      "createdAt": "2026-09-10T23:27:57.689Z",
+      "createdBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      },
+      "updatedAt": "2026-09-10T23:27:57.689Z",
+      "updatedBy": {
+        "id": "usr_klu4w9yAPQ",
+        "name": "Kitt"
+      }
+    },
+    "deletedAt": "2026-09-10T23:33:13.890Z",
+    "deletedBy": {
+      "id": "usr_klu4w9yAPQ",
+      "name": "Kitt"
+    }
+  }
+]

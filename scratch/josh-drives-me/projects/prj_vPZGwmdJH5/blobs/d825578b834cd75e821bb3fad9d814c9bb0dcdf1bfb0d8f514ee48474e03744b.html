@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><title>The Drive Test</title><style>
+  *{box-sizing:border-box} html,body{margin:0;height:100%}
+  body{background:#0a0a0e;color:#f2efe6;font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;overflow:hidden}
+  .card{position:relative;height:100%;display:flex;flex-direction:column;padding:34px 38px 30px;
+        background:radial-gradient(120% 80% at 50% 0%,#1a1218 0%,#0a0a0e 60%)}
+  .scanner{position:absolute;left:0;right:0;top:0;height:8px;background:#1c1c22;overflow:hidden}
+  .scanner i{position:absolute;top:0;bottom:0;width:22%;background:linear-gradient(90deg,transparent,#ff2a2a 40%,#ff6b6b 50%,#ff2a2a 60%,transparent);
+             animation:scan 2.2s ease-in-out infinite alternate;box-shadow:0 0 18px #ff2a2a}
+  @keyframes scan{from{left:-22%}to{left:100%}}
+  .kicker{font:700 15px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;color:#ff5a5a;text-transform:uppercase}
+  h1{font-size:44px;line-height:1.02;margin:10px 0 6px;font-weight:800;letter-spacing:-.01em}
+  h1 small{display:block;font-size:20px;font-weight:600;color:#ffcf5a;margin-top:6px}
+  .sub{color:#b9b3a6;font-size:17px;margin:0 0 18px}
+  .sec{font:700 13px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;color:#ffcf5a;text-transform:uppercase;margin:18px 0 8px;border-bottom:1px solid #2a2a33;padding-bottom:6px}
+  ul{margin:0;padding-left:0;list-style:none}
+  li{padding:6px 0 6px 0;font-size:17px;line-height:1.3;border-bottom:1px dashed #23232b;display:flex;gap:10px}
+  li:last-child{border-bottom:0}
+  .n{flex:0 0 34px;font:700 14px/1.5 ui-monospace,Menlo,monospace;color:#8d8778}
+  .night{color:#9fd3ff}
+  .night .n{color:#7fbfff}
+  .boss{margin-top:auto;background:linear-gradient(135deg,#3a0d12,#1c0a0d);border:1px solid #ff3b3b;border-radius:14px;padding:14px 16px;font-size:17px;line-height:1.35}
+  .boss b{color:#ff6b6b;font:800 13px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;display:block;margin-bottom:6px}
+  .pill{display:inline-block;background:#1f1f27;border:1px solid #33333d;border-radius:999px;padding:5px 12px;font-size:14px;margin:0 6px 6px 0;color:#e8e2d3}
+  .pill.n{color:#9fd3ff;border-color:#2b4f6b}
+  .tip{background:#151519;border-left:4px solid #ffcf5a;padding:10px 14px;border-radius:0 10px 10px 0;font-size:16px;line-height:1.35;color:#e6e0d1;margin-top:14px}
+  .tip b{color:#ffcf5a}
+  .foot{margin-top:12px;font:12px/1.4 ui-monospace,Menlo,monospace;color:#6f6a5f;letter-spacing:.06em}
+  a{color:#9fd3ff}
+</style></head><body><div class="scanner"><i></i></div><div class="card">
+    <div class="kicker">Final boss</div>
+    <h1>🎮 The Drive Test<small>Print this. Use it as the score sheet for every mock test in Level 7.</small></h1>
+    <div class="sec">Pre-drive check (the test starts in the parking lot)</div>
+    <div>
+      <span class="pill">Headlights</span><span class="pill">Turn signals</span><span class="pill">Brake lights</span><span class="pill">Horn</span>
+      <span class="pill">Wipers & washer</span><span class="pill">Defrost</span><span class="pill">Hand signals ✋</span><span class="pill">Emergency brake</span>
+      <span class="pill">Seat belt on before the examiner sits</span>
+    </div>
+    <div class="sec">Instant fails — one and it's over</div>
+    <ul>
+      <li><span class="n">💥</span><span>Hitting a curb, cone, or anything else</span></li>
+      <li><span class="n">🤚</span><span>Examiner grabs the wheel, brakes, or has to speak to prevent danger</span></li>
+      <li><span class="n">🚨</span><span>Running a stop sign or red light; any moving violation; speeding</span></li>
+      <li><span class="n">🌀</span><span>A dangerous or illegal maneuver (wrong lane, unsafe turn, ignoring a pedestrian)</span></li>
+    </ul>
+    <div class="sec">Point-takers — 15 or fewer to pass</div>
+    <ul>
+      <li><span class="n">↔️</span><span>Lane changes without mirror + shoulder check; drifting; poor lane position</span></li>
+      <li><span class="n">↩️</span><span>Turns: too wide, too tight, wrong lane at the end, no signal at 100 ft</span></li>
+      <li><span class="n">🛑</span><span>Incomplete stops, stopping over the line, stopping too far back</span></li>
+      <li><span class="n">🐢</span><span>Too slow (impeding traffic) counts too, not only too fast</span></li>
+      <li><span class="n">🅿️</span><span>Slow-speed maneuvers: parallel park, three-point turn, backing. One free pull-up.</span></li>
+      <li><span class="n">👀</span><span>Not scanning: head fixed, no mirror checks, no look at intersections</span></li>
+    </ul>
+    <div class="sec">Mock test routine (Level 7)</div>
+    <ul>
+      <li><span class="n">1</span><span>Parent is “examiner”: gives directions only, no coaching, no reactions.</span></li>
+      <li><span class="n">2</span><span>Route ~20 min: residential, arterial with lights, 4+ lane changes, an unprotected left, a roundabout if nearby, then maneuvers.</span></li>
+      <li><span class="n">3</span><span>Tally on this sheet. Score 100 minus deductions. Josh guesses his score before he sees it.</span></li>
+      <li><span class="n">4</span><span>Book the real test only after two mocks at 90+ with zero criticals.</span></li>
+    </ul>
+    <div class="boss"><b>🏁 Pass condition</b>No critical errors and ≤15 deductions. Then Josh signs the family contract and drives for ice cream. Alone. 🍦</div>
+  </div></body></html>

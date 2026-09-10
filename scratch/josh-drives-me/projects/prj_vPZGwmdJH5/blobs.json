@@ -1,0 +1,632 @@
+{
+  "1c026a2bc7386cde7bd3ad334cf9a8af367690fee2f8156f19d368c03add7ff3": {
+    "file": "1c026a2bc7386cde7bd3ad334cf9a8af367690fee2f8156f19d368c03add7ff3.html",
+    "mimeType": "text/html",
+    "filename": "route.html",
+    "size": 12444
+  },
+  "e65e482eabf1e50b993cdd6fb670041eeaa03a338aa7ecb695460150784d7c61": {
+    "file": "e65e482eabf1e50b993cdd6fb670041eeaa03a338aa7ecb695460150784d7c61.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 28
+  },
+  "bc99257421bc3c4308f90d96f8b795d4ba9fb1bf851a41d27dc666df6f7178d6": {
+    "file": "bc99257421bc3c4308f90d96f8b795d4ba9fb1bf851a41d27dc666df6f7178d6.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 94
+  },
+  "4516220186d81275127c3257156b24d1e2b057e63ce5163df082c29b9cc4dfc3": {
+    "file": "4516220186d81275127c3257156b24d1e2b057e63ce5163df082c29b9cc4dfc3.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 59
+  },
+  "f37cd8ed1d0e21943140645180cc6fe0e0998592861a3237e405c3c94b8164d0": {
+    "file": "f37cd8ed1d0e21943140645180cc6fe0e0998592861a3237e405c3c94b8164d0.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 26
+  },
+  "db157b4e873c27b015fbb263147a82421351716bd5e968ad86430446537561cd": {
+    "file": "db157b4e873c27b015fbb263147a82421351716bd5e968ad86430446537561cd.html",
+    "mimeType": "text/html",
+    "filename": "level-1.html",
+    "size": 5074
+  },
+  "78c9775970ebfbd1ff28a71e7d0bc0cc40de9772510d9c55f15b75211d7371f1": {
+    "file": "78c9775970ebfbd1ff28a71e7d0bc0cc40de9772510d9c55f15b75211d7371f1.html",
+    "mimeType": "text/html",
+    "filename": "level-2.html",
+    "size": 4947
+  },
+  "b769f30cf8cf37f053964b67231140cc7b3d85e32a3f01e783c171a27ddd9cf2": {
+    "file": "b769f30cf8cf37f053964b67231140cc7b3d85e32a3f01e783c171a27ddd9cf2.html",
+    "mimeType": "text/html",
+    "filename": "level-3.html",
+    "size": 5034
+  },
+  "ad8194bcc2fba4066c167551d5caa23c6d16d5260fea3025fb4ecadc40ba03eb": {
+    "file": "ad8194bcc2fba4066c167551d5caa23c6d16d5260fea3025fb4ecadc40ba03eb.html",
+    "mimeType": "text/html",
+    "filename": "level-4.html",
+    "size": 5392
+  },
+  "c657787d354154d297db9c62fb62b7697a1b142ae628f8f66a802782c2f8a80b": {
+    "file": "c657787d354154d297db9c62fb62b7697a1b142ae628f8f66a802782c2f8a80b.html",
+    "mimeType": "text/html",
+    "filename": "level-5.html",
+    "size": 5421
+  },
+  "b59220b019fb00b4e74104af798ea4883dab7b0e5282d85dd492426a3c1f8a59": {
+    "file": "b59220b019fb00b4e74104af798ea4883dab7b0e5282d85dd492426a3c1f8a59.mmd",
+    "mimeType": "text/vnd.mermaid",
+    "filename": "skill-tree.mmd",
+    "size": 962
+  },
+  "bbe558a04899a8c7cb55b72745d07e04b96327a3a6513ac7390cc60efd235edf": {
+    "file": "bbe558a04899a8c7cb55b72745d07e04b96327a3a6513ac7390cc60efd235edf.html",
+    "mimeType": "text/html",
+    "filename": "route.html",
+    "size": 12350
+  },
+  "65b5970c146cb80a01789b4fd576f231e4bbae3eff5aac52a942cd34d822b90a": {
+    "file": "65b5970c146cb80a01789b4fd576f231e4bbae3eff5aac52a942cd34d822b90a.md",
+    "mimeType": "text/markdown",
+    "filename": "DESIGN.md",
+    "size": 4389
+  },
+  "d0490e492713d75fea3c8ba796784437c295b57abb7addf051b517e4a34d9c44": {
+    "file": "d0490e492713d75fea3c8ba796784437c295b57abb7addf051b517e4a34d9c44.html",
+    "mimeType": "text/html",
+    "filename": "level-6.html",
+    "size": 5464
+  },
+  "20e670e4d311e00c7e8fb84272838527265d38aaeee0ba2d015062caddf01e2a": {
+    "file": "20e670e4d311e00c7e8fb84272838527265d38aaeee0ba2d015062caddf01e2a.html",
+    "mimeType": "text/html",
+    "filename": "level-7.html",
+    "size": 5240
+  },
+  "42b1db6c882fcdb212504dd1bbbbc3afe41c317e612dc6ff57089aa1b55a57ed": {
+    "file": "42b1db6c882fcdb212504dd1bbbbc3afe41c317e612dc6ff57089aa1b55a57ed.html",
+    "mimeType": "text/html",
+    "filename": "level-8.html",
+    "size": 4883
+  },
+  "e17a182b1cce6aaa8a0bc7634221c98045bdaf3b18ca826d8a1c1bc7f35e9514": {
+    "file": "e17a182b1cce6aaa8a0bc7634221c98045bdaf3b18ca826d8a1c1bc7f35e9514.html",
+    "mimeType": "text/html",
+    "filename": "rulebook.html",
+    "size": 5482
+  },
+  "9de9b82e8330691809345f6c538413e4da42b33fafe482d98e6102d293634513": {
+    "file": "9de9b82e8330691809345f6c538413e4da42b33fafe482d98e6102d293634513.html",
+    "mimeType": "text/html",
+    "filename": "recipe.html",
+    "size": 5450
+  },
+  "d825578b834cd75e821bb3fad9d814c9bb0dcdf1bfb0d8f514ee48474e03744b": {
+    "file": "d825578b834cd75e821bb3fad9d814c9bb0dcdf1bfb0d8f514ee48474e03744b.html",
+    "mimeType": "text/html",
+    "filename": "boss.html",
+    "size": 5432
+  },
+  "5b6abce3c48173c7b5799b29facc42583da68a29a31555b72790abbbaad7f046": {
+    "file": "5b6abce3c48173c7b5799b29facc42583da68a29a31555b72790abbbaad7f046.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 123
+  },
+  "f0b2afe801dda01db0741a41dc67ce2b81067885de12c769c456bc3525c79891": {
+    "file": "f0b2afe801dda01db0741a41dc67ce2b81067885de12c769c456bc3525c79891.md",
+    "mimeType": "text/markdown",
+    "filename": "area.md",
+    "size": 165
+  },
+  "0b09db4e784bc051dbd8458b0b99c870f8f7a1b6e014b2cc0b45f4f278c03fcf": {
+    "file": "0b09db4e784bc051dbd8458b0b99c870f8f7a1b6e014b2cc0b45f4f278c03fcf.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 19
+  },
+  "cea92626afa600cf921c5c52f45348cf4e55c052bc13c1268f483b7ab8396053": {
+    "file": "cea92626afa600cf921c5c52f45348cf4e55c052bc13c1268f483b7ab8396053.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 22
+  },
+  "cef202b8f20451779288796b5f5916e3777be19d168cfa9764d8c7af99ca927f": {
+    "file": "cef202b8f20451779288796b5f5916e3777be19d168cfa9764d8c7af99ca927f.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 14
+  },
+  "6d133f1d616ca633b2d2519569f5006711854bd1458e56452614063021273bf9": {
+    "file": "6d133f1d616ca633b2d2519569f5006711854bd1458e56452614063021273bf9.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 46
+  },
+  "1a306a22e15bf8392e22bc4a40da8cc68e74fa053f84a547b8e2e6b93ca9a222": {
+    "file": "1a306a22e15bf8392e22bc4a40da8cc68e74fa053f84a547b8e2e6b93ca9a222.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 16
+  },
+  "d2d7d2cabfbe246b0497e3aca6b794232e6fc04fdd118fa9edce154ce01f8266": {
+    "file": "d2d7d2cabfbe246b0497e3aca6b794232e6fc04fdd118fa9edce154ce01f8266.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "a955c12b7fb092a4eeb7970d618dc8f80c832e670785ab5f10d1466a6dc9973d": {
+    "file": "a955c12b7fb092a4eeb7970d618dc8f80c832e670785ab5f10d1466a6dc9973d.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "24b54ee07c2ad0a160841ad9215285c049ac67232d4f5953fc4994918e070a75": {
+    "file": "24b54ee07c2ad0a160841ad9215285c049ac67232d4f5953fc4994918e070a75.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 15
+  },
+  "fb7c3f4ab2770c74f8b452f1bfaeb0960e9c741485fc03474f2f2be5f92c7dde": {
+    "file": "fb7c3f4ab2770c74f8b452f1bfaeb0960e9c741485fc03474f2f2be5f92c7dde.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 35
+  },
+  "929aaca470699cf1f3a4ceb4819d82f10447d28187caecc7a9df65950d10a633": {
+    "file": "929aaca470699cf1f3a4ceb4819d82f10447d28187caecc7a9df65950d10a633.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 27
+  },
+  "4f4e1c7a228750f5ca1c788ca42c8dba4052bfaffcea7892861d051df11b7ab8": {
+    "file": "4f4e1c7a228750f5ca1c788ca42c8dba4052bfaffcea7892861d051df11b7ab8.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 55
+  },
+  "af300d5b868f20b06faea2be76ae1825685babb16b6ab70c60d168fffcc9283f": {
+    "file": "af300d5b868f20b06faea2be76ae1825685babb16b6ab70c60d168fffcc9283f.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 58
+  },
+  "1ea4051127542342ad631b38a8f8aa3b5c8deb9aeb4881c3cb33dfc40d232735": {
+    "file": "1ea4051127542342ad631b38a8f8aa3b5c8deb9aeb4881c3cb33dfc40d232735.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "490b3955e1bee922eaded8b51115556306d8c2c51917bdc95748b72bb059f1e9": {
+    "file": "490b3955e1bee922eaded8b51115556306d8c2c51917bdc95748b72bb059f1e9.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "1186db68acbc2d7842d1ca311152055aa9fac21bacf10e5f244e4ffcc4243892": {
+    "file": "1186db68acbc2d7842d1ca311152055aa9fac21bacf10e5f244e4ffcc4243892.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 43
+  },
+  "aeaeb76074cddd8c5368484e7b5471ca7b570dbb2f12cd152af310fd18061634": {
+    "file": "aeaeb76074cddd8c5368484e7b5471ca7b570dbb2f12cd152af310fd18061634.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 15
+  },
+  "fd6846cd21d2b1484a2d5c7eba7bd6aa96a7a19f6b13984f8edfd62cd4bd9deb": {
+    "file": "fd6846cd21d2b1484a2d5c7eba7bd6aa96a7a19f6b13984f8edfd62cd4bd9deb.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "059796d151c10cf838eeec90e18350b8c163bafaf58f374315b0f571ad1cddd1": {
+    "file": "059796d151c10cf838eeec90e18350b8c163bafaf58f374315b0f571ad1cddd1.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 55
+  },
+  "3b653df739680c63fdec75d930cfbc9daeaa6942fc3267c5d84a21c9dccd9cc0": {
+    "file": "3b653df739680c63fdec75d930cfbc9daeaa6942fc3267c5d84a21c9dccd9cc0.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 15
+  },
+  "a714b5c9690155833f723f7416a4df7697c8e8b573853eb2086e6bed3d69f7f5": {
+    "file": "a714b5c9690155833f723f7416a4df7697c8e8b573853eb2086e6bed3d69f7f5.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 30
+  },
+  "b1a6a3a3727715e49d92ed5f58cca8aad4c18e6ae095e313dff8f65d435ad528": {
+    "file": "b1a6a3a3727715e49d92ed5f58cca8aad4c18e6ae095e313dff8f65d435ad528.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "4a83d8c5de9e10471a8162f9de38ddb7358a4e69d89eb5ac9df74e915d79c2ed": {
+    "file": "4a83d8c5de9e10471a8162f9de38ddb7358a4e69d89eb5ac9df74e915d79c2ed.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 19
+  },
+  "a2e0210f9c107caf53b231ea66c49759e72b765cfec60b25afe09405310f184b": {
+    "file": "a2e0210f9c107caf53b231ea66c49759e72b765cfec60b25afe09405310f184b.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 19
+  },
+  "a06c43cce054ea507b2759f197ee25b3f9083376be61da45b5d88dc780be680f": {
+    "file": "a06c43cce054ea507b2759f197ee25b3f9083376be61da45b5d88dc780be680f.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 15
+  },
+  "9c2a62bc5293aa17e39e248e460b17629989f72bb7d65067efa2f337ab28fc95": {
+    "file": "9c2a62bc5293aa17e39e248e460b17629989f72bb7d65067efa2f337ab28fc95.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 31
+  },
+  "92e6c5626bf5532cb2b174b98aa1b31db9c68ae076816fbbef0b0a2c3d3adb9c": {
+    "file": "92e6c5626bf5532cb2b174b98aa1b31db9c68ae076816fbbef0b0a2c3d3adb9c.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 39
+  },
+  "acef87f601559c17611b4b2dcce50c75ce7666c5cabe6801963e658be7a8ff9e": {
+    "file": "acef87f601559c17611b4b2dcce50c75ce7666c5cabe6801963e658be7a8ff9e.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 29
+  },
+  "7af89d2fad458c67c26f8e0240a434bab3b4943b9d00f9065267a0ad19a6a4f5": {
+    "file": "7af89d2fad458c67c26f8e0240a434bab3b4943b9d00f9065267a0ad19a6a4f5.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 53
+  },
+  "7efc7531236941423bedd6622143dc0225db8492d21f3035b7320cf6858be21b": {
+    "file": "7efc7531236941423bedd6622143dc0225db8492d21f3035b7320cf6858be21b.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "4d6ff139b2173bec05a70c270e253a0083397272c77105355d3e602acffe9b77": {
+    "file": "4d6ff139b2173bec05a70c270e253a0083397272c77105355d3e602acffe9b77.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 28
+  },
+  "38a617d256f1eaf99442ec8f601e104ea1883450e489ec4595fe737f8ae9b802": {
+    "file": "38a617d256f1eaf99442ec8f601e104ea1883450e489ec4595fe737f8ae9b802.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "d5e8c589c000effc4e573297b1089c0f2c9edec58ea0490e6115996fc6bb79b6": {
+    "file": "d5e8c589c000effc4e573297b1089c0f2c9edec58ea0490e6115996fc6bb79b6.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "6c2f1d1a805d85fee6d83e83c65b2871d3e6e4747663850ecf24029e8fdaf98d": {
+    "file": "6c2f1d1a805d85fee6d83e83c65b2871d3e6e4747663850ecf24029e8fdaf98d.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 30
+  },
+  "065bbaf6a41e66edb7163a047a9476c1629582daacb564b2cebbcdc99cd2c9d3": {
+    "file": "065bbaf6a41e66edb7163a047a9476c1629582daacb564b2cebbcdc99cd2c9d3.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 18
+  },
+  "89aa08fbd462384e9e289285975f3d4651a541f7d8eb3505f57270f37287195e": {
+    "file": "89aa08fbd462384e9e289285975f3d4651a541f7d8eb3505f57270f37287195e.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 41
+  },
+  "b97c406a13d818f639276f7c36f942af482dfe59a4f6e5668a5d4b9e7437454b": {
+    "file": "b97c406a13d818f639276f7c36f942af482dfe59a4f6e5668a5d4b9e7437454b.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 30
+  },
+  "2a5bc1d73c69cd275a4847266576167fdfaab92cd083bd7543cb56bc64d19010": {
+    "file": "2a5bc1d73c69cd275a4847266576167fdfaab92cd083bd7543cb56bc64d19010.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 39
+  },
+  "39d359a884acf51ea7fafc6fd7bd4ba32c9479b60de2d35b3b56ab9fa52832f4": {
+    "file": "39d359a884acf51ea7fafc6fd7bd4ba32c9479b60de2d35b3b56ab9fa52832f4.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 18
+  },
+  "068f325dae91bd90fd7f5c117a7a3bb91a9f44521e48318075dfbb8986a84973": {
+    "file": "068f325dae91bd90fd7f5c117a7a3bb91a9f44521e48318075dfbb8986a84973.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 32
+  },
+  "319f16e2a5df553f65b490ebe079989c67252ccfd4299fba4ef59e8c69139c1a": {
+    "file": "319f16e2a5df553f65b490ebe079989c67252ccfd4299fba4ef59e8c69139c1a.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 33
+  },
+  "859ec66cba41885e19229d48a169fca7b25e70f7039bffbf80e3ff33f5302404": {
+    "file": "859ec66cba41885e19229d48a169fca7b25e70f7039bffbf80e3ff33f5302404.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 12
+  },
+  "3f55f52ce3ce93d81d7ee053c9b9805b60f3fbafe66d8c9cf9d69129e148414b": {
+    "file": "3f55f52ce3ce93d81d7ee053c9b9805b60f3fbafe66d8c9cf9d69129e148414b.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "93a9e3d8b1127d5553862c19d98b6a1786d546d1ae666abe3559103a673ba4ec": {
+    "file": "93a9e3d8b1127d5553862c19d98b6a1786d546d1ae666abe3559103a673ba4ec.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 45
+  },
+  "e7611705cb5d01856344487ad376347847e73e92395f737df039f9f3fc91c5a8": {
+    "file": "e7611705cb5d01856344487ad376347847e73e92395f737df039f9f3fc91c5a8.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 19
+  },
+  "c956c463fe5c9347f61e97f4c773c7d4afede21c5fe87ffcf1f2251d555df6c6": {
+    "file": "c956c463fe5c9347f61e97f4c773c7d4afede21c5fe87ffcf1f2251d555df6c6.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "e02e800931ac12d535b7f8cdadf9e5a4001e5d1408dfb4487b8656c1f2bff309": {
+    "file": "e02e800931ac12d535b7f8cdadf9e5a4001e5d1408dfb4487b8656c1f2bff309.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 21
+  },
+  "bee7f660ce7a3477e59ceac785028c4c0a3583cdf4f06d9cccc0d78c1c4b69ac": {
+    "file": "bee7f660ce7a3477e59ceac785028c4c0a3583cdf4f06d9cccc0d78c1c4b69ac.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 18
+  },
+  "cb4b33f89fd83a5a34b99d39f248b1a25577ba7e0019231af9ef9df424e3fd68": {
+    "file": "cb4b33f89fd83a5a34b99d39f248b1a25577ba7e0019231af9ef9df424e3fd68.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 30
+  },
+  "b942e3e464351394ada4d86d376e0b3d1b31cb199b67950f371d2305ab1c896d": {
+    "file": "b942e3e464351394ada4d86d376e0b3d1b31cb199b67950f371d2305ab1c896d.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 31
+  },
+  "1ee6b29fe854fadfbfe37f0ae6fa78fc8e4da4aca4e22b7c9e3bff726024d7d3": {
+    "file": "1ee6b29fe854fadfbfe37f0ae6fa78fc8e4da4aca4e22b7c9e3bff726024d7d3.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "667a77224fab32d0ca7919a3f6b84e03453006c24e75d447579d1a64c13999e3": {
+    "file": "667a77224fab32d0ca7919a3f6b84e03453006c24e75d447579d1a64c13999e3.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 20
+  },
+  "ad3aa57e34933a22519201069f18dd62582935254e42a4664c07148c0b0d52b5": {
+    "file": "ad3aa57e34933a22519201069f18dd62582935254e42a4664c07148c0b0d52b5.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 20
+  },
+  "3891f8e66c4238a188be68e11b2e2d97409df65f8bcce25e31e5bb48abf57fb2": {
+    "file": "3891f8e66c4238a188be68e11b2e2d97409df65f8bcce25e31e5bb48abf57fb2.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "8c7c47ec12985790899950721732c3b971d312da4bd74a5ebb82abde785d0461": {
+    "file": "8c7c47ec12985790899950721732c3b971d312da4bd74a5ebb82abde785d0461.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 34
+  },
+  "c1b4875b73b9edd39a2d539538d7035d05eddd211a1267821aadccd785a43ee9": {
+    "file": "c1b4875b73b9edd39a2d539538d7035d05eddd211a1267821aadccd785a43ee9.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 25
+  },
+  "ab81fe0e02fcf26a3d89c03d22f25a1536c2b3d2f859d9626dbeb0a8e56da853": {
+    "file": "ab81fe0e02fcf26a3d89c03d22f25a1536c2b3d2f859d9626dbeb0a8e56da853.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "644b0f1d0ae1c726440c16d03fa7fbceb03cb5ed28aab69f4aa50768dd8b422e": {
+    "file": "644b0f1d0ae1c726440c16d03fa7fbceb03cb5ed28aab69f4aa50768dd8b422e.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "a9aef853313911d7f03b1ff742502cd90420e26780ffe1265838674c5ecc4393": {
+    "file": "a9aef853313911d7f03b1ff742502cd90420e26780ffe1265838674c5ecc4393.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 18
+  },
+  "b733ffb3d290c379c5230a9e99b67f87f9976109f61572f35426c9ba8ac042df": {
+    "file": "b733ffb3d290c379c5230a9e99b67f87f9976109f61572f35426c9ba8ac042df.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 23
+  },
+  "7af6fdc4f14000cba45f522a2d89dee0aad980bc354508a95786bf72efdae3b3": {
+    "file": "7af6fdc4f14000cba45f522a2d89dee0aad980bc354508a95786bf72efdae3b3.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 30
+  },
+  "4382c43cd8c183a1f0849401580833b07a0faf94a8fc9b499254f706595ec33a": {
+    "file": "4382c43cd8c183a1f0849401580833b07a0faf94a8fc9b499254f706595ec33a.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 32
+  },
+  "959c053609e3dcfc058d52a37333920aec48b5b729c22c1b3ab971bd8eb357c7": {
+    "file": "959c053609e3dcfc058d52a37333920aec48b5b729c22c1b3ab971bd8eb357c7.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 18
+  },
+  "ab9227a763434ab0b56204cdf382b498537201e1fe61c3fcdf60287c19b23f2f": {
+    "file": "ab9227a763434ab0b56204cdf382b498537201e1fe61c3fcdf60287c19b23f2f.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 27
+  },
+  "15b945c3db9ca70c42b37a8c26ccf49fe4780d24ebb87c630493659026e6eb5b": {
+    "file": "15b945c3db9ca70c42b37a8c26ccf49fe4780d24ebb87c630493659026e6eb5b.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "d2e98cbb9eaef75a61bae554f1957cd707fd254a66bd189a5f13ebb5e3b18955": {
+    "file": "d2e98cbb9eaef75a61bae554f1957cd707fd254a66bd189a5f13ebb5e3b18955.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "7011aa7a3e3cb7d2d65e56c74f37fd668edd59e134de419a54b127c4c5a3c24f": {
+    "file": "7011aa7a3e3cb7d2d65e56c74f37fd668edd59e134de419a54b127c4c5a3c24f.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 18
+  },
+  "9ed727ebbbcfd162fd272db8d31fe60c0acc3a6279dfbf4adf786dc7f355f965": {
+    "file": "9ed727ebbbcfd162fd272db8d31fe60c0acc3a6279dfbf4adf786dc7f355f965.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 21
+  },
+  "a5afc526b56840eea5587192371ee73b45e84ff95041ed7e5a0ff80d7a7a7dff": {
+    "file": "a5afc526b56840eea5587192371ee73b45e84ff95041ed7e5a0ff80d7a7a7dff.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "25ea0c9690d62ac7ebe57a33c5ba2dc7663584cf7b27a4677d1dda9eb96b625b": {
+    "file": "25ea0c9690d62ac7ebe57a33c5ba2dc7663584cf7b27a4677d1dda9eb96b625b.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "b2646aa9674c5275bc529642cb68741c5c6b24c481356dc6c63e1638128a18b0": {
+    "file": "b2646aa9674c5275bc529642cb68741c5c6b24c481356dc6c63e1638128a18b0.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 18
+  },
+  "de2eb83c92084c9da3113cf382d5c317b23baf13c54ea9fbfc1be7bd3c802edb": {
+    "file": "de2eb83c92084c9da3113cf382d5c317b23baf13c54ea9fbfc1be7bd3c802edb.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 21
+  },
+  "abec4141ff94ec20674e621ca47fdff443d25aca12300c98f76de8b115f4ad49": {
+    "file": "abec4141ff94ec20674e621ca47fdff443d25aca12300c98f76de8b115f4ad49.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 30
+  },
+  "ed06945326dc55c6c40ea3df2298634ec7a9d79eccc2884312adabab5ee45527": {
+    "file": "ed06945326dc55c6c40ea3df2298634ec7a9d79eccc2884312adabab5ee45527.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 54
+  },
+  "ca9970ca1078536c6d95388859f049690421f931622aaca0720c0ed47119ee66": {
+    "file": "ca9970ca1078536c6d95388859f049690421f931622aaca0720c0ed47119ee66.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 42
+  },
+  "cbcac3c866c28d6e0f914865ccf10e55b19a89ed2c42b6cd7dc165d5e75c2a6c": {
+    "file": "cbcac3c866c28d6e0f914865ccf10e55b19a89ed2c42b6cd7dc165d5e75c2a6c.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "3db56216e0e43adccc2243de93040a47dda025fcb36bbb0b8ec0017386c5487f": {
+    "file": "3db56216e0e43adccc2243de93040a47dda025fcb36bbb0b8ec0017386c5487f.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 22
+  },
+  "e9450597ef77939e4073b4dc259be419f4ecef745afa004f46f95add15b4c9f2": {
+    "file": "e9450597ef77939e4073b4dc259be419f4ecef745afa004f46f95add15b4c9f2.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 34
+  },
+  "9c02c92f4545a354b6f0859995ed81da7c15ac5c867b611eedf622f444d6b659": {
+    "file": "9c02c92f4545a354b6f0859995ed81da7c15ac5c867b611eedf622f444d6b659.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "c49daa530b757f879015f9af4cc73ba3f488e02f8861cc5f615fbafc4d20cdaa": {
+    "file": "c49daa530b757f879015f9af4cc73ba3f488e02f8861cc5f615fbafc4d20cdaa.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 17
+  },
+  "1fd8d9b996d4d8bf5db1af43519ea4cdc5b69dd78b260df16ed0215cb1a50b98": {
+    "file": "1fd8d9b996d4d8bf5db1af43519ea4cdc5b69dd78b260df16ed0215cb1a50b98.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 15
+  },
+  "f0413001f44366154a0c802876a8ec406ce01fd46cbfbe5f24f9e69da4492bc6": {
+    "file": "f0413001f44366154a0c802876a8ec406ce01fd46cbfbe5f24f9e69da4492bc6.md",
+    "mimeType": "text/markdown",
+    "filename": "DESIGN.md",
+    "size": 4410
+  },
+  "1a01dd212cec5e6f564cfb3ca0691ef101a4148b9e379d96d0007f24b8a09ba7": {
+    "file": "1a01dd212cec5e6f564cfb3ca0691ef101a4148b9e379d96d0007f24b8a09ba7.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 88
+  },
+  "3a4d4dcbbfddc450c37a0512ec88b43d0df6dc469f3b2dcd9d6bf4023fce4aed": {
+    "file": "3a4d4dcbbfddc450c37a0512ec88b43d0df6dc469f3b2dcd9d6bf4023fce4aed.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 95
+  },
+  "7badf531b8e19ec2ba1ae0764ad3c48744bc955951e68f73af7696089e1ec401": {
+    "file": "7badf531b8e19ec2ba1ae0764ad3c48744bc955951e68f73af7696089e1ec401.md",
+    "mimeType": "text/markdown",
+    "filename": "text.md",
+    "size": 131
+  }
+}

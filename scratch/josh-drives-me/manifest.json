@@ -1,0 +1,21 @@
+{
+  "format": "isocan-export/1",
+  "exportedAt": "2026-09-10T23:34:49.114Z",
+  "from": "http://127.0.0.1:4441",
+  "by": {
+    "id": "usr_klu4w9yAPQ",
+    "name": "Kitt"
+  },
+  "canvases": [
+    {
+      "id": "prj_vPZGwmdJH5",
+      "title": "Josh Drives Me (Crazy?)",
+      "entries": 129,
+      "lastSeq": 129,
+      "blobs": 105,
+      "bytes": 95527,
+      "missing": []
+    }
+  ],
+  "items": []
+}
