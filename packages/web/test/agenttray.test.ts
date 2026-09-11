@@ -191,6 +191,26 @@ describe("the tray's standing-agent doors", () => {
     expect(add).not.toMatch(/kind === "rc"/);
   });
 
+  it("the add is the rc owner's — anybody else reads whose rc it is (owner-only summons)", () => {
+    // An agent added to somebody else's rc would answer them alone, and the
+    // home refuses the ask anyway: the button would be a promise to nobody.
+    expect(add).toMatch(/useRcOwners\(/);
+    expect(add).toMatch(/owners\.some\(\(o\) => sameActor\(joined, o\.id, actor\.id\)\)/);
+    expect(add).toContain("is {names}&rsquo;s");
+  });
+
+  it("the owner's widening sends the same re-enrolment `isocan rc listen` does", () => {
+    expect(tray).toMatch(/onListen: \(open: boolean\)/);
+    expect(tray).toMatch(/listen: open \? \[LISTEN_ANYONE\] : \[\]/);
+    expect(tray).toMatch(/viewer=\{actor\.id\}/);
+  });
+
+  it("an ask the gate will turn away says so under it, never 'Sent' (owner-only summons)", () => {
+    const onit = read("components/OnIt.tsx");
+    expect(onit).toMatch(/refusedMentions\(last\?\.mentions, actor\.id, policies, joined\)/);
+    expect(onit).toMatch(/state: "refused"/);
+  });
+
   it("dismiss appears exactly on rows with standing, and sends the withdraw op", () => {
     expect(tray).toMatch(/canvas\?\.agents\?\.\[row\.actorId\]/);
     expect(tray).toMatch(/type: "agent\.withdraw"/);

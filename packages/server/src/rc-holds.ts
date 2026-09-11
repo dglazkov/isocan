@@ -1,4 +1,4 @@
-import type { RcAsk } from "@isocan/core";
+import type { Actor, RcAsk, RcPolicy } from "@isocan/core";
 
 /**
  * **Connection-bound rc liveness, and the asks that ride it** (agent-custody
@@ -25,7 +25,44 @@ import type { RcAsk } from "@isocan/core";
  * covered by a short queue — the gap is microseconds, the queue's TTL is
  * seconds, and an ask that outlives it dies quietly HERE because the dialog
  * that sent it is already counting down to saying so out loud.
+ *
+ * **Each hold says whose it is** (owner-only summons, 11 Sep 2026). An rc
+ * announces its owner — its machine's person — and, per agent, the policy it
+ * applies to a summons (`RcPolicy`). Nothing here enforces a policy; the rc
+ * does, because only the rc starts a turn. What this registry does with them
+ * is say them (`answering`, the web's and `isocan who`'s reading) and route
+ * an ask to add an agent only to an rc its asker owns: adding an agent to a
+ * machine is that machine's owner's gesture.
  */
+
+/** Whether an asker is this owner — the caller supplies the comparison,
+ * since only it holds the registry's joins. */
+type IsOwner = (owner: Actor, askerId: string) => boolean;
+
+/**
+ * An announced policy map, read tolerantly and made honest: only for agents
+ * the same hold names, and with the owner the hold's own — already checked
+ * against the badge — rather than whatever each entry claims. A policy is a
+ * statement in its owner's name, so its owner is never the sender's to pick
+ * per agent.
+ */
+export function rcPoliciesOf(
+  raw: unknown,
+  actorIds: ReadonlySet<string>,
+  owner: Actor,
+): Record<string, RcPolicy> | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const out: Record<string, RcPolicy> = {};
+  for (const [actorId, entry] of Object.entries(raw as Record<string, unknown>)) {
+    if (!actorIds.has(actorId)) continue;
+    const listen = (entry as { listen?: unknown } | null)?.listen;
+    out[actorId] = {
+      owner,
+      listen: Array.isArray(listen) ? listen.filter((v): v is string => typeof v === "string") : [],
+    };
+  }
+  return out;
+}
 
 const ASK_TTL_MS = 15_000;
 
@@ -35,7 +72,14 @@ const ASK_TTL_MS = 15_000;
  * reported within the second. */
 const HOLD_FLAP_MS = 250;
 
-interface LocalHold {
+/** What an rc says about itself beside its agents. Both absent from an rc
+ * older than owner-only summons. */
+interface HoldPolicy {
+  owner?: Actor | undefined;
+  policies?: Readonly<Record<string, RcPolicy>> | undefined;
+}
+
+interface LocalHold extends HoldPolicy {
   actorIds: ReadonlySet<string>;
   /** Ends the wait early, delivering these asks to this hold's response. */
   deliver: (asks: RcAsk[]) => void;
@@ -44,6 +88,10 @@ interface LocalHold {
 interface Mirror {
   parked: boolean;
   actorIds: ReadonlySet<string>;
+  /** The owners of the rcs parked behind that daemon, already checked
+   * against the relaying badge's claims. */
+  owners?: readonly Actor[] | undefined;
+  policies?: Readonly<Record<string, RcPolicy>> | undefined;
   /** Sends an `rc-ask` down the socket that owns this mirror. Returns false
    * when the socket cannot carry it (closing, gone). */
   sendAsk: (ask: RcAsk) => boolean;
@@ -52,11 +100,18 @@ interface Mirror {
 interface RcAnswering {
   parked: boolean;
   actorIds: string[];
+  owners: Actor[];
+  policies: Record<string, RcPolicy>;
 }
 
 export class RcHolds {
   private local = new Map<string, Set<LocalHold>>();
-  private queued = new Map<string, { ask: RcAsk; expires: number }[]>();
+  /** Asks waiting out the gap between back-to-back holds. `ownerId` is the
+   * owner of the rc the ask was routed to, so another person's rc re-issuing
+   * first does not carry it off. */
+  private queued = new Map<string, { ask: RcAsk; expires: number; ownerId?: string }[]>();
+  /** Whose rc just closed its last hold on a canvas — who the gap belongs to. */
+  private lastOwner = new Map<string, Actor | undefined>();
   /** originKey → canvasId → what that connection last relayed. The key is
    * whatever the socket layer uses to identify one connection — the same
    * value it hands `PresenceHub.mirror`. */
@@ -90,6 +145,8 @@ export class RcHolds {
     canvasId: string,
     actorIds: ReadonlySet<string>,
     waitMs: number,
+    /** Whose rc this is and what it applies (owner-only summons). */
+    policy: HoldPolicy = {},
   ): { done: Promise<RcAsk[]>; release: () => void } {
     let holds = this.local.get(canvasId);
     if (!holds) this.local.set(canvasId, (holds = new Set()));
@@ -101,9 +158,11 @@ export class RcHolds {
     let open = true;
     const entry: LocalHold = {
       actorIds,
+      ...(policy.owner ? { owner: policy.owner } : {}),
+      ...(policy.policies ? { policies: policy.policies } : {}),
       deliver: (asks) => finish(asks),
     };
-    const timer = setTimeout(() => finish(this.drain(canvasId)), waitMs);
+    const timer = setTimeout(() => finish(this.drain(canvasId, entry.owner)), waitMs);
     timer.unref?.();
     const finish = (asks: RcAsk[]): void => {
       if (!open) return;
@@ -112,6 +171,7 @@ export class RcHolds {
       here.delete(entry);
       if (here.size === 0 && this.local.get(canvasId) === here) {
         this.local.delete(canvasId);
+        this.lastOwner.set(canvasId, entry.owner);
         // Quiet for the flap window, then say it went down — unless a
         // re-issued hold lands first, which is the whole point.
         const down = setTimeout(() => {
@@ -126,17 +186,22 @@ export class RcHolds {
     here.add(entry);
     this.changed(canvasId);
     // Anything that arrived between holds is this hold's to carry.
-    const waiting = this.drain(canvasId);
+    const waiting = this.drain(canvasId, entry.owner);
     if (waiting.length > 0) finish(waiting);
     return { done, release: () => finish([]) };
   }
 
-  private drain(canvasId: string): RcAsk[] {
+  /** The queued asks this owner's hold may carry: those routed to it, and
+   * those routed to nobody in particular (an rc too old to say whose). */
+  private drain(canvasId: string, owner?: Actor): RcAsk[] {
     const rows = this.queued.get(canvasId);
     if (!rows) return [];
-    this.queued.delete(canvasId);
     const now = Date.now();
-    return rows.filter((row) => row.expires > now).map((row) => row.ask);
+    const mine = rows.filter((row) => row.ownerId === undefined || row.ownerId === owner?.id);
+    const rest = rows.filter((row) => !mine.includes(row) && row.expires > now);
+    if (rest.length > 0) this.queued.set(canvasId, rest);
+    else this.queued.delete(canvasId);
+    return mine.filter((row) => row.expires > now).map((row) => row.ask);
   }
 
   /** What the socket layer relayed for one connection. A full replacement per
@@ -157,14 +222,22 @@ export class RcHolds {
   answering(canvasId: string): RcAnswering {
     const localOnly = this.answeringLocal(canvasId);
     const actorIds = new Set(localOnly.actorIds);
+    const owners = new Map(localOnly.owners.map((o) => [o.id, o]));
+    const policies = { ...localOnly.policies };
     let parked = localOnly.parked;
     for (const mine of this.mirrors.values()) {
       const row = mine.get(canvasId);
       if (!row) continue;
       if (row.parked) parked = true;
       for (const actorId of row.actorIds) actorIds.add(actorId);
+      for (const owner of row.owners ?? []) owners.set(owner.id, owner);
+      for (const [actorId, policy] of Object.entries(row.policies ?? {})) {
+        // First word wins, as for the ask: one actor is one machine's claim,
+        // so two policies for it would be the same rc said twice.
+        if (row.actorIds.has(actorId) && !policies[actorId]) policies[actorId] = policy;
+      }
     }
-    return { parked, actorIds: [...actorIds] };
+    return { parked, actorIds: [...actorIds], owners: [...owners.values()], policies };
   }
 
   /** Local holds only — what a daemon relays up. Mirrors stay out: a relay
@@ -172,38 +245,60 @@ export class RcHolds {
   answeringLocal(canvasId: string): RcAnswering {
     const holds = this.local.get(canvasId);
     const actorIds = new Set<string>();
-    for (const hold of holds ?? []) for (const actorId of hold.actorIds) actorIds.add(actorId);
-    return { parked: (holds?.size ?? 0) > 0, actorIds: [...actorIds] };
+    const owners = new Map<string, Actor>();
+    const policies: Record<string, RcPolicy> = {};
+    for (const hold of holds ?? []) {
+      for (const actorId of hold.actorIds) {
+        actorIds.add(actorId);
+        const policy = hold.policies?.[actorId];
+        if (policy && !policies[actorId]) policies[actorId] = policy;
+      }
+      if (hold.owner) owners.set(hold.owner.id, hold.owner);
+    }
+    return { parked: (holds?.size ?? 0) > 0, actorIds: [...actorIds], owners: [...owners.values()], policies };
   }
 
   /**
-   * Route an ask toward whoever is parked. An open local hold gets it now; a
-   * parked-but-between-holds canvas queues it briefly; otherwise it goes down
-   * the first mirror that says an rc is parked behind it. False means nobody
-   * is there to ask — the caller's 409.
+   * Route an ask toward whoever is parked — and, since owner-only summons,
+   * toward an rc the asker OWNS: adding an agent to a machine is that
+   * machine's owner's gesture. An open local hold of theirs gets it now; a
+   * canvas between back-to-back holds of theirs queues it briefly; otherwise
+   * it goes down the first mirror whose owners include them. An rc too old to
+   * say whose it is takes anyone's ask, as every rc did before.
+   *
+   * False means nobody the asker may ask is there — the caller says which
+   * refusal: no rc at all (409), or only other people's (`answering().owners`).
    */
-  ask(canvasId: string, ask: RcAsk): boolean {
-    const holds = this.local.get(canvasId);
-    const first = holds?.values().next().value;
-    if (first) {
-      first.deliver([...this.drain(canvasId), ask]);
+  ask(canvasId: string, ask: RcAsk, isOwner?: IsOwner): boolean {
+    const theirs = (owner: Actor | undefined) => !isOwner || !owner || isOwner(owner, ask.from.id);
+    const holds = [...(this.local.get(canvasId) ?? [])];
+    const hold = holds.find((h) => theirs(h.owner));
+    if (hold) {
+      hold.deliver([...this.drain(canvasId, hold.owner), ask]);
       return true;
     }
-    if (this.sinking.has(canvasId)) {
-      // Between back-to-back holds: the next re-issue drains this.
-      this.enqueue(canvasId, ask);
-      return true;
+    if (holds.length === 0 && this.sinking.has(canvasId)) {
+      // Between back-to-back holds: the next re-issue drains this — if the
+      // rc that just closed one is the asker's.
+      const owner = this.lastOwner.get(canvasId);
+      if (theirs(owner)) {
+        this.enqueue(canvasId, ask, owner?.id);
+        return true;
+      }
     }
     for (const mine of this.mirrors.values()) {
       const row = mine.get(canvasId);
-      if (row?.parked && row.sendAsk(ask)) return true;
+      if (!row?.parked) continue;
+      const owners = row.owners ?? [];
+      if (owners.length > 0 && !owners.some((o) => theirs(o))) continue;
+      if (row.sendAsk(ask)) return true;
     }
     return false;
   }
 
-  private enqueue(canvasId: string, ask: RcAsk): void {
+  private enqueue(canvasId: string, ask: RcAsk, ownerId?: string): void {
     const rows = this.queued.get(canvasId) ?? [];
-    rows.push({ ask, expires: Date.now() + ASK_TTL_MS });
+    rows.push({ ask, expires: Date.now() + ASK_TTL_MS, ...(ownerId ? { ownerId } : {}) });
     this.queued.set(canvasId, rows);
   }
 }

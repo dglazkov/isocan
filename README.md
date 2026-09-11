@@ -839,3 +839,17 @@ is included automatically and existing Codex domain rules still compose.
 See the [measured network boundary](docs/research/2026-09-10-what-the-rc-hands-over.md#native-codex-opt-in--11-september)
 before choosing it. The separate `--sandbox` flag fences the entire adapter
 with srt; combining the two is refused until nesting has been validated.
+
+### Whose word starts a summoned turn
+
+A summoned turn runs on the machine of the person whose `isocan rc` answers
+for the agent, and spends that person's tokens — so a standing agent answers
+**only its owner** (that machine's person, and anything the machine itself
+speaks as) until the owner widens it: `isocan rc listen <name> --to
+<names>|everyone`, or *Let anyone ask* on the agent's row in the app. A
+mention from anybody else starts nothing and counts against nothing; isocan
+answers it in the thread with whose word the agent takes and that command.
+The rc announces its policy with its hold, so the tray and `isocan who` say
+*listens only to Nico* before anybody asks, and the add-agent dialog is
+offered to the rc's owner alone. Only the owner's word widens: a gate
+somebody else wrote into the enrolment is set aside, and said.

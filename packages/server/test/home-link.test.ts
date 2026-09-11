@@ -765,16 +765,61 @@ describe("the rc's liveness and the web's ask, carried across the link", () => {
     get<{ parked: boolean; actorIds: string[] }>(node, `/api/projects/${CANVAS}/rc`);
 
   /** An rc's hold at A, as the CLI makes it: held open, released by abort. */
-  function holdAtA(actorIds: string[], waitMs = 8_000) {
+  function holdAtA(actorIds: string[], waitMs = 8_000, says: Record<string, unknown> = {}) {
     const aborter = new AbortController();
     const done = fetch(`${A.base}/api/rc/hold`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...A.badge.headers },
-      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs }),
+      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs, ...says }),
       signal: aborter.signal,
     });
     return { done, aborter };
   }
+
+  it("owner-only summons: whose rc it is and whose word it takes reach H, and H routes asks by it", async () => {
+    await birthAtA();
+    const sian = { id: "agt_sian", name: "Sian" };
+    await A.badge.speakAs(sian);
+    await op(A, priya, { type: "agent.enroll", agent: sian });
+
+    // Priya's rc says it is hers, and that Sian takes her word alone — the
+    // policy the rc applies at dispatch, announced so the web can say it.
+    const hold = holdAtA([sian.id], 12_000, {
+      owner: priya,
+      policies: { [sian.id]: { owner: priya, listen: [] } },
+    });
+    type Answering = { parked: boolean; actorIds: string[]; owners?: unknown[]; policies?: Record<string, unknown> };
+    const at = await until(
+      () => get<Answering>(H, `/api/projects/${CANVAS}/rc`),
+      (r) => r.policies?.[sian.id] !== undefined,
+      "Sian's policy to relay up",
+    );
+    expect(at.owners).toEqual([priya]);
+    expect(at.policies).toEqual({ [sian.id]: { owner: priya, listen: [] } });
+
+    // Somebody else's ask to add an agent is refused AT THE DOOR, in words
+    // that name whose rc it is — never sent down to spend nothing silently.
+    const asked = await post(H, `/api/projects/${CANVAS}/agents/ask`, {
+      name: "Percy",
+      from: { id: "usr_home", name: "Home" },
+    });
+    expect(asked.status).toBe(403);
+    const refusal = (await asked.json()) as { code: string; error: string };
+    expect(refusal.code).toBe("not-your-rc");
+    expect(refusal.error).toContain("Priya's");
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
+
+  it("an owner the holding badge cannot speak as is not believed", async () => {
+    await birthAtA();
+    const hold = holdAtA([], 8_000, { owner: isaac });
+    await until(() => get<{ parked: boolean }>(H, `/api/projects/${CANVAS}/rc`), (r) => r.parked, "the hold to relay up");
+    const at = await get<{ owners?: unknown[] }>(A, `/api/projects/${CANVAS}/rc`);
+    expect(at.owners).toEqual([]);
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
 
   it("a hold at A is `parked` at H, and stops being when the hold ends", async () => {
     await birthAtA();

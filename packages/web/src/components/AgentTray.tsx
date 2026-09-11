@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Actor } from "@isocan/core";
-import { roster } from "@isocan/core";
+import { LISTEN_ANYONE, roster, rulesOf } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { AddAgent } from "./AddAgent.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -114,8 +114,22 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
                         type: "agent.withdraw",
                         actorId: row.actorId,
                       }),
+                    /* Whose word wakes it (owner-only summons): the same
+                       re-enrolment `isocan rc listen` sends, the other rule
+                       keys carried through. The row offers it only to the
+                       owner, and the rc honours it only from the owner. */
+                    onListen: (open: boolean) => {
+                      const record = canvas?.agents?.[row.actorId];
+                      if (!record) return;
+                      void sendEchoed(canvasId, actor, {
+                        type: "agent.enroll",
+                        agent: record.actor,
+                        rules: { ...rulesOf(record.rules), listen: open ? [LISTEN_ANYONE] : [] },
+                      });
+                    },
                   }
                 : {})}
+              viewer={actor.id}
             />
           ))
         )}

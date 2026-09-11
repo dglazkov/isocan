@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import { WebSocket } from "ws";
 import type {
   Actor,
+  RcPolicy,
   AttestOffer,
   AttestRequest,
   AttestResponse,
@@ -1481,9 +1482,40 @@ export class HomeLink implements HomeConnection {
         this.unvouched.delete(key);
         answerable.push(actorId);
       }
+      // **Whose, and whose word** (owner-only summons): the owners of the rcs
+      // parked here, vouched the same way the faces are — a policy says
+      // "listens only to Nico" in Nico's name — and the policy of each agent
+      // that made it through above. An owner the home will not vouch for
+      // takes its policies with it; the home then reads those agents the way
+      // it reads an older rc's, and the refusal is said once, like a face's.
+      const owners: Actor[] = [];
+      for (const owner of local.owners) {
+        const key = `${link.canvasId} owner ${owner.id}`;
+        const ok = await this.ensureClaim(owner).then(
+          () => true,
+          (err: unknown) => {
+            if (!this.unvouched.has(key)) {
+              this.unvouched.add(key);
+              console.error(
+                `[isocan] ${this.homeUrl} will not vouch for ${owner.name} (${owner.id}): ` +
+                  `${(err as Error).message} — whose word their rc takes goes unsaid at the home until it does`,
+              );
+            }
+            return false;
+          },
+        );
+        if (!ok) continue;
+        this.unvouched.delete(key);
+        owners.push(owner);
+      }
+      const policies: Record<string, RcPolicy> = {};
+      for (const actorId of answerable) {
+        const policy = local.policies[actorId];
+        if (policy && owners.some((o) => o.id === policy.owner.id)) policies[actorId] = policy;
+      }
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(
-          JSON.stringify({ type: "rc-relay", parked: local.parked, actorIds: answerable }),
+          JSON.stringify({ type: "rc-relay", parked: local.parked, actorIds: answerable, owners, policies }),
         );
       }
     }

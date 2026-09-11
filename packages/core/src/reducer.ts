@@ -486,9 +486,14 @@ export function applyOperation(
 
     case "agent.enroll": {
       // Re-enrolling updates the record in place: the standing was already
-      // there, the rules (or the name) changed. `rules` is stored verbatim
-      // and interpreted by nobody until phase 4 defines the vocabulary.
-      const row = { actor: op.agent, ...(op.rules !== undefined ? { rules: op.rules } : {}) };
+      // there, the rules (or the name) changed. `rules` is stored verbatim;
+      // `writtenBy` is the envelope's author, so the rc can tell its owner's
+      // gate from anybody else's (`EnrolledAgent.writtenBy`).
+      const row = {
+        actor: op.agent,
+        ...(op.rules !== undefined ? { rules: op.rules } : {}),
+        writtenBy: actor,
+      };
       return withCanvas({
         ...canvas,
         agents: { ...(canvas.agents ?? {}), [op.agent.id]: row },

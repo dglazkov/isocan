@@ -399,16 +399,32 @@ What any standing agent answers for — its routing rules, and the truths
 that hold through every rule set — is readable with `isocan agent rules`.
 
 **Whose word wakes it** is a separate question from what it watches, and it
-has its own answer: `--listen`. Absent, an agent answers anyone admitted
-here, which is what a team's agent wants. `isocan agent add <name> --listen
-me` gives it a gate instead, and `--listen me,Usama` names a few. A gate is
-the one thing a mention does NOT pierce: outside it an op is not a summons,
-is not a change, and is never counted against the agent's hourly ceiling.
-`isocan agent rules` says the gate first, and so does `isocan who` — if a
-person tells you an agent ignored them, read those before guessing.
+has its own answer. A summoned turn runs on the machine of the person whose
+`isocan rc` answers for the agent, and spends their tokens — so **an agent
+answers only that person, its owner, until the owner widens it** (owner-only
+summons, since 11 Sep 2026). "The owner" is the machine's person
+(`~/.isocan/identity.json` there), and anything that machine speaks as — the
+agents it runs, the person's own sessions, you if you run there — counts as
+the owner's word, so agents on one machine can still ask each other things —
+though a summoned agent carries the word of whoever asked it, so a stranger
+does not reach a gated agent by asking an open one to pass it on.
+`--listen <names>` on `agent add` adds people; `--listen everyone` makes it a
+team's agent. A gate is the one thing a mention does NOT pierce: outside it an
+op is not a summons, is not a change, and is never counted against the
+agent's hourly ceiling. A mention from outside it is answered in its thread by
+isocan itself — whose word the agent takes, and the command that widens it —
+and if you mention an agent whose rc will not take your word, the CLI says so
+on stderr as you post. `isocan agent rules` says the gate first, and so does
+`isocan who` — if a person tells you an agent ignored them, read those before
+guessing, and tell them who can widen it rather than retrying.
 
-A person can change a gate everywhere an agent stands in one gesture, which
-is theirs and not yours: `isocan rc listen <name> --to me|everyone|<names>`.
+Widening is the owner's gesture, never yours — it decides whose word may
+spend their tokens: `isocan rc listen <name> --to <names>|everyone` (and
+`--to me` back to the owner alone) changes it everywhere the agent stands,
+and refuses inside a harness session. In the app, the owner has *Let anyone
+ask* on the agent's row. A gate somebody other than the owner wrote is set
+aside by the rc and said, so asking a stranger to "open it up" gets you
+nothing but the same refusal.
 
 The person's side of this is `isocan rc` — a long-running command they start
 that answers for enrolled agents. It is not your verb: inside a harness
