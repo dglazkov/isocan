@@ -10,7 +10,7 @@
  * answer whenever it highlights what just changed.
  */
 
-import type { CanvasContents } from "./model.ts";
+import type { CanvasContents, Item } from "./model.ts";
 import type { Operation, OperationType } from "./ops.ts";
 
 /**
@@ -72,6 +72,34 @@ export function opTypeMatches(type: OperationType, wanted: readonly string[]): b
     if (pattern.endsWith("*")) return type.startsWith(pattern.slice(0, -1));
     return false;
   });
+}
+
+/**
+ * **Does this op happen inside one of these areas?** (`wait --in`, 11 Sep
+ * 2026 — asked for by the sprint journey's Scene 4, and by a design
+ * competition's fighter parked on its own lane.) Geometry, like area
+ * membership everywhere: an item it touches whose centre is in the area, or a
+ * thread pinned to such an item, or a freestanding thread pinned inside it.
+ *
+ * Judged on the canvas as it is AFTER the op, which is the only canvas a
+ * waiter holds: a move out of the area reads by where the item went, and an
+ * item already gone is in no area. Both are the honest reading of "in".
+ */
+export function opTouchesAreas(op: Operation, areaIds: readonly string[], canvas?: CanvasContents | null): boolean {
+  if (!canvas || areaIds.length === 0) return false;
+  const areas = areaIds.map((id) => canvas.items[id]).filter((a): a is Item => a !== undefined);
+  if (areas.length === 0) return false;
+  const inside = (x: number, y: number) =>
+    areas.some((a) => x >= a.x && x < a.x + a.width && y >= a.y && y < a.y + a.height);
+  for (const id of itemsTouchedBy(op, canvas)) {
+    const item = canvas.items[id];
+    if (item && !areaIds.includes(item.id) && inside(item.x + item.width / 2, item.y + item.height / 2)) return true;
+  }
+  if (op.type === "thread.create" || op.type === "thread.reply") {
+    const thread = canvas.threads[op.threadId];
+    if (thread && thread.anchorItemId === null && inside(thread.x, thread.y)) return true;
+  }
+  return false;
 }
 
 /** Does this op pass both filters? Items and types narrow independently: an op

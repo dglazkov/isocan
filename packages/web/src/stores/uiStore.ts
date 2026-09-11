@@ -255,6 +255,12 @@ interface UiStore {
    *  3), so the slots that read the module list re-render. Never stored. */
   modulesGeneration: number;
   bumpModules: () => void;
+  /** The module dialog open over the canvas, if any (proposed: `dialogs`):
+   *  which one, and what followed the slash command that opened it. One at a
+   *  time, by construction. Never stored. */
+  moduleDialog: { id: string; args: string } | null;
+  openModuleDialog: (id: string, args?: string) => void;
+  closeModuleDialog: () => void;
   /** Google Doc items this browser shows LIVE — the `/preview` frame in
    *  place of the words (Google Docs stage 4). A mode you flip, remembered
    *  per person, never a second item. */
@@ -653,6 +659,9 @@ export const useUiStore = create<UiStore>((set, get) => {
     collapsedComments: [],
     modulesGeneration: 0,
     bumpModules: () => set((s) => ({ modulesGeneration: s.modulesGeneration + 1 })),
+    moduleDialog: null,
+    openModuleDialog: (id, args = "") => set({ moduleDialog: { id, args } }),
+    closeModuleDialog: () => set({ moduleDialog: null }),
     liveDocs: readIdList(LIVE_DOCS_KEY),
     pendingChat: null,
     paletteOpen: null,

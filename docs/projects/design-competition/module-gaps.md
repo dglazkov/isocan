@@ -29,7 +29,14 @@ shape moves.
 | 5 | [Casting agents](#5-casting-agents) | `CliHost`, `WebHost`, the rc | `CliModule.templates`, `host.enrol` | yes: `templates` |
 | 6 | [Curtain and `wait --in`](#6-smaller-a-curtain-that-is-not-the-sprints-and-wait---in) | `core/sprint.ts`, `wait` | `CoreModule.rounds` | yes: `rounds` |
 
-`MODULE_API_VERSION` moves to 0.3.0 with the first of these to land.
+**All six built on 11 Sep 2026** (modules phase 4.6). `MODULE_API_VERSION`
+moved 0.2.0 → **0.2.1**, not 0.3.0 as first written: every one of them is a
+new optional field or a member a module is *handed*, never one it must provide,
+so a `^0.2.0` module still loads. Two additions the build found it needed:
+`WebHost.viewer` (a ballot has to know which medal is yours) and
+`WebHost.reveal` (a dialog that makes something off-screen should show it),
+and `LAZY_HALVES` — a build-time module fetched after first paint, so the
+competition costs no first visit.
 
 ## 1. Assets
 
@@ -302,10 +309,14 @@ interface WebHost {
 - **Promoted, not private.** `enrol` and `withdraw` are what `rc add` and
   `rc rm` already do, moved onto the hosts — the promotion rule `CliHost` was
   written with.
-- **Consent stays where agent-custody left it.** Whose ask a parked rc honours
-  is open; the default this proposal assumes is the one the 10 Sep rc note
-  recommends — **the rc's owner only** — so Fight works for the person whose
-  machine it is and is refused, with a sentence, for everyone else.
+- **Consent is the plain ask's, not a rule of its own.** A template ask is
+  honoured exactly where a plain ask already is, because a template only
+  writes files from code the machine's own person installed; making owner-only
+  the rule for templates alone would have made it the rule by the back door.
+  Agent-custody then decided it for every ask at once — owner-only summons
+  (#269, 11 Sep): the home refuses anybody but the rc's owner with the owner's
+  name, and the rc holds the same rule where the machine is — so fighters are
+  cast only on the pressing person's own rc, template or not.
 - **The brief is not in the template.** What to *do* arrives as a message on
   the canvas, which is how an rc wakes an agent already. Templates decide who
   an agent is; messages say what it is asked. Keeping the two apart is what

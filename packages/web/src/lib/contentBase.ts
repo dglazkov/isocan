@@ -3,7 +3,7 @@ import { SIGN_BLOBS_LIMIT } from "@isocan/core";
 import { getServing, signedBlobs } from "./api.ts";
 import type { ContentOrigin } from "./frame.ts";
 import { activateRuntimeModules } from "./runtimeModules.ts";
-import { loadExperiments } from "../modules.ts";
+import { loadExperiments, loadLazyModules } from "../modules.ts";
 
 /**
  * The content origin's base URL, as this tab knows it — the app half of
@@ -52,6 +52,8 @@ export async function loadContentBase(): Promise<void> {
     void activateRuntimeModules(serving.modules ?? []);
     // And the experiments this browser already had on, from the same beat.
     void loadExperiments();
+    // And the modules that are on for everybody but cost no first visit.
+    void loadLazyModules();
   } catch {
     adoptContentBase(null);
   }

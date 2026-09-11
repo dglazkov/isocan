@@ -159,15 +159,18 @@ export function contextLayers(
 }
 
 /**
- * The design system that governs here: this canvas's own, else the first a
- * linked canvas contributes, in reading order. `design check` on a canvas
- * with none of its own checks against the inherited one, and says whose.
+ * The design system that governs here: the area's own when `at` names a place
+ * in one (scoped design systems, 11 Sep 2026), else this canvas's own, else
+ * the first a linked canvas contributes, in reading order — **area → canvas →
+ * linked**. `design check` on a canvas with none of its own checks against the
+ * inherited one, and says whose.
  */
 export function governingDesign(
   canvas: CanvasContents,
   linked: LinkedCanvas[],
+  opts?: { at?: { x: number; y: number } | Item },
 ): { item: Item; from: { canvasId: string; title: string } | null } | null {
-  const own = designSystem(canvas);
+  const own = designSystem(canvas, opts);
   if (own) return { item: own, from: null };
   for (const link of linked) {
     if (!link.canvas) continue;

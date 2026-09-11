@@ -7,7 +7,7 @@ before any module**, because the thing nobody knows yet is whether a
 not, the picker is a costume shop. Then the platform changes that are useful
 without the competition, then the module on the terminal, then the picker.
 
-**Where we are:** designed 11 Sep 2026. Nothing built. Phase 0 is next.
+**Where we are:** designed and built on 11 Sep 2026 — phases 1–6 built on the branch, 7 built but for blind bouts, 5.5 and 8 waiting on the merge, and phase 0 — the one that needs people — still owed and still first in importance.
 Decided the same day: principle-first names (*Less but Better*, after Dieter
 Rams), exhibition as the default bout, and shipping on isocan.io — which is
 phase 5.5 below.
@@ -16,6 +16,8 @@ The epic is [#250](https://github.com/dglazkov/isocan/issues/250); each phase
 names its issue.
 
 ## Phase 0 — a bout by hand, and two numbers
+
+**Owed.** It needs three people who know the roster, and no build can stand in for them. Everything below was built without the two numbers; when phase 0 runs, it may change the packs, not the machinery.
 
 *No module, no new code.* Three packs written by hand from
 [`packs.md`](packs.md) — Kare, Rams, Linear — each a directory with an
@@ -46,6 +48,8 @@ the three briefs, and what changed in the packs because of them.
 
 ## Phase 1 — the platform changes nothing else needs to wait for
 
+**Built 11 Sep.** `designSystem(canvas, { at })`, the hijack fixed, `--in` on `design`, `check`, `set`, `import` and `audit`, the audit asking at the screen; `wait --in` and `AgentRules.areas`. Held by `packages/core/test/moduleextensions.test.ts`.
+
 *Core and CLI only. Useful without the competition.*
 
 - **The scoped design system** ([§4](module-gaps.md#4-a-design-system-scoped-to-an-area),
@@ -61,6 +65,8 @@ the three briefs, and what changed in the packs because of them.
 an agent parked with `wait --in A` is not woken by a comment in B.
 
 ## Phase 2 — packs and assets: the module exists, on the terminal
+
+**Built 11 Sep.** Assets (build, manifest, bound, `moduleAsset`, `.md`/`.json` types, a runtime module's `styles.css`); the pack format, its validator and the nine packs (every `DESIGN.md` parses and lints with no errors); the module, `competition fighters` and `competition new`, and the fighter card's renderer.
 
 - **Module assets** ([§1](module-gaps.md#1-assets), #251): the `assets/`
   convention, `module-build.mjs` copying it, the manifest listing it, the
@@ -84,6 +90,8 @@ build of the module carries its avatars and they draw from
 
 ## Phase 3 — casting: the fighters walk in
 
+**Built 11 Sep.** Templates, `CliHost.enrol` / `withdraw`, the rc running a template ask; `competition start`, `status`, `handin`, and the bell. The rc's template path is proved over HTTP in `packages/cli/test/rc.test.ts`.
+
 - **Templates and `enrol`** ([§5](module-gaps.md#5-casting-agents), #255):
   `CliModule.templates`, `CliHost.enrol`/`withdraw` promoted from `rc add` and
   `rc rm`, the rc honouring template ids from installed modules only.
@@ -100,6 +108,8 @@ lanes, three entries stamped at the bell, the floor under each.
 
 ## Phase 4 — the vote and the result
 
+**Built 11 Sep.** `rounds` (the sprint is the curtain's first caller now), ballots on both surfaces, the tally in the module's core, `result`, `decide`, `withdraw`. `test/bout.test.ts` in the module plays a whole bout over the wire.
+
 - **The curtain's `rounds`** ([§6](module-gaps.md#6-smaller-a-curtain-that-is-not-the-sprints-and-wait---in),
   #256): the sprint becomes the curtain's first caller, the competition its
   second.
@@ -115,6 +125,8 @@ by the verb and dropped by the tally with a sentence.
 
 ## Phase 5 — the picker
 
+**Built 11 Sep.** The dialog slot, `WebHost.enrol` / `viewer` / `reveal`, the fighter select, and the bout tray; driven in a browser against a daemon from the branch — from the composer and from ⌘K.
+
 - **The dialog slot** ([§3](module-gaps.md#3-a-dialog-slot), #254):
   `WebModule.dialogs`, `DialogFacts`, `opens` on actions and module commands,
   the shell's `Modal` as the box.
@@ -129,6 +141,8 @@ by the verb and dropped by the tally with a sentence.
 module's and disappears when the module is removed.
 
 ## Phase 5.5 — on isocan.io
+
+**Waiting on the merge.** It is a build-time module, fetched after first paint (`LAZY_HALVES`), and the bundle budget holds; the walk on dev and prod happens when `green` carries it.
 
 *Decided 11 Sep 2026: it ships on the hosted home.* The first phase in which
 anybody who is not on this repo can play a bout, so it waits for the picker —
@@ -157,6 +171,8 @@ unchanged within the ratchet.
 
 ## Phase 6 — bring your own fighter
 
+**Built 11 Sep.** `points`, `contributes`, `contributions()`, data-only modules; `competition fighter new` writes one and `module add` installs it (the end-to-end test does both). *Your emissaries* in the picker is not built.
+
 - **Contribution points and data-only modules** ([§2](module-gaps.md#2-contribution-points),
   #252): `points`, `contributes`, `contributions()`, manifests carrying data,
   `module add` saying *data only — runs nothing*.
@@ -170,6 +186,8 @@ tenth portrait and fights.
 
 ## Phase 7 — blind bouts, the converge half, and standings
 
+**Built but for blind.** `take`, `remix`, `rematch` and `standings` (Bradley–Terry behind `MIN_BOUTS`) are built; **blind bouts are not** — they need desks wired to the bout, and `--mode blind` is refused with a sentence rather than faked on live lanes.
+
 - **Blind** (#262): fighters on desks (`sprint desk`), shuffled hand-in to a
   Wall area as *Entry A, B, C*, coaching refused with a sentence, names on the
   wall at the tally.
@@ -182,6 +200,8 @@ tenth portrait and fights.
 **Acceptance:** Scenes 4 (blind), 5 and 7's first half play.
 
 ## Phase 8 — take it away
+
+**Owed.** The removal proof is run by hand on a build of the image, after the merge.
 
 The removal proof, for the largest module yet, by hand and recorded here —
 on a build of the hosted home's own image, since that is where it ships: a

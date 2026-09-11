@@ -31,6 +31,49 @@ export interface CliHost {
     size?: { width: number; height: number },
   ) => unknown;
   truncate: (text: string, max: number) => string;
+  /**
+   * **Enrol an agent on a canvas, from this machine** (proposed: `templates`,
+   * 11 Sep 2026) — what `isocan rc add` does, promoted rather than imported:
+   * the `agent.enroll` op, and the machine-local row the rc dispatches from.
+   * With a `template`, the named template (from a module loaded HERE)
+   * prepares the agent's working directory first, and that directory is the
+   * row's cwd.
+   */
+  enrol: (ctx: Ctx, canvasId: string, ask: EnrolRequest) => Promise<{ actorId: string; dir: string | null }>;
+  /** Take an agent's standing back — what `isocan rc rm` does. The log keeps
+   *  everything; the working directory is left where it is. */
+  withdraw: (ctx: Ctx, canvasId: string, actorId: string) => Promise<void>;
+}
+
+export interface EnrolRequest {
+  name: string;
+  template?: string;
+  args?: Readonly<Record<string, string>>;
+  /** A harness name `isocan harness` knows; unset, the machine's default. */
+  harness?: string;
+}
+
+/**
+ * **A template: what a new agent's working directory holds** (proposed:
+ * `templates`).
+ *
+ * The gap `AddAgent` deferred on 30 Aug — *"persona templates deliberately
+ * absent… until the personas machinery can say what a template defaults,
+ * rather than a picker that decorates without deciding"* — answered in the
+ * narrowest shape that decides something: a template writes files into a
+ * directory, and that directory is where the agent's harness starts, so an
+ * `AGENTS.md` in it is what the agent reads first.
+ *
+ * **Only code a person installed runs.** A web ask names a template by id;
+ * the rc looks the id up among modules loaded on its own machine and refuses
+ * one it does not have. A template writes files. It does not start a
+ * harness, choose a model, or run anything.
+ */
+export interface EnrolTemplate {
+  /** Namespaced: `<module>.<name>`. */
+  id: string;
+  describe: string;
+  prepare: (args: Readonly<Record<string, string>>, into: string) => Promise<{ harness?: string } | void>;
 }
 
 export interface CliModule {
@@ -40,4 +83,6 @@ export interface CliModule {
   /** The section `isocan --agent-help` prints after the base guide, while
    *  this module is loaded. Every verb `register` adds must be named in it. */
   guide: string;
+  /** Working-directory templates this module offers the rc. */
+  templates?: readonly EnrolTemplate[];
 }

@@ -52,6 +52,18 @@ export interface SlashCommand {
    * the client to run.
    */
   local?: boolean;
+  /**
+   * **A module command that opens one of its module's dialogs** (proposed:
+   * `dialogs`, 11 Sep 2026) — local on the web, a skill on the terminal. Typed
+   * into a composer it opens the dialog, with whatever followed the command
+   * as the dialog's `args`; read by an agent from the Chat it is still a body
+   * to carry out with the module's verbs. The same command, the right thing on
+   * each surface — which is what `local` already means for a built-in.
+   *
+   * Honoured only for `source: "module"`: a home command has no code in the
+   * client, and a file must not be able to claim a dialog.
+   */
+  opens?: string;
 }
 
 /** What a command may be called. Kept narrow so a name is always typeable,

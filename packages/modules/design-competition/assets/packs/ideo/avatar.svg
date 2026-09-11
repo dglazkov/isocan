@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90">
+<rect width="120" height="90" fill="#fafafa"/>
+<rect x="14" y="16" width="30" height="30" rx="1" fill="#7fd6ee" stroke="#222222" stroke-opacity="0.15" stroke-width="1" transform="rotate(-8 29 31)"/>
+<rect x="28" y="22" width="30" height="30" rx="1" fill="#ff9ec4" stroke="#222222" stroke-opacity="0.15" stroke-width="1" transform="rotate(5 43 37)"/>
+<rect x="20" y="36" width="30" height="30" rx="1" fill="#ffd84d" stroke="#222222" stroke-opacity="0.15" stroke-width="1" transform="rotate(-3 35 51)"/>
+<line x1="25" y1="46" x2="42" y2="45" stroke="#222222" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="25" y1="52" x2="38" y2="51.5" stroke="#222222" stroke-width="1.2" stroke-linecap="round"/>
+<path d="M50 56 C62 70 70 30 60 26 C52 23 58 44 78 48 C84 49 88 50 90 52" fill="none" stroke="#222222" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M85 48.5 L90.5 52.3 L84.6 55" fill="none" stroke="#222222" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M92 58 L102 53 L112 58 L102 63 Z" fill="#ffffff" stroke="#222222" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M92 58 L92 69 L102 74 L102 63 Z" fill="#ececec" stroke="#222222" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M102 63 L112 58 L112 69 L102 74 Z" fill="#d6d6d6" stroke="#222222" stroke-width="1.2" stroke-linejoin="round"/>
+</svg>

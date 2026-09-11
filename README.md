@@ -278,6 +278,21 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   (`isocan area grid Test 5x15`). See
   [the research](docs/research/2026-09-01-design-sprint.md) and
   [the journey](docs/projects/sprint/journey.md).
+- **The design competition** — *choose your fighter*: type
+  `/design-competition <brief>` (or ⌘K → *Start a design competition*) and
+  pick two to four designer packs — *Less, but better* after Dieter Rams,
+  *Road signs* after Susan Kare, *Fast is a feature* after Linear, nine in all,
+  each an homage named for its principle. The arena is a Brief and a lane per
+  fighter, each lane holding its card, its own `DESIGN.md` (a design system
+  scoped to the lane) and its references; one agent per fighter is enrolled on
+  your rc from its pack's template and handed its brief in its lane. At the
+  bell people rank 🥇🥈🥉 by which best answers the brief, 🔴 the part they
+  would steal, ⛔ a miss; fighters rank each other, counted apart; the
+  Decider's 🏆 decides and *take* makes the winner the screen's next version.
+  Every step is a verb: `isocan competition new | start | handin | bell | vote
+  | result | take | standings`. Bring your own fighter as a data-only module
+  (`isocan competition fighter new`). Built as a module on purpose — see
+  [the project](docs/projects/design-competition/).
 - **Areas**: a titled sheet things are placed on — `isocan area new "Sketches"`,
   then `--in Sketches` on `text`, `add` and `mv`, `isocan ls --in` to read it
   back, `isocan format --in` to tidy within it. A sheet lies behind everything,

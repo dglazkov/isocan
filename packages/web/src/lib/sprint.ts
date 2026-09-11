@@ -12,6 +12,8 @@ import {
   newGroupId,
   newItemId,
   newVersionId,
+  roundRunning,
+  roundsOn,
   sprintState,
   wallFor,
 } from "@isocan/core";
@@ -326,9 +328,29 @@ export function useOnWall(item: Item): boolean {
 export function useVotesHiddenOn(item: Item): boolean {
   const { state, nowMs } = useSprint();
   const canvas = useCanvasStore((s) => s.canvas);
+  // A module's vote round (proposed: `rounds`, 11 Sep 2026) curtains its own
+  // area by the same lens — the sprint is the curtain's first caller now,
+  // not its only case. Same shared clock, so a round's curtain lifts on the
+  // same tick as every chip.
+  if (canvas && roundsOn(canvas, item).some((round) => roundRunning(round, nowMs))) return true;
   if (!hidesVotes(state, nowMs) || !state || !canvas) return false;
   return wallIdsFor(canvas, state).has(item.id);
 }
+
+/**
+ * The marks that are votes on this item beyond the sprint's own: every mark
+ * of every module round it sits in, running or finished — so a heat map of
+ * dots draws on a competition's entries the way it does on a sprint's wall,
+ * hidden but your own while the round runs and all of them at the bell.
+ */
+export function useRoundMarks(item: Item): readonly string[] {
+  const canvas = useCanvasStore((s) => s.canvas);
+  return useMemo(
+    () => (canvas ? [...new Set(roundsOn(canvas, item).flatMap((round) => round.marks))] : EMPTY_MARKS),
+    [canvas, item],
+  );
+}
+const EMPTY_MARKS: readonly string[] = [];
 
 /** The mark a running vote phase counts, or null outside one. */
 export function voteMark(state: SprintState | null): string | null {

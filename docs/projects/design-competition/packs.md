@@ -257,9 +257,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
 - **Studies:** the original Macintosh icons (1983–84, MoMA acquired the
   sketchbooks), Chicago, Geneva and Monaco (1984), Cairo (1984), the Windows
   3.0 Solitaire deck (1990). None bundle-able — link.
-- **Quote (verify the transcript's wording before shipping):** *good icons
-  are more akin to road signs than illustrations* — Stanford, *Making the
-  Macintosh*.
+- **Quote: none.** The "road signs" line is widely quoted and was not found
+  in the Stanford *Making the Macintosh* transcript when the pack was written
+  (11 Sep), so the pack ships `quote: null` rather than a misattribution.
 - **Avatar:** an original 1-bit smile on a 12×12 grid.
 
 ### Less, but better — after Dieter Rams & Braun
@@ -428,7 +428,8 @@ Engineering** (*serious instruments disguised as toys*), **Don Norman**
 
 - Every hex marked *approx.* is a translation; phase 0 decides whether they
   are the right ones by whether people can tell the entries apart.
-- The Kare quote's exact wording, from the Stanford transcript.
+- The Kare quote was dropped (above); the others were checked at their sources
+  when the packs were written — Ive's, at fourteen words, was dropped for length.
 - Every Commons licence, file by file, at the time the pack is built.
 - *Fail faster to succeed sooner* is widely credited to David Kelley with no
   primary source found, so IDEO's pack does not use it.

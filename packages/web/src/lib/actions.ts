@@ -331,7 +331,21 @@ function moduleActions(): Action[] {
   );
   return pages.concat(modules().flatMap((m) =>
     (m.actions ?? []).map(
-      (a): Action => ({
+      (a): Action =>
+        // An action that OPENS a dialog is a door, not a write (proposed:
+        // `dialogs`): offered on a read-only canvas too, and the dialog says
+        // what it cannot do there.
+        a.opens !== undefined ? {
+        id: a.id,
+        name: a.name,
+        ...(a.hint ? { hint: a.hint } : {}),
+        group: "Canvas",
+        available: (ctx) => {
+          const canvas = useCanvasStore.getState().canvas;
+          return onCanvas(ctx) && canvas !== null && (a.available?.({ canvas, selection: ctx.selection }) ?? true);
+        },
+        run: () => useUiStore.getState().openModuleDialog(a.opens!),
+      } : ({
         id: a.id,
         name: a.name,
         ...(a.hint ? { hint: a.hint } : {}),
@@ -344,7 +358,7 @@ function moduleActions(): Action[] {
         run: async (ctx) => {
           const canvas = useCanvasStore.getState().canvas;
           if (!canvas || !ctx.canvasId) return;
-          for (const op of a.run({ canvas, selection: ctx.selection }) ?? []) {
+          for (const op of a.run?.({ canvas, selection: ctx.selection }) ?? []) {
             await sendEchoed(ctx.canvasId, ctx.actor, op);
           }
         },

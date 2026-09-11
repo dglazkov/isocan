@@ -1,5 +1,6 @@
 import type { CanvasContents, Item } from "./model.ts";
 import type { MetaPatch } from "./ops.ts";
+import { areaOf, areasOf } from "./area.ts";
 
 /**
  * The design system: what this canvas has decided things look like.
@@ -39,15 +40,56 @@ export function isDesignSystem(item: Item): boolean {
 }
 
 /**
- * The canvas's design system, if it has one. Most recently updated wins: two
- * are a mistake rather than a feature, and the newest is the likelier answer
- * to "which one is real".
+ * **The design system that governs a place on the canvas**, if there is one.
+ *
+ * With no `at`: the canvas's own — a design-system item in NO area. Most
+ * recently updated wins: two at the same level are a mistake rather than a
+ * feature, and the newest is the likelier answer to "which one is real".
+ *
+ * With `at` (11 Sep 2026, `docs/projects/design-competition/module-gaps.md`
+ * §4): the one inside the smallest area containing that spot, else the
+ * canvas's own. Scoped by geometry, the way area membership already is, so it
+ * needs no property — moving a `DESIGN.md` out of an area makes it the
+ * canvas's, visibly, in one undo.
+ *
+ * **Why the canvas-wide pick now ignores scoped ones**: it did not, and
+ * "newest wins" over the whole canvas meant three lanes each holding a
+ * `DESIGN.md` silently replaced the canvas's own system with whichever lane
+ * was touched last — every later `design --css`, every audit on a screen's
+ * arrival, every nudge. That was not a missing feature; it was a bug waiting
+ * for the first canvas with two systems, and a canvas holding a marketing
+ * site and an admin app has always been one.
  */
-export function designSystem(canvas: CanvasContents): Item | null {
-  const found = Object.values(canvas.items)
+export function designSystem(canvas: CanvasContents, opts?: { at?: { x: number; y: number } | Item }): Item | null {
+  const systems = Object.values(canvas.items).filter(isDesignSystem);
+  if (systems.length === 0) return null;
+  const areas = areasOf(canvas);
+  const areaHolding = (item: Item) => areaOf(canvas, item);
+  const newest = (list: Item[]) =>
+    [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))[0] ?? null;
+  const at = opts?.at;
+  if (at) {
+    const point = "id" in at ? { x: at.x + at.width / 2, y: at.y + at.height / 2 } : at;
+    const holding = areas
+      .filter((a) => point.x >= a.x && point.x < a.x + a.width && point.y >= a.y && point.y < a.y + a.height)
+      .sort((a, b) => a.width * a.height - b.width * b.height);
+    for (const area of holding) {
+      const here = newest(systems.filter((s) => areaHolding(s)?.id === area.id));
+      if (here) return here;
+    }
+  }
+  return newest(systems.filter((s) => areaHolding(s) === null));
+}
+
+/** Every design system that governs an area rather than the canvas, with
+ *  the area it governs — what the Context view lists under each area. */
+export function scopedDesignSystems(canvas: CanvasContents): { area: Item; item: Item }[] {
+  return Object.values(canvas.items)
     .filter(isDesignSystem)
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
-  return found[0] ?? null;
+    .flatMap((item) => {
+      const area = areaOf(canvas, item);
+      return area ? [{ area, item }] : [];
+    });
 }
 
 /**
@@ -149,7 +191,11 @@ export function designStanding(
   screens: number,
   project?: HasProperties,
 ): DesignStanding {
-  if (designSystem(canvas) !== null) return "fine";
+  // ANY written system counts — the canvas's own or one scoped to an area. A
+  // canvas whose every lane carries its own `DESIGN.md` has written its style
+  // down; asking it for a canvas-wide one on top would be a nudge about a
+  // shape, not about the thing the nudge exists for.
+  if (Object.values(canvas.items).some(isDesignSystem)) return "fine";
   if (project !== undefined && designSkipped(project)) return "fine";
   if (screens >= DESIGN_SYSTEM_LIMIT) return "overdue";
   return screens >= DESIGN_SYSTEM_AFTER ? "owed" : "fine";

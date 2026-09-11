@@ -147,7 +147,7 @@ export type ServerMessage =
    * add` makes, so the actor is born first-claim on the machine that answers
    * for it. Carries a NAME and never an actor: minting is the rc's.
    */
-  | { type: "rc-ask"; askId: string; name: string; from: Actor };
+  | { type: "rc-ask"; askId: string; name: string; from: Actor; template?: string; args?: Record<string, string> };
 
 /** Client → server. Presence is the ephemeral plane: daemon memory + WS
  * fan-out only — never the oplog, never storage, never undo. */
@@ -491,6 +491,15 @@ export interface RcAsk {
   name: string;
   /** Who asked, for the rc's narration and the enrolment's history. */
   from: Actor;
+  /**
+   * A working-directory template to prepare before enrolling (proposed:
+   * `templates`, 11 Sep 2026) — an ID, never code. The rc honours ids from
+   * modules its operator installed and refuses the rest by name, so a canvas
+   * can say which template and never what it runs.
+   */
+  template?: string;
+  /** Strings the template reads. Nothing else crosses. */
+  args?: Record<string, string>;
 }
 
 /**
@@ -555,6 +564,8 @@ export interface RcAnsweringResponse {
 export interface RcAskRequest {
   name: string;
   from: Actor;
+  template?: string;
+  args?: Record<string, string>;
 }
 
 /** The receipt for a ring, so the caller can follow what it started. */

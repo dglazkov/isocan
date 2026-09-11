@@ -11,8 +11,10 @@ of what is below.
 ## How early this is — read this first
 
 **The module API is pre-1.0 and we intend to break it.** It is at
-`MODULE_API_VERSION` 0.2.0, it moved on the day a second person wrote a module
-against it, and it will move again. Nothing here is frozen.
+`MODULE_API_VERSION` 0.2.1. It moved on the day a second person wrote a module
+against it (0.2.0), again — additively — when the design competition asked for
+assets, contribution points, dialogs, templates and vote rounds (0.2.1), and it
+will move again. Nothing here is frozen.
 
 Two things follow, and they are the whole contract:
 
@@ -21,8 +23,8 @@ you were built against — `^0.2.0`, not `*`. A build that cannot satisfy it
 refuses you with a sentence naming both versions, which is the outcome you
 want: a refusal you can read beats a module that half-loads.
 
-**Say if you use the unstable parts.** `overlays`, `drops` and `host` are
-**proposed**: they exist, they work, and they have had one caller each. A
+**Say if you use the unstable parts.** `overlays`, `drops`, `host`, `assets`,
+`points`, `dialogs`, `templates` and `rounds` are **proposed**: they exist, they work, and they have had one caller each. A
 manifest that uses one names it in `proposed`, and `isocan module add` refuses
 it unless the person adding it passes `--proposed`. That is VS Code's bargain
 in the shape this codebase can afford — their stable API has essentially never
@@ -277,6 +279,107 @@ in your `agent-guide.md` (`isocan board new`), and the section is printed
 after the base guide only while the module is loaded. `surface.test.ts`
 reads verbs from every module's `cli.ts` and enforces it.
 
+## What the design competition added (11 Sep 2026, all proposed)
+
+`@isocan/design-competition` is the worked example for every section below —
+it uses all of them. The argument for each is
+[`../design-competition/module-gaps.md`](../design-competition/module-gaps.md).
+
+### Assets — files that are not code **(proposed: `assets`)**
+
+Put anything your module ships that is not code under
+`packages/modules/<name>/assets/`. Reach it the same way on both surfaces and in
+both layouts, because `src/` and `dist/` are both one level below the root:
+
+```ts
+new URL(`../assets/packs/${id}/avatar.svg`, import.meta.url)   // web: Vite rewrites it; a runtime build resolves it in the browser
+fileURLToPath(new URL("../assets/x.md", import.meta.url))      // cli: a path you read
+```
+
+`module-build.mjs` copies `assets/` and lists every file with its size in the
+manifest; `module add` prints the list and refuses a file over
+`ASSET_MAX_BYTES` (256 KB) or a module over `ASSETS_MAX_BYTES` (2 MB).
+`assets/styles.css` is linked while a *runtime* module is loaded — its CSS's
+home at last. A build-time module's styles still live in `styles.css`, under a
+comment, where the token and scale guards read them.
+
+To reach ANOTHER module's files — a contribution's relative paths — use
+`moduleAsset(moduleName, relative)`: the loaders register each runtime
+module's base (a URL prefix on the web, a directory on the CLI).
+
+### Contribution points and data-only modules **(proposed: `points`)**
+
+A module can declare a list other modules add to:
+
+```ts
+export const myCore: CoreModule = {
+  name: "@isocan/whiteboard",
+  points: [{ id: "whiteboard.stencils", describe: "shapes the tray offers", validate: (v) => (isStencil(v) ? [] : ["not a stencil"]) }],
+  contributes: { "whiteboard.stencils": BUILT_IN_STENCILS },   // your own, through the same reader
+};
+contributions<Stencil>("whiteboard.stencils"); // [{ module, value }], validated, module order
+```
+
+`contributes` is DATA and rides the manifest. A module whose whole content is
+`contributes` plus `assets/` — no `web`, no `cli` — is a **data-only module**:
+`module add` says *data only — runs nothing*. `refusedContributions()` and
+`isocan module ls` say what a point would not take, and a contribution to a
+point nobody declares is orphaned, not an error.
+
+### Dialogs **(proposed: `dialogs`)**
+
+```ts
+dialogs: [{ id: "fighters", title: "Choose your fighter", wide: true, component: Picker }],
+actions: [{ id: "start", name: "Start a design competition", opens: "fighters" }],   // ⌘K
+commands: [{ name: "design-competition", …, source: "module", opens: "fighters" }],  // the composer
+```
+
+The shell owns the box — one at a time, in its own `Modal`, focus in and back.
+`DialogFacts` hands you `canvasId`, `canvas`, `selection`, `args` (what
+followed the slash command), `rcParked`, `canEdit`, and a host with `close`. A
+command with `opens` is local on the web and still a skill on the terminal:
+give it a `body` an agent can carry out with your verbs. A dialog opens only
+from a door a person used; you cannot open one yourself.
+
+### The host grows **(proposed: `host`, `templates`)**
+
+`WebHost` adds `viewer` (who is acting — for "your ballot"), `reveal(itemIds)`
+(glide this viewer's camera; writes nothing) and `enrol({ name, template,
+args })` (ask the parked rc to enrol an agent). `CliHost` adds `enrol(ctx,
+canvasId, { name, template, args, harness })` and `withdraw(ctx, canvasId,
+actorId)` — `rc add` and `rc remove`, promoted.
+
+### Templates — what a new agent's working directory holds **(proposed: `templates`)**
+
+```ts
+export const myCli: CliModule = {
+  …,
+  templates: [{ id: "whiteboard.critic", describe: "…", prepare: async (args, into) => { await fs.writeFile(path.join(into, "AGENTS.md"), …); } }],
+};
+```
+
+The rc runs `prepare` on its own machine, into
+`~/.isocan/templates/<id>/<canvas>/<name>/`, then enrols the agent with that
+directory as its cwd — so an `AGENTS.md` there is what the agent reads first. A
+web ask names a template by id and string args only (`askTemplate` reads them
+at the door); an id no module on that machine offers is refused by name. A
+template writes files. Say what the agent is ASKED in a message on the canvas,
+not in the template.
+
+### Vote rounds **(proposed: `rounds`)**
+
+`rounds: (canvas) => [{ areaId, marks, until }]` puts the sprint's curtain on
+your area: counts and bylines hidden while `until` is ahead, every mark with a
+point drawn as the heat map, and the marks still drawn after the bell. The
+record is never hidden; this is a lens.
+
+### Loaded after first paint
+
+A build-time module that nobody's first visit should pay for goes in
+`LAZY_HALVES` in `packages/web/src/modules.ts` instead of `LIST`: its web half
+arrives through `addModule` a beat after the canvas draws, the way a runtime
+module's does. `test/bundle-budget.test.ts` is why.
+
 ## Registering: the two lists
 
 A build-time module is one line in each list, and those two lines are the
@@ -381,9 +484,12 @@ does not load runtime modules; whether it ever should is a decision the
 
 No panel or tool slot — a dock panel or a rail tool is still a shell change.
 No inspector on the canvas, only in the workbench (an overlay is the way to
-put something beside the work today). No per-module CSS file, and an overlay
-that needs positioning still needs a rule in `styles.css` — the stickers tray
-shipped invisible for a day because the region had no CSS at all.
+put something beside the work today). A build-time module's CSS still lives in
+`styles.css` (only a runtime module's `assets/styles.css` is linked), and an
+overlay that needs positioning still needs a rule there — the stickers tray
+shipped invisible for a day because the region had no CSS at all. Runtime
+modules' `rounds` do not reach the CLI (the manifest carries data, not
+functions), so a runtime module's curtain is the web's alone.
 No way for a card to name the module a file came from when that module is
 absent. A prose editor for documents, deferred. Sandboxes, which wait on the
 content origin, extension actors and compute consent. Each is listed in

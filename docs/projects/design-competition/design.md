@@ -91,10 +91,14 @@ brief and whose properties say what the bout is —
 `competition.fighters`, `competition.entry` (`screen` | `flow`),
 `competition.mode` (`exhibition` | `blind`), `competition.decider` (an actor
 id), `competition.target` (the item a winner would become a version of).
-Where the bout *is* — building, voting, decided — is not stored: it is read
-from the Chat, as the sprint reads its phase (`sprintState` reads the newest
-`/sprint <phase>` line). One source of truth, and it is the one people can
-read.
+Where the bout *is* — laid, building, voting, decided — is on the Brief too,
+as `competition.phase` and `competition.until`, and the winner as
+`competition.winner`. **Changed in the build (11 Sep):** the first draft read
+the phase from the Chat the way the sprint does; the build keeps it on the
+item instead, because the module rules already say *module state is an item,
+visible and versioned* — and a property the log attributes to whoever rang the
+bell is a firmer record than a line somebody could edit. The Chat still
+carries what people read: each fighter's brief, the bell's call to critique.
 
 ## The cast
 
@@ -149,8 +153,9 @@ first customer that deferral was waiting for.
 Two halves, both through things that exist:
 
 - **Who it is** lives in its **working directory**. Enrolment already takes
-  `--dir`; the competition makes one per fighter per bout
-  (`~/.isocan/competitions/<bout>/<fighter>/`) holding an `AGENTS.md` — *you
+  `--dir`; the `design-competition.fighter` template writes one per fighter
+  per canvas (`~/.isocan/templates/design-competition.fighter/<canvas>/<name>/`
+  — the rc chooses where, never the template) holding an `AGENTS.md` — *you
   are Road Signs, an homage to Susan Kare's work, not her; here are the rules
   of the bout* — beside the pack's `DESIGN.md` and references. Every harness
   isocan runs already reads `AGENTS.md` (or `CLAUDE.md`) from its cwd.

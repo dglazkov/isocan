@@ -1,7 +1,8 @@
-import type { Actor, Operation, WebHost } from "@isocan/core";
-import { uploadBlob } from "./api.ts";
+import type { Actor, EnrolAsk, Operation, WebHost } from "@isocan/core";
+import { askEnrolAgent, uploadBlob } from "./api.ts";
 import { canEditNow } from "./capability.ts";
-import { sendEchoed, setNotice } from "../stores/canvasStore.ts";
+import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { glideToBox } from "./zoomactions.ts";
 
 /**
  * **The web half's host object** (#156, 9 Sep 2026).
@@ -56,5 +57,52 @@ export function webHostFor(canvasId: string, actor: Actor): WebHost {
       const upload = await uploadBlob(canvasId, bytes, filename);
       return { blobHash: upload.blobHash, size: upload.size };
     },
+    /**
+     * **The parked rc enrols; this asks** (proposed: `templates`). The same
+     * doorbell `AddAgent` rings — never an `agent.enroll` of our own, because
+     * the actor is born first-claim on the machine that answers for it — and
+     * it resolves the way that dialog does: when the enrol op for the name
+     * lands in the replica. A refusal on the rc (a name already worn, a
+     * template that machine does not have) is narrated there and arrives here
+     * as the patience running out, said in words.
+     */
+    async enrol(ask: EnrolAsk): Promise<{ actorId: string }> {
+      if (!canEditNow()) throw new Error("You are reading this canvas — nobody can be enrolled from here.");
+      const standing = () =>
+        Object.values(useCanvasStore.getState().canvas?.agents ?? {}).find(
+          (a) => a.actor.name.toLowerCase() === ask.name.toLowerCase(),
+        );
+      const already = standing();
+      if (already) return { actorId: already.actor.id };
+      await askEnrolAgent(canvasId, {
+        name: ask.name,
+        from: actor,
+        ...(ask.template ? { template: ask.template } : {}),
+        ...(ask.args ? { args: { ...ask.args } } : {}),
+      });
+      const until = Date.now() + ENROL_PATIENCE_MS;
+      while (Date.now() < until) {
+        const row = standing();
+        if (row) return { actorId: row.actor.id };
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      throw new Error(`the rc did not enrol ${ask.name} — its terminal says why`);
+    },
+    viewer: { id: actor.id, name: actor.name },
+    reveal(itemIds: readonly string[]): void {
+      const items = itemIds
+        .map((id) => useCanvasStore.getState().canvas?.items[id])
+        .filter((item): item is NonNullable<typeof item> => item !== undefined);
+      if (items.length === 0) return;
+      glideToBox({
+        minX: Math.min(...items.map((i) => i.x)),
+        minY: Math.min(...items.map((i) => i.y)),
+        maxX: Math.max(...items.map((i) => i.x + i.width)),
+        maxY: Math.max(...items.map((i) => i.y + i.height)),
+      });
+    },
   };
 }
+
+/** How long an enrol waits for the op to land — `AddAgent`'s own patience. */
+const ENROL_PATIENCE_MS = 25_000;
