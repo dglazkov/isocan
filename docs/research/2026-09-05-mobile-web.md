@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-07
 issue: 182
 see: multi-identity, workbench, on-demand, ui-refresh
-note: measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with a finger, the chrome overlaps, the Chat fits by accident and the deck fits on purpose; the field draws one line (a phone views, comments and presents; a tablet edits); recommends touch physics for every coarse pointer, a phone face built from the Chat, the viewer and the deck, and no native app. Stage 0 mostly built 7 Sep — one finger pans, two pinch, and the front page and the bottom clusters fit at 375; the 44px targets, the rail fold and long-press are not. Decided 11 Sep — the phone face is Chat-first. Stages 1–4 not built
+note: measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with a finger, the chrome overlaps, the Chat fits by accident and the deck fits on purpose; the field draws one line (a phone views, comments and presents; a tablet edits); recommends touch physics for every coarse pointer, a phone face built from the Chat, the viewer and the deck, and no native app. Stage 0 mostly built 7 Sep — one finger pans, two pinch, and the front page and the bottom clusters fit at 375 (the minimap folding below 460px since 11 Sep); the 44px targets, the rail fold and long-press are not. Decided 11 Sep — the phone face is Chat-first. Stages 1–4 not built
 ---
 
 # Mobile web: a phone talks to the canvas
@@ -14,8 +14,8 @@ decisions this note leaves open.
 
 **Where this stands, 11 Sep 2026: partly built.** Stage 0's touch half and two
 of its three chrome fixes shipped 7 Sep (5ad7e68b, cffeaf6c) — see "What the
-touch half shipped" below; the 44px targets, the rail fold and long-press did
-not. The first open question is answered: **the phone face is Chat-first** (D1,
+touch half shipped" below — and the minimap's fold below 460px followed on
+11 Sep (#265); the 44px targets, the rail fold and long-press have not. The first open question is answered: **the phone face is Chat-first** (D1,
 Dion, 11 Sep). Stages 1–4 are not built.
 
 The question, as asked: *canvases are hard on mobile, so how do we make

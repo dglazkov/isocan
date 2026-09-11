@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-11
 issue: 185
 see: ui-refresh, evals
-note: an outside architecture review checked against the tree — most of it holds, four items are wrong in ways that change the fix, and the finding it missed was the nightly catching the bundle breach three nights running into unmerged PRs. Steps 0 and 2–8 done, step 9 decided against (no big-bang split). Step 1 is the one that will not stay done — the entry chunk went 768,993 → 635,728 by 8 Sep, under the 640,000 goal for the first time, and has crept back over it with features since (646,899 on 11 Sep); the ceiling moved with a reason 11 Sep
+note: an outside architecture review checked against the tree — most of it holds, four items are wrong in ways that change the fix, and the finding it missed was the nightly catching the bundle breach three nights running into unmerged PRs. Steps 0 and 2–8 done, step 9 decided against (no big-bang split). Step 1 is the one that will not stay done — the entry chunk went 768,993 → 635,728 by 8 Sep, under the 640,000 goal for the first time, and has crept back over it with features since (646,899 in 11 Sep's nightly, 653,406 later that day); the ceiling moved to 653,500 with a reason 11 Sep (#267), and the goal is 13,406 bytes away
 ---
 
 # The architecture review, checked against the tree
@@ -16,10 +16,12 @@ wrong, and what it did not look at.
 **Where this stands, 11 Sep 2026.** Steps 0 and 2–8 are done and step 9 was
 decided against. Step 1's numbers below are history: the entry chunk reached
 **635,728 on 8 Sep**, under the 640,000 goal for the first time, and has
-crept back over it one agreed feature at a time — **646,899 on 11 Sep**
-(`docs/reviews/2026-09-11-performance.md`), over the goal, with the ceiling in
-`scripts/bundle-ceiling.mjs` moved with a reason 11 Sep. The ratchet is doing
-what step 2 built it to do; the goal is what is missed.
+crept back over it one agreed feature at a time — **646,899 in 11 Sep's
+nightly** (`docs/reviews/2026-09-11-performance.md`) and 653,406 by that
+afternoon. Over the goal: the ceiling in `scripts/bundle-ceiling.mjs` moved
+641,100 → 653,500 with a reason 11 Sep (#267), which itemises the 12,306 bytes
+and names the Help panel's static import as the first place to look. The
+ratchet is doing what step 2 built it to do; the goal is what is missed.
 
 Most of it holds. The parts that do not are worth writing down not because
 the reviewer was careless but because each wrong item points at a **real
