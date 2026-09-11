@@ -237,154 +237,37 @@ export async function inlineHtmlAssets(
 }
 
 /**
- * Inlines all local filesystem image assets referenced in a Markdown document:
- * 1. Standard markdown images: ![alt](path "title"), ![alt](<path>)
- * 2. Inline HTML <img>, <source>, <video poster="..."> tags
- * 3. Markdown reference definitions: [ref]: path "title"
- * 4. Regular markdown links pointing to local image files: [alt](path.png)
- *
- * Ignores content inside fenced code blocks and inline code.
+ * Bundle the images the Markdown renderer actually paints, preserving the source
+ * around them. Parsing avoids rewriting code, escaped examples or balanced URL
+ * parentheses. Raw HTML is literal text in our renderer, so inlining it would
+ * expose a base64 payload as prose. File links stay links to saved canvas files.
  */
-export async function inlineMarkdownAssets(
-  filePath: string,
-  markdown: string,
-): Promise<string> {
-  const baseDir = path.dirname(path.resolve(filePath));
-
-  // 1. Mask fenced code blocks and inline code so we don't alter code snippets
-  const codeBlocks: string[] = [];
-  const maskedMarkdown = markdown.replace(
-    /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]+`)/g,
-    (match) => {
-      const placeholder = `__ISOCAN_CODE_BLOCK_${codeBlocks.length}__`;
-      codeBlocks.push(match);
-      return placeholder;
-    },
-  );
-
-  let result = maskedMarkdown;
-
-  // 2. Handle HTML <img> and <source> tags
-  const attrRegex = /\b(?:src|poster)=(["'])(.*?)\1/gi;
-  const htmlRefsToReplace = new Map<string, string>();
-  let attrMatch: RegExpExecArray | null;
-  while ((attrMatch = attrRegex.exec(result)) !== null) {
-    const rawRef = attrMatch[2];
-    if (rawRef && !htmlRefsToReplace.has(rawRef)) {
-      const dataUri = await resolveImageToDataUri(rawRef, baseDir);
-      if (dataUri) {
-        htmlRefsToReplace.set(rawRef, dataUri);
-      }
-    }
+export async function inlineMarkdownAssets(filePath: string, markdown: string): Promise<string> {
+  const [{ unified }, { default: remarkParse }] = await Promise.all([import("unified"), import("remark-parse")]);
+  type Node = { type: string; url?: string; alt?: string; title?: string | null; identifier?: string; children?: Node[];
+    position?: { start: { offset?: number }; end: { offset?: number } } };
+  const tree = unified().use(remarkParse).parse(markdown) as Node;
+  const images: Node[] = [];
+  const definitions = new Map<string, Node>();
+  const walk = (node: Node) => {
+    if (node.type === "definition" && node.identifier && !definitions.has(node.identifier)) definitions.set(node.identifier, node);
+    if (node.type === "image" || node.type === "imageReference") images.push(node);
+    node.children?.forEach(walk);
+  };
+  walk(tree);
+  const replacements: Array<{ start: number; end: number; text: string }> = [];
+  for (const node of images) {
+    const target = node.type === "imageReference" ? definitions.get(node.identifier ?? "") : node;
+    const start = node.position?.start.offset, end = node.position?.end.offset;
+    if (!target?.url || start === undefined || end === undefined) continue;
+    const data = await resolveImageToDataUri(target.url, path.dirname(path.resolve(filePath)));
+    if (!data) continue;
+    const alt = (node.alt ?? "").replace(/\\/g, "\\\\").replace(/\[/g, "\\[").replace(/\]/g, "\\]");
+    const title = target.title == null ? "" : ` "${target.title.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    const angle = /\]\(\s*</.test(markdown.slice(start, end));
+    replacements.push({ start, end, text: `![${alt}](${angle ? `<${data}>` : data}${title})` });
   }
-  if (htmlRefsToReplace.size > 0) {
-    result = result.replace(
-      /\b(src|poster)=(["'])(.*?)\2/gi,
-      (full, attr, quote, ref) => {
-        const dataUri = htmlRefsToReplace.get(ref);
-        return dataUri ? `${attr}=${quote}${dataUri}${quote}` : full;
-      },
-    );
-  }
-
-  // 3. Handle Markdown images: ![alt](target)
-  const mdImageRegex = /!\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^"'\s\)]+))(?:\s+(?:"([^"]*)"|'([^']*)'|\(([^)]*)\)))?\s*\)/g;
-  const mdImageReplacements: Array<{ fullMatch: string; replacement: string }> = [];
-  let mdMatch: RegExpExecArray | null;
-
-  while ((mdMatch = mdImageRegex.exec(result)) !== null) {
-    const fullMatch = mdMatch[0];
-    const alt = mdMatch[1];
-    const isAngleBracket = Boolean(mdMatch[2]);
-    const rawRef = mdMatch[2] ?? mdMatch[3];
-    const title = mdMatch[4] ?? mdMatch[5] ?? mdMatch[6];
-
-    if (rawRef) {
-      const dataUri = await resolveImageToDataUri(rawRef, baseDir);
-      if (dataUri) {
-        const dest = isAngleBracket ? `<${dataUri}>` : dataUri;
-        let titleSuffix = "";
-        if (title !== undefined) {
-          titleSuffix = ` "${title.replace(/"/g, '\\"')}"`;
-        }
-        mdImageReplacements.push({
-          fullMatch,
-          replacement: `![${alt}](${dest}${titleSuffix})`,
-        });
-      }
-    }
-  }
-
-  for (const { fullMatch, replacement } of mdImageReplacements) {
-    result = result.replace(fullMatch, replacement);
-  }
-
-  // 4. Handle Reference definitions: [ref]: target "title"
-  const refDefRegex = /^(\s*\[[^\]]+\]:\s*)(?:<([^>]+)>|(\S+))((?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*)$/gm;
-  const refReplacements: Array<{ fullMatch: string; replacement: string }> = [];
-  let refMatch: RegExpExecArray | null;
-
-  while ((refMatch = refDefRegex.exec(result)) !== null) {
-    const fullMatch = refMatch[0];
-    const prefix = refMatch[1];
-    const isAngleBracket = Boolean(refMatch[2]);
-    const rawRef = refMatch[2] ?? refMatch[3];
-    const suffix = refMatch[4];
-
-    if (rawRef) {
-      const dataUri = await resolveImageToDataUri(rawRef, baseDir);
-      if (dataUri) {
-        const dest = isAngleBracket ? `<${dataUri}>` : dataUri;
-        refReplacements.push({
-          fullMatch,
-          replacement: `${prefix}${dest}${suffix}`,
-        });
-      }
-    }
-  }
-
-  for (const { fullMatch, replacement } of refReplacements) {
-    result = result.replace(fullMatch, replacement);
-  }
-
-  // 5. Handle Markdown links pointing directly to local image files: [text](target)
-  const mdLinkRegex = /(?<!!)\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^"'\s\)]+))(?:\s+(?:"([^"]*)"|'([^']*)'|\(([^)]*)\)))?\s*\)/g;
-  const mdLinkReplacements: Array<{ fullMatch: string; replacement: string }> = [];
-  let linkMatch: RegExpExecArray | null;
-
-  while ((linkMatch = mdLinkRegex.exec(result)) !== null) {
-    const fullMatch = linkMatch[0];
-    const text = linkMatch[1];
-    const isAngleBracket = Boolean(linkMatch[2]);
-    const rawRef = linkMatch[2] ?? linkMatch[3];
-    const title = linkMatch[4] ?? linkMatch[5] ?? linkMatch[6];
-
-    if (rawRef) {
-      const dataUri = await resolveImageToDataUri(rawRef, baseDir);
-      if (dataUri) {
-        const dest = isAngleBracket ? `<${dataUri}>` : dataUri;
-        let titleSuffix = "";
-        if (title !== undefined) {
-          titleSuffix = ` "${title.replace(/"/g, '\\"')}"`;
-        }
-        mdLinkReplacements.push({
-          fullMatch,
-          replacement: `[${text}](${dest}${titleSuffix})`,
-        });
-      }
-    }
-  }
-
-  for (const { fullMatch, replacement } of mdLinkReplacements) {
-    result = result.replace(fullMatch, replacement);
-  }
-
-  // 6. Restore code blocks
-  result = result.replace(
-    /__ISOCAN_CODE_BLOCK_(\d+)__/g,
-    (_, idx) => codeBlocks[Number(idx)] ?? "",
-  );
-
+  let result = markdown;
+  for (const replacement of replacements.sort((a, b) => b.start - a.start)) result = result.slice(0, replacement.start) + replacement.text + result.slice(replacement.end);
   return result;
 }
-

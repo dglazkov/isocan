@@ -27,7 +27,7 @@ export function textAttention(value: unknown, now = Date.now(), canvas?: CanvasC
   if (!Number.isFinite(v.expiresAt) || v.expiresAt <= now) return null;
   if (canvas) {
     const version = canvas.items[v.itemId]?.versions.find(one => one.id === v.versionId);
-    if (!version || version.blobHash !== v.blobHash || !["text/markdown", "text/plain"].includes(version.mimeType)) return null;
+    if (!version || ![version, version.visual].some(face => face?.blobHash === v.blobHash && ["text/markdown", "text/plain"].includes(face.mimeType))) return null;
   }
   return { itemId: v.itemId, versionId: v.versionId, blobHash: v.blobHash, textSpace: v.textSpace,
     flavor: v.flavor, start: v.start, end: v.end, expiresAt: Math.min(v.expiresAt, now + TEXT_ATTENTION_MS) };

@@ -101,6 +101,53 @@ try{
  const markdownNodes=new Set(profile.nodes.filter(n=>n.callFrame.url.includes('markdown-body')).map(n=>n.id));
  report.panZoom={documents:21,samples:profile.samples?.length ?? 0,markdownChunkSamples:(profile.samples ?? []).filter(id=>markdownNodes.has(id)).length};
  if(!report.panZoom.samples)throw Error('Profiler returned no samples');
+ await cli('--canvas','prj_attention','version','promote','itm_document','ver_original');
+ { const loaded=a.once('Page.loadEventFired');await a.send('Page.navigate',{url:origin+'/p/prj_attention'});await loaded;await until(a,`!!document.querySelector('.item-read')`,'Read control after presence checks'); }
+ const click = async(selector) => {const box=await a.ev(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)throw Error('missing ${selector}');const r=el.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);await a.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...box});await a.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...box});};
+ await click('.item-read');await until(a,`!!document.querySelector('.item.entered .markdown-text strong')`,'read original');
+ await a.ev(`(()=>{const node=document.querySelector('.markdown-text strong').firstChild;const r=document.createRange();r.selectNodeContents(node);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()`);
+ await until(a,`!!document.querySelector('.text-comment-action')`,'comment on selection');
+ await click('.text-comment-action');
+ await until(a,`!!document.querySelector('.compose-popover textarea')`,'quote composer');
+ assert.equal(await a.ev(`document.querySelector('.compose-popover blockquote').textContent`),'this sentence');
+ await a.send('Input.insertText',{text:'Please clarify this passage.'});
+ await click('.compose-popover button[type=submit]');
+ await until(b,`!!document.querySelector('.document-discussions button')`,'durable comment reaches reader');
+ assert.equal(await b.ev(`document.querySelectorAll('.text-comment-action').length`),0);
+ const threads=JSON.parse((await cli('--json','--canvas','prj_attention','comment','list')).stdout);
+ assert.equal(threads[0].textAnchor.quote,'this sentence');assert.equal(threads[0].textAnchorResolution.status,'resolved');
+ await click('.document-discussions button');
+ await until(a,`[...CSS.highlights.keys()].some(k=>k.startsWith('threadanchor'))`,'saved quote highlight');
+ const quote=await a.ev(`[...CSS.highlights.entries()].find(([k])=>k.startsWith('threadanchor'))[1].values().next().value.toString()`);assert.equal(quote,'this sentence');
+ await a.ev(`document.querySelector('.item').style.width='380px'`);
+ assert.equal(await a.ev(`[...CSS.highlights.entries()].find(([k])=>k.startsWith('threadanchor'))[1].values().next().value.toString()`),'this sentence');
+ report.durable={quote,readOnly:true,reflow:true,cliResolution:threads[0].textAnchorResolution};
+ // Import a self-contained Markdown face and a sibling document; relative links
+ // navigate to saved items, while a missing reference has no navigable app URL.
+ await writeFile(home+'/pixel.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64'));
+ await writeFile(home+'/guide.md','# Guide\n\nA **durable quote**.\n\n![Pixel](pixel.png)\n\n[Plan](plan.md#decisions) · [Missing](missing.md)');
+ await writeFile(home+'/plan.md','# Plan\n\n'+('Review this plan. '.repeat(200))+'\n\n## Decisions\n\nDone.');
+ const guide=JSON.parse((await cli('--json','--canvas','prj_attention','add','guide.md')).stdout);
+ const plan=JSON.parse((await cli('--json','--canvas','prj_attention','add','plan.md')).stdout);
+ const loaded=a.once('Page.loadEventFired');await a.send('Page.navigate',{url:origin+'/p/prj_attention/i/'+guide.itemId});await loaded;
+ await until(a,`!!document.querySelector('.fullscreen-stage .markdown-text img')`,'imported Markdown');
+ report.resourceImage=await a.ev(`(()=>{const image=document.querySelector('.fullscreen-stage .markdown-text img');return {src:image.src,naturalWidth:image.naturalWidth}})()`);
+ assert.ok(report.resourceImage.src.startsWith('data:image/png;base64,'));assert.equal(report.resourceImage.naturalWidth,1);
+ assert.equal(await a.ev(`document.querySelector('.fullscreen-stage .markdown-resource-missing')?.textContent`),'Missing');
+ await a.ev(`(()=>{const node=document.querySelector('.fullscreen-stage .markdown-text strong').firstChild;const r=document.createRange();r.selectNodeContents(node);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()`);
+ await until(a,`!!document.querySelector('.fullscreen-stage .text-comment-action')`,'full screen comment action');
+ await click('.fullscreen-stage .text-comment-action');
+ await until(a,`!!document.querySelector('.fullscreen .compose-popover textarea')`,'full screen composer above the stage');
+ assert.equal(await a.ev(`(()=>{const e=document.querySelector('.fullscreen .compose-popover textarea');const r=e.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e})()`),true);
+ await a.send('Input.insertText',{text:'Full screen discussion.'});await click('.fullscreen .compose-popover button[type=submit]');
+ await until(a,`!!document.querySelector('.fullscreen-stage .document-discussions button')`,'full screen saved thread');
+ report.fullscreenComments=true;
+
+ await click('.fullscreen-stage .markdown-text a');
+ await until(a,`location.pathname.endsWith(${JSON.stringify(plan.itemId)}) && !!document.querySelector('.fullscreen-stage .markdown-text h2')`,'relative link opens sibling');
+ report.relativeNavigation=await a.ev(`({path:location.pathname,hash:location.hash,scroll:document.querySelector('.fullscreen-stage .md-view').scrollTop})`);
+ assert.equal(report.relativeNavigation.hash,'#decisions');assert.ok(report.relativeNavigation.scroll>0);
+ const screenshot=await a.send('Page.captureScreenshot',{format:'png'});await writeFile(path.join(output,'isocan-durable-browser.png'),Buffer.from(screenshot.data,'base64'));
  report.errors=await Promise.all(clients.map(c=>c.takeErrors()));
  for(const quote of [report.selected,report.remote.quote,report.otherSelected,report.independent.own,report.independent.remote,report.reflow.quote,report.reflow.own,report.scroll.quote]) assert.equal(quote,'this sentence');
  assert.equal(report.remote.own,'');

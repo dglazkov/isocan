@@ -168,15 +168,16 @@ Inline code should also be untouched: \`![Inline Code](sample.png)\`.
     expect(inlined).toContain('"Art Direction Sample")');
     expect(inlined).toContain("![Angle Brackets](<data:image/png;base64,");
 
-    // 2. HTML image tags in markdown are inlined
-    expect(inlined).toContain('<img src="data:image/png;base64,');
+    // 2. Raw HTML stays literal, as the renderer displays it.
+    expect(inlined).toContain('<img src="sample.png"');
 
-    // 3. Reference definitions are inlined
-    expect(inlined).toContain("[ref1]: data:image/png;base64,");
+    // 3. Reference images get a self-contained destination; shared definitions stay intact.
+    expect(inlined).toContain("![Reference Tag](data:image/png;base64,");
+    expect(inlined).toContain('[ref1]: sample.png "Reference Title"');
     expect(inlined).toContain('"Reference Title"');
 
-    // 4. Direct markdown links to images are inlined
-    expect(inlined).toContain("[Direct Link to Image](data:image/png;base64,");
+    // 4. File links remain addressable links, not blocked data-URI navigation.
+    expect(inlined).toContain("[Direct Link to Image](sample.png)");
 
     // 5. Non-image links are preserved
     expect(inlined).toContain("[Read Docs](readme.md)");
@@ -190,6 +191,18 @@ Inline code should also be untouched: \`![Inline Code](sample.png)\`.
     expect(inlined).toContain("`![Inline Code](sample.png)`");
 
     await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+
+  it("handles balanced image paths and escaped examples without regex masking", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "inline-md-parsed-"));
+    try {
+      await fs.writeFile(path.join(dir, "plot(1).png"), Buffer.from("synthetic"));
+      const source = "![Plot](plot(1).png)\n\n\\![Example](plot(1).png)\n\n    ![Code](plot(1).png)";
+      const result = await inlineMarkdownAssets(path.join(dir, "doc.md"), source);
+      expect(result).toContain("![Plot](data:image/png;base64,");
+      expect(result).toContain("\\![Example](plot(1).png)");
+      expect(result).toContain("    ![Code](plot(1).png)");
+    } finally { await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 
   it("handles markdown without images gracefully", async () => {

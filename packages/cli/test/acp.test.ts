@@ -159,6 +159,18 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(plain.stdout).toContain("permission:yes");
   }, 40_000);
 
+  it("a native Codex fence refuses even allow-once escalation", async () => {
+    const agent = await AcpAgentProcess.spawn({ harness: "codex", command: process.execPath, args: [fakeAcp], nativeCodexSandbox: true, sessionDirectories: [home] }, { cwd: home, env: { ...process.env, FAKE_ACP_VERSION: "1.11.0", FAKE_ACP_EXPECT_ROOT: home } });
+    try {
+      const session = await agent.ensureSession(home, null);
+      await agent.ensureSession(home, session.sessionId);
+      const events: string[] = [];
+      const answer = await agent.prompt(session.sessionId, "hello", (event) => events.push(event.detail ?? ""));
+      expect(events.join("\n")).toContain("sandbox cannot be escalated");
+      expect(answer.text).toContain("permission:deny");
+    } finally { agent.close(); }
+  });
+
   it("the adapter's environment is a list, not the shell: needs pass, accidents do not, the hook adds", () => {
     const shell: NodeJS.ProcessEnv = {
       PATH: "/usr/bin",

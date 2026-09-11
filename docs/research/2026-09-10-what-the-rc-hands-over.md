@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-10
 see: on-demand, harnesses, agent-custody, standing-agents
 issue: 238
-note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS is the one gating measurement left — `scripts/spike-srt.sh` is it in one command — and codex nested with it. Still owed: a reach word on the enrolment translated per harness, the second-user recipe, owner-only summons
+note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS outer-sandbox checks now pass too (srt 0.0.76). Native Codex is separately opt-in via --codex-sandbox, with command-level policy checks on macOS and Linux; nesting remains refused. Still owed: a reach word on the enrolment translated per harness, the second-user recipe, owner-only summons
 ---
 
 # What the rc hands over, and how to hand over less
@@ -12,9 +12,9 @@ note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the
 Layer 1 is in `acp.ts`: permissions answered by kind, the environment as a
 list, with `config.json`'s `adapterEnv` hook for what the list does not
 know. Layer 3 is `sandbox.ts`: `isocan rc --sandbox`, written from what the
-measurement below found rather than from the documentation. Layer 2, the
-second-user recipe and the consent default are owed — and so is the macOS
-half of the measurement, which `scripts/spike-srt.sh` exists to get.
+measurement below found rather than from the documentation. Native Codex now has a separate opt-in (measured below). The
+second-user recipe, consent default and nested sandboxes remain owed.
+`scripts/spike-srt.sh` now also has passing macOS measurements.
 
 > "I realise that when I run rc and give it my harness... it pretty much has
 > access to my entire system :)"
@@ -454,3 +454,80 @@ too.
   spike work.
 - Keyring-backed logins (Antigravity, codex `keyring` mode) inside any
   fence that hides the secret service.
+
+
+## Native Codex opt-in — 11 September
+
+`rc --codex-sandbox` and `rc turn --codex-sandbox` now configure a separate,
+opt-in native boundary. The default remains unchanged. A local
+`codexSandbox: true` setting makes it persistent; `--unsandboxed` disables it
+for a run. A request to combine native and outer srt fences is refused.
+
+The measured adapter is **codex-acp 1.11.0**, bundling **Codex 0.153.4**.
+The client checks the adapter version and refuses an older or unidentified
+bridge. Both new and resumed ACP sessions receive the isocan state directory
+as `additionalDirectories`; the enrollment directory is the workspace.
+The adapter's misleadingly named `read-only` mode sends `workspaceWrite`
+with a human reviewer. Its `agent` mode uses automatic approval review.
+Native opt-in deliberately uses the former, and isocan rejects **every**
+permission request in this mode, including `allow_once`. This prevents an
+ordinary approval response from silently widening the selected sandbox.
+The existing default permission behavior remains unchanged outside this mode.
+
+The exact config used by this bridge enables
+`sandbox_workspace_write.network_access` and
+`features.network_proxy.enabled`, with `allow_local_binding: false` and an
+explicit daemon-host allow entry. Additional exact hostnames come from local
+`codexSandboxDomains`, such as `github.com` and `registry.npmjs.org`.
+Existing Codex domain rules compose; this is not an assertion that the local
+user's other allow entries were erased. Hosts are allowed, not individual
+ports on a host. No unrestricted private-network exception is requested.
+
+### What was run
+
+`scripts/check-codex-sandbox.mjs` uses the bundled binary's **app-server
+command/exec API**, without a model or login, and the same `workspaceWrite`
+policy that the adapter sends. It creates synthetic workspace/state files
+and a local HTTP listener, then removes them. `codex sandbox -P :workspace`
+was the wrong instrument: in this version the explicit profile ignores
+`sandbox_workspace_write.writable_roots`. The app-server path proves the
+actual extra-root policy without weakening the test to put both roots in one
+directory.
+
+| Check | macOS 25.6 arm64 | Linux arm64 (Docker, Node 24 bookworm) |
+| --- | --- | --- |
+| Workspace and separate isocan-state writes | Allowed | Allowed |
+| HTTP daemon request on explicit IPv4 loopback | Allowed | Allowed |
+| npm registry lookup, with registry explicitly listed | Allowed | Allowed |
+| Git status and GitHub ls-remote | Allowed | Allowed |
+| Git metadata write (`git add`) | Refused | Refused |
+| Write outside the workspace/state roots | Refused | Refused |
+| Unlisted external host through proxy | Refused | Refused |
+| Direct external request bypassing the proxy | Refused | Refused |
+| Unlisted IPv6 loopback listener, bypassing proxy | Refused | Refused |
+
+The Linux container mounted only the probe script, with no project or login
+material. It needed permission to create its nested sandbox (`SYS_ADMIN` and
+an unconfined container seccomp profile); these are test-container settings,
+not changes to the host or to isocan's runtime policy. This is command-level
+OS enforcement evidence, not a claim that a new authenticated model turn ran
+on Linux. The earlier macOS ACP turn measurements established daemon reach;
+the current fake-bridge tests pin directory propagation on new/resumed
+sessions and refusal of escalation.
+
+**Limits:** native mode does not hide file reads, fence the ACP adapter
+process, or constrain separately configured MCP services. Git commits need
+protected metadata writes and therefore fail in this mode. Report the
+refusal rather than suggesting a tool bypass. Owner-only summons, a
+second-user recipe, and a unified enrollment reach policy remain separate
+work. The [official permission documentation](https://learn.chatgpt.com/docs/permissions)
+also distinguishes tool sandboxing from other integrations; configuration
+syntax must be checked against the binary the ACP bridge actually bundles.
+
+The outer fence was measured separately with
+`PATH=<temporary srt bin>:$PATH bash scripts/spike-srt.sh --no-harness`:
+**srt 0.0.76 on macOS, eight checks held and none broke**, including the CLI's
+identity request, `wait` parking, hidden home canary and unlisted-host refusal.
+The probe now creates a unique canary, so rerunning it cannot overwrite an
+older probe's file. Linux outer-fence and real Claude-turn evidence remains
+in the earlier section; native/outer nesting is still unverified and refused.

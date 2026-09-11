@@ -12,6 +12,9 @@ taken, and costs less to read.
 
 **[The whole changelog, laid out properly →](https://claude.ai/code/artifact/0d2b285f-f913-4987-b1d9-0dbe48724106)**
 
+The same days on a canvas: [\[isocan\] History](https://isocan.io/p/prj_Gi8oGKNALt) — one
+screen per day, one row per week, open to anyone with the address.
+
 | Day | | What happened |
 | --- | --- | --- |
 | **[11 Sep](2026-09-11.md)** | What the rc hands over, the sheep harness | A summoned agent's permissions are answered by kind — the allow-once option, else the agent's own reject; a mode switch is never chosen — and its environment is a list (a process's needs, `ISOCAN_*`, the vendors' namespaces, a `config.json` `adapterEnv` hook) rather than the whole shell. The research note the day before measured what was handed over and what the agent actually needs. Then the sandbox spike, on Linux — `@anthropic-ai/sandbox-runtime` around the adapter holds the fence, reaches the daemon, and completes real Claude turns that resume — and then the fence itself: `isocan rc --sandbox` wraps every adapter in a policy derived from the enrolment, refuses rather than running open on a machine that cannot fence, and carries the six things the spike found, the sixth being that srt must be readable inside its own fence. And withdrawing an agent on the sheep harness ends its sheep and the badge its cell redeemed, named exactly through the pass the rc minted; the pasture stays. |

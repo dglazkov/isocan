@@ -1,3 +1,4 @@
+import { supportsCodexSandbox } from "./codex-sandbox.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { harnessVars } from "@isocan/api";
 import type { AdapterSpec } from "./harnesses.ts";
@@ -246,6 +247,9 @@ export class AcpAgentProcess {
    * fail loudly, never hang on a process that is gone. */
   private died: ((reason: Error) => void)[] = [];
 
+  private refusePermissions = false;
+  private sessionDirectories: string[] = [];
+
   private constructor(child: ChildProcess) {
     this.child = child;
     child.stdout!.setEncoding("utf8");
@@ -281,10 +285,16 @@ export class AcpAgentProcess {
     relayStderr(child);
     const agent = new AcpAgentProcess(child);
     agent.env = env;
+    agent.refusePermissions = spec.nativeCodexSandbox === true;
+    agent.sessionDirectories = spec.sessionDirectories ?? [];
     const init = await agent.request("initialize", {
       protocolVersion: 1,
       clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
     });
+    if (spec.nativeCodexSandbox && !supportsCodexSandbox(init?.agentInfo?.version)) {
+      child.kill();
+      throw new Error("--codex-sandbox requires codex-acp 1.11.0 or newer with a reported version");
+    }
     agent.authMethods = Array.isArray(init?.authMethods) ? init.authMethods : [];
     agent.agentTitle = String(init?.agentInfo?.title ?? init?.agentInfo?.name ?? spec.harness);
     return agent;
@@ -363,7 +373,7 @@ export class AcpAgentProcess {
         msg.params?.options ?? [];
       const title = msg.params?.toolCall?.title ?? "a tool";
       const once = options.find((o) => o.kind === "allow_once");
-      if (once) {
+      if (once && !this.refusePermissions) {
         this.onEvent?.({ kind: "permission", detail: `${title} → ${once.optionId ?? "?"}` });
         this.send({
           jsonrpc: "2.0",
@@ -379,7 +389,7 @@ export class AcpAgentProcess {
       const offered = options.map((o) => o.optionId ?? o.name ?? "?").join(", ") || "nothing";
       this.onEvent?.({
         kind: "permission",
-        detail: `${title} → refused: no allow-once option (offered: ${offered}); a summoned turn grants nothing that outlasts it`,
+        detail: this.refusePermissions ? `${title} → refused: the Codex sandbox cannot be escalated by a summoned turn` : `${title} → refused: no allow-once option (offered: ${offered}); a summoned turn grants nothing that outlasts it`,
       });
       this.send({
         jsonrpc: "2.0",
@@ -451,7 +461,7 @@ export class AcpAgentProcess {
     if (previous) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          await this.sessionRequest("session/load", { sessionId: previous, cwd, mcpServers: [] });
+          await this.sessionRequest("session/load", { sessionId: previous, cwd, mcpServers: [], ...(this.sessionDirectories.length ? { additionalDirectories: this.sessionDirectories } : {}) });
           return { sessionId: previous, resumed: true };
         } catch (err) {
           // A login refusal is not the transient scar the retry is for.
@@ -460,7 +470,7 @@ export class AcpAgentProcess {
         }
       }
     }
-    const created = await this.sessionRequest("session/new", { cwd, mcpServers: [] });
+    const created = await this.sessionRequest("session/new", { cwd, mcpServers: [], ...(this.sessionDirectories.length ? { additionalDirectories: this.sessionDirectories } : {}) });
     return { sessionId: created.sessionId as string, resumed: false };
   }
 

@@ -90,6 +90,9 @@ describe("CLI dual-face artifacts", () => {
     const vis = await isocan("get", added.itemId, "--visual");
     expect(vis.code).toBe(0);
     expect(vis.stdout).toContain("<h1>Visualizer</h1>");
+    await fs.writeFile(path.join(home, "design.md"), "# Revised source");
+    expect((await isocan("edit", added.itemId, "design.md")).code).toBe(0);
+    expect((await isocan("get", added.itemId, "--visual")).stdout).toContain("<h1>Visualizer</h1>");
   });
 
   it("automatically inlines local images for HTML files into visual face while preserving clean source face", async () => {
@@ -114,6 +117,33 @@ describe("CLI dual-face artifacts", () => {
     expect(vis.stdout).toContain("data:image/png;base64,");
     expect(vis.stdout).not.toContain("src=\"./pixel.png\"");
   });
+
+  it("imports Markdown images without changing source, and quotes the displayed face", async () => {
+    await fs.mkdir(path.join(home, "docs"));
+    await fs.writeFile(path.join(home, "docs", "pixel.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB", "base64"));
+    const source = "# Notes\n\nRead **this sentence**.\n\n![pixel](pixel.png)";
+    await fs.writeFile(path.join(home, "docs", "notes.md"), source);
+    const added = await json("add", "docs/notes.md");
+    const item = await json("show", added.itemId);
+    expect(item.properties.sourcePath).toBe("docs/notes.md");
+    expect(item.properties.file).toBeUndefined();
+    expect((await isocan("get", added.itemId)).stdout).toBe(source);
+    expect((await isocan("get", added.itemId, "--visual")).stdout).toContain("data:image/png;base64,");
+    const comment = await json("comment", "add", "Clarify", "--item", added.itemId, "--quote", "this sentence");
+    const threads = await json("comment", "list", "--item", added.itemId);
+    expect(threads[0].textAnchor.blobHash).toBe(item.versions[0].visual.blobHash);
+    expect(threads[0].textAnchorResolution.status).toBe("resolved");
+    await fs.writeFile(path.join(home, "docs", "notes.md"), "# Notes\n\nBefore. Read **this sentence**.\n\n![pixel](pixel.png)");
+    expect((await isocan("edit", added.itemId, "docs/notes.md")).code).toBe(0);
+    const moved = await json("comment", "list", "--item", added.itemId);
+    expect(moved[0].textAnchor).toEqual(threads[0].textAnchor);
+    expect(moved[0].textAnchorResolution.status).toBe("resolved");
+    expect(moved[0].textAnchorResolution.start).toBeGreaterThan(threads[0].textAnchorResolution.start);
+    expect((await isocan("comment", "anchor", comment.threadId, added.itemId, "--quote", "Before.")).code).toBe(0);
+    expect((await json("comment", "list", "--item", added.itemId))[0].textAnchor.quote).toBe("Before.");
+    expect((await isocan("comment", "anchor", comment.threadId, "--at", "0,0")).code).toBe(0);
+    expect((await json("comment", "list"))[0].textAnchor).toBeUndefined();
+  }, 60_000);
 
   it("updates visual face with isocan edit --visual", async () => {
     await fs.writeFile(path.join(home, "notes.md"), "# Notes v1");

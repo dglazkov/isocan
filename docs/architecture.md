@@ -10,6 +10,13 @@ later. The record of what moved it lives in the phase findings of
 [the multiuser phases](projects/multiuser/phases.md): a finding that redraws
 the map edits this doc in the same change.
 
+The same system is drawn as instruments on the
+[\[isocan\] System design](https://isocan.io/p/prj_6fgykNN1_m) canvas — the hourglass, the
+life of an operation, the door, the two ledgers, home and replica, the
+storage seam, the GCP map — each screen citing the files it was read from.
+Drive that first if the names here do not yet mean anything; this doc is the
+one that has to stay exact.
+
 ## Givens
 
 - **Google Cloud**, one region (`us-west1` — compute, Firestore, and

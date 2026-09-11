@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-10
 issue: 236
 see: modules, context
-note: reading controls, typography, outline, shared text projection and live version-specific selections built 11 September; CLI quote selection and two-browser owner/read-only acceptance included. Durable comments remain issue 49; richer editing and relative-asset resolution are separate follow-ups.
+note: reading controls, typography, outline, shared text projection and live version-specific selections built 11 September; CLI quote selection and two-browser owner/read-only acceptance included. Durable quoted comments and relative saved-file links/local image bundling added 11 September; richer editing remains separate.
 ---
 
 # Markdown that reads well, and selections another person can see
@@ -143,3 +143,47 @@ This strengthens #49: resolve its persistent anchors forward only when unambiguo
 For agents, expose text attention through the existing presence read/write surfaces with a named descriptor and quote-resolution helper; a CLI should be able to report “Taylor selected this passage” and deliberately point to a passage itself. A command must report ambiguity, never invent a match. These are proposed surface extensions, not currently available CLI syntax.
 
 Regression proof must include a many-document pan/zoom trace: the existing memoization was introduced after Markdown parsing dominated canvas movement. Selection updates should touch range decorations, not parse every document. No new operation is needed for reading or presence; #49 extends the anchor contract for persistent comments. Source Markdown, versions and the HTML isolation boundary remain the authority.
+
+
+## Durable discussion and relative resources — 11 September
+
+Selecting words now offers **Comment on selection**. The existing
+`thread.create` operation saves a `textAnchor` alongside the item offset:
+version ID, displayed blob hash, projection flavor, Unicode-point range,
+quote, and surrounding context. `thread.setAnchor` replaces or clears it in
+one undoable act. The original selector is never overwritten merely because
+a newer version happens to contain the passage.
+
+A unique quote follows edits. Repeated text needs matching context; missing
+or ambiguous text keeps the item pin and explains the unresolved passage.
+The document highlights the opened thread's quote with CSS Highlights,
+outside the native selection. Pin locations are derived from the current
+rendered range and remeasured on resize and scroll; an offscreen quote falls
+back to its item pin. Full-screen composition uses the same popover above the
+viewer. An open comment can be moved to another selected passage. Plain text
+and displayed Markdown visual faces use the same representation checks.
+
+The CLI offers `comment add --item … --quote …`, optional `--occurrence`,
+`comment anchor … --quote …`, and resolution status in `comment list --json`.
+This implementation uses rendered quotes rather than Markdown source-line
+numbers. It does not introduce rich-text editing or PDF selectors.
+
+Relative Markdown links resolve against saved canvas files, using explicit
+`file`/`visualFile` paths first, import `sourcePath` next, and filename last.
+They open the target item's route, including a heading fragment. Duplicate,
+missing or unsafe paths stay visibly unavailable. Images can use saved canvas
+image blobs. CLI Markdown `add`/file `edit` also bundles local image references
+into a visual face while keeping the exact source available through `get`.
+Image discovery uses the Markdown parser: balanced filenames and references
+work, while code examples, ordinary links and literal HTML stay untouched.
+`sourcePath` is provenance, never an instruction to write a file to disk.
+Browser uploads cannot inspect neighboring local files; import those assets
+or use self-contained Markdown. No filesystem-reading server endpoint was
+added and the content-origin boundary is unchanged.
+
+`check-text-selection.mjs` now covers the prior presence checks plus native
+browser composition, receiving the thread as a read-only user, CLI resolution,
+reflow, full-screen composition, an imported PNG, missing-link treatment and
+navigation to another document's heading. Core tests cover Unicode offsets,
+context ambiguity, version provenance, operation undo/restore and safe path
+resolution. CLI tests cover source/visual identity, edits and re-anchoring.

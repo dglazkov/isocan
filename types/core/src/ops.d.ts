@@ -1,3 +1,4 @@
+import type { TextAnchor } from "./text-anchor.js";
 import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.js";
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
@@ -283,6 +284,7 @@ export type Operation = {
     type: "trash.empty";
 } | {
     type: "thread.create";
+    textAnchor?: TextAnchor | null;
     threadId: string;
     x: number;
     y: number;
@@ -299,6 +301,8 @@ export type Operation = {
     comment: NewComment;
 } | {
     type: "thread.setAnchor";
+    /** Omission clears a previous text selector, preserving old item-pin clients. */
+    textAnchor?: TextAnchor | null;
     threadId: string;
     anchorItemId: string | null;
     x: number;

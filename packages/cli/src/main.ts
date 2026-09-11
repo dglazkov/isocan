@@ -1,3 +1,5 @@
+import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
+import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
@@ -5605,8 +5607,8 @@ program
             size: visUpload.size,
           };
           visualData = visData;
-        } else if (mimeType === "text/html") {
-          const inlined = await inlineHtmlAssets(file, rawSource.toString("utf8"));
+        } else if (mimeType === "text/html" || mimeType === "text/markdown") {
+          const inlined = await (mimeType === "text/markdown" ? inlineMarkdownAssets : inlineHtmlAssets)(file, rawSource.toString("utf8"));
           if (inlined !== rawSource.toString("utf8")) {
             const inlinedData = Buffer.from(inlined, "utf8");
             const visUpload = await ctx.client.uploadBlob(p.id, inlinedData, mimeType, filename);
@@ -5623,10 +5625,12 @@ program
         const upload = await ctx.client.uploadBlob(p.id, rawSource, mimeType, filename);
 
         const visualFileProp = opts.visual ? cleanFilePath(opts.visual) ?? path.basename(opts.visual) : undefined;
+        const sourcePath = cleanFilePath(path.relative(process.cwd(), path.resolve(file)));
         const fileProp = opts.visual ? cleanFilePath(file) ?? path.basename(file) : undefined;
         // `kind=drawing` is the convention the web app's Pen writes, and what
         // both clients read to render ink without a card (core/drawing.ts).
         const properties = {
+          ...(sourcePath ? { [SOURCE_PATH_PROP]: sourcePath } : {}),
           ...opts.prop,
           ...(fileProp && !opts.prop[FILE_PROP] ? { [FILE_PROP]: fileProp } : {}),
           ...(visualFileProp ? { [VISUAL_FILE_PROP]: visualFileProp } : {}),
@@ -7753,8 +7757,8 @@ program
             filename: visFilename,
             size: visUpload.size,
           };
-        } else if (mimeType === "text/html") {
-          const inlined = await inlineHtmlAssets(file, raw.toString("utf8"));
+        } else if (mimeType === "text/html" || (mimeType === "text/markdown" && (!current.visual || (current.visual.mimeType === mimeType && !item.properties[VISUAL_FILE_PROP])))) {
+          const inlined = await (mimeType === "text/markdown" ? inlineMarkdownAssets : inlineHtmlAssets)(file, raw.toString("utf8"));
           if (inlined !== raw.toString("utf8")) {
             const inlinedData = Buffer.from(inlined, "utf8");
             const visUpload = await ctx.client.uploadBlob(p.id, inlinedData, mimeType, filename);
@@ -7821,8 +7825,9 @@ program
             filename: visFilename,
             size: visUpload.size,
           };
-        } else if (mimeType === "text/html" && current.visual) {
-          const inlined = await inlineHtmlAssets(tmp, data.toString("utf8"));
+        } else if ((mimeType === "text/html" && current.visual) || (mimeType === "text/markdown" && (!current.visual || (current.visual.mimeType === mimeType && !item.properties[VISUAL_FILE_PROP])))) {
+          const assetBase = mimeType === "text/markdown" ? path.resolve(item.properties[FILE_PROP] ?? item.properties[SOURCE_PATH_PROP] ?? current.filename) : tmp;
+          const inlined = await (mimeType === "text/markdown" ? inlineMarkdownAssets : inlineHtmlAssets)(assetBase, data.toString("utf8"));
           const inlinedData = Buffer.from(inlined, "utf8");
           const visUpload = await ctx.client.uploadBlob(p.id, inlinedData, mimeType, filename);
           visualFace = {
@@ -10031,16 +10036,38 @@ async function newComment(
   return buildComment(ctx.client, canvasId, snapshot, body);
 }
 
+/** One projection for browser selections, CLI quotes, and comment resolution. */
+async function readCommentDocument(ctx: Ctx, canvasId: string, item: Item) {
+  const version = item.versions.find(v => v.id === item.currentVersionId)!;
+  const face = visualFaceOf(version);
+  if (!["text/markdown", "text/plain"].includes(face.mimeType)) throw new Error("Text comments need a Markdown or plain-text item");
+  const { markdownText } = await import("@isocan/core/markdown");
+  const { isTextItem } = await import("@isocan/core");
+  const flavor = face.mimeType === "text/plain" ? "plain" as const : isTextItem(item) ? "text-node" as const : "document" as const;
+  const text = markdownText((await ctx.client.downloadBlob(canvasId, face.blobHash)).toString("utf8"), flavor);
+  return { text, versionId: version.id, blobHash: face.blobHash, flavor };
+}
+
+async function quotedCommentAnchor(ctx: Ctx, canvasId: string, item: Item, quote: string, occurrence?: string) {
+  const doc = await readCommentDocument(ctx, canvasId, item);
+  return makeTextAnchor(doc.text, doc, quoteRange(doc.text, quote, occurrence === undefined ? undefined : Number(occurrence)));
+}
+
 comment
   .command("add <text>")
   .description("Start a thread — anchored to an item or freestanding at --at")
   .option("--item <item>", "anchor to this item")
+  .option("--quote <text>", "anchor to exact rendered text on --item")
+  .option("--occurrence <number>", "which matching quote, counted from 1")
   .option("--at <x,y>", "freestanding at world coordinates")
   .action(
-    run(async (text: string, opts: { item?: string; at?: string }, cmd: Command) => {
+    run(async (text: string, opts: { item?: string; at?: string; quote?: string; occurrence?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       if (!opts.item && !opts.at) throw new Error("pass --item <item> or --at <x,y>");
+      if ((opts.quote !== undefined || opts.occurrence !== undefined) && !opts.item) throw new Error("Text selection requires --item");
+      if (opts.occurrence !== undefined && opts.quote === undefined) throw new Error("--occurrence requires --quote");
+      const textAnchor = opts.quote !== undefined ? await quotedCommentAnchor(ctx, p.id, resolveItem(snapshot, opts.item!), opts.quote, opts.occurrence) : null;
       let x: number, y: number, anchorItemId: string | null;
       if (opts.item) {
         const item = resolveItem(snapshot, opts.item);
@@ -10061,6 +10088,7 @@ comment
         x,
         y,
         anchorItemId,
+        ...(textAnchor ? { textAnchor } : {}),
         comment: first,
       });
       // The comment id comes back because a note posted while working is one
@@ -10102,6 +10130,8 @@ comment
   .command("anchor <thread> [item]")
   .description("Re-pin a thread: anchor it to an item, or detach it with --at")
   .option("--at <x,y>", "detach: make the thread freestanding at world coordinates")
+  .option("--quote <text>", "re-anchor to exact rendered text on the item")
+  .option("--occurrence <number>", "which matching quote, counted from 1")
   .addHelpText(
     "after",
     `
@@ -10111,7 +10141,7 @@ follows the item from now on.`,
   )
   .action(
     run(
-      async (threadRef: string, itemRef: string | undefined, opts: { at?: string }, cmd: Command) => {
+      async (threadRef: string, itemRef: string | undefined, opts: { at?: string; quote?: string; occurrence?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const thread = resolveThread(snapshot, threadRef);
@@ -10127,7 +10157,11 @@ follows the item from now on.`,
         } else {
           throw new Error("pass an item to anchor to, or --at x,y to detach");
         }
-        await sendOp(ctx, p.id, { type: "thread.setAnchor", threadId: thread.id, anchorItemId, x, y });
+        if ((opts.quote !== undefined || opts.occurrence !== undefined) && !itemRef) throw new Error("Text selection requires an item");
+        if (opts.occurrence !== undefined && opts.quote === undefined) throw new Error("--occurrence requires --quote");
+        const textAnchor = opts.quote !== undefined ? await quotedCommentAnchor(ctx, p.id, resolveItem(snapshot, itemRef!), opts.quote, opts.occurrence) : null;
+        await sendOp(ctx, p.id, { type: "thread.setAnchor", threadId: thread.id, anchorItemId, x, y, textAnchor });
+        if (ctx.json) return printJson({ threadId: thread.id, anchorItemId, textAnchor });
         console.log(
           anchorItemId
             ? `anchored ${thread.id} to ${anchorItemId}`
@@ -10185,7 +10219,19 @@ comment
         const item = resolveItem(snapshot, opts.item);
         threads = threads.filter((t) => t.anchorItemId === item.id);
       }
-      if (ctx.json) return printJson(threads);
+      if (ctx.json) {
+        const documents = new Map<string, ReturnType<typeof readCommentDocument>>();
+        return printJson(await Promise.all(threads.map(async thread => {
+          if (!thread.textAnchor) return thread;
+          const item = thread.anchorItemId ? snapshot.canvas.items[thread.anchorItemId] : undefined;
+          if (!item) return { ...thread, textAnchorResolution: { status: "unavailable" } };
+          try {
+            if (!documents.has(item.id)) documents.set(item.id, readCommentDocument(ctx, p.id, item));
+            const doc = await documents.get(item.id)!;
+            return { ...thread, textAnchorResolution: { ...resolveTextAnchor(thread.textAnchor, doc.text, doc), versionId: doc.versionId } };
+          } catch (error) { return { ...thread, textAnchorResolution: { status: "unavailable", reason: (error as Error).message } }; }
+        })));
+      }
       if (threads.length === 0) return printTable([]);
       for (const t of threads) {
         const anchor = t.main
@@ -10360,15 +10406,11 @@ session
     if (opts.clear) { await touchSession(ctx, p.id, { textSelection: null }); return console.log("text selection cleared"); }
     if (!ref || !opts.quote) throw new Error("pass an item and --quote, or --clear");
     const item = resolveItem(snapshot, ref);
-    const version = item.versions.find(v => v.id === item.currentVersionId)!;
-    if (!["text/markdown", "text/plain"].includes(version.mimeType)) throw new Error("Text selection needs a saved Markdown or plain-text version");
-    const { markdownText } = await import("@isocan/core/markdown");
-    const { quoteRange, isTextItem, TEXT_ATTENTION_MS } = await import("@isocan/core");
-    const flavor: import("@isocan/core").TextAttention["flavor"] = version.mimeType === "text/plain" ? "plain" : isTextItem(item) ? "text-node" : "document";
-    const text = markdownText((await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8"), flavor);
-    const range = quoteRange(text, opts.quote, opts.occurrence === undefined ? undefined : Number(opts.occurrence));
-    const textSelection = { itemId: item.id, versionId: version.id, blobHash: version.blobHash,
-      textSpace: "markdown-hast-v1" as const, flavor, ...range, expiresAt: Date.now() + TEXT_ATTENTION_MS };
+    const doc = await readCommentDocument(ctx, p.id, item);
+    const { TEXT_ATTENTION_MS } = await import("@isocan/core");
+    const range = quoteRange(doc.text, opts.quote, opts.occurrence === undefined ? undefined : Number(opts.occurrence));
+    const textSelection = { itemId: item.id, versionId: doc.versionId, blobHash: doc.blobHash,
+      textSpace: "markdown-hast-v1" as const, flavor: doc.flavor, ...range, expiresAt: Date.now() + TEXT_ATTENTION_MS };
     await touchSession(ctx, p.id, { textSelection, selection: [item.id] });
     if (ctx.json) return printJson(textSelection);
     console.log(`selecting “${opts.quote}” on ${item.title} for 15 seconds`);
@@ -11778,6 +11820,7 @@ turn is \`sheep attach\`, and the first one births the agent's sheep.
 try a policy against one agent before starting an rc with it.`,
   )
   .option("--sandbox", "fence the adapter: its own directory, ~/.isocan, /tmp, this daemon and its harness's API")
+  .option("--codex-sandbox", "opt in to Codex tool sandboxing; exact daemon host and configured domains, no escalation")
   .option("--unsandboxed", "run the adapter with your own reach, overriding config.json's sandbox")
   .action(
     run(async (name: string, promptWords: string[], _opts: unknown, cmd: Command) => {
@@ -11846,6 +11889,7 @@ try a policy against one agent before starting an rc with it.`,
         spec,
         row,
         await sandboxAsked(ctx.home, cmd.optsWithGlobals() as { sandbox?: boolean; unsandboxed?: boolean }),
+        await codexSandboxAsked(ctx.home, cmd.optsWithGlobals() as { codexSandbox?: boolean; unsandboxed?: boolean }),
       );
       console.error(
         rcLine(
@@ -11914,7 +11958,7 @@ interface Fence {
   /** What holds this agent in: srt around a local adapter, the sheep's own
    * cell, or nothing. Three states rather than a boolean, because "not
    * fenced by srt" and "not fenced" are different facts about a turn. */
-  holding: "srt" | "cell" | null;
+  holding: "srt" | "cell" | "codex" | null;
 }
 
 /**
@@ -11928,6 +11972,7 @@ async function fenceSpec(
   spec: AdapterSpec,
   row: RcAgentRow,
   asked: boolean,
+  nativeCodex = false,
 ): Promise<Fence> {
   /**
    * **A sheep is already fenced, and not by us.** Its turn does not run on
@@ -11940,6 +11985,8 @@ async function fenceSpec(
    * research note's "a stronger box" row, arriving from another project.
    */
   if (spec.harness === SHEEP_HARNESS) return { spec, holding: "cell" };
+  if (asked && nativeCodex) throw new Error("Choose --sandbox or --codex-sandbox; nested fences are not supported");
+  if (nativeCodex && spec.harness === "codex") return { spec: await codexSandboxSpec(spec, ctx.home, ctx.client.base), holding: "codex" };
   if (!asked) return { spec, holding: null };
   const scan = await scanSandbox(ctx.home);
   if (!scan.can) throw new Error(noSandboxLine(scan));
@@ -11958,7 +12005,7 @@ async function fenceSpec(
 /** The spawn line's fence marker, so a person never has to infer which
  * boundary a turn is running behind. */
 function fenceNote(fence: Fence): string {
-  return fence.holding === "srt" ? ", fenced" : fence.holding === "cell" ? ", in a cell" : "";
+  return fence.holding === "codex" ? ", Codex workspace sandbox (escalation refused)" : fence.holding === "srt" ? ", fenced" : fence.holding === "cell" ? ", in a cell" : "";
 }
 
 interface RcShared {
@@ -11966,6 +12013,7 @@ interface RcShared {
   /** Whether adapters are fenced — resolved once at start, so a refusal
    * lands before anything parks rather than at the first summons. */
   sandbox: boolean;
+  codexSandbox: boolean;
   guards: Map<string, GuardState>;
   sessionIds: Map<string, string>;
   upgrade: { upgrading: boolean; upgraded: string | null };
@@ -12097,9 +12145,10 @@ rcCommand
   .option("--all", "answer on every canvas this machine's enrolments name, not only this directory's")
   .option("--default-harness <name>", "the harness agents that named none run on — kept as config.json's defaultHarness")
   .option("--sandbox", "fence every adapter: its own directory, ~/.isocan, /tmp, this daemon and its harness's API")
+  .option("--codex-sandbox", "opt in to Codex tool sandboxing; exact daemon host and configured domains, no escalation")
   .option("--unsandboxed", "run adapters with your own reach, overriding config.json's sandbox")
   .action(
-  run(async (opts: { all?: boolean; defaultHarness?: string; sandbox?: boolean; unsandboxed?: boolean }, cmd: Command) => {
+  run(async (opts: { all?: boolean; defaultHarness?: string; sandbox?: boolean; unsandboxed?: boolean; codexSandbox?: boolean }, cmd: Command) => {
     const ctx = await ctxOf(cmd);
     /**
      * The user/agent divide, enforced (the naming door's residue, decided
@@ -12126,6 +12175,8 @@ rcCommand
      * discovered at the first summons is an agent already running unfenced.
      */
     const fence = await sandboxAsked(ctx.home, opts);
+    const nativeCodex = await codexSandboxAsked(ctx.home, opts);
+    if (fence && nativeCodex) throw new Error("Choose --sandbox or --codex-sandbox; nested fences are not supported");
     const sandboxScan = await scanSandbox(ctx.home);
     if (fence && !sandboxScan.can) throw new Error(noSandboxLine(sandboxScan));
     // Only when it holds: the start stays three lines otherwise (see
@@ -12135,6 +12186,7 @@ rcCommand
     const shared: RcShared = {
       rooms: rooms.length,
       sandbox: fence,
+      codexSandbox: nativeCodex,
       guards: new Map(),
       sessionIds: new Map(),
       upgrade: { upgrading: false, upgraded: null },
@@ -12676,7 +12728,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       // The fence, if the rc was started with one (`sandbox.ts`). The start
       // was already refused if it could not be built here, so this cannot
       // fail for want of `bwrap` at the doorbell.
-      const fence = await fenceSpec(ctx, spec, row, shared.sandbox);
+      const fence = await fenceSpec(ctx, spec, row, shared.sandbox, shared.codexSandbox);
       console.log(rcLine(tag, `${record.actor.name} · ${spec.harness}${fenceNote(fence)}`));
       const agent =
         spec.harness === SHEEP_HARNESS

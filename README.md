@@ -27,6 +27,29 @@ need Claude Code; any agent that reads `.agents/skills/` works.)
 [`docs/how-to.md`](docs/how-to.md) is the five-minute version of actually
 using it. What follows is the developer's route into the same thing.
 
+**Rather see it than read it?** isocan explains itself on isocan, and each of
+these is open to anyone with the address (they wear an `[isocan]` prefix so
+they stand out in a long list of canvases):
+
+* [\[isocan\] Demo](https://isocan.io/p/prj_sN8FgZuimi) — the story, told on the
+  canvas it is about. Read the sheets left to right, or press Enter on the
+  first slide and use the arrows.
+* [\[isocan\] Getting Started](https://isocan.io/p/prj_6nodKBn0oA) — five steps to a first working
+  session, then the concepts underneath: daemon, directories, home, agents,
+  ops. A deck, one screen each.
+* [\[isocan\] System design](https://isocan.io/p/prj_6fgykNN1_m) — thirteen animated,
+  drivable instruments: the 33-op waist, the isomorphism, the life of an
+  operation, the door, the two ledgers, home versus replica. Every screen
+  cites the files it was read from.
+* [\[isocan\] History](https://isocan.io/p/prj_Gi8oGKNALt) — how it was built, day by day,
+  from the first commit on 15 August 2026.
+* [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119) — every research note and project by
+  where it stands, the same board as [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+The list the app shows under **? → Read more** is the same one, kept in
+`packages/web/src/lib/guides.ts`; a test reads this README to make sure the
+two never name different canvases.
+
 ## Quick start
 
 From any directory, one command — no npm publishing involved, the repo *is*
@@ -109,7 +132,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   bottom of the document it is describing.
 - **Markdown reading**: Read / select text mode, a heading outline, and live
   shared text selections. `isocan session select <item> --quote "words"` points
-  agents to the same saved passage without changing the document.
+  agents to the same saved passage without changing the document. Select words
+  and choose **Comment on selection** to save a discussion on that passage;
+  `comment add --item <item> --quote "words" "feedback"` does the same.
+  Quotes follow unambiguous matches across versions and keep their original
+  wording when a passage disappears. Relative Markdown links open saved files
+  on the canvas; CLI imports bundle local images while preserving the source.
 - **The Pen (`P`)**: draw freehand on the canvas in your identity color — the
   same color your cursor and your face in the pile wear, so ink is signed by
   how it looks; the ink well beside the rail switches to any other color in
@@ -551,7 +579,7 @@ isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · resto
 isocan edit <item> [<file>]        # new version from a file or $EDITOR
 isocan versions <item> · version promote <item> <version>
 isocan comment add (--item <item> | --at x,y) <text> · reply · list · rm
-isocan comment anchor <thread> (<item> | --at x,y)   # re-pin / detach a thread
+isocan comment anchor <thread> (<item> [--quote "words"] | --at x,y)
 isocan comment main [<thread> | --clear]   # the docked agent↔user channel
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--all] [--dry-run] [--keep-ops N]   # compact the oplog, sweep
@@ -739,6 +767,10 @@ the first hour: clone to running, the three homes and which one you are
 pointing at, how work reaches production, and the house practices that are not
 obvious from the code.
 
+[`docs/architecture.md`](docs/architecture.md) is what actually runs and
+where; the [\[isocan\] System design](https://isocan.io/p/prj_6fgykNN1_m) canvas is the same
+material as instruments you can drive, and the better first sitting.
+
 [`docs/development.md`](docs/development.md) is the whole of it, written for the
 people who actually work here: an **upgrade** door for a rig built before
 the home work landed, and a **first entry** door — `git clone` to a running dev
@@ -784,3 +816,20 @@ their own; Claude Code reaches the same file through the committed symlink at
 `.claude/skills/isocan-collab` — is the doorway that points there. Adding a
 harness means adding a doorway to that file, never a second copy of it
 (`test/skills.test.ts` holds the line).
+
+### Opt-in sandbox for summoned Codex agents
+
+`isocan rc --codex-sandbox` (also `rc turn <agent> <prompt> --codex-sandbox`)
+uses Codex's native workspace sandbox on macOS and Linux. It requires
+codex-acp 1.11 or newer. Workspace and isocan-state writes are allowed;
+permission escalation is refused. Git metadata remains protected, so reads
+and diffs work but committing does not. This bounds Codex's tools, not the
+adapter process, file reads, or separately configured MCP services.
+
+`codexSandbox: true` in `~/.isocan/config.json` makes this the standing choice;
+`--unsandboxed` overrides it for a run. `codexSandboxDomains` adds exact network
+hostnames, for example `["github.com", "registry.npmjs.org"]`. The daemon's host
+is included automatically and existing Codex domain rules still compose.
+See the [measured network boundary](docs/research/2026-09-10-what-the-rc-hands-over.md#native-codex-opt-in--11-september)
+before choosing it. The separate `--sandbox` flag fences the entire adapter
+with srt; combining the two is refused until nesting has been validated.

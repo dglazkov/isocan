@@ -37,7 +37,8 @@ export declare function atCorner(canvas: CanvasContents, thread: CommentThread):
  * The corner-anchored one wins when several exist, because that is the one ⇧C
  * and `isocan comment add --item` both put there; a thread anchored somewhere
  * else on the item (dropped in comment mode, aimed at a particular spot) is
- * about that spot and is left alone. Oldest first among equals, so the answer
+ * about that spot and is left alone. A quoted passage is its own discussion,
+ * never the default item conversation. Oldest first among equals, so the answer
  * does not change as people talk.
  */
 export declare function itemThread(canvas: CanvasContents, itemId: string): CommentThread | null;

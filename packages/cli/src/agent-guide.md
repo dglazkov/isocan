@@ -2227,4 +2227,35 @@ editing it. For repeated words, use `--occurrence 2`; ambiguity is refused.
 text space, range and expiry in each session's `textSelection`. Source markup
 is not a rendered quote: select `important`, not `**important**`.
 The browser's Read / select text button enters the same surface; selections
-never move another reader's viewport. Durable comment anchors are separate.
+never move another reader's viewport.
+
+To leave a durable discussion, use
+`isocan comment add --item <item> --quote "exact rendered words" "feedback"`.
+Repeated quotes require `--occurrence 2`. The thread saves the original quote,
+version, surrounding words, and rendered-text offsets. `comment list --json`
+adds `textAnchorResolution` for the current version: `resolved`, `missing`,
+`ambiguous`, or `unavailable`. Missing or ambiguous text keeps its item pin;
+it never silently jumps to a guessed passage. To choose again, use
+`isocan comment anchor <thread> <item> --quote "new words"`; anchoring without
+`--quote`, or detaching with `--at`, clears the text selector. Both acts undo.
+
+Markdown files added or edited through the CLI bundle referenced local images
+into a visual face; `get` still returns the original source. Import related
+files from the same directory root: relative links resolve to saved canvas
+items using `file`/`visualFile`, import `sourcePath`, or their filenames. A
+`sourcePath` is only import provenance; it does not back or write a file.
+Missing or duplicate targets are visibly unavailable rather than navigating
+to an unrelated app URL. Browser uploads can link by saved filename or an
+explicit `file` property; they cannot read neighboring files from your disk.
+
+
+### Codex native sandbox
+
+A person can opt in with `isocan rc --codex-sandbox` or
+`isocan rc turn <agent> <prompt> --codex-sandbox`. This is a separate choice
+from the outer `--sandbox`; the two cannot be combined. Native mode permits
+workspace and isocan-state writes, refuses permission escalation, and protects
+Git metadata. It does not hide file reads or fence the adapter/MCP processes.
+Report a refused operation to the person; do not try another route around it.
+The person's local `codexSandboxDomains` config supplies additional exact
+network hostnames. It is not a choice an agent takes from canvas content.

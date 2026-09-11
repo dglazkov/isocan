@@ -56,6 +56,10 @@ export interface AdapterSpec {
    * at spawn — a builtin's knowledge of its own harness, never a person's
    * setting. */
   env?: Record<string, string>;
+  /** Reject permission escalation and require the measured Codex ACP contract. */
+  nativeCodexSandbox?: boolean;
+  /** Additional writable roots passed on both creation and resume. */
+  sessionDirectories?: string[];
   /** Make sure the bridge is here before spawning — a builtin fetched on
    * first use rather than shipped. Narrates through the callback, and
    * returns the command and args the registry says NOW, which the caller

@@ -77,7 +77,7 @@ function handle(msg) {
       result: {
         protocolVersion: 1,
         agentCapabilities: { loadSession: true },
-        agentInfo: { name: "fake-acp", title: "Fake", version: "0.0.1" },
+        agentInfo: { name: "fake-acp", title: "Fake", version: process.env.FAKE_ACP_VERSION ?? "0.0.1" },
         ...(authMethod ? { authMethods: [{ id: authMethod, name: authMethod }] } : {}),
       },
     });
@@ -92,6 +92,8 @@ function handle(msg) {
     }
   } else if ((method === "session/new" || method === "session/load") && !authenticated) {
     send({ jsonrpc: "2.0", id, error: { code: -32000, message: "Authentication required" } });
+  } else if ((method === "session/new" || method === "session/load") && process.env.FAKE_ACP_EXPECT_ROOT && !params.additionalDirectories?.includes(process.env.FAKE_ACP_EXPECT_ROOT)) {
+    send({ jsonrpc: "2.0", id, error: { code: -32602, message: "missing additional directory" } });
   } else if (method === "session/new") {
     const sessions = known();
     const sessionId = `sess_fake_${process.pid}_${sessions.length + 1}`;

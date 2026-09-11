@@ -1,3 +1,4 @@
+import type { TextAnchor } from "./text-anchor.ts";
 import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.ts";
 
 /**
@@ -273,6 +274,7 @@ export type Operation =
   // ---- comments ----
   | {
       type: "thread.create";
+      textAnchor?: TextAnchor | null;
       threadId: string;
       x: number;
       y: number;
@@ -290,6 +292,8 @@ export type Operation =
       // or freestanding (x,y become world coordinates). Lets a thread that
       // started before its item existed be anchored to it after the fact.
       type: "thread.setAnchor";
+      /** Omission clears a previous text selector, preserving old item-pin clients. */
+      textAnchor?: TextAnchor | null;
       threadId: string;
       anchorItemId: string | null;
       x: number;

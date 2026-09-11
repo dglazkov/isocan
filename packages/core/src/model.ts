@@ -1,3 +1,4 @@
+import type { TextAnchor } from "./text-anchor.ts";
 /**
  * The shared state model. Both the daemon (authoritative) and the web client
  * (live replica) hold this shape; the CLI reads it through queries.
@@ -222,6 +223,8 @@ export interface CommentThread {
   /** null = freestanding. If the anchor item is in the trash or missing,
    * renderers fall back to treating (x, y) as world coordinates. */
   anchorItemId: string | null;
+  /** Optional saved text selection, with the original version as provenance. */
+  textAnchor?: TextAnchor | null;
   /** Always at least one comment. */
   comments: Comment[];
   /** At most one thread on a canvas is "main": the designated agent↔user

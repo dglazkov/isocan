@@ -1,3 +1,4 @@
+import type { TextAnchor } from "@isocan/core";
 import { create } from "zustand";
 import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
@@ -78,6 +79,8 @@ export interface PendingText {
 }
 
 export interface PendingComment {
+  /** A quote captured before the composer takes focus. */
+  textAnchor?: TextAnchor;
   /** World coordinates of the click. */
   x: number;
   y: number;

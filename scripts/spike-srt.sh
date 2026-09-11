@@ -52,7 +52,7 @@ SPIKE="$(mktemp -d)"
 HOME_DIR="$SPIKE/home"
 PROJ="$SPIKE/proj"
 PORT=$((4700 + RANDOM % 200))
-CANARY="$HOME/.isocan-spike-canary"
+CANARY="$(mktemp "$HOME/.isocan-spike-canary.XXXXXX")"
 mkdir -p "$HOME_DIR" "$PROJ"
 
 PASS=0

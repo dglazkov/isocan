@@ -87,3 +87,5 @@ export * from "./canvasswitch.js";
 export * from "./lens.js";
 export * from "./export.js";
 export * from "./text-attention.js";
+export * from "./text-anchor.js";
+export { markdownResource, SOURCE_PATH_PROP } from "./markdown-resources.js";

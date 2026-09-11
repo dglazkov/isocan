@@ -10,6 +10,11 @@ the production image on purpose, so nothing in it can be served by accident.
 That separation is the point of this file. It ships, so a home can say what it
 is running; nothing else about how the work was done ships with it.
 
+The [\[isocan\] History](https://isocan.io/p/prj_Gi8oGKNALt) canvas is the long version for
+a reader with time: every feature, capability and decision from the first
+commit on 15 August 2026, one screen per day, one row per week. Open to anyone
+with the address.
+
 **Days with nothing a person would notice are not here.** A day of
 refactoring, of tests, of chasing a flake is a real day's work and an empty
 notice. A what's-new with an entry every day is one nobody believes by the
