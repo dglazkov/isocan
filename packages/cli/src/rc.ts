@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import type { SheepPlace } from "./sheep.ts";
 
 /**
  * **The enrolment record's rc half** (agents-on-demand phase 2).
@@ -33,6 +34,11 @@ export interface RcAgentRow {
   cwd: string;
   /** The ACP resume handle, once phase 3 mints one. Null until then. */
   sessionId: string | null;
+  /** For the sheep harness, where `sessionId` lives: the kennel and the
+   * home it named at birth. Carried so a summons from any directory
+   * resumes the same sheep, and so a kennel re-pointed since is refused
+   * rather than answered with a second sheep. */
+  sheep?: SheepPlace;
 }
 
 export const rcAgentsFile = (home: string) => path.join(home, "rc-agents.json");
@@ -153,11 +159,13 @@ export async function setRcSessionId(
   canvasId: string,
   actorId: string,
   sessionId: string,
+  sheep?: SheepPlace,
 ): Promise<void> {
   const rows = await readRcAgents(home);
   const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
   if (!row) return;
   row.sessionId = sessionId;
+  if (sheep) row.sheep = sheep;
   await writeRcAgents(home, rows);
 }
 

@@ -421,8 +421,8 @@ import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
-import { SHEEP_HARNESS, SheepAgent, homeAddressForCell, sheepConfig } from "./sheep.ts";
-import { adapterFor, defaultLine, noDefaultLine, noNeedLine, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
+import { SHEEP_HARNESS, SheepAgent, describePlace, homeAddressForCell, loopbackFromCell, noSheepLine, placeLine, sheepPlaceFor } from "./sheep.ts";
+import { adapterFor, defaultLine, noDefaultLine, noNeedLine, onPath, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
 import {
   noSandboxLine,
   policyFor,
@@ -11453,7 +11453,12 @@ knows — builtin, or declared in ~/.isocan/config.json under acpAdapters or
 harnessVars — with whether its executable is on the PATH, where the rc
 would get its ACP bridge, whether it could run here, and which one an
 agent enrolled with no harness named runs on. --json adds a \`runnable\`
-field so an agent presenting the choice need not derive it.`,
+field so an agent presenting the choice need not derive it.
+
+sheep is the one harness whose sessions run elsewhere: in cells at a sheep
+home. It is runnable when \`sheep\` is on the PATH and the kennel for this
+directory (.sheep/ at or above it, else ~/.sheep) names a home, and its
+row says which.`,
   )
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -11472,6 +11477,7 @@ field so an agent presenting the choice need not derive it.`,
           sandbox: { can: sandbox.can, engine: sandbox.engine, ...(sandbox.why ? { why: sandbox.why } : {}) },
         });
       }
+      const where = scan.rows.some((r) => r.home);
       printTable(
         scan.rows.map((r) => ({
           harness: r.name,
@@ -11479,6 +11485,7 @@ field so an agent presenting the choice need not derive it.`,
           adapter: r.adapter ?? "none",
           runnable: r.runnable ? "yes" : "no",
           default: r.default ? "yes" : "",
+          ...(where ? { home: r.home ?? "" } : {}),
         })),
       );
       console.log(scan.default ? defaultLine(scan) : noDefaultLine(scan));
@@ -11536,7 +11543,7 @@ rcCommand
   .command("add <name>")
   .description("Enrol an agent — the person's point-anywhere form")
   .option("--dir <path>", "the agent's working directory (default: here)")
-  .option("--harness <name>", "how its sessions start: claude-code, pi, codex or antigravity (default: yours, else unsaid)")
+  .option("--harness <name>", "how its sessions start: claude-code, pi, codex, antigravity, or sheep for a cell at a sheep home (default: yours, else unsaid)")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
   .option("--listen <who>", "whose word wakes it: me, everyone (default), or names/ids, comma-separated")
   .action(
@@ -11678,6 +11685,8 @@ an error. Adapters: claude-code, pi, codex and antigravity ship known — each
 the ACP registry's current bridge, fetched on first use (Antigravity's is a
 300 MB binary and wants GEMINI_API_KEY); others are declared in
 ~/.isocan/config.json as {"acpAdapters": {"<harness>": ["cmd", "arg"]}}.
+An agent on the sheep harness runs in a cell at a sheep home instead: the
+turn is \`sheep attach\`, and the first one births the agent's sheep.
 
 --sandbox fences the adapter the way a fenced rc does, which is the way to
 try a policy against one agent before starting an rc with it.`,
@@ -11723,7 +11732,9 @@ try a policy against one agent before starting an rc with it.`,
         throw new Error(
           row.harness === null
             ? `${record.actor.name} named no harness, and ${noDefaultLine(await scanHarnesses(ctx.home))}`
-            : `no ACP adapter is known for harness "${row.harness}" — declare one in ~/.isocan/config.json: ` +
+            : row.harness === SHEEP_HARNESS
+              ? noSheepLine(record.actor.name)
+              : `no ACP adapter is known for harness "${row.harness}" — declare one in ~/.isocan/config.json: ` +
                 `{"acpAdapters": {"${row.harness}": ["command", "arg"]}}`,
         );
       }
@@ -11759,8 +11770,9 @@ try a policy against one agent before starting an rc with it.`,
       const agent =
         spec.harness === SHEEP_HARNESS
           ? await SheepAgent.spawn(spec, {
-              home: ctx.home,
               name: record.actor.name,
+              cwd: row.cwd,
+              stored: row.sheep ?? null,
               narrate: (line) => console.error(rcLine("", `${record.actor.name} · ${line}`)),
               birth: await sheepBirth(ctx, p, record.actor.id),
             })
@@ -11778,7 +11790,13 @@ try a policy against one agent before starting an rc with it.`,
               : `${record.actor.name} · session ${session.sessionId} started${row.sessionId ? " (the stored one would not load — rebuilt)" : ""}`,
           ),
         );
-        await setRcSessionId(ctx.home, p.id, record.actor.id, session.sessionId);
+        await setRcSessionId(
+          ctx.home,
+          p.id,
+          record.actor.id,
+          session.sessionId,
+          agent instanceof SheepAgent ? agent.place : undefined,
+        );
         const turn = await agent.prompt(session.sessionId, promptWords.join(" "), (event) => {
           if (event.kind === "chunk" && event.text) process.stdout.write(event.text);
           else if (event.kind === "tool") console.error(rcLine("", `${record.actor.name} · tool ${event.detail}`));
@@ -11868,34 +11886,33 @@ interface RcShared {
 }
 
 /**
+ * What a sheep needs to be born as this agent (the sheep spike, 10 Sep
+ * 2026): a pass minted for the agent's own actor — the rc's badge holds the
+ * claim, so the home allows it — at the address the cell can reach, and the
+ * collab skill for its pasture. The pass is minted lazily, only when a
+ * sheep is actually born, because it is single-use and short-lived.
+ */
+async function sheepBirth(ctx: Ctx, p: Canvas, actorId: string): Promise<import("./sheep.ts").SheepBirth> {
+  const skill = await fs.readFile(path.join(skillSource(), "SKILL.md"), "utf8").catch(() => undefined);
+  const origin = (await ctx.homeOf(p.id).catch(() => null)) ?? ctx.client.base;
+  return {
+    canvasTitle: p.title,
+    canvasOrigin: origin,
+    ...(skill ? { skill } : {}),
+    pass: async () => {
+      const { token } = await ctx.client.mintPass(p.id, actorId);
+      return canvasUrlWithPass(homeAddressForCell(origin, await loopbackFromCell(ctx.home)), p.id, token);
+    },
+  };
+}
+
+/**
  * The door (phase 2, decided at the door): `isocan rc --all` — an explicit
  * word, because a bare `rc` in an unbound directory doing something large by
  * default is what the on-demand rule frowns on. Every canvas this machine's
  * enrolment records name, plus the bound one if there is one; a canvas the
  * records name that the home no longer has is said and skipped.
  */
-/**
- * What a sheep needs to be born as this agent (the sheep spike, 10 Sep
- * 2026): a pass minted for the agent's own actor — the rc's badge holds the
- * claim, so the home allows it — at the address the cell can reach, and the
- * collab skill for its pasture. The pass is minted lazily, only when a
- * pasture is actually made, because it is single-use and short-lived.
- */
-async function sheepBirth(ctx: Ctx, p: Canvas, actorId: string): Promise<import("./sheep.ts").SheepBirth> {
-  const cfg = await sheepConfig(ctx.home);
-  if (!cfg) throw new Error('harness "sheep" needs a "sheep" block in config.json');
-  const skill = await fs.readFile(path.join(skillSource(), "SKILL.md"), "utf8").catch(() => undefined);
-  return {
-    canvasTitle: p.title,
-    ...(skill ? { skill } : {}),
-    pass: async () => {
-      const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
-      const { token } = await ctx.client.mintPass(p.id, actorId);
-      return canvasUrlWithPass(homeAddressForCell(origin, cfg), p.id, token);
-    },
-  };
-}
-
 async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
   const canvases = await ctx.client.listCanvases();
   const wanted = new Set((await readRcAgents(ctx.home)).map((row) => row.canvasId));
@@ -12116,6 +12133,24 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
           : `${enrolledCount} ${enrolledCount === 1 ? "agent" : "agents"} enrolled (\`isocan who\` names them) — quiet until something arrives (Ctrl-C stops answering)`,
       ),
     );
+    // An agent on the sheep harness runs somewhere else, and where is the
+    // one thing the person cannot see from here: said once, at start, as
+    // the home the row carries or the kennel would name — or why it can't.
+    const sheepOnPath = await onPath("sheep", process.env);
+    for (const row of await readRcAgents(ctx.home)) {
+      if (row.canvasId !== p.id || row.harness !== SHEEP_HARNESS || !opening[row.actorId]) continue;
+      const place = row.sheep ?? sheepPlaceFor(row.cwd);
+      console.log(
+        rcLine(
+          tag,
+          !sheepOnPath
+            ? `${noSheepLine(row.name)} — answering for everyone else`
+            : place
+              ? `${row.name}'s sheep ${row.sheep ? "live" : "will live"} at ${placeLine(place)}`
+              : `${row.name} names sheep, and the kennel for ${row.cwd} names no home — \`sheep home local\` or \`sheep home join <address>\` there`,
+        ),
+      );
+    }
 
     /**
      * **Dispatch** (phase 4). One quiet connection, fanned out: the rc holds
@@ -12379,7 +12414,9 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         throw new Error(
           row.harness === null
             ? `${record.actor.name} named no harness, and ${noDefaultLine(await scanHarnesses(ctx.home))}`
-            : `no ACP adapter for harness "${row.harness}" — config.json's acpAdapters hook declares one`,
+            : row.harness === SHEEP_HARNESS
+              ? noSheepLine(record.actor.name)
+              : `no ACP adapter for harness "${row.harness}" — config.json's acpAdapters hook declares one`,
         );
       }
       // The binding (phase 3): idempotent for CLI-added agents, the one
@@ -12462,8 +12499,9 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       const agent =
         spec.harness === SHEEP_HARNESS
           ? await SheepAgent.spawn(spec, {
-              home: ctx.home,
               name: record.actor.name,
+              cwd: row.cwd,
+              stored: row.sheep ?? null,
               narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
               birth: await sheepBirth(ctx, p, record.actor.id),
             })
@@ -12479,8 +12517,15 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         // the adapter's environment says which canvas is asking this time.
         const session = await agent.ensureSession(row.cwd, row.sessionId ?? shared.sessionIds.get(record.actor.id) ?? null);
         shared.sessionIds.set(record.actor.id, session.sessionId);
-        await setRcSessionId(ctx.home, p.id, record.actor.id, session.sessionId);
-        console.log(rcLine(tag, `${record.actor.name} · session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`));
+        await setRcSessionId(
+          ctx.home,
+          p.id,
+          record.actor.id,
+          session.sessionId,
+          agent instanceof SheepAgent ? agent.place : undefined,
+        );
+        const where = agent instanceof SheepAgent ? `at ${describePlace(agent.place)}` : `in ${row.cwd}`;
+        console.log(rcLine(tag, `${record.actor.name} · session ${session.resumed ? "resumed" : "started"} ${where}`));
         // The event stream the adapter is already sending, spent on the face:
         // each tool call becomes an inferred status (so it never displaces
         // anything the agent said with `--say`) and re-asserts `working`.

@@ -77,13 +77,23 @@ and both places the rc starts a turn (`rc turn` and the parked summons)
 branch on that name. The summons text is unchanged. A sheep and a local
 adapter receive identical content; the difference is where the turn runs.
 
-- `ensureSession` with a stored id checks the sheep still exists at the
-  home and resumes it. With none, it makes the agent's pasture and mints
-  a sheep into it with an opening prompt. The sheep's id is the row's
-  `sessionId`.
+- `spawn` refuses what cannot work, in one sentence naming both homes:
+  a kennel that names no home, a kennel re-pointed since the sheep was
+  born, and a station asked to reach a canvas on this machine's daemon.
+- `ensureSession` reads the home's sessions once. The stored id, if the
+  home still has it, is resumed. Otherwise a sheep already in the agent's
+  pasture is resumed, because a row can forget what the home remembers.
+  Only when the herd is empty does it make the pasture, mint the pass,
+  and birth a sheep with an opening prompt, narrating each step. The
+  sheep's id is the row's `sessionId`.
 - `prompt` is `sheep attach --wait <id> -- <summons>`. `--wait` queues
   behind a running turn, which is the birth's on a first summons. The
-  reply streams back as chunks; exit is the stop.
+  reply streams back as chunks; exit is the stop. Before it, the
+  transcript's last entry says how long the cell has been quiet, and past
+  the home's ten-minute idle period the rc says setup is probably running.
+  During it, the transcript is read every three seconds and each tool call
+  becomes the same inferred status the ACP path produces, because
+  `sheep attach` streams only the reply's text.
 - `close` does nothing. Nothing runs between turns.
 
 ### A pasture per agent
@@ -128,13 +138,24 @@ moment of birth and never stored on the rc's side.
 
 ### Where the home is
 
+Which sheep home an agent's sheep live at is sheep's own rule: the
+kennel, a `.sheep/` at or above the directory, else `~/.sheep`, and the
+home its config names. The rc walks it from the agent's directory at
+birth and writes the kennel and the home onto the rc row beside the
+sheep id, with `local` for a local home, whose port changes with every
+start. From then on the row decides, not the directory, and the rc runs
+`sheep` beside that kennel with `SHEEP_HOME` taken out of its
+environment. `isocan harness` lists `sheep` with the home, and `isocan
+rc` says at start where each sheep-harnessed agent's sheep live.
+
 The pass carries the canvas's home address, so a sheep talks to wherever
 the canvas lives, which for a canvas born at dev.isocan.io is
 dev.isocan.io. A canvas on a laptop daemon is reachable from a local
-sheep home's Docker container at `host.docker.internal`, and the `homeAs`
-config key rewrites a loopback origin to that. A canvas on a laptop is
-not reachable from a deployed station, and the rc should say so rather
-than mint a pass nobody can redeem.
+sheep home's Docker container at `host.docker.internal` on the daemon's
+port, which is the default, and `config.json`'s `loopbackFromCell`
+names another address when a Docker does not answer to that one. A
+canvas on a laptop is not reachable from a deployed station, and the rc
+refuses at the summons rather than mint a pass nobody can redeem.
 
 ## Findings the spike left
 
@@ -155,19 +176,33 @@ Recorded here as what a full build owes, not as trajectory.
 - **The face gets no tool beats.** The rc reads `sheep attach`'s text
   stream, so the summoned face shows "reading your comment…" and nothing
   else while the sheep works. `sheep log --json` carries pi's entries
-  with tool calls, so this is the rc's to fix, not sheep's.
+  with tool calls, so this is the rc's to fix, not sheep's. *Answered in
+  phase 1 by reading the transcript during the turn.*
 - **Setup's output is invisible to the rc.** A pasture's setup writes to
   the cell's log and reaches the model only on failure. The rc narrated
   nothing for the two minutes the install took, [sheep#4](https://github.com/dglazkov/sheep/issues/4).
 - **Configuration is hand-written.** The `sheep` block in `config.json`
   names the command and the kennel. `isocan harness` should find `sheep`
   on PATH and a kennel above the directory, the way it finds the others.
+  *Answered in phase 1; the block is gone.*
 - **The kennel is the directory's.** Sheep resolves its home by walking up
   from the working directory to a `.sheep`, else `~/.sheep`. The rc runs
   sheep with the configured kennel as its working directory, and the
   spike ran on the deployed station because the configured checkout had
   no `.sheep` that day. Which home an agent's sheep live at is a fact the
-  enrolment should carry, not one the filesystem decides.
+  enrolment should carry, not one the filesystem decides. *Answered in
+  phase 1: the rc row carries it from the birth on.*
+- **One agent on two canvases shares one sheep bound to the first.** An
+  rc keeps one session per agent across canvases, and the herd check
+  finds the agent's sheep whichever canvas summons it. That sheep's CLI
+  is bound to the canvas whose pass it redeemed, so a summons from a
+  second canvas reaches a cell that answers on the first. Found in phase
+  1 by reading, not walked.
+- **A cell that cannot rent a container ends its turn in silence.** In
+  phase 1's walk the station's container service dropped mid-setup. The
+  sheep's every command failed, it ended the turn with `end_turn`, the rc
+  advanced the cursor, and the thread heard nothing; the next summons
+  worked. From the rc's side this is an agent that chose not to reply.
 
 ## Open doors
 

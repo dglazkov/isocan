@@ -425,7 +425,8 @@ conversation per agent that carries on wherever it is summoned, and
 
 Which harness a summoned agent runs in is the enrolment's `--harness`
 (claude-code, pi, codex and antigravity are known; `~/.isocan/config.json`'s `acpAdapters`
-declares others), and an agent enrolled with none named runs on the
+declares others; `sheep` runs the agent in a cell at a sheep home instead of on
+this machine, and `isocan harness` says which home), and an agent enrolled with none named runs on the
 machine's default: the only runnable harness, or the one picked with
 `isocan rc --default-harness <name>`. `isocan harness` lists what this
 machine can run and which is the default (`--json` adds a `runnable`

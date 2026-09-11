@@ -6,7 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { builtinHarnesses } from "@isocan/api";
 import { readConfigFile, updateConfigFile } from "@isocan/server";
-import { SHEEP_HARNESS, sheepAdapter } from "./sheep.ts";
+import { SHEEP_HARNESS, placeLine, sheepPlaceFor } from "./sheep.ts";
 
 /**
  * **Which harness runs an agent that named none** (decided 2026-09-04).
@@ -370,6 +370,9 @@ export interface HarnessRow {
   runnable: boolean;
   /** The one an agent that named no harness runs on. */
   default: boolean;
+  /** Where its sessions live, for a harness whose sessions are not on this
+   * machine: sheep's, the home its kennel names. */
+  home?: string;
 }
 
 export interface HarnessScan {
@@ -382,7 +385,7 @@ export interface HarnessScan {
   ignored: string | null;
 }
 
-async function onPath(bin: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+export async function onPath(bin: string, env: NodeJS.ProcessEnv): Promise<boolean> {
   for (const dir of (env.PATH ?? "").split(path.delimiter)) {
     if (!dir) continue;
     try {
@@ -412,10 +415,11 @@ function declaredAdapter(
 
 /** Everything this machine could run, and which one it runs by default.
  * A fact about the machine — no daemon is consulted. `env` is a parameter
- * so a test can hand it a PATH. */
+ * so a test can hand it a PATH; `cwd` is where sheep's kennel walk starts. */
 export async function scanHarnesses(
   home: string,
   env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
 ): Promise<HarnessScan> {
   const raw = await readConfigFile<HarnessConfig>(home);
   const names = new Set<string>([
@@ -424,6 +428,7 @@ export async function scanHarnesses(
     ...Object.keys(raw.acpAdapters ?? {}),
     ...Object.keys(raw.harnessVars ?? {}),
   ]);
+  names.delete(SHEEP_HARNESS);
   const rows: HarnessRow[] = [];
   for (const name of names) {
     const installed = await installedProbe(home, name, env);
@@ -431,6 +436,18 @@ export async function scanHarnesses(
     const runnable = adapter === "config" || (adapter === "builtin" && installed !== false);
     rows.push({ name, installed, adapter, runnable, default: false });
   }
+  // sheep is not an ACP bridge but a herding command, found the same way:
+  // `sheep` on the PATH, and a kennel that names a home.
+  const sheepInstalled = await onPath("sheep", env);
+  const place = sheepInstalled ? sheepPlaceFor(cwd, env) : null;
+  rows.push({
+    name: SHEEP_HARNESS,
+    installed: sheepInstalled,
+    adapter: "builtin",
+    runnable: place !== null,
+    default: false,
+    ...(place ? { home: placeLine(place) } : {}),
+  });
   const runnable = rows.filter((r) => r.runnable);
   const wanted = typeof raw.defaultHarness === "string" ? raw.defaultHarness.trim() : "";
   const chosen = wanted ? runnable.find((r) => r.name === wanted) ?? null : null;
@@ -460,11 +477,10 @@ export async function adapterFor(
 ): Promise<AdapterSpec | null> {
   const wanted = harness ?? (await scanHarnesses(home, env)).default?.name ?? null;
   if (!wanted) return null;
-  // The sheep spike (10 Sep 2026): a harness that is not an ACP bridge but
-  // a herding command — its sessions are cells at a sheep home.
+  // A harness that is not an ACP bridge but a herding command: its
+  // sessions are cells at a sheep home, and `sheep.ts` drives it.
   if (wanted === SHEEP_HARNESS) {
-    const spec = await sheepAdapter(home);
-    return spec ? { harness: wanted, ...spec } : null;
+    return (await onPath("sheep", env)) ? { harness: wanted, command: "sheep", args: [] } : null;
   }
   const raw = await readConfigFile<HarnessConfig>(home);
   const spec = declaredAdapter(raw, wanted) ?? (await builtinAdapter(home, wanted)) ?? null;

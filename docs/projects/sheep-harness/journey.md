@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-10
 see: sheep-harness, on-demand, standing-agents, agent-custody, harnesses
-note: phase 0, the spike, walked 10 Sep 2026 on the deployed sheep station against dev.isocan.io — journeys 1 and 2 walked by hand, journey 3's credential rule held, journeys 4 and 5 not yet buildable. Phases 1–3 designed and not built; three of their steps wait on the sheep side.
+note: phases 0 and 1 closed 10 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, the birth and a quiet cell narrated, tool beats on the face from the transcript. Journeys 1 and 2 walked on the deployed station against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Journey 4 is phase 2's, and waits on sheep#1 (its verb is on sheep's main); phase 3 is the week with the bill.
 ---
 # The sheep harness — the journeys
 
@@ -34,14 +34,18 @@ laptop stops running it.*
    just watched, tool calls and all.
 5. Activity Monitor shows one process for the rc. While Percy's turn
    runs there is one more, `sheep attach`, a thin client waiting on the
-   cell; when the reply lands it is gone. No model and no agent runtime
-   ever appear.
+   cell, and every few seconds a `sheep log` that reads the transcript
+   for the face's tool beats and exits; when the reply lands they are
+   gone. No model and no agent runtime ever appear. The transcript read
+   goes when `sheep attach` streams entries
+   ([sheep#7](https://github.com/dglazkov/sheep/issues/7)).
 
 **Acceptance:** No new gesture beyond the harness's name. The summons
 Percy receives is the same text a local adapter would receive. The reply
-is by the enrolled actor, not by you and not by the rc. The only thing
-of Percy's that runs on the laptop is the client that carries a turn,
-for the length of that turn, and nothing after it.
+is by the enrolled actor, not by you and not by the rc. The only things
+of Percy's that run on the laptop are the client that carries a turn and
+the transcript reads beside it, for the length of that turn, and nothing
+after it.
 
 ## Journey 2 — The same Percy, a day later, in a fresh container
 
