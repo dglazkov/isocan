@@ -1814,6 +1814,14 @@ isocan fit <items...>                  # grow items to the size their content wa
   tokens nobody kept, values that are not colours, contrast that fails. Run it
   before you grade a screen against it, and before you hand a system back.
 
+  **A design system can govern one area rather than the canvas.** A DESIGN.md
+  that sits inside an area governs what is in that area and nothing else —
+  three lanes can hold three philosophies while the canvas keeps its own. Add
+  `--in <area>` to `isocan design`, `check`, `set`, `import` and `audit`
+  (`isocan design --css --in "Road Signs"`); a screen you add is scored against
+  the system that governs where it landed. The order is area, then the canvas,
+  then a linked canvas's.
+
   `isocan design audit` says whether the SCREENS hold up: which values each one
   uses that the system never named, worst screen first. It is the arithmetic
   half of `/design-audit` and nothing more — a colour is in the palette or it is
@@ -2049,7 +2057,10 @@ isocan fit <items...>                  # grow items to the size their content wa
   ```
 
   `--item` takes any item ref (repeatable), `--op` takes a type or a family
-  (`item.*`). A summons still wakes you through any filter — being told to stop
+  (`item.*`), and `--in <area>` narrows to what happens inside an area — an
+  item whose centre is there, or a thread pinned there — which is how an agent
+  working in one lane of a board parks on that lane alone
+  (`isocan wait --in "Sketches" --json --timeout 900`). A summons still wakes you through any filter — being told to stop
   is never the noise you asked to be spared — and the JSON says which it was:
   `reason: "summons"` or `"change"`. Your own ops never wake you, so writing
   the thing you were watching for does not wake you again.

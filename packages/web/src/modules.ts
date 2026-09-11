@@ -81,6 +81,36 @@ const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>>
   "modules.stickers": () => import("@isocan/stickers/web") as Promise<{ default: ShellModule }>,
 };
 
+/**
+ * **Modules that are on for everybody, and fetched after first paint** (11
+ * Sep 2026) — the experiment's lesson applied to a module that is not an
+ * experiment. The design competition ships on isocan.io, and a picker, nine
+ * portraits and a bout tray are nothing a first visit should pay for: measured
+ * against the stickers precedent, a plain import in `LIST` is bytes for
+ * everybody. So its web half arrives the way a runtime module's does, through
+ * `addModule`, a beat after the canvas draws — and a `/design-competition`
+ * typed before it lands simply posts, for an agent to carry out with the
+ * verbs, which is what a module command does anyway.
+ */
+const LAZY_HALVES: readonly (() => Promise<{ default: ShellModule }>)[] = [
+  () => import("@isocan/design-competition/web") as Promise<{ default: ShellModule }>,
+];
+
+let lazyLoaded = false;
+
+/** Fetch every always-on lazy module's web half, once. */
+export async function loadLazyModules(): Promise<void> {
+  if (lazyLoaded) return;
+  lazyLoaded = true;
+  for (const load of LAZY_HALVES) {
+    try {
+      addModule((await load()).default);
+    } catch {
+      // One module that will not load is one module; the canvas still draws.
+    }
+  }
+}
+
 const fetched = new Set<string>();
 
 /** Import the web half of every experiment that is on and has not arrived. */

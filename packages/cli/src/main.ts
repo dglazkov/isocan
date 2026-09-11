@@ -122,6 +122,7 @@ import {
   isDataOnly,
   assetProblems,
   refusedContributions,
+  type RefusedContribution,
   enginesSatisfied,
   moduleSlug,
   modulePageUrl,
@@ -10152,7 +10153,7 @@ moduleCmd
       ];
       // Contributions a point would not take, and ones to a point nobody
       // declares — said here, where "why is my fighter missing" gets asked.
-      const refusedAdds = refusedContributions();
+      const refusedAdds: RefusedContribution[] = refusedContributions();
       if (globals.json) {
         return printJson(
           rows.map((row) => {

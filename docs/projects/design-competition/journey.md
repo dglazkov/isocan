@@ -1,9 +1,9 @@
 ---
-status: designed
+status: partial
 since: 2026-09-11
 issue: 250
 see: sprint, modules, personas, on-demand, standing-agents, evals
-note: designed 11 Sep 2026 from the ask and the research note; nothing built. The competition is a sprint with one phase, cast by a picker — areas, desks, the curtain, placed dots, the split tally, hand-in and the rc's message-wake already exist. What does not is the module-system half, and it is the other half of the point — packs as module content, a dialog slot, assets on both surfaces, a scoped design system, and a way for a module to cast agents. Decided the same day: principle-first names (the agent is *Less but Better*, after Dieter Rams), exhibition as the default bout, and shipping on isocan.io as a build-time module, lazy-loaded. Phase 0 (a bout by hand, no module) is next
+note: built 11 Sep 2026, the day it was designed — the six module-system gaps as platform changes (assets, contribution points and data-only modules, a dialog slot, templates and host.enrol, a design system scoped to an area, rounds and wait --in) and @isocan/design-competition on them: nine packs, the picker, the arena, casting from a template, the bell, ballots as reactions, the tally, take, remix, rematch, standings and bring-your-own; a whole bout plays over the wire in its test. Still owed: phase 0 (a bout with people, measuring whether the packs are distinguishable), blind bouts on desks, the isocan.io walk and the removal proof. Designed as: The competition is a sprint with one phase, cast by a picker — areas, desks, the curtain, placed dots, the split tally, hand-in and the rc's message-wake already exist. What does not is the module-system half, and it is the other half of the point — packs as module content, a dialog slot, assets on both surfaces, a scoped design system, and a way for a module to cast agents. Decided the same day: principle-first names (the agent is *Less but Better*, after Dieter Rams), exhibition as the default bout, and shipping on isocan.io as a build-time module, lazy-loaded. Phase 0 (a bout by hand, no module) is next
 ---
 # The design competition journey
 

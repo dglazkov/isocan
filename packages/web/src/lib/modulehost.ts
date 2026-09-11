@@ -2,6 +2,7 @@ import type { Actor, EnrolAsk, Operation, WebHost } from "@isocan/core";
 import { askEnrolAgent, uploadBlob } from "./api.ts";
 import { canEditNow } from "./capability.ts";
 import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { glideToBox } from "./zoomactions.ts";
 
 /**
  * **The web half's host object** (#156, 9 Sep 2026).
@@ -86,6 +87,19 @@ export function webHostFor(canvasId: string, actor: Actor): WebHost {
         await new Promise((r) => setTimeout(r, 250));
       }
       throw new Error(`the rc did not enrol ${ask.name} — its terminal says why`);
+    },
+    viewer: { id: actor.id, name: actor.name },
+    reveal(itemIds: readonly string[]): void {
+      const items = itemIds
+        .map((id) => useCanvasStore.getState().canvas?.items[id])
+        .filter((item): item is NonNullable<typeof item> => item !== undefined);
+      if (items.length === 0) return;
+      glideToBox({
+        minX: Math.min(...items.map((i) => i.x)),
+        minY: Math.min(...items.map((i) => i.y)),
+        maxX: Math.max(...items.map((i) => i.x + i.width)),
+        maxY: Math.max(...items.map((i) => i.y + i.height)),
+      });
     },
   };
 }

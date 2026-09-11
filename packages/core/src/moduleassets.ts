@@ -12,6 +12,7 @@ import { moduleBase } from "./modules.ts";
  * `isocan module add`, before anybody has downloaded anything.
  */
 export const ASSET_MAX_BYTES = 256 * 1024;
+/** And all of a module's files together. */
 export const ASSETS_MAX_BYTES = 2 * 1024 * 1024;
 
 /** Refusals for a manifest's asset list — empty when it fits. */

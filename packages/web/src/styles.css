@@ -3884,6 +3884,90 @@ button.mt-card:hover { border-color: var(--accent); }
 .module-overlays-right { right: calc(var(--edge) + 44px); }
 .module-overlay { pointer-events: auto; }
 
+/* **The design competition module's pieces** (11 Sep 2026): the fighter card
+   a lane holds, the choose-your-fighter picker inside the shell's Modal, and
+   the bout tray against the right edge. Tokens only, and only steps the app
+   already uses — the scale guards count steps, and a module adds none of its
+   own. A pack's own colour arrives inline, from data, on the card's border:
+   it is the pack's, not the app's. */
+.dc-card {
+  display: flex; gap: 10px; height: 100%; padding: 10px; box-sizing: border-box; overflow: hidden;
+  background: var(--card); border: 2px solid var(--line); border-radius: var(--radius);
+}
+.dc-card-empty { align-items: center; justify-content: center; color: var(--ink-soft); font-size: 12px; }
+.dc-card-art { width: 50%; height: auto; max-height: 100%; object-fit: contain; border-radius: 6px; }
+.dc-card-words { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dc-card-title { font-size: 16px; color: var(--ink); }
+.dc-card-credit, .dc-card-tagline { font-size: 12px; color: var(--ink-soft); }
+.dc-homage {
+  align-self: flex-start; margin-top: auto; padding: 2px 6px; border-radius: 999px;
+  background: var(--chip); color: var(--ink-soft); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+}
+.dc-picker { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.dc-select { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 16px; align-items: start; }
+.dc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.dc-tile {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 0 0 8px;
+  background: var(--chip); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; text-align: left; cursor: pointer;
+}
+.dc-tile:hover { background: var(--chip-hover); }
+.dc-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.dc-tile.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.dc-tile-art { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.dc-tile-title { padding: 4px 8px 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.dc-tile-credit { padding: 0 8px; font-size: 11px; color: var(--ink-soft); }
+.dc-slot {
+  position: absolute; top: 6px; left: 6px; padding: 2px 6px; border-radius: 4px;
+  background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700;
+}
+.dc-who { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink); }
+.dc-who-title { font-size: 18px; }
+.dc-who-credit, .dc-who-fine { font-size: 12px; color: var(--ink-soft); }
+.dc-who ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-left: 18px; }
+.dc-bar { display: flex; gap: 8px; align-items: stretch; }
+.dc-bar-slot {
+  flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px;
+  border: 1px dashed var(--line); border-radius: var(--radius); font-size: 12px; color: var(--ink-soft);
+}
+.dc-bar-slot.filled { border-style: solid; border-width: 2px; color: var(--ink); }
+.dc-bar-n { font-size: 10.5px; color: var(--ink-soft); }
+.dc-settings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.dc-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink); }
+/* One small uppercase label — a setting's name and the tray's phase are the same thing. */
+.dc-field > span:first-child, .dc-field input, .dc-field select {
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); font: inherit;
+}
+.dc-actions { display: flex; gap: 12px; align-items: center; }
+.dc-fight {
+  padding: 8px 20px; border: none; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink);
+  font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.dc-fight:disabled { background: var(--chip); color: var(--ink-soft); cursor: not-allowed; }
+.dc-quiet {
+  padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink);
+  font-size: 12px; cursor: pointer;
+}
+.dc-quiet:hover { background: var(--chip); }
+.dc-note { margin: 0; font-size: 12px; color: var(--ink-soft); }
+.dc-tray { display: flex; flex-direction: column; width: 280px; font-size: 13px; color: var(--ink); }
+.dc-tray-head { display: flex; flex-direction: column; gap: 4px; padding: 10px; border-bottom: 1px solid var(--line-soft); }
+.dc-tray-head .dc-quiet { padding: 0; border: none; background: none; text-align: left; font-size: 13px; font-weight: 600; }
+.dc-tray-phase { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.dc-tray-body { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+.dc-lanes, .dc-ballot { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dc-lanes li, .dc-ballot li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.dc-lanes li > span { font-size: 11px; color: var(--ink-soft); }
+.dc-marks { display: flex; gap: 2px; }
+.dc-mark { width: 28px; height: 28px; border: 1px solid transparent; border-radius: 6px; background: none; font-size: 14px; cursor: pointer; }
+.dc-mark.on { border-color: var(--accent); background: var(--accent-wash); }
+.dc-mark:disabled { cursor: not-allowed; filter: grayscale(1); }
+.dc-tally { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.dc-tally th { padding: 2px 4px; text-align: left; font-weight: 500; color: var(--ink-soft); }
+.dc-tally td { padding: 3px 4px; border-top: 1px solid var(--line-soft); }
+.dc-tally tr.won td { font-weight: 700; }
+.dc-decide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.dc-result { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+
 .tool-rail {
   position: absolute; right: var(--edge); top: var(--edge); bottom: var(--edge);
   margin: auto 0; height: fit-content; z-index: var(--z-float);

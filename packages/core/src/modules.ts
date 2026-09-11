@@ -178,7 +178,7 @@ export function refusedContributions(): RefusedContribution[] {
 }
 
 /** Every vote round a loaded module says is running on this canvas. */
-export function moduleRounds(canvas: CanvasContents): VoteRound[] {
+function moduleRounds(canvas: CanvasContents): VoteRound[] {
   return modules().flatMap((m) => [...(m.rounds?.(canvas) ?? [])]);
 }
 
@@ -215,6 +215,7 @@ export function roundRunning(round: VoteRound, nowMs: number): boolean {
  */
 const BASES = new Map<string, string>();
 
+/** Record where a runtime module's files are — a loader's act, once per load. */
 export function registerModuleBase(name: string, base: string): void {
   BASES.set(name, base.endsWith("/") ? base : `${base}/`);
 }
@@ -352,6 +353,20 @@ export interface WebHost {
    * rc is parked — which the component already knew, from `rcParked`.
    */
   enrol: (ask: EnrolAsk) => Promise<{ actorId: string }>;
+  /**
+   * **Who is acting** (proposed: `host`, 11 Sep 2026) — the actor every op
+   * `send` writes goes out as. A ballot tray has to know which medal is YOURS
+   * and whether you are the one who decides; a component had no way to ask.
+   * The identity already rides every write; this only lets the component read
+   * it.
+   */
+  viewer: { id: string; name: string };
+  /**
+   * **Show these items** — glide this viewer's camera to them (proposed:
+   * `host`). Nothing is written: a camera is one person's, not the canvas's.
+   * For the moment a dialog closes on something it just made off-screen.
+   */
+  reveal: (itemIds: readonly string[]) => void;
 }
 
 /** What a component asks the parked rc to enrol. */
@@ -363,7 +378,7 @@ export interface EnrolAsk {
 }
 
 /** A template id: `<module>.<name>`, lowercase, the shape a property key has. */
-export const TEMPLATE_ID = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9.-]*$/;
+const TEMPLATE_ID = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9.-]*$/;
 
 /**
  * **The template half of an ask, or why not** — read once, where the ask
@@ -461,6 +476,7 @@ export interface DialogFacts {
   host: WebHost & { close: () => void };
 }
 
+/** A dialog a module fills and the shell opens (proposed: `dialogs`). */
 export interface ModuleDialog<D> {
   /** Unique within the module: an action's or a command's `opens` names it. */
   id: string;

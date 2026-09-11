@@ -4,7 +4,7 @@ Each phase ends with something a person can remove and watch disappear.
 Ordered by what settles the most with the least: the registries before any
 loader, because a loader with nothing to load into is a loader.
 
-**Where we are:** phases 1–4 built 4–5 September 2026. Phase 5 waits on three named gates.
+**Where we are:** phases 1–4 built 4–5 September 2026, 4.5 on 9 September, 4.6 on 11 September. Phase 5 waits on three named gates.
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
@@ -218,6 +218,37 @@ on. And the overlay slot shipped with no CSS at all: the tray was in the DOM,
 in its region, `position: static`, a 1280×178 block nobody could see, past
 lint, typecheck, 3,936 tests and two byte checks. Neither was findable without
 building the built thing and looking at it.
+
+## Phase 4.6 — what the design competition asked for ✅
+
+*Built 11 Sep 2026, on the design competition's branch
+([`../design-competition/module-gaps.md`](../design-competition/module-gaps.md)).*
+
+The competition was built as a module on purpose — the module system's hardest
+test — and it needed six things no module could do. Each landed as a platform
+change for every module, all on the proposed list, and `MODULE_API_VERSION`
+moved 0.2.0 → 0.2.1 because none of them changes anything a module provides:
+
+- **Assets**: `module-build.mjs` copies `assets/` and lists every file with its
+  size; `module add` prints and bounds them; `moduleAsset` reaches another
+  module's files through the base its loader registered; a runtime module's
+  `assets/styles.css` is linked while it is loaded.
+- **Contribution points** (`points`, `contributes`, `contributions()`) and
+  **data-only modules** — a manifest and some files, which run nothing.
+- **Dialogs** in the shell's `Modal`, opened by an action's or a module
+  command's `opens` — a command that is local on the web and a skill on the
+  terminal.
+- **Casting**: `CliModule.templates`, `CliHost.enrol` / `withdraw`,
+  `WebHost.enrol` / `viewer` / `reveal`; the rc runs only templates installed on
+  its own machine, and the ask carries an id and strings.
+- **A design system scoped to an area** — core, not the module API — which
+  fixed the canvas-wide "newest wins" pick a lane's `DESIGN.md` would have
+  hijacked.
+- **Rounds** for the sprint's curtain, and `wait --in`.
+
+**Acceptance:** `@isocan/design-competition` built on nothing else — its
+end-to-end test plays a whole bout over the wire, and the picker, the lanes and
+the ballot tray were driven in a browser against a daemon from the branch.
 
 ## Phase 5 — sandboxes
 

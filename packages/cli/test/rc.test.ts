@@ -491,6 +491,48 @@ describe("the web doors' mechanics (phase 2.5)", () => {
     await done;
   }, 30_000);
 
+  it("a web ask naming a template gets a working directory from a module on THIS machine (proposed: templates)", async () => {
+    const rc = spawnCli(["rc"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+
+    // What the design competition's Fight button sends: a name, a template
+    // id and strings — never code. The template is the module's, installed
+    // in this build; the rc runs it here, into a directory it chooses.
+    const asked = await post("/api/projects/prj_1/agents/ask", {
+      name: "Less but Better",
+      from: dimitri,
+      template: "design-competition.fighter",
+      args: { pack: "rams", bout: "itm_bout", lane: "Less but Better", canvas: "prj_1" },
+    });
+    expect(asked.ok).toBe(true);
+    await until(async () => out, (o) => o.includes("from the template design-competition.fighter"), "the template ask narrated");
+    await until(rcRows, (r) => r.some((row) => row.name === "Less but Better"), "the enrolment");
+    const row = (await rcRows()).find((r) => r.name === "Less but Better")!;
+    expect(await fs.realpath(row.cwd)).toBe(await fs.realpath(path.join(home, "templates", "design-competition.fighter", "prj_1", "less-but-better")));
+    expect(await fs.readFile(path.join(row.cwd, "AGENTS.md"), "utf8")).toMatch(/You are Less but Better/);
+
+    // A template nobody installed here is refused by id, and enrols nobody.
+    await post("/api/projects/prj_1/agents/ask", { name: "Stranger", from: dimitri, template: "nobody.here" });
+    await until(async () => out, (o) => o.includes("no module on this machine offers the template nobody.here"), "the refusal");
+    expect((await rcRows()).some((r) => r.name === "Stranger")).toBe(false);
+
+    rc.kill("SIGINT");
+    await done;
+  }, 30_000);
+
+  it("refuses at the door an ask whose template is not an id and strings", async () => {
+    const res = await fetch(`${base}/api/projects/prj_1/agents/ask`, {
+      method: "POST",
+      headers: { ...badge.headers, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Sly", from: dimitri, template: "../../bin/sh" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("an rc that starts late reconciles the enrolments it missed", async () => {
     // Enrolled from the web while NO rc ran — the record works with nothing
     // running; the rc supplies where and how at its next start.

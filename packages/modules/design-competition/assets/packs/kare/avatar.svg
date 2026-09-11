@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" shape-rendering="crispEdges">
+<rect width="120" height="90" fill="#ffffff"/>
+<path d="M24 9V81M30 9V81M36 9V81M42 9V81M48 9V81M54 9V81M60 9V81M66 9V81M72 9V81M78 9V81M84 9V81M90 9V81M96 9V81M24 9H96M24 15H96M24 21H96M24 27H96M24 33H96M24 39H96M24 45H96M24 51H96M24 57H96M24 63H96M24 69H96M24 75H96M24 81H96" fill="none" stroke="#d9e2ec" stroke-width="0.5"/>
+<rect x="48" y="9" width="24" height="6" fill="#000000"/>
+<rect x="36" y="15" width="12" height="6" fill="#000000"/>
+<rect x="72" y="15" width="12" height="6" fill="#000000"/>
+<rect x="30" y="21" width="6" height="12" fill="#000000"/>
+<rect x="84" y="21" width="6" height="12" fill="#000000"/>
+<rect x="24" y="33" width="6" height="24" fill="#000000"/>
+<rect x="90" y="33" width="6" height="24" fill="#000000"/>
+<rect x="30" y="57" width="6" height="12" fill="#000000"/>
+<rect x="84" y="57" width="6" height="12" fill="#000000"/>
+<rect x="36" y="69" width="12" height="6" fill="#000000"/>
+<rect x="72" y="69" width="12" height="6" fill="#000000"/>
+<rect x="48" y="75" width="24" height="6" fill="#000000"/>
+<rect x="48" y="27" width="6" height="12" fill="#000000"/>
+<rect x="66" y="33" width="12" height="6" fill="#000000"/>
+<rect x="42" y="45" width="6" height="6" fill="#000000"/>
+<rect x="72" y="45" width="6" height="6" fill="#000000"/>
+<rect x="48" y="51" width="24" height="6" fill="#000000"/>
+</svg>

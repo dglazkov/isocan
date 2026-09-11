@@ -1,0 +1,25 @@
+{
+  "name": "@isocan/design-competition",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Choose your fighter — designer packs as agents, one brief, rival designs in lanes, and a vote the people win",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "isocan": {
+    "engines": "^0.2.1",
+    "proposed": ["assets", "points", "dialogs", "templates", "rounds", "host", "overlays"]
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

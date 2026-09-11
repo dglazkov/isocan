@@ -82,7 +82,8 @@ describe("a design system scoped to an area (gap 4)", () => {
 
   it("governs in the order area → canvas → linked", () => {
     const c = canvasOf([laneA, inA]);
-    const linked = [{ canvasId: "prj_x", title: "Brand", canvas: canvasOf([canvasOwn]) }];
+    const card = item("card", { x: 8000, y: 0, w: 100, h: 100 });
+    const linked = [{ item: card, canvasId: "prj_x", title: "Brand", canvas: canvasOf([canvasOwn]) }];
     expect(governingDesign(c, linked, { at: laneA })?.item.id).toBe("dsA");
     const outside = governingDesign(c, linked, { at: { x: 9000, y: 9000 } });
     expect(outside?.item.id).toBe("ds");
