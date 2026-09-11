@@ -52,6 +52,7 @@ const FullScreen = lazy(() => import("../components/FullScreen.tsx").then((m) =>
 import { DeckPrint } from "../components/DeckPrint.tsx";
 import { ModulePage } from "../components/ModulePage.tsx";
 import { ModuleOverlays } from "../components/ModuleOverlays.tsx";
+import { ModuleDialogs } from "../components/ModuleDialogs.tsx";
 import { useChromeHidden } from "../lib/hideable.ts";
 import { Viewer } from "../components/Viewer.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
@@ -933,6 +934,9 @@ function CanvasSurface({
           canvas and below the app's own chrome, so a module can add to the
           screen without covering the controls the app promises. */}
       <ModuleOverlays canvasId={canvasId!} actor={actor} />
+      {/* A module's popup, opened by a command or a palette entry and
+          never by itself (proposed: `dialogs`). */}
+      <ModuleDialogs canvasId={canvasId!} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}

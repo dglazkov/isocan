@@ -109,6 +109,7 @@ import {
   NO_RC_CODE,
   NOT_YOUR_RC_CODE,
   sameActor,
+  askTemplate,
   NOT_YOUR_BADGE,
   OplogFencedError,
   OpValidationError,
@@ -273,6 +274,11 @@ export const STATIC_TYPES: Record<string, string> = {
   ".js": "text/javascript",
   ".css": "text/css",
   ".svg": "image/svg+xml",
+  // A module's assets (proposed: `assets`, 11 Sep 2026): its DESIGN.md files
+  // and its data were served as octet-stream and fetched by type-blind code;
+  // naming them costs nothing and lets a browser show one if you open it.
+  ".md": "text/markdown; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".webp": "image/webp",
   // The painted grounds (#195's art, 8 Sep 2026). Four tiles under
@@ -3486,7 +3492,11 @@ export function registerRoutes(
     } catch {
       return reply.code(403).send({ error: `this badge may not speak as ${body.from.id}` });
     }
-    const ask = { askId: newId("ask"), name, from: body.from };
+    // A template is an id and some strings (proposed: `templates`): read here,
+    // once, so every hop below carries only what `askTemplate` let through.
+    const template = askTemplate(body);
+    if ("error" in template) return reply.code(400).send({ error: template.error });
+    const ask = { askId: newId("ask"), name, from: body.from, ...template };
     // Owner-only: an rc takes an ask from its owner — or anybody joined with
     // them, which is why the comparison is made here, with the registry.
     const joined = await engine.actorJoins();

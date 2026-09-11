@@ -72,10 +72,11 @@ describe("a module behind an experiment", () => {
 
 describe("how early the API says it is", () => {
   it("names the slots it intends to change", () => {
-    /* The three that landed on 9 Sep with one caller each. Shipping is not
-       stability, and calling it stable because it shipped is how an API gets
-       frozen by accident. */
-    expect([...PROPOSED].sort()).toEqual(["drops", "host", "overlays"]);
+    /* The three that landed on 9 Sep with one caller each, and the five the
+       design competition asked for on 11 Sep with one caller each. Shipping is
+       not stability, and calling it stable because it shipped is how an API
+       gets frozen by accident. */
+    expect([...PROPOSED].sort()).toEqual(["assets", "dialogs", "drops", "host", "overlays", "points", "rounds", "templates"]);
   });
 
   it("refuses a proposal this build has never heard of, by name", () => {

@@ -2,6 +2,7 @@ import type { ContextPiece } from "./context.ts";
 import type { CanvasContents, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import type { SlashCommand } from "./commands.ts";
+import { inArea } from "./area.ts";
 
 /**
  * **The module registry** (`docs/projects/modules/design.md`).
@@ -62,6 +63,166 @@ export interface CoreModule {
    * command; a module's agent tool is a command plus a verb.
    */
   commands?: readonly SlashCommand[];
+  /**
+   * **Named lists this module reads, which other modules may add to**
+   * (proposed: `points`, 11 Sep 2026 — `docs/projects/design-competition/module-gaps.md` §2).
+   *
+   * Until now contribution ran one way: a module added to core's registries
+   * and nothing could add to a module's. A second package wanting to add a
+   * fighter to the design competition would have had to import it, which the
+   * removability guard forbids. A point is VS Code's extension point in this
+   * registry's shape: the declaring module names it and says what it accepts,
+   * and `contributions(id)` is the one reader.
+   */
+  points?: readonly ContributionPoint[];
+  /**
+   * **What this module adds to other modules' points**, by point id. DATA —
+   * JSON-serialisable, so it rides the manifest and is known before any code
+   * runs, the way `kinds` already are. A module whose whole content is this
+   * plus `assets/` is a **data-only module**: a manifest and some files, which
+   * runs nothing.
+   */
+  contributes?: Readonly<Record<string, readonly unknown[]>>;
+  /**
+   * **Vote rounds the curtain honours** (proposed: `rounds`). The sprint's
+   * curtain hid counts and bylines on its own Vote sheet while a vote phase's
+   * clock ran and knew nothing else; a module running a vote of its own on
+   * another area names it here, and the same lens draws the same curtain.
+   */
+  rounds?: (canvas: CanvasContents) => readonly VoteRound[];
+}
+
+/**
+ * **One vote in progress, on one area** — what the curtain needs to know and
+ * nothing more: WHERE (the area whose contents are behind it), WHICH marks are
+ * the votes, and UNTIL when. The record is never hidden; this is etiquette the
+ * lens keeps, and the chip says so.
+ */
+export interface VoteRound {
+  /** The area item whose contents are curtained. */
+  areaId: string;
+  /** The reactions that are votes in this round — 🥇, 🔴, ⭐… */
+  marks: readonly string[];
+  /** ISO time the curtain lifts. */
+  until: string;
+}
+
+/** A named list a module reads and other modules may add to. */
+export interface ContributionPoint {
+  /** Namespaced like a property key, and forever: `design-competition.fighters`. */
+  id: string;
+  /** One line, printed by `isocan module ls`. */
+  describe: string;
+  /** What is wrong with one contributed value; empty means accepted. */
+  validate: (value: unknown) => string[];
+}
+
+/** One accepted contribution, tagged with the module it came from — which is
+ *  how a reader finds that module's assets. */
+export interface Contribution<T> {
+  module: string;
+  value: T;
+}
+
+/** A contribution a point refused, or one to a point nobody declares. */
+export interface RefusedContribution {
+  module: string;
+  point: string;
+  /** Why: the validator's sentences, or that no loaded module declares the point. */
+  problems: string[];
+}
+
+function declaredPoint(id: string): ContributionPoint | null {
+  for (const m of modules()) {
+    const hit = (m.points ?? []).find((p) => p.id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * **Every accepted contribution to a point**, in module order. A value the
+ * declaring module's validator refuses is left out here and listed by
+ * `refusedContributions()`; a point no loaded module declares has no
+ * contributions at all, which is what removing the module that owns it means.
+ */
+export function contributions<T>(pointId: string): Contribution<T>[] {
+  const point = declaredPoint(pointId);
+  if (!point) return [];
+  const out: Contribution<T>[] = [];
+  for (const m of modules()) {
+    for (const value of m.contributes?.[pointId] ?? []) {
+      if (point.validate(value).length === 0) out.push({ module: m.name, value: value as T });
+    }
+  }
+  return out;
+}
+
+/** What `isocan module ls` says about contributions that did not land. */
+export function refusedContributions(): RefusedContribution[] {
+  const out: RefusedContribution[] = [];
+  for (const m of modules()) {
+    for (const [pointId, values] of Object.entries(m.contributes ?? {})) {
+      const point = declaredPoint(pointId);
+      if (!point) {
+        out.push({ module: m.name, point: pointId, problems: [`no loaded module declares ${pointId} — orphaned, not an error`] });
+        continue;
+      }
+      values.forEach((value, i) => {
+        const problems = point.validate(value);
+        if (problems.length > 0) out.push({ module: m.name, point: pointId, problems: problems.map((p) => `#${i + 1}: ${p}`) });
+      });
+    }
+  }
+  return out;
+}
+
+/** Every vote round a loaded module says is running on this canvas. */
+export function moduleRounds(canvas: CanvasContents): VoteRound[] {
+  return modules().flatMap((m) => [...(m.rounds?.(canvas) ?? [])]);
+}
+
+/**
+ * **The rounds an item is IN** — its centre inside the round's area, the same
+ * geometry every area uses — running or finished. Running ones curtain it;
+ * finished ones still say which marks are votes, so the heat map draws at the
+ * bell and stays drawn.
+ */
+export function roundsOn(canvas: CanvasContents, item: Item): VoteRound[] {
+  return moduleRounds(canvas).filter((round) => {
+    const area = canvas.items[round.areaId];
+    return area !== undefined && inArea(area, item);
+  });
+}
+
+/** Is this round's clock still running — the curtain's half of it. */
+export function roundRunning(round: VoteRound, nowMs: number): boolean {
+  return Date.parse(round.until) > nowMs;
+}
+
+/**
+ * **Where a module's files are reached from** (proposed: `assets`).
+ *
+ * A build-time module reaches its own `assets/` with `new URL("../assets/…",
+ * import.meta.url)`, which Vite rewrites and a runtime build leaves for the
+ * browser to resolve against `/modules/<slug>/dist/web.js` — the same relative
+ * path in both layouts, the trick `agent-guide.md` already relies on. What
+ * that cannot do is reach ANOTHER module's files, which is exactly what a
+ * contribution needs: a fighter contributed by a data-only module names its
+ * avatar relative to that module. So the loaders record each runtime module's
+ * base here — a URL prefix on the web, a directory on the CLI — and a reader
+ * resolves a contribution's paths against its module's base.
+ */
+const BASES = new Map<string, string>();
+
+export function registerModuleBase(name: string, base: string): void {
+  BASES.set(name, base.endsWith("/") ? base : `${base}/`);
+}
+
+/** The base a module's relative paths resolve against, or null for a module
+ *  that reaches its own files itself (every build-time module). */
+export function moduleBase(name: string): string | null {
+  return BASES.get(name) ?? null;
 }
 
 /** Every loaded module's slash commands, in name order. */
@@ -178,6 +339,58 @@ export interface WebHost {
     bytes: Blob,
     filename: string,
   ) => Promise<{ blobHash: string; size: number }>;
+  /**
+   * **Ask the parked rc to enrol an agent** (proposed: `templates`, 11 Sep
+   * 2026). The web cannot enrol by sending `agent.enroll` — the actor is born
+   * first-claim on the machine that answers for it (agent custody) — so this
+   * rides the same ask `AddAgent` makes, and resolves when the op lands.
+   *
+   * **The canvas names a template; the machine runs it.** `template` is an id
+   * and `args` are strings: the rc honours ids from modules its operator
+   * installed and refuses the rest by name, so nothing that arrives from a
+   * canvas becomes code on anybody's machine. Refused with a sentence when no
+   * rc is parked — which the component already knew, from `rcParked`.
+   */
+  enrol: (ask: EnrolAsk) => Promise<{ actorId: string }>;
+}
+
+/** What a component asks the parked rc to enrol. */
+export interface EnrolAsk {
+  name: string;
+  /** A template id a module on the rc's machine registered: `design-competition.fighter`. */
+  template?: string;
+  args?: Readonly<Record<string, string>>;
+}
+
+/** A template id: `<module>.<name>`, lowercase, the shape a property key has. */
+export const TEMPLATE_ID = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9.-]*$/;
+
+/**
+ * **The template half of an ask, or why not** — read once, where the ask
+ * enters the home (`/api/projects/:id/agents/ask`), and never trusted
+ * further down: an id in the template shape, and at most sixteen string args
+ * of at most 512 characters. What crosses from a canvas to a machine is a
+ * name and some strings, and this is the line that keeps it so.
+ */
+export function askTemplate(
+  raw: { template?: unknown; args?: unknown },
+): { template?: string; args?: Record<string, string> } | { error: string } {
+  if (raw.template === undefined && raw.args === undefined) return {};
+  if (typeof raw.template !== "string" || !TEMPLATE_ID.test(raw.template)) {
+    return { error: "a template is named by an id like `module.name`" };
+  }
+  const args: Record<string, string> = {};
+  if (raw.args !== undefined) {
+    if (!raw.args || typeof raw.args !== "object" || Array.isArray(raw.args)) return { error: "template args are an object of strings" };
+    const entries = Object.entries(raw.args as Record<string, unknown>);
+    if (entries.length > 16) return { error: "at most 16 template args" };
+    for (const [k, v] of entries) {
+      if (!/^[a-z][a-z0-9-]{0,31}$/.test(k)) return { error: `template arg "${k}" is not a plain key` };
+      if (typeof v !== "string" || v.length > 512) return { error: `template arg "${k}" is not a string of at most 512 characters` };
+      args[k] = v;
+    }
+  }
+  return { template: raw.template, ...(Object.keys(args).length ? { args } : {}) };
 }
 
 /**
@@ -212,7 +425,50 @@ export interface ModuleAction {
   /** Offered only when this says so — a menu that lists what it cannot do lies. */
   available?: (facts: ModuleActionFacts) => boolean;
   /** The ops to send, in order; nothing means nothing to do. */
-  run: (facts: ModuleActionFacts) => readonly Operation[] | void;
+  run?: (facts: ModuleActionFacts) => readonly Operation[] | void;
+  /**
+   * **Open one of this module's dialogs instead** (proposed: `dialogs`) — by
+   * its id. An action that opens is a door, not a write: it is offered on a
+   * read-only canvas too, and the dialog decides what it can do there.
+   */
+  opens?: string;
+}
+
+/**
+ * **What a dialog is handed** (proposed: `dialogs`, 11 Sep 2026).
+ *
+ * Overlays are edges and pages are cover routes; neither is a thing that
+ * opens over where you are because you asked — a picker. So an eighth slot,
+ * and the shell owns the box: one dialog at a time, mounted in the app's own
+ * `Modal`, Esc and the backdrop close it, focus is trapped and returned. A
+ * module fills the inside and cannot position, stack or re-open itself.
+ *
+ * It opens only from a door a person used — a slash command they typed, a
+ * palette entry they chose — never on load, from a renderer, or from an op
+ * arriving. That is the whole of its risk budget.
+ */
+export interface DialogFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+  selection: readonly string[];
+  /** What followed the slash command that opened it; "" from the palette. */
+  args: string;
+  /** Whether an rc is parked here — the `AddAgent` gate, as a fact. */
+  rcParked: boolean;
+  /** Whether the viewer may write here — a read-only canvas opens the dialog
+   *  and the dialog says what it cannot do. */
+  canEdit: boolean;
+  host: WebHost & { close: () => void };
+}
+
+export interface ModuleDialog<D> {
+  /** Unique within the module: an action's or a command's `opens` names it. */
+  id: string;
+  /** The Modal's heading, and its accessible name. */
+  title: string;
+  /** The Modal's wider width. The shell owns both. */
+  wide?: boolean;
+  component: D;
 }
 
 /**
@@ -356,7 +612,7 @@ interface ModuleOverlay<O> {
   component: O;
 }
 
-export interface WebModule<C, R = never, I = never, P = never, O = never> {
+export interface WebModule<C, R = never, I = never, P = never, O = never, D = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
@@ -373,6 +629,8 @@ export interface WebModule<C, R = never, I = never, P = never, O = never> {
   overlays?: readonly ModuleOverlay<O>[];
   /** Drags this module catches on the canvas, by mime. */
   drops?: readonly ModuleDrop[];
+  /** Popups a person opens by a command or a palette entry. */
+  dialogs?: readonly ModuleDialog<D>[];
 }
 
 /**
@@ -407,6 +665,21 @@ export interface ModuleManifest {
    * these slots without breaking somebody who never asked for them.
    */
   proposed?: readonly string[];
+  /**
+   * **What else lands on disk** (proposed: `assets`): every file under the
+   * module's `assets/`, with its size, so `module add` can print what arrives
+   * as well as what runs. Paths are relative to the module's directory.
+   */
+  assets?: readonly { path: string; size: number }[];
+  /** The module's contributions to other modules' points — data, read before
+   *  any code runs. A manifest with these and no `web` or `cli` is a
+   *  data-only module. */
+  contributes?: Readonly<Record<string, readonly unknown[]>>;
+}
+
+/** A manifest that runs nothing: no web half, no CLI half. */
+export function isDataOnly(manifest: ModuleManifest): boolean {
+  return !manifest.web && !manifest.cli;
 }
 
 /**
@@ -433,8 +706,15 @@ export interface ModuleManifest {
  * against 0.1 no longer compiles. Under semver's pre-1.0 rule a minor bump is
  * exactly how you say that, and `^0.1.0` is refused by the check below — which
  * is the first time it has ever refused anything.
+ *
+ * **0.2.0 → 0.2.1 on 11 Sep 2026**, and it is an addition, not a break: the
+ * design competition's six asks (assets, contribution points, dialogs,
+ * templates and `host.enrol`, vote rounds) are all new optional fields or new
+ * members a module is HANDED, never one it must provide. A module built for
+ * `^0.2.0` still loads; one that uses the new parts says `^0.2.1` and names
+ * them in `proposed`.
  */
-export const MODULE_API_VERSION = "0.2.0";
+export const MODULE_API_VERSION = "0.2.1";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it
@@ -449,7 +729,7 @@ export const MODULE_API_VERSION = "0.2.0";
  * one caller. That is not stability, and calling it stable because it shipped
  * is how an API gets frozen by accident.
  */
-export const PROPOSED = ["overlays", "drops", "host"] as const;
+export const PROPOSED = ["overlays", "drops", "host", "assets", "points", "dialogs", "templates", "rounds"] as const;
 
 /** Which of a manifest's proposals this build does not recognise. A module
  *  asking for something that no longer exists is a refusal with a name, not a
@@ -476,6 +756,7 @@ export function manifestRecord(manifest: ModuleManifest): CoreModule {
     name: manifest.name,
     ...(manifest.kinds ? { kinds: manifest.kinds } : {}),
     ...(manifest.propertyKeys ? { propertyKeys: manifest.propertyKeys } : {}),
+    ...(manifest.contributes ? { contributes: manifest.contributes } : {}),
   };
 }
 

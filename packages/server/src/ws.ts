@@ -701,7 +701,15 @@ export function attachWebSockets(
             sendAsk: (ask) => {
               if (ws.readyState !== WebSocket.OPEN) return false;
               ws.send(
-                JSON.stringify({ type: "rc-ask", askId: ask.askId, name: ask.name, from: ask.from }),
+                JSON.stringify({
+                  type: "rc-ask",
+                  askId: ask.askId,
+                  name: ask.name,
+                  from: ask.from,
+                  // The template half, already read by `askTemplate` at the door.
+                  ...(ask.template ? { template: ask.template } : {}),
+                  ...(ask.args ? { args: ask.args } : {}),
+                }),
               );
               return true;
             },

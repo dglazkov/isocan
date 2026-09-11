@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
 import {
@@ -66,7 +66,7 @@ import { fileMarkTip } from "../lib/backing.ts";
 import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
-import { useOnWall, useSprint, useVotesHiddenOn, voteMark } from "../lib/sprint.ts";
+import { useOnWall, useRoundMarks, useSprint, useVotesHiddenOn, voteMark } from "../lib/sprint.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
 import { useCanEdit } from "../lib/capability.ts";
@@ -145,6 +145,12 @@ function ItemViewInner({
   // On the wall during a vote: where a dot may be placed.
   const wall = useOnWall(item);
   const onWall = mark !== null && wall;
+  // Every mark that draws as a dot here: the sprint's, and a module round's.
+  const roundMarks = useRoundMarks(item);
+  const dotMarks = useMemo(
+    () => (mark === null ? roundMarks : [mark, ...roundMarks.filter((m) => m !== mark)]),
+    [mark, roundMarks],
+  );
   const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
   const soleSelection = useUiStore(
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
@@ -841,22 +847,25 @@ function ItemViewInner({
           {item.title}
         </div>
       )}
-      {mark !== null && reactionPointsOf(item, mark).length > 0 && (
+      {dotMarks.some((m) => reactionPointsOf(item, m).length > 0) && (
         /* The heat map: the mark, drawn where each person put it. Under the
            curtain only YOUR dot shows — you may see where you voted, not
            where anyone else did — and at the bell all of them. Fractions of
-           the box, so a dot stays on the part of the sketch it was put on. */
+           the box, so a dot stays on the part of the sketch it was put on.
+           The sprint's mark, and every mark of a module's vote round this
+           item sits in (proposed: `rounds`) — one heat map, two callers. */
         <div className="vote-dots" aria-hidden>
-          {reactionPointsOf(item, mark)
+          {dotMarks
+            .flatMap((m) => reactionPointsOf(item, m).map((dot) => ({ ...dot, mark: m })))
             .filter((dot) => !votesHidden || dot.actorId === actor.id)
             .map((dot) => (
               <span
-                key={dot.actorId}
+                key={`${dot.mark}:${dot.actorId}`}
                 className={`vote-dot${dot.actorId === actor.id ? " mine" : ""}`}
                 style={{ left: `${dot.x * 100}%`, top: `${dot.y * 100}%` }}
                 title={votesHidden ? "your dot" : (names[dot.actorId] ?? dot.actorId)}
               >
-                {mark}
+                {dot.mark}
               </span>
             ))}
         </div>

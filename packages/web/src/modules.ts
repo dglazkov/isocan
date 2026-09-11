@@ -2,8 +2,10 @@ import type { ComponentType } from "react";
 import {
   moduleSlug,
   registerModule,
+  type DialogFacts,
   type InspectorFacts,
   type ModuleInspector,
+  type ModuleDialog,
   type ModuleDrop,
   type ModulePage,
   type OverlayFacts,
@@ -40,7 +42,8 @@ export type ShellModule = WebModule<
   ComponentType<RendererFacts>,
   ComponentType<InspectorFacts>,
   ComponentType<PageFacts>,
-  ComponentType<OverlayFacts>
+  ComponentType<OverlayFacts>,
+  ComponentType<DialogFacts>
 >;
 
 const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb];
@@ -136,6 +139,13 @@ export function addModule(record: ShellModule): boolean {
   return true;
 }
 
+/** Core's registry changed without a web half arriving — a data-only
+ *  module's contributions, read from its manifest — so the slots that read
+ *  contributions draw again. */
+export function noteRegistryChanged(): void {
+  useUiStore.getState().bumpModules();
+}
+
 /** The renderer a loaded module claims for a mime, ahead of the built-in chain. */
 export function moduleRendererFor(mimeType: string): ComponentType<RendererFacts> | null {
   for (const m of live()) {
@@ -176,4 +186,17 @@ export function modulePages(): ModulePage<ComponentType<PageFacts>>[] {
 /** The page at a segment, or null: a segment nobody owns is a plain 404. */
 export function modulePage(segment: string): ModulePage<ComponentType<PageFacts>> | null {
   return modulePages().find((p) => p.segment === segment) ?? null;
+}
+
+/**
+ * The dialog an `opens` names, or null (proposed: `dialogs`). Ids are unique
+ * within a module and a guard holds them unique across the build, so the
+ * first match in module order is the only match.
+ */
+export function moduleDialog(id: string): ModuleDialog<ComponentType<DialogFacts>> | null {
+  for (const m of live()) {
+    const hit = (m.dialogs ?? []).find((d) => d.id === id);
+    if (hit) return hit;
+  }
+  return null;
 }

@@ -63,6 +63,7 @@ export * from "./authaction.ts";
 export * from "./lane.ts";
 export * from "./frameable.ts";
 export * from "./modules.ts";
+export * from "./moduleassets.ts";
 export * from "./designimport.ts";
 export * from "./context.ts";
 export * from "./memory.ts";

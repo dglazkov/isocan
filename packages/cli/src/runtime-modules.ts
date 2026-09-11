@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import * as core from "@isocan/core";
-import { manifestRecord, registerModule } from "@isocan/core";
+import { assetProblems, manifestRecord, registerModule, registerModuleBase } from "@isocan/core";
 import { readRuntimeModules } from "@isocan/server";
 import type { CliHost, CliModule } from "./modulehost.ts";
 
@@ -28,6 +28,8 @@ export interface LoadedRuntimeModule {
   version: string;
   guide: string | null;
   refused: string | null;
+  /** Working-directory templates its cli half offers the rc (proposed: `templates`). */
+  templates?: CliModule["templates"];
 }
 
 declare global {
@@ -43,8 +45,17 @@ export async function loadRuntimeModules(home: string, host: CliHost): Promise<L
       loaded.push({ ...row, guide: null, refused: found.refused });
       continue;
     }
+    const tooBig = assetProblems(manifest.assets);
+    if (tooBig.length > 0) {
+      loaded.push({ ...row, guide: null, refused: tooBig.join("; ") });
+      continue;
+    }
     registerModule(manifestRecord(manifest));
+    // Where this module's relative paths resolve — a contribution names its
+    // avatar relative to the module that contributed it (proposed: `assets`).
+    registerModuleBase(manifest.name, dir);
     let guide: string | null = null;
+    let templates: CliModule["templates"] | undefined;
     if (manifest.guide) {
       try {
         guide = readFileSync(path.join(dir, manifest.guide), "utf8");
@@ -59,12 +70,13 @@ export async function loadRuntimeModules(home: string, host: CliHost): Promise<L
         const record = mod.default;
         record?.register?.(host);
         if (!guide && typeof record?.guide === "string") guide = record.guide;
+        if (record?.templates?.length) templates = record.templates;
       } catch (err) {
         loaded.push({ ...row, guide: null, refused: `its cli half would not load — ${(err as Error).message}` });
         continue;
       }
     }
-    loaded.push({ ...row, guide, refused: null });
+    loaded.push({ ...row, guide, refused: null, ...(templates ? { templates } : {}) });
   }
   return loaded;
 }
