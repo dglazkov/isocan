@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
+import { formatBadgeToken } from "@isocan/core";
 import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -501,10 +502,24 @@ describe("the web doors' mechanics (phase 2.5)", () => {
 
     // What the design competition's Fight button sends: a name, a template
     // id and strings — never code. The template is the module's, installed
-    // in this build; the rc runs it here, into a directory it chooses.
-    const asked = await post("/api/projects/prj_1/agents/ask", {
+    // in this build; the rc runs it here, into a directory it chooses. Asked
+    // by the rc's owner: since owner-only summons (#269) a template ask meets
+    // the same gate as a plain one, and this machine is Nico's. Asked on the
+    // badge this machine already holds — a test badge may not become somebody
+    // live here, and the owner's own surface is what the Fight button is.
+    const { auth } = JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8")) as {
+      auth: Record<string, { badgeId: string; secret: string }>;
+    };
+    const [mine] = Object.values(auth);
+    const asOwner = (body: unknown): Promise<any> =>
+      fetch(`${base}/api/projects/prj_1/agents/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${formatBadgeToken(mine!.badgeId, mine!.secret)}` },
+        body: JSON.stringify(body),
+      }).then((r) => r.json());
+    const asked = await asOwner({
       name: "Less but Better",
-      from: dimitri,
+      from: nico,
       template: "design-competition.fighter",
       args: { pack: "rams", bout: "itm_bout", lane: "Less but Better", canvas: "prj_1" },
     });
@@ -515,8 +530,19 @@ describe("the web doors' mechanics (phase 2.5)", () => {
     expect(await fs.realpath(row.cwd)).toBe(await fs.realpath(path.join(home, "templates", "design-competition.fighter", "prj_1", "less-but-better")));
     expect(await fs.readFile(path.join(row.cwd, "AGENTS.md"), "utf8")).toMatch(/You are Less but Better/);
 
+    // Somebody else's template ask is refused at the door like any ask would
+    // be — a template names what to write, never whose machine may be asked.
+    const theirs = await post("/api/projects/prj_1/agents/ask", {
+      name: "Road Signs",
+      from: dimitri,
+      template: "design-competition.fighter",
+      args: { pack: "kare", bout: "itm_bout", lane: "Road Signs", canvas: "prj_1" },
+    });
+    expect(theirs).toMatchObject({ code: "not-your-rc" });
+    expect(theirs.error).toContain("Nico's");
+
     // A template nobody installed here is refused by id, and enrols nobody.
-    await post("/api/projects/prj_1/agents/ask", { name: "Stranger", from: dimitri, template: "nobody.here" });
+    await asOwner({ name: "Stranger", from: nico, template: "nobody.here" });
     await until(async () => out, (o) => o.includes("no module on this machine offers the template nobody.here"), "the refusal");
     expect((await rcRows()).some((r) => r.name === "Stranger")).toBe(false);
 
