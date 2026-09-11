@@ -5,6 +5,9 @@ import {
   dispatchReason,
   extractMentions,
   invertOperation,
+  LISTEN_ANYONE,
+  listensTo,
+  listenWords,
   OpValidationError,
   roster,
   rulesOf,
@@ -196,6 +199,93 @@ describe("dispatchReason — THE routing composition (phase 4)", () => {
     expect(rulesOf(null)).toEqual({});
     expect(rulesOf("nonsense")).toEqual({});
     expect(rulesOf({ items: ["a", 3], ops: "not-an-array", extra: true })).toEqual({ items: ["a"] });
+    expect(rulesOf({ listen: ["usr_dion", 7] })).toEqual({ listen: ["usr_dion"] });
+  });
+});
+
+/**
+ * **The speaker gate** (`docs/research/2026-09-04-sheepdog.md`, "whom it
+ * listens to"). What these pin is the ORDER — the gate is outside the
+ * composition, so it beats the one thing nothing else beats, a mention —
+ * and the compatibility rule, that an enrolment with no gate answers
+ * everybody exactly as it did before the field existed.
+ */
+describe("dispatchReason — the speaker gate", () => {
+  const gated = (listen?: string[]) => ({
+    actorId: sian.id,
+    names: [{ id: sian.id, name: sian.name }],
+    rules: listen === undefined ? null : { ops: ["*"], listen },
+  });
+  const comment = (body: string) =>
+    ({
+      type: "thread.create",
+      threadId: "th_x",
+      x: 0,
+      y: 0,
+      anchorItemId: null,
+      comment: { id: "cmt_x", body },
+    }) as const;
+  const move = { type: "item.move", itemId: "itm_1", x: 1, y: 2 } as const;
+
+  it("no gate answers everybody — every enrolment written before this field", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    expect(dispatchReason(comment("@Sian look"), "usr_alice", gated(), s.canvas)).toBe("mentioned");
+  });
+
+  it("a mention from outside the gate is nothing at all — not a summons, not a change", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    const ctx = gated(["usr_dion"]);
+    // The whole feature in one assertion: a mention pierces every filter and
+    // does NOT pierce this. A stranger's `@Sian` costs the owner nothing.
+    expect(dispatchReason(comment("@Sian look"), "usr_alice", ctx, s.canvas)).toBeNull();
+    expect(dispatchReason(move, "usr_alice", ctx, s.canvas)).toBeNull();
+    // And the person it does admit is unaffected in both directions.
+    expect(dispatchReason(comment("@Sian look"), "usr_dion", ctx, s.canvas)).toBe("mentioned");
+    expect(dispatchReason(move, "usr_dion", ctx, s.canvas)).toBe("change");
+  });
+
+  it("the main thread does not pierce it either — the Chat is a speaker too", () => {
+    let s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    s = apply(s, {
+      type: "thread.create",
+      threadId: "th_main",
+      x: 0,
+      y: 0,
+      anchorItemId: null,
+      main: true,
+      comment: { id: "cmt_1", body: "morning" },
+    })!;
+    const inMain = {
+      type: "thread.reply",
+      threadId: "th_main",
+      comment: { id: "cmt_2", body: "anyone about?" },
+    } as const;
+    expect(dispatchReason(inMain, "usr_alice", gated(["usr_dion"]), s.canvas)).toBeNull();
+    expect(dispatchReason(inMain, "usr_dion", gated(["usr_dion"]), s.canvas)).toBe("main-thread");
+  });
+
+  it('"*" turns the gate off without deleting the field', () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    expect(dispatchReason(comment("@Sian hi"), "usr_alice", gated(["*"]), s.canvas)).toBe("mentioned");
+    expect(dispatchReason(comment("@Sian hi"), "usr_alice", gated([]), s.canvas)).toBe("mentioned");
+  });
+
+  it("listensTo and listenWords answer from the same field, so no surface can be silent", () => {
+    expect(listensTo({ listen: ["usr_dion"] }, "usr_dion")).toBe(true);
+    expect(listensTo({ listen: ["usr_dion"] }, "usr_alice")).toBe(false);
+    expect(listensTo(null, "usr_alice")).toBe(true);
+    expect(listensTo({ listen: [LISTEN_ANYONE] }, "usr_alice")).toBe(true);
+
+    const nameOf = (id: string) => ({ usr_dion: "Dion", usr_usama: "Usama" })[id];
+    expect(listenWords(null, nameOf)).toBeNull();
+    expect(listenWords({ listen: [LISTEN_ANYONE] }, nameOf)).toBeNull();
+    expect(listenWords({ listen: ["usr_dion"] }, nameOf)).toBe("listens to Dion");
+    expect(listenWords({ listen: ["usr_dion", "usr_usama"] }, nameOf)).toBe("listens to Dion and Usama");
+    expect(listenWords({ listen: ["usr_dion", "usr_usama", "usr_jt"] }, nameOf)).toBe(
+      "listens to Dion and 2 others",
+    );
+    // An id nobody can name still reads as something a person can act on.
+    expect(listenWords({ listen: ["usr_ghost"] }, nameOf)).toBe("listens to usr_ghost");
   });
 });
 

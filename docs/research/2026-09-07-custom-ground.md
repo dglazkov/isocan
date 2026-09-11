@@ -157,8 +157,25 @@ somebody picks the file.
 1. ~~**`blobsNamedBy` and gc.**~~ ✅ Done 7 Sep as `blobsInProperties`.
 2. ~~**A custom tile, pinned, with the scrim.**~~ ✅ Done 7 Sep — and it is
    **one** property, not two. See below.
-3. **The cursor library.** Names in `themeCursor`, a picker in the Background
-   submenu, and more shapes.
+3. ~~**The cursor library.**~~ ✅ Done 8 Sep — `CURSORS`, `canvasCursor` as
+   the one fold both surfaces call, a `Cursor` submenu under Background, and
+   `isocan canvas background --cursor <name>`.
+
+   **B was right, and the shapes are why.** Five candidates were drawn,
+   rendered at 18, 24 and 32 on both grounds, and looked at; **two survived
+   the way #195's rocket did not.** A PENCIL at 18 is a diagonal sliver and a
+   PIN is an arrow with a notch — the same failure, twice. A BOLT was too thin
+   to see. The subtler rejection is the one worth keeping: a LEAF and a PETAL
+   both read perfectly well and are both the fish's silhouette without its
+   tail, and two entries that look alike at the size they are used is a picker
+   that costs a decision and returns nothing. Drop, heart and crescent
+   shipped; the library is seven.
+
+   **The one-property rule is untouched.** A seeded ground still names its own
+   cursor and cannot be overruled — `canvasCursor` enforces that rather than
+   hoping for it. Only a canvas standing on a picture, which names nothing,
+   reads a chosen one, so this is the missing name rather than a second name
+   competing with one.
 4. **World-anchored custom tiles.** For somebody with a real seamless tile,
    with the seam risk stated where they choose it.
 

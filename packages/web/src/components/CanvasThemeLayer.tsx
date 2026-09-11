@@ -19,14 +19,22 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
  * nothing, because the ground arriving a frame late is invisible in a way a
  * missing item never would be.
  *
- * The painted themes named in #195 — farm, mountains, ocean — are not here
- * yet. Galaxy is generated, which is why it is first: it proves the layer,
- * the world-space alignment and the chunking without waiting on artwork.
- * Adding one is a file beside `Galaxy.tsx` and a line in this switch.
+ * The painted themes #195 named — farm, mountains, ocean — arrived on 8 Sep
+ * 2026, along with a desert nobody had asked for. Galaxy was generated first
+ * because it proved the layer, the world-space alignment and the chunking
+ * without waiting on artwork, and it is generated STILL because the space
+ * tile that came back has a seam. A ground is now a file, not a component.
  */
 const Galaxy = lazy(() => import("./themes/Galaxy.tsx").then((m) => ({ default: m.Galaxy })));
-const Ocean = lazy(() => import("./themes/Ocean.tsx").then((m) => ({ default: m.Ocean })));
-const Mountains = lazy(() => import("./themes/Mountains.tsx").then((m) => ({ default: m.Mountains })));
+/**
+ * **One chunk for every painted ground**, where there was one per procedural
+ * theme. The art is not in the chunk — each tile is a file in `public/grounds/`
+ * fetched by URL — so this splits a component, not megabytes, and a canvas
+ * wearing no ground still fetches neither.
+ */
+const Painted = lazy(() =>
+  import("./themes/PaintedGround.tsx").then((m) => ({ default: m.PaintedGround })),
+);
 const CustomGround = lazy(() =>
   import("./themes/CustomGround.tsx").then((m) => ({ default: m.CustomGround })),
 );
@@ -51,15 +59,17 @@ export function CanvasThemeLayer() {
     );
   }
   if (theme === null) return null;
+  /**
+   * **Generated, or painted.** Galaxy is the only ground still drawn in code,
+   * and it is not a leftover: the painted space tile has a visible seam and an
+   * infinite canvas finds a seam within one pan, while a generated sky cannot
+   * have one. Everything else is a picture, and one component draws all of
+   * them — the switch that used to be here grew a line per theme, which is the
+   * shape that made "farm waits for artwork" a code change rather than a file.
+   */
   return (
     <Suspense fallback={null}>
-      {theme === "galaxy" && <Galaxy anchor={anchor} />}
-      {theme === "ocean" && <Ocean anchor={anchor} />}
-      {theme === "mountains" && <Mountains anchor={anchor} />}
-      {/* Farm is not in `THEMES` yet, so nothing can ask for it: grass and
-          hedgerows read as DRAWN in a way procedural texture does not, and a
-          picker step that appears to do nothing is worse than a shorter
-          picker. It arrives as a component and a line in that list. */}
+      {theme === "galaxy" ? <Galaxy anchor={anchor} /> : <Painted theme={theme} anchor={anchor} />}
     </Suspense>
   );
 }

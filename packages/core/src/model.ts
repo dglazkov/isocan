@@ -1,3 +1,4 @@
+import type { TextAnchor } from "./text-anchor.ts";
 /**
  * The shared state model. Both the daemon (authoritative) and the web client
  * (live replica) hold this shape; the CLI reads it through queries.
@@ -72,15 +73,79 @@ export interface Canvas {
   lastOp?: string;
 }
 
+export interface VisualFace {
+  /** sha256 of visual content; stored at blobs/<hash>.<ext> */
+  blobHash: string;
+  mimeType: string;
+  filename?: string;
+  size?: number;
+}
+
 export interface ItemVersion {
   id: string;
-  /** sha256 of content; stored at blobs/<hash>.<ext> */
+  /** sha256 of content; stored at blobs/<hash>.<ext>. The source face of the artifact. */
   blobHash: string;
   mimeType: string;
   filename: string;
   size: number;
+  /**
+   * The visual face of the artifact, if distinct from the source.
+   * When present, canvas cards, fullscreen, and stage preview render this face.
+   * When absent, renderers fall back to the source face (blobHash).
+   */
+  visual?: VisualFace;
   createdAt: string;
   createdBy: Actor;
+}
+
+/**
+ * The face to render visually on the canvas card, in full screen, and in the
+ * workbench preview pane. Falls back to the source face (blobHash) when no
+ * distinct visual face is defined.
+ */
+export function visualFaceOf(version: ItemVersion): {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+} {
+  if (version.visual) {
+    return {
+      blobHash: version.visual.blobHash,
+      mimeType: version.visual.mimeType,
+      filename: version.visual.filename ?? version.filename,
+      size: version.visual.size ?? version.size,
+    };
+  }
+  return {
+    blobHash: version.blobHash,
+    mimeType: version.mimeType,
+    filename: version.filename,
+    size: version.size,
+  };
+}
+
+/**
+ * The source face of the artifact: shown in the workbench editor, inspected via
+ * `isocan get`, and synchronized with disk via `isocan save`.
+ */
+export function sourceFaceOf(version: ItemVersion): {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+} {
+  return {
+    blobHash: version.blobHash,
+    mimeType: version.mimeType,
+    filename: version.filename,
+    size: version.size,
+  };
+}
+
+/** Is the visual face distinct from the source face? */
+export function hasDistinctVisualFace(version: ItemVersion): boolean {
+  return version.visual !== undefined && version.visual.blobHash !== version.blobHash;
 }
 
 export interface Item {
@@ -158,6 +223,8 @@ export interface CommentThread {
   /** null = freestanding. If the anchor item is in the trash or missing,
    * renderers fall back to treating (x, y) as world coordinates. */
   anchorItemId: string | null;
+  /** Optional saved text selection, with the original version as provenance. */
+  textAnchor?: TextAnchor | null;
   /** Always at least one comment. */
   comments: Comment[];
   /** At most one thread on a canvas is "main": the designated agent↔user

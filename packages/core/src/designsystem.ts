@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
+import type { MetaPatch } from "./ops.ts";
 
 /**
  * The design system: what this canvas has decided things look like.
@@ -20,6 +21,7 @@ import type { CanvasContents, Item } from "./model.ts";
  */
 
 const ROLE_PROP = "role";
+/** The `role` an item wears to BE this canvas's design system. */
 export const DESIGN_SYSTEM_ROLE = "design-system";
 /** What this was called for an afternoon. Canvases written in that window
  * still say it, and a rename that orphans somebody's file is not a rename. */
@@ -30,6 +32,7 @@ export function designSystemProperties(): Record<string, string> {
   return { [ROLE_PROP]: DESIGN_SYSTEM_ROLE };
 }
 
+/** Is this item the design system — under either name it has been given? */
 export function isDesignSystem(item: Item): boolean {
   const role = item.properties[ROLE_PROP];
   return role === DESIGN_SYSTEM_ROLE || role === LEGACY_DESIGN_ROLE;
@@ -77,6 +80,112 @@ export const DESIGN_SYSTEM_AFTER = 2;
  * Counting is left to the caller, which knows what a screen is on its
  * surface — this stays a rule about numbers so both can apply the same one.
  */
-export function needsDesignSystem(canvas: CanvasContents, screens: number): boolean {
-  return screens >= DESIGN_SYSTEM_AFTER && designSystem(canvas) === null;
+export function needsDesignSystem(
+  canvas: CanvasContents,
+  screens: number,
+  project?: HasProperties,
+): boolean {
+  return designStanding(canvas, screens, project) !== "fine";
+}
+
+/**
+ * **How many screens before the note stops being a note** (8 Sep 2026).
+ *
+ * `DESIGN_SYSTEM_AFTER` has been printing a courtesy line on both surfaces
+ * since the feature landed, and measured across six live canvases it has
+ * changed nothing: **37 of 61 screens sit on a canvas with no design system**,
+ * including one at 24 screens and one at 7. A note that has been ignored
+ * twenty-four times is not a note, it is decoration — which is this repo's own
+ * oldest finding, in the words `bundle-ceiling.mjs` uses about the size gate it
+ * replaced: *"seven raises teach somebody to edit a number without reading
+ * it"*.
+ *
+ * So the shape is that gate's, deliberately: **a creep asks, a jump blocks.**
+ * Past `DESIGN_SYSTEM_AFTER` a canvas is told; past this, adding another
+ * screen is refused until somebody either writes a system or says out loud
+ * that this canvas does not want one.
+ *
+ * **Three times the point where the rule already applies**, and the ratio is
+ * borrowed rather than invented: `test/review-queue.test.ts` reddens a finding
+ * asked three nights running, on the argument that a question asked a third
+ * time needs a guard rather than a fourth mention. Same argument, same three.
+ */
+export const DESIGN_SYSTEM_LIMIT = DESIGN_SYSTEM_AFTER * 3;
+
+/**
+ * Where this canvas stands: nothing owed, owed, or past the point where it is
+ * still a suggestion.
+ *
+ * One function rather than two booleans, because the two surfaces must not be
+ * able to disagree about which of the three a canvas is in — and because a
+ * caller that has to combine `needsDesignSystem` with a comparison of its own
+ * is a caller that will get the boundary wrong in one place.
+ */
+type DesignStanding = "fine" | "owed" | "overdue";
+
+/**
+ * **The two halves of the answer live on two objects, and that is why this
+ * takes both.**
+ *
+ * The design system is an ITEM, so it is in `CanvasContents`. The decision not
+ * to have one is a canvas PROPERTY, so it is on the project — the same place
+ * `themeOf` reads from. A caller holding only one of them cannot answer the
+ * question, and the shape that makes that impossible to get wrong is one
+ * function asking for both.
+ *
+ * `project` is optional only because the answer without it is the safe one: a
+ * caller that cannot see the properties reports the standing as if nobody had
+ * opted out, which asks for a system that may not be wanted rather than
+ * silently skipping one that is.
+ */
+interface HasProperties {
+  properties?: Record<string, string>;
+}
+
+/** Which of the three this canvas is in. See `DesignStanding` above for why
+ *  it takes both the contents and the project. */
+export function designStanding(
+  canvas: CanvasContents,
+  screens: number,
+  project?: HasProperties,
+): DesignStanding {
+  if (designSystem(canvas) !== null) return "fine";
+  if (project !== undefined && designSkipped(project)) return "fine";
+  if (screens >= DESIGN_SYSTEM_LIMIT) return "overdue";
+  return screens >= DESIGN_SYSTEM_AFTER ? "owed" : "fine";
+}
+
+/**
+ * **Saying no, on the canvas, where the next person can see it.**
+ *
+ * A gate with no way past it is a gate people route around, and the route
+ * around a CLI refusal is a flag — which leaves no trace, has to be passed
+ * every time, and tells the next person nothing. This is a canvas PROPERTY
+ * instead: it versions, both surfaces can read it, and "this canvas has
+ * decided it does not want a design system" is a fact about the canvas rather
+ * than a habit of whoever is typing.
+ *
+ * It is the same shape as `themePatch` and for the same reason — a property on
+ * `project.update`'s `MetaPatch`, not a new operation to add to the vocabulary.
+ *
+ * Some canvases genuinely should take it. A canvas of historical pages, each
+ * reproducing a different era on purpose, has screens that are SUPPOSED to
+ * disagree; a system derived from them would be a system made of averages.
+ */
+const DESIGN_SKIP_PROP = "design";
+const DESIGN_SKIP_VALUE = "none";
+
+/** Has this canvas said, on the record, that it does not want one? */
+export function designSkipped(canvas: { properties?: Record<string, string> }): boolean {
+  return canvas.properties?.[DESIGN_SKIP_PROP] === DESIGN_SKIP_VALUE;
+}
+
+/** This canvas does not want one, deliberately. */
+export function designSkipPatch(): MetaPatch {
+  return { properties: { [DESIGN_SKIP_PROP]: DESIGN_SKIP_VALUE } };
+}
+
+/** Take the decision back — the note and the gate return. */
+export function designUnskipPatch(): MetaPatch {
+  return { removeProperties: [DESIGN_SKIP_PROP] };
 }

@@ -128,7 +128,24 @@ describe("the shelf's control does not depend on the list being long", () => {
     /* The other half of the split: a row that appeared because of a shelf must
        not bring a search box and a sort menu with it onto a home of four. */
     expect(bare).toMatch(/\{browsing && \(\s*<input/);
-    expect(bare).toMatch(/\{browsing &&\s*CANVAS_SORTS\.map/);
+    expect(bare).toMatch(/\{browsing && \(\s*<div className="canvas-sorts segmented"/);
+  });
+
+  /**
+   * `Archived` sat INSIDE `.canvas-sorts` while that was three loose chips,
+   * which cost nothing until the ordering became a segmented track: a fourth
+   * segment in a one-of-N groove says that turning the shelf on turns an
+   * ordering off, and the `role="group"` around it was labelled `Order`,
+   * which was never true of it.
+   */
+  it("keeps the shelf's control out of the ordering, which is one-of-N", () => {
+    const track = bare.slice(
+      bare.indexOf('<div className="canvas-sorts segmented"'),
+      bare.indexOf("</div>", bare.indexOf('<div className="canvas-sorts segmented"')),
+    );
+    expect(track).toContain("CANVAS_SORTS.map");
+    expect(track).not.toContain("Archived");
+    expect(track).not.toContain("showArchived");
   });
 });
 

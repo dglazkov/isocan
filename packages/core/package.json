@@ -4,12 +4,18 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./markdown": "./src/markdown-text.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "nanoid": "^5.0.9"
+    "nanoid": "^5.0.9",
+    "unified": "^11.0.5",
+    "remark-parse": "^11.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-breaks": "^4.0.0",
+    "remark-rehype": "^11.1.2"
   }
 }

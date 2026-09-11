@@ -6,7 +6,7 @@ import type {
   PresenceActivity,
   PresenceSession,
 } from "@isocan/core";
-import { narrowed, newId } from "@isocan/core";
+import { narrowed, newId, textAttention } from "@isocan/core";
 
 /**
  * The ephemeral plane. Presence lives in daemon memory and WS fan-out only —
@@ -104,6 +104,7 @@ export class PresenceHub {
       actor?: Actor;
       cursor?: { x: number; y: number } | null;
       selection?: string[];
+      textSelection?: import("@isocan/core").TextAttention | null;
       status?: string | null;
       statusSource?: "explicit" | "lifecycle" | "inferred";
       activity?: PresenceActivity | null;
@@ -155,6 +156,7 @@ export class PresenceHub {
     return here.map(({ lastSeenMs, onThreadAt, origin, ...session }) => ({
       ...session,
       via: origin,
+      ...(session.textSelection !== undefined ? { textSelection: textAttention(session.textSelection) } : {}),
     }));
   }
 
@@ -233,6 +235,7 @@ export class PresenceHub {
       const { via: _theirs, ...incoming } = session;
       const next: SessionState = {
         ...incoming,
+        ...(incoming.textSelection !== undefined ? { textSelection: textAttention(incoming.textSelection) } : {}),
         origin,
         lastSeenMs: Date.now(),
         statusSource: null,
@@ -364,6 +367,7 @@ function patchSession(
     actor?: Actor;
     cursor?: { x: number; y: number } | null;
     selection?: string[];
+      textSelection?: import("@isocan/core").TextAttention | null;
     status?: string | null;
     statusSource?: "explicit" | "lifecycle" | "inferred";
     activity?: PresenceActivity | null;
@@ -375,6 +379,7 @@ function patchSession(
   if (patch.actor?.id && patch.actor.name) session.actor = patch.actor;
   if (patch.cursor !== undefined) session.cursor = patch.cursor;
   if (patch.selection !== undefined) session.selection = patch.selection;
+  if (patch.textSelection !== undefined) session.textSelection = textAttention(patch.textSelection);
   if (patch.status !== undefined) {
     // Words the actor said outrank narration the system derived; lifecycle
     // turns (parking, waking, a posted comment) outrank everything. The

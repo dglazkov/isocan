@@ -12,7 +12,7 @@ import { crossesCover } from "../src/lib/keys.ts";
  * screen deleted the thing being viewed and landed on "that item is not on
  * this canvas any more"; arrows nudged it, S fanned it, ⌘Z undid ops nobody
  * could see. The rule lives in ONE home (`crossesCover` in lib/keys.ts) and
- * this file asks lessons.md #16's two questions of it: does the rule do its
+ * this file asks lessons.md #38's two questions of it: does the rule do its
  * job, and is the handler actually wired through it.
  */
 

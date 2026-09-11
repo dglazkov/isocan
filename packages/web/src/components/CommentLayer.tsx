@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+import { useTextAnchorStore } from "../stores/textAnchorStore.ts";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, CanvasContents, CommentThread, NewComment } from "@isocan/core";
@@ -61,6 +63,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
   const drag = useUiStore((s) => s.drag);
   const openThreadId = useUiStore((s) => s.openThreadId);
   const pendingComment = useUiStore((s) => s.pendingComment);
+  const textViews = useTextAnchorStore(s => s.views);
   const seen = useUnreadStore((s) => s.seen);
   const joined = useCanvasStore((s) => s.actorJoins);
   // A reader cannot comment, by the decision the roles journey records:
@@ -70,7 +73,9 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
   if (!canvas) return null;
 
   function pinWorldPos(thread: CommentThread): { x: number; y: number } {
-    const world = threadWorldPos(canvas!, thread);
+    const view = textViews[thread.id];
+    const positioned = thread.textAnchor && view?.x !== undefined && view.y !== undefined ? { ...thread, x: view.x, y: view.y } : thread;
+    const world = threadWorldPos(canvas!, positioned);
     // While a drag is live the item has not moved in the replica yet, so the
     // pin rides the gesture's delta to stay glued to it.
     const riding =
@@ -99,13 +104,14 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
             canvasId={canvasId}
             actor={actor}
             screen={screenOf(thread)}
-            corner={atCorner(canvas, thread)}
+            corner={atCorner(canvas, thread) && !(thread.textAnchor && textViews[thread.id]?.x !== undefined)}
             open={openThreadId === thread.id}
             unread={unreadCount(thread, seen, actor.id, joined)}
           />
         ))}
       </div>
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 30 }}>
+      {createPortal(
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: "var(--z-popover)" }}>
         {openThread && (
           <ThreadPopover
             thread={openThread}
@@ -118,6 +124,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
           <ComposePopover canvasId={canvasId} actor={actor} pending={pendingComment} />
         )}
       </div>
+      , document.querySelector(".fullscreen") ?? document.body)}
     </>
   );
 }
@@ -330,6 +337,7 @@ function ThreadPopover({
   actor: Actor;
 }) {
   const [reply, setReply] = useState("");
+  const textView = useTextAnchorStore(s => s.views[thread.id]);
   // The registry names people, not the comment: see lib/names.ts.
   const names = useActorNames();
   const { candidates, peers } = useMentionRoster(actor.id);
@@ -365,6 +373,10 @@ function ThreadPopover({
           if (itemId) catapultToItem(itemId);
         }}
       >
+        {thread.textAnchor && <div className="thread-text-anchor">
+          <blockquote>{thread.textAnchor.quote}</blockquote>
+          <small>{textView?.resolution.status === "resolved" ? "On this passage" : textView?.resolution.status === "ambiguous" ? "This passage appears more than once — re-anchor to choose" : textView?.resolution.status === "missing" ? "This passage is no longer in the current version" : "Original passage — open the document to locate it"} · said of {thread.textAnchor.versionId}</small>
+        </div>}
         {thread.comments.map((comment) => (
           <div className="comment" key={comment.id}>
             <span className="who">{actorNameIn(names, comment.author)}</span>
@@ -521,11 +533,13 @@ function ComposePopover({
             x: pending.x,
             y: pending.y,
             anchorItemId: pending.anchorItemId,
+            ...(pending.textAnchor ? { textAnchor: pending.textAnchor } : {}),
             comment: withAbout(makeComment(trimmed), pending.aboutItemId),
           });
         }}
         style={{ display: "block" }}
       >
+        {pending.textAnchor && <blockquote className="thread-text-anchor">{pending.textAnchor.quote}</blockquote>}
         <MentionField
           multiline
           autoFocus

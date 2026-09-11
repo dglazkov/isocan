@@ -29,7 +29,11 @@ describe("documents fill the inspector and page slots", () => {
 
   it("a page is a cover route mounted in the canvas page, with the shell's own bar", () => {
     expect(page).toContain("useMatch(MODULE_PAGE_ROUTE)");
-    expect(page).toContain("<ModulePage canvasId={canvasId} segment={pageSegment} />");
+    /* The mount, not its exact spelling. This named the whole JSX line and
+       broke on 9 Sep when the page grew an `actor` prop so a module could be
+       handed a host to write through (#156) — a component that was still
+       correct. The invariant is that the segment reaches ModulePage. */
+    expect(page).toMatch(/<ModulePage[^>]*segment=\{pageSegment\}/);
     expect(modules).toContain("export function modulePage(segment: string)");
   });
 });

@@ -28,14 +28,81 @@
  *   which must be answered within three days (`test/review-queue.test.ts`),
  *   and answering it is where CEILING gets raised with its reason.
  *
- * The second only works because the queue reaches `main` now and an answer
- * covers the nights that repeat it. Before 7 Sep it would have been a warning
- * into a void.
+ * **696,100 → 636,000 on 8 Sep 2026, and it went DOWN**, which had not
+ * happened before: one namespace import (`import * as core` in
+ * `web/lib/runtimeModules.ts`, publishing the host object runtime modules
+ * read) asked for every export of `@isocan/core` and pinned all of it into
+ * the first paint — 51.5% of the chunk, `recap.ts` and `evals.ts` included,
+ * which this app never calls. Fetched inside the guard that already returns
+ * early when no module has a web half, it is 64,271 bytes lighter and under
+ * the 640,000 goal for the first time since the goal existed.
+ *
+ * **636,000 → 637,100 the same afternoon, and this is the gate working rather
+ * than failing.** #204 phase 3 added a cursor library — three shapes and the
+ * fold that chooses between them — for 1,015 bytes. A creep, so it asked
+ * instead of blocking, and this is the answer: a feature Dion asked for, paid
+ * in a kilobyte, and still 2,985 bytes under the goal. The gate exists so that
+ * a raise costs somebody a sentence; this is the sentence.
+ *
+ * **637,100 → 637,600, and the interesting part is what it did NOT cost.**
+ * #195's painted grounds landed on 8 Sep: four JPEG tiles, two new grounds,
+ * and two hand-written procedural components deleted. The art is 1.26MB and
+ * **none of it is in this number** — a tile is a file in `public/grounds/`
+ * fetched only by a canvas wearing that ground, so a canvas on the dot grid
+ * downloads none of them and a canvas on a starfield downloads none of them
+ * either. What the entry chunk actually paid is 453 bytes of core: two more
+ * names in `THEMES`, their labels, their cursor cases and their tone rows.
+ *
+ * That is the shape worth copying rather than the number: a feature that
+ * looked like megabytes cost half a kilobyte, because the megabytes were put
+ * where a first visit does not go. A creep, so it asked instead of blocking,
+ * and this is the sentence it asked for.
+ *
+ * **637,600 → 637,400 on 9 Sep, and it went DOWN because the raise above was
+ * answered rather than accepted.** Dion, reading that entry: *"A cursor should
+ * only be loaded if a theme is loaded."* He is right, and it cost 609 bytes to
+ * agree with him — the seven cursor paths were in `@isocan/core/theme.ts`,
+ * which every first visit downloads, and a canvas on the dot grid draws
+ * exactly one of them.
+ *
+ * Core is one barrel with no subpath exports, so nothing in it can arrive
+ * later; the paths moved to the surface that draws them
+ * (`web/src/lib/cursorart.ts`, behind an `import()`) and core kept the
+ * decision. The first attempt at the split SAVED 12 BYTES AND COST 81, because
+ * the arrow was exported from the same module and a bundler merges a module
+ * imported both ways — which is why `arrow.ts` exists and why the guard reads
+ * the built chunks instead of the imports.
+ *
+ * Worth keeping as the shape rather than the number: a raise that gets
+ * answered is the gate working exactly as designed. The ceiling went up for a
+ * feature, somebody read the sentence, and it came back down further than it
+ * went up.
+ *
+ * **637,400 → 641,100 on 9 Sep, for the module API's own weight.** #156's
+ * report turned into a host a module can write through, an overlays slot, a
+ * drop registry and the experiments gate — all shell code, all in the first
+ * paint because the shell is.
+ *
+ * **The module behind the experiment is NOT in it, and that was measured
+ * rather than assumed.** Built as a plain import gated at render, stickers put
+ * 6,227 bytes into the entry chunk for everybody including the people who
+ * never switch it on — gating the drawing and not the download. It arrives
+ * through `addModule` now, the way a runtime module does, and the entry chunk
+ * carries none of it: 6,227 became 3,695, and the rest is API.
+ *
+ * Worth keeping as the rule rather than the number: **"merged but off" has to
+ * mean off**, and an experiment costing everybody bytes is not off. The gate
+ * asked, this is the sentence, and the half of the raise that was avoidable
+ * was avoided before it was written down.
+ *
+ * The second gate only works because the queue reaches `main` now and an
+ * answer covers the nights that repeat it. Before 7 Sep it would have been a
+ * warning into a void.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 696_100;
+export const CEILING = 641_100;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

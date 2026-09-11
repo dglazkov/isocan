@@ -6,6 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { builtinHarnesses } from "@isocan/api";
 import { readConfigFile, updateConfigFile } from "@isocan/server";
+import { SHEEP_HARNESS, placeLine, sheepPlaceFor } from "./sheep.ts";
 
 /**
  * **Which harness runs an agent that named none** (decided 2026-09-04).
@@ -33,6 +34,18 @@ interface HarnessConfig {
   acpAdapters?: Record<string, string[] | string>;
   harnessVars?: Record<string, string>;
   defaultHarness?: string;
+  /** What else of the person's environment reaches an adapter, beyond the
+   * list `acp.ts` knows: names, or `PREFIX_*`. */
+  adapterEnv?: string[];
+}
+
+/** `config.json`'s `adapterEnv`, read at every spawn so an edit takes
+ * effect on the next summons. A malformed entry is skipped, not thrown —
+ * the file is hand-edited, and a typo must not cost a turn. */
+export async function passedEnv(home: string): Promise<string[]> {
+  const raw = await readConfigFile<HarnessConfig>(home);
+  const declared = Array.isArray(raw.adapterEnv) ? raw.adapterEnv : [];
+  return declared.filter((rule): rule is string => typeof rule === "string" && /^[A-Za-z_][A-Za-z0-9_]*\*?$/.test(rule));
 }
 
 export interface AdapterSpec {
@@ -43,6 +56,10 @@ export interface AdapterSpec {
    * at spawn — a builtin's knowledge of its own harness, never a person's
    * setting. */
   env?: Record<string, string>;
+  /** Reject permission escalation and require the measured Codex ACP contract. */
+  nativeCodexSandbox?: boolean;
+  /** Additional writable roots passed on both creation and resume. */
+  sessionDirectories?: string[];
   /** Make sure the bridge is here before spawning — a builtin fetched on
    * first use rather than shipped. Narrates through the callback, and
    * returns the command and args the registry says NOW, which the caller
@@ -357,6 +374,9 @@ export interface HarnessRow {
   runnable: boolean;
   /** The one an agent that named no harness runs on. */
   default: boolean;
+  /** Where its sessions live, for a harness whose sessions are not on this
+   * machine: sheep's, the home its kennel names. */
+  home?: string;
 }
 
 export interface HarnessScan {
@@ -369,7 +389,7 @@ export interface HarnessScan {
   ignored: string | null;
 }
 
-async function onPath(bin: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+export async function onPath(bin: string, env: NodeJS.ProcessEnv): Promise<boolean> {
   for (const dir of (env.PATH ?? "").split(path.delimiter)) {
     if (!dir) continue;
     try {
@@ -399,10 +419,11 @@ function declaredAdapter(
 
 /** Everything this machine could run, and which one it runs by default.
  * A fact about the machine — no daemon is consulted. `env` is a parameter
- * so a test can hand it a PATH. */
+ * so a test can hand it a PATH; `cwd` is where sheep's kennel walk starts. */
 export async function scanHarnesses(
   home: string,
   env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
 ): Promise<HarnessScan> {
   const raw = await readConfigFile<HarnessConfig>(home);
   const names = new Set<string>([
@@ -411,6 +432,7 @@ export async function scanHarnesses(
     ...Object.keys(raw.acpAdapters ?? {}),
     ...Object.keys(raw.harnessVars ?? {}),
   ]);
+  names.delete(SHEEP_HARNESS);
   const rows: HarnessRow[] = [];
   for (const name of names) {
     const installed = await installedProbe(home, name, env);
@@ -418,6 +440,18 @@ export async function scanHarnesses(
     const runnable = adapter === "config" || (adapter === "builtin" && installed !== false);
     rows.push({ name, installed, adapter, runnable, default: false });
   }
+  // sheep is not an ACP bridge but a herding command, found the same way:
+  // `sheep` on the PATH, and a kennel that names a home.
+  const sheepInstalled = await onPath("sheep", env);
+  const place = sheepInstalled ? sheepPlaceFor(cwd, env) : null;
+  rows.push({
+    name: SHEEP_HARNESS,
+    installed: sheepInstalled,
+    adapter: "builtin",
+    runnable: place !== null,
+    default: false,
+    ...(place ? { home: placeLine(place) } : {}),
+  });
   const runnable = rows.filter((r) => r.runnable);
   const wanted = typeof raw.defaultHarness === "string" ? raw.defaultHarness.trim() : "";
   const chosen = wanted ? runnable.find((r) => r.name === wanted) ?? null : null;
@@ -447,6 +481,11 @@ export async function adapterFor(
 ): Promise<AdapterSpec | null> {
   const wanted = harness ?? (await scanHarnesses(home, env)).default?.name ?? null;
   if (!wanted) return null;
+  // A harness that is not an ACP bridge but a herding command: its
+  // sessions are cells at a sheep home, and `sheep.ts` drives it.
+  if (wanted === SHEEP_HARNESS) {
+    return (await onPath("sheep", env)) ? { harness: wanted, command: "sheep", args: [] } : null;
+  }
   const raw = await readConfigFile<HarnessConfig>(home);
   const spec = declaredAdapter(raw, wanted) ?? (await builtinAdapter(home, wanted)) ?? null;
   return spec ? { harness: wanted, ...spec } : null;

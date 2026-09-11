@@ -1,5 +1,5 @@
-import type { Actor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
-import { contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
+import type { Actor, CanvasCursor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
+import { CURSORS, cursorLabel, contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -531,6 +531,10 @@ export function chromeMenu(ctx: {
   /** Ask for a file and stand the canvas on it. The caller owns the picker
    *  and the upload for `setTheme`'s reason: this module builds entries. */
   pickGround: () => void | Promise<void>;
+  /** The pointer this canvas wears, when it is standing on a picture of its
+   *  own — null when nothing has been chosen (#204 phase 3). */
+  cursor: CanvasCursor | null;
+  setCursor: (cursor: CanvasCursor | null) => void | Promise<void>;
   /** Open the switcher — the same face ⌘O opens. */
   openSwitcher: () => void;
   /** Whether the ground travels with the canvas or stays behind the glass. */
@@ -685,6 +689,34 @@ export function chromeMenu(ctx: {
           checked: !ctx.ownGround && ctx.theme === null,
           writes: true,
           run: () => void ctx.setTheme(null),
+        },
+        { separator: "" },
+        {
+          /**
+           * **The cursor half of "a tile and cursor"** (#204 phase 3).
+           *
+           * Only for a picture of your own, and that is #195's rule rather
+           * than a limitation: a seeded ground NAMES its cursor, because
+           * "galaxy" is the fact — a canvas cannot be a galaxy with a fish.
+           * A picture names nothing, so there is nothing to contradict and
+           * this is the missing name rather than a second one competing.
+           *
+           * Chosen, never uploaded: every shape is filled with the viewer's
+           * own colour, and an uploaded image cannot be tinted — six people
+           * would share one pointer, which deletes the only signal saying who
+           * is who.
+           */
+          label: "Cursor",
+          value: ctx.cursor ? cursorLabel(ctx.cursor) : "Arrow",
+          writes: true,
+          disabled: !ctx.ownGround,
+          run: () => {},
+          submenu: CURSORS.map((cursor) => ({
+            label: cursorLabel(cursor),
+            checked: (ctx.cursor ?? "arrow") === cursor,
+            writes: true,
+            run: () => void ctx.setCursor(cursor === "arrow" ? null : cursor),
+          })),
         },
         { separator: "" },
         {

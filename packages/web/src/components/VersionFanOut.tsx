@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { canvasIdOf, isDesignSystem, isTextItem, sourceOf } from "@isocan/core";
+import { canvasIdOf, isDesignSystem, isTextItem, sourceOf, visualFaceOf } from "@isocan/core";
 
 import { useUiStore } from "../stores/uiStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -102,6 +102,7 @@ function FanCard({
   onPicked: () => void;
 }) {
   const { ref, onScreen } = useOnScreen<HTMLDivElement>();
+  const visual = visualFaceOf(version);
   const targetX = item.x + item.width + 28 + index * (cardW + FAN_GAP);
   const startX = item.x + index * 6;
   return (
@@ -146,9 +147,9 @@ function FanCard({
              drawn small, not the address as text. */
           <VersionContent
             canvasId={canvasId}
-            blobHash={version.blobHash}
-            mimeType={version.mimeType}
-            filename={version.filename}
+            blobHash={visual.blobHash}
+            mimeType={visual.mimeType}
+            filename={visual.filename ?? version.filename}
             entered={false}
             designSystem={isDesignSystem(item)}
             textNode={isTextItem(item)}

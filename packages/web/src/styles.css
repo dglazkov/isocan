@@ -41,8 +41,15 @@
   /* Open water and high ground (#195), the same on either theme and for the
      same reason as space: these are pictures, not surfaces that follow the
      app's theme. Dark enough that white item cards read as objects on top. */
-  --theme-ocean: #0b2733;
-  --theme-rock: #2b2825;
+  /* Measured from the tiles themselves, 8 Sep 2026 — each is its picture's
+     own mean colour, so the ground behind an image that has not arrived yet
+     is the colour of the image, and so the top fade over it (groundtone.ts)
+     is too. Before the art these were chosen by eye and were the target the
+     prompts named; now they are read off what the artist sent back. */
+  --theme-ocean: #314852;
+  --theme-rock: #2f2e28;
+  --theme-farm: #353423;
+  --theme-sand: #ab703b;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -124,6 +131,20 @@
   --overlay: rgba(35, 38, 43, 0.35);
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
   --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
+  /* **The same lift, drawn by `filter` instead of `box-shadow`.** A shadow
+     from `filter` follows the rendered SILHOUETTE rather than the border box,
+     which is the only way to shade a thing made of two boxes — a card with a
+     preview hanging off it — without a seam across the join. Written as two
+     drop-shadows because `drop-shadow()` has no spread: the tight one is the
+     contact edge, the wide one is the distance off the page.
+
+     **No spread is why the offset is small.** `--shadow-pop` can afford `0
+     14px 30px` because its `-14px` shrinks the shadow back inside the box;
+     the same offset here drew a full-size grey copy of the card sticking out
+     below it — an offset slab rather than a halo. Keeping the offset under
+     half the blur is what a filter has instead of spread. */
+  --lift: drop-shadow(0 1px 2px rgba(30, 34, 40, 0.10))
+    drop-shadow(0 8px 18px rgba(30, 34, 40, 0.16));
   --radius: 8px;
   /* **Roundness says how permanent a thing is.** Floating chrome is the most
      ephemeral thing on screen and wears the largest radius; the work itself
@@ -224,8 +245,15 @@
   /* Open water and high ground (#195), the same on either theme and for the
      same reason as space: these are pictures, not surfaces that follow the
      app's theme. Dark enough that white item cards read as objects on top. */
-  --theme-ocean: #0b2733;
-  --theme-rock: #2b2825;
+  /* Measured from the tiles themselves, 8 Sep 2026 — each is its picture's
+     own mean colour, so the ground behind an image that has not arrived yet
+     is the colour of the image, and so the top fade over it (groundtone.ts)
+     is too. Before the art these were chosen by eye and were the target the
+     prompts named; now they are read off what the artist sent back. */
+  --theme-ocean: #314852;
+  --theme-rock: #2f2e28;
+  --theme-farm: #353423;
+  --theme-sand: #ab703b;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -280,6 +308,10 @@
   --overlay: rgba(0, 0, 0, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
   --shadow-pop: 0 14px 30px -14px rgba(0, 0, 0, 0.75);
+  /* Deeper on graphite: a shadow on a dark ground has less room to darken,
+     so it earns its edge by being nearly opaque at the contact. */
+  --lift: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5))
+    drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55));
 }
 
 * { box-sizing: border-box; }
@@ -468,15 +500,50 @@ img { height: auto; }
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-float);
   box-shadow: var(--shadow-card);
   display: flex; flex-direction: column;
-  text-align: left; overflow: hidden;
-  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+  text-align: left;
+  /* No `overflow: hidden`: the peek is an overlay that must leave the box
+     (below — and the box would clip it). No child paints a background to the
+     corners, so nothing needed the clip; the just-made sheen rounds its own
+     corners with `border-radius: inherit`. */
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease,
+    filter 0.14s ease;
 }
-.canvas-card:hover {
+/**
+ * **Lifted: nearer, not merely highlighted.**
+ *
+ * Hover and focus are one state here, because focus is the second way the
+ * preview opens and a card that grew for the pointer but not for the keyboard
+ * would read as two different controls.
+ *
+ * The lift is doing real work rather than decorating: an open peek covers most
+ * of the card below it and leaves a sliver of that card poking out under its
+ * bottom edge, which without a shadow reads as a rendering fault — two
+ * surfaces at the same depth, one inexplicably cut off. A shadow says which is
+ * in front, and 2.5% of scale says how far.
+ */
+.canvas-card:hover,
+.canvas-card:focus-within {
   border-color: var(--accent);
-  box-shadow: var(--shadow-pop);
-  transform: translateY(-2px);
+  /* Not `box-shadow`: the card and the preview hanging off it are two boxes
+     making one surface, and two box-shadows draw a line across the join —
+     which is why the peek turned shadows off on both halves. `--lift` is
+     drawn by `filter`, so ONE shadow wraps the pair's outline and the join
+     stays invisible. */
+  box-shadow: none;
+  filter: var(--lift);
+  /* A transform is paint, never layout: the neighbours do not move a pixel
+     for it, which is the whole premise of the overlay (peekoverlay.test.ts).
+     The peek is a child, so it comes forward with the card it belongs to. */
+  transform: translateY(-2px) scale(1.025);
+  /* The lifted card — and the preview hanging off it — reads above the cards
+     it overlays. `--z-popover` names exactly this: peek cards. */
+  z-index: var(--z-popover);
 }
-@media (prefers-reduced-motion: reduce) { .canvas-card:hover { transform: none; } }
+/* The shadow is not motion and stays; the approach is, and goes. */
+@media (prefers-reduced-motion: reduce) {
+  .canvas-card:hover,
+  .canvas-card:focus-within { transform: none; }
+}
 /* The whole card is the way in — the thing you want every time should not be
    one of three equal buttons, one of which deletes. */
 .card-open {
@@ -516,7 +583,12 @@ img { height: auto; }
   gap: 8px; padding: 16px; justify-content: center;
   border-style: dashed; box-shadow: none;
 }
-.canvas-card.create:hover { transform: none; box-shadow: none; }
+/* The create card is a form, not a preview: it has no peek to lift and
+   typing in it must not push it toward you. `:focus-within` as well as
+   `:hover`, because the caret lands inside it every time somebody names a
+   canvas. */
+.canvas-card.create:hover,
+.canvas-card.create:focus-within { transform: none; box-shadow: none; filter: none; }
 .canvases-loading { color: var(--ink-muted); font-size: 13px; padding: 8px 2px; }
 .canvas-card .row { display: flex; gap: 6px; }
 .canvas-card.create {
@@ -707,12 +779,31 @@ img { height: auto; }
    would end it. */
 .surface-self { color: var(--ink-soft); font-size: 11px; }
 
-/* Light / dark / system — a segmented pill; the active segment lifts like a card. */
-.theme-switch {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
-  padding: 3px; border-radius: 8px;
+/**
+ * **Segmented: one control, one of N chosen.**
+ *
+ * Light/dark/system and the canvas list's ordering are the same control
+ * wearing different labels — a track that IS the group, and one segment
+ * inside it that is the answer. So the track is a class both wear rather than
+ * a selector list: `oneblock.test.ts` holds every bare class to a single
+ * unscoped block, which is the rule that would have to bend to write
+ * `.theme-switch, .canvas-sorts` here and then give each its own `display`.
+ * A shared look is a shared name.
+ *
+ * The ordering used to be three loose chips 2px apart, which said "three
+ * separate things you can press" and left the set — which is the meaning —
+ * undrawn. Joining this rather than growing a second segmented look is the
+ * whole point.
+ */
+.segmented {
+  gap: 3px; padding: 3px; border-radius: var(--radius);
   background: var(--chip); border: 1px solid var(--chip-line);
 }
+/* The theme's three one-word labels fit equal columns; "Recent activity"
+   beside "Name" does not, so an ordering's segments take their labels'
+   widths. That difference is the only reason these are two rules. */
+.theme-switch { display: grid; grid-template-columns: repeat(3, 1fr); }
+/* A segment carries no box of its own — the track is the box. */
 .theme-opt {
   padding: 5px 6px; border-radius: 6px; font-size: 12px; text-align: center;
   color: var(--ink-muted); background: none; border: 1px solid transparent;
@@ -730,7 +821,11 @@ img { height: auto; }
 .chrome-name { font-weight: 600; }
 .chrome-where { grid-column: 2; font-size: 11px; color: var(--ink-soft); line-height: 1.35; }
 .chrome-show-all { align-self: flex-start; font-size: 11.5px; margin-top: 2px; }
-.theme-opt.active {
+/* The chosen segment lifts out of the track like a card — the second half of
+   the shared idiom above, and the reason the track needs no divider lines:
+   what is pressed is the thing standing proud of the groove. */
+.theme-opt.active,
+.canvas-sorts .btn.on {
   color: var(--ink); background: var(--card);
   border-color: var(--chip-line); box-shadow: var(--shadow-card);
 }
@@ -854,31 +949,51 @@ img { height: auto; }
 .canvas-theme-galaxy {
   background-color: var(--theme-space);
   --stars: none; --stars-size: auto; --stars-pos: 0 0; --star-fade: 0;
+  --clouds: none; --clouds-size: auto; --clouds-pos: 0 0;
+}
+/* The nebulae, under the stars and over the ground. `::before` rather than a
+   fourth star gradient because they want their own tile sizes — thousands of
+   world units against the stars' hundreds — and because a cloud painted over
+   the stars is fog. They share `--star-fade`: the ground going quiet when you
+   stand back is one behaviour, not two curves. */
+.canvas-theme-galaxy::before {
+  content: ""; position: absolute; inset: 0;
+  background-image: var(--clouds); background-size: var(--clouds-size); background-position: var(--clouds-pos);
+  opacity: var(--star-fade, 1);
 }
 /* The stars fade with zoom; the ground does not. Painted as a second layer so
    the fade is one composited opacity rather than three gradients redrawn. */
-/* Ocean and mountains: the same two-layer shape as the starfield — a ground
-   that never fades, and a pattern layer that does. Their grounds are quiet,
-   mid-dark colours chosen so items keep their contrast on top; a background
-   somebody has to turn off to read the canvas is not a background. */
-.canvas-theme-ocean {
-  background-color: var(--theme-ocean);
-  --swell: none; --swell-pos: 0 0; --swell-fade: 0;
+/**
+ * **The painted grounds** (#195's art, 8 Sep 2026). Ocean, mountains, farm and
+ * desert differ only in the picture and its world size, and both of those are
+ * written by `PaintedGround.tsx` — so the shared half wears a name of its own
+ * and each ground's rule says only what is true about that ground.
+ *
+ * A grouped selector would have been the obvious way to write it and is the
+ * wrong one: `oneblock.test.ts` holds every class to a single canonical block,
+ * because a class appearing in two places is how `.face.away .face-mark` lost
+ * its scope and dimmed every face on the canvas (lessons.md #1).
+ *
+ * `background-color` is each tile's own mean colour, measured off the file
+ * rather than picked: it is what shows for the moment before a 139–663KB JPEG
+ * arrives, and what the top fade over it is drawn from (`lib/groundtone.ts`).
+ * A ground whose holding colour is not its picture's flashes a different
+ * ground on every cold load.
+ *
+ * The three values below are declared here as well as written by the
+ * component, for the reason the starfield states above: `var()` with no
+ * definition drops the whole declaration silently, so a component that stopped
+ * setting one would give a rule nobody could see was gone. The safe picture is
+ * the flat colour with no tile, which is a ground rather than a blank.
+ */
+.canvas-theme-painted {
+  background-image: var(--tile); background-size: var(--tile-size); background-position: var(--tile-pos);
+  --tile: none; --tile-size: auto; --tile-pos: 0 0;
 }
-.canvas-theme-ocean::after {
-  content: ""; position: absolute; inset: 0;
-  background-image: var(--swell); background-position: var(--swell-pos);
-  opacity: var(--swell-fade, 1);
-}
-.canvas-theme-mountains {
-  background-color: var(--theme-rock);
-  --ridge: none; --ridge-pos: 0 0; --ridge-fade: 0;
-}
-.canvas-theme-mountains::after {
-  content: ""; position: absolute; inset: 0;
-  background-image: var(--ridge); background-position: var(--ridge-pos);
-  opacity: var(--ridge-fade, 1);
-}
+.canvas-theme-ocean { background-color: var(--theme-ocean); }
+.canvas-theme-mountains { background-color: var(--theme-rock); }
+.canvas-theme-farm { background-color: var(--theme-farm); }
+.canvas-theme-desert { background-color: var(--theme-sand); }
 .canvas-theme-galaxy::after {
   content: ""; position: absolute; inset: 0;
   background-image: var(--stars); background-size: var(--stars-size); background-position: var(--stars-pos);
@@ -2281,6 +2396,20 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .stage-pane-bar .spacer { flex: 1; }
 .stage-pane-name { font-weight: 600; color: var(--ink); }
 .stage-pane-name i { font-style: normal; font-weight: 400; color: var(--ink-soft); }
+.stage-toggle-group {
+  display: inline-flex; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card);
+  padding: 1px; gap: 1px;
+}
+.stage-toggle-btn {
+  font: inherit; font-size: 10.5px; cursor: pointer;
+  padding: 1px 7px; border-radius: 999px; border: none;
+  background: transparent; color: var(--ink-muted);
+}
+.stage-toggle-btn:hover { color: var(--ink); }
+.stage-toggle-btn.active {
+  background: var(--chip); color: var(--ink); font-weight: 600;
+}
 .stage-pane-fold {
   flex: none; font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
   width: 22px; height: 21px; border-radius: 999px;
@@ -3687,8 +3816,8 @@ button.mt-card:hover { border-color: var(--accent); }
 .canvas-picker-meta { font-size: 10.5px; color: var(--ink-muted); }
 .canvas-picker-note { padding: 6px 8px; font-size: 11px; color: var(--ink-muted); white-space: normal; }
 .site-error {
-  position: absolute; top: calc(100% + 4px); right: 10px;
-  font-size: 10.5px; color: var(--danger); white-space: nowrap;
+  font-size: 12px; color: var(--danger); white-space: normal;
+  overflow-wrap: anywhere;
 }
 .shelf-glyph { color: var(--accent); }
 .btn.active .shelf-glyph { color: var(--accent-ink); }
@@ -3707,6 +3836,37 @@ button.mt-card:hover { border-color: var(--accent); }
    same way when there is room and pins to the top edge when there is not,
    so what overflows is at the bottom, once, and the height rules below
    make sure it rarely does. */
+/**
+ * **Where a module's overlay sits** (#156, 9 Sep 2026).
+ *
+ * A module names an EDGE and the shell owns where that edge is — the rule
+ * `ModuleOverlays` exists to enforce, because two modules positioning
+ * themselves is how a canvas ends up with two trays on top of each other.
+ *
+ * Centred vertically against its edge, like the tool rail opposite, and
+ * offset past the rail so a module's tray does not sit on the app's buttons.
+ * `--z-float` is the rail's own layer: an overlay is chrome, and chrome that
+ * outranked a dialog would be a module covering something the app promised.
+ *
+ * **The column takes no pointer events and each overlay takes them back.** A
+ * full-height strip that swallowed clicks would make a band of canvas
+ * unreachable down one side — and nobody would connect a dead strip to a tray
+ * they switched on days earlier.
+ *
+ * Written a day after the slot, because the slot shipped without it: the
+ * component rendered, the tests passed, the bytes were right, and the tray
+ * was a 1280x178 static block at the top of the page that nobody could see.
+ */
+.module-overlays {
+  position: absolute; top: var(--edge); bottom: var(--edge);
+  margin: auto 0; height: fit-content; z-index: var(--z-float);
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.module-overlays-left { left: calc(var(--edge) + 44px); }
+.module-overlays-right { right: calc(var(--edge) + 44px); }
+.module-overlay { pointer-events: auto; }
+
 .tool-rail {
   position: absolute; right: var(--edge); top: var(--edge); bottom: var(--edge);
   margin: auto 0; height: fit-content; z-index: var(--z-float);
@@ -3715,12 +3875,72 @@ button.mt-card:hover { border-color: var(--accent); }
   box-shadow: var(--shadow-pop);
 }
 .tool-btn {
+  position: relative; /* the tip hangs off the button, not the rail */
   display: flex; align-items: center; justify-content: center;
   width: 38px; height: 38px; border-radius: 11px;
   background: none; border: 1px solid transparent; color: var(--ink-muted);
 }
 .tool-btn:hover { background: var(--chip); color: var(--ink); }
 .tool-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+/* The rail's tooltips, drawn rather than left to `title` — the same reason
+   `.fullscreen-btn::after` gives: the native tip waits about a second,
+   appears at the pointer, and takes no styling. Here it had a third fault.
+   The rail is a column, and a tip that lands at the pointer lands ON the
+   buttons below the one it names, so reading what Pen does covered Text and
+   Comment.
+
+   **Out to the side, pointing back at the button.** The rail is on the right
+   edge, so the tip pops LEFT into open canvas — the direction the ink well
+   already takes — and a small chevron on its right edge says which button is
+   speaking, which a floating pill beside a column of six cannot. It is the
+   card's own paper, ink-coloured, at a readable size: this is the one place
+   a first-time visitor learns what the glyphs are and what the letters do.
+   The hint's first line is the name and key; a second line, when there is
+   one, is the behaviour (`pre-line` makes the newline a line).
+
+   Prompt: a fifth of a second, not the native second — long enough that
+   sweeping the pointer down the rail does not flash six tips, short enough
+   that stopping on one gets an answer. Keyboard focus gets it at once.
+   Inert (`pointer-events: none`), and never the thing the pointer meets on
+   its way to the control it describes. */
+.tool-btn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; right: calc(100% + 12px); top: 50%;
+  transform: translate(4px, -50%);
+  width: max-content; max-width: 220px; padding: 5px 10px; border-radius: 9px;
+  white-space: pre-line; text-align: left;
+  background: var(--card); border: 1px solid var(--line); color: var(--ink);
+  box-shadow: var(--shadow-pop);
+  font-size: 12px; line-height: 1.35; font-weight: 400;
+  opacity: 0; pointer-events: none; z-index: 1;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+/* The chevron: a square wearing two of the tip's borders, turned so its
+   corner meets the button. It sits over the tip's right edge (z 2 over 1),
+   so the edge it crosses is its own. */
+.tool-btn[data-tip]::before {
+  content: "";
+  position: absolute; right: calc(100% + 8px); top: 50%;
+  width: 8px; height: 8px;
+  transform: translate(4px, -50%) rotate(45deg);
+  background: var(--card); border-right: 1px solid var(--line); border-top: 1px solid var(--line);
+  opacity: 0; pointer-events: none; z-index: 2;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+.tool-btn[data-tip]:hover::after,
+.tool-btn[data-tip]:hover::before { opacity: 1; transition-delay: 0.2s; }
+.tool-btn[data-tip]:focus-visible::after,
+.tool-btn[data-tip]:focus-visible::before { opacity: 1; transition-delay: 0s; }
+.tool-btn[data-tip]:hover::after,
+.tool-btn[data-tip]:focus-visible::after { transform: translate(0, -50%); }
+.tool-btn[data-tip]:hover::before,
+.tool-btn[data-tip]:focus-visible::before { transform: translate(0, -50%) rotate(45deg); }
+/* A press is an answer, not a question: the tip goes the moment the button
+   is pressed, the way the native one does. (A button with something open
+   beside it — the Pen's ink well, the Add door's popover — carries no
+   `data-tip` at all while it is open; that is decided where it renders.) */
+.tool-btn[data-tip]:active::after,
+.tool-btn[data-tip]:active::before { opacity: 0; transition: none; }
 .tool-sep { height: 1px; margin: 2px 6px; background: var(--line); }
 /* A canvas's own tool (extensions stage 1). It keeps the rail's geometry —
    same 38px square, same radius, same focus ring — because the app draws it
@@ -4341,6 +4561,8 @@ button.mt-card:hover { border-color: var(--accent); }
   border-radius: 4px; background: var(--chip); border: 1px solid var(--chip-line);
 }
 .help-commands .help-keys { flex-basis: 200px; }
+.help-guides .help-keys a { color: var(--accent-text); text-decoration: none; }
+.help-guides .help-keys a:hover { text-decoration: underline; }
 
 /* ---------- who picked this up ---------- */
 /* Under the last thing said in a thread: live, ephemeral, and never a comment.
@@ -5123,10 +5345,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---- the right-click menu ----------------------------------------------
    Screen space, above everything, and deliberately plain: a menu is read in
-   the half-second before a click, so it earns nothing from decoration. The
-   frosted ground is the one the app already uses for floating chrome
-   (`--panel`, already paired with a blur in four other places), so this adds
-   no token. */
+   the half-second before a click, so it earns nothing from decoration. */
 .context-menu {
   /* `--z-popover` is documented as "menus, thread popovers, peek cards — a
      click opened it", which is exactly this. `--z-dialog` is reserved for the
@@ -5134,7 +5353,40 @@ button.mt-card:hover { border-color: var(--accent); }
      who-are-you dialog would be that reservation spent for nothing. */
   position: fixed; z-index: var(--z-popover);
   min-width: 208px; padding: 5px;
-  background: var(--panel); backdrop-filter: blur(8px);
+  /**
+   * **A menu carries its own ground** (8 Sep 2026).
+   *
+   * This was `var(--panel)` with a blur — the frosted slab every other
+   * floating surface wears. Dion opened Background ▸ and reported that the
+   * submenu *"doesn't show the same hover color as the main menu so it's hard
+   * to see"*, and the two halves of one menu really were different colours.
+   *
+   * `--panel` is `rgba(255, 255, 255, 0.92)`, so what it RENDERS depends on
+   * what is behind it — and a right-click menu is the one piece of chrome that
+   * can open over anything. His main menu sat over the chat panel and rendered
+   * ~#fdfdfc; the submenu hung 4px past its right edge over a Space Galaxy
+   * ground and rendered ~#ebebeb. `--chip-hover` is opaque `#e9eae4`, chosen
+   * against the first: on the second it is a contrast ratio of **1.02**, which
+   * is not a faint highlight, it is no highlight.
+   *
+   * It is not a submenu bug and it is not only dark grounds. The same menu
+   * opened over a photograph in the dark theme puts `--panel` at ~#2c2f34 and
+   * `--chip-hover` at #2f343d — the same collision, mirrored. Anywhere the
+   * ground is unknowable, an opaque hover token is a coin flip.
+   *
+   * So the fix is not a second hover colour for menus, which would give
+   * "the row you are pointing at" two spellings. It is that a list of rows you
+   * point at must not take its colour from the canvas: `--panel` layered over
+   * an opaque `--card` renders one value everywhere, within a hair of what the
+   * menu already looked like on the app's own chrome. The blur goes with it —
+   * nothing shows through an opaque stack, so it was buying a compositing
+   * layer for an effect nobody could see.
+   *
+   * `.floats` keeps the frost, deliberately. A panel is a surface you read;
+   * a menu is a set of targets you point at, and only the second has a state
+   * that can be cancelled out by whatever it happens to be over.
+   */
+  background: linear-gradient(var(--panel), var(--panel)), var(--card);
   border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop);
   display: flex; flex-direction: column; gap: 1px;
@@ -5508,15 +5760,39 @@ button.mt-card:hover { border-color: var(--accent); }
   margin: 0 0 14px;
 }
 .canvas-filter { flex: 1 1 220px; min-width: 0; max-width: 340px; }
-.canvas-sorts { display: flex; gap: 2px; flex-wrap: wrap; }
-/* The chosen ordering wears the accent the way a pressed control does
-   everywhere else here — `aria-pressed` carries it for a reader. */
-/* One rule, two places: the canvas list's ordering and the lens's narrowing
+/* The ordering is a segmented control — its track, and what a chosen segment
+   looks like, are the theme switch's rules, shared up where they are written.
+   This is only what is its own: how the segments sit in the track, and the
+   `.btn` box each one has to shed to become a segment. `aria-pressed` carries
+   the choice for a reader either way. */
+.canvas-sorts { display: inline-flex; align-items: center; flex-wrap: wrap; }
+/**
+ * A segment that is not the chosen one sheds the `.btn` box: the track is the
+ * box, and a chip inside a chip is the look this replaced.
+ *
+ * `:not(.on)` first, so the pressed segment above is left alone rather than
+ * out-specified — and `:not(.primary):not(.active)` because
+ * `overrides.test.ts` holds every container that repaints a component to
+ * excluding the variants that paint themselves. Neither is used in this track
+ * today; the point of the guard is that the day one is, it does not lose its
+ * fill and take a bug report to notice.
+ */
+.canvas-sorts .btn:not(.on):not(.primary):not(.active) {
+  color: var(--ink-muted); background: none; border: 1px solid transparent;
+}
+/* The chosen one is already standing proud; only the others have anywhere
+   to go on hover. */
+.canvas-sorts .btn:not(.on):hover { color: var(--ink); background: none; }
+/* One rule, two places: the lens's narrowing and the canvas list's `Archived`
    are the same control — a chip that is currently ON — so they are written
    once. Not a coincidence of values (see `copied-rules` in `measure.mjs` for
-   when merging would be wrong): pressing either means the same thing. */
-.canvas-sorts .btn.on,
-.lens-narrow .btn.on {
+   when merging would be wrong): pressing either widens what you are looking
+   at, and neither is one-of-N. The ORDERING left this rule when it became a
+   segmented track, which is also why `Archived` had to leave the track: a
+   fourth segment beside three orderings would have promised that turning the
+   shelf on turns an ordering off. */
+.lens-narrow .btn.on,
+.canvas-archived.on {
   background: var(--accent-wash);
   color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
@@ -5771,20 +6047,66 @@ button.mt-card:hover { border-color: var(--accent); }
 /**
  * **The card's peek** — what happened here before the last thing.
  *
- * Inside the card rather than floating over it: a popover would need placing
- * against the viewport, and these are three short rows the card has room for.
+ * Attached to the card but floating over its neighbours: in flow it pushed
+ * the whole grid down on every hover, and the page jumped under the pointer.
  * It appears on pointer AND on focus, because a hover-only affordance does not
  * exist for a keyboard or a touch screen.
  */
+/* Only a rendered preview joins the card: an empty history leaves it alone.
+   Both halves use one opaque ground and perimeter, without shadows crossing
+   the join. Keep the card's border widths so its grid footprint never changes. */
+.canvas-card:has(> .card-peek) {
+  background: linear-gradient(var(--panel), var(--panel)), var(--card);
+  box-shadow: none;
+}
+.canvas-card:has(> .card-peek:not(.up)) {
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+}
+.canvas-card:has(> .card-peek.up) {
+  border-top-left-radius: 0; border-top-right-radius: 0;
+}
 .card-peek {
+  /* Out of flow, over the neighbours. The first version was a plain flex
+     child of the card — "a popover floating outside would need placing, and
+     this is a few short rows that the card has room for" — and every hover
+     grew the card by the peek's height and pushed the whole grid down: the
+     page jumped under the pointer. The card's footprint is fixed now; the
+     preview floats below it, above the rows it covers, placed by the card
+     it belongs to. */
+  position: absolute; top: 100%; left: -1px; right: -1px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin: 6px 14px 0;
-  padding-top: 6px;
-  border-top: 1px solid var(--line-soft);
+  margin: 0;
+  padding: 8px 14px 10px;
+  /* The menu's ground (8 Sep 2026): `--panel` over opaque `--card` renders
+     one value no matter which cards this opens over — a translucent peek
+     would read differently per row it covered. */
+  background: linear-gradient(var(--panel), var(--panel)), var(--card);
+  border: 1px solid;
+  border-color: inherit;
+  /* top: 100% overlaps the card's existing 1px border with this ground. */
+  border-top-width: 0;
+  border-radius: 0 0 var(--r-float) var(--r-float);
+  box-shadow: none;
+  /* Bounded: five seams is the most a peek ever shows, but on a short
+     window it scrolls rather than running off the screen. 288px is the cap
+     when the room allows it — five rows with thumbnails measure 282, which
+     240 was 42px short of, slicing the last row on every canvas whose seams
+     named items (`PEEK_CAP` carries the measurement and is asserted equal to
+     this number). The component clamps further to the actual room on the
+     chosen side (peekplace.ts) with an inline max-height. */
+  max-height: 288px;
+  overflow-y: auto;
   font-size: 11.5px;
   color: var(--ink-soft);
+}
+/* A card near the bottom edge opens its preview upward instead — the
+   component measures and wears `up` when there is more room above. */
+.card-peek.up {
+  top: auto; bottom: 100%;
+  border-top-width: 1px; border-bottom-width: 0;
+  border-radius: var(--r-float) var(--r-float) 0 0;
 }
 .card-peek-row { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
 /* A row that is a link to its item: the same quiet row, and a hover that
@@ -6094,15 +6416,30 @@ button.mt-card:hover { border-color: var(--accent); }
 .fullscreen-notes-toggle.on { border-color: var(--accent); color: var(--accent-text); }
 
 /* ---------- the top fade (lib/hideable.ts, "canvas.topfade") ---------- */
-/* A wash of the page's own ground from the top edge, so the title, the faces
-   and Share read over a busy canvas — white on light, near-black on dark,
-   because it is `--ground` and not a colour of its own. Over the items
-   (`--z-canvas`) and under every piece of chrome; no pointer target, so a
-   drag that starts under it still starts on the canvas. */
+/**
+ * A wash of the ground from the top edge, so the title, the faces and Share
+ * read over a busy canvas. Over the items (`--z-canvas`) and under every
+ * piece of chrome; no pointer target, so a drag that starts under it still
+ * starts on the canvas.
+ *
+ * **The ground it washes is the CANVAS's, not the app's** (8 Sep 2026). This
+ * was `var(--ground)` alone — the page's ground, near-white in the light
+ * theme — and Dion reported it from a canvas standing on Space Galaxy: *"when
+ * the background is dark, the top fade should be dark, and when it's light it
+ * should be light."* A ground is not the app's theme. `.canvas-theme-galaxy`
+ * says so two hundred lines up — *"Space is dark whatever the app's theme
+ * is"* — so in light mode the fade was a white bar dissolving into a
+ * starfield, which is the exact artefact a fade exists to prevent.
+ *
+ * `lib/groundtone.ts` writes `--canvas-ground` as the same token the ground
+ * itself paints with, so the wash and the thing it washes cannot drift; the
+ * fallback here is what a canvas with no ground of its own gets, and is why
+ * this stayed right for every canvas until one wore a sky.
+ */
 .top-fade {
   position: absolute; top: 0; left: 0; right: 0; height: 96px;
   z-index: var(--z-canvas); pointer-events: none;
-  background: linear-gradient(to bottom, var(--ground), transparent);
+  background: linear-gradient(to bottom, var(--canvas-ground, var(--ground)), transparent);
 }
 
 /* ---------- a diagram, drawn from its text (modules/mermaid) ---------- */
@@ -6115,3 +6452,30 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .diagram-view svg { max-width: 100%; max-height: 100%; height: auto; }
 .diagram-error small { display: block; margin-top: 6px; color: var(--ink-soft); }
+
+/* Read mode keeps document geometry local and gives selection its own gesture. */
+.item-read { position: absolute; right: 8px; bottom: 8px; z-index: 6; background: var(--card); min-height: 32px; }
+.item.entered .md-view { padding-bottom: 40px; user-select: text; -webkit-user-select: text; }
+.item.entered:not(.textnode) .md-view, .artifact-stage .md-view { font-size: 16px; line-height: 1.6; }
+.item.entered:not(.textnode) .md-view h1, .artifact-stage .md-view h1 { font-size: 22px; }
+.item.entered:not(.textnode) .md-view h2, .artifact-stage .md-view h2 { font-size: 18px; }
+.item.entered:not(.textnode) .md-view h3, .artifact-stage .md-view h3 { font-size: 17px; }
+.markdown-text { max-width: 72ch; margin-inline: auto; overflow-wrap: anywhere; }
+.markdown-text pre { overflow-wrap: normal; }
+.text-attention-status { position: sticky; top: 0; z-index: 1; background: var(--card); color: var(--ink); padding: 4px 8px; font-size: 12px; line-height: 1.4; border-bottom: 1px solid var(--line); user-select: none; }
+.text-attention-status > span { display: block; }
+.text-attention-status button { margin-left: 6px; }
+
+.document-outline { margin: 0 0 12px; font-size: 13px; }
+.document-outline nav { display: flex; flex-direction: column; align-items: flex-start; }
+
+/* Discussion controls stay outside the canonical document text. */
+.document-discussions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.thread-text-anchor { margin: 0 0 12px; overflow-wrap: anywhere; }
+.thread-text-anchor blockquote { margin: 0 0 8px; padding-left: 12px; border-left: 2px solid var(--accent); white-space: pre-wrap; max-height: 160px; overflow: auto; }
+.thread-text-anchor small { color: var(--ink-muted); }
+.markdown-resource-missing { text-decoration: underline dotted; color: var(--ink-muted); cursor: help; }
+
+.text-comment-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; position: sticky; top: 0; z-index: 2; background: var(--card); padding: 4px; }
+.fullscreen-stage .md-view { padding-top: 96px; scroll-padding-top: 96px; }
+.fullscreen-stage .text-comment-actions { top: 64px; }

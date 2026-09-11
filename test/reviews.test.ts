@@ -41,6 +41,21 @@ describe("the review index is derived, not written", () => {
     const page = readFileSync(`${repo}/docs/reviews/README.md`, "utf8");
     expect(page).toContain("scripts/reviews.mjs");
   });
+
+  it("stays current when only the clock moves", () => {
+    // Run the real checker under another clock. Relative ages in the
+    // committed table used to make an unchanged checkout fail at midnight.
+    const clock = `const RealDate = Date;
+      globalThis.Date = class extends RealDate {
+        constructor(...args) { super(...(args.length ? args : ["2040-01-01T00:00:00Z"])); }
+        static now() { return new RealDate("2040-01-01T00:00:00Z").getTime(); }
+      };`;
+    const out = execFileSync(process.execPath, [
+      "--import", `data:text/javascript,${encodeURIComponent(clock)}`,
+      `${repo}/scripts/reviews.mjs`, "--check",
+    ], { cwd: repo, encoding: "utf8", timeout: 60_000 });
+    expect(out).toContain("is current");
+  });
 });
 
 /**
@@ -58,17 +73,20 @@ describe("the review index is derived, not written", () => {
  * free, and nothing announced that it was not — so four lessons written on
  * 8 Sep took 36–39 and two of them collided. Those are 40–43 now.
  *
- * A ratchet rather than a bound, because the four inherited collisions want
- * reference archaeology rather than a rename: each has to be read to say which
- * lesson its citations meant.
+ * The archaeology is done and the ratchet is at zero. Each later duplicate
+ * was read to see which lesson its citations meant, then moved to a free
+ * number — the existence check to 38, the NaN one to 39, deduplicating-by-a-
+ * finer-key to 45, the shared chrome budget to 46, the cheerful instrument to
+ * 47 — and every first occurrence kept its number, so the citations that were
+ * already right did not move. 36 and 37 went back after 35.
  */
 describe("a lesson number means one lesson", () => {
   const numbers = () =>
     [...readFileSync(fileURLToPath(new URL("../docs/reviews/lessons.md", import.meta.url)), "utf8")
       .matchAll(/^\|\s*(\d+)\s*\|\s*\*\*/gm)].map((m) => Number(m[1]));
 
-  /** 16, 17, 18 and 20 were already doubled before this guard existed. */
-  const INHERITED = 4;
+  /** Was 4 — 16, 17, 18 and 20 — until #206 phase 5 gave each one a name. */
+  const INHERITED = 0;
 
   it(`has no more than ${INHERITED} numbers used twice`, () => {
     const seen = new Map<number, number>();

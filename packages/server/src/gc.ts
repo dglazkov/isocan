@@ -75,8 +75,11 @@ function hashesInOperation(op: Operation): string[] {
   switch (op.type) {
     case "item.add":
     case "item.addVersion":
-    case "item.restoreVersion":
-      return [op.version.blobHash];
+    case "item.restoreVersion": {
+      const hashes = [op.version.blobHash];
+      if (op.version.visual?.blobHash) hashes.push(op.version.visual.blobHash);
+      return hashes;
+    }
     default:
       return [];
   }
@@ -102,10 +105,16 @@ export function reachableHashes(state: CanvasState, retained: LogEntry[]): Set<s
   const marked = new Set<string>();
   for (const hash of blobsInProperties(state)) marked.add(hash);
   for (const item of Object.values(state.canvas.items)) {
-    for (const version of item.versions) marked.add(version.blobHash);
+    for (const version of item.versions) {
+      marked.add(version.blobHash);
+      if (version.visual?.blobHash) marked.add(version.visual.blobHash);
+    }
   }
   for (const entry of state.canvas.trash) {
-    for (const version of entry.item.versions) marked.add(version.blobHash);
+    for (const version of entry.item.versions) {
+      marked.add(version.blobHash);
+      if (version.visual?.blobHash) marked.add(version.visual.blobHash);
+    }
   }
   for (const entry of retained) {
     for (const hash of hashesInOperation(entry.envelope.op)) marked.add(hash);

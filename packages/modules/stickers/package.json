@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/stickers",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A tray of emoji you drag onto the canvas — the module the overlay, drop and host APIs were shaped by",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

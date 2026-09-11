@@ -51,14 +51,27 @@ export const THEME_PROP = "theme";
  * The grounds this build can actually draw. `none` is not a member — it is the
  * absence of the property, so removing a theme leaves nothing behind.
  *
- * **Farm is deliberately not here yet**, and that is the rule rather than an
- * omission: a canvas wearing a name nothing can draw shows the dot grid with
- * no way to explain itself, and cycling through the picker would hit a step
- * that appears to do nothing. Grass and hedgerows read as DRAWN in a way
- * procedural texture does not, so farm waits for artwork — and adding it is
- * this list plus a component, with nothing else to change (#195, 6 Sep).
+ * **The artist arrived on 8 September 2026**, and this list is what that
+ * bought. It read `galaxy, ocean, mountains` for a fortnight with a comment
+ * saying farm was *deliberately* absent — *"a canvas wearing a name nothing
+ * can draw shows the dot grid with no way to explain itself"* — and that
+ * comment was right to hold the line and is now spent, exactly as it said it
+ * would be: *"adding it is this list plus a component, with nothing else to
+ * change"*. It was.
+ *
+ * Five grounds, and one of them is still generated. **`galaxy` keeps its
+ * procedural starfield rather than taking the painted tile it was offered**,
+ * for the one reason that outranks a nicer picture: measured 2×2 against
+ * itself, the painted space tile has a visible seam — a brightness step down
+ * the join, edge gap 8 against an interior control of 0. An infinite canvas
+ * finds a seam within one pan. The generated sky has none by construction and
+ * costs no download, which was always its argument.
+ *
+ * The other four are pictures now (`packages/web/public/grounds/`). Ocean and
+ * mountains had procedural stand-ins and this is the drop-in the stopgap was
+ * written for; farm and desert never could have been generated at all.
  */
-export const THEMES = ["galaxy", "ocean", "mountains"] as const;
+export const THEMES = ["galaxy", "ocean", "mountains", "farm", "desert"] as const;
 
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
@@ -86,6 +99,10 @@ export function themeLabel(theme: CanvasTheme): string {
       return "Ocean";
     case "mountains":
       return "Mountains";
+    case "farm":
+      return "Farmland";
+    case "desert":
+      return "Desert";
   }
 }
 
@@ -407,20 +424,164 @@ export function groundIsPlace(canvas: { properties?: Record<string, string> }): 
  * The three that ship are the three that survived being looked at; `farm`
  * would want a sheep and wants the same artist its grass does.
  */
-export function themeCursor(theme: CanvasTheme | null): string {
+/**
+ * **A cursor you choose, when the ground is a picture** (#204 phase 3).
+ *
+ * > "there should be a 'custom' setting where the user can set a tile and
+ * > cursor and then it takes on its own?"
+ *
+ * ## Why this does not break "one property, not two"
+ *
+ * `THEME_PROP`'s comment is emphatic and right: a theme names the ground AND
+ * the cursor, because "farm" is the fact, and two properties would let a
+ * canvas be a farm with rockets. That rule is untouched here — **a seeded
+ * ground still names its own cursor and this property cannot override one.**
+ *
+ * The gap is that a canvas standing on a PICTURE has no name to derive a
+ * cursor from, so it got the plain arrow. There is nothing to contradict, so
+ * there is nothing to protect: this is the name that is missing, not a second
+ * name competing with one.
+ *
+ * ## Chosen, never uploaded (#204, D4)
+ *
+ * Every shape here is filled at runtime with the viewer's own identity colour,
+ * and that is the constraint #195 is emphatic about — the seven
+ * `IDENTITY_COLORS` also land on items during remote selection, so a cursor
+ * carrying its own colour would delete the one signal saying who is who. An
+ * uploaded PNG cannot be tinted, so on that canvas six people would share one
+ * pointer. The refusal is worth stating out loud rather than leaving as an
+ * absence.
+ *
+ * And it is genuinely hard to draw for: at 18 pixels a rocket silhouette IS an
+ * arrow — that was tried, across four sizes, and never worked. Asking somebody
+ * to author one is asking them to fail; offering a library is the same feature
+ * with the failure removed.
+ */
+export const CURSOR_PROP = "cursor";
+
+/** The shapes this build can draw. Not a string, for `THEMES`' reason: a
+ *  canvas wearing a name nothing can draw is a pointer that vanishes. */
+export const CURSORS = ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep"] as const;
+
+/** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
+ *  reason: a name nothing can draw is a pointer that vanishes. */
+export type CanvasCursor = (typeof CURSORS)[number];
+
+/** Is this a shape this build can draw — the parse both surfaces use, so the
+ *  CLI refuses exactly what the app would not render. */
+export function isCursor(value: string): value is CanvasCursor {
+  return (CURSORS as readonly string[]).includes(value);
+}
+
+/** What a shape is called where somebody picks it. Beside the ids for
+ *  `themeLabel`'s reason: a menu that says "sparkle" is showing its variable. */
+export function cursorLabel(cursor: CanvasCursor): string {
+  switch (cursor) {
+    case "arrow":
+      return "Arrow";
+    case "sparkle":
+      return "Sparkle";
+    case "fish":
+      return "Fish";
+    case "flag":
+      return "Flag";
+    case "drop":
+      return "Drop";
+    case "heart":
+      return "Heart";
+    case "crescent":
+      return "Crescent";
+    case "sheep":
+      return "Sheep";
+  }
+}
+
+/** The chosen shape, or null when nothing has been chosen. */
+export function cursorOf(canvas: { properties?: Record<string, string> }): CanvasCursor | null {
+  const value = canvas.properties?.[CURSOR_PROP];
+  return value !== undefined && isCursor(value) ? value : null;
+}
+
+/** Wear one; `arrow` is a choice rather than an absence, so it is stored. */
+export function cursorPatch(cursor: CanvasCursor): MetaPatch {
+  return { properties: { [CURSOR_PROP]: cursor } };
+}
+
+/** Back to whatever the ground implies. */
+export function noCursorPatch(): MetaPatch {
+  return { removeProperties: [CURSOR_PROP] };
+}
+
+/**
+ * **Which pointer this canvas wears — the NAME, not the drawing** (9 Sep 2026).
+ *
+ * > "A cursor should only be loaded if a theme is loaded"
+ *
+ * This returned an SVG path until Dion read the size gate's answer and asked
+ * that. He is right, and the fix is a boundary rather than a lazy import: the
+ * path data was 7 shapes in core, which every first visit downloaded, and a
+ * canvas on the dot grid draws exactly one of them. Core is imported eagerly
+ * by everything; there is no honest way to make part of it arrive later.
+ *
+ * So the paths went to the surface that draws them
+ * (`web/src/lib/cursorart.ts`, fetched only when the answer here is not
+ * `arrow`) and core kept the DECISION, which is the half both surfaces need
+ * and the half that carries the rule.
+ *
+ * It is the same seam the design system already uses — core holds the tokens,
+ * the surface renders them — and it reads better than what it replaced: the
+ * CLI never drew a cursor, so it was carrying seven path strings to print
+ * sentences about grounds.
+ *
+ * ## The order is the rule, not a preference
+ *
+ * A seeded ground names its cursor and wins, so a galaxy cannot be given a
+ * fish — that is `THEME_PROP`'s invariant, and this is where it is enforced
+ * rather than hoped for. Only a canvas standing on a picture, which names
+ * nothing, reads the chosen one.
+ */
+export function canvasCursorName(canvas: { properties?: Record<string, string> }): CanvasCursor {
+  const theme = themeOf(canvas);
+  if (theme !== null) return themeCursorName(theme);
+  return cursorOf(canvas) ?? "arrow";
+}
+
+/**
+ * **The cursor a SEEDED ground gives everybody**, keyed by theme.
+ *
+ * Its own function rather than folded into `canvasCursorName`, because this is
+ * the half that must not be overridable: a theme names its cursor, and the
+ * library's names are the same names, so a picked "sparkle" and a galaxy's
+ * cursor can never become two drawings of one idea.
+ *
+ * **Farm got its sheep on 9 Sep; desert still borrows the crescent.** Dion
+ * asked for both, and only one of them is possible.
+ *
+ * A sun cannot be a cursor here, and the reason is structural rather than a
+ * failure of drawing: a sun is radially symmetric and a cursor has to point.
+ * Two attempts were drawn and rendered at 18, 24 and 32px — pulling one ray
+ * out to the hotspot makes a spike by construction, and what you get is a
+ * COMET, which also happens to be the sparkle's cousin. A cactus was tried for
+ * the same slot and has no natural top-left tip at all.
+ *
+ * So the crescent stays, and it is not a placeholder: a desert moon is a good
+ * story, and the shape is the sharpest tip in the library. What desert would
+ * actually want is a shape somebody thinks of that nobody has yet.
+ */
+export function themeCursorName(theme: CanvasTheme | null): CanvasCursor {
   switch (theme) {
     case "galaxy":
-      // A four-point star whose upper-left ray is long enough to point with.
-      return "M1.5 0.5 C6 6 7.5 7.5 13 10.5 C8.5 11.8 7.2 13 5.5 19 C4.6 13.4 3.4 11.8 0.6 10.2 C3.6 8.2 4.8 6.2 1.5 0.5 Z";
+      return "sparkle";
     case "ocean":
-      // Nose at the hotspot, tail behind — it swims the way the pointer points.
-      return "M1.5 0.5 C8 3 13 8 14.5 13.5 C10 14.5 5 12 1.8 7.5 Z M13.5 13 L17.5 12 L16 17 Z";
+      return "fish";
     case "mountains":
-      // A summit flag: the pole's top is the tip, which is the one shape here
-      // that was legible at 18px on the first try.
-      return "M1.5 0.5 L3.1 0.9 L3.1 19 L1.5 19 Z M3.6 1.4 L13.5 4.6 L3.6 9.2 Z";
+      return "flag";
+    case "farm":
+      return "sheep";
+    case "desert":
+      return "crescent";
     default:
-      // No ground, no costume. The arrow every cursor here has always been.
-      return "M1.5 0.5 L16 12 L9.2 12.8 L5.5 19 Z";
+      // No ground, no costume.
+      return "arrow";
   }
 }

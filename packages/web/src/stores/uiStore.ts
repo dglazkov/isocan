@@ -1,3 +1,4 @@
+import type { TextAnchor } from "@isocan/core";
 import { create } from "zustand";
 import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
@@ -55,12 +56,31 @@ export interface PendingText {
    *  so choosing a size shows you the size before it is everyone's. */
   style: TextStyle;
   face: TextFace;
+  /**
+   * **This placement borrowed the tool and gives it back** (9 Sep 2026).
+   *
+   * > "when you click away it switches to the select tool UNLESS the user was
+   * > holding down the T key when they clicked... then it STAYS on the text
+   * > tool"
+   *
+   * Set when the canvas places a node with the text tool and T was NOT being
+   * held: one node, then the tool hands itself back. Held-T says "I am placing
+   * several", and leaves the tool where it is.
+   *
+   * It rides on the pending node rather than sitting beside it in the store,
+   * because that is what scopes it correctly for free: re-wording an existing
+   * node opens a pending too (`ItemView`), and that must never move the tool.
+   * A flag on the store would have to remember which of those it belonged to.
+   */
+  oneShot?: boolean;
   /** The paper being typed on, or null/absent for a plain caption — local
    *  until it commits, like the step and the face. */
   paper?: Paper | null;
 }
 
 export interface PendingComment {
+  /** A quote captured before the composer takes focus. */
+  textAnchor?: TextAnchor;
   /** World coordinates of the click. */
   x: number;
   y: number;
@@ -210,6 +230,11 @@ interface UiStore {
    *  browser, like the theme: taste, not a canvas fact. */
   hiddenChrome: string[];
   setChromeHidden: (id: string, hidden: boolean) => void;
+  /** Unfinished work a person switched on for themselves — `lib/experiments.ts`.
+   *  This browser's, like `hiddenChrome`: it changes what YOU see, never what
+   *  the canvas is. */
+  experiments: string[];
+  setExperiment: (id: string, on: boolean) => void;
   /**
    * **Messages this reader has folded away**, by comment id.
    *
@@ -423,6 +448,7 @@ function readWbAgentsWidth(): number {
 }
 
 const HIDDEN_CHROME_KEY = "isocan.hiddenChrome";
+const EXPERIMENTS_KEY = "isocan.experiments";
 /** The cursor glow, which some people find delightful and some find busy. */
 const GLOW_KEY = "isocan.cursorGlow";
 const LIVE_DOCS_KEY = "isocan.liveDocs";
@@ -605,6 +631,7 @@ export const useUiStore = create<UiStore>((set) => {
     marksOpen: false,
     historyOpen: false,
     hiddenChrome: readHiddenChrome(),
+    experiments: readIdList(EXPERIMENTS_KEY),
     collapsedComments: [],
     modulesGeneration: 0,
     bumpModules: () => set((s) => ({ modulesGeneration: s.modulesGeneration + 1 })),
@@ -641,7 +668,24 @@ export const useUiStore = create<UiStore>((set) => {
     setRenaming: (renamingItemId) => set({ renamingItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
-    setPendingText: (pendingText) => set({ pendingText }),
+    /**
+     * **Closing a one-shot placement hands the tool back.**
+     *
+     * In the setter rather than at the call sites because there are three of
+     * them and two are in `TextComposer` alone — commit, and Escape. A rule
+     * carried out in three places is a rule that will be carried out in two.
+     *
+     * Only when the text tool is still the active one: picking another tool
+     * while the composer is open has already answered the question, and
+     * putting Select back on top of that would undo a choice the person made
+     * more recently than this.
+     */
+    setPendingText: (pendingText) =>
+      set((s) =>
+        pendingText === null && s.pendingText?.oneShot === true && s.activeTool === "text"
+          ? { pendingText, activeTool: "select" as Tool }
+          : { pendingText },
+      ),
     setClipboard: (clipboard) => set({ clipboard }),
     setContextMenu: (contextMenu) => set({ contextMenu }),
     setLastText: (lastTextStyle, lastTextFace, lastPaper) => {
@@ -698,6 +742,22 @@ export const useUiStore = create<UiStore>((set) => {
           : s.hiddenChrome.filter((one) => one !== id);
         writeHiddenChrome(hiddenChrome);
         return { hiddenChrome };
+      }),
+    setExperiment: (id, on) =>
+      set((s) => {
+        const experiments = on
+          ? s.experiments.includes(id)
+            ? s.experiments
+            : [...s.experiments, id]
+          : s.experiments.filter((one) => one !== id);
+        try {
+          localStorage.setItem(EXPERIMENTS_KEY, JSON.stringify(experiments));
+        } catch {
+          // A browser that will not store this still runs the app; the switch
+          // simply does not survive a reload, which is the same bargain every
+          // other preference here makes.
+        }
+        return { experiments };
       }),
     toggleComment: (id) =>
       set((s) => ({

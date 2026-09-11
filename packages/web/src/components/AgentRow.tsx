@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { AgentRow } from "@isocan/core";
-import { answeringExcerpt, recentActivity, workbenchItemPath } from "@isocan/core";
+import { answeringExcerpt, listenWords, recentActivity, rulesOf, workbenchItemPath } from "@isocan/core";
 import { quietFor } from "../lib/presence.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { goStage } from "../lib/goStage.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -98,6 +99,17 @@ export function AgentRowView({
      tab is hidden. */
   useClockSecond();
   const heardFrom = agoMs(useAnsweredAt(canvasId));
+  /**
+   * **The gate, said where the mention is made** (sheepdog, "whom it listens
+   * to"). The design's first failure mode is a silent gate — *"a person
+   * mentions a sheepdog that does not listen to them and nothing says so"* —
+   * and this row is the one place they will look. `listenWords` is core's,
+   * so the tray and `isocan who` cannot word it differently.
+   */
+  const names = useActorNames();
+  const gate = listenWords(rulesOf(canvas?.agents?.[row.actorId]?.rules), (id) =>
+    actorNameIn(names, { id, name: id }),
+  );
 
   // An enrolled row is a RECORD made visible (agents-on-demand phase 2.5):
   // standing to answer here, no session because nothing has arrived. Not
@@ -156,6 +168,10 @@ export function AgentRowView({
               : row.lastAct
                 ? `${describeAct(row.lastAct.kind, row.lastAct.subject)} · ${ago(row.lastAct.at)}`
                 : "enrolled — nobody is listening right now"}
+            {/* Qualifies the promise above rather than replacing it: "answers
+                if you comment" is simply false for anyone outside the gate,
+                and this is the sentence that says so before they type. */}
+            {gate && <em> · {gate}</em>}
           </span>
           {onDismiss && (
             <button

@@ -3,10 +3,47 @@
 Copy one block at a time into an image model. Each is self-contained — nothing
 above or below it needs to go with it.
 
-The grounds ship **procedurally generated** today (`packages/web/src/components/themes/`).
-That was a deliberate stopgap, and the switch was built to take a painted tile
-without rework — so anything produced from these is a drop-in replacement, not a
-migration.
+## What arrived, 8 September 2026
+
+Seven tiles came back against these prompts, and four of them ship. **The
+checks at the bottom of this file caught something in three of the seven**,
+which is the argument for keeping them at the bottom of this file.
+
+| Tile | Verdict |
+| --- | --- |
+| `farmland` | **Ships as `farm`.** The best of the set: irregular fields mean no landmark repeats, and at #353423 it is a work surface. This is the ground `THEMES` held a place for since 6 Sep. |
+| `mountains` | **Ships.** #2f2e28, matching the `rock` target almost exactly. It has the one recognisable landmark in the set — a radial massif — so its tile is sized at 2,200 world units to put the repeat off a working viewport. |
+| `ocean` | **Ships.** Chosen over `ocean2`, which tiles perfectly but reads as a woven lattice: the X-crossings sit on a findable grid. This one reads as sea. |
+| `dessert` | **Ships as `desert`.** Tiles cleanly. It is the one ground that fails the white-card check — #ab703b, where a green pen stroke reads 1.06:1 — and it ships bare anyway, on Dion's call, because a person who picks Desert has chosen a bright ground. |
+| `space` | **Rejected: it does not tile.** Laid 2×2 there is a visible brightness step down the join — edge gap 8 against an interior control of 0. An infinite canvas finds a seam within one pan. `Galaxy.tsx` keeps its generated starfield, which cannot have one. |
+| `ocean2` | Not shipped. See `ocean` above. |
+| `mountains2` | Not shipped. It tiles better — strong diagonal banding, no landmark — but at #5d5954 it is the second-brightest tile and reads as a pattern rather than terrain. A swap is one line in `PAINTED`. |
+
+Three of the seven were `.png` files that were **JPEGs inside**. It cost
+nothing here, but the static server's type map is keyed on the extension, so a
+genuinely mislabelled asset would have gone out as the wrong type.
+
+**The delivered files were renamed to match all of this**, and the names in the
+table above are the ones on disk now. Every extension is the one its magic
+bytes say (checked, not remembered), and the ocean pair was swapped so that in
+both pairs the plain name is the tile that shipped and the `2` is the
+alternate — which is what `mountains`/`mountains2` already meant, and what
+`ocean`/`ocean2` meant backwards. The one name still lying is `dessert`, which
+is sand.
+
+Every tile was 1024² or 2048²; all four that ship were normalised to 1024² at
+quality 82 (139–663KB, from 118KB–5.3MB). Resampling the 2048s was measured
+not to widen a seam.
+
+---
+
+The grounds shipped **procedurally generated** until that day
+(`packages/web/src/components/themes/`). That was a deliberate stopgap, and the
+switch was built to take a painted tile without rework — so anything produced
+from these was a drop-in replacement rather than a migration. It was:
+`Ocean.tsx` and `Mountains.tsx` are gone, `PaintedGround.tsx` draws all four
+pictures, and adding a fifth is a line in `THEMES`, a line in `PAINTED`, and a
+JPEG.
 
 ---
 

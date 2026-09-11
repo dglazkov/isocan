@@ -1,3 +1,4 @@
+import { textAttention } from "@isocan/core";
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { Capability, ClientMessage, PresenceSession, ServerMessage } from "@isocan/core";
@@ -536,6 +537,7 @@ export function attachWebSockets(
     // This connection's presence session, created lazily on its first
     // presence message and torn down with the socket.
     let sessionId: string | null = null;
+    let presenceRevision = 0;
 
     let room = rooms.get(canvasId);
     if (!room) {
@@ -684,7 +686,11 @@ export function attachWebSockets(
       }
       if (message.type !== "presence" || !message.sessionId || !message.actor?.id) return;
       const actor = message.actor;
-      const beat = () => {
+      const revision = ++presenceRevision;
+      const beat = async () => {
+        const selectedText = message.textSelection
+          ? textAttention(message.textSelection, Date.now(), (await engine.getSnapshot(canvasId!)).canvas) : null;
+        if (revision !== presenceRevision || ws.readyState !== WebSocket.OPEN) return;
         if (sessionId === null) {
           sessionId = message.sessionId;
           // The rung rides the session from the admission, never from the
@@ -697,14 +703,15 @@ export function attachWebSockets(
           actor,
           cursor: message.cursor,
           selection: Array.isArray(message.selection) ? message.selection : [],
+          textSelection: selectedText,
         });
       };
-      if (vouched.has(actor.id)) return beat();
+      if (vouched.has(actor.id)) { void beat().catch(() => {}); return; }
       void engine
         .requireActor(badgeId, actor.id)
         .then(() => {
           vouched.add(actor.id);
-          beat();
+          return beat();
         })
         // A beat naming an actor this badge does not claim is DROPPED, not a
         // closed socket: the tab is mid-claim, or its badge was replaced and

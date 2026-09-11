@@ -55,7 +55,7 @@ beforeEach(async () => {
   // door any unknown harness uses.
   await fs.writeFile(
     path.join(home, "config.json"),
-    JSON.stringify({ acpAdapters: { fake: [process.execPath, fakeAcp] } }),
+    JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { fake: [process.execPath, fakeAcp] } }),
   );
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
@@ -142,6 +142,153 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(inside.stdout).toContain("Sian");
   }, 30_000);
 
+  it("a permission is granted for this call only — never by index, never a mode switch", async () => {
+    // The Claude adapter's plan-exit prompt: every option allow_always
+    // and each one a mode switch, bypass among them. The old answer (the
+    // first option matching /allow/) chose one. The answer is by kind:
+    // no allow_once here, so the agent's own reject — and the narration
+    // says what was offered and why it was refused.
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const run = await collect(spawnCli(["rc", "turn", "Sian", "hello"], { FAKE_ACP_PERMISSION: "plan-exit" }));
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("permission:reject");
+    expect(run.stderr).toContain("refused: no allow-once option (offered: exit-plan-auto, exit-plan-bypass, exit-plan-default, reject)");
+    // …and the everyday prompt, reject listed first, still gets its yes:
+    // kind chooses, not position (the first test above pins this too).
+    const plain = await isocan("rc", "turn", "Sian", "again");
+    expect(plain.stdout).toContain("permission:yes");
+  }, 40_000);
+
+  it("a native Codex fence refuses even allow-once escalation", async () => {
+    const agent = await AcpAgentProcess.spawn({ harness: "codex", command: process.execPath, args: [fakeAcp], nativeCodexSandbox: true, sessionDirectories: [home] }, { cwd: home, env: { ...process.env, FAKE_ACP_VERSION: "1.11.0", FAKE_ACP_EXPECT_ROOT: home } });
+    try {
+      const session = await agent.ensureSession(home, null);
+      await agent.ensureSession(home, session.sessionId);
+      const events: string[] = [];
+      const answer = await agent.prompt(session.sessionId, "hello", (event) => events.push(event.detail ?? ""));
+      expect(events.join("\n")).toContain("sandbox cannot be escalated");
+      expect(answer.text).toContain("permission:deny");
+    } finally { agent.close(); }
+  });
+
+  it("the adapter's environment is a list, not the shell: needs pass, accidents do not, the hook adds", () => {
+    const shell: NodeJS.ProcessEnv = {
+      PATH: "/usr/bin",
+      HOME: "/Users/nico",
+      LC_ALL: "en_US.UTF-8",
+      HTTPS_PROXY: "http://proxy:3128",
+      ISOCAN_HOME_URL: "https://isocan.io",
+      ANTHROPIC_API_KEY: "sk-ant",
+      OPENAI_API_KEY: "sk-oai",
+      GEMINI_API_KEY: "g",
+      CLAUDE_CONFIG_DIR: "/Users/nico/.claude-work",
+      npm_config_cache: "/tmp/npm",
+      // The accidents: exported for something else, never for an agent.
+      AWS_SECRET_ACCESS_KEY: "aws",
+      GITHUB_TOKEN: "gh",
+      SSH_AUTH_SOCK: "/tmp/agent.sock",
+      DATABASE_URL: "postgres://",
+      // A harness variable, and the nested-session guard's tripwire.
+      CLAUDE_CODE_SESSION_ID: "stale",
+      CLAUDECODE: "1",
+      // What the hook names: one exact, one by prefix.
+      MY_HARNESS_TOKEN: "t",
+      FAKE_ACP_CRASH: "no",
+      FAKE_OTHER: "x",
+    };
+    const env = adapterEnv("prj_1", "Sian", { source: shell, pass: ["MY_HARNESS_TOKEN", "FAKE_ACP_*"] });
+    expect(env).toMatchObject({
+      PATH: "/usr/bin",
+      HOME: "/Users/nico",
+      LC_ALL: "en_US.UTF-8",
+      HTTPS_PROXY: "http://proxy:3128",
+      ISOCAN_HOME_URL: "https://isocan.io",
+      ANTHROPIC_API_KEY: "sk-ant",
+      OPENAI_API_KEY: "sk-oai",
+      GEMINI_API_KEY: "g",
+      CLAUDE_CONFIG_DIR: "/Users/nico/.claude-work",
+      npm_config_cache: "/tmp/npm",
+      MY_HARNESS_TOKEN: "t",
+      FAKE_ACP_CRASH: "no",
+      ISOCAN_HARNESS: "agent",
+      ISOCAN_SESSION_ID: "Sian",
+      ISOCAN_CANVAS: "prj_1",
+    });
+    for (const name of ["AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "DATABASE_URL", "CLAUDE_CODE_SESSION_ID", "CLAUDECODE", "FAKE_OTHER"]) {
+      expect(env).not.toHaveProperty(name);
+    }
+    // Without the hook, the hook's names stay behind too.
+    expect(adapterEnv("prj_1", "Sian", { source: shell })).not.toHaveProperty("MY_HARNESS_TOKEN");
+  });
+
+  it("a fence asked for and not buildable is refused, not quietly run open", async () => {
+    // The rule the module's comment states: one word cannot also mean its
+    // opposite. On a machine that cannot fence, `--sandbox` fails and names
+    // what is missing — it does not start the agent with the person's reach.
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const refused = await isocan("rc", "turn", "--sandbox", "Sian", "hello");
+    expect(refused.code).toBe(1);
+    // This runner may be able to fence; only assert the shape it takes when
+    // it cannot, which is the half that must never be silent.
+    if (refused.stderr.includes("--sandbox was asked for")) {
+      expect(refused.stderr).toMatch(/srt is not on the PATH|bwrap|IPv6|ripgrep/);
+      expect(refused.stderr).not.toContain("turn ended");
+    }
+  }, 30_000);
+
+  /**
+   * **The fence, for real** — opt-in, because it needs a working srt and,
+   * on Linux, bubblewrap. `ISOCAN_REAL_SANDBOX=<srt command>` names one
+   * (a path, or a command line), and it is declared through
+   * `config.json`'s `sandboxCommand`, so this runs on a machine whose srt
+   * needs a wrapper — which is how it was first run: the 11 Sep spike's
+   * host has no IPv6, so its srt is a patched one the scan rightly refuses.
+   *
+   * What it pins is the pair of facts the whole layer rests on, in ONE
+   * turn: the daemon is still reachable from inside, and the person's home
+   * is not.
+   */
+  it.runIf(process.env.ISOCAN_REAL_SANDBOX)(
+    "a fenced adapter reaches the daemon, and cannot read the person's home",
+    async () => {
+      const canary = path.join(os.homedir(), ".isocan-fence-canary");
+      await fs.writeFile(canary, "the person's own file");
+      try {
+        await fs.writeFile(
+          path.join(home, "config.json"),
+          JSON.stringify({
+            acpAdapters: { fake: [process.execPath, fakeAcp] },
+            sandboxCommand: process.env.ISOCAN_REAL_SANDBOX!.trim().split(/\s+/),
+            // The scripted adapter and the CLI it runs live in the
+            // checkout, which is nobody's working directory — the hook
+            // doing exactly the job it exists for.
+            sandboxRead: [fileURLToPath(new URL("../../..", import.meta.url))],
+            adapterEnv: ["FAKE_ACP_*"],
+          }),
+        );
+        await isocan("rc", "add", "Sian", "--harness", "fake");
+        const run = await collect(
+          spawnCli(["rc", "turn", "--sandbox", "Sian", "hello"], {
+            FAKE_ACP_PROBE: canary,
+            FAKE_ACP_REPLY: "0",
+          }),
+        );
+        expect(run.stderr).toContain("fenced");
+        expect(run.stderr).toContain("turn ended — end_turn");
+        // Reachable: the adapter ran and the injected identity arrived, so
+        // the fence did not break the one connection the agent needs.
+        expect(run.stdout).toContain("env:agent:Sian");
+        // Fenced: the person's own file is not readable from inside, and
+        // the refusal is the filesystem's, not a guess.
+        expect(run.stdout).toMatch(/probe:refused:ENOENT|probe:refused:EACCES/);
+        expect(run.stdout).not.toContain("the person's own file");
+      } finally {
+        await fs.rm(canary, { force: true });
+      }
+    },
+    120_000,
+  );
+
   it("pi ships known: `--harness pi` resolves to the pi-acp adapter without config", async () => {
     // The registry's current pi-acp, pinned to the version the index names.
     expect(await adapterFor(home, "pi")).toMatchObject({
@@ -152,7 +299,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // The config hook still wins over the builtin, as it does for claude-code.
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { pi: ["pi-acp", "--flag"], fake: [process.execPath, fakeAcp] } }),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { pi: ["pi-acp", "--flag"], fake: [process.execPath, fakeAcp] } }),
     );
     expect(await adapterFor(home, "pi")).toEqual({ harness: "pi", command: "pi-acp", args: ["--flag"] });
   });
@@ -180,7 +327,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // "Authentication required" until `authenticate` names gemini-api-key,
     // which the server itself answers from GEMINI_API_KEY.
     await isocan("rc", "add", "Sian", "--harness", "fake");
-    const wants = { FAKE_ACP_AUTH: "gemini-api-key" };
+    const wants = { FAKE_ACP_AUTH: "gemini-api-key", GEMINI_API_KEY: "" };
     const refused = await collect(spawnCli(["rc", "turn", "Sian", "hello"], wants));
     expect(refused.code).toBe(1);
     expect(refused.stderr).toContain("Fake wants a login before a session (methods: gemini-api-key)");
@@ -260,7 +407,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // said outright, since the runner may have pi or claude installed too.
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
     );
     const run = await isocan("rc", "turn", "Percy", "hi");
     expect(run.code).toBe(0);

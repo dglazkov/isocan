@@ -7,6 +7,9 @@ import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.
 import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints } from "../lib/viewport.ts";
+import { moduleDropFor } from "../modules.ts";
+import { webHostFor } from "../lib/modulehost.ts";
+import { newGroupId } from "@isocan/core";
 import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
 import { addFailure, addFiles } from "../lib/upload.ts";
@@ -173,7 +176,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * The cause is the same thing that made P right and H wrong: tool keys were
    * handled in two files with two different shapes. They are handled here now.
    */
-  const holdTool = useRef<{ code: string; prev: Tool; downAt: number } | null>(null);
+  /**
+   * The tool a held key borrowed, and whether the hold was USED — a hold that
+   * placed something is a person saying "I am doing several of these", so it
+   * latches on release instead of handing the tool back (9 Sep 2026).
+   */
+  const holdTool = useRef<{ code: string; prev: Tool; downAt: number; used?: boolean } | null>(null);
   const penHeld = useRef(false);
   // Pending settle: the ink becomes an item when this fires (see INK_SETTLE_MS).
   const settleTimer = useRef<number | null>(null);
@@ -359,7 +367,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         holdTool.current = { code: e.code, prev: ui.activeTool, downAt: Date.now() };
         ui.setActiveTool(wants);
       }
-      if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey) {
+      // `!e.repeat`: a region zoom hands the tool to Select while Z is still
+      // down. The next autorepeated keydown found "not zoom", re-armed the
+      // tool with a fresh timestamp, and the release landed inside the tap
+      // window — so a hold that had already done its job latched Zoom on.
+      if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey && !e.repeat) {
         const ui = useUiStore.getState();
         if (ui.activeTool !== "zoom") {
           zoomPrevTool.current = ui.activeTool;
@@ -374,7 +386,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         const ui = useUiStore.getState();
         // A hold hands the tool back; a tap keeps it, and pressing the same key
         // again returns to Select — the toggle H and T have always had.
-        if (wasHeld(held.downAt, Date.now())) ui.setActiveTool(held.prev);
+        //
+        // Unless the hold was USED. Holding T, clicking, and releasing to find
+        // yourself back in Select is the tool doing the opposite of what the
+        // gesture asked for: you held it down BECAUSE you are placing more
+        // than one.
+        if (wasHeld(held.downAt, Date.now()) && held.used !== true) ui.setActiveTool(held.prev);
         else if (held.prev === ui.activeTool) ui.setActiveTool("select");
         holdTool.current = null;
       }
@@ -612,6 +629,24 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       e.preventDefault();
       const ui = useUiStore.getState();
       const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+      /**
+       * **Holding T means "several"; clicking with the tool means "one".**
+       *
+       * > "when you click away it switches to the select tool UNLESS the user
+       * > was holding down the T key when they clicked"
+       *
+       * The tool was already tap-to-latch, hold-to-borrow. This gives the two
+       * gestures different ENDINGS as well as different beginnings: a borrowed
+       * tool that placed something keeps itself (the hold is marked used, so
+       * releasing T no longer hands it back), and a latched one puts a single
+       * node down and returns to Select when the composer closes.
+       *
+       * Read at the moment of the press, deliberately. Whether T is still down
+       * when you finish typing is not the question — you cannot type with it
+       * held, and the intent was declared when you clicked.
+       */
+      const borrowing = holdTool.current?.code === "KeyT";
+      if (borrowing && holdTool.current !== null) holdTool.current.used = true;
       ui.setPendingText({
         x: Math.round(world.x),
         y: Math.round(world.y),
@@ -622,6 +657,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         style: ui.lastTextStyle,
         face: ui.lastTextFace,
         paper: ui.lastPaper,
+        oneShot: !borrowing,
       });
       return;
     }
@@ -934,6 +970,41 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     const files = Array.from(e.dataTransfer.files);
     const ui = useUiStore.getState();
     const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+
+    /**
+     * **A module's claim on a dragged mime, before the built-ins** (#156).
+     *
+     * Only when there are no files: a native OS drop is the shell's own
+     * gesture and a module intercepting it would be taking over the app's
+     * behaviour rather than adding its own. What is left is a drag started
+     * inside the page — a tray, a palette — which is exactly what a module
+     * needs and what nothing could catch before.
+     *
+     * The module returns ops and the shell sends them, like every other write
+     * a module makes. Its own failure is said out loud rather than left as an
+     * unhandled rejection, the way the upload's is below.
+     */
+    if (files.length === 0) {
+      const claim = moduleDropFor(Array.from(e.dataTransfer.types));
+      if (claim) {
+        const data = e.dataTransfer.getData(claim.mimeType);
+        try {
+          const host = webHostFor(canvasId, actor);
+          const ops = await claim.run({
+            canvasId,
+            data,
+            mimeType: claim.mimeType,
+            at: { x: Math.round(world.x), y: Math.round(world.y) },
+            host,
+          });
+          // One drop is one act, however many ops it took.
+          if (ops && ops.length > 0) await host.send(ops, newGroupId());
+        } catch (err) {
+          setNotice(err instanceof Error && err.message ? err.message : "That could not be dropped here.");
+        }
+        return;
+      }
+    }
 
     // A dragged link or tab arrives as text/uri-list — the same type a
     // browser item's blob stores — and lands as a projected site (#40).

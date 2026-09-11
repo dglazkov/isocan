@@ -20,6 +20,9 @@ import type { Item } from "./model.ts";
 /** The path this item is the file at, relative to the bound root. */
 export const FILE_PROP = "file";
 
+/** The path this item's companion visualizer is at, relative to the bound root. */
+export const VISUAL_FILE_PROP = "visualFile";
+
 /**
  * Where this item belongs on disk, or null when it belongs nowhere — which
  * is the default and stays perfectly useful.
@@ -30,6 +33,15 @@ export const FILE_PROP = "file";
  */
 export function fileOf(item: Item): string | null {
   const raw = item.properties[FILE_PROP];
+  return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
+}
+
+/**
+ * Where this item's visualizer file belongs on disk, or null when it belongs
+ * nowhere. Relative to the bound root.
+ */
+export function visualFileOf(item: Item): string | null {
+  const raw = item.properties[VISUAL_FILE_PROP];
   return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : null;
 }
 
@@ -62,6 +74,8 @@ type BackingState = "written" | "behind" | "drifted" | "absent" | "unbound";
 export interface Backing {
   path: string;
   state: BackingState;
+  visualPath?: string | undefined;
+  visualState?: BackingState | undefined;
 }
 
 /**
@@ -79,16 +93,47 @@ export function backingOf(
 ): Backing | null {
   const path = fileOf(item);
   if (path === null) return null;
-  if (!bound) return { path, state: "unbound" };
+  const visualPath = visualFileOf(item);
+  if (!bound) {
+    return {
+      path,
+      state: "unbound",
+      ...(visualPath !== null ? { visualPath, visualState: "unbound" } : {}),
+    };
+  }
   const found = onDisk(path);
-  if (found === null) return { path, state: "absent" };
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
-  if (found === current?.blobHash) return { path, state: "written" };
-  // Anything this item has ever been is ours, which is the same set the
-  // daemon writes against. Matching one of them means the disk is a version
-  // BEHIND, not somebody else's work.
-  if (item.versions.some((v) => v.blobHash === found)) return { path, state: "behind" };
-  return { path, state: "drifted" };
+  let state: BackingState;
+  if (found === null) {
+    state = "absent";
+  } else if (found === current?.blobHash) {
+    state = "written";
+  } else if (item.versions.some((v) => v.blobHash === found)) {
+    state = "behind";
+  } else {
+    state = "drifted";
+  }
+
+  let visualState: BackingState | undefined;
+  if (visualPath !== null) {
+    const vFound = onDisk(visualPath);
+    const vCurrentHash = current?.visual?.blobHash;
+    if (vFound === null) {
+      visualState = "absent";
+    } else if (vCurrentHash && vFound === vCurrentHash) {
+      visualState = "written";
+    } else if (item.versions.some((v) => v.visual?.blobHash === vFound)) {
+      visualState = "behind";
+    } else {
+      visualState = "drifted";
+    }
+  }
+
+  return {
+    path,
+    state,
+    ...(visualPath !== null && visualState !== undefined ? { visualPath, visualState } : {}),
+  };
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
-import { PLACEMENT_CLEARANCE, nearestFreeSpot } from "./placement.ts";
+import { PLACEMENT_CLEARANCE, PLACEMENT_GAP, nearestFreeSpot, overlaps } from "./placement.ts";
 import { isPaper, type Paper } from "./textnode.ts";
 
 /**
@@ -138,23 +138,34 @@ export function findArea(canvas: CanvasContents, ref: string): Item | null {
   return areas.find((a) => a.title.toLowerCase().startsWith(needle)) ?? null;
 }
 
+interface AreaSpot {
+  x: number;
+  y: number;
+  areaId?: string;
+  resizedArea?: { width: number; height: number };
+  shifts?: Array<{ itemId: string; x: number; y: number }>;
+}
+
 /**
  * Where a new thing of this size can sit INSIDE the area without landing on
- * anything already there: the same outward search the daemon uses for the
- * whole canvas, confined to the sheet's inner region, starting at its
- * top-left. Something placed here is placed *chosen*, because the search
- * already found it clear and the daemon must not tidy it out of the area.
+ * anything already there.
  *
- * A sheet too full to hold it still gets an honest answer — the inner
- * region's top-left — rather than a spot outside the area, which would
- * make "in the area" a lie the moment the wall was busy.
+ * If the area has room, it takes the nearest free spot within the sheet's
+ * inner region in reading order.
+ *
+ * If the area cannot fit the new item within its current boundaries, the area
+ * AUTOMATICALLY GROWS: it finds a clear spot in reading order (flowing across
+ * the row and wrapping downward into subsequent rows) and returns the required
+ * expanded sheet dimensions in `resizedArea`. If the item is wider than the
+ * sheet, the sheet widens to accommodate it and downstream items/areas to the
+ * right are shifted to prevent overlap.
  */
 export function freeSpotIn(
   canvas: CanvasContents,
   area: Item,
   width: number,
   height: number,
-): { x: number; y: number } {
+): AreaSpot {
   const inner = areaInner(area);
   const occupied = Object.values(canvas.items)
     .filter((item) => !isArea(item))
@@ -166,7 +177,88 @@ export function freeSpotIn(
     width: inner.width + PLACEMENT_CLEARANCE * 2,
     height: inner.height + PLACEMENT_CLEARANCE * 2,
   };
-  return nearestFreeSpot(want, occupied, within);
+  const spot = nearestFreeSpot(want, occupied, within);
+
+  const inside =
+    spot.x >= within.x &&
+    spot.y >= within.y &&
+    spot.x + width <= within.x + within.width &&
+    spot.y + height <= within.y + within.height;
+  const clear =
+    inside && !occupied.some((item) => overlaps({ ...spot, width, height }, item, PLACEMENT_CLEARANCE));
+
+  if (clear) {
+    return { x: spot.x, y: spot.y };
+  }
+
+  // Area cannot fit the item within current bounds: auto-grow.
+  const growWidth = Math.max(inner.width, width);
+  const growWithin = {
+    x: inner.x - PLACEMENT_CLEARANCE,
+    y: inner.y - PLACEMENT_CLEARANCE,
+    width: growWidth + PLACEMENT_CLEARANCE * 2,
+    height: Number.MAX_SAFE_INTEGER,
+  };
+  const grownSpot = nearestFreeSpot(want, occupied, growWithin);
+  const grownInside =
+    grownSpot.x >= growWithin.x &&
+    grownSpot.y >= growWithin.y &&
+    grownSpot.x + width <= growWithin.x + growWithin.width;
+  const grownClear =
+    grownInside &&
+    !occupied.some((item) => overlaps({ ...grownSpot, width, height }, item, PLACEMENT_CLEARANCE));
+
+  let finalSpot: { x: number; y: number };
+  if (grownClear) {
+    finalSpot = grownSpot;
+  } else {
+    // Fallback below the lowest item in this area to guarantee no overlap
+    const inThisArea = itemsIn(canvas, area);
+    const lowestY =
+      inThisArea.length === 0
+        ? inner.y
+        : Math.max(...inThisArea.map((i) => i.y + i.height));
+    finalSpot = { x: inner.x, y: lowestY + PLACEMENT_GAP };
+  }
+
+  const neededWidth = Math.max(area.width, Math.round(finalSpot.x + width - area.x + AREA_INSET));
+  const neededHeight = Math.max(area.height, Math.round(finalSpot.y + height - area.y + AREA_INSET));
+
+  const shifts: Array<{ itemId: string; x: number; y: number }> = [];
+  if (neededWidth > area.width) {
+    const deltaX = neededWidth - area.width;
+    const rightThreshold = area.x + area.width - PLACEMENT_CLEARANCE;
+    for (const item of Object.values(canvas.items)) {
+      if (item.id !== area.id && item.x >= rightThreshold) {
+        shifts.push({ itemId: item.id, x: item.x + deltaX, y: item.y });
+      }
+    }
+  }
+
+  return {
+    x: finalSpot.x,
+    y: finalSpot.y,
+    areaId: area.id,
+    resizedArea: { width: neededWidth, height: neededHeight },
+    ...(shifts.length > 0 ? { shifts } : {}),
+  };
+}
+
+/**
+ * Calculate the sheet dimensions required to enclose these items with title
+ * header and insets. Returns null if the area already comfortably encloses them.
+ */
+export function areaEnclosing(
+  area: Item,
+  items: readonly Item[],
+): { width: number; height: number } | null {
+  if (items.length === 0) return null;
+  const maxRight = Math.max(...items.map((i) => i.x + i.width));
+  const maxBottom = Math.max(...items.map((i) => i.y + i.height));
+  const neededWidth = Math.max(area.width, Math.round(maxRight - area.x + AREA_INSET));
+  const neededHeight = Math.max(area.height, Math.round(maxBottom - area.y + AREA_INSET));
+  if (neededWidth === area.width && neededHeight === area.height) return null;
+  return { width: neededWidth, height: neededHeight };
 }
 
 /**

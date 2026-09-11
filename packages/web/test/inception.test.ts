@@ -59,7 +59,7 @@ describe("the popup has two doors and one dialog", () => {
   it("searches your canvases, most recent first, or takes an address", () => {
     expect(popup).toContain("listCanvases()");
     expect(popup).toContain("Date.parse(b.updatedAt) - Date.parse(a.updatedAt)");
-    expect(popup).toContain("classifyAddable(query, canvases ?? [], canvasId)");
+    expect(popup).toContain("classifyAddableDraft(query, canvases ?? [], canvasId)");
   });
 
   it("is opened by the rail and by ⌘K through one shared state — the one Add door", () => {

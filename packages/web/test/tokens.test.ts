@@ -127,7 +127,7 @@ describe("drawing a design system", () => {
  * Caught the day full screen was built. `.fullscreen` asked for `var(--bg)`,
  * which this stylesheet has never had — the palette calls it `--ground` — so
  * an element whose entire job was to COVER the canvas was transparent, and the
- * canvas showed through the thing hiding it. Same shape as lessons.md #16: a
+ * canvas showed through the thing hiding it. Same shape as lessons.md #39: a
  * bad value that never threw.
  */
 describe("every token used is a token defined", () => {
@@ -185,6 +185,12 @@ describe("every token used is a token defined", () => {
       // the zoom (`textMarkSize`) — a number no stylesheet can know, for the
       // same reason `--scale` is not in one.
       "--mark",
+      // `--canvas-ground` is the colour THIS canvas is standing on, which is a
+      // canvas property (`lib/groundtone.ts`) rather than anything a
+      // stylesheet knows. Read as `var(--canvas-ground, var(--ground))`, so a
+      // canvas with no ground of its own falls back to the app's page ground
+      // and the declaration never drops.
+      "--canvas-ground",
     ]);
     const known = defined(rules);
     const missing = used(rules).filter((u) => !known.has(u.name) && !setInJs.has(u.name));

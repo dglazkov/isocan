@@ -1,4 +1,5 @@
-import type { Actor, Comment, CommentThread, ItemVersion } from "./model.ts";
+import type { TextAnchor } from "./text-anchor.ts";
+import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.ts";
 
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
@@ -16,6 +17,8 @@ export interface NewVersion {
   mimeType: string;
   filename: string;
   size: number;
+  /** Optional visual face (canvas iframe presentation, visualizer, inlined HTML). */
+  visual?: VisualFace;
 }
 
 /**
@@ -34,7 +37,16 @@ export interface NewVersion {
  * else, and "commit this here" has to mean here. Absent means not chosen,
  * so every op already in a log replays exactly as it did.
  */
-export type Placement = { x: number; y: number; chosen?: boolean } | { anchorItemId: string };
+export type Placement =
+  | {
+      x: number;
+      y: number;
+      chosen?: boolean;
+      areaId?: string;
+      resizedArea?: { width: number; height: number };
+      shifts?: Array<{ itemId: string; x: number; y: number }>;
+    }
+  | { anchorItemId: string };
 
 export interface NewComment {
   id: string;
@@ -262,6 +274,7 @@ export type Operation =
   // ---- comments ----
   | {
       type: "thread.create";
+      textAnchor?: TextAnchor | null;
       threadId: string;
       x: number;
       y: number;
@@ -279,6 +292,8 @@ export type Operation =
       // or freestanding (x,y become world coordinates). Lets a thread that
       // started before its item existed be anchored to it after the fact.
       type: "thread.setAnchor";
+      /** Omission clears a previous text selector, preserving old item-pin clients. */
+      textAnchor?: TextAnchor | null;
       threadId: string;
       anchorItemId: string | null;
       x: number;

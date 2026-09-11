@@ -4,8 +4,11 @@ import {
   GROUND_MAX_BYTES,
   anchorOf,
   anchorPatch,
+  cursorOf,
+  cursorPatch,
   groundOf,
   groundPatch,
+  noCursorPatch,
   noThemePatch,
   themeOf,
   themePatch,
@@ -157,6 +160,13 @@ export function Toolbar({
                   },
                   ownGround: groundOf(canvas) !== null,
                   pickGround: () => groundInput.current?.click(),
+                  cursor: cursorOf(canvas),
+                  setCursor: async (cursor) => {
+                    await sendEchoed(canvas.id, actor, {
+                      type: "project.update",
+                      patch: cursor === null ? noCursorPatch() : cursorPatch(cursor),
+                    });
+                  },
                   canEdit,
                   toWorkbench: () => navigate(workbenchPath(canvas.id)),
                 }),

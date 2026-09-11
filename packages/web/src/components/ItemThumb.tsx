@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { canvasIdOf, itemKind, isTextItem, type Item } from "@isocan/core";
+import { canvasIdOf, itemKind, isTextItem, visualFaceOf, type Item } from "@isocan/core";
 import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
@@ -59,12 +59,13 @@ export function ItemThumb({
   if (!item) return null;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
   if (!current) return null;
-  if (current.mimeType.startsWith("image/")) {
+  const visual = visualFaceOf(current);
+  if (visual.mimeType.startsWith("image/")) {
     return (
       <img
         className="item-thumb"
         style={{ width, height }}
-        src={blobUrl(canvasId, current.blobHash)}
+        src={blobUrl(canvasId, visual.blobHash)}
         alt=""
       />
     );
@@ -86,11 +87,11 @@ export function ItemThumb({
       >
         <VersionContent
           canvasId={canvasId}
-          blobHash={current.blobHash}
-          mimeType={current.mimeType}
-          filename={current.filename}
+          blobHash={visual.blobHash}
+          mimeType={visual.mimeType}
+          filename={visual.filename ?? current.filename}
           entered={false}
-          textNode={isTextItem(item)}
+          textNode={isTextItem(item) && visual.mimeType === "text/markdown"}
           // A canvas item's thumbnail is its miniature — the lens, the files
           // panel and the card peek draw a canvas the way the card does
           // (inception phase 3).

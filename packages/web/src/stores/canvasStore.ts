@@ -1,3 +1,4 @@
+import type { TextAttention } from "@isocan/core";
 import { create } from "zustand";
 import type {
   Actor,
@@ -431,6 +432,8 @@ export function flashNotice(notice: string, ms = 2500): void {
 // ---- presence publishing (throttled, trailing-edge) ----
 
 let presenceActor: Actor | null = null;
+let selectedText: TextAttention | null = null;
+let selectedTextOwner: string | null = null;
 let lastCursor: { x: number; y: number } | null = null;
 let presenceTimer: ReturnType<typeof setTimeout> | null = null;
 let lastFlush = 0;
@@ -455,6 +458,15 @@ export function setPresenceActor(actor: Actor): void {
   flushPresence();
 }
 
+/** Publish saved-document attention without changing the canvas or its undo history. */
+export function publishTextSelection(selection: TextAttention | null, owner: string): void {
+  // A canvas preview leaving Read must not clear a newer stage selection.
+  if (selection === null && selectedTextOwner !== owner) return;
+  selectedTextOwner = selection === null ? null : owner;
+  selectedText = selection;
+  flushPresence();
+}
+
 export function publishSelection(): void {
   schedulePresenceFlush();
 }
@@ -475,6 +487,7 @@ function flushPresence(): void {
     actor: presenceActor,
     cursor: lastCursor,
     selection: useUiStore.getState().selectedItemIds,
+    textSelection: selectedText,
   };
   socket.send(JSON.stringify(message));
 }
@@ -726,6 +739,8 @@ export function leavePast(): void {
 }
 
 export function disconnect(): void {
+  selectedText = null;
+  selectedTextOwner = null;
   currentProjectId = null;
   stopWatchdog();
   if (reconnectTimer) clearTimeout(reconnectTimer);

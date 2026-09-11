@@ -69,7 +69,7 @@ describe("the item title row", () => {
    *
    * So: the row's OWN rule has to exist, and it has to place the row. That is
    * the thing the rest of this file is about, and a check that any relative
-   * can satisfy answers a different question (lessons.md #16).
+   * can satisfy answers a different question (lessons.md #38).
    */
   it("has the rule that places the row, under that exact name", () => {
     const own = ownRule();

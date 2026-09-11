@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-04
 see: modules, extensions, workbench, mindmap, iso-api, atlas
-note: designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep. Phase 5, sandboxes, waits on three gates: the content origin (CLEARED 6 Sep, live on prod), extension actors (which extensions stage 4 found has no subject to attribute until a panel ACTS, so it waits on that rather than on the calendar) and compute consent
+note: designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep; phase 4.5 (WebHost, overlays, drops, the module API's own version and a PROPOSED list) built 9 Sep from #156's field report. Phase 5, sandboxes, waits on three gates: the content origin (CLEARED 6 Sep, live on prod), extension actors (which extensions stage 4 found has no subject to attribute until a panel ACTS, so it waits on that rather than on the calendar) and compute consent
 ---
 # Modules — a package that contributes to both surfaces, and can be taken away
 
@@ -97,8 +97,19 @@ Slots, in the order they are needed:
    mime test, mounted before the built-in chain so a module can own a mime
    the built-ins would otherwise call a document. Lazy — a renderer is a
    `React.lazy` chunk loaded when its kind is first seen, never at boot.
-3. **Panel**, **page**, **inspector**, **tool**: designed in the research
-   note's manifest and the extensions design; each lands when a module asks.
+3. **Page** and **inspector** (phase 4): a cover route of a module's own, and
+   a reader beside the workbench's stage.
+4. **Overlay** and **drop** (phase 4.5, proposed): screen space against a
+   named edge, and a claim on a dragged mime. Both landed because a module
+   asked — which is what "each lands when a module asks" meant, and the first
+   time somebody outside this repo did the asking.
+5. **Panel** and **tool**: still designed and unbuilt. A dock panel or a rail
+   tool is a shell change today.
+
+**Reading is free; writing is a slot's own question.** Until 9 Sep every one of
+these except `actions` was read-only, which nobody noticed while no module had
+an interactive surface. `WebHost` (phase 4.5) is what a component changes
+anything through, and it is handed only to the slots a person interacts with.
 
 ### The CLI contract
 
@@ -114,6 +125,26 @@ The guide is the same object it always was, with a rule added: `isocan
 every module's `cli.ts`, and documented verbs from the base guide **and**
 every module's guide. A module verb nobody is told about does not exist,
 exactly as before.
+
+## Versioning: two surfaces, one of them frozen
+
+**`MODULE_API_VERSION` is not the app's version** (9 Sep 2026). It was, pinned
+by a test to the root package's 0.1.0, which is why the engines check — real
+and enforced — had never refused anything: the number it compared against was
+a constant.
+
+VS Code can judge `engines.vscode` against the app version because their stable
+API has essentially never broken since 1.0; every release is compatible, so the
+app version is a safe proxy. Ours breaks. Tying them means bumping the app for
+a change nobody outside a module can see, or never bumping — and it was the
+second.
+
+So the module API has its own number, moving only when it moves, and a
+**proposed** list for the parts we intend to change. A module names the
+proposals it uses and a home says yes with `--proposed`. That is the split that
+lets the older slots be treated as nearly-stable while overlays, drops and the
+host keep moving: fast on one side of the line, careful on the other, and the
+line is a list rather than a promise.
 
 ## What a module may not add
 

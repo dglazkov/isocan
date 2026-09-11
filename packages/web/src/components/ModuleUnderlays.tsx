@@ -1,4 +1,4 @@
-import { MODULES } from "../modules.ts";
+import { modules } from "../modules.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
@@ -21,7 +21,7 @@ export function ModuleUnderlays() {
   const facts = { canvas, drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null };
   return (
     <>
-      {MODULES.flatMap((m) =>
+      {modules().flatMap((m) =>
         (m.underlays ?? []).map((Underlay, i) => <Underlay key={`${m.core.name}:${i}`} {...facts} />),
       )}
     </>

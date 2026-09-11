@@ -47,6 +47,8 @@ const menu = (over = {}) =>
     theme: null,
     ownGround: false,
     pickGround: () => {},
+    cursor: null,
+    setCursor: () => {},
     anchor: "world" as const,
     toggleAnchor: () => {},
     openSwitcher: () => {},
