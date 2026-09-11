@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-10
 see: on-demand, harnesses, agent-custody, standing-agents
-note: layer 1 built 11 Sep — permissions answered by kind (allow_once, else the agent's reject; a mode switch is never chosen), and the adapter's environment is a list (a process's needs, ISOCAN_*, the vendors' namespaces, config.json's `adapterEnv` hook) instead of the whole shell. Measured 10 Sep — a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, and codex forced to full access because its sandbox refused loopback; any admitted member of a shared canvas can ring. Still owed — a reach word on the enrolment translated per harness (`_meta.claudeCode.options`, codex `agent` mode after the loopback spike), the `@anthropic-ai/sandbox-runtime` spike, the second-user recipe, and owner-only summons
+note: layer 1 built 11 Sep — permissions answered by kind (allow_once, else the agent's reject; a mode switch is never chosen), and the adapter's environment is a list (a process's needs, ISOCAN_*, the vendors' namespaces, config.json's `adapterEnv` hook) instead of the whole shell. Measured 10 Sep — a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, and codex forced to full access because its sandbox refused loopback; any admitted member of a shared canvas can ring. The srt spike ran on Linux 11 Sep — the fence holds, the daemon is reachable through the proxy, a real Claude turn completed under srt through the rc, sessions resume — with five things a wrapper must know (srt's bridge dies silently on a kernel without IPv6 until its listener is IPv4; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys and the registry allowed for `npx`; `~/.claude` re-allowed). macOS and codex nested still unmeasured. Still owed — a reach word on the enrolment translated per harness, the second-user recipe, and owner-only summons
 ---
 
 # What the rc hands over, and how to hand over less
@@ -295,6 +295,114 @@ Landlock ruleset of its own. Those are srt with fewer maintainers, and the
 constraint `harness.ts` already states — no adapter per harness — applies
 to sandboxes too.
 
+## The srt spike, measured (11 September, Linux)
+
+Run on Ubuntu 24.04.4 in a Firecracker container (kernel 6.18.44, x86_64,
+root, **no IPv6 in the kernel at all** — `/proc/sys/net/ipv6` absent),
+Node 22.22.2, `@anthropic-ai/sandbox-runtime` 0.0.76 (published 10 Sep),
+bubblewrap 0.9.0, socat 1.8.0.0, `@agentclientprotocol/claude-agent-acp`
+0.76.0 over Claude Code 2.1.268. macOS was not available; codex and pi are
+not installed here and have no login, so step 3 did not run. The policy
+under test: write to one project directory, `~/.isocan` and `/tmp`; deny
+read on the rest of `~` (here `/root` and `/home/user`), re-allowing the
+project, `~/.isocan`, and the isocan checkout the CLI runs from; network
+`127.0.0.1:<daemon port>`, `api.anthropic.com`, later `registry.npmjs.org`.
+
+**Step 1, loopback: holds, after one patch and two variables.**
+
+- The read fence works as documented: a canary in `/root` reads as "no
+  such file" inside; `ls /home/user` shows only the re-allowed checkout.
+  The mandatory denies materialise as `/dev/null` mounts *in the project
+  directory* — `ls -a` inside shows `.bashrc`, `.gitconfig`, `.mcp.json`,
+  `.vscode` and the rest that are not on disk — and are cleaned up after.
+- **srt's Linux bridge died silently on this host.** Inside the sandbox
+  the runtime starts `socat TCP-LISTEN:3128 … UNIX-CONNECT:<sock>` in the
+  background with output to `/dev/null`; `TCP-LISTEN` wants an IPv6 socket
+  and this kernel has none, so both listeners exit at once with
+  `socket(10, 1, 6): Address family not supported by protocol`, and every
+  connection to `localhost:3128` is refused "after 0 ms". Nothing
+  reported it. A bare `bwrap --unshare-net` confirms the diagnosis:
+  `TCP4-LISTEN` works, `TCP-LISTEN` does not. Changing the two listeners
+  to `TCP4-LISTEN` in `dist/sandbox/linux-sandbox-utils.js` brought the
+  bridge up; everything below is measured with that patch. A laptop kernel
+  has IPv6 and would not hit this, but it is the shape of failure to
+  expect from srt on Linux: a silent bridge, and "connection refused" as
+  the only symptom. Worth an upstream issue.
+- **Once the bridge is up, an IP literal in the allow-list reaches the
+  host daemon through the proxy.** `curl --noproxy '' http://127.0.0.1:4711/api/health`
+  inside got the daemon's answer. A loopback port not in the list is
+  refused with "Connection blocked by network allowlist"; a domain not in
+  the list gets a 403 CONNECT; `api.anthropic.com` answered 404 through
+  the proxy chain.
+- **Two variables the wrapper has to set inside the sandbox.** srt
+  itself sets `NO_PROXY=localhost,127.0.0.1,::1,…` for the child, so every
+  client bypasses the only path to the host for exactly the address that
+  needs it: with srt's `NO_PROXY` as set, curl and Node both fail with
+  ECONNREFUSED. Clearing `NO_PROXY`/`no_proxy` and setting
+  `NODE_USE_ENV_PROXY=1` (Node's env-proxy support, experimental in
+  22.22 — it prints an `UNDICI-EHPA` warning) makes Node's `fetch` go
+  through the proxy; without the flag it fails even with `NO_PROXY`
+  cleared. The isocan CLI uses global `fetch` and a long poll for `wait`,
+  no WebSocket, so with those two variables `isocan --json whoami` and
+  `isocan wait --timeout 5` both work inside. One more thing seen: when
+  the daemon is unreachable, `wait` tries to start one — inside the
+  sandbox, that is a second daemon in the sandbox's own network namespace
+  that nothing else can reach ("daemon did not come up").
+- The listeners race the command: srt backgrounds them and runs the user
+  command at once, so a one-line `curl` can run before `socat` listens.
+  An adapter takes seconds to start and will not notice; a `sleep 1`
+  was enough here.
+
+**Step 2, the Claude adapter under srt: a real turn completed, through
+the rc's own spawn path.** With `config.json` declaring `claude-code` as
+`srt --settings … -- sh -c 'export NO_PROXY= no_proxy= NODE_USE_ENV_PROXY=1 …; exec npx -y @agentclientprotocol/claude-agent-acp@0.76.0'`
+and the two `adapterEnv`-hooked variables, `isocan rc turn Percy hello`
+answered "Hi! What are you working on today?" and `end_turn`.
+
+- `npx` inside needs `registry.npmjs.org` allowed **and npm's own proxy
+  keys** (`npm_config_proxy`, `npm_config_https_proxy`,
+  `npm_config_noproxy=`) pointed at the inner proxy: npm honours its
+  config over `HTTPS_PROXY`, and this machine's `npm_config_noproxy`
+  listed the registry, so npm resolved DNS directly and failed with
+  `EAI_AGAIN`. With the keys set: about 11 s cold whether the npm cache is
+  hidden (a tmpfs over `~`) or re-allowed, 2.5 s warm when re-allowed. The
+  Claude SDK's own initialize took 18 s the first time.
+- **`~/.claude` must be re-allowed for read and write, or sessions do not
+  resume.** With `~` denied, the session store lands on the tmpfs and the
+  next turn says "the stored one would not load — rebuilt". With
+  `~/.claude` and `~/.claude.json` re-allowed, the second turn resumed
+  and remembered the word it was told.
+- A turn that used the agent's own shell: `isocan --json whoami` from
+  Bash inside the sandboxed agent reached the daemon and answered as
+  Percy (the enrolled actor, via the injected identity); `cat
+  /root/spike-canary.txt` failed; `ls /home/user` showed only the
+  checkout. The permission for that Bash call was answered `allow-once`
+  by kind — layer 1's answer, on a real adapter. Start to session: 57 s
+  on the first turn, 21 s on the resumed one, under srt.
+- **Credentials never entered the sandbox.** This machine has no Claude
+  login on disk and no key in the environment; the session's egress
+  proxy injects the credential on the way out. The model call succeeded
+  anyway — the vault pattern the note names, observed working: the
+  sandboxed adapter held nothing worth stealing.
+- Two things of this machine's, not srt's: the session's own upstream
+  proxy terminates TLS with a CA under `~/.ccr`, which `denyRead ~`
+  hides, so curl and npm needed the CA re-allowed or the CA variables
+  cleared; and the isocan CLI is not installed globally here, so the
+  agent's first attempt found no `isocan` on its PATH.
+
+**Step 3, codex nested: not run.** codex is not installed on this machine
+and has no login. On Linux codex sandboxes with Landlock and seccomp, not
+`sandbox-exec`, so the nesting question is macOS's; unmeasured.
+
+**What this settles.** Layer 3 is real on Linux: the fence holds, the
+daemon is reachable, the adapter runs, sessions resume. The cost is a
+wrapper that knows five things — the IPv4 listener (until upstream fixes
+it), `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside, npm's proxy keys
+and the registry domain for `npx`, and the harness's own directory
+re-allowed — and a dependency check for `bwrap` and `socat` with an
+"unsandboxed" line when they are absent. macOS is still unmeasured, and
+the recommendation stands: adopt when step 1 holds there too.
+
 ## What this leaves open
 
 - Whether Claude's `sandbox.network.allowedDomains` accepts an IPv4 literal
@@ -305,8 +413,10 @@ to sandboxes too.
   unverified; the docs were unreachable.
 - pi's proposed native `--mode acp` with an ask/code option (discussion
   #4444, July 2026): merged or not.
-- srt on Linux: whether each harness's loopback client honours the proxy
-  variables; whether srt's IP-literal allow-list resolves Claude Code issue
-  #28018 (loopback blocked in the Bash sandbox, open as of February).
+- srt on macOS: step 1 with `allowLocalBinding` and with the IP literal;
+  codex nested inside it. On Linux, whether pi's and codex's own clients
+  honour the proxy variables the way the isocan CLI does. Whether srt's
+  IP-literal allow-list resolves Claude Code issue #28018 (loopback
+  blocked in the Bash sandbox, open as of February).
 - Keyring-backed logins (Antigravity, codex `keyring` mode) inside any
   fence that hides the secret service.
