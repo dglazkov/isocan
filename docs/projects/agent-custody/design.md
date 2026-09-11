@@ -177,7 +177,10 @@ sequenceDiagram
   [`docs/research/2026-09-10-what-the-rc-hands-over.md`](../../research/2026-09-10-what-the-rc-hands-over.md),
   layers 1 and 3 — which leaves WHO MAY START one as the question the
   fence cannot answer. A fenced agent asked for by a stranger is still a
-  stranger spending your tokens on your laptop.)*
+  stranger spending your tokens on your laptop.)* **Decided later on
+  11 Sep: summons are owner-only by default** — recorded as D2 in that
+  research note, and being built separately; this stays under Open until
+  it lands.
 - **The dialog does not name the machine.** With two rcs parked it says
   "the parked rc" and first-wins picks silently; the promise should
   name its keeper once the hold carries a machine label.

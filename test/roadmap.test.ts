@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -96,5 +96,21 @@ describe("the roadmap is derived, not written", () => {
     // lately, and hiding that number would make the roadmap flattering.
     const page = readFileSync(`${repo}/docs/ROADMAP.md`, "utf8");
     expect(page).toContain("no verdict recorded at all");
+  });
+
+  it("links every row to a file that exists, read from where the page lives", () => {
+    /**
+     * Every row linked `docs/research/…` from inside `docs/`, so all 79 went to
+     * `docs/docs/…` from the day the generator was written until #232 (Paul
+     * Kinlan, 11 Sep 2026). The test above checks two rows through the CLI,
+     * which is about agreeing on a status; this checks every row's link, which
+     * is about arriving — a link that reads as real and goes nowhere is the
+     * same failure as a stale verdict.
+     */
+    const page = readFileSync(`${repo}/docs/ROADMAP.md`, "utf8");
+    const links = [...page.matchAll(/^\| (?:\*\*project\*\*|research) \| \[[^\]]*\]\(([^)]+)\)/gm)].map((m) => m[1]!);
+    expect(links.length, "the roadmap had no rows to check").toBeGreaterThan(0);
+    const missing = links.filter((rel) => !existsSync(path.join(repo, "docs", rel)));
+    expect(missing, "a roadmap row whose link does not resolve from docs/").toEqual([]);
   });
 });

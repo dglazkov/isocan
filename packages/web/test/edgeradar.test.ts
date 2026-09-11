@@ -210,8 +210,15 @@ describe("edgeBeacons", () => {
 
 describe("formatDistance", () => {
   it("reads the way a person would say it", () => {
-    expect(formatDistance(1400)).toBe("1,400px away");
-    expect(formatDistance(42)).toBe("42px away");
+    expect(formatDistance(1400, "en-US")).toBe("1,400px away");
+    expect(formatDistance(42, "en-US")).toBe("42px away");
+  });
+
+  it("says it in the reader's locale, not an American one for everybody", () => {
+    // It named "en-US" until 11 Sep 2026. A German reader gets a dot.
+    expect(formatDistance(1400, "de-DE")).toBe("1.400px away");
+    // With no locale, the viewer's own — whatever this machine is set to.
+    expect(formatDistance(1400)).toBe(`${(1400).toLocaleString()}px away`);
   });
 });
 

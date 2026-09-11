@@ -1,14 +1,26 @@
 ---
-status: designed
+status: partial
 since: 2026-09-09
 issue: 156
 see: modules, extensions, workbench
-note: five gaps reported from outside by romannurik, who built a sticker module against the real API. They are symptoms of one asymmetry — the module API can read from five places and write from exactly one, the palette action — and of one absent capability, because no operation carries bytes. The web half also has no host object, where the CLI half has `CliHost` and an explicit rule for promoting helpers into it. Recommends a `WebHost` with two members (`send`, `putBlob`), an `overlays` slot, a drop-mime registry, and notes that the canvas inspector needs no API change at all.
+note: five gaps reported from outside by romannurik, who built a sticker module against the real API. They are symptoms of one asymmetry — the module API can read from five places and write from exactly one, the palette action — and of one absent capability, because no operation carries bytes. The web half also has no host object, where the CLI half has `CliHost` and an explicit rule for promoting helpers into it. Recommends a `WebHost` with two members (`send`, `putBlob`), an `overlays` slot, a drop-mime registry, and notes that the canvas inspector needs no API change at all. Four of the five built the same day (bf0db60a, 9634e9d2) — `WebHost` with `send` (the door test inside it) and `putBlob`, the overlays slot against a named edge, and the drop-mime registry, with stickers rewritten on them behind Settings → Experiments. Residue — the canvas inspector mount is not built (inspectors still mount only in the workbench, though bf0db60a's message says otherwise), `putBlob` has no size bound, and the shape still has one module behind it.
 ---
 
 # What a sticker module found
 
-**9 September 2026.** Research. Nothing built.
+**9 September 2026.** Research. Nothing built when written.
+
+**Where this stands, 11 Sep 2026: four of the five phases built, 9 Sep**
+(bf0db60a "A module can write from where a person is looking", 9634e9d2 "An
+overlay slot with nowhere to be") — `WebHost` with `send` and `putBlob`
+(`packages/web/src/lib/modulehost.ts`, which settled the second open question
+by putting `canEditNow()` inside `send`), the overlays slot, and the drop
+registry (`moduleDropFor`, read by `CanvasViewport`'s drop handler). **Phase 3,
+the canvas inspector mount, is not built**: `moduleInspectorsFor` is still
+called only from `Workbench.tsx`, and `modules/authoring.md` says so, although
+bf0db60a's message lists it as done. Still open from the list at the end: a
+size bound for `putBlob`, and whether the shape holds for a second module by a
+second author.
 
 [@romannurik built a sticker item type](https://github.com/dglazkov/isocan/issues/156#issuecomment-5603055567)
 against the module API — an on-canvas renderer, a workbench panel that drags

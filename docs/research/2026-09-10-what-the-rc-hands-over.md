@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-10
 see: on-demand, harnesses, agent-custody, standing-agents
 issue: 238
-note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS outer-sandbox checks now pass too (srt 0.0.76). Native Codex is separately opt-in via --codex-sandbox, with command-level policy checks on macOS and Linux; nesting remains refused. Still owed: a reach word on the enrolment translated per harness, the second-user recipe, owner-only summons
+note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS outer-sandbox checks now pass too (srt 0.0.76). Native Codex is separately opt-in via --codex-sandbox, with command-level policy checks on macOS and Linux; nesting remains refused. Decided 11 Sep: --sandbox stays opt-in, not the default yet; summons are owner-only by default (decided, being built separately). Still owed: a reach word on the enrolment translated per harness, the second-user recipe, and building owner-only summons
 ---
 
 # What the rc hands over, and how to hand over less
@@ -15,6 +15,9 @@ know. Layer 3 is `sandbox.ts`: `isocan rc --sandbox`, written from what the
 measurement below found rather than from the documentation. Native Codex now has a separate opt-in (measured below). The
 second-user recipe, consent default and nested sandboxes remain owed.
 `scripts/spike-srt.sh` now also has passing macOS measurements.
+**Decided 11 Sep** (Decisions, below): the fence stays opt-in rather than the
+default, and summons become owner-only by default — the consent default is
+decided and being built separately.
 
 > "I realise that when I run rc and give it my harness... it pretty much has
 > access to my entire system :)"
@@ -305,6 +308,21 @@ What isocan should not do: own a Seatbelt profile, a bwrap line, or a
 Landlock ruleset of its own. Those are srt with fewer maintainers, and the
 constraint `harness.ts` already states — no adapter per harness — applies
 to sandboxes too.
+
+## Decisions
+
+**D1. `isocan rc --sandbox` stays opt-in; it is not the default yet.** Dion,
+11 Sep 2026. Step 4 above said the macOS run would decide whether the fence
+becomes the default. That run has since passed (srt 0.0.76, eight checks held
+— the last section below), and the decision is still *not yet*. A person asks
+for the fence with `--sandbox`; asked for and not buildable is a refusal,
+never a quiet unfenced run. Revisiting the default is a later decision, not a
+consequence of any one measurement.
+
+**D2. Summons are owner-only by default.** Dion, 11 Sep 2026 — step 6 above,
+taken as written. Reach limits bound what a turn may do; consent bounds who
+may start one, and on a shared canvas that is the sharper question. Decided,
+and being built separately; not built at the time of writing.
 
 ## The srt spike, measured (11 September, Linux)
 
