@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-10
 see: sheep-harness, on-demand, standing-agents, agent-custody, harnesses
-note: phases 0–2 closed 10–11 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, tool beats on the face from the transcript; withdrawal ends the sheep and the badge its cell redeemed, named exactly through the pass the rc minted, and keeps the pasture. Journeys 1, 2 and 4 walked on the deployed station and a local sheep home against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Phase 3, the week with the bill, needs the shepherd; sheep#2 and sheep#3 are still open.
+note: phases 0–2.5 closed 10–11 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, tool beats on the face from the transcript; a birth mints the sheep with the pass as its own secret and spends no turn; withdrawal ends the sheep and the badge its cell redeemed, and keeps the pasture. Journeys 1, 2 and 4 walked on the deployed station and a local sheep home against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Phase 3, the week with the bill, needs the shepherd; sheep#2 is still open.
 ---
 # The sheep harness — the journeys
 
@@ -76,9 +76,11 @@ found there is resumed even when the row had forgotten it.
 if you tried.*
 
 1. `sheep log <id>` from birth to now. The pass address appears nowhere:
-   not in the opening prompt, not in a tool call, not in a result.
-2. `sheep pasture secret ls isocan-percy` prints the name `ISOCAN_PASS`
-   and no value.
+   not in a prompt, not in a tool call, not in a result.
+2. `sheep ls --json` lists Percy's sheep with `ISOCAN_PASS` in its
+   `secrets`: the name, and no value. `sheep pasture secret ls
+   isocan-percy` prints nothing, because the pass is the sheep's and not
+   the pasture's.
 3. In a turn, ask Percy to print its environment. The pass is not in it.
    Ask Percy to show its isocan home. It can: the badge the pass redeemed
    is Percy's own, kept in the workspace so it survives the container,
@@ -118,7 +120,8 @@ badge at the isocan home. The pasture is never removed by the rc; sheep
 has no verb for it and the pasture is the shepherd's. This step waits on
 a sheep verb that ends a session for good, filed there as a journey;
 until it lands, the rc aborts and narrates what it could not end. The
-pasture's secret is a spent pass and needs no dropping.
+pass is the sheep's own secret and ends with the sheep, so the kept
+pasture holds none.
 
 ## Journey 5 — A machine with no sheep says so
 

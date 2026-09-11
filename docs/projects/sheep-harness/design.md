@@ -84,14 +84,16 @@ adapter receive identical content; the difference is where the turn runs.
   home still has it, is resumed. Otherwise a sheep already in the agent's
   pasture is resumed, because a row can forget what the home remembers.
   Only when the herd is empty does it make the pasture, mint the pass,
-  and birth a sheep with an opening prompt, narrating each step. The
-  sheep's id is the row's `sessionId`.
+  and mint a sheep with `sheep new --detach` and no prompt, the pass on
+  stdin as the sheep's own secret, narrating each step. The birth spends
+  no model turn (phase 2.5). The sheep's id is the row's `sessionId`.
 - `prompt` is `sheep attach --wait <id> -- <summons>`. `--wait` queues
-  behind a running turn, which is the birth's on a first summons. The
-  reply streams back as chunks; exit is the stop. Before it, the
-  transcript's last entry says how long the cell has been quiet, and past
-  the home's ten-minute idle period the rc says setup is probably running.
-  During it, the transcript is read every three seconds and each tool call
+  behind a turn already running at the cell; a first summons finds none,
+  because the birth runs no turn. The reply streams back as chunks; exit
+  is the stop. Before it, the transcript's last entry says how long the
+  cell has been quiet, and past the home's ten-minute idle period the rc
+  says setup is probably running; a sheep with no transcript has never
+  started a container, and the rc says setup runs first. During it, the transcript is read every three seconds and each tool call
   becomes the same inferred status the ACP path produces, because
   `sheep attach` streams only the reply's text.
 - `close` does nothing. Nothing runs between turns.
@@ -101,9 +103,14 @@ adapter receive identical content; the difference is where the turn runs.
 A pasture is what every sheep born into it knows: a tree at `/pasture`,
 a setup script run in each fresh container, secrets the setup can read.
 The rc makes one per agent, named `isocan-<name>`, and puts three things
-in it: `setup.sh`, `brief.md` naming the agent and the canvas, and the
-collab skill. The pasture is per agent and not per canvas because the
-secret in it is the agent's, below.
+in it: `setup.sh`, `BRIEF.md` naming the agent and the canvas, which the
+home puts in the system prompt of every model call, and the collab
+skill. The pasture was made per agent and not per canvas because the
+pass was its secret. Since phase 2.5 the pass is the sheep's own secret
+and the pasture holds none, except where the rc falls back to the
+pasture's secret at a `sheep` or home from before per-sheep secrets. The
+brief still names the agent, so the pasture is still per agent; whether
+it becomes the canvas's is an open door, below.
 
 ### Identity: the pass, minted for the agent
 
@@ -116,10 +123,13 @@ arriving as the actor the minting badge holds. The rc's badge holds the
 agent's enrolment claim, so `mintPass(canvasId, actorId)` is allowed for
 the agent's actor, and refused for any other by the desk's own check.
 
-The pass rides into the cell as the pasture secret `ISOCAN_PASS`. Secrets
-are environment for the setup script and for nothing else, so the
-credential is never in a prompt, never in the transcript, and never
-readable by the model's own commands. `setup.sh` redeems it once:
+The pass rides into the cell as `ISOCAN_PASS`, a secret for that one
+sheep, given at its mint: `sheep new --secret ISOCAN_PASS` with the value
+as the one line of stdin (phase 2.5; before it, the pasture's secret of
+that name). A sheep's secrets, like a pasture's, are environment for the
+setup script and for nothing else, so the credential is never in a
+prompt, never in the transcript, and never readable by the model's own
+commands. Ending the sheep ends the secret. `setup.sh` redeems it once:
 
 ```sh
 isocan setup --direct --no-open --no-install "$ISOCAN_PASS"
@@ -133,8 +143,11 @@ what the cell syncs and the container's disk is not
 ([sheep#6](https://github.com/dglazkov/sheep/issues/6) asks for a home directory that survives). That is why the
 fourth turn's fresh container was still Shaun.
 
-A pass lives fifteen minutes and works once, so it is minted at the
-moment of birth, and its token is never stored on the rc's side. Its id
+A pass lives fifteen minutes and works once. It is minted at the birth,
+which a summons causes, and that summons goes to the idle sheep at once,
+so the sheep's first command, which starts a container and runs setup,
+redeems the pass within minutes. Its token is never stored on the rc's
+side. Its id
 is, on the rc row (phase 2): the desk tells the badge that minted a pass
 which badge redeemed it, and that badge is the cell's, which withdrawal
 ends.
@@ -177,7 +190,9 @@ Recorded here as what a full build owes, not as trajectory.
   verb gets `sheep abort` and a sentence saying what remains.*
 - **The birth spends a turn.** `sheep new --detach` needs a prompt, so
   the rc pays one model turn to get an id, [sheep#3](https://github.com/dglazkov/sheep/issues/3). It also means a first summons is queued behind the birth,
-  which `--wait` handles.
+  which `--wait` handles. *Answered in phase 2.5: `sheep new --detach`
+  with no prompt mints an idle sheep, so the birth spends no turn and the
+  first summons is the sheep's first prompt.*
 - **The face gets no tool beats.** The rc reads `sheep attach`'s text
   stream, so the summoned face shows "reading your comment…" and nothing
   else while the sheep works. `sheep log --json` carries pi's entries
@@ -214,6 +229,15 @@ Recorded here as what a full build owes, not as trajectory.
   finds it in the herd and resumes it rather than birthing a new one, and
   its turns then fail because the badge it holds was ended. Redeploying the
   station removes the case. Found in phase 2 by reading, not walked.
+- **A minted sheep's transcript faults at the station during setup.** In
+  phase 2.5's walk on sheep-2, a sheep minted into a pasture with its own
+  secret ran its first command behind setup, and `GET /s/<id>/transcript`
+  answered `500 AgentHarness storage or invariant fault` from then on.
+  `sheep attach` died on it with "Internal server error", so the rc saw
+  the turn end at `sheep exit 2` while the sheep kept working and replied
+  six minutes later; `sheep status` still said running after the reply.
+  A pastureless sheep read every three seconds through its turn did not
+  fault. The station's container image predated its Worker that day.
 - **A machine linked to several homes ends a badge at the wrong one.**
   `killBadge` goes to the machine's birth-default home. When a sheep's
   canvas lives at another home, the kill is refused there and the rc
@@ -230,9 +254,12 @@ Recorded here as what a full build owes, not as trajectory.
   completes the handshake. That holds. The only new choice the dialog
   could offer is which harness, and `sheep` would be one of them.
 - **A pasture per canvas instead.** A pasture is the natural place for a
-  canvas's brief, skill and binding, but the pass is the agent's, and
-  secrets are per pasture. If sheep gains per-sheep secrets at birth
-  ([sheep#5](https://github.com/dglazkov/sheep/issues/5)), the pasture can become the canvas's.
+  canvas's brief, skill and binding, but the pass is the agent's. Sheep
+  gained secrets per sheep at the mint
+  ([sheep#5](https://github.com/dglazkov/sheep/issues/5)) and the pass is
+  one since phase 2.5, so the secret no longer ties the pasture to one
+  agent. The brief, which names the agent, still does. Whether the
+  pasture becomes the canvas's is not decided.
 - **The bill.** #210 asked for a number. The spike ran four turns on one
   agent; the station reports container minutes at `GET /home`, and phase
   3 reads them before and after a week.

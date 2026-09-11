@@ -11,14 +11,23 @@
 // pi's entries look in `sheep log --json`, so the rc's tool beats have
 // something to read.
 //
-// Three switches live in the state file itself, so a test sets them before
+// `new --secret NAME` (repeatable) reads one line of stdin per name, as
+// sheep does since sheep#5, keeps the values in `sheepSecrets` by sheep id
+// (never printed, and dropped by `rm`), and lists the names in `ls --json`'s
+// `secrets`. `new --detach` with no prompt only mints: no transcript entries.
+//
+// Four switches live in the state file itself, so a test sets them before
 // anything runs: `attachMs` makes a turn take that long, with the sheep
 // "busy" meanwhile; a turn under a sheep that is ended exits 1, and one
 // stopped by `abort` exits 0, which is what a real attach did when a
-// station's `sheep abort` stopped it (walked 11 Sep 2026); `newMs` makes a birth take that long; `oldHome` answers
-// `rm` the way a station deployed before
-// sheep's end verb does ("not found" for a sheep it has). The current home's
-// answer to an id it does not have is its own sentence, and both are exit 2.
+// station's `sheep abort` stopped it (walked 11 Sep 2026); `newMs` makes a
+// birth take that long, with `minting` set in the state meanwhile; `oldHome`
+// answers `rm` the way a station deployed before sheep's end verb does ("not
+// found" for a sheep it has). The current home's answer to an id it does not
+// have is its own sentence, and both are exit 2. `noSheepSecrets` answers
+// `new --secret` the way a `sheep` or a home from before sheep#5 does: the
+// sheep is minted, exit 0, stdin is never read, and its row has no
+// `secrets` field.
 import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
 const file = process.env.FAKE_SHEEP_STATE;
@@ -43,6 +52,11 @@ const stdin = async () => {
 const flag = (name) => {
   const i = argv.indexOf(name);
   return i === -1 ? undefined : argv[i + 1];
+};
+/** Every value of a repeatable flag, in order, before any `--`. */
+const flags = (name) => {
+  const end = argv.indexOf("--") === -1 ? argv.length : argv.indexOf("--");
+  return argv.slice(0, end).flatMap((a, i) => (a === name ? [argv[i + 1]] : []));
 };
 const after = () => {
   const i = argv.indexOf("--");
@@ -74,7 +88,7 @@ if (verb === "ls") {
   const pasture = flag("--pasture");
   const rows = state.sessions.filter((s) => pasture === undefined || s.pasture === pasture);
   if (argv.includes("--json")) process.stdout.write(`${JSON.stringify(rows)}\n`);
-  else for (const s of rows) process.stdout.write(`${s.id}\t${s.name ?? ""}\t\t${s.state}\t${s.pasture ?? ""}\n`);
+  else for (const s of rows) process.stdout.write(`${s.id}\t${s.name ?? ""}\t\t${s.state}\t${s.pasture ?? ""}\t${(s.secrets ?? []).join(",")}\n`);
 } else if (verb === "pasture" && sub === "ls") {
   for (const name of Object.keys(state.pastures)) process.stdout.write(`${name}\t2026-09-10T00:00:00.000Z\n`);
 } else if (verb === "pasture" && sub === "new") {
@@ -89,14 +103,39 @@ if (verb === "ls") {
   state.pastures[argv[3]].secrets[argv[4]] = call.stdin.trim();
   save();
 } else if (verb === "new") {
+  const names = state.noSheepSecrets ? [] : flags("--secret");
+  let values = [];
+  if (names.length > 0) {
+    if (!argv.includes("--detach") && after() === undefined) {
+      await finish(2, "sheep: pi's terminal needs stdin, and a secret is read from it: with --secret, pass --detach or a prompt after --");
+    }
+    call.stdin = await stdin();
+    values = call.stdin.split("\n");
+    if (call.stdin.endsWith("\n")) values.pop();
+    if (values.length !== names.length) {
+      await finish(2, `sheep: one line of stdin per --secret name, in order: ${names.length} names, ${values.length} lines`);
+    }
+  }
   if (state.newMs) {
+    state.minting = true;
+    save();
     await new Promise((resolve) => setTimeout(resolve, state.newMs));
     state = load();
+    delete state.minting;
   }
   const id = `s_${state.next++}`;
-  state.sessions.unshift({ id, name: flag("--name") ?? null, pasture: flag("--pasture") ?? null, createdAt: Date.now(), state: "idle", task: null });
-  entry(id, "user", after() ?? "");
-  entry(id, "assistant", [{ type: "text", text: "ready" }]);
+  const row = { id, name: flag("--name") ?? null, pasture: flag("--pasture") ?? null, createdAt: Date.now(), state: "idle", task: null };
+  if (!state.noSheepSecrets) row.secrets = [...names].sort();
+  state.sessions.unshift(row);
+  if (names.length > 0) {
+    state.sheepSecrets ??= {};
+    state.sheepSecrets[id] = Object.fromEntries(names.map((name, i) => [name, values[i]]));
+  }
+  // With a prompt, the turn it starts; `--detach` with none only mints.
+  if (after() !== undefined) {
+    entry(id, "user", after());
+    entry(id, "assistant", [{ type: "text", text: "ready" }]);
+  }
   save();
   process.stdout.write(`${id}\n`);
 } else if (verb === "attach") {
@@ -130,6 +169,7 @@ if (verb === "ls") {
   const aborted = sheep.state === "busy";
   state.sessions = state.sessions.filter((s) => s.id !== id);
   delete state.entries[id];
+  if (state.sheepSecrets) delete state.sheepSecrets[id];
   save();
   process.stdout.write(argv.includes("--json") ? `${JSON.stringify({ id, ended: true, aborted })}\n` : `${id}\tended\n`);
 } else if (verb === "abort") {

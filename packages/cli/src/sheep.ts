@@ -24,11 +24,11 @@ import type { AdapterSpec } from "./harnesses.ts";
  * speaking to the home directly (`isocan setup --direct`), and its
  * identity is a pass the rc mints for the agent's own actor — the same
  * pass that puts a person's second machine on a canvas, minted for the
- * agent instead. The pass rides into the cell as a pasture secret, so it
- * is environment for the pasture's setup script and never in a prompt or
- * a transcript. The redeemed badge lives in the synced workspace
- * (`/workspace/.isocan-home`, symlinked from `~/.isocan`) so it outlives
- * the container, which the home rents per command.
+ * agent instead. The pass rides into the cell as the sheep's own secret,
+ * given at its mint, so it is environment for the pasture's setup script
+ * and never in a prompt or a transcript. The redeemed badge lives in the
+ * synced workspace (`/workspace/.isocan-home`, symlinked from `~/.isocan`)
+ * so it outlives the container, which the home rents per command.
  *
  * Nothing here is configured by hand. `sheep` is found on the PATH, and
  * which home its sessions live at is sheep's own rule — the kennel, a
@@ -96,6 +96,10 @@ export function sheepPlaceFor(cwd: string, env: NodeJS.ProcessEnv = process.env)
   const home = kennelHome(kennel);
   return home ? { kennel, home } : null;
 }
+
+/** The name the pass has in a cell: setup's environment, and the secret
+ * `sheep new --secret` gives the sheep at its mint. */
+export const PASS_SECRET = "ISOCAN_PASS";
 
 /** The pasture an agent's sheep are born into: one per agent, named for it.
  * The rc makes it and never removes it — a pasture is the shepherd's. */
@@ -211,11 +215,14 @@ interface PiEntry {
   message?: { role?: string; content?: unknown };
 }
 
-/** The part of `sheep ls --json`'s rows the rc reads. */
+/** The part of `sheep ls --json`'s rows the rc reads. `secrets` is the
+ * names the sheep was minted with; a home or a `sheep` from before
+ * per-sheep secrets (sheep#5) lists none, or no field. */
 interface SheepRow {
   id: string;
   name: string | null;
   pasture: string | null;
+  secrets?: string[];
 }
 
 /**
@@ -303,6 +310,9 @@ async function runSheep(
       resolve({ code: code ?? 1, stdout: out, stderr: err });
     });
     if (opts.stdin !== undefined) {
+      // A `sheep` that does not read stdin (one from before `new --secret`)
+      // can exit before the write lands; that is its answer, not a crash.
+      child.stdin!.on("error", () => {});
       child.stdin!.end(opts.stdin);
     }
   });
@@ -327,6 +337,10 @@ export class SheepAgent {
   /** The id of the pass minted for the sheep this agent just birthed, or
    * null when `ensureSession` resumed one. The caller writes it to the row. */
   bornPass: string | null = null;
+
+  /** The sheep this process minted, whose birth line already said that its
+   * first container runs setup. */
+  private born: string | null = null;
 
   private constructor(
     private readonly command: string[],
@@ -383,8 +397,9 @@ export class SheepAgent {
     return runSheep(this.command, this.place, args, { narrate: this.narrate, ...opts });
   }
 
-  /** A pasture per agent: the setup script, the brief, the skill, and the
-   * pass as a secret. Made once; a second birth of the same name finds it. */
+  /** A pasture per agent: the setup script, the brief and the skill. Made
+   * once; a second birth of the same name finds it. The pass is not here:
+   * it is the sheep's own secret, given at the mint. */
   private async ensurePasture(): Promise<string> {
     const name = this.pasture;
     const listed = await this.sheep(["pasture", "ls"]);
@@ -399,21 +414,17 @@ export class SheepAgent {
       this.narrate(`pasture ${name} already exists; the sheep born into it is new and does not remember an earlier one`);
     }
     // The tree is re-put every birth: cheap, and it keeps the script current.
-    this.narrate(`putting setup.sh, brief.md${this.birth.skill ? " and the collab skill" : ""} in pasture ${name}`);
+    this.narrate(`putting setup.sh, BRIEF.md${this.birth.skill ? " and the collab skill" : ""} in pasture ${name}`);
     const put = async (p: string, body: string) => {
       const r = await this.sheep(["pasture", "put", name, p], { stdin: body });
       if (r.code !== 0) throw new Error(`sheep pasture put ${p} failed: ${r.stderr.trim()}`);
     };
     await put("setup.sh", SETUP_SCRIPT);
-    await put("brief.md", BRIEF(this.name, this.birth.canvasTitle));
+    // BRIEF.md, by that name, is in the system prompt of every model call
+    // at the home. The birth sends no prompt, so this is how the sheep
+    // learns who it is before its first summons.
+    await put("BRIEF.md", BRIEF(this.name, this.birth.canvasTitle));
     if (this.birth.skill) await put("skills/isocan/SKILL.md", this.birth.skill);
-    // A pass is single-use and lives fifteen minutes, so it is minted at
-    // the moment of birth, and only then.
-    this.narrate(`minting a pass for ${this.name} — single-use, fifteen minutes, redeemed by the pasture's setup`);
-    const { address, passId } = await this.birth.pass();
-    const secret = await this.sheep(["pasture", "secret", "set", name, "ISOCAN_PASS"], { stdin: `${address}\n` });
-    if (secret.code !== 0) throw new Error(`sheep pasture secret set failed: ${secret.stderr.trim()}`);
-    this.bornPass = passId;
     return name;
   }
 
@@ -430,9 +441,10 @@ export class SheepAgent {
   /**
    * The stored sheep if it still exists at the home; else one already in
    * the agent's pasture, which a row can forget (a row reaped, a machine
-   * re-imaged) while the home remembers; else a fresh one, born into the
-   * pasture with an opening prompt. A pass is minted only on that last
-   * path, so a sheep that exists is never handed a second one.
+   * re-imaged) while the home remembers; else a fresh one, minted idle into
+   * the pasture with no prompt, so no model turn is spent. A pass is minted
+   * only on that last path, so a sheep that exists is never handed a second
+   * one.
    */
   async ensureSession(_cwd: string, previous: string | null): Promise<{ sessionId: string; resumed: boolean }> {
     const sessions = await this.sessions();
@@ -451,38 +463,68 @@ export class SheepAgent {
     if (previous) this.narrate(`sheep ${previous} is gone from ${describePlace(this.place)} — a new one is born`);
     this.narrate(`birthing a sheep for ${this.name} at ${describePlace(this.place)}`);
     const pasture = await this.ensurePasture();
-    const born = await this.sheep([
-      "new",
-      "--detach",
-      "--name",
-      this.name,
-      "--pasture",
-      pasture,
-      "--",
-      `You are ${this.name}. Read /pasture/brief.md, run \`isocan whoami\` to confirm who you are, and reply with one line saying you are ready.`,
-    ]);
+    // A pass is single-use and lives fifteen minutes. The sheep is minted
+    // idle and the summons follows at once, so its first command, which
+    // rents a container and runs setup, redeems the pass well inside that.
+    this.narrate(`minting a pass for ${this.name} — single-use, fifteen minutes, the sheep's own secret, redeemed by its setup`);
+    const { address, passId } = await this.birth.pass();
+    const born = await this.sheep(
+      ["new", "--detach", "--name", this.name, "--pasture", pasture, "--secret", PASS_SECRET],
+      { stdin: `${address}\n` },
+    );
     if (born.code !== 0) throw new Error(`sheep new failed: ${born.stderr.trim()}`);
     const id = born.stdout.split("\n")[0]?.trim();
     if (!id) throw new Error(`sheep new printed no id: ${born.stderr.trim()}`);
+    this.bornPass = passId;
+    this.born = id;
+    await this.passKept(id, pasture, address);
     this.narrate(
-      `sheep ${id} born — its opening prompt spends one model turn, and its first container runs setup ` +
-        "before anything else (installing isocan, about two minutes); a summons waits behind both",
+      `sheep ${id} minted — no turn spent; its first container runs setup before this summons ` +
+        "(installing isocan, about two minutes)",
     );
     return { sessionId: id, resumed: false };
   }
 
-  /** The transcript from an entry on (or its last entry, with no `since`). */
-  private async entries(sessionId: string, since?: string): Promise<PiEntry[]> {
+  /**
+   * Makes sure the new sheep's setup will find the pass. Whether the sheep
+   * took it as its own secret is read from the home's listing, not from
+   * `sheep new`'s answer: a `sheep` from before `--secret` takes the flag
+   * as a stray word, a home from before per-sheep secrets drops the field,
+   * and both mint the sheep and exit 0. Such a sheep is used, not ended: it
+   * is idle and nothing of it has run, so the pass goes to the pasture's
+   * secret of the same name, which setup reads when the sheep's first
+   * container starts. That is the phase 1 birth's credential, and it stays
+   * in the pasture after it is spent.
+   */
+  private async passKept(id: string, pasture: string, address: string): Promise<void> {
+    const row = (await this.sessions()).find((s) => s.id === id);
+    if (row?.secrets?.includes(PASS_SECRET)) return;
+    const secret = await this.sheep(["pasture", "secret", "set", pasture, PASS_SECRET], { stdin: `${address}\n` });
+    if (secret.code !== 0) {
+      // A sheep with no pass anywhere would be resumed from the herd and
+      // fail every turn, so it is ended rather than left.
+      await this.sheep(["rm", id], { narrate: () => {} }).catch(() => null);
+      throw new Error(`sheep ${id} did not keep its pass, and sheep pasture secret set failed: ${secret.stderr.trim()}`);
+    }
+    this.narrate(
+      `${describePlace(this.place)} cannot keep a secret for one sheep (this \`sheep\` or its home predates it), ` +
+        `so the pass is pasture ${pasture}'s ${PASS_SECRET} secret instead, and stays there once spent`,
+    );
+  }
+
+  /** The transcript from an entry on (or its last entry, with no `since`),
+   * or null when the home would not say. */
+  private async entries(sessionId: string, since?: string): Promise<PiEntry[] | null> {
     const r = await this.sheep(["log", "--json", ...(since ? ["--since", since] : ["--last", "1"]), sessionId], {
       narrate: () => {},
     });
-    return r.code === 0 ? parseLines<PiEntry>(r.stdout) : [];
+    return r.code === 0 ? parseLines<PiEntry>(r.stdout) : null;
   }
 
   /**
    * One turn: the summons goes to the sheep, its reply streams back as
-   * chunks, and the exit is the stop. `--wait` queues behind a running
-   * turn (the birth's, on a first summons) and streams when it starts.
+   * chunks, and the exit is the stop. `--wait` queues behind a turn already
+   * running at the cell and streams when it starts.
    *
    * `sheep attach` streams only the reply's text, so the tool beats come
    * from the transcript, read every few seconds while the turn runs and
@@ -490,15 +532,23 @@ export class SheepAgent {
    * same beat the ACP path produces. Before the turn, the transcript's
    * last entry says how long the cell has been quiet — past the home's
    * idle period its container is gone and setup runs first, which the rc
-   * says as the guess it is.
+   * says as the guess it is. A sheep with no transcript has never run a
+   * command, so its first container is still to come; the birth says so for
+   * a sheep this process minted, and this says it for one found unasked.
    */
   async prompt(
     sessionId: string,
     text: string,
     onEvent?: (event: TurnEvent) => void,
   ): Promise<{ stopReason: string; text: string }> {
-    const last = (await this.entries(sessionId)).at(-1);
-    if (last && Date.now() - last.timestamp > QUIET_MS) {
+    const tail = await this.entries(sessionId);
+    const last = tail?.at(-1);
+    if (tail?.length === 0 && this.born !== sessionId) {
+      this.narrate(
+        `sheep ${sessionId} has no transcript yet, so its first container runs setup before this summons ` +
+          "(installing isocan, about two minutes)",
+      );
+    } else if (last && Date.now() - last.timestamp > QUIET_MS) {
       this.narrate(
         `the cell has been quiet for ${ago(Date.now() - last.timestamp)}, so its container is probably fresh and ` +
           "setup is probably running first (installing isocan, about two minutes) — a guess from the clock; the home does not say",
@@ -507,7 +557,7 @@ export class SheepAgent {
     let cursor = last?.id ?? new Date(Date.now() - 5_000).toISOString();
     const seen = new Set<string>();
     const readTools = async () => {
-      const fresh = (await this.entries(sessionId, cursor)).filter((e) => !seen.has(e.id));
+      const fresh = ((await this.entries(sessionId, cursor)) ?? []).filter((e) => !seen.has(e.id));
       for (const e of fresh) seen.add(e.id);
       if (fresh.length > 0) cursor = fresh.at(-1)!.id;
       for (const title of toolCalls(fresh)) onEvent?.({ kind: "tool", detail: title });

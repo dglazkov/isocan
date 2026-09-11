@@ -820,6 +820,8 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
 
   const kennel = (config: object) => fs.writeFile(path.join(home, ".sheep", "config"), JSON.stringify(config));
   const sheepState = async () => JSON.parse(await fs.readFile(stateFile, "utf8"));
+  /** The pass a sheep was minted with: its own secret, never the pasture's. */
+  const sheepPass = async (id = "s_1") => (await sheepState()).sheepSecrets?.[id]?.ISOCAN_PASS as string | undefined;
   const sheepCalls = async (): Promise<Array<{ argv: string[]; cwd: string; stdin?: string }>> =>
     (await fs.readFile(`${stateFile}.calls`, "utf8").catch(() => ""))
       .split("\n")
@@ -834,8 +836,8 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     expect(first.code, first.stderr).toBe(0);
     expect(first.stderr).toContain("birthing a sheep for Percy at the local sheep home in");
     expect(first.stderr).toContain("making pasture isocan-percy");
-    expect(first.stderr).toContain("minting a pass for Percy — single-use, fifteen minutes");
-    expect(first.stderr).toContain("sheep s_1 born — its opening prompt spends one model turn");
+    expect(first.stderr).toContain("minting a pass for Percy — single-use, fifteen minutes, the sheep's own secret");
+    expect(first.stderr).toContain("sheep s_1 minted — no turn spent; its first container runs setup before this summons");
     expect(first.stderr).toContain("session s_1 started");
     // The tool beat: read from the transcript, not from attach's text.
     expect(first.stderr).toContain('Percy · tool bash isocan comment reply th_1 "on it"');
@@ -845,9 +847,9 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     expect(row.sessionId).toBe("s_1");
     expect(row.sheep).toEqual({ kennel: path.join(await fs.realpath(home), ".sheep"), home: "local" });
 
-    // Journey 3: the pass is the pasture's secret — at the address a
+    // Journey 3: the pass is the sheep's own secret — at the address a
     // container reaches — and in no argument the rc ever passed.
-    const pass = (await sheepState()).pastures["isocan-percy"].secrets.ISOCAN_PASS as string;
+    const pass = (await sheepPass())!;
     expect(pass).toContain("host.docker.internal");
     expect(pass).toContain("prj_1");
     const calls = await sheepCalls();
@@ -859,11 +861,13 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     const second = await run("rc", "turn", "Percy", "and", "the", "heading");
     expect(second.code, second.stderr).toBe(0);
     expect(second.stderr).toContain("session s_1 resumed");
+    expect(second.stderr).not.toContain("minting a pass");
     const after = await sheepCalls();
     expect(after.filter((c) => c.argv[0] === "new")).toHaveLength(1);
-    expect(after.filter((c) => c.argv[1] === "secret")).toHaveLength(1);
+    expect(after.some((c) => c.argv[1] === "secret")).toBe(false);
     const summons = after.filter((c) => c.argv[0] === "attach").map((c) => c.argv.at(-1));
     expect(summons).toEqual(["the empty state", "and the heading"]);
+    expect((await rcRows()).find((r) => r.name === "Percy")!.cellPass).toEqual(row.cellPass);
 
     // A kennel re-pointed since the birth is refused, naming both homes.
     await kennel({ home: "https://station.example", token: "t" });
@@ -888,10 +892,15 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     expect(turn.code, turn.stderr).toBe(0);
     expect(turn.stderr).toContain("sheep s_9 is already in pasture isocan-percy — resuming it rather than birthing a second");
     expect(turn.stderr).toContain("session s_9 resumed");
+    // Minted and never asked, so nothing has run in it yet, and that is said.
+    expect(turn.stderr).toContain("sheep s_9 has no transcript yet, so its first container runs setup before this summons");
+    expect(turn.stderr).not.toContain("minting a pass");
     const calls = await sheepCalls();
     expect(calls.some((c) => c.argv[0] === "new")).toBe(false);
     expect(calls.some((c) => c.argv[1] === "secret")).toBe(false);
-    expect((await rcRows()).find((r) => r.name === "Percy")!.sessionId).toBe("s_9");
+    const row = (await rcRows()).find((r) => r.name === "Percy")!;
+    expect(row.sessionId).toBe("s_9");
+    expect(row.cellPass).toBeUndefined();
   }, 30_000);
 
   it("a parked rc says where the sheep will live, and answers a summons from a cell", async () => {
@@ -952,16 +961,123 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
   }, 30_000);
 
   /**
+   * **The birth without a turn** (sheep-harness phase 2.5). The first
+   * summons for an agent with no sheep mints one idle — `sheep new --detach`
+   * with no prompt, the pass on stdin as the sheep's own `ISOCAN_PASS` — and
+   * sends the summons straight to it. No model turn is spent on the birth,
+   * nothing is put in the pasture's secrets, and the summons is the only
+   * prompt the sheep ever gets. A `sheep` or a home from before per-sheep
+   * secrets mints the sheep and drops the secret without a word, so the rc
+   * reads the new sheep's `secrets` in `sheep ls --json` and, when the name
+   * is missing, gives the pass to the pasture instead and says so.
+   */
+  describe("the birth without a turn (sheep-harness phase 2.5)", () => {
+    const summon = () =>
+      post("/api/ops", {
+        canvasId: "prj_1",
+        actor: dimitri,
+        op: {
+          type: "thread.create",
+          threadId: "th_1",
+          x: 0,
+          y: 0,
+          anchorItemId: null,
+          comment: { id: "cmt_1", body: "@Percy the empty state reads wrong" },
+        },
+      });
+
+    it("a parked rc's summons mints the sheep with --detach --secret and no prompt, and is its one attach", async () => {
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      const rc = spawnCli(["rc"], env);
+      let out = "";
+      rc.stdout!.setEncoding("utf8");
+      rc.stdout!.on("data", (chunk) => (out += chunk));
+      const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+      await until(async () => out, (o) => o.includes("Percy's sheep will live at"), "the rc to come up");
+      await summon();
+      await until(async () => out, (o) => o.includes("Percy · turn ended"), "the turn from the cell");
+      expect(out).toContain("Percy · sheep s_1 minted — no turn spent; its first container runs setup before this summons");
+      expect(out).not.toContain("has no transcript yet");
+
+      const calls = await sheepCalls();
+      const pass = (await sheepPass())!;
+      expect(pass).toContain("prj_1");
+      // The mint: exactly these words, no `--` and so no prompt, the pass
+      // the one line of its stdin and in no argument anywhere.
+      const births = calls.filter((c) => c.argv[0] === "new");
+      expect(births.map((c) => c.argv)).toEqual([
+        ["new", "--detach", "--name", "Percy", "--pasture", "isocan-percy", "--secret", "ISOCAN_PASS"],
+      ]);
+      expect(births[0]!.stdin).toBe(`${pass}\n`);
+      expect(calls.every((c) => !c.argv.join(" ").includes(pass))).toBe(true);
+      // Nothing in the pasture's secrets; the name is on the sheep.
+      expect(calls.some((c) => c.argv[1] === "secret")).toBe(false);
+      const state = await sheepState();
+      expect(state.pastures["isocan-percy"].secrets).toEqual({});
+      expect(state.sessions.map((s: { id: string; secrets?: string[] }) => [s.id, s.secrets])).toEqual([["s_1", ["ISOCAN_PASS"]]]);
+      // One prompt ever reached the sheep, and it is the summons: the only
+      // call carrying `--` is the one attach, and the transcript opens with it.
+      const prompted = calls.filter((c) => c.argv.includes("--"));
+      expect(prompted.map((c) => c.argv[0])).toEqual(["attach"]);
+      expect(prompted[0]!.argv.at(-1)).toContain("@Percy the empty state reads wrong");
+      const transcript = state.entries.s_1 as Array<{ message: { role: string; content: unknown } }>;
+      expect(transcript[0]!.message).toEqual({ role: "user", content: prompted[0]!.argv.at(-1) });
+      // The brief is where the home puts it in every model call.
+      expect(Object.keys(state.pastures["isocan-percy"].tree).sort()).toEqual(
+        expect.arrayContaining(["BRIEF.md", "setup.sh"]),
+      );
+      expect(state.pastures["isocan-percy"].tree["BRIEF.md"]).toContain("You are Percy");
+      const row = (await rcRows()).find((r) => r.name === "Percy")!;
+      expect(row.sessionId).toBe("s_1");
+      expect(row.cellPass).toMatchObject({ canvasId: "prj_1", passId: expect.stringMatching(/^pss_/) });
+      rc.kill("SIGINT");
+      await done;
+    }, 40_000);
+
+    it("a `sheep` or home that drops a sheep's own secret: the pass goes to the pasture, said once, and the one sheep is used", async () => {
+      await fs.writeFile(stateFile, JSON.stringify({ sessions: [], pastures: {}, entries: {}, next: 1, noSheepSecrets: true }));
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      const turn = await run("rc", "turn", "Percy", "the", "empty", "state");
+      expect(turn.code, turn.stderr).toBe(0);
+      expect(turn.stderr).toContain(
+        "cannot keep a secret for one sheep (this `sheep` or its home predates it), so the pass is pasture " +
+          "isocan-percy's ISOCAN_PASS secret instead, and stays there once spent",
+      );
+      expect(turn.stderr).toContain("sheep s_1 minted — no turn spent");
+
+      const calls = await sheepCalls();
+      // Asked for with --secret, found missing in the listing, and given to
+      // the pasture — after the mint and before the one attach.
+      const verbs = calls.map((c) => (c.argv[0] === "pasture" ? `pasture ${c.argv[1]}` : c.argv[0]));
+      const at = (verb: string) => verbs.indexOf(verb);
+      expect(verbs.filter((v) => v === "new")).toHaveLength(1);
+      expect(calls.find((c) => c.argv[0] === "new")!.argv).toContain("--secret");
+      expect(at("new")).toBeLessThan(at("pasture secret"));
+      expect(verbs.slice(at("new") + 1, at("pasture secret"))).toEqual(["ls"]);
+      expect(at("pasture secret")).toBeLessThan(at("attach"));
+      const state = await sheepState();
+      const pass = state.pastures["isocan-percy"].secrets.ISOCAN_PASS as string;
+      expect(pass).toContain("prj_1");
+      expect(calls.every((c) => !c.argv.join(" ").includes(pass))).toBe(true);
+      // One sheep, no opening prompt, nothing ended.
+      expect(state.sessions.map((s: { id: string }) => s.id)).toEqual(["s_1"]);
+      expect(calls.some((c) => c.argv[0] === "rm")).toBe(false);
+      expect(calls.filter((c) => c.argv.includes("--")).map((c) => c.argv[0])).toEqual(["attach"]);
+      expect((await rcRows()).find((r) => r.name === "Percy")!.cellPass).toMatchObject({ canvasId: "prj_1" });
+    }, 40_000);
+  });
+
+  /**
    * **Withdrawal ends the sheep** (sheep-harness phase 2, journey 4). Every
    * path that withdraws an agent ends its sheep at the sheep home and the
    * badge its cell redeemed at the isocan home, and says each; the pasture
-   * stays. The cell is played by a badge redeeming the pass the rc put in
-   * the pasture, the way the cell's `isocan setup --direct` would, so there
-   * is a real badge to end.
+   * stays. The cell is played by a badge redeeming the pass the rc gave the
+   * sheep as its own secret, the way the cell's `isocan setup --direct`
+   * would, so there is a real badge to end.
    */
   describe("withdrawal ends the sheep (sheep-harness phase 2)", () => {
     const redeemCellPass = async (): Promise<TestBadge> => {
-      const address = (await sheepState()).pastures["isocan-percy"].secrets.ISOCAN_PASS as string;
+      const address = (await sheepPass("s_1"))!;
       const cell = await mintTestBadge(base);
       const res = await fetch(`${base}/api/passes/redeem`, {
         method: "POST",
@@ -993,11 +1109,12 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
       expect(born.cellPass).toMatchObject({ canvasId: "prj_1", passId: expect.stringMatching(/^pss_/) });
       // Until sheep#2, the brief says a cold turn is slow and a dead
       // container is to be reported, not slept on.
-      const brief = (await sheepState()).pastures["isocan-percy"].tree["brief.md"] as string;
+      const brief = (await sheepState()).pastures["isocan-percy"].tree["BRIEF.md"] as string;
       expect(brief).toContain("can take a couple of minutes");
       expect(brief).toContain("do not sleep and retry");
 
       // The cell redeems its pass; the rc's machine names the badge as the cell's.
+      const firstPass = await sheepPass("s_1");
       const cell = await redeemCellPass();
       const listed = await run("badges");
       expect(listed.stdout).toMatch(new RegExp(`${cell.badgeId}\\s+cell \\(Percy's sheep\\)`));
@@ -1021,6 +1138,9 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
       const after = await sheepState();
       expect(after.sessions).toEqual([]);
       expect(Object.keys(after.pastures)).toEqual(["isocan-percy"]);
+      // The pass ended with the sheep; the kept pasture holds no secret.
+      expect(after.sheepSecrets.s_1).toBeUndefined();
+      expect(after.pastures["isocan-percy"].secrets).toEqual({});
       expect((await rcRows()).some((r) => r.name === "Percy")).toBe(false);
       expect(await daemon.desk.badge(cell.badgeId)).toBeNull();
       expect((await run("badges")).stdout).not.toContain(cell.badgeId);
@@ -1031,13 +1151,16 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
       const again = await run("rc", "turn", "Percy", "hello again");
       expect(again.code, again.stderr).toBe(0);
       expect(again.stderr).toContain("pasture isocan-percy already exists; the sheep born into it is new and does not remember an earlier one");
-      expect(again.stderr).toContain("sheep s_2 born");
+      expect(again.stderr).toContain("sheep s_2 minted — no turn spent");
       const reborn = (await rcRows()).find((r) => r.name === "Percy")!;
       expect(reborn.sessionId).toBe("s_2");
       expect(reborn.cellPass!.passId).not.toBe(born.cellPass!.passId);
       const births = (await sheepCalls()).filter((c) => c.argv[0] === "new");
       expect(births.map((c) => c.argv[c.argv.indexOf("--pasture") + 1])).toEqual(["isocan-percy", "isocan-percy"]);
-      expect((await sheepCalls()).filter((c) => c.argv[1] === "secret")).toHaveLength(2);
+      expect(births.every((c) => c.argv.includes("--secret"))).toBe(true);
+      expect(await sheepPass("s_2")).toContain("prj_1");
+      expect(await sheepPass("s_2")).not.toBe(firstPass);
+      expect((await sheepCalls()).some((c) => c.argv[1] === "secret")).toBe(false);
     }, 60_000);
 
     it("mid-turn at a parked rc: the turn is aborted and reads as a withdrawal — no failure, no system voice, no retry", async () => {
@@ -1199,9 +1322,9 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
           comment: { id: "cmt_1", body: "@Percy the empty state reads wrong" },
         },
       });
-      // The pass is in the pasture and `sheep new` is under way: the row
-      // does not name a sheep yet, so whoever reaps it has none to end.
-      await until(sheepCalls, (calls) => calls.some((c) => c.argv[1] === "secret"), "the birth to be under way");
+      // `sheep new` has the pass and is under way: the row does not name a
+      // sheep yet, so whoever reaps it has none to end.
+      await until(async () => (await sheepState().catch(() => null))?.minting, (m) => m === true, "the birth to be under way");
       await post("/api/ops", { canvasId: "prj_1", actor: dimitri, op: { type: "agent.withdraw", actorId } });
       await until(async () => seen.out, (o) => o.includes("Percy · pasture isocan-percy stays"), "the born sheep ended");
       expect(seen.out).toContain("Percy · withdrawn before its turn — no turn runs");

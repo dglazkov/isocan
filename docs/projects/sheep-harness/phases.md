@@ -4,10 +4,9 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phases 0 to 2 closed, 10 and 11 September. Phase 2.5,
-the birth without a turn, is next: sheep#3 and sheep#5 closed on 11
-September, and sheep-2 was redeployed that day. Phase 3, the week with
-the bill, follows and needs the shepherd (⚑).** Three steps below wait on the sheep side and
+**Where we are: phases 0 to 2.5 closed, 10 and 11 September. Phase 3,
+the week with the bill, is next and needs the shepherd (⚑); before it,
+sheep-2's redeploy wants finishing and its transcript fault an answer.** Three steps below wait on the sheep side and
 are marked ⇢ with the journey filed there. Three more journeys are filed
 for findings phase 1 works around rather than waits on, and one for what
 phase 1 found:
@@ -203,30 +202,73 @@ prompt waits on sheep#3.
 
 ## Phase 2.5 — The birth without a turn
 
+**Status: CLOSED (2026-09-11).** Walked by the conductor on sheep-2
+against the scratch canvas at dev.isocan.io: a new agent's first summons
+minted its sheep with no turn spent, `sheep ls --json` listed
+`ISOCAN_PASS` among that sheep's secrets, the new pasture held none, and
+the agent replied as itself naming the canvas, which only `BRIEF.md` had
+told it; `isocan badges` listed its cell. The station's transcript read
+then failed for that sheep (`500 AgentHarness storage or invariant
+fault`), which ended the rc's `attach` two minutes into setup, and the
+reply landed eight and a half minutes after the summons. A pastureless
+sheep read while polled did not fault, so the fault is the station's,
+recorded in design.md; the station's container image was also still the
+one from before the day's redeploy, which stopped midway.
+
 Pays phase 2's step that waited on
 [sheep#3](https://github.com/dglazkov/sheep/issues/3), which closed on
 11 September together with
 [sheep#5](https://github.com/dglazkov/sheep/issues/5).
 
 **Outcome:** a birth spends no model turn. The first summons for an
-agent with no sheep mints one with `sheep new --detach --secret
-ISOCAN_PASS`, the pass on stdin and no prompt, and sends the summons
-straight to it, so the sheep's first command runs setup and redeems the
-pass within the fifteen minutes it lives. The pass is the sheep's own
-secret, never the pasture's, so nothing is left in a kept pasture and
-ending the sheep ends it. The pasture keeps `setup.sh`, the brief and
-the skill. The birth's narration says no turn was spent, and the first
-summons no longer waits behind an opening turn. A home whose `sheep`
-refuses `--secret` gets the phase 1 birth, the pass as the pasture's
-secret, and a sentence saying so.
+agent with no sheep mints one with `sheep new --detach --name <agent>
+--pasture isocan-<agent> --secret ISOCAN_PASS`, the pass address the
+one line of stdin and no prompt, and sends the summons straight to it
+with `sheep attach --wait`, so the sheep's first command runs setup and
+redeems the pass within the fifteen minutes it lives. The pass is the
+sheep's own secret, never the pasture's, so nothing is left in a kept
+pasture and ending the sheep ends it. The pasture keeps `setup.sh`, the
+brief and the skill; the brief is `BRIEF.md`, which the home puts in the
+system prompt of every model call. The birth says "sheep <id> minted —
+no turn spent; its first container runs setup before this summons", and
+a sheep found in the herd with no transcript yet gets the same warning
+before its summons. A `sheep` or a home from before per-sheep secrets
+mints the sheep and drops the secret without refusing, so the rc reads
+the new sheep's `secrets` in `sheep ls --json`; when `ISOCAN_PASS` is
+missing, the same pass goes to the pasture's `ISOCAN_PASS` secret, the
+phase 1 birth's credential, the one sheep minted is used, and one
+sentence says the home cannot keep a secret for one sheep.
 
-**Proof:** the rc test's birth cases against the fake `sheep`: `new`
-called with `--detach --secret ISOCAN_PASS` and no prompt, the pass on
-stdin and in no argument, no pasture secret set, one `attach` carrying
-the summons and no opening prompt anywhere; a resume and a herd find
-mint no pass; and the fallback at a home that refuses `--secret`.
+**Proof:** `packages/cli/test/rc.test.ts`'s "the birth without a turn"
+cases, against the fake `sheep`, which now reads `new --secret`'s values
+from stdin, keeps them per sheep and drops them with the sheep, lists
+the names in `ls --json`, mints with no transcript under `--detach` with
+no prompt, and can answer `new --secret` the way a `sheep` or home from
+before sheep#5 does. A parked rc's summons mints with exactly `new
+--detach --name Percy --pasture isocan-percy --secret ISOCAN_PASS`, the
+pass on stdin and in no argument, no pasture secret set, and the one
+call carrying a prompt is the `attach` with the summons, which opens
+the transcript. The fallback sets the pasture secret between the mint's
+listing and the `attach`, leaves one sheep, and says so. Phase 1's
+"enrol, birth, resume" case checks the same from `rc turn`, and that the
+resume mints no pass; the herd case that a found sheep mints none and is
+said to have no transcript yet; the phase 2 cases redeem the sheep's own
+secret, and journey 4's finds it gone with the sheep and the kept
+pasture holding none. Putting back the opening prompt reddens two cases,
+and putting back the pasture secret five.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- The fallback is detected from `sheep ls --json`, not from a refusal.
+  Neither side refuses: a `sheep` from before `--secret` takes the flag
+  and its name as stray words, and a home from before per-sheep secrets
+  ignores the `secrets` field of the mint, and both mint the sheep and
+  exit 0. The sheep minted is kept, since nothing of it has run, and the
+  pass goes to the pasture before its first command.
+- The brief is `BRIEF.md`, not `brief.md`. The home puts only
+  `/pasture/BRIEF.md` in the system prompt, and until now the opening
+  prompt was what told the sheep to read the lowercase file. Pastures
+  made before keep a `brief.md` that the rc no longer writes or reads.
 
 ## Phase 3 — The walk, with the bill
 
