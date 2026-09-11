@@ -113,8 +113,9 @@ settled about *what a pack may contain*:
   relicensed as MIT, so it is linked, not bundled.
 - **Homage, never endorsement.** Every card carries a line saying the pack is
   an homage to publicly documented work and is not affiliated with or
-  endorsed by the designer. Agent names are the pack's (*Kare Bot*), never
-  the person's.
+  endorsed by the designer. **The principle leads and the person is a
+  credit** (decided 11 Sep): the card reads *Less, but better — after Dieter
+  Rams*, and the agent is *Less but Better*, never the person's name.
 - **The philosophy is paraphrase with sources**, not quotation. At most one
   short attributed quote per pack.
 
@@ -176,3 +177,15 @@ take-it copies rather than `choose`; standings derived, handed to evals; packs
 are not personas. Phase 0 — a bout by hand — goes first, because the one
 thing nobody knows is whether a `DESIGN.md` makes an agent's work
 recognisably *somebody's*.
+
+**Three questions the note left open, answered by Dion the same day:**
+
+- **Naming: the principle leads, the person is a credit.** *Less, but better*
+  over *after Dieter Rams*; the agent is *Less but Better*. This went further
+  than the note's own first answer (*Rams Bot*), and it is the better one: it
+  keeps a living person's name off every op an agent makes, and it names the
+  thing that actually fought.
+- **Exhibition is the default bout.** Blind stays a separate bout on desks.
+- **It ships on isocan.io**, as a build-time module whose web half is one lazy
+  chunk. Fighters still run on the person's own rc; bring-your-own on the
+  hosted home waits for the shared question of who may add a module there.

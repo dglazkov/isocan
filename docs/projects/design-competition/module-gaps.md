@@ -197,9 +197,9 @@ load, never from a renderer, never from an op arriving.
 
 ## 4. A design system scoped to an area
 
-**The need.** Three lanes, three philosophies, one canvas. *Kare Bot*'s
+**The need.** Three lanes, three philosophies, one canvas. *Road Signs*'
 screen should be audited against Kare's tokens, and `isocan design --css`
-run by *Kare Bot* should print them.
+run by *Road Signs* should print them.
 
 **What stops it — and what would break.** `designSystem(canvas)`
 (`core/designsystem.ts`) returns *the* design system: of every item with the
@@ -207,7 +207,7 @@ design-system role, *"most recently updated wins: two are a mistake rather
 than a feature."* Furnish three lanes with three `DESIGN.md` items and the
 canvas's own design system is silently replaced by whichever lane was touched
 last — every later `design --css`, every audit on screen arrival, every
-`needsDesignSystem` nudge on the whole canvas reads *Rams Bot*'s orange dot.
+`needsDesignSystem` nudge on the whole canvas reads *Less but Better*'s orange dot.
 That is not a missing feature; it is a bug the competition would ship on day
 one.
 

@@ -4,10 +4,10 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phases 0 to 2 closed, 10 and 11 September. Phase 3,
-the week with the bill, is next and needs the shepherd (⚑); so does
-redeploying sheep-2, which predates `sheep rm` and cannot end a sheep
-until it is.** Three steps below wait on the sheep side and
+**Where we are: phases 0 to 2 closed, 10 and 11 September. Phase 2.5,
+the birth without a turn, is next: sheep#3 and sheep#5 closed on 11
+September, and sheep-2 was redeployed that day. Phase 3, the week with
+the bill, follows and needs the shepherd (⚑).** Three steps below wait on the sheep side and
 are marked ⇢ with the journey filed there. Three more journeys are filed
 for findings phase 1 works around rather than waits on, and one for what
 phase 1 found:
@@ -134,7 +134,8 @@ station's phase-1 agent, whose row had no pass, was withdrawn with the
 sentence naming `isocan badges --kill`. That walk found the aborted turn
 exiting cleanly, which the parked rc logged as "turn ended"; it now
 reads as a withdrawal, with a test. The walk left Timmy's and Shirley's
-sheep, and a probe, idle on sheep-2 until it can end them.
+sheep, and a probe, on sheep-2; they were ended with `sheep rm` once the
+station was redeployed.
 
 **Outcome:** `agent.withdraw` for a sheep-harnessed agent aborts a
 running turn, ends the sheep for good, leaves the pasture and says so,
@@ -157,7 +158,7 @@ Until it lands, the opening prompt stays and `--wait` queues the first
 summons behind it. Once it lands, the pass moves from the birth to the
 first summons: a pass lives fifteen minutes and setup runs on the first
 command that rents a container, so a pass minted at an idle birth would
-expire unredeemed.
+expire unredeemed. (Built in phase 2.5.)
 
 **Proof:** `packages/cli/test/rc.test.ts`'s "withdrawal ends the sheep"
 cases, against the fake `sheep`, which now answers `rm` and `abort`, can
@@ -199,6 +200,33 @@ prompt waits on sheep#3.
 - One agent on two canvases shares one sheep, so withdrawal from one canvas
   leaves the sheep and its badge while another row on the machine still
   names them, and hands that row the pass.
+
+## Phase 2.5 — The birth without a turn
+
+Pays phase 2's step that waited on
+[sheep#3](https://github.com/dglazkov/sheep/issues/3), which closed on
+11 September together with
+[sheep#5](https://github.com/dglazkov/sheep/issues/5).
+
+**Outcome:** a birth spends no model turn. The first summons for an
+agent with no sheep mints one with `sheep new --detach --secret
+ISOCAN_PASS`, the pass on stdin and no prompt, and sends the summons
+straight to it, so the sheep's first command runs setup and redeems the
+pass within the fifteen minutes it lives. The pass is the sheep's own
+secret, never the pasture's, so nothing is left in a kept pasture and
+ending the sheep ends it. The pasture keeps `setup.sh`, the brief and
+the skill. The birth's narration says no turn was spent, and the first
+summons no longer waits behind an opening turn. A home whose `sheep`
+refuses `--secret` gets the phase 1 birth, the pass as the pasture's
+secret, and a sentence saying so.
+
+**Proof:** the rc test's birth cases against the fake `sheep`: `new`
+called with `--detach --secret ISOCAN_PASS` and no prompt, the pass on
+stdin and in no argument, no pasture secret set, one `attach` carrying
+the summons and no opening prompt anywhere; a resume and a herd find
+mint no pass; and the fallback at a home that refuses `--secret`.
+
+**Trajectory:** to be written at close.
 
 ## Phase 3 — The walk, with the bill
 

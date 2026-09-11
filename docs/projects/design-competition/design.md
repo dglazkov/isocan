@@ -70,7 +70,7 @@ If that holds for a module this large, the module sentence holds.
 one grouped write, one undo, `placement.chosen` — with a **Brief** area
 across the top and one **lane** per fighter beneath it. A lane is an area
 (`kind=area`) titled with the fighter's agent name; membership is geometry,
-as it is for every area, so `isocan ls --in "Kare Bot"` is the lane's
+as it is for every area, so `isocan ls --in "Road Signs"` is the lane's
 contents with no new code.
 
 Each lane is furnished with three things, all ordinary items:
@@ -98,21 +98,29 @@ read.
 
 ## The cast
 
-### A fighter is an enrolled agent under an homage name
+### A fighter is an enrolled agent named for its principle
 
 One agent per fighter, enrolled for the bout with `agent.enroll` — the op
 that exists. Separate agents rather than one agent playing three parts,
 because the spectacle *is* three cursors moving at once, and because a
-fighter's identity has to be an actor for the tally to be able to say *Linear
-Bot ranked Kare Bot's entry first* and for standings to accumulate across
-bouts (the enrolment key is the name, so re-enrolling *Kare Bot* next week is
-the same actor — standing-agents phase 1).
+fighter's identity has to be an actor for the tally to be able to say *Fast
+Is a Feature ranked Road Signs' entry first* and for standings to accumulate
+across bouts (the enrolment key is the name, so re-enrolling *Road Signs* next
+week is the same actor — standing-agents phase 1).
 
-**The name is the pack's `agentName`, never the person's.** *Kare Bot*, not
-*Susan Kare*; *Rams Bot*, not *Dieter Rams*. AGENTS.md's house rule is that
-presence is honest, and an agent cursor reading *Susan Kare* claims to be
-somebody it is not. The validator refuses a pack whose `agentName` equals
-its `name` or contains it without a qualifier ([packs.md](packs.md#homage-not-impersonation)).
+**The principle leads; the person is a credit** (decided 11 Sep 2026). The
+card's headline is the pack's `title` — *Less, but better* — with *after
+Dieter Rams & Braun* beneath it, and the agent is named for the principle:
+*Less but Better*, not *Dieter Rams* and not *Rams Bot*. AGENTS.md's house
+rule is that presence is honest, and a cursor reading *Dieter Rams* claims
+to be somebody it is not; a cursor reading *Rams Bot* is honest but still
+wears a living person's name on every op it makes. Naming the idea is honest
+twice over — it is also what actually fought. Three consequences, all in
+[packs.md](packs.md#homage-not-impersonation): the validator refuses an
+`agentName` carrying any name from the credit; a credit can be changed or
+removed on request without the pack losing what it is; and because mentions
+resolve by first word (`@Less` is *Less but Better*), fighters' first words
+must be unique on the canvas.
 
 ### Whose compute, and the button that is not there
 
@@ -143,7 +151,7 @@ Two halves, both through things that exist:
 - **Who it is** lives in its **working directory**. Enrolment already takes
   `--dir`; the competition makes one per fighter per bout
   (`~/.isocan/competitions/<bout>/<fighter>/`) holding an `AGENTS.md` — *you
-  are Kare Bot, an homage to Susan Kare's work, not her; here are the rules
+  are Road Signs, an homage to Susan Kare's work, not her; here are the rules
   of the bout* — beside the pack's `DESIGN.md` and references. Every harness
   isocan runs already reads `AGENTS.md` (or `CLAUDE.md`) from its cwd.
 - **What to do** is **a message addressed to it, in its lane**: the brief,
@@ -166,17 +174,17 @@ point is not to need it).
 
 At the result, each fighter is withdrawn (`agent.withdraw`): the roster row
 goes, the log keeps everything, the working directory is kept under the
-bout's id until the person clears it. A fighter that should stay — *Kare Bot
+bout's id until the person clears it. A fighter that should stay — *Road Signs
 is on our team now* — is simply not withdrawn.
 
 ## Exhibition and blind
 
 The ask wants each fighter to build "in its own area of the canvas". That is
-the **exhibition** bout, and it is the default because fun is the point: you
-watch three cursors race in three lanes.
+the **exhibition** bout, and it is the default (decided 11 Sep 2026) because
+fun is the point: you watch three cursors race in three lanes.
 
 It is also not a blind test, and the design should say so rather than pretend.
-In an exhibition, voters watched *Rams Bot* build the grey one; the curtain
+In an exhibition, voters watched *Less but Better* build the grey one; the curtain
 can hide the byline and it cannot hide the memory. Fighters can also read
 each other's lanes — an agent with `isocan ls` sees the whole canvas — and
 the bout's rules ask them not to, which is etiquette, not a wall.
@@ -277,8 +285,8 @@ a minimum number of bouts** — Design Arena hides a model under fifteen
 comparisons, and a fighter that has won its only bout has not won anything
 yet. Every entry and every retry stays on the canvas: "The Leaderboard
 Illusion" found private reruns distort arena rankings, and a lane cannot
-reroll quietly because nothing on a canvas is quiet. A month of Tuesdays says *Linear Bot wins dense screens;
-Kare Bot wins anything a customer sees first*, and that is a sentence the
+reroll quietly because nothing on a canvas is quiet. A month of Tuesdays says *Fast Is a Feature* wins dense screens and
+*Road Signs* wins anything a customer sees first, and that is a sentence the
 canvas's own design system can be told.
 
 The evals plan already says the best signal here is the one people produce
@@ -323,12 +331,36 @@ module, and listed in [`module-gaps.md`](module-gaps.md).
   sprint's tally and `standings()`.
 - **Hiding the brief in a prompt.** The first turn is a message on the canvas.
 
+## On isocan.io
+
+**It ships there** (decided 11 Sep 2026). What that means, given how the
+hosted home works today:
+
+- **A build-time module.** The hosted home loads no runtime modules, so the
+  competition is in the two lists and the Dockerfile's manifest layer, and the
+  nine default packs are in the image as its assets. That is also the removal
+  test's real home: if isocan.io can drop it and every arena still reads as
+  files, it holds.
+- **Gate the download, not the drawing.** The stickers module's lesson (9
+  Sep): a plain import gated at render still cost every first visit 6,227
+  bytes. The picker, the avatars and the arena's web half are one lazy chunk
+  fetched when somebody opens the picker or a canvas holds a fighter card;
+  `test/bundle-budget.test.ts` holds everybody else's first visit where it is.
+- **Fighters still run on the person's own rc**, parked against isocan.io —
+  the hosted home spawns nothing, and the picker's Fight button reads the
+  parked-rc fact exactly as `AddAgent` does there today. The sheep harness is
+  how a person with no laptop open gets fighters anyway.
+- **Bring-your-own on the hosted home waits** for the question every module
+  there shares: who may add one. A **data-only** module (gap 2) is the first
+  thing a hosted home could reasonably accept — it runs no code — so it is the
+  natural first answer, and it is not this project's to give alone.
+- **The proposed parts are ours to break.** Dialogs, templates, assets, points
+  and rounds are on the proposed list; a build-time module is not refused for
+  using them, and shipping on isocan.io does not freeze them. The module moves
+  with the API until 1.0.
+
 ## Open
 
-- **Who may run fighters on isocan.io.** The hosted home loads no runtime
-  modules, and fighters run on the person's rc either way; the build-time
-  module can ship there when the default packs are ready. Same decision as
-  every module on the hosted home.
 - **The fighter cursor's colour and mark** are the pack's; whether an homage
   agent should wear a distinct *mark* (as an emissary wears its person's name
   with a mark) is a question for the identity desk, not this module.
@@ -336,4 +368,4 @@ module, and listed in [`module-gaps.md`](module-gaps.md).
   The directory form comes first; the canvas form is the inception project's
   shelf with a validator, and waits for it.
 - **Cost.** Nobody has measured what a three-fighter, twenty-minute bout costs
-  in turns or tokens. Phase 1 measures it before the picker offers five.
+  in turns or tokens. Phase 0 measures it before the picker offers five.

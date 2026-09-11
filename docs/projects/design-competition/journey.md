@@ -3,7 +3,7 @@ status: designed
 since: 2026-09-11
 issue: 250
 see: sprint, modules, personas, on-demand, standing-agents, evals
-note: designed 11 Sep 2026 from the ask and the research note; nothing built. The competition is a sprint with one phase, cast by a picker — areas, desks, the curtain, placed dots, the split tally, hand-in and the rc's message-wake already exist. What does not is the module-system half, and it is the other half of the point — packs as module content, a dialog slot, assets on both surfaces, a scoped design system, and a way for a module to cast agents. Phase 0 (one fighter pack, by hand, no module) is next
+note: designed 11 Sep 2026 from the ask and the research note; nothing built. The competition is a sprint with one phase, cast by a picker — areas, desks, the curtain, placed dots, the split tally, hand-in and the rc's message-wake already exist. What does not is the module-system half, and it is the other half of the point — packs as module content, a dialog slot, assets on both surfaces, a scoped design system, and a way for a module to cast agents. Decided the same day: principle-first names (the agent is *Less but Better*, after Dieter Rams), exhibition as the default bout, and shipping on isocan.io as a build-time module, lazy-loaded. Phase 0 (a bout by hand, no module) is next
 ---
 # The design competition journey
 
@@ -44,7 +44,10 @@ critique, and their votes are counted apart; the winner is a person's call.
 
 And one rule that is new, because the fighters are named after real people:
 **a fighter is an homage, and says so.** The card, the cursor and the agent's
-name never pass as the designer. See [`packs.md`](packs.md#homage-not-impersonation).
+name never pass as the designer: **the principle leads and the person is a
+credit** — the card reads *Less, but better* over *after Dieter Rams*, and
+the cursor reads *Less but Better* (decided 11 Sep 2026). See
+[`packs.md`](packs.md#homage-not-impersonation).
 
 ## Cast
 
@@ -55,7 +58,7 @@ All synthetic.
 - **Jun** — designer. Has a house style he has been meaning to write down.
 - **Ola** — engineer. Votes, argues, and does not care who anybody is.
 - **The fighters** — agents, each enrolled for the bout under a pack's agent
-  name (*Kare Bot*, *Rams Bot*, *Linear Bot*), each carrying that pack's
+  name (*Road Signs*, *Less but Better*, *Fast Is a Feature*), each carrying that pack's
   `DESIGN.md` and references. They build and they critique. They never decide.
 - **Kit** — the facilitator from the sprint, optional. The competition runs
   without one; with one, Kit holds the clock and calls the rounds.
@@ -69,21 +72,22 @@ Chat:
 
 Instead of a question in the Chat, a **picker** opens over the canvas: the
 *choose your fighter* screen. Nine portraits on a grid — each an illustrated
-avatar, never a photograph — with a name, a tagline, and a small **homage**
-mark. Hovering one turns its card over: three lines of philosophy, the
-signature moves, the works it will study.
+avatar, never a photograph — headed by its principle, with the designer as a
+credit beneath and a small **homage** mark. Hovering one turns its card over:
+three lines of philosophy, the signature moves, the works it will study.
 
 | | | |
 | --- | --- | --- |
-| **Jony Ive & Apple** — *make it inevitable* | **frog design** — *form follows emotion* | **IDEO** — *build to think* |
-| **Susan Kare** — *friendly at 32×32* | **Dieter Rams** — *less, but better* | **Bret Victor** — *see the thing change* |
-| **Matías Duarte** — *paper, ink, and meaning* | **Linear** — *fast is a feature* | **Edward Tufte** — *above all, the data* |
+| **Inevitable** — after Jony Ive & Apple | **Form follows emotion** — after frog design | **Build to think** — after IDEO |
+| **Road signs** — after Susan Kare | **Less, but better** — after Dieter Rams | **Immediate connection** — after Bret Victor |
+| **Paper and ink** — after Matías Duarte | **Fast is a feature** — after Linear | **Show the data** — after Edward Tufte |
 
 Three more tiles close the row: **🎲 Random**, **＋ Bring your own** (Scene
 6) and **Your emissaries**, which lists any persona agent enrolled on this
 canvas — *Agent Jun* can fight too.
 
-Priya picks three: **Kare**, **Rams**, **Linear**. Each pick lights its card
+Priya picks three: **Road signs**, **Less, but better**, **Fast is a feature**
+— Kare, Rams and Linear, though she picked them for the ideas. Each pick lights its card
 and plays its slot in a *P1 · P2 · P3* bar along the bottom. Below the grid,
 four settings, each with a default she does not have to touch:
 
@@ -119,7 +123,7 @@ Each lane arrives furnished:
 
 - the pack's **`DESIGN.md`** as the lane's **design system** — an item with the
   design-system role, *scoped to the lane*, so `isocan design --css --in
-  "Kare Bot"` prints Kare's tokens and not the canvas's;
+  "Road Signs"` prints that pack's tokens and not the canvas's;
 - a **reference shelf** — the pack's chosen works as cards: a title, a year,
   one line on what to learn from it, and a link out. Pictures only where the
   licence allows (see [`packs.md`](packs.md#references-and-licences));
@@ -133,7 +137,7 @@ JSON without the module. `isocan area ls` lists the lanes.
 ## Scene 2 — the fighters walk in
 
 Three cursors arrive, one per lane, each wearing its pack's colour and agent
-name: *Kare Bot*, *Rams Bot*, *Linear Bot*. They were enrolled for the bout by
+name: *Road Signs*, *Less but Better*, *Fast Is a Feature*. They were enrolled for the bout by
 the Fight button, on Priya's own rc — the picker would not offer **Fight**
 without one parked, and said so ("Start `isocan rc` on your machine to run
 fighters — they run on your compute, under your harness").
@@ -144,16 +148,16 @@ lane; do not read the other lanes; one entry; hand in before the bell.* The
 lane's card flips from *waiting* to *building*. The Chat shows one line per
 fighter as each starts.
 
-Nobody has to watch, and everybody does. Kare Bot's lane fills with a warm
+Nobody has to watch, and everybody does. *Road Signs*' lane fills with a warm
 cream screen, a 1-bit pot-plant icon at 32×32 and a button that says *Send it
-home*. Rams Bot's is grey and white, one orange accent, nothing that is not a
-control. Linear Bot's is dark, dense, and the whole flow works from the
+home*. *Less but Better*'s is grey and white, one orange accent, nothing that is not a
+control. *Fast Is a Feature*'s is dark, dense, and the whole flow works from the
 keyboard.
 
-Jun reacts 🔥 on Kare Bot's icon. That is cheering, and it is a reaction like
+Jun reacts 🔥 on *Road Signs*' icon. That is cheering, and it is a reaction like
 any other — the fighter is not told to change anything by it. **Coaching** is
 something else: a thread in a lane addressed to its fighter
-(`@Kare Bot the price is too quiet`) is a message the fighter answers, and in
+(`@Road Signs the price is too quiet`) is a message the fighter answers, and in
 an exhibition bout that is allowed and visible. In a blind bout it is refused,
 and the refusal says why.
 
@@ -164,7 +168,7 @@ is an homage to and what the bout's rules are, beside the pack's `DESIGN.md`).
 Each is woken by the thing that already wakes an agent — **a message
 addressed to it**, posted in its own lane, carrying the brief — so the first
 turn is on the canvas where everyone can read it, not in a prompt nobody can
-see. Each parks on its own lane (`isocan wait --in "Kare Bot"`, which the
+see. Each parks on its own lane (`isocan wait --in "Road Signs"`, which the
 sprint journey asked for and nobody built). The lanes show what each message
 made. From a terminal: `isocan competition start <competition>` does the
 same, and `isocan competition status` prints each lane — fighter, state,
@@ -174,12 +178,12 @@ items, time left.
 
 At twenty minutes the clock chip rings. Each fighter hands in: its entry is
 stamped as the lane's entry (`competition=entry`), and anything else in the
-lane is left as working. Rams Bot handed in at fourteen minutes and parked; a
+lane is left as working. *Less but Better* handed in at fourteen minutes and parked; a
 fighter who finishes early is allowed to stop.
 
 Then the **floor check**: the existing design audit runs across the three
 entries — the slop floor and each entry against its *own* lane's design system
-— and writes one line under each: *Kare Bot · 0 tells · 2 off-system values*.
+— and writes one line under each: *Road Signs · 0 tells · 2 off-system values*.
 It is shown as a floor, not a score. The competition is not decided by a
 linter.
 
@@ -200,7 +204,7 @@ the bell (the sprint's curtain, by lens). The chip says so.
 
 Then **the fighters critique each other**, in voice. Each fighter posts one
 thread on each rival's entry, written from its pack's critique questions —
-Rams Bot on Linear Bot's entry: *"Which of these fourteen shortcuts would a
+*Less but Better* on *Fast Is a Feature*'s entry: *"Which of these fourteen shortcuts would a
 first-time buyer miss if it were gone?"* — and ranks the entries it did not
 make. A fighter never ranks its own entry. The verb refuses; the record would
 show it anyway.
@@ -225,15 +229,15 @@ admits only them to. From a terminal: `isocan competition vote <entry>
 ## Scene 5 — the result, and what happens to it
 
 At the bell the curtain lifts. The tally shows people's rankings and the
-fighters' apart, as the sprint's tally does — *People: Kare 7 · Linear 6 ·
-Rams 5 (Borda, three ballots). Fighters: Linear 4 · Kare 3 · Rams 2 (each
-ranking the two entries it did not make).* — and the heat map of
-dots draws on the entries. Ola, who ranked Linear first, reads Rams Bot's
-critique and the cluster of dots on Kare Bot's price and says the checkout
-should be Linear's flow with Kare's voice.
+fighters' apart, as the sprint's tally does — *People: Road Signs 7 · Fast Is a Feature 6 · Less but Better 5 (Borda,
+three ballots). Fighters: Fast Is a Feature 4 · Road Signs 3 · Less but Better
+2 (each ranking the two entries it did not make).* — and the heat map of
+dots draws on the entries. Ola, who ranked *Fast Is a Feature* first, reads *Less but Better*'s
+critique and the cluster of dots on *Road Signs*' price and says the checkout
+should be *Fast Is a Feature*'s flow in *Road Signs*' voice.
 
-**Priya decides.** The Decider's 🏆 goes on **Kare Bot**'s entry — the winner
-card fills the arena header with the avatar, and the Chat says *Kare Bot wins
+**Priya decides.** The Decider's 🏆 goes on *Road Signs*' entry — the winner
+card fills the arena header with the avatar, and the Chat says *Road Signs wins
 — Priya's call* (the confetti is one frame, and skippable). Then the three
 things a result can become, each one button and one verb:
 
@@ -269,8 +273,8 @@ so it can live in the repo, in a git spec a teammate can add
 (`isocan competition fighter add github:acme/jun-style`), or on a canvas as
 items. The next time anybody on the team opens the picker, *Jun's house
 style* is a tenth portrait. The same week *Agent Jun* — Jun's emissary
-persona — takes a slot in a bout against *Rams Bot*, and loses, and Jun reads
-Rams Bot's critique of his own emissary with real interest.
+persona — takes a slot in a bout against *Less but Better*, and loses, and Jun reads
+*Less but Better*'s critique of his own emissary with real interest.
 
 **Acceptance:** a pack is a file format with a validator, loadable from the
 module's own defaults, a directory, a git spec, or a canvas; the picker lists
@@ -282,8 +286,8 @@ reference with a picture is refused, and says which reference.
 After a month of Tuesdays, `isocan competition standings` reads every bout on
 the canvas and prints which fighters win, against whom, on what kind of brief
 — and the evals project reads the same ballots as **preference pairs**, which
-is what a ranking is. *Linear Bot wins dense screens; Kare Bot wins anything a
-customer sees first.* That is a fact the design system can be told.
+is what a ranking is. *Fast Is a Feature* wins dense screens; *Road Signs* wins anything a
+customer sees first. That is a fact the design system can be told.
 
 Then the home's operator removes the module. The arenas are still there:
 areas with titles, `DESIGN.md` items, reference cards that read as JSON,

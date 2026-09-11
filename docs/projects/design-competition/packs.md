@@ -25,10 +25,11 @@ packs/<id>/
 ```json
 {
   "id": "rams",
-  "name": "Dieter Rams & Braun",
   "title": "Less, but better",
+  "agentName": "Less but Better",
+  "credit": "after Dieter Rams & Braun",
+  "name": "Dieter Rams & Braun",
   "tagline": "Removes everything. Except the point.",
-  "agentName": "Rams Bot",
   "colour": "#e8641b",
   "homage": "An homage to the published principles of Dieter Rams and Braun design. Not affiliated with or endorsed by Dieter Rams, Braun or Vitsœ.",
   "bio": "German industrial designer (b. 1932); Braun 1955–95, chief of design from 1961; the ten principles of good design.",
@@ -72,18 +73,31 @@ imply endorsement, and their likeness, are the real exposure. So:
 1. **The homage line is required** and shown on every card, in the picker and
    on the canvas: *An homage to the published principles of X. Not affiliated
    with or endorsed by X.*
-2. **`agentName` is never the person's name.** *Rams Bot*, never *Dieter Rams*
-   — the cursor is a bot and says so. The validator refuses an `agentName`
-   equal to `name` or to any name in it.
-3. **A principle-first `title`** (*Less, but better*) sits beside the credit,
-   so a pack can be renamed on request without losing what it is. The `id` is
-   stable; names are not. That is the takedown path, and it costs nothing.
-4. **No likeness.** Avatars are emblems of the work (below). No photo, no
+2. **The principle leads; the person is a credit** (decided 11 Sep 2026). A
+   card's headline is the pack's `title` — *Less, but better* — with *after
+   Dieter Rams & Braun* beneath it, and the agent on the canvas is named for
+   the principle too: `agentName` is *Less but Better*, never *Dieter Rams* and
+   not a *Rams Bot* either. The cursor, the tally and the Chat line
+   (*Less but Better wins — Priya's call*) name an idea, and the idea is what
+   actually fought. The validator refuses an `agentName` that contains any
+   of the names in `name`. The one exception is a pack somebody makes of
+   **themselves** (Scene 6's *Jun's house style*): the rule protects people
+   who did not choose to be a fighter, and Jun did.
+3. **The `id` is stable; names are not.** Because the principle carries the
+   pack, a credit can be changed or removed on request without the pack losing
+   what it is. That is the takedown path, and it costs nothing.
+4. **First words are unique.** `@Dimitri` resolves to *Dimitri Glazkov* —
+   mentions match a name's first word (`core/mentions.ts`) — so *Less but
+   Better* answers to `@Less`. The validator refuses a roster where two
+   fighters share a first word, and `competition start` refuses a bout whose
+   fighter's first word is already a name on the canvas. No punctuation in an
+   `agentName`, so the first word is a word.
+5. **No likeness.** Avatars are emblems of the work (below). No photo, no
    portrait, no caricature.
-5. **No words in their mouths.** `critique.md` is written as *a Rams-inspired
+6. **No words in their mouths.** `critique.md` is written as *a Rams-inspired
    critic asks…*, never as a quotation. At most one real quote per pack, short,
    verified at its source, with the link.
-6. **No logos or trade dress.** Names are used descriptively (nominative use);
+7. **No logos or trade dress.** Names are used descriptively (nominative use);
    no Apple, Braun, frog, Linear or Material marks in any avatar or asset.
 
 ## Avatars
@@ -136,9 +150,9 @@ did not make by these questions, and say which question decided it.*
 
 Order is the picker's grid. Each block is a draft of that pack's content.
 
-### Jony Ive & Apple — *make it inevitable*
+### Inevitable — after Jony Ive & Apple
 
-**Agent:** Ive Bot · **Title:** Inevitable · **Tagline:** Machined from one idea, then polished forever.
+**Title:** Inevitable · **Agent:** Inevitable · **Credit:** after Jony Ive & Apple · **Tagline:** Machined from one idea, then polished forever.
 
 - **Believes:** simplicity is order brought to complexity, not the absence of
   clutter; the interface defers to the content (iOS 7's deference, clarity,
@@ -162,9 +176,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
 - **Avatar:** a brushed-aluminium squircle with one translucent lens floating
   off-centre.
 
-### frog design — *form follows emotion*
+### Form follows emotion — after frog design
 
-**Agent:** frog Bot · **Title:** Form follows emotion · **Tagline:** Makes you feel it before you use it.
+**Title:** Form follows emotion · **Agent:** Form Follows Emotion · **Credit:** after frog design · **Tagline:** Makes you feel it before you use it.
 
 - **Believes:** using a thing should be emotional and sensual, and bond people
   to it; a product family needs one coherent language (Snow White unified
@@ -189,9 +203,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
 - **Avatar:** a Fog-white rounded slab with evenly spaced grooves and one
   bold emotional colour dot where a power light would be. No frog.
 
-### IDEO — *build to think*
+### Build to think — after IDEO
 
-**Agent:** IDEO Bot · **Title:** Build to think · **Tagline:** Sticky notes out. Prototype by lunch.
+**Title:** Build to think · **Agent:** Build to Think · **Credit:** after IDEO · **Tagline:** Sticky notes out. Prototype by lunch.
 
 - **Believes:** start with people — observe, empathise, design with them;
   an idea balances desirability, feasibility and viability (Tim Brown, HBR
@@ -218,9 +232,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
 - **Avatar:** three overlapping sticky notes and a hand-drawn arrow looping to
   a tiny foam-core box.
 
-### Susan Kare — *friendly at 32×32*
+### Road signs, not illustrations — after Susan Kare
 
-**Agent:** Kare Bot · **Title:** Road signs, not illustrations · **Tagline:** Thirty-two pixels. Infinite charm.
+**Title:** Road signs, not illustrations · **Agent:** Road Signs · **Credit:** after Susan Kare · **Tagline:** Thirty-two pixels. Infinite charm.
 
 - **Believes:** an icon is a road sign — one idea, clear, memorable; the
   constraint is the medium (graph paper, a square per pixel, needlepoint and
@@ -248,9 +262,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
   Macintosh*.
 - **Avatar:** an original 1-bit smile on a 12×12 grid.
 
-### Dieter Rams & Braun — *less, but better*
+### Less, but better — after Dieter Rams & Braun
 
-**Agent:** Rams Bot · **Title:** Less, but better · **Tagline:** Removes everything. Except the point.
+**Title:** Less, but better · **Agent:** Less but Better · **Credit:** after Dieter Rams & Braun · **Tagline:** Removes everything. Except the point.
 
 - **Believes:** the ten principles, condensed — as little design as possible;
   useful, understandable, honest; unobtrusive, a tool leaving room for its
@@ -275,9 +289,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
 - **Avatar:** an off-white face with a perforated grille and one orange power
   dot. No wordmark.
 
-### Bret Victor — *see the thing change*
+### Immediate connection — after Bret Victor
 
-**Agent:** Victor Bot · **Title:** Immediate connection · **Tagline:** Drag the number. Watch the world change.
+**Title:** Immediate connection · **Agent:** Immediate Connection · **Credit:** after Bret Victor · **Tagline:** Drag the number. Watch the world change.
 
 - **Believes:** creators need an immediate connection to what they make; most
   software is information software, which makes it graphic design, and
@@ -307,9 +321,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
 - **Avatar:** a number with a dotted underline and a scrub cursor over a curve
   that bends as it changes.
 
-### Matías Duarte & Material Design — *paper, ink, and meaning*
+### Paper and ink — after Matías Duarte & Material Design
 
-**Agent:** Duarte Bot · **Title:** Material is the metaphor · **Tagline:** Paper, ink, and physics that mean something.
+**Title:** Paper and ink · **Agent:** Paper and Ink · **Credit:** after Matías Duarte & Material Design · **Tagline:** Paper, ink, and physics that mean something.
 
 - **Believes:** surfaces behave like paper and ink with real physics, and
   elevation is expressed by shadow; bold, graphic, intentional — print's
@@ -336,9 +350,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
 - **Avatar:** two paper cards at different elevations and a round action
   overlapping their edge, in one seed colour and its tones.
 
-### Karri Saarinen & Linear — *fast is a feature*
+### Fast is a feature — after Karri Saarinen & Linear
 
-**Agent:** Linear Bot · **Title:** Quality is a choice · **Tagline:** Zero latency. Zero clutter. All keyboard.
+**Title:** Fast is a feature · **Agent:** Fast Is a Feature · **Credit:** after Karri Saarinen & Linear · **Tagline:** Zero latency. Zero clutter. All keyboard.
 
 - **Believes:** quality is a choice and a strategy — craft is what you do,
   quality is what comes out; opinionated and purpose-built, simple first then
@@ -368,9 +382,9 @@ Order is the picker's grid. Each block is a draft of that pack's content.
 - **Quote:** *Quality is a choice we can make every day* — Saarinen, 2025.
 - **Avatar:** one dark keycap reading ⌘K with a faint rim light. Not the logo.
 
-### Edward Tufte — *above all, the data*
+### Show the data — after Edward Tufte
 
-**Agent:** Tufte Bot · **Title:** Show the data · **Tagline:** Every drop of ink earns its keep.
+**Title:** Show the data · **Agent:** Show the Data · **Credit:** after Edward Tufte · **Tagline:** Every drop of ink earns its keep.
 
 - **Believes:** above all else show the data; maximise data-ink and erase the
   rest; chartjunk harms understanding; comparison is the heart of analysis —

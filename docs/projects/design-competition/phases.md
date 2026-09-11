@@ -8,6 +8,9 @@ not, the picker is a costume shop. Then the platform changes that are useful
 without the competition, then the module on the terminal, then the picker.
 
 **Where we are:** designed 11 Sep 2026. Nothing built. Phase 0 is next.
+Decided the same day: principle-first names (*Less but Better*, after Dieter
+Rams), exhibition as the default bout, and shipping on isocan.io — which is
+phase 5.5 below.
 
 The epic is [#250](https://github.com/dglazkov/isocan/issues/250); each phase
 names its issue.
@@ -17,7 +20,7 @@ names its issue.
 *No module, no new code.* Three packs written by hand from
 [`packs.md`](packs.md) — Kare, Rams, Linear — each a directory with an
 `AGENTS.md` and a `DESIGN.md`. On a scratch canvas: three areas by hand
-(`isocan area new`), three agents by hand (`isocan rc add "Kare Bot" --dir
+(`isocan area new`), three agents by hand (`isocan rc add "Road Signs" --dir
 <pack>`), a brief posted in each lane addressed to its fighter, ballots as
 reactions (`isocan react 🥇 <entry>`), counted by hand.
 
@@ -25,8 +28,8 @@ What it measures, because everything later is priced on it:
 
 1. **Distinctiveness.** Show the three entries, unlabelled and shuffled, to
    three people who know the roster. How often do they match entry to
-   fighter? Chance is one in three. If people cannot tell *Kare Bot* from
-   *Rams Bot*, the packs are adjectives and phase 2's content work is the
+   fighter? Chance is one in three. If people cannot tell *Road Signs* from
+   *Less but Better*, the packs are adjectives and phase 2's content work is the
    whole project. Run it on three briefs.
 2. **Cost.** Turns and tokens for a three-fighter, twenty-minute bout, from
    the rc's own accounting. The picker will state it before Fight; it has to
@@ -75,7 +78,7 @@ an agent parked with `wait --in A` is not woken by a comment in B.
   card, so the arena looks like a line-up.
 
 **Acceptance:** `competition new` lays an arena on a scratch canvas; `isocan
-ls --in "Kare Bot"` lists the card, the system and the shelf; the runtime
+ls --in "Road Signs"` lists the card, the system and the shelf; the runtime
 build of the module carries its avatars and they draw from
 `/modules/design-competition/assets/`.
 
@@ -125,6 +128,33 @@ by the verb and dropped by the tally with a sentence.
 **Acceptance:** Scene 0 plays from the Chat and from ⌘K; the dialog is the
 module's and disappears when the module is removed.
 
+## Phase 5.5 — on isocan.io
+
+*Decided 11 Sep 2026: it ships on the hosted home.* The first phase in which
+anybody who is not on this repo can play a bout, so it waits for the picker —
+a competition you can only start from a terminal is not the thing to put in
+front of people.
+
+- **Build-time on the hosted home**: the module in both lists and the
+  Dockerfile's manifest layer (the `COPY` line a new module needs, or the image
+  builds without it and dev and prod sit still with no GitHub signal); the nine
+  default packs in the image as assets.
+- **One lazy chunk**: the picker, the avatars and the arena's web half are
+  fetched when somebody opens the picker or a canvas holds a fighter card, and
+  never on a first visit — `test/bundle-budget.test.ts` is the guard that
+  refuses the stickers module's first mistake.
+- **Fighters on the person's rc, parked against isocan.io**: the Fight button
+  reads the same parked-rc fact `AddAgent` does there. No hosted spawning.
+- **Walked on dev.isocan.io first** (the `green` ref), then prod: a bout from
+  the Chat, three fighters on one laptop's rc, the vote from two browsers, the
+  winner taken as `#Checkout`'s next version.
+- **Not in this phase**: bring-your-own on the hosted home, which waits for the
+  shared question of who may add a module there. Data-only modules are the
+  likely first answer; it is not this project's to give alone.
+
+**Acceptance:** the walk above, recorded; the first-visit bytes on isocan.io
+unchanged within the ratchet.
+
 ## Phase 6 — bring your own fighter
 
 - **Contribution points and data-only modules** ([§2](module-gaps.md#2-contribution-points),
@@ -153,7 +183,8 @@ tenth portrait and fights.
 
 ## Phase 8 — take it away
 
-The removal proof, for the largest module yet, by hand and recorded here: a
+The removal proof, for the largest module yet, by hand and recorded here —
+on a build of the hosted home's own image, since that is where it ships: a
 home with three finished arenas; the module removed from both lists and the
 build; `isocan ls` files fighter cards under `other`, the `DESIGN.md` items
 and entries are files, every ballot is a reaction in the log, `--help` has no
