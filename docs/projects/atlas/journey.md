@@ -1,8 +1,8 @@
 ---
-status: designed
-since: 2026-08-29
+status: partial
+since: 2026-09-06
 see: atlas
-note: both mechanisms designed, neither built
+note: both mechanisms are built, one of them only in the terminal. The content origin closed 6 Sep — all four stages, the hosted half on isocan.store with signed reads. Convergence shipped 29 Aug as `isocan choose` (core/converge.ts) — out of existing ops by grouping, where the design wanted a new op; the explored siblings go to the trash rather than onto the stack as versions; and the web has no "Keep this" door. Still unbuilt from what the scenes force — the question as a thread property and Scene 7's rebuild loop with its structural fingerprint
 ---
 # The atlas journey
 
@@ -203,7 +203,9 @@ Four things are genuinely forced, smallest first.
    belongs in the skill's own vocabulary, not in isocan's.
 4. **Convergence.** Scene 8 needs `isocan choose <item>` — adopt this child as
    the parent's next version, retire its siblings, one op so it is one undo.
-   Two independent lines of work now want it.
+   Two independent lines of work now want it. *Built 29 Aug 2026 as exactly
+   that verb (`core/converge.ts`) — one grouped gesture rather than one op, and
+   CLI-only; see [convergence](convergence.md).*
 
 ## Open debts
 

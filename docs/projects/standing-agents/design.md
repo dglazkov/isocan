@@ -84,7 +84,11 @@ where you already are") reads the **flags alone**. A summons's
 environment is where the agent was put, not a pointer it chose; refusing
 it would refuse every summons on a second canvas.
 
-## Mechanism 3 — the rc parks everywhere its rows name *(not built)*
+## Mechanism 3 — the rc parks everywhere its rows name *(built 3 Sep 2026 — phase 2, as `isocan rc --all`, 8a092f4e)*
+
+*The heading said "not built" until 11 Sep, eight days after the build; the
+front matter and phases.md had it right. What follows is the design as
+written, kept for the reasoning.*
 
 Dispatch state keyed by `(canvasId, actorId)` rather than by actor; one
 `watchLog` lap with a cursor per canvas — the transport already takes a

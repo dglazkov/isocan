@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-06
 issue: 134
 see: ui-refresh, roles, standing-agents, 2026-09-06-project-and-canvas.md
-note: phase 1 built 6 Sep — ⌘O, ⌘K → Switch canvas…, and the caret beside the name open one window that leads with the canvases this browser was on lately, finds one from a few letters, and moves you there; recents on the home screen and in the lens, spaces as headings, a shared "lately", and the project › canvas row are open
+note: phase 1 built 6 Sep — ⌘O, ⌘K → Switch canvas…, and the same row in the bar's ··· menu (which replaced the caret beside the name that evening) open one window that leads with the canvases this browser was on lately, finds one from a few letters, and moves you there; recents on the home screen and in the lens, spaces as headings, a shared "lately", and the project › canvas row are open. Decided 11 Sep — a shared "lately" may take a new op if one is needed, designed together with the inbox's seen-marks
 ---
 # The switcher
 
@@ -75,6 +75,11 @@ window is open and which face it wears. The switcher is the same component as
 the launcher because it is the same gesture, and a second modal over the
 first would have had to answer which of two Escapes closes what. Backspace on
 an empty field steps back to the commands.
+
+*(The caret below was removed the same evening — 920b61fd, Dion's call: the
+canvas name beside it opens rename, so the caret was a second button labelled
+only by its shape. Its door is a "Switch canvas…" row in the bar's `···`
+menu, which carries the word and ⌘O.)*
 
 **Three doors, no clutter.** ⌘O (which crosses a cover like ⌘K, since leaving
 is the one act that makes sense whatever is covering the canvas and it acts
@@ -209,7 +214,10 @@ scope and has no box of its own: the switcher is one row away.
    visits stay a browser's business (and the lens's per-actor rows are the
    cross-device answer) or a per-actor visit mark becomes desk state at the
    home. Not before multi-identity's resume is something people actually use,
-   because that is the first time two browsers would disagree.
+   because that is the first time two browsers would disagree. *Decided
+   11 Sep 2026 (Dion): a new op is acceptable if one is needed, and this is
+   designed together with the inbox's step 2 rather than after it — D1 in
+   [the inbox note](../../research/2026-08-29-the-inbox.md).*
 5. **The project › canvas row.** When a project holds more than one canvas,
    a row is `Project › Canvas`, the fuzzy match runs over both names, and
    Recent stays a flat list of canvases because that is what you go to. The

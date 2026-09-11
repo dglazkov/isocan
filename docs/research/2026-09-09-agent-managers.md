@@ -1,14 +1,23 @@
 ---
-status: open
+status: partial
 since: 2026-09-09
 see: harnesses, context, memory, iso-api, on-demand
 issue: 220
-note: measured 9 Sep — isocan.io sends no frame-ancestors and no X-Frame-Options, so any manager may already frame it, and one does. The gate is not framing, it is ADMISSION: the badge cookie is SameSite=Lax with no Partitioned and the web app has no bearer path at all (0 hits for Authorization in packages/web/src), so in a partitioning browser an embedded canvas is anonymous, cannot persist a badge, mints a fresh one per load, and walks into the per-address mint meter. Four doors weighed; the recommendation is MCP for the vocabulary, MCP Apps (SEP-1865, stable since 26 Jan) for the surface, the plain iframe as the fallback that already works, and no per-vendor extension — the harnesses constraint, inverted
+note: measured 9 Sep — isocan.io sends no frame-ancestors and no X-Frame-Options, so any manager may already frame it, and one does. The gate is not framing, it is ADMISSION: the badge cookie is SameSite=Lax with no Partitioned and the web app has no bearer path at all (0 hits for Authorization in packages/web/src), so in a partitioning browser an embedded canvas is anonymous, cannot persist a badge, mints a fresh one per load, and walks into the per-address mint meter. Four doors weighed; the recommendation is MCP for the vocabulary, MCP Apps (SEP-1865, stable since 26 Jan) for the surface, the plain iframe as the fallback that already works, and no per-vendor extension — the harnesses constraint, inverted. Taken up as the embed project the same day, which built steps 1 and 2's read half (ca307057) — the framed badge partitioned, `isocan embed` for a pass-bearing address, and @isocan/mcp with six read tools; the MCP write verbs and MCP Apps are not built
 ---
 
 # Into somebody else's window
 
 **9 September 2026** · [full write-up](https://claude.ai/code/artifact/6e1bd1c5-2446-436b-b423-18bdee77db3a)
+
+**Where this stands, 11 Sep 2026: partly built, as
+[the embed project](../projects/embed/phases.md).** The recommendation was
+taken as written. Step 1 is built — the framed badge is `Partitioned`, and
+`isocan embed` prints the address to paste into a pane. Step 2's read half is
+built — `@isocan/mcp`, six read tools, spawned as `isocan mcp` — and the
+identity question below was settled by it: an MCP client is whoever the machine
+already is, the person by default. The write verbs, step 3 (MCP Apps) and the
+standing "no per-IDE extension" of step 4 are the embed project's phases 2–4.
 
 Asked by Dion: *what is the best way to integrate isocan
 into Jetski, Antigravity, or any other agent manager or IDE?* Measured on this

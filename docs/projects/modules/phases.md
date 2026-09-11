@@ -234,3 +234,15 @@ attribute is the person who pressed it, and the thing that would need one is a
 panel that acts on its own (extensions stage 3). **Compute consent** is
 untouched. So the gate that moved is one of three, and the one behind it moved
 its own dependency into view rather than closer.
+
+**Compute consent, 11 Sep 2026 — no longer untouched, not yet cleared.** It
+has two halves, and both moved the same day
+([what the rc hands over](../../research/2026-09-10-what-the-rc-hands-over.md)).
+*What a turn can reach*: `isocan rc --sandbox` fences every adapter in a
+sandbox whose policy is derived from the enrolment, and permissions are
+answered by kind rather than auto-allowed — built, and opt-in rather than the
+default (decided 11 Sep). *Who may start a turn*: owner-only summons by default
+was decided 11 Sep and is being built separately. Neither is a module sandbox
+— this gate asks whose machine runs a module's compute and on whose say-so,
+and the rc work answers that for an agent's turn — but it is the same question
+one layer over, and the answer this gate will want is now visible.

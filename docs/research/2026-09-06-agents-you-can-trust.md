@@ -1,15 +1,21 @@
 ---
 status: partial
-since: 2026-09-06
+since: 2026-09-07
 issue: 197
 see: standing-agents, on-demand, personas, evals
-note: two halves of one question — whether an agent will actually answer (evidence with an age, and a receipt for every summons) and how a cheap tier and an expensive tier divide the work (findings, a queue that can fail, verdicts that become guards)
+note: two halves of one question — whether an agent will actually answer (evidence with an age, and a receipt for every summons) and how a cheap tier and an expensive tier divide the work (findings, a queue that can fail, verdicts that become guards). Phases 1–4 built 6–7 Sep — the summons receipt (core/src/summons.ts), the age beside "answers if you comment", the findings queue that reddens the suite after 3 days, and repeated questions listed; phase 5, the expensive tier triggered by the queue, is owed
 ---
 
 # Agents you can trust: liveness you can see, and tiers that hand off
 
 **6 September 2026.** Research. **Phase 3 is built** (`test/review-queue.test.ts`);
 the rest is designed and owed.
+
+**Where this stands, 11 Sep 2026: phases 1–4 built, 6–7 Sep.** The summons
+receipt is `core/src/summons.ts` (6c8c8623) with its deadline on the web's
+OnIt line (ec5728c1); evidence with an age, the queue that can fail, and
+repetition made visible are marked below. **Phase 5 — the expensive tier
+triggered by the queue — is the one owed.**
 
 Two questions, asked together because they turn out to be the same question
 asked at two scales:
@@ -167,7 +173,13 @@ same finding was on its sixth appearance. The queue should be able to say
 
 Ordered by what unblocks the rest. Each is small enough to land on its own.
 
-### Phase 1 — The summons receipt
+### Phase 1 — The summons receipt ✅ built 6 Sep
+
+*Built as a fold with no op and no stored field — `summonsState` in
+`core/src/summons.ts` (6c8c8623), asked → picked up → answered, or past a
+bound, nothing answered — and a deadline on the OnIt line that already said who
+was woken (ec5728c1): "woken 45s ago and has not picked this up" instead of a
+wait with no expiry.*
 
 **Work:** a comment naming an agent shows *asked <name>*, and resolves to
 *picked up (Ns)* or *nothing answered*. The rc already answers the doorbell

@@ -1,9 +1,9 @@
 ---
-status: partial
-since: 2026-09-02
+status: built
+since: 2026-09-04
 issue: 151
 see: ui-refresh
-note: designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Stages 1, 2 and 4 built 4 Sep — the registry, the store field, the two controls asked for hidden by right-click and shown again under the identity menu or by right-clicking the area they were hidden from, ⌘K "Show hidden controls", and the test that every entry names its other door; stage 3 not built
+note: designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Stages 1, 2 and 4 built 4 Sep — the registry, the store field, the two controls asked for hidden by right-click and shown again under the identity menu or by right-clicking the area they were hidden from, ⌘K "Show hidden controls", and the test that every entry names its other door. Residue — stage 3 (the rest of the rail and the corners) is on request by design, one registry entry each as somebody asks
 ---
 
 # Chrome you can turn off

@@ -1,9 +1,9 @@
 ---
-status: designed
-since: 2026-09-05
+status: partial
+since: 2026-09-07
 issue: 182
 see: multi-identity, workbench, on-demand, ui-refresh
-note: measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with a finger, the chrome overlaps, the Chat fits by accident and the deck fits on purpose; the field draws one line (a phone views, comments and presents; a tablet edits); recommends touch physics for every coarse pointer, a phone face built from the Chat, the viewer and the deck, and no native app. Nothing built
+note: measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with a finger, the chrome overlaps, the Chat fits by accident and the deck fits on purpose; the field draws one line (a phone views, comments and presents; a tablet edits); recommends touch physics for every coarse pointer, a phone face built from the Chat, the viewer and the deck, and no native app. Stage 0 mostly built 7 Sep — one finger pans, two pinch, and the front page and the bottom clusters fit at 375; the 44px targets, the rail fold and long-press are not. Decided 11 Sep — the phone face is Chat-first. Stages 1–4 not built
 ---
 
 # Mobile web: a phone talks to the canvas
@@ -11,6 +11,12 @@ note: measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with 
 **5 September 2026.** Tracked as
 [#182](https://github.com/dglazkov/isocan/issues/182), which holds the
 decisions this note leaves open.
+
+**Where this stands, 11 Sep 2026: partly built.** Stage 0's touch half and two
+of its three chrome fixes shipped 7 Sep (5ad7e68b, cffeaf6c) — see "What the
+touch half shipped" below; the 44px targets, the rail fold and long-press did
+not. The first open question is answered: **the phone face is Chat-first** (D1,
+Dion, 11 Sep). Stages 1–4 are not built.
 
 The question, as asked: *canvases are hard on mobile, so how do we make
 this experience responsive? Do we make it just the chat experience? Think
@@ -272,6 +278,7 @@ Written up as the decisions in #182:
 1. **Chat-first or canvas-first.** The recommendation puts the Chat on the
    first tab. It is the one choice here that changes what a person sees
    first, and it is a product decision rather than a measurement.
+   *Decided 11 Sep: Chat-first — D1 below.*
 2. **Width or capability.** Layout by width (`max-width: 640px`, tldraw's
    TABLET_SM line), physics by pointer (`pointer: coarse`), is the
    recommendation; an iPad in portrait at 768–834px sits on the line and
@@ -280,6 +287,14 @@ Written up as the decisions in #182:
    Stages 1–4 only matter where a phone can reach a canvas, which is
    isocan.io, dev, or a pass; the strongest argument for #91 in a while is a
    phone in a pocket and a laptop that is closed.
+
+## Decisions
+
+**D1. The phone face is Chat-first.** Dion, 11 Sep 2026, answering the first
+open question above. The Chat is the first tab of stage 1's face, as the
+recommendation argued: it is what a phone is for here, and an agent's "done"
+in it is the link to the card. The Canvas and Agents tabs follow it. Decided,
+not built.
 
 ## What was not measured
 

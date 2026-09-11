@@ -35,7 +35,8 @@ import { switchCanvas } from "../lib/canvasswitch.ts";
  * composer would offer. That includes commands a canvas defines for itself.
  *
  * **The same window has a second face: the switcher** (`mode === "canvases"`).
- * Choosing "Switch canvas…", pressing ⌘O, or the ⌄ beside the canvas's name
+ * Choosing "Switch canvas…" (here, or in the bar's `···` menu, which
+ * replaced the ⌄ beside the canvas's name on 6 Sep) or pressing ⌘O
  * flips this window to a list of canvases — the ones you were on lately
  * first, everything else by activity — and a few letters find one. It is
  * the same component rather than a second dialog because it IS the same

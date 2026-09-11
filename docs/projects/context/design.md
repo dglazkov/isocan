@@ -1,8 +1,8 @@
 ---
 status: partial
-since: 2026-08-30
+since: 2026-09-09
 see: context
-note: stages 1 and 2 built; the MCP surface is not
+note: stages 1 and 2 built 29–30 Aug; stage 3's MCP surface exists since 9 Sep — @isocan/mcp, built by the embed project, reads the canvas, its items, threads and activity — but not the list this stage specified, so `read_context` (the MCP spelling of `isocan context`) and MCP resources are what is missing
 ---
 # Context and memory — the canvas is the record, never the index
 
@@ -105,7 +105,8 @@ from a font request, and self-hosting is the only version that clears it.
 **Therefore: MCP, not a dependency.** Hindsight already speaks it; agents on
 this canvas run in harnesses that speak it. An agent that wants long memory
 can be given it without isocan importing anything, shipping anything, or
-knowing the vendor's name. isocan has no MCP surface today, and the useful
+knowing the vendor's name. isocan had no MCP surface when this was written
+(it has one since 9 Sep — stage 3 below), and the useful
 thing it could offer over MCP is not a memory store — it is the canvas: read
 the recap, read the design system, read the threads. Let somebody else's
 memory index that.
@@ -169,6 +170,9 @@ system passes none of them.
 3. **An MCP surface that exposes the canvas for reading.** This is the piece
    that makes external memory possible without adopting any of it: point
    Hindsight at the canvas and let it index the record it does not own.
+   *Mostly built 9 Sep by [embed](../embed/phases.md) phase 2 — `@isocan/mcp`,
+   `isocan mcp`, six read tools. What it lacks is this stage's own list:
+   `read_context`, and the canvas as an MCP resource.*
 4. **Only then**, and only if the four gaps still hurt: a self-hosted index
    behind the three tests. Cross-canvas and semantic recall are the two worth
    paying for. Person-level psychological modelling is the one to leave alone

@@ -130,8 +130,11 @@ want.
 
 ## The standing reviews
 
-Four personas in `.claude/agents/` watch what shipping tends to erode — a
-market researcher, a design auditor, an architect, and a QA tester. Each reads
+Nine personas in `.agents/personas/` (with doorways in `.claude/agents/`)
+watch what shipping tends to erode — among them a market researcher, a design
+auditor, an architect, a QA tester, and one that opens the app and uses it.
+[`docs/projects/personas/README.md`](docs/projects/personas/README.md) has the
+full table, each with the number it owns. Each reads
 `docs/reviews/README.md` before it looks, so a run in October knows what a run
 in August measured, and writes its findings back there as a dated page.
 
