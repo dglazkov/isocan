@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
@@ -79,7 +80,7 @@ describe("the roadmap is derived, not written", () => {
       if (!row || checked >= 2) continue;
       checked += 1;
       const answer = JSON.parse(
-        execFileSync("node", [`${repo}/packages/cli/bin/isocan.js`, "--json", "doc", "status", row[1]], {
+        execFileSync("node", [`${repo}/packages/cli/bin/isocan.js`, "--json", "doc", "status", path.join(repo, "docs", row[1])], {
           cwd: repo,
           encoding: "utf8",
           timeout: 60_000,
