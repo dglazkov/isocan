@@ -49,7 +49,7 @@ beforeEach(async () => {
     path.join(home, "config.json"),
     // …and named as the default outright: a web add's row says null, which
     // means the machine's default, and the runner's PATH must not vote.
-    JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
+    JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
   );
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
@@ -675,7 +675,7 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
     );
     // Enrolled from the web: a row that says null, meaning "the machine's default".
     await post("/api/ops", {
@@ -714,7 +714,7 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
     );
     await isocan("rc", "add", "Sian", "--harness", "fake");
     const rc = spawnCli(["rc"], bare);

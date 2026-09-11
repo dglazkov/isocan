@@ -432,6 +432,27 @@ machine can run and which is the default (`--json` adds a `runnable`
 field) — the thing to read before presenting the choice to a person, and
 the thing to tell them when a summons fails for want of one.
 
+A summoned session's environment is a list, not the person's shell: what a
+process needs, `ISOCAN_*`, and each vendor's own namespace (`ANTHROPIC_*`,
+`CLAUDE_*`, `OPENAI_*`, `CODEX_*`, `GEMINI_*`, `PI_*`). If something you
+need is missing inside a summons, the person names it once in
+`~/.isocan/config.json` under `adapterEnv` (`["MY_VAR", "MY_PREFIX_*"]`) —
+tell them the variable, not the mechanism. And a permission you ask for is
+granted for that one call; an option that would outlast the turn (a standing
+rule, a mode switch) is refused, so do not ask for those — do the call.
+
+**You may be fenced, and it is deliberate.** A person can start the rc with
+`--sandbox`, which runs your session inside a sandbox: you write your own
+working directory, `~/.isocan` and `/tmp`, you read nothing else of their
+home, and you reach this daemon and your own harness's API and nothing else
+on the network. So a refused read outside your directory, or a fetch of some
+other site that fails, is the fence doing its job — not a broken machine, and
+not something to work around. Say what you could not reach and why it
+mattered; the person decides whether to widen it (`sandboxRead`,
+`sandboxWrite` and `sandboxDomains` in `~/.isocan/config.json`) or to leave
+it closed. What never changes is the canvas work: the `isocan` CLI reaches
+the daemon from inside a fence exactly as it does outside.
+
 ## The Chat
 
 **The web app calls it the Chat**; on the wire and in this CLI it is the

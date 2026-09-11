@@ -419,10 +419,19 @@ import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
-import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState } from "./rc.ts";
+import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
 import { SHEEP_HARNESS, SheepAgent, homeAddressForCell, sheepConfig } from "./sheep.ts";
-import { adapterFor, defaultLine, noDefaultLine, noNeedLine, scanHarnesses, setDefaultHarness } from "./harnesses.ts";
+import { adapterFor, defaultLine, noDefaultLine, noNeedLine, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
+import {
+  noSandboxLine,
+  policyFor,
+  sandboxAsked,
+  sandboxLine,
+  scanSandbox,
+  wrapSpec,
+  writeSandboxSettings,
+} from "./sandbox.ts";
 import {
   checkoutState,
   planUpgrade,
@@ -11450,12 +11459,17 @@ field so an agent presenting the choice need not derive it.`,
     run(async (_opts: unknown, cmd: Command) => {
       const home = paths.isocanHome();
       const scan = await scanHarnesses(home);
+      const sandbox = await scanSandbox(home);
       if ((cmd.optsWithGlobals() as { json?: boolean }).json) {
         return printJson({
           harnesses: scan.rows,
           default: scan.default?.name ?? null,
           source: scan.source,
           ...(scan.ignored ? { ignored: scan.ignored } : {}),
+          // What a fenced rc would hold with here, or why it could not —
+          // read before offering `--sandbox` to a person, the same way
+          // `runnable` is read before offering a harness.
+          sandbox: { can: sandbox.can, engine: sandbox.engine, ...(sandbox.why ? { why: sandbox.why } : {}) },
         });
       }
       printTable(
@@ -11468,6 +11482,11 @@ field so an agent presenting the choice need not derive it.`,
         })),
       );
       console.log(scan.default ? defaultLine(scan) : noDefaultLine(scan));
+      console.log(
+        sandbox.can
+          ? `a fenced rc would hold with srt on ${sandbox.engine} (\`isocan rc --sandbox\`)`
+          : `this machine cannot fence an adapter: ${sandbox.why}`,
+      );
     }),
   );
 
@@ -11489,6 +11508,25 @@ the only harness installed here, or the one \`--default-harness <name>\` picked
 (kept in ~/.isocan/config.json as defaultHarness). With two installed and
 none picked, a terminal start asks; a start with no terminal refuses and
 names the flag. \`isocan harness\` prints what is installed and runnable.
+
+A summoned agent's environment is a list, not your shell: what a process
+needs (PATH, HOME, locale, proxies), isocan's own variables, and each
+vendor's namespace (ANTHROPIC_*, CLAUDE_*, OPENAI_*, CODEX_*, GEMINI_*, PI_*).
+Anything else you export stays behind. A harness that needs more is named
+once in ~/.isocan/config.json: {"adapterEnv": ["MY_VAR", "MY_PREFIX_*"]}.
+Permission prompts are answered for the one call only; an option that
+would outlast the turn (a standing rule, a mode switch) is refused and said.
+
+--sandbox goes further and fences the adapter from outside the harness, so
+the limit holds whatever the harness does: it writes only its own directory,
+~/.isocan and /tmp, reads nothing else of your home, and reaches only this
+daemon and its harness's API. It needs srt on the PATH (npm i -g
+@anthropic-ai/sandbox-runtime) and, on Linux, bubblewrap and socat; asking
+for a fence this machine cannot build is refused rather than run open.
+{"sandbox": true} in ~/.isocan/config.json is the standing answer, and
+--unsandboxed overrides it. sandboxDomains, sandboxRead and sandboxWrite
+there add what the derived policy cannot know. \`isocan harness\` says
+whether this machine could fence at all.
 
 An agent never starts an rc — inside a harness session this refuses, and
 the agent's spelling of the verbs is \`isocan agent\`.`,
@@ -11639,8 +11677,13 @@ handle that fails to load twice is replaced by a fresh session rather than
 an error. Adapters: claude-code, pi, codex and antigravity ship known — each
 the ACP registry's current bridge, fetched on first use (Antigravity's is a
 300 MB binary and wants GEMINI_API_KEY); others are declared in
-~/.isocan/config.json as {"acpAdapters": {"<harness>": ["cmd", "arg"]}}.`,
+~/.isocan/config.json as {"acpAdapters": {"<harness>": ["cmd", "arg"]}}.
+
+--sandbox fences the adapter the way a fenced rc does, which is the way to
+try a policy against one agent before starting an rc with it.`,
   )
+  .option("--sandbox", "fence the adapter: its own directory, ~/.isocan, /tmp, this daemon and its harness's API")
+  .option("--unsandboxed", "run the adapter with your own reach, overriding config.json's sandbox")
   .action(
     run(async (name: string, promptWords: string[], _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -11694,7 +11737,25 @@ the ACP registry's current bridge, fetched on first use (Antigravity's is a
         as: record.actor.id,
       });
 
-      console.error(rcLine("", `${record.actor.name} · starting ${spec.harness} (${spec.command}) in ${row.cwd}`));
+      // The fence, if this machine was asked for one (`sandbox.ts`). The
+      // line still names the harness's own command: what the person wants to
+      // read is which bridge started, with what is holding it beside it.
+      // `optsWithGlobals`, not this command's own options: `rc` declares
+      // --sandbox too, and commander gives a flag to the ancestor that
+      // declares it — so `rc turn --sandbox` lands on the parent and this
+      // command's own opts come through empty.
+      const fence = await fenceSpec(
+        ctx,
+        spec,
+        row,
+        await sandboxAsked(ctx.home, cmd.optsWithGlobals() as { sandbox?: boolean; unsandboxed?: boolean }),
+      );
+      console.error(
+        rcLine(
+          "",
+          `${record.actor.name} · starting ${spec.harness} (${spec.command})${fenceNote(fence)} in ${row.cwd}`,
+        ),
+      );
       const agent =
         spec.harness === SHEEP_HARNESS
           ? await SheepAgent.spawn(spec, {
@@ -11703,9 +11764,9 @@ the ACP registry's current bridge, fetched on first use (Antigravity's is a
               narrate: (line) => console.error(rcLine("", `${record.actor.name} · ${line}`)),
               birth: await sheepBirth(ctx, p, record.actor.id),
             })
-          : await AcpAgentProcess.spawn(spec, {
+          : await AcpAgentProcess.spawn(fence.spec, {
               cwd: row.cwd,
-              env: adapterEnv(p.id, record.actor.name),
+              env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
             });
       try {
         const session = await agent.ensureSession(row.cwd, row.sessionId);
@@ -11743,8 +11804,63 @@ the ACP registry's current bridge, fetched on first use (Antigravity's is a
  * canvas asked. Auto-upgrade runs once for the process, and Ctrl-C stands
  * every announcement down.
  */
+interface Fence {
+  spec: AdapterSpec;
+  /** What holds this agent in: srt around a local adapter, the sheep's own
+   * cell, or nothing. Three states rather than a boolean, because "not
+   * fenced by srt" and "not fenced" are different facts about a turn. */
+  holding: "srt" | "cell" | null;
+}
+
+/**
+ * **The fence, applied to one spawn** (`sandbox.ts`). Both dispatch paths —
+ * a person's `rc turn` and a summons — come through here, so there is no
+ * door that fences and no door that forgets. Asked for and not buildable is
+ * a refusal, said in the words of what is missing.
+ */
+async function fenceSpec(
+  ctx: Ctx,
+  spec: AdapterSpec,
+  row: RcAgentRow,
+  asked: boolean,
+): Promise<Fence> {
+  /**
+   * **A sheep is already fenced, and not by us.** Its turn does not run on
+   * this filesystem at all: `sheep.ts` starts a pi session in a cell at a
+   * sheep home, which reaches the home over the network. srt around the
+   * `sheep` command would fence the CLIENT — and cut it off from the sheep
+   * home, since the policy's allow-list names this daemon and the vendor,
+   * not a kennel — while the agent it starts sits in a container either
+   * way. The cell is the boundary, and a stronger one than srt: it is the
+   * research note's "a stronger box" row, arriving from another project.
+   */
+  if (spec.harness === SHEEP_HARNESS) return { spec, holding: "cell" };
+  if (!asked) return { spec, holding: null };
+  const scan = await scanSandbox(ctx.home);
+  if (!scan.can) throw new Error(noSandboxLine(scan));
+  const policy = await policyFor({
+    cwd: row.cwd,
+    home: ctx.home,
+    daemon: ctx.client.base,
+    harness: spec.harness,
+    sandboxRoot: scan.root,
+    npx: spec.command === "npx" || spec.command.endsWith("/npx"),
+  });
+  const file = await writeSandboxSettings(ctx.home, `${row.canvasId}-${row.actorId}`, policy);
+  return { spec: wrapSpec(spec, scan, file), holding: "srt" };
+}
+
+/** The spawn line's fence marker, so a person never has to infer which
+ * boundary a turn is running behind. */
+function fenceNote(fence: Fence): string {
+  return fence.holding === "srt" ? ", fenced" : fence.holding === "cell" ? ", in a cell" : "";
+}
+
 interface RcShared {
   rooms: number;
+  /** Whether adapters are fenced — resolved once at start, so a refusal
+   * lands before anything parks rather than at the first summons. */
+  sandbox: boolean;
   guards: Map<string, GuardState>;
   sessionIds: Map<string, string>;
   upgrade: { upgrading: boolean; upgraded: string | null };
@@ -11797,8 +11913,10 @@ async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
 rcCommand
   .option("--all", "answer on every canvas this machine's enrolments name, not only this directory's")
   .option("--default-harness <name>", "the harness agents that named none run on — kept as config.json's defaultHarness")
+  .option("--sandbox", "fence every adapter: its own directory, ~/.isocan, /tmp, this daemon and its harness's API")
+  .option("--unsandboxed", "run adapters with your own reach, overriding config.json's sandbox")
   .action(
-  run(async (opts: { all?: boolean; defaultHarness?: string }, cmd: Command) => {
+  run(async (opts: { all?: boolean; defaultHarness?: string; sandbox?: boolean; unsandboxed?: boolean }, cmd: Command) => {
     const ctx = await ctxOf(cmd);
     /**
      * The user/agent divide, enforced (the naming door's residue, decided
@@ -11819,8 +11937,21 @@ rcCommand
       throw new Error("`isocan rc --all` found no canvas to answer on — nothing is enrolled from this machine yet (`isocan rc add <name>` on a bound canvas)");
     }
     await settleDefaultHarness(ctx, rooms, opts.defaultHarness);
+    /**
+     * The fence, settled before anything parks — and refused here if it was
+     * asked for and cannot be built, because a machine missing `bwrap`
+     * discovered at the first summons is an agent already running unfenced.
+     */
+    const fence = await sandboxAsked(ctx.home, opts);
+    const sandboxScan = await scanSandbox(ctx.home);
+    if (fence && !sandboxScan.can) throw new Error(noSandboxLine(sandboxScan));
+    // Only when it holds: the start stays three lines otherwise (see
+    // `sandboxLine`), and `isocan harness` is where "could this machine
+    // fence?" is answered.
+    if (fence) console.log(`rc: ${sandboxLine(sandboxScan)}`);
     const shared: RcShared = {
       rooms: rooms.length,
+      sandbox: fence,
       guards: new Map(),
       sessionIds: new Map(),
       upgrade: { upgrading: false, upgraded: null },
@@ -12323,6 +12454,11 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       // silent half. The interval is the floor under everything else.
       const heartbeat = setInterval(() => beat({}), 60_000);
       heartbeat.unref?.();
+      // The fence, if the rc was started with one (`sandbox.ts`). The start
+      // was already refused if it could not be built here, so this cannot
+      // fail for want of `bwrap` at the doorbell.
+      const fence = await fenceSpec(ctx, spec, row, shared.sandbox);
+      console.log(rcLine(tag, `${record.actor.name} · ${spec.harness}${fenceNote(fence)}`));
       const agent =
         spec.harness === SHEEP_HARNESS
           ? await SheepAgent.spawn(spec, {
@@ -12331,9 +12467,9 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
               narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
               birth: await sheepBirth(ctx, p, record.actor.id),
             })
-          : await AcpAgentProcess.spawn(spec, {
+          : await AcpAgentProcess.spawn(fence.spec, {
               cwd: row.cwd,
-              env: adapterEnv(p.id, record.actor.name),
+              env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
               narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
             });
       try {

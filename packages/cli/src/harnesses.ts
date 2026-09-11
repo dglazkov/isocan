@@ -34,6 +34,18 @@ interface HarnessConfig {
   acpAdapters?: Record<string, string[] | string>;
   harnessVars?: Record<string, string>;
   defaultHarness?: string;
+  /** What else of the person's environment reaches an adapter, beyond the
+   * list `acp.ts` knows: names, or `PREFIX_*`. */
+  adapterEnv?: string[];
+}
+
+/** `config.json`'s `adapterEnv`, read at every spawn so an edit takes
+ * effect on the next summons. A malformed entry is skipped, not thrown —
+ * the file is hand-edited, and a typo must not cost a turn. */
+export async function passedEnv(home: string): Promise<string[]> {
+  const raw = await readConfigFile<HarnessConfig>(home);
+  const declared = Array.isArray(raw.adapterEnv) ? raw.adapterEnv : [];
+  return declared.filter((rule): rule is string => typeof rule === "string" && /^[A-Za-z_][A-Za-z0-9_]*\*?$/.test(rule));
 }
 
 export interface AdapterSpec {

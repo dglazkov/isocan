@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 44 still open** — of which 29 partly
+**21 built · 45 still open** — of which 30 partly
 built, 14 designed, 0 blocked, and
 **1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -16,7 +16,7 @@ read lately.
 3 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>29</sub>
+## Partly built <sub>30</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -49,6 +49,7 @@ and the done column should not be flattered by either.
 | research | [The design sprint, as a game the canvas already knows how to play](docs/research/2026-09-01-design-sprint.md) | 2026-09-01 | stages 0-2 built 1 Sep — the `/sprint` command, `sprintState` derived from the Chat, `isocan sprint` and the clock chip, hand-in as a property, the vote curtain by lens, the split tally, the bell; stage 3 (rival rooms, the overnight Monday) is practice, not code, and the sprint has not yet been run for real · see atlas, personas, on-demand, sprint · [#150](https://github.com/dglazkov/isocan/issues/150) |
 | research | [The flake family, and the first one caught in the act](docs/research/2026-08-29-the-flake-family.md) | 2026-08-29 | 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue · [#146](https://github.com/dglazkov/isocan/issues/146) |
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open · see evals, personas · [#138](https://github.com/dglazkov/isocan/issues/138) |
+| research | [What the rc hands over, and how to hand over less](docs/research/2026-09-10-what-the-rc-hands-over.md) | 2026-09-10 | Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS is the one gating measurement left — `scripts/spike-srt.sh` is it in one command — and codex nested with it. Still owed: a reach word on the enrolment translated per harness, the second-user recipe, owner-only summons · see on-demand, harnesses, agent-custody, standing-agents · [#238](https://github.com/dglazkov/isocan/issues/238) |
 
 ## Designed, not built <sub>14</sub>
 
