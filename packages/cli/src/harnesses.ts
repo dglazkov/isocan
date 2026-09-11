@@ -6,6 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { builtinHarnesses } from "@isocan/api";
 import { readConfigFile, updateConfigFile } from "@isocan/server";
+import { SHEEP_HARNESS, sheepAdapter } from "./sheep.ts";
 
 /**
  * **Which harness runs an agent that named none** (decided 2026-09-04).
@@ -459,6 +460,12 @@ export async function adapterFor(
 ): Promise<AdapterSpec | null> {
   const wanted = harness ?? (await scanHarnesses(home, env)).default?.name ?? null;
   if (!wanted) return null;
+  // The sheep spike (10 Sep 2026): a harness that is not an ACP bridge but
+  // a herding command — its sessions are cells at a sheep home.
+  if (wanted === SHEEP_HARNESS) {
+    const spec = await sheepAdapter(home);
+    return spec ? { harness: wanted, ...spec } : null;
+  }
   const raw = await readConfigFile<HarnessConfig>(home);
   const spec = declaredAdapter(raw, wanted) ?? (await builtinAdapter(home, wanted)) ?? null;
   return spec ? { harness: wanted, ...spec } : null;

@@ -421,6 +421,7 @@ import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
+import { SHEEP_HARNESS, SheepAgent, homeAddressForCell, sheepConfig } from "./sheep.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
 import {
   noSandboxLine,
@@ -11738,7 +11739,7 @@ try a policy against one agent before starting an rc with it.`,
 
       // The fence, if this machine was asked for one (`sandbox.ts`). The
       // line still names the harness's own command: what the person wants to
-      // read is which bridge started, with whether it is fenced beside it.
+      // read is which bridge started, with what is holding it beside it.
       // `optsWithGlobals`, not this command's own options: `rc` declares
       // --sandbox too, and commander gives a flag to the ancestor that
       // declares it — so `rc turn --sandbox` lands on the parent and this
@@ -11752,13 +11753,21 @@ try a policy against one agent before starting an rc with it.`,
       console.error(
         rcLine(
           "",
-          `${record.actor.name} · starting ${spec.harness} (${spec.command})${fence.fenced ? ", fenced" : ""} in ${row.cwd}`,
+          `${record.actor.name} · starting ${spec.harness} (${spec.command})${fenceNote(fence)} in ${row.cwd}`,
         ),
       );
-      const agent = await AcpAgentProcess.spawn(fence.spec, {
-        cwd: row.cwd,
-        env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
-      });
+      const agent =
+        spec.harness === SHEEP_HARNESS
+          ? await SheepAgent.spawn(spec, {
+              home: ctx.home,
+              name: record.actor.name,
+              narrate: (line) => console.error(rcLine("", `${record.actor.name} · ${line}`)),
+              birth: await sheepBirth(ctx, p, record.actor.id),
+            })
+          : await AcpAgentProcess.spawn(fence.spec, {
+              cwd: row.cwd,
+              env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
+            });
       try {
         const session = await agent.ensureSession(row.cwd, row.sessionId);
         console.error(
@@ -11795,6 +11804,14 @@ try a policy against one agent before starting an rc with it.`,
  * canvas asked. Auto-upgrade runs once for the process, and Ctrl-C stands
  * every announcement down.
  */
+interface Fence {
+  spec: AdapterSpec;
+  /** What holds this agent in: srt around a local adapter, the sheep's own
+   * cell, or nothing. Three states rather than a boolean, because "not
+   * fenced by srt" and "not fenced" are different facts about a turn. */
+  holding: "srt" | "cell" | null;
+}
+
 /**
  * **The fence, applied to one spawn** (`sandbox.ts`). Both dispatch paths —
  * a person's `rc turn` and a summons — come through here, so there is no
@@ -11806,8 +11823,19 @@ async function fenceSpec(
   spec: AdapterSpec,
   row: RcAgentRow,
   asked: boolean,
-): Promise<{ spec: AdapterSpec; fenced: boolean }> {
-  if (!asked) return { spec, fenced: false };
+): Promise<Fence> {
+  /**
+   * **A sheep is already fenced, and not by us.** Its turn does not run on
+   * this filesystem at all: `sheep.ts` starts a pi session in a cell at a
+   * sheep home, which reaches the home over the network. srt around the
+   * `sheep` command would fence the CLIENT — and cut it off from the sheep
+   * home, since the policy's allow-list names this daemon and the vendor,
+   * not a kennel — while the agent it starts sits in a container either
+   * way. The cell is the boundary, and a stronger one than srt: it is the
+   * research note's "a stronger box" row, arriving from another project.
+   */
+  if (spec.harness === SHEEP_HARNESS) return { spec, holding: "cell" };
+  if (!asked) return { spec, holding: null };
   const scan = await scanSandbox(ctx.home);
   if (!scan.can) throw new Error(noSandboxLine(scan));
   const policy = await policyFor({
@@ -11819,7 +11847,13 @@ async function fenceSpec(
     npx: spec.command === "npx" || spec.command.endsWith("/npx"),
   });
   const file = await writeSandboxSettings(ctx.home, `${row.canvasId}-${row.actorId}`, policy);
-  return { spec: wrapSpec(spec, scan, file), fenced: true };
+  return { spec: wrapSpec(spec, scan, file), holding: "srt" };
+}
+
+/** The spawn line's fence marker, so a person never has to infer which
+ * boundary a turn is running behind. */
+function fenceNote(fence: Fence): string {
+  return fence.holding === "srt" ? ", fenced" : fence.holding === "cell" ? ", in a cell" : "";
 }
 
 interface RcShared {
@@ -11840,6 +11874,28 @@ interface RcShared {
  * enrolment records name, plus the bound one if there is one; a canvas the
  * records name that the home no longer has is said and skipped.
  */
+/**
+ * What a sheep needs to be born as this agent (the sheep spike, 10 Sep
+ * 2026): a pass minted for the agent's own actor — the rc's badge holds the
+ * claim, so the home allows it — at the address the cell can reach, and the
+ * collab skill for its pasture. The pass is minted lazily, only when a
+ * pasture is actually made, because it is single-use and short-lived.
+ */
+async function sheepBirth(ctx: Ctx, p: Canvas, actorId: string): Promise<import("./sheep.ts").SheepBirth> {
+  const cfg = await sheepConfig(ctx.home);
+  if (!cfg) throw new Error('harness "sheep" needs a "sheep" block in config.json');
+  const skill = await fs.readFile(path.join(skillSource(), "SKILL.md"), "utf8").catch(() => undefined);
+  return {
+    canvasTitle: p.title,
+    ...(skill ? { skill } : {}),
+    pass: async () => {
+      const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
+      const { token } = await ctx.client.mintPass(p.id, actorId);
+      return canvasUrlWithPass(homeAddressForCell(origin, cfg), p.id, token);
+    },
+  };
+}
+
 async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
   const canvases = await ctx.client.listCanvases();
   const wanted = new Set((await readRcAgents(ctx.home)).map((row) => row.canvasId));
@@ -12289,7 +12345,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       console.log(
         rcLine(
           tag,
-          `${record.actor.name} · ${reason} from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"} — starting a session${shared.sandbox ? ", fenced" : ""}`,
+          `${record.actor.name} · ${reason} from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"} — starting a session`,
         ),
       );
       try {
@@ -12402,11 +12458,20 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       // was already refused if it could not be built here, so this cannot
       // fail for want of `bwrap` at the doorbell.
       const fence = await fenceSpec(ctx, spec, row, shared.sandbox);
-      const agent = await AcpAgentProcess.spawn(fence.spec, {
-        cwd: row.cwd,
-        env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
-        narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
-      });
+      console.log(rcLine(tag, `${record.actor.name} · ${spec.harness}${fenceNote(fence)}`));
+      const agent =
+        spec.harness === SHEEP_HARNESS
+          ? await SheepAgent.spawn(spec, {
+              home: ctx.home,
+              name: record.actor.name,
+              narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
+              birth: await sheepBirth(ctx, p, record.actor.id),
+            })
+          : await AcpAgentProcess.spawn(fence.spec, {
+              cwd: row.cwd,
+              env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
+              narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
+            });
       try {
         // One session handle per AGENT (phase 2): a summons on any canvas
         // resumes the same conversation — this row's handle, else the one

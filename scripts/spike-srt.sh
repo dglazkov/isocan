@@ -83,11 +83,25 @@ if command -v srt >/dev/null; then
   echo "  srt lives in: ${SRT_PKG:-unresolved}"
   echo "  srt version: ${SRT_VERSION:-unknown}"
 else
+  # Only what is actually absent: a hint naming something already installed
+  # reads as "this did not detect my machine", and the next thing a person
+  # does is stop trusting the rest of the output.
   echo
   echo "srt is not on the PATH, and every step below needs it:"
   echo "  npm i -g @anthropic-ai/sandbox-runtime"
-  [ "$PLATFORM" = "Linux" ] && echo "  sudo apt install bubblewrap socat ripgrep"
-  [ "$PLATFORM" = "Darwin" ] && echo "  brew install ripgrep"
+  NEED=""
+  for bin in $([ "$PLATFORM" = "Linux" ] && echo "bwrap socat rg" || echo "rg"); do
+    command -v "$bin" >/dev/null || NEED="$NEED $bin"
+  done
+  if [ -n "$NEED" ]; then
+    if [ "$PLATFORM" = "Linux" ]; then
+      echo "  sudo apt install$(echo "$NEED" | sed 's/ bwrap/ bubblewrap/; s/ rg/ ripgrep/g')"
+    else
+      echo "  brew install$(echo "$NEED" | sed 's/ rg/ ripgrep/')"
+    fi
+  fi
+  echo
+  echo "Then re-run this script. Nothing else is needed."
   exit 1
 fi
 # Thing 1, on Linux: srt's inner bridge listens on an IPv6 socket, and a

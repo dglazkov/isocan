@@ -367,7 +367,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         holdTool.current = { code: e.code, prev: ui.activeTool, downAt: Date.now() };
         ui.setActiveTool(wants);
       }
-      if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey) {
+      // `!e.repeat`: a region zoom hands the tool to Select while Z is still
+      // down. The next autorepeated keydown found "not zoom", re-armed the
+      // tool with a fresh timestamp, and the release landed inside the tap
+      // window — so a hold that had already done its job latched Zoom on.
+      if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey && !e.repeat) {
         const ui = useUiStore.getState();
         if (ui.activeTool !== "zoom") {
           zoomPrevTool.current = ui.activeTool;

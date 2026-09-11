@@ -3875,12 +3875,72 @@ button.mt-card:hover { border-color: var(--accent); }
   box-shadow: var(--shadow-pop);
 }
 .tool-btn {
+  position: relative; /* the tip hangs off the button, not the rail */
   display: flex; align-items: center; justify-content: center;
   width: 38px; height: 38px; border-radius: 11px;
   background: none; border: 1px solid transparent; color: var(--ink-muted);
 }
 .tool-btn:hover { background: var(--chip); color: var(--ink); }
 .tool-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+/* The rail's tooltips, drawn rather than left to `title` — the same reason
+   `.fullscreen-btn::after` gives: the native tip waits about a second,
+   appears at the pointer, and takes no styling. Here it had a third fault.
+   The rail is a column, and a tip that lands at the pointer lands ON the
+   buttons below the one it names, so reading what Pen does covered Text and
+   Comment.
+
+   **Out to the side, pointing back at the button.** The rail is on the right
+   edge, so the tip pops LEFT into open canvas — the direction the ink well
+   already takes — and a small chevron on its right edge says which button is
+   speaking, which a floating pill beside a column of six cannot. It is the
+   card's own paper, ink-coloured, at a readable size: this is the one place
+   a first-time visitor learns what the glyphs are and what the letters do.
+   The hint's first line is the name and key; a second line, when there is
+   one, is the behaviour (`pre-line` makes the newline a line).
+
+   Prompt: a fifth of a second, not the native second — long enough that
+   sweeping the pointer down the rail does not flash six tips, short enough
+   that stopping on one gets an answer. Keyboard focus gets it at once.
+   Inert (`pointer-events: none`), and never the thing the pointer meets on
+   its way to the control it describes. */
+.tool-btn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; right: calc(100% + 12px); top: 50%;
+  transform: translate(4px, -50%);
+  width: max-content; max-width: 220px; padding: 5px 10px; border-radius: 9px;
+  white-space: pre-line; text-align: left;
+  background: var(--card); border: 1px solid var(--line); color: var(--ink);
+  box-shadow: var(--shadow-pop);
+  font-size: 12px; line-height: 1.35; font-weight: 400;
+  opacity: 0; pointer-events: none; z-index: 1;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+/* The chevron: a square wearing two of the tip's borders, turned so its
+   corner meets the button. It sits over the tip's right edge (z 2 over 1),
+   so the edge it crosses is its own. */
+.tool-btn[data-tip]::before {
+  content: "";
+  position: absolute; right: calc(100% + 8px); top: 50%;
+  width: 8px; height: 8px;
+  transform: translate(4px, -50%) rotate(45deg);
+  background: var(--card); border-right: 1px solid var(--line); border-top: 1px solid var(--line);
+  opacity: 0; pointer-events: none; z-index: 2;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+.tool-btn[data-tip]:hover::after,
+.tool-btn[data-tip]:hover::before { opacity: 1; transition-delay: 0.2s; }
+.tool-btn[data-tip]:focus-visible::after,
+.tool-btn[data-tip]:focus-visible::before { opacity: 1; transition-delay: 0s; }
+.tool-btn[data-tip]:hover::after,
+.tool-btn[data-tip]:focus-visible::after { transform: translate(0, -50%); }
+.tool-btn[data-tip]:hover::before,
+.tool-btn[data-tip]:focus-visible::before { transform: translate(0, -50%) rotate(45deg); }
+/* A press is an answer, not a question: the tip goes the moment the button
+   is pressed, the way the native one does. (A button with something open
+   beside it — the Pen's ink well, the Add door's popover — carries no
+   `data-tip` at all while it is open; that is decided where it renders.) */
+.tool-btn[data-tip]:active::after,
+.tool-btn[data-tip]:active::before { opacity: 0; transition: none; }
 .tool-sep { height: 1px; margin: 2px 6px; background: var(--line); }
 /* A canvas's own tool (extensions stage 1). It keeps the rail's geometry —
    same 38px square, same radius, same focus ring — because the app draws it

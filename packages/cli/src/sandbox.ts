@@ -18,6 +18,14 @@ import type { AdapterSpec } from "./harnesses.ts";
  * works for pi (no permission system at all) and for Claude's non-Bash
  * tools (its own sandbox covers Bash only).
  *
+ * **It fences a LOCAL adapter, and only that.** The sheep harness
+ * (`sheep.ts`) runs its turn in a cell at a sheep home rather than on this
+ * filesystem, so nothing here applies to it and nothing here should learn
+ * its paths: `main.ts`'s `fenceSpec` returns "the cell is holding it" for a
+ * sheep and never wraps it. A policy that allow-listed a kennel would be
+ * fencing the client that talks to the sheep home, which is not where the
+ * agent is.
+ *
  * **It is asked for, never assumed.** `isocan rc --sandbox`, or
  * `{"sandbox": true}` in `config.json`. And asking for a fence and not
  * getting one is a REFUSAL, not a warning: a person who wants "fence if you
