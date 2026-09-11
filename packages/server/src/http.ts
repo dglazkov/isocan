@@ -1,3 +1,4 @@
+import { textAttention } from "@isocan/core";
 import { createReadStream, existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { createHash } from "node:crypto";
@@ -3514,6 +3515,7 @@ export function registerRoutes(
     // Every beat re-asserts who is holding the face (that is what makes a
     // rename re-label it live), so every beat is checked.
     if (body.actor) await engine.requireActor(req.badge!.badgeId, body.actor.id);
+    if (body.textSelection !== undefined) body.textSelection = textAttention(body.textSelection, Date.now(), (await engine.getSnapshot(id)).canvas);
     if (!presence.touch(id, sid, body)) {
       return reply.status(404).send({ error: "session expired or unknown", code: "unknown-session" });
     }

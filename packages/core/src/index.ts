@@ -86,3 +86,5 @@ export * from "./canvassort.ts";
 export * from "./canvasswitch.ts";
 export * from "./lens.ts";
 export * from "./export.ts";
+
+export * from "./text-attention.ts";

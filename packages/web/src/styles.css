@@ -6450,3 +6450,19 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .diagram-view svg { max-width: 100%; max-height: 100%; height: auto; }
 .diagram-error small { display: block; margin-top: 6px; color: var(--ink-soft); }
+
+/* Read mode keeps document geometry local and gives selection its own gesture. */
+.item-read { position: absolute; right: 8px; bottom: 8px; z-index: 6; background: var(--card); min-height: 32px; }
+.item.entered .md-view { padding-bottom: 40px; user-select: text; -webkit-user-select: text; }
+.item.entered:not(.textnode) .md-view, .artifact-stage .md-view { font-size: 16px; line-height: 1.6; }
+.item.entered:not(.textnode) .md-view h1, .artifact-stage .md-view h1 { font-size: 22px; }
+.item.entered:not(.textnode) .md-view h2, .artifact-stage .md-view h2 { font-size: 18px; }
+.item.entered:not(.textnode) .md-view h3, .artifact-stage .md-view h3 { font-size: 17px; }
+.markdown-text { max-width: 72ch; margin-inline: auto; overflow-wrap: anywhere; }
+.markdown-text pre { overflow-wrap: normal; }
+.text-attention-status { position: sticky; top: 0; z-index: 1; background: var(--card); color: var(--ink); padding: 4px 8px; font-size: 12px; line-height: 1.4; border-bottom: 1px solid var(--line); user-select: none; }
+.text-attention-status > span { display: block; }
+.text-attention-status button { margin-left: 6px; }
+
+.document-outline { margin: 0 0 12px; font-size: 13px; }
+.document-outline nav { display: flex; flex-direction: column; align-items: flex-start; }

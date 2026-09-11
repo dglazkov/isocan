@@ -27,6 +27,7 @@ export declare class PresenceHub {
             y: number;
         } | null;
         selection?: string[];
+        textSelection?: import("../../core/src/index.js").TextAttention | null;
         status?: string | null;
         statusSource?: "explicit" | "lifecycle" | "inferred";
         activity?: PresenceActivity | null;

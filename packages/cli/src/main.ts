@@ -10349,6 +10349,32 @@ session
   );
 
 session
+  .command("select [item]")
+  .description("Point to a quote in saved Markdown/plain text for 15 seconds; --clear puts it down")
+  .option("--quote <text>", "exact rendered words, not Markdown source syntax")
+  .option("--occurrence <number>", "which matching passage, counted from 1")
+  .option("--clear", "clear your shared text selection")
+  .action(run(async (ref: string | undefined, opts: { quote?: string; occurrence?: string; clear?: boolean }, cmd: Command) => {
+    const ctx = await ctxOf(cmd);
+    const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+    if (opts.clear) { await touchSession(ctx, p.id, { textSelection: null }); return console.log("text selection cleared"); }
+    if (!ref || !opts.quote) throw new Error("pass an item and --quote, or --clear");
+    const item = resolveItem(snapshot, ref);
+    const version = item.versions.find(v => v.id === item.currentVersionId)!;
+    if (!["text/markdown", "text/plain"].includes(version.mimeType)) throw new Error("Text selection needs a saved Markdown or plain-text version");
+    const { markdownText } = await import("@isocan/core/markdown");
+    const { quoteRange, isTextItem, TEXT_ATTENTION_MS } = await import("@isocan/core");
+    const flavor: import("@isocan/core").TextAttention["flavor"] = version.mimeType === "text/plain" ? "plain" : isTextItem(item) ? "text-node" : "document";
+    const text = markdownText((await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8"), flavor);
+    const range = quoteRange(text, opts.quote, opts.occurrence === undefined ? undefined : Number(opts.occurrence));
+    const textSelection = { itemId: item.id, versionId: version.id, blobHash: version.blobHash,
+      textSpace: "markdown-hast-v1" as const, flavor, ...range, expiresAt: Date.now() + TEXT_ATTENTION_MS };
+    await touchSession(ctx, p.id, { textSelection, selection: [item.id] });
+    if (ctx.json) return printJson(textSelection);
+    console.log(`selecting “${opts.quote}” on ${item.title} for 15 seconds`);
+  }));
+
+session
   .command("on <thread>")
   .description("Say you have picked up a thread — it shows under the comment that asked")
   .option("--say <status>", "what you are doing, shown live in the thread")
@@ -10522,7 +10548,7 @@ program
               ? capabilityWord.presence[s.capability]
               : sessionState(s, canvas, Date.now()),
           cursor: s.cursor ? `${Math.round(s.cursor.x)},${Math.round(s.cursor.y)}` : "—",
-          selection: String(s.selection.length || "—"),
+          selection: s.textSelection ? `text ${s.textSelection.start}–${s.textSelection.end} on ${s.textSelection.itemId}` : String(s.selection.length || "—"),
           activity: describeActivity(s.activity),
           status: s.status ?? "—",
           seen: s.lastSeen,

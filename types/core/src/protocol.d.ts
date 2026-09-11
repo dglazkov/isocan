@@ -1,3 +1,4 @@
+import type { TextAttention } from "./text-attention.js";
 import type { Capability } from "./grants.js";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.js";
 import type { Actor, Canvas, CanvasContents } from "./model.js";
@@ -169,6 +170,7 @@ export type ClientMessage = {
         y: number;
     } | null;
     selection: string[];
+    textSelection?: TextAttention | null;
 }
 /**
  * A whole roster, from a connection that speaks for several people at once.
@@ -258,6 +260,8 @@ export interface PresenceSession {
         y: number;
     } | null;
     selection: string[];
+    /** Temporary text attention, absent on older clients. */
+    textSelection?: TextAttention | null;
     status: string | null;
     /**
      * Who is speaking when `status` is set — the same tri-state the update
@@ -361,6 +365,7 @@ export interface UpdateSessionRequest {
         y: number;
     } | null;
     selection?: string[];
+    textSelection?: TextAttention | null;
     status?: string | null;
     /** Who is speaking when `status` is set. "explicit" (default) — the actor
      * said it (`session say/work --say`); it sticks until they post a comment

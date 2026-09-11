@@ -107,6 +107,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   (`allow-scripts` without `allow-same-origin`). "Double-click to interact"
   hangs under the item while you point at it, rather than lying across the
   bottom of the document it is describing.
+- **Markdown reading**: Read / select text mode, a heading outline, and live
+  shared text selections. `isocan session select <item> --quote "words"` points
+  agents to the same saved passage without changing the document.
 - **The Pen (`P`)**: draw freehand on the canvas in your identity color — the
   same color your cursor and your face in the pile wear, so ink is signed by
   how it looks; the ink well beside the rail switches to any other color in

@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 45 still open** — of which 30 partly
+**21 built · 46 still open** — of which 31 partly
 built, 14 designed, 0 blocked, and
 **1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -16,7 +16,7 @@ read lately.
 3 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>30</sub>
+## Partly built <sub>31</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -34,6 +34,7 @@ and the done column should not be flattered by either.
 | research | [Google Docs on the canvas](docs/research/2026-09-02-google-docs-on-the-canvas.md) | 2026-09-02 | stages 1–3 built 2–3 Sep — the ↗ on anything with a source, `isocan gdoc add` and the Add-site dialog landing a doc's markdown as a document with source and synced, the daemon fetching for the app, `gdoc sync` stacking a version only where the doc changed, and on 3 Sep `gdoc auth`: a Drive access token on the machine for docs not shared by link, with sync asking Drive for modifiedTime first. Stage 4's live mode built 4 Sep — Live | Words on the strip, the /preview frame in the same item, remembered per browser. Stage 5's folder watch is designed and not built · see standing-agents, on-demand · [#152](https://github.com/dglazkov/isocan/issues/152) |
 | **project** | [inception](docs/projects/inception/design.md) | 2026-09-02 | phases 0–3 built 2 Sep, and phase 4's half — the card drawn live one level deep, ↗ and double-click open a tab, `isocan canvas place`, the popup from the rail and ⌘K, `isocan canvas shot --into` as the picture that survives a refused pull, the miniature wherever thumbnails are, and "lives at another home" said on the card; pulling a picture across homes is not built · see on-demand, standing-agents |
 | research | [JSON Canvas: what adopting it would mean](docs/research/json-canvas.md) | 2026-08-30 | export built; import deliberately not, and the edge question is answered · [#154](https://github.com/dglazkov/isocan/issues/154) |
+| research | [Markdown that reads well, and selections another person can see](docs/research/2026-09-10-markdown-and-shared-selections.md) | 2026-09-10 | reading controls, typography, outline, shared text projection and live version-specific selections built 11 September; CLI quote selection and two-browser owner/read-only acceptance included. Durable comments remain issue 49; richer editing and relative-asset resolution are separate follow-ups. · see modules, context · [#236](https://github.com/dglazkov/isocan/issues/236) |
 | **project** | [memory](docs/projects/memory/design.md) | 2026-09-02 | designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Phases 0–1 built 4 Sep — the Context view and `isocan context` in layers with a heading per source, and `memory=inherit` on a canvas card bringing the linked canvas's design system, pins and size in read-only with provenance and the override rule; `design check` reads the governing one. Phase 3 the same day — the Context sheet a first link lays and lands on, and the memory mark on the card as the switch. Phases 2 and 4 not built · see context, inception, standing-agents |
 | **project** | [mindmap](docs/projects/mindmap/design.md) | 2026-08-29 | all four stages built; tidy lays a map out on demand. Since 4 Sep the mind map is a module (packages/modules/mindmap), the first internal one · see mindmap, modules |
 | **project** | [modules](docs/projects/modules/design.md) | 2026-09-04 | designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep; phase 4.5 (WebHost, overlays, drops, the module API's own version and a PROPOSED list) built 9 Sep from #156's field report. Phase 5, sandboxes, waits on three gates: the content origin (CLEARED 6 Sep, live on prod), extension actors (which extensions stage 4 found has no subject to attribute until a panel ACTS, so it waits on that rather than on the calendar) and compute consent · see modules, extensions, workbench, mindmap, iso-api, atlas |

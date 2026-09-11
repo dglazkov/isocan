@@ -267,6 +267,8 @@ export function ArtifactStage({
       mimeType={face.mimeType}
       filename={face.filename ?? current.filename}
       entered={true}
+      itemId={item.id}
+      versionId={current.id}
       designSystem={isDesignSystem(item)}
       textNode={isTextItem(item)}
       reloadToken={0}

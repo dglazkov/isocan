@@ -2134,7 +2134,7 @@ anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 
 `isocan --help` covers everything; the commands you'll live in:
 `comment list|add|reply|anchor|main|rm`,
-`session start|on|work|say|point|end|move`,
+`session start|on|work|say|point|select|end|move`,
 `canvas create|list|show|edit|archive|delete` (delete needs `--force` and is
 NOT undoable — confirm on the thread first, and never delete a canvas you did
 not make). **`canvas archive` is the one to reach for instead**: it takes a
@@ -2215,3 +2215,16 @@ Every one of these is the same operation the web app sends. If you find
 something a person can do on the canvas that you cannot do from here, that is
 a bug in isocan, not a limit of yours — say so (see "If you hit a product
 bug").
+
+
+### Pointing to words together
+
+With a session started (`isocan session start`),
+`isocan session select <item> --quote "exact rendered words"` shares a text
+range in the current saved Markdown/plain-text version for 15 seconds, without
+editing it. For repeated words, use `--occurrence 2`; ambiguity is refused.
+`session select --clear` puts it down. `isocan --json who` includes the version,
+text space, range and expiry in each session's `textSelection`. Source markup
+is not a rendered quote: select `important`, not `**important**`.
+The browser's Read / select text button enters the same surface; selections
+never move another reader's viewport. Durable comment anchors are separate.

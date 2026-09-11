@@ -86,3 +86,4 @@ export * from "./canvassort.js";
 export * from "./canvasswitch.js";
 export * from "./lens.js";
 export * from "./export.js";
+export * from "./text-attention.js";
