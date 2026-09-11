@@ -238,6 +238,9 @@ Recorded here as what a full build owes, not as trajectory.
   six minutes later; `sheep status` still said running after the reply.
   A pastureless sheep read every three seconds through its turn did not
   fault. The station's container image predated its Worker that day.
+  *It did not recur once the station was redeployed whole:* the same
+  agent, withdrawn and re-enrolled, was minted and answered in 2 minutes
+  10 seconds with setup included.
 - **A machine linked to several homes ends a badge at the wrong one.**
   `killBadge` goes to the machine's birth-default home. When a sheep's
   canvas lives at another home, the kill is refused there and the rc

@@ -6,6 +6,7 @@ import type { Clipboard } from "../lib/clipboard.ts";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
+import { chooseMinimap, minimapShown, narrowNow, type MinimapFold } from "../lib/minimapfold.ts";
 
 /** The pointer tools on the right rail. */
 export type Tool = "select" | "hand" | "comment" | "zoom" | "pen" | "text";
@@ -170,9 +171,13 @@ interface UiStore {
   /** The docked main-thread panel (pill when closed). Persisted per canvas
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
-  /** The minimap, which folds away into its corner. Remembered per browser:
-   * someone who put it away wants it away tomorrow too. */
+  /** Whether the minimap is drawn open NOW — what every control reads. The
+   * choice behind it is remembered per browser (someone who put it away wants
+   * it away tomorrow too), but below 460px the width folds it without
+   * touching that choice: see `lib/minimapfold.ts` (#182). */
   minimapOpen: boolean;
+  /** The three facts `minimapOpen` is derived from; only `kept` is stored. */
+  minimapFold: MinimapFold;
   /** Whether the dot grid lights up under the pointer. */
   cursorGlow: boolean;
   /** Full screen shows the slide's speaker note to the presenter (N). A
@@ -314,7 +319,11 @@ interface UiStore {
   setIdentityOpen: (open: boolean) => void;
   setShareOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
+  /** A person folding or unfolding the map. Written to storage only on a
+   *  wide window; on a narrow one it holds for this visit. */
   setMinimapOpen: (open: boolean) => void;
+  /** The width crossing 460px, from the media query. Never stored. */
+  setMinimapNarrow: (narrow: boolean) => void;
   /**
    * **The cursor glow, off if you want it off.**
    *
@@ -577,7 +586,15 @@ function writeInkColor(color: string | null): void {
 }
 
 /** Local-only UI state — never synced, deliberately per-client. */
-export const useUiStore = create<UiStore>((set) => {
+export const useUiStore = create<UiStore>((set, get) => {
+  // The width is read once here, so the first paint on a phone is already
+  // folded rather than open for a frame and then folding; the Minimap keeps
+  // it current from then on.
+  const minimapFold: MinimapFold = {
+    kept: readFlag(MINIMAP_KEY, true),
+    narrow: narrowNow(),
+    narrowOpen: false,
+  };
   // Fan-out and entered-HTML only make sense for a single-item selection.
   const selectionSideEffects = (s: UiStore, next: string[]) => ({
     selectedItemIds: next,
@@ -616,7 +633,8 @@ export const useUiStore = create<UiStore>((set) => {
     identityOpen: false,
     shareOpen: false,
     mainPanelOpen: false,
-    minimapOpen: readFlag(MINIMAP_KEY, true),
+    minimapOpen: minimapShown(minimapFold),
+    minimapFold,
     cursorGlow: readFlag(GLOW_KEY, true),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     panelWidth: readPanelWidth(),
@@ -830,9 +848,18 @@ export const useUiStore = create<UiStore>((set) => {
       writeFlag(GLOW_KEY, cursorGlow);
       set({ cursorGlow });
     },
-    setMinimapOpen: (minimapOpen) => {
-      writeFlag(MINIMAP_KEY, minimapOpen);
-      set({ minimapOpen });
+    setMinimapOpen: (open) => {
+      const { fold, store } = chooseMinimap(get().minimapFold, open);
+      // Only a wide window's choice is a preference. A narrow one is this
+      // visit's, and writing it would be the width deciding the desktop.
+      if (store) writeFlag(MINIMAP_KEY, open);
+      set({ minimapFold: fold, minimapOpen: minimapShown(fold) });
+    },
+    setMinimapNarrow: (narrow) => {
+      const was = get().minimapFold;
+      if (was.narrow === narrow) return;
+      const fold = { ...was, narrow };
+      set({ minimapFold: fold, minimapOpen: minimapShown(fold) });
     },
   };
 });

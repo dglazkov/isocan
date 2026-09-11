@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Canvas } from "../src/model.ts";
 import { fuzzyMatch, litRuns, rankCanvases } from "../src/canvasswitch.ts";
-import { shelvePatch } from "../src/shelf.ts";
+import { inScope, shelvePatch } from "../src/shelf.ts";
 
 /**
  * **The switcher leads with where you were, and takes a few letters to find
@@ -120,58 +120,79 @@ describe("the list the switcher shows", () => {
 });
 
 /**
- * **A canvas somebody put away, and a switcher that is two things at once**
- * (#194).
+ * **The switcher's scope: live by default, everything when asked** (#194).
  *
- * With an empty field this window is a LIST, and the shelf exists because a
- * list that only grows stops meaning "my canvases" — so an archived canvas is
- * out of it, exactly as it is out of the home screen. With something typed it
- * is a SEARCH, and the issue's title asks for one that can reach in: refusing
- * to find a canvas whose name somebody just typed is the other half of this
- * feature failing.
- *
- * Both halves have to hold at once, which is why they are tested together.
+ * The issue asked for a search whose default scope is not everything, and a
+ * toggle that widens it to archived canvases. It shipped first without one —
+ * archived canvases arrived under every live match once anything was typed —
+ * and on 11 Sep the toggle was built as asked: `"live"` hides the shelf from
+ * the list AND the search, `"all"` is the toggle, and it is the same
+ * `ShelfScope` the terminal's `--with-archived` passes to the same `inScope`.
  */
-describe("the shelf, in a window that is a list and a search", () => {
+describe("the shelf, as a scope the switcher is given", () => {
   const shelved = (one: Canvas): Canvas => ({ ...one, properties: shelvePatch("2026-06-01T00:00:00Z").properties! });
   const all = [
     canvas("c_lake", "Lake House", "2026-03-01T00:00:00Z"),
     shelved(canvas("c_lab", "Lab notes", "2026-04-01T00:00:00Z")),
   ];
+  const ids = (rows: { canvas: Canvas }[]) => rows.map((r) => r.canvas.id);
 
-  it("keeps it out of the list, however lately it was visited", () => {
+  it("keeps it out of the list by default, however lately it was visited", () => {
     // Recency is the strongest reason a row is offered, so it is the one that
     // would smuggle an archived canvas back in.
-    expect(rankCanvases(all, "", ["c_lab", "c_lake"]).map((r) => r.canvas.id)).toEqual(["c_lake"]);
-    expect(rankCanvases(all, "", []).map((r) => r.canvas.id)).toEqual(["c_lake"]);
+    expect(ids(rankCanvases(all, "", ["c_lab", "c_lake"]))).toEqual(["c_lake"]);
+    expect(ids(rankCanvases(all, "", []))).toEqual(["c_lake"]);
   });
 
-  it("finds it once something is typed — that is the reaching in", () => {
-    const rows = rankCanvases(all, "lab", []);
-    expect(rows.map((r) => r.canvas.id)).toEqual(["c_lab"]);
-    expect(rows[0]!.shelved).toBe(true);
-    // And the letters still light, because it is a real match, not a
-    // consolation row.
+  it("keeps it out of the search by default too — typing is not the toggle", () => {
+    // The shipped-first behaviour reached in on any query. The default scope
+    // is live, with or without letters in the field.
+    expect(ids(rankCanvases(all, "lab", []))).toEqual([]);
+    expect(ids(rankCanvases(all, "la", []))).toEqual(["c_lake"]);
+  });
+
+  it("includes it when the scope is widened, in the list and the search", () => {
+    const list = rankCanvases(all, "", ["c_lab"], null, "all");
+    // Visited lately and in scope, so it leads Recent like any other visit.
+    expect(ids(list)).toEqual(["c_lab", "c_lake"]);
+    expect(list.map((r) => r.recent)).toEqual([true, false]);
+    const rows = rankCanvases(all, "lab", [], null, "all");
+    expect(ids(rows)).toEqual(["c_lab"]);
+    // And the letters still light, because it is a real match.
     expect(rows[0]!.positions).toEqual([0, 1, 2]);
   });
 
-  it("puts it under every live match, whatever it scored", () => {
+  it("ranks it on its match once asked for, not under every live one", () => {
     /* "Lab notes" is the better match for "la" by a distance — a prefix, two
-       letters together — and it still comes second. The rule is not "usually
-       lower": a person scanning for the canvas they are working on must never
-       have to look past one they put away. */
-    const rows = rankCanvases(all, "la", []);
-    expect(rows.map((r) => r.canvas.id)).toEqual(["c_lake", "c_lab"]);
-    expect(rows.map((r) => r.shelved)).toEqual([false, true]);
+       letters together. Somebody who widened the search to the shelf is most
+       likely looking for something on it, so it is not pushed below a weaker
+       live match: one order, as `--with-archived` prints one table. */
+    const rows = rankCanvases(all, "la", [], null, "all");
+    expect(ids(rows)).toEqual(["c_lab", "c_lake"]);
+    expect(rows.map((r) => r.shelved)).toEqual([true, false]);
   });
 
   it("says so on every row it hands over", () => {
-    // The marking is what makes offering them safe, so `shelved` is asserted
-    // as a fact of the row rather than left to the surface to work out. A
+    // The marking is what makes mixing them safe, so `shelved` is asserted as
+    // a fact of the row rather than left to the surface to work out. A
     // surface reading `properties` itself would be the second fold this
     // module exists to prevent.
-    for (const row of rankCanvases(all, "l", [])) {
-      expect(row.shelved).toBe(row.canvas.id === "c_lab");
+    for (const query of ["", "l"]) {
+      for (const row of rankCanvases(all, query, ["c_lab"], null, "all")) {
+        expect(row.shelved).toBe(row.canvas.id === "c_lab");
+      }
+    }
+  });
+
+  it("offers exactly the set `inScope` gives the terminal, for every scope", () => {
+    /* The parity the both-surfaces rule asks for, held as a set: whatever the
+       switcher offers with an empty field under a scope is what
+       `canvas list` prints under the flag that names it — `"live"` the
+       default, `"shelved"` `--archived`, `"all"` `--with-archived`. */
+    for (const scope of ["live", "shelved", "all"] as const) {
+      const offered = ids(rankCanvases(all, "", [], null, scope)).sort();
+      const listed = all.filter((one) => inScope(one, scope)).map((one) => one.id).sort();
+      expect(offered, scope).toEqual(listed);
     }
   });
 });

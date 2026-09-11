@@ -232,21 +232,31 @@ the row already knows when it has run out, and a breakpoint is a second
 opinion about the same fact in pixels that stop being true when somebody adds
 a button here.
 
-**The minimap and the zoom row overlapped by 27 pixels.** They stack now below
-460px. Two things worth keeping:
+**The minimap and the zoom row overlapped by 27 pixels.** Below 460px the map
+is folded now. Three things worth keeping:
 
-- **Stacking, not folding.** This note recommends folding the map, and the
-  fold writes `isocan.minimap` to localStorage — so a WIDTH would decide a
-  PREFERENCE, which then follows the person to their desktop as a setting they
-  never chose and cannot connect to anything they did. Stacking is CSS, holds
-  no state, and comes back on rotation.
+- **Stacked first, folded since.** This note recommends folding the map, and
+  on 7 Sep the fold wrote `isocan.minimap` to localStorage — so a WIDTH would
+  have decided a PREFERENCE, which then follows the person to their desktop as
+  a setting they never chose. The map was stacked above the zoom row instead.
+  On 11 Sep the fold and the preference became two facts
+  (`web/lib/minimapfold.ts`): below 460 the width folds the map for display
+  and writes nothing, and the stored choice comes back the moment the window
+  widens. The stack survives only for a map somebody taps open on a phone.
+- **A phone's unfold is for the visit.** Tapping the handle below 460 opens
+  the map until the page is left, across rotations, and is never written —
+  neither over the desktop's choice (the original failure, backwards) nor
+  under a narrow-only key, because the phone face is to be Chat-first (decided
+  11 Sep) and a stored narrow-window minimap preference would be a setting
+  minted for a layout about to be replaced. The next visit starts folded.
 - **460 is arithmetic, and it is approximate on purpose.** The two meet around
   405 — around, because the zoom row is as wide as the percentage it happens to
   be showing, so "100%" and "25%" collide at different widths, and a breakpoint
   set at the collision would be set at one of them. 460 clears the widest
   reading with 51 measured pixels to spare. Not this note's 640: between 405
   and 640 the clusters sit 231px apart, and moving chrome there is chrome
-  moving for no reason.
+  moving for no reason. The fold and the sheet's lift read the one number
+  (`NARROW_MINIMAP_PX`), held together by `minimapnarrow.test.ts`.
 
 **Not fixed: the touch targets.** Fourteen controls are still under the 44px
 floor, the smallest 20×20. That is not one declaration — at 375px you cannot

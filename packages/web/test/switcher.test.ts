@@ -114,9 +114,10 @@ describe("the doors", () => {
 
 describe("the list", () => {
   it("is ranked by core, with the recents handed in", () => {
-    // One ranking for the inline "Switch to" group and the switcher's face:
-    // two matchers would be two answers to "which canvas did I mean".
-    expect(palette.match(/rankCanvases\(/g)?.length).toBe(2);
+    // One ranking for the inline "Switch to" group, the switcher's face, and
+    // the count of what the list scope hides: two matchers would be two
+    // answers to "which canvas did I mean".
+    expect(palette.match(/rankCanvases\(/g)?.length).toBe(3);
     expect(palette).toContain("readRecents()");
   });
 
@@ -127,7 +128,7 @@ describe("the list", () => {
   });
 
   it("never offers the canvas you are on", () => {
-    expect(palette).toMatch(/rankCanvases\(canvases, query, recents\.map\(\(r\) => r\.id\), canvasId\)/);
+    expect(palette).toMatch(/rankCanvases\(canvases, query, recents\.map\(\(r\) => r\.id\), canvasId, scope\)/);
   });
 
   it("lights the matched letters", () => {
@@ -138,14 +139,69 @@ describe("the list", () => {
 });
 
 /**
- * **What makes offering an archived canvas safe** (#194).
+ * **The switcher's scope toggle** (#194, built 11 Sep as the issue asked).
  *
- * `rankCanvases` keeps them out of the switcher's list and puts them under
- * every live match once something is typed — that half is core's, and
- * `core/test/canvasswitch.test.ts` holds it. The half that lives here is that
- * the row SAYS SO. Take that away and the design stops being defensible: a
- * canvas somebody put away comes back looking exactly like one they did not,
- * on a screen whose whole job is telling canvases apart at a glance.
+ * Which canvases a scope offers is core's (`rankCanvases` with a `ShelfScope`,
+ * held in `core/test/canvasswitch.test.ts`, including that each scope offers
+ * exactly the set `inScope` gives `canvas list`). What lives here is the
+ * control: that it hands core the scope and not a second filter, that it
+ * starts at the list every opening, and that it is reachable without a mouse
+ * by the key every other surface prints for it.
+ */
+describe("the scope toggle", () => {
+  it("hands both rankings the toggle's scope — the list, or the list and the shelf", () => {
+    expect(palette).toContain('const scope: ShelfScope = withArchived ? "all" : "live";');
+    // Both the switcher's face and the inline "Switch to" group: a toggle
+    // that widened one and not the other would be two answers again.
+    expect(palette.match(/canvasId, scope\)/g)?.length).toBe(2);
+    // And no filter of its own — a second fold over `properties` is how
+    // "archived" comes to mean two things.
+    expect(palette).not.toMatch(/properties\??\.shelved/);
+  });
+
+  it("starts at the list on every opening, and remembers nothing", () => {
+    // Remembered, one search would un-archive the shelf from this window for
+    // good — the home screen's `Archived` resets for the same reason.
+    expect(palette).toContain("const [withArchived, setWithArchived] = useState(false);");
+    expect(palette, "no storage behind the scope").not.toContain("localStorage");
+  });
+
+  it("is a labelled checkbox a Tab away from the field, and ⌥A from inside it", () => {
+    expect(palette).toMatch(/<label className="palette-scope">\s*<input\s+type="checkbox"/);
+    expect(palette).toContain("<span>Include archived</span>");
+    expect(palette).toContain('aria-keyshortcuts="Alt+A"');
+    // By `code`: on a Mac ⌥A types "å", so `key` is not "a".
+    expect(palette).toMatch(/e\.altKey &&\s*!e\.metaKey &&\s*!e\.ctrlKey &&\s*e\.code === "KeyA"/);
+    // Offered only while something is archived — ⌥A included, so a title
+    // with an å in it can still be typed on a home with no shelf.
+    expect(palette).toMatch(/switching &&\s*hasShelf &&\s*e\.altKey/);
+    expect(palette).toContain("{switching && hasShelf && (");
+  });
+
+  it("prints the key the help panel prints", () => {
+    expect(keyFor("Include archived canvases")).toBe("⌥A");
+    expect(palette).toContain("keyFor(INCLUDE_ARCHIVED)");
+    expect(palette).toContain('const INCLUDE_ARCHIVED = "Include archived canvases";');
+  });
+
+  it("says what the list scope is hiding, so the default never reads as 'no such canvas'", () => {
+    // Counted by the same ranking under the shelf's own scope.
+    expect(palette).toContain('rankCanvases(canvases, query, [], canvasId, "shelved").length');
+    expect(palette).toContain('className="palette-shelf-hint" onClick={toggleArchived}');
+    const sheet = rules(withoutComments());
+    expect(sheet.some((r) => r.selector === ".palette-scope")).toBe(true);
+    expect(sheet.some((r) => r.selector === ".palette-shelf-hint")).toBe(true);
+  });
+});
+
+/**
+ * **What makes showing an archived canvas beside live ones safe** (#194).
+ *
+ * Under Include archived, `rankCanvases` ranks them among the live ones —
+ * that half is core's. The half that lives here is that the row SAYS SO.
+ * Take that away and the design stops being defensible: a canvas somebody
+ * put away comes back looking exactly like one they did not, on a screen
+ * whose whole job is telling canvases apart at a glance.
  *
  * Two surfaces show them beside live ones — this window, and the home
  * screen's grid under `Archived` — so both are checked, against one chip.

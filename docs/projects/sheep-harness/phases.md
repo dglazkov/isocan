@@ -5,8 +5,7 @@ phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
 **Where we are: phases 0 to 2.5 closed, 10 and 11 September. Phase 3,
-the week with the bill, is next and needs the shepherd (⚑); before it,
-sheep-2's redeploy wants finishing and its transcript fault an answer.** Three steps below wait on the sheep side and
+the week with the bill, is next and needs the shepherd (⚑).** Three steps below wait on the sheep side and
 are marked ⇢ with the journey filed there. Three more journeys are filed
 for findings phase 1 works around rather than waits on, and one for what
 phase 1 found:
@@ -213,7 +212,10 @@ fault`), which ended the rc's `attach` two minutes into setup, and the
 reply landed eight and a half minutes after the summons. A pastureless
 sheep read while polled did not fault, so the fault is the station's,
 recorded in design.md; the station's container image was also still the
-one from before the day's redeploy, which stopped midway.
+one from before the day's redeploy, which stopped midway. Once the
+station was redeployed whole, the same agent was withdrawn (its sheep
+and cell badge ended, the pasture kept), re-enrolled, minted into the
+kept pasture, and answered in 2 minutes 10 seconds.
 
 Pays phase 2's step that waited on
 [sheep#3](https://github.com/dglazkov/sheep/issues/3), which closed on

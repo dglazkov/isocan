@@ -1,4 +1,5 @@
 import type { Canvas } from "./model.js";
+import { type ShelfScope } from "./shelf.js";
 /**
  * **Jumping to another canvas, from wherever you are.**
  *
@@ -33,9 +34,10 @@ export interface SwitchRow {
      *  exists. With a query the ranking is by match and this is a hint; without
      *  one it is the group the row sits in. */
     recent: boolean;
-    /** Whether this one is archived (#194). Only ever true with a query, and
-     *  the row that carries it says so on screen: a canvas somebody put away
-     *  arriving unmarked among the live ones is the shelf failing quietly. */
+    /** Whether this one is archived (#194). Only ever true when the scope
+     *  reached in, and the row that carries it says so on screen: a canvas
+     *  somebody put away arriving unmarked among the live ones is the shelf
+     *  failing quietly. */
     shelved: boolean;
 }
 /**
@@ -74,28 +76,35 @@ export declare function fuzzyMatch(query: string, text: string): {
  * a canvas deleted, or one whose home is not this origin, is not somewhere
  * this list can take you.
  *
- * ## Archived canvases: out of the list, in reach of a search (#194)
+ * ## Archived canvases: a scope, and the default is not everything (#194)
  *
- * The shelf is a fix for a list that only grows, so **with no query there is
- * no shelf here** — that case IS a list, and it is the one the home screen
- * hides them from. A switcher that kept showing them would have made Archive
- * a change to one list and not the other, which is the same as not working.
+ * `scope` is the same `ShelfScope` the home screen's `Archived` toggle and
+ * `isocan canvas list --archived / --with-archived` pass to `inScope`, so
+ * "archived" cannot come to mean one set in the switcher and another in the
+ * terminal. The switcher offers two of the three: `"live"`, the default, and
+ * `"all"` — its **Include archived** toggle, which is `--with-archived` in the
+ * app's words.
  *
- * **With a query they are all offered, under every live match, marked.** A
- * typed query is a statement of intent, and refusing to find a canvas
- * somebody named is the other half of this feature failing — the issue's own
- * title asks for a search that can reach in. This is the shape the file
- * already uses one paragraph down for descriptions: *a second chance, not a
- * first*. Ordered by a sort key rather than a score penalty, because "below
- * every live match" is the rule, and a penalty large enough to mean that is a
- * number somebody has to keep large enough.
+ * **`"live"` means live whether or not anything is typed.** The shelf is a
+ * fix for a list that only grows, and a search that quietly reached in would
+ * make Archive a change to the list and not to the search — the issue asked
+ * for a search whose default scope is not everything, and for a control that
+ * widens it.
  *
- * So there is no scope control, no toggle and no prefix to learn. What makes
- * that safe is the marking: `shelved` rides on the row, and a surface that
- * draws these must say so, or a canvas somebody put away comes back
- * indistinguishable from one they did not.
+ * **Under `"all"` an archived canvas is ranked like any other, and marked.**
+ * The person asked for the shelf, so it is not a second chance any more: the
+ * one they are most likely looking for is an archived one, and ordering every
+ * weaker live match above it would make the thing they widened the search to
+ * find its last row. One order, a mark on the rows that are away — which is
+ * exactly what `--with-archived` prints, a column in one table rather than a
+ * second table under the first.
+ *
+ * What makes mixing them safe is the marking: `shelved` rides on the row, and
+ * a surface that draws these must say so, or a canvas somebody put away comes
+ * back indistinguishable from one they did not. `"shelved"` works too, and
+ * the switcher uses it only to count what the live scope is hiding.
  */
-export declare function rankCanvases(canvases: readonly Canvas[], query: string, recentIds: readonly string[], except?: string | null): SwitchRow[];
+export declare function rankCanvases(canvases: readonly Canvas[], query: string, recentIds: readonly string[], except?: string | null, scope?: ShelfScope): SwitchRow[];
 /**
  * A title split into the runs the highlight paints: `[text, lit]` pairs, in
  * order, with adjacent lit letters joined so "Lake" is one mark rather than

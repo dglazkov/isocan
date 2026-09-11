@@ -54,6 +54,12 @@ export const SHORTCUTS: Shortcut[] = [
     group: "Moving around",
     note: "The canvases you were on lately first, then the rest by activity; type a few letters to find one. Also ⌘K → Switch canvas…, or the ⌄ beside the canvas's name",
   },
+  {
+    keys: ["⌥A"],
+    does: "Include archived canvases",
+    group: "Moving around",
+    note: "In the switcher, when anything is archived. For this opening only: it starts at the canvases in the list every time, the way `canvas list` does without --with-archived",
+  },
   { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it. In full screen the next item opens full screen too: a row of screens is a slideshow" },
   { keys: ["←", "→", "↑", "↓"], does: "Flip through the slides", group: "Moving around", note: "Full screen only. Items marked 🎬 (right-click → Make this a slide) are the deck, in reading order; with none marked, every item is. Page Up/Down flip too, so a presenter's clicker works" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },
