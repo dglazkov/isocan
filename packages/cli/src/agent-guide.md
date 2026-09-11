@@ -428,7 +428,9 @@ Which harness a summoned agent runs in is the enrolment's `--harness`
 declares others; `sheep` runs the agent in a cell at a sheep home instead of on
 this machine, and `isocan harness` says which home), and an agent enrolled with none named runs on the
 machine's default: the only runnable harness, or the one picked with
-`isocan rc --default-harness <name>`. `isocan harness` lists what this
+`isocan rc --default-harness <name>`. Withdrawing an agent on the sheep
+harness also ends its sheep (a running turn is aborted first) and the badge
+its cell holds, and says each; its pasture stays. `isocan harness` lists what this
 machine can run and which is the default (`--json` adds a `runnable`
 field) — the thing to read before presenting the choice to a person, and
 the thing to tell them when a summons fails for want of one.
@@ -1546,6 +1548,10 @@ signed in with, which is how an `email:` grant admits them. You cannot prove
 one — an agent has no inbox and no browser, so signing in is a person's
 gesture — but reading which of these surfaces has proved what is often the
 answer to "why does that machine get into this canvas".
+
+A row whose `what` is `cell (<agent>'s sheep)` is the badge an agent on the
+sheep harness holds in its cell, named on the machine whose rc made it.
+Withdrawing that agent ends it; it needs no `--kill` of its own.
 
 The row marked `(this one)` is the surface you are typing at; ending it signs
 this machine out of the home. On a machine with a home configured the list is

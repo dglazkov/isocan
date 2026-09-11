@@ -6,6 +6,7 @@ import type {
   GrantsResponse,
   LogEntry,
   MintPassResponse,
+  PassResponse,
   RedeemPassResponse,
 } from "@isocan/core";
 import {
@@ -17,6 +18,7 @@ import {
   PASS_TTL_MS,
   PASS_UNKNOWN,
   passesRoute,
+  passRoute,
   UNKNOWN_ROUTE,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
@@ -412,6 +414,56 @@ describe("a pass is single-use and short-lived, and says which it was", () => {
   });
 });
 
+/**
+ * **Reading a pass back** (sheep-harness phase 2). An rc mints a pass for a
+ * sheep's cell, and when the agent is withdrawn it has to end the badge that
+ * pass made. `redeemedBy` names that badge exactly; this is the one read of
+ * it, and it answers only the badge that minted the pass.
+ */
+describe("the minter can read its pass back, and nobody else can", () => {
+  it("says whether it was spent and by which badge, and never carries the secret", async () => {
+    const tab = await jordansTab();
+    const { pass, token } = await body<MintPassResponse>(await mint(tab, jordan.id));
+
+    const before = await get(tab, passRoute(CANVAS, pass.id));
+    expect(before.status, await before.clone().text()).toBe(200);
+    const unspent = (await body<PassResponse>(before)).pass;
+    expect(unspent).toMatchObject({ id: pass.id, canvasId: CANVAS, mintedBy: tab.badgeId, actorId: jordan.id });
+    expect(unspent.redeemedBy).toBeUndefined();
+    expect(unspent).not.toHaveProperty("secretHash");
+
+    const laptop = await fresh();
+    expect((await redeem(laptop, token)).status).toBe(200);
+    const spent = (await body<PassResponse>(await get(tab, passRoute(CANVAS, pass.id)))).pass;
+    expect(spent.redeemedBy).toBe(laptop.badgeId);
+    expect(spent.redeemedAt).toBeDefined();
+    expect(JSON.stringify(spent)).not.toContain(token.slice(pass.id.length + 1));
+  });
+
+  it("answers unknown-pass alike for another badge's pass, another canvas, and no pass", async () => {
+    const tab = await jordansTab();
+    const { pass } = await body<MintPassResponse>(await mint(tab, jordan.id));
+    // Priya is admitted and made the canvas; the pass is still not hers.
+    const hers = await get(owner, passRoute(CANVAS, pass.id));
+    expect(hers.status).toBe(404);
+    expect((await body<{ code: string }>(hers)).code).toBe(PASS_UNKNOWN);
+
+    await post(owner, "/api/ops", {
+      canvasId: null,
+      actor: priya,
+      op: { type: "project.create", canvasId: "prj_other", title: "Acme Other" },
+    });
+    const { pass: other } = await body<MintPassResponse>(await post(owner, passesRoute("prj_other"), {}));
+    const crossed = await get(owner, passRoute(CANVAS, other.id));
+    expect(crossed.status).toBe(404);
+    expect((await body<{ code: string }>(crossed)).code).toBe(PASS_UNKNOWN);
+
+    const none = await get(tab, passRoute(CANVAS, "pss_nothing"));
+    expect(none.status).toBe(404);
+    expect((await body<{ code: string }>(none)).code).toBe(PASS_UNKNOWN);
+  });
+});
+
 describe("an unmatched /api path says so, in JSON, with a code", () => {
   /**
    * Phase 7.5's open finding, closed here because phase 8 is when it stops
@@ -642,7 +694,15 @@ describe("on a replica", () => {
       // handing out admissions to a door it does not answer.
       expect(await daemon.desk.pass(pass.id)).not.toBeNull();
       expect(await replica.desk.pass(pass.id)).toBeNull();
-      expect((await redeem(await fresh(), token)).status).toBe(200);
+      const cell = await fresh();
+      expect((await redeem(cell, token)).status).toBe(200);
+
+      // And the replica's CLI can read it back: the read forwards to the
+      // home, where the minter was this daemon's badge, and names the badge
+      // the pass made (sheep-harness phase 2).
+      const read = await fetch(`${replicaBase}${passRoute(CANVAS, pass.id)}`, { headers: cli.headers });
+      expect(read.status, await read.clone().text()).toBe(200);
+      expect((await body<PassResponse>(read)).pass.redeemedBy).toBe(cell.badgeId);
     } finally {
       await replica.close();
       await fs.rm(replicaDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

@@ -135,6 +135,24 @@ export declare function parsePassToken(raw: string | undefined | null): PassToke
 /** `/api/projects/` is a deliberate holdout (phase 13.5) — see `grantsRoute`. */
 export declare const passesRoute: (canvasId: string) => string;
 /**
+ * Read one back: `GET /api/projects/:id/passes/:passId` (sheep-harness
+ * phase 2).
+ *
+ * **Only for the badge that minted it**, and the row without its secret. What
+ * the minter learns is what it already half knows: that the pass it handed
+ * over was spent, when, and by which badge — `redeemedBy`. That last field is
+ * the exact name of the surface the pass made, which is what an rc needs to
+ * end the badge a sheep's cell redeemed when the agent is withdrawn, without
+ * guessing it from a list of surfaces that share an actor.
+ *
+ * Canvas-scoped for the mint route's reasons: the door has already run, and
+ * on a replica the read forwards to the home whose desk holds the row, where
+ * the minter is this daemon's badge there. A pass minted by another badge, on
+ * another canvas, or never minted at all answers `unknown-pass` alike, so the
+ * route is no oracle over other people's passes.
+ */
+export declare const passRoute: (canvasId: string, passId: string) => string;
+/**
  * Redeem one: `POST /api/passes/redeem` — flat, and it has to be.
  *
  * The redeemer is BY DEFINITION not admitted to the canvas yet; that is what
@@ -163,12 +181,17 @@ export interface MintPassRequest {
 export interface MintPassResponse {
     pass: Pass;
     /**
-     * `<passId>.<secret>`, handed over **once and never again** — there is no
-     * route that reads a pass back out, and the desk holds only the hash. A
-     * caller that loses it mints another; that is cheaper than any mechanism
-     * for showing it twice, and it is the same posture as the door's.
+     * `<passId>.<secret>`, handed over **once and never again** — no route
+     * reads a token back out (`passRoute` returns the row, never the secret),
+     * and the desk holds only the hash. A caller that loses it mints another;
+     * that is cheaper than any mechanism for showing it twice, and it is the
+     * same posture as the door's.
      */
     token: string;
+}
+/** One pass read back by its minter (`passRoute`): the row, no secret. */
+export interface PassResponse {
+    pass: Pass;
 }
 export interface RedeemPassRequest {
     token: string;

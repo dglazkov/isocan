@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, GroupResponse, GroupsResponse, UndoRedoRequest } from "../../core/src/index.js";
+import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, GroupResponse, GroupsResponse, UndoRedoRequest } from "../../core/src/index.js";
 import type { Engine } from "./engine.js";
 import type { PresenceHub } from "./presence.js";
 import { type HomeBuild } from "./build.js";
@@ -149,6 +149,9 @@ export interface HomeConnection {
      * from elsewhere needs its name.
      */
     mintPass(canvasId: string, actor?: Actor): Promise<MintPassResponse>;
+    /** One pass read back by its minter — which, for a pass this daemon minted
+     * at the home, is this daemon's badge there (sheep-harness phase 2). */
+    pass(canvasId: string, passId: string): Promise<PassResponse>;
     redeemPass(token: string): Promise<RedeemPassResponse>;
     /**
      * Ask the home for ONE canvas by name, so this replica starts carrying it.
@@ -671,6 +674,8 @@ export declare class HomeLink implements HomeConnection {
      * this machine may, which is all it can honestly see.
      */
     mintPass(canvasId: string, actor?: Actor): Promise<MintPassResponse>;
+    /** Read one back at the home, on the badge that minted it there. */
+    pass(canvasId: string, passId: string): Promise<PassResponse>;
     /**
      * Redeem one at the home, on this daemon's badge — the enrolling half of
      * Scene 5, from the new machine's end.

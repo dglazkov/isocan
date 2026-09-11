@@ -4,11 +4,9 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phases 0 and 1 closed 10 September. Phase 2 is next,
-and its first step's sheep verb exists: `sheep rm` is on sheep's main,
-walked on a local home, with
-[sheep#1](https://github.com/dglazkov/sheep/issues/1) still open while
-its account walk waits.** Three steps below wait on the sheep side and
+**Where we are: phases 0 and 1 closed 10 September. Phase 2 is built
+and waits for its walk; its sheep verb, `sheep rm`, is on sheep's main
+([sheep#1](https://github.com/dglazkov/sheep/issues/1), closed).** Three steps below wait on the sheep side and
 are marked ⇢ with the journey filed there. Three more journeys are filed
 for findings phase 1 works around rather than waits on, and one for what
 phase 1 found:
@@ -119,6 +117,8 @@ that would connect them.
 
 ## Phase 2 — Withdrawal, and the cost of a cold turn
 
+**Status: BUILT, not yet walked (2026-09-10).**
+
 **Outcome:** `agent.withdraw` for a sheep-harnessed agent aborts a
 running turn, ends the sheep for good, leaves the pasture and says so,
 and narrates each. `isocan badges` on the rc's machine lists a cell's badge as the
@@ -142,11 +142,46 @@ first summons: a pass lives fifteen minutes and setup runs on the first
 command that rents a container, so a pass minted at an idle birth would
 expire unredeemed.
 
-**Proof:** the rc test's withdraw case against the fake `sheep`: abort
-then end, pasture kept, badge ended; and a birth case asserting no
-opening prompt once the verb exists.
+**Proof:** `packages/cli/test/rc.test.ts`'s "withdrawal ends the sheep"
+cases, against the fake `sheep`, which now answers `rm` and `abort`, can
+make a turn or a birth take a while, and can answer `rm` the way a station
+deployed before sheep's end verb does. `rc remove` with no rc running
+ends the sheep once beside the row's kennel, keeps the pasture, reaps the
+row, and ends the badge a test badge made by redeeming the pass from the
+pasture, after `isocan badges` listed it as `cell (Percy's sheep)`;
+re-enrolling births `s_2` into the same pasture with a new pass and says the
+sheep does not remember the first. A withdrawal under a parked rc's running
+turn aborts it and reads as a withdrawal: no "turn FAILED", no system-voice
+reply in the thread, no second `attach`. The web's withdraw op is ended by a
+parked rc, a withdrawal made while no rc ran is ended at the next rc's
+start, one landing while the rc starts is ended too (the rc reaps once more
+after its start tip, pinned by a source-shape test because the window
+cannot be forced), and one landing while the sheep is being born is ended
+by the summons that birthed it. An older home gets `sheep abort` and the "still
+at" sentence; a sheep already gone is said as already ended; a sheep behind
+two canvases stays until its last row goes.
+`packages/server/test/passes.test.ts` covers the pass read: its minter
+learns `redeemedBy`, any other badge, canvas or id gets `unknown-pass`, and
+a replica's read forwards to the home. The birth case with no opening
+prompt waits on sheep#3.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- Which badge is the cell's is answered exactly, not by matching actors.
+  The desk already recorded which badge redeemed a pass; a new route,
+  `GET /api/projects/:id/passes/:passId`, reads that back to the badge that
+  minted the pass and to no other, forwarded to the home on a replica. The
+  rc row keeps the birth's pass id (`cellPass`), never its token. A home
+  deployed before this route cannot say, and the rc then names
+  `isocan badges --kill` instead of guessing.
+- sheep#1 landed while the phase was planned, so withdrawal ends the sheep
+  with `sheep rm` and falls back to `sheep abort` only at a home deployed
+  before it. The two homes word their refusals differently, so a refusal
+  is read against `sheep ls`: a sheep no longer listed was already ended,
+  and one still listed is at a home that cannot end it.
+- One agent on two canvases shares one sheep, so withdrawal from one canvas
+  leaves the sheep and its badge while another row on the machine still
+  names them, and hands that row the pass.
 
 ## Phase 3 — The walk, with the bill
 

@@ -16,6 +16,7 @@ import type {
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
+  PassResponse,
   PostOpRequest,
   PostOpResponse,
   PresenceSession,
@@ -56,6 +57,7 @@ import {
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
   passesRoute,
+  passRoute,
   canvasesRoute,
   WS_BEHIND,
   WS_NO_CANVAS,
@@ -336,6 +338,9 @@ export interface HomeConnection {
    * from elsewhere needs its name.
    */
   mintPass(canvasId: string, actor?: Actor): Promise<MintPassResponse>;
+  /** One pass read back by its minter — which, for a pass this daemon minted
+   * at the home, is this daemon's badge there (sheep-harness phase 2). */
+  pass(canvasId: string, passId: string): Promise<PassResponse>;
   redeemPass(token: string): Promise<RedeemPassResponse>;
   /**
    * Ask the home for ONE canvas by name, so this replica starts carrying it.
@@ -1842,6 +1847,11 @@ export class HomeLink implements HomeConnection {
       passesRoute(canvasId),
       actor ? { actorId: actor.id } : {},
     );
+  }
+
+  /** Read one back at the home, on the badge that minted it there. */
+  pass(canvasId: string, passId: string): Promise<PassResponse> {
+    return this.api<PassResponse>("GET", passRoute(canvasId, passId));
   }
 
   /**

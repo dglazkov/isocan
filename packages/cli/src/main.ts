@@ -30,6 +30,7 @@ import type {
   Grant,
   GrantResponse,
   GroupView,
+  Pass,
   Space,
   SweepReport,
   UpgradeVerdict,
@@ -50,7 +51,9 @@ import {
   INSTALL_SPEC,
   LINK,
   NOT_ADMITTED,
+  NOT_YOUR_BADGE,
   WITHDRAWN,
+  passExpired,
   grantSubjectOf,
   atLeast,
   capabilityOf,
@@ -419,9 +422,9 @@ import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
-import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
+import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
-import { SHEEP_HARNESS, SheepAgent, describePlace, homeAddressForCell, loopbackFromCell, noSheepLine, placeLine, sheepPlaceFor } from "./sheep.ts";
+import { SHEEP_HARNESS, SheepAgent, describePlace, endSheep, homeAddressForCell, loopbackFromCell, noSheepLine, placeLine, sheepPlaceFor } from "./sheep.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, onPath, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
 import {
   noSandboxLine,
@@ -3666,14 +3669,27 @@ program
   .command("badges")
   .description("Every surface that carries your identity — and end one that should not")
   .option("--kill <badgeId>", "end that surface's recognition: it can no longer speak as you")
+  .addHelpText(
+    "after",
+    `
+An agent on the sheep harness answers from a cell, and the cell holds a
+badge of its own: the one it redeemed the pass the rc minted at the sheep's
+birth. On the rc's machine that badge is listed as "cell (<agent>'s sheep)",
+and withdrawing the agent (\`isocan rc remove\`) ends it with the sheep.`,
+  )
   .action(
     run(async (opts: { kill?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
+      const cells = await cellBadges(ctx);
+      const what = (badge: BadgeSummary) => {
+        const cell = cells.get(badge.badgeId);
+        return cell ? `cell (${cell.agent}'s sheep)` : surfaceKind(badge);
+      };
       if (opts.kill !== undefined) {
         const { killed, swept } = await ctx.client.killBadge(opts.kill);
         if (ctx.json) return printJson({ killed, swept });
         printKeyValues({
-          ended: `${killed.badgeId} (${surfaceKind(killed)})`,
+          ended: `${killed.badgeId} (${what(killed)})`,
           identity:
             killed.actors.map((a) => a.name || a.id).join(", ") ||
             "none — it spoke as nobody",
@@ -3687,12 +3703,16 @@ program
         return;
       }
       const { badges } = await ctx.client.badges();
-      if (ctx.json) return printJson({ badges });
+      if (ctx.json) {
+        return printJson({
+          badges: badges.map((badge) => (cells.has(badge.badgeId) ? { ...badge, cell: cells.get(badge.badgeId) } : badge)),
+        });
+      }
       const now = new Date().toISOString();
       printTable(
         badges.map((badge) => ({
           badge: badge.badgeId,
-          what: surfaceKind(badge),
+          what: what(badge),
           identity: badge.actors.map((a) => a.name || a.id).join(", ") || "—",
           // What this surface has PROVED (phase 9 stage 2). An agent has no
           // inbox and cannot sign in — but "which of my surfaces has proved
@@ -3710,6 +3730,26 @@ program
       );
     }),
   );
+
+/**
+ * Which surfaces are sheep cells this machine's rc made (sheep-harness phase
+ * 2): each sheep's birth pass, kept on its rc row, asked which badge redeemed
+ * it. Exact rather than inferred from actors, because a person may hand any
+ * machine a pass for the same agent. A pass the home cannot answer for
+ * (an older home, a canvas since gone) names nothing, and the row reads as
+ * the machine it is.
+ */
+async function cellBadges(ctx: Ctx): Promise<Map<string, { agent: string; sheep: string | null }>> {
+  const cells = new Map<string, { agent: string; sheep: string | null }>();
+  const asked = new Set<string>();
+  for (const row of await readRcAgents(ctx.home)) {
+    if (!row.cellPass || asked.has(row.cellPass.passId)) continue;
+    asked.add(row.cellPass.passId);
+    const answer = await ctx.client.pass(row.cellPass.canvasId, row.cellPass.passId).catch(() => null);
+    if (answer?.pass.redeemedBy) cells.set(answer.pass.redeemedBy, { agent: row.name, sheep: row.sessionId });
+  }
+  return cells;
+}
 
 /** A browser tab or a machine, in one word. The carrier IS the answer — a
  * cookie badge is a browser by construction, because nothing else has a
@@ -11338,6 +11378,16 @@ async function enrolAgent(
   );
 }
 
+/** What withdrawal does beyond the standing, for the one harness where
+ * something of the agent's lives elsewhere — said on both remove verbs. */
+const SHEEP_WITHDRAWAL_HELP = `
+For an agent on the sheep harness, withdrawal also ends its sheep at the
+sheep home (a running turn is aborted first) and the badge its cell
+redeemed, and says each. The pasture isocan-<name> stays: it is yours, and
+re-enrolling the agent births a new sheep into it, which does not remember
+the old one. A home too old to end a sheep gets \`sheep abort\` instead, and
+the rc says what is left there.`;
+
 /** Both remove verbs land here — the standing goes, the history stays. */
 async function withdrawAgent(cmd: Command, name: string, contained: boolean): Promise<void> {
   const ctx = await ctxOf(cmd);
@@ -11359,12 +11409,20 @@ async function withdrawAgent(cmd: Command, name: string, contained: boolean): Pr
         (standing.length > 0 ? ` — standing here: ${standing.join(", ")}` : " — nobody is enrolled here"),
     );
   }
+  // The rc half is read before it is reaped: an agent on the sheep harness
+  // has a sheep and a cell's badge to end, and the row is what names them.
+  const rcRow = (await readRcAgents(ctx.home)).find((r) => r.canvasId === p.id && r.actorId === row.actor.id);
   await ctx.client.sendOp(p.id, ctx.actor, { type: "agent.withdraw", actorId: row.actor.id });
   await removeRcAgent(ctx.home, p.id, row.actor.id);
+  if (!ctx.json) {
+    console.log(
+      `dismissed ${row.actor.name} — the standing is withdrawn, the history untouched.`,
+    );
+  }
+  // Narration on stderr under --json, so stdout stays one JSON document.
+  const say = (line: string) => (ctx.json ? console.error : console.log)(`${row.actor.name} · ${line}`);
+  await withdrawSheep(ctx, rcRow, say);
   if (ctx.json) return printJson({ withdrawn: row.actor, canvasId: p.id });
-  console.log(
-    `dismissed ${row.actor.name} — the standing is withdrawn, the history untouched.`,
-  );
 }
 
 const agentCommand = program
@@ -11393,6 +11451,7 @@ agentCommand
 agentCommand
   .command("remove <name>")
   .description("Withdraw an agent's standing here — on a person's word")
+  .addHelpText("after", SHEEP_WITHDRAWAL_HELP)
   .action(run(async (name: string, _opts: unknown, cmd: Command) => withdrawAgent(cmd, name, true)));
 
 agentCommand
@@ -11668,6 +11727,7 @@ pierce this one.
 rcCommand
   .command("remove <name>")
   .description("Withdraw an agent's standing on this canvas")
+  .addHelpText("after", SHEEP_WITHDRAWAL_HELP)
   .action(run(async (name: string, _opts: unknown, cmd: Command) => withdrawAgent(cmd, name, false)));
 
 rcCommand
@@ -11796,6 +11856,7 @@ try a policy against one agent before starting an rc with it.`,
           record.actor.id,
           session.sessionId,
           agent instanceof SheepAgent ? agent.place : undefined,
+          bornPassOf(agent, p.id),
         );
         const turn = await agent.prompt(session.sessionId, promptWords.join(" "), (event) => {
           if (event.kind === "chunk" && event.text) process.stdout.write(event.text);
@@ -11900,10 +11961,89 @@ async function sheepBirth(ctx: Ctx, p: Canvas, actorId: string): Promise<import(
     canvasOrigin: origin,
     ...(skill ? { skill } : {}),
     pass: async () => {
-      const { token } = await ctx.client.mintPass(p.id, actorId);
-      return canvasUrlWithPass(homeAddressForCell(origin, await loopbackFromCell(ctx.home)), p.id, token);
+      const { pass, token } = await ctx.client.mintPass(p.id, actorId);
+      return {
+        address: canvasUrlWithPass(homeAddressForCell(origin, await loopbackFromCell(ctx.home)), p.id, token),
+        passId: pass.id,
+      };
     },
   };
+}
+
+/** The pass a sheep's birth just minted, as the row keeps it — or nothing,
+ * for a resumed sheep or another harness. */
+function bornPassOf(agent: unknown, canvasId: string): RcAgentRow["cellPass"] {
+  return agent instanceof SheepAgent && agent.bornPass ? { canvasId, passId: agent.bornPass } : undefined;
+}
+
+/**
+ * **Withdrawal, for an agent whose sessions are sheep** (sheep-harness
+ * phase 2). Every path that withdraws an agent comes here with the rc row it
+ * read before reaping it: `rc remove` and `agent remove`, a parked rc seeing
+ * the withdraw op, an rc starting after a withdrawal it missed, and a summons
+ * whose agent was withdrawn while its sheep was being born. The sheep is
+ * ended at its home (`endSheep`), then the badge its cell redeemed is ended
+ * at the isocan home. Two paths racing on one withdrawal both arrive here;
+ * the second finds the sheep already gone at its home and says so.
+ *
+ * One sheep can stand behind rows on several canvases (the rc keeps one
+ * session per agent), so while another row on this machine names the same
+ * sheep, nothing is ended and that row takes the pass.
+ */
+async function withdrawSheep(ctx: Ctx, row: RcAgentRow | undefined, narrate: (line: string) => void): Promise<void> {
+  if (!row || row.harness !== SHEEP_HARNESS || !row.sessionId || !row.sheep) return;
+  const others = (await readRcAgents(ctx.home)).filter(
+    (r) => r.actorId === row.actorId && r.canvasId !== row.canvasId && r.sessionId === row.sessionId,
+  );
+  if (others.length > 0) {
+    const canvases = await ctx.client.listCanvases().catch(() => [] as Canvas[]);
+    const on = others.map((r) => `"${canvases.find((c) => c.id === r.canvasId)?.title ?? r.canvasId}"`).join(", ");
+    narrate(`sheep ${row.sessionId} stays — ${row.name} still answers from it on ${on}`);
+    if (row.cellPass && !others.some((r) => r.cellPass)) {
+      await setRcCellPass(ctx.home, others[0]!.canvasId, row.actorId, row.cellPass);
+    }
+    return;
+  }
+  await endSheep({ name: row.name, sessionId: row.sessionId, place: row.sheep }, narrate);
+  await endCellBadge(ctx, row, narrate);
+}
+
+/**
+ * The badge a sheep's cell made by redeeming its pass, ended. Named exactly:
+ * the desk tells the badge that minted a pass which badge redeemed it
+ * (`redeemedBy`), and the row kept the pass's id from the birth. What cannot
+ * be named that way is said, with the verb that ends it by hand.
+ */
+async function endCellBadge(ctx: Ctx, row: RcAgentRow, narrate: (line: string) => void): Promise<void> {
+  const byHand = "`isocan badges` lists it, and `isocan badges --kill <badge>` ends it";
+  if (!row.cellPass) {
+    narrate(`no pass is recorded for sheep ${row.sessionId}, so the badge ${row.name}'s cell holds is not known here — ${byHand}`);
+    return;
+  }
+  let pass: Pass;
+  try {
+    ({ pass } = await ctx.client.pass(row.cellPass.canvasId, row.cellPass.passId));
+  } catch (err) {
+    narrate(`could not ask the home which badge redeemed pass ${row.cellPass.passId} — ${(err as Error).message}; ${byHand}`);
+    return;
+  }
+  if (!pass.redeemedBy) {
+    const expiry = passExpired(pass, new Date().toISOString()) ? "" : `, and it expires by itself at ${pass.expiresAt}`;
+    narrate(`pass ${pass.id} was never redeemed, so ${row.name}'s cell holds no badge${expiry}`);
+    return;
+  }
+  try {
+    await ctx.client.killBadge(pass.redeemedBy);
+    narrate(`ended badge ${pass.redeemedBy} — ${row.name}'s cell can no longer speak as ${row.name}`);
+  } catch (err) {
+    // A killed badge drops out of every surface listing, so a second ending
+    // is refused as not-yours rather than answered as already-ended.
+    if (err instanceof ApiError && (err.code === NOT_YOUR_BADGE || err.code === "unknown-badge")) {
+      narrate(`badge ${pass.redeemedBy} is no longer among this machine's surfaces at the home — already ended`);
+      return;
+    }
+    narrate(`could not end badge ${pass.redeemedBy} — ${(err as Error).message}; ${byHand}`);
+  }
 }
 
 /**
@@ -12079,6 +12219,19 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
     // rc half — the web's adds, and any it missed while down. Quiet: this is
     // record housekeeping, not an event. The home half stays authoritative:
     // rc rows for this canvas with no standing enrolment are dead, reaped.
+    const reap = async (roster: Record<string, import("@isocan/core").EnrolledAgent>, when: string) => {
+      for (const row of await readRcAgents(ctx.home)) {
+        if (row.canvasId === p.id && !roster[row.actorId]) {
+          await removeRcAgent(ctx.home, p.id, row.actorId);
+          // A sheep the withdrawn agent left is ended now, and that is not
+          // housekeeping, so it is said.
+          if (row.harness === SHEEP_HARNESS && row.sessionId) {
+            console.log(rcLine(tag, `${row.name} was withdrawn ${when} — ending what it left`));
+            await withdrawSheep(ctx, row, (line) => console.log(rcLine(tag, `${row.name} · ${line}`)));
+          }
+        }
+      }
+    };
     const reconcile = async (roster: Record<string, import("@isocan/core").EnrolledAgent>) => {
       for (const record of Object.values(roster)) {
         await adoptRcAgent(ctx.home, {
@@ -12090,11 +12243,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
           sessionId: null,
         });
       }
-      for (const row of await readRcAgents(ctx.home)) {
-        if (row.canvasId === p.id && !roster[row.actorId]) {
-          await removeRcAgent(ctx.home, p.id, row.actorId);
-        }
-      }
+      await reap(roster, "while no rc ran here");
     };
     // Names for the withdraw narration: state drops the row before the op is
     // read here, so remember every name this process has seen.
@@ -12215,6 +12364,13 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
       );
       return comment ? (comment.envelope.op as { threadId: string }).threadId : null;
+    };
+    /** Whether this agent's standing here is gone, read from the home rather
+     * than from this process's dispatch table: the withdraw op and the turn
+     * it stopped reach this rc in either order. */
+    const withdrawnHere = async (actorId: string): Promise<boolean> => {
+      const snapshot = await ctx.client.snapshot(p.id).catch(() => null);
+      return snapshot !== null && !snapshot.canvas.agents?.[actorId];
     };
     const dispatches = new Map<string, AgentDispatch>();
     // Where each standing began — the floor for a cursor row that does not
@@ -12517,13 +12673,35 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         // the adapter's environment says which canvas is asking this time.
         const session = await agent.ensureSession(row.cwd, row.sessionId ?? shared.sessionIds.get(record.actor.id) ?? null);
         shared.sessionIds.set(record.actor.id, session.sessionId);
-        await setRcSessionId(
+        const recorded = await setRcSessionId(
           ctx.home,
           p.id,
           record.actor.id,
           session.sessionId,
           agent instanceof SheepAgent ? agent.place : undefined,
+          bornPassOf(agent, p.id),
         );
+        /**
+         * **Withdrawn while its sheep was being found or born** (sheep-harness
+         * phase 2). The row is gone, so whoever reaped it ended the sheep the
+         * row named — if it named one. A sheep this summons birthed, or
+         * found in the herd under another id, is known only here, and ending
+         * it is this summons's job; then there is no turn to run.
+         */
+        if (!recorded && agent instanceof SheepAgent && (await withdrawnHere(record.actor.id))) {
+          shared.sessionIds.delete(record.actor.id);
+          console.log(rcLine(tag, `${record.actor.name} · withdrawn before its turn — no turn runs`));
+          if (session.sessionId !== row.sessionId) {
+            const born = bornPassOf(agent, p.id);
+            const { cellPass: _stale, ...rest } = row;
+            await withdrawSheep(
+              ctx,
+              { ...rest, harness: SHEEP_HARNESS, sessionId: session.sessionId, sheep: agent.place, ...(born ? { cellPass: born } : {}) },
+              (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
+            );
+          }
+          return;
+        }
         const where = agent instanceof SheepAgent ? `at ${describePlace(agent.place)}` : `in ${row.cwd}`;
         console.log(rcLine(tag, `${record.actor.name} · session ${session.resumed ? "resumed" : "started"} ${where}`));
         // The event stream the adapter is already sending, spent on the face:
@@ -12548,6 +12726,18 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
             }
           },
         );
+        /**
+         * **A turn stopped by withdrawal is not a failed turn** (sheep-harness
+         * phase 2). Ending a sheep aborts its running turn, so `sheep attach`
+         * exits non-zero under a summons whose agent is already gone. An ACP
+         * turn runs on to its own end when its agent is withdrawn; a sheep's
+         * is stopped, and it is said as that: no failure, no system voice in
+         * the thread, nothing held for a retry.
+         */
+        if (turn.stopReason !== "end_turn" && (await withdrawnHere(record.actor.id))) {
+          console.log(rcLine(tag, `${record.actor.name} · turn stopped — ${record.actor.name} was withdrawn`));
+          return;
+        }
         console.log(rcLine(tag, `${record.actor.name} · turn ended — ${turn.stopReason}`));
         // Completion, explicitly: the rc SAW the turn end, so the cursor
         // advances now rather than waiting for the park's inferred evidence.
@@ -12584,9 +12774,54 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       for (const d of dispatches.values()) if (d.scannedTip < from) from = d.scannedTip;
       return from;
     };
+    /** Anybody the roster names that this rc is not answering for: adopted
+     * and claimed, the same two things the enrol branch below does. Run on
+     * every lap that reads a roster, and once at start (below). */
+    const takeUp = async (roster: Record<string, import("@isocan/core").EnrolledAgent>): Promise<void> => {
+      for (const record of Object.values(roster)) {
+        if (dispatches.has(record.actor.id)) continue;
+        /**
+         * The SAME two things the enrol branch below does, and the first
+         * version of this did only one of them.
+         *
+         * Claiming a cursor makes the rc dispatch to the agent; `adoptRcAgent`
+         * records where and how it runs. An agent picked up here without the
+         * adoption has a cursor and no record — which is why the test watching
+         * for "· where and how supplied" kept timing out with the fix in
+         * place, and it was right to: the line is missing because the RECORD
+         * is missing, not because the narration is.
+         */
+        const adopted = await adoptRcAgent(ctx.home, {
+          canvasId: p.id,
+          actorId: record.actor.id,
+          name: record.actor.name,
+          harness: null,
+          cwd: rcCwd,
+          sessionId: null,
+        });
+        if (adopted) console.log(rcLine(tag, `${record.actor.name} · where and how supplied — ${rcCwd}`));
+        await claimAgent(record.actor.id);
+      }
+    };
     const startTip = (await ctx.client.watchLog({ only: [p.id] })).cursors[p.id] ?? 0;
+    /**
+     * **The startup window, closed from both sides** (sheep-harness phase 2).
+     * `opening` was read before this tip, and the enrol and withdraw branches
+     * below only read ops above it, so an enrolment or a withdrawal landing
+     * between the two was seen by neither. A withdrawal left its row, and
+     * for an agent on the sheep harness its sheep. An enrolment waited for
+     * the first lap that read a roster, which on a quiet canvas is the end
+     * of a thirty-second poll: `rc.test.ts`'s "a web add gets its rc half"
+     * failed on CI twice in three runs of phase 2's commit on exactly that.
+     * The roster read now includes both, so it is reaped and taken up here.
+     */
+    const settled = await rosterOf();
+    for (const [id, row] of Object.entries(settled)) known.set(id, row.actor.name);
+    await reap(settled, "as this rc started");
+    for (const actorId of [...dispatches.keys()]) if (!settled[actorId]) dispatches.delete(actorId);
+    await takeUp(settled);
     cursors = { [p.id]: lapFrom() };
-    let lastRoster = opening;
+    let lastRoster = settled;
     let offlineSince: number | null = null;
     for (;;) {
       considerUpgrade();
@@ -12682,30 +12917,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
        * by which they could have arrived. `claimAgent` returns early when a
        * dispatch exists, so this costs nothing on a settled lap.
        */
-      for (const record of Object.values(roster)) {
-        if (dispatches.has(record.actor.id)) continue;
-        /**
-         * The SAME two things the enrol branch below does, and the first
-         * version of this did only one of them.
-         *
-         * Claiming a cursor makes the rc dispatch to the agent; `adoptRcAgent`
-         * records where and how it runs. An agent picked up here without the
-         * adoption has a cursor and no record — which is why the test watching
-         * for "· where and how supplied" kept timing out with the fix in
-         * place, and it was right to: the line is missing because the RECORD
-         * is missing, not because the narration is.
-         */
-        const adopted = await adoptRcAgent(ctx.home, {
-          canvasId: p.id,
-          actorId: record.actor.id,
-          name: record.actor.name,
-          harness: null,
-          cwd: rcCwd,
-          sessionId: null,
-        });
-        if (adopted) console.log(rcLine(tag, `${record.actor.name} · where and how supplied — ${rcCwd}`));
-        await claimAgent(record.actor.id);
-      }
+      await takeUp(roster);
       for (const entry of batch.entries) {
         const op = entry.envelope.op;
         const by = entry.envelope.actor;
@@ -12727,9 +12939,16 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
           continue;
         }
         if (op.type === "agent.withdraw" && entry.seq > startTip) {
-          console.log(rcLine(tag, `${by.name} dismissed ${known.get(op.actorId) ?? op.actorId} — no longer answering here`));
+          const name = known.get(op.actorId) ?? op.actorId;
+          console.log(rcLine(tag, `${by.name} dismissed ${name} — no longer answering here`));
+          // Read before it is reaped: the row names the sheep to end. A verb
+          // on this machine may have reaped it first and ended the sheep
+          // itself; then there is nothing here to do.
+          const row = (await readRcAgents(ctx.home)).find((r) => r.canvasId === p.id && r.actorId === op.actorId);
           await removeRcAgent(ctx.home, p.id, op.actorId);
           dispatches.delete(op.actorId);
+          shared.sessionIds.delete(op.actorId);
+          await withdrawSheep(ctx, row, (line) => console.log(rcLine(tag, `${name} · ${line}`)));
           continue;
         }
         // Route to every enrolled agent whose composition matches — the
@@ -12817,6 +13036,13 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         dispatch.busy = true;
         void runSummons(record, dispatch)
           .catch(async (err) => {
+            // Withdrawn under the turn (ending a sheep stops its turn): not a
+            // failure, and nothing is held for a retry.
+            if (await withdrawnHere(actorId)) {
+              dispatch.pending.length = 0;
+              console.log(rcLine(tag, `${record.actor.name} · turn stopped — ${record.actor.name} was withdrawn`));
+              return;
+            }
             // Silence surfaced (journey 5): the failure reaches the thread
             // it failed FOR, in the system voice — never as the agent, which
             // never ran, and never silently. The batch is not advanced; a

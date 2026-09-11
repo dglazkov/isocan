@@ -39,6 +39,15 @@ export interface RcAgentRow {
    * resumes the same sheep, and so a kennel re-pointed since is refused
    * rather than answered with a second sheep. */
   sheep?: SheepPlace;
+  /**
+   * For the sheep harness, the pass minted at this sheep's birth — its id and
+   * the canvas it was minted on, never its token. The desk answers its minter
+   * which badge redeemed it (`GET …/passes/:passId`), and that badge is the
+   * cell's, so withdrawal ends exactly it and `isocan badges` can name it.
+   * Belongs to the sheep in `sessionId`: dropped when the row's sheep
+   * changes without a birth.
+   */
+  cellPass?: { canvasId: string; passId: string };
 }
 
 export const rcAgentsFile = (home: string) => path.join(home, "rc-agents.json");
@@ -153,19 +162,42 @@ export async function adoptRcAgent(home: string, row: RcAgentRow): Promise<boole
 
 /** The resume handle, once a session exists (phase 3). Best-effort by the
  * spike's finding: a stored id that fails to load twice is replaced by a
- * fresh session, and this row is what records the replacement. */
+ * fresh session, and this row is what records the replacement. A sheep's
+ * birth hands its pass too; a different sheep arriving without one (found
+ * in the herd) drops the old sheep's, which named another cell's badge.
+ * Returns whether the row was there to write — a row withdrawn mid-summons
+ * is not. */
 export async function setRcSessionId(
   home: string,
   canvasId: string,
   actorId: string,
   sessionId: string,
   sheep?: SheepPlace,
+  cellPass?: RcAgentRow["cellPass"],
+): Promise<boolean> {
+  const rows = await readRcAgents(home);
+  const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
+  if (!row) return false;
+  if (cellPass) row.cellPass = cellPass;
+  else if (row.sessionId !== sessionId) delete row.cellPass;
+  row.sessionId = sessionId;
+  if (sheep) row.sheep = sheep;
+  await writeRcAgents(home, rows);
+  return true;
+}
+
+/** Hand a sheep's pass to another row naming the same sheep — the survivor,
+ * when the row that held it is withdrawn and the sheep stays. */
+export async function setRcCellPass(
+  home: string,
+  canvasId: string,
+  actorId: string,
+  cellPass: NonNullable<RcAgentRow["cellPass"]>,
 ): Promise<void> {
   const rows = await readRcAgents(home);
   const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
   if (!row) return;
-  row.sessionId = sessionId;
-  if (sheep) row.sheep = sheep;
+  row.cellPass = cellPass;
   await writeRcAgents(home, rows);
 }
 

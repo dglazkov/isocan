@@ -770,6 +770,33 @@ describe("both ways of taking up an agent do the same two things", () => {
 });
 
 /**
+ * **A withdrawal inside the rc's startup window** (sheep-harness phase 2).
+ * The same window as above, from the other side, and source-shape for the
+ * same reason: it cannot be forced from outside.
+ */
+describe("a withdrawal is reaped however the rc noticed it", () => {
+  const main = readFileSync(fileURLToPath(new URL("../src/main.ts", import.meta.url)), "utf8");
+
+  it("reaps and takes up once more after the start tip, where neither branch can see it", () => {
+    // Both halves of the same window (sheep-harness phase 2): an agent
+    // withdrawn between `opening` and `startTip` kept its row, and on the
+    // sheep harness its sheep — found by the full file under load; and one
+    // enrolled there waited for the first lap that read a roster, the end of
+    // a thirty-second poll on a quiet canvas — "a web add gets its rc half"
+    // failed on CI twice in three runs on it.
+    const tip = main.indexOf("const startTip = ");
+    const reaped = main.indexOf('await reap(settled, "as this rc started")');
+    const takenUp = main.indexOf("await takeUp(settled)");
+    const loop = main.indexOf("for (;;)", tip);
+    expect(tip).toBeGreaterThan(-1);
+    expect(reaped).toBeGreaterThan(tip);
+    expect(main.slice(tip, reaped)).toContain("const settled = await rosterOf()");
+    expect(takenUp).toBeGreaterThan(reaped);
+    expect(takenUp).toBeLessThan(loop);
+  });
+});
+
+/**
  * **The sheep harness** (sheep-harness phase 1). `sheep` is found on the
  * PATH and its home by the kennel walk, never by a config block: a fake
  * `sheep` on the PATH answers from a state file and records every call, and
@@ -923,6 +950,296 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     expect(turn.stderr).toContain("move the canvas to a home with an address, or make the sheep home a local one");
     expect((await sheepCalls()).length).toBe(0);
   }, 30_000);
+
+  /**
+   * **Withdrawal ends the sheep** (sheep-harness phase 2, journey 4). Every
+   * path that withdraws an agent ends its sheep at the sheep home and the
+   * badge its cell redeemed at the isocan home, and says each; the pasture
+   * stays. The cell is played by a badge redeeming the pass the rc put in
+   * the pasture, the way the cell's `isocan setup --direct` would, so there
+   * is a real badge to end.
+   */
+  describe("withdrawal ends the sheep (sheep-harness phase 2)", () => {
+    const redeemCellPass = async (): Promise<TestBadge> => {
+      const address = (await sheepState()).pastures["isocan-percy"].secrets.ISOCAN_PASS as string;
+      const cell = await mintTestBadge(base);
+      const res = await fetch(`${base}/api/passes/redeem`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...cell.headers },
+        body: JSON.stringify({ token: address.slice(address.indexOf("#") + 1) }),
+      });
+      if (!res.ok) throw new Error(`the cell could not redeem its pass: ${await res.text()}`);
+      return cell;
+    };
+    const commentsOn = async (threadId: string): Promise<unknown[]> => {
+      const res = await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers });
+      const snapshot = (await res.json()) as { canvas: { threads: Record<string, { comments: unknown[] }> } };
+      return snapshot.canvas.threads[threadId]?.comments ?? [];
+    };
+    const parked = () => {
+      const rc = spawnCli(["rc"], env);
+      const seen = { out: "" };
+      rc.stdout!.setEncoding("utf8");
+      rc.stdout!.on("data", (chunk) => (seen.out += chunk));
+      const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+      return { rc, seen, done };
+    };
+
+    it("journey 4: `rc remove` ends the sheep and the cell's badge, keeps the pasture; re-enrolment births anew", async () => {
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      const birth = await run("rc", "turn", "Percy", "hello");
+      expect(birth.code, birth.stderr).toBe(0);
+      const born = (await rcRows()).find((r) => r.name === "Percy")!;
+      expect(born.cellPass).toMatchObject({ canvasId: "prj_1", passId: expect.stringMatching(/^pss_/) });
+      // Until sheep#2, the brief says a cold turn is slow and a dead
+      // container is to be reported, not slept on.
+      const brief = (await sheepState()).pastures["isocan-percy"].tree["brief.md"] as string;
+      expect(brief).toContain("can take a couple of minutes");
+      expect(brief).toContain("do not sleep and retry");
+
+      // The cell redeems its pass; the rc's machine names the badge as the cell's.
+      const cell = await redeemCellPass();
+      const listed = await run("badges");
+      expect(listed.stdout).toMatch(new RegExp(`${cell.badgeId}\\s+cell \\(Percy's sheep\\)`));
+      const json = JSON.parse((await run("--json", "badges")).stdout) as { badges: Array<{ badgeId: string; cell?: unknown }> };
+      expect(json.badges.find((b) => b.badgeId === cell.badgeId)?.cell).toEqual({ agent: "Percy", sheep: "s_1" });
+
+      const removed = await run("rc", "remove", "Percy");
+      expect(removed.code, removed.stderr).toBe(0);
+      expect(removed.stdout).toContain("dismissed Percy");
+      expect(removed.stdout).toContain("Percy · ending sheep s_1 at the local sheep home in");
+      expect(removed.stdout).toContain("Percy · sheep s_1 ended — its container and workspace are gone");
+      expect(removed.stdout).toContain("Percy · pasture isocan-percy stays — it is yours");
+      expect(removed.stdout).toContain(`Percy · ended badge ${cell.badgeId} — Percy's cell can no longer speak as Percy`);
+
+      // Ended once, beside the row's kennel; the pasture kept; the row gone;
+      // the badge a badge nobody holds.
+      const rms = (await sheepCalls()).filter((c) => c.argv[0] === "rm");
+      expect(rms.map((c) => [c.argv, c.cwd, (c as { exit?: number }).exit])).toEqual([
+        [["rm", "--json", "s_1"], await fs.realpath(home), 0],
+      ]);
+      const after = await sheepState();
+      expect(after.sessions).toEqual([]);
+      expect(Object.keys(after.pastures)).toEqual(["isocan-percy"]);
+      expect((await rcRows()).some((r) => r.name === "Percy")).toBe(false);
+      expect(await daemon.desk.badge(cell.badgeId)).toBeNull();
+      expect((await run("badges")).stdout).not.toContain(cell.badgeId);
+
+      // A week later: a new sheep in the same pasture, a new pass, and the
+      // rc says the sheep does not remember the first.
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      const again = await run("rc", "turn", "Percy", "hello again");
+      expect(again.code, again.stderr).toBe(0);
+      expect(again.stderr).toContain("pasture isocan-percy already exists; the sheep born into it is new and does not remember an earlier one");
+      expect(again.stderr).toContain("sheep s_2 born");
+      const reborn = (await rcRows()).find((r) => r.name === "Percy")!;
+      expect(reborn.sessionId).toBe("s_2");
+      expect(reborn.cellPass!.passId).not.toBe(born.cellPass!.passId);
+      const births = (await sheepCalls()).filter((c) => c.argv[0] === "new");
+      expect(births.map((c) => c.argv[c.argv.indexOf("--pasture") + 1])).toEqual(["isocan-percy", "isocan-percy"]);
+      expect((await sheepCalls()).filter((c) => c.argv[1] === "secret")).toHaveLength(2);
+    }, 60_000);
+
+    it("mid-turn at a parked rc: the turn is aborted and reads as a withdrawal — no failure, no system voice, no retry", async () => {
+      // A turn that takes a minute, so the withdrawal lands under it.
+      await fs.writeFile(stateFile, JSON.stringify({ sessions: [], pastures: {}, entries: {}, next: 1, attachMs: 60_000 }));
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      const { rc, seen, done } = parked();
+      await until(async () => seen.out, (o) => o.includes("Percy's sheep will live at"), "the rc to come up");
+      await post("/api/ops", {
+        canvasId: "prj_1",
+        actor: dimitri,
+        op: {
+          type: "thread.create",
+          threadId: "th_1",
+          x: 0,
+          y: 0,
+          anchorItemId: null,
+          comment: { id: "cmt_1", body: "@Percy the empty state reads wrong" },
+        },
+      });
+      await until(async () => (await sheepState().catch(() => null))?.sessions?.[0]?.state, (s) => s === "busy", "the turn to be running in the cell");
+
+      const removed = await run("rc", "remove", "Percy");
+      expect(removed.code, removed.stderr).toBe(0);
+      await until(async () => seen.out, (o) => o.includes("Percy · turn stopped — Percy was withdrawn"), "the turn to read as a withdrawal");
+      // Whichever of the verb and the rc reached the home first ended it,
+      // and said the turn was aborted; the other found it already gone.
+      expect(`${removed.stdout}${seen.out}`).toContain("the running turn was aborted first");
+      const rms = (await sheepCalls()).filter((c) => c.argv[0] === "rm");
+      expect(rms.filter((c) => (c as { exit?: number }).exit === 0)).toHaveLength(1);
+      expect((await sheepState()).sessions).toEqual([]);
+
+      // A lap later: nothing failed, nothing was said in the thread in the
+      // system voice, and nothing was sent to the cell again.
+      await new Promise((r) => setTimeout(r, 3_000));
+      expect(seen.out).not.toContain("turn FAILED");
+      expect(seen.out).not.toContain("turn ended");
+      expect(await commentsOn("th_1")).toHaveLength(1);
+      expect((await sheepCalls()).filter((c) => c.argv[0] === "attach")).toHaveLength(1);
+      expect(seen.out.match(/Percy · summons/g)).toHaveLength(1);
+      rc.kill("SIGINT");
+      await done;
+    }, 60_000);
+
+    it("the web's withdraw, seen by a parked rc, ends the sheep — reading the row before reaping it", async () => {
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      expect((await run("rc", "turn", "Percy", "hello")).code).toBe(0);
+      const { actorId } = (await rcRows()).find((r) => r.name === "Percy")!;
+      const { rc, seen, done } = parked();
+      await until(async () => seen.out, (o) => o.includes("Percy's sheep live at"), "the rc to come up");
+      // Past its start: only the loop narrates an adoption, so after this
+      // line the withdraw op below is one the rc reads as it lands.
+      await post("/api/ops", { canvasId: "prj_1", actor: dimitri, op: { type: "agent.enroll", agent: { id: "usr_sian", name: "Sian" } } });
+      await until(async () => seen.out, (o) => o.includes("Sian · where and how supplied"), "the rc to be parked");
+      // The tray's Dismiss: the withdraw op over HTTP, no verb on this machine.
+      await post("/api/ops", { canvasId: "prj_1", actor: dimitri, op: { type: "agent.withdraw", actorId } });
+      await until(async () => seen.out, (o) => o.includes("Percy · pasture isocan-percy stays"), "the sheep ended");
+      expect(seen.out).toContain("Dimitri dismissed Percy — no longer answering here");
+      expect(seen.out).toContain("Percy · ending sheep s_1");
+      expect(seen.out).toContain("Percy · sheep s_1 ended");
+      // Never redeemed here, so there is no badge — and that is said.
+      expect(seen.out).toMatch(/Percy · pass pss_\S+ was never redeemed, so Percy's cell holds no badge/);
+      expect((await sheepCalls()).filter((c) => c.argv[0] === "rm")).toHaveLength(1);
+      expect((await rcRows()).map((r) => r.name)).toEqual(["Sian"]);
+      rc.kill("SIGINT");
+      await done;
+    }, 60_000);
+
+    it("a withdrawal landing while the rc starts is ended too", async () => {
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      expect((await run("rc", "turn", "Percy", "hello")).code).toBe(0);
+      const { actorId } = (await rcRows()).find((r) => r.name === "Percy")!;
+      const { rc, seen, done } = parked();
+      // As early as the rc says anything about Percy, which on a loaded
+      // machine is between its opening roster and its start tip, where
+      // neither the reconcile nor the withdraw branch used to see it. Which
+      // side of the tip it lands on is timing; the source-shape test below
+      // pins the reap that covers the window, and this one that either way
+      // the sheep is ended once.
+      await until(async () => seen.out, (o) => o.includes("Percy's sheep live at"), "the rc to say where");
+      await post("/api/ops", { canvasId: "prj_1", actor: dimitri, op: { type: "agent.withdraw", actorId } });
+      await until(async () => seen.out, (o) => o.includes("Percy · pasture isocan-percy stays"), "the sheep ended");
+      expect(seen.out).toContain("Percy · sheep s_1 ended");
+      expect((await sheepCalls()).filter((c) => c.argv[0] === "rm")).toHaveLength(1);
+      expect(await rcRows()).toEqual([]);
+      rc.kill("SIGINT");
+      await done;
+    }, 60_000);
+
+    it("a withdrawal made while no rc ran is ended at the next rc's start", async () => {
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      expect((await run("rc", "turn", "Percy", "hello")).code).toBe(0);
+      const { actorId } = (await rcRows()).find((r) => r.name === "Percy")!;
+      await post("/api/ops", { canvasId: "prj_1", actor: dimitri, op: { type: "agent.withdraw", actorId } });
+      expect((await sheepState()).sessions).toHaveLength(1);
+
+      const { rc, seen, done } = parked();
+      await until(async () => seen.out, (o) => o.includes("answering on"), "the rc to come up");
+      expect(seen.out).toContain("Percy was withdrawn while no rc ran here — ending what it left");
+      expect(seen.out).toContain("Percy · sheep s_1 ended");
+      expect((await sheepState()).sessions).toEqual([]);
+      expect(await rcRows()).toEqual([]);
+      rc.kill("SIGINT");
+      await done;
+    }, 60_000);
+
+    it("withdrawn while its sheep is being born: the summons ends the sheep it birthed, and runs no turn", async () => {
+      await fs.writeFile(stateFile, JSON.stringify({ sessions: [], pastures: {}, entries: {}, next: 1, newMs: 3_000 }));
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      const { actorId } = (await rcRows()).find((r) => r.name === "Percy")!;
+      const { rc, seen, done } = parked();
+      await until(async () => seen.out, (o) => o.includes("Percy's sheep will live at"), "the rc to come up");
+      await post("/api/ops", {
+        canvasId: "prj_1",
+        actor: dimitri,
+        op: {
+          type: "thread.create",
+          threadId: "th_1",
+          x: 0,
+          y: 0,
+          anchorItemId: null,
+          comment: { id: "cmt_1", body: "@Percy the empty state reads wrong" },
+        },
+      });
+      // The pass is in the pasture and `sheep new` is under way: the row
+      // does not name a sheep yet, so whoever reaps it has none to end.
+      await until(sheepCalls, (calls) => calls.some((c) => c.argv[1] === "secret"), "the birth to be under way");
+      await post("/api/ops", { canvasId: "prj_1", actor: dimitri, op: { type: "agent.withdraw", actorId } });
+      await until(async () => seen.out, (o) => o.includes("Percy · pasture isocan-percy stays"), "the born sheep ended");
+      expect(seen.out).toContain("Percy · withdrawn before its turn — no turn runs");
+      expect(seen.out).toContain("Percy · sheep s_1 ended");
+      expect((await sheepState()).sessions).toEqual([]);
+      expect((await sheepCalls()).some((c) => c.argv[0] === "attach")).toBe(false);
+      expect(seen.out).not.toContain("turn FAILED");
+      expect(await rcRows()).toEqual([]);
+      rc.kill("SIGINT");
+      await done;
+    }, 60_000);
+
+    it("one sheep behind two canvases stays until its last row is withdrawn, and the pass goes with it", async () => {
+      await post("/api/ops", {
+        canvasId: null,
+        actor: dimitri,
+        op: { type: "project.create", canvasId: "prj_2", title: "Q" },
+      });
+      await run("--canvas", "prj_1", "rc", "add", "Percy", "--harness", "sheep");
+      await run("--canvas", "prj_2", "rc", "add", "Percy", "--harness", "sheep");
+      expect((await run("--canvas", "prj_1", "rc", "turn", "Percy", "hello")).code).toBe(0);
+      // The second canvas resumes the one sheep from the pasture's herd.
+      expect((await run("--canvas", "prj_2", "rc", "turn", "Percy", "hello")).stderr).toContain("session s_1 resumed");
+      const cell = await redeemCellPass();
+
+      const first = await run("--canvas", "prj_1", "rc", "remove", "Percy");
+      expect(first.stdout).toContain('Percy · sheep s_1 stays — Percy still answers from it on "Q"');
+      expect((await sheepCalls()).some((c) => c.argv[0] === "rm")).toBe(false);
+      const survivor = (await rcRows()).find((r) => r.canvasId === "prj_2")!;
+      expect(survivor.cellPass?.canvasId).toBe("prj_1");
+
+      const last = await run("--canvas", "prj_2", "rc", "remove", "Percy");
+      expect(last.stdout).toContain("Percy · sheep s_1 ended");
+      expect(last.stdout).toContain(`Percy · ended badge ${cell.badgeId}`);
+      expect(await daemon.desk.badge(cell.badgeId)).toBeNull();
+    }, 60_000);
+
+    it("a home too old to end a sheep: the turn is aborted, and the rc says what remains", async () => {
+      await fs.writeFile(stateFile, JSON.stringify({ sessions: [], pastures: {}, entries: {}, next: 1, oldHome: true }));
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      expect((await run("rc", "turn", "Percy", "hello")).code).toBe(0);
+      // Mid-turn, as far as the home is concerned.
+      const state = await sheepState();
+      state.sessions[0].state = "busy";
+      await fs.writeFile(stateFile, JSON.stringify(state));
+
+      const removed = await run("rc", "remove", "Percy");
+      expect(removed.code, removed.stderr).toBe(0);
+      expect(removed.stdout).toContain("Percy · its running turn was aborted");
+      expect(removed.stdout).toContain(
+        "Percy · sheep s_1 is still at the local sheep home in " +
+          `${await fs.realpath(home)}: this home cannot end a sheep (sheep rm: not found); \`sheep ls\` lists it`,
+      );
+      expect(removed.stdout).toContain("Percy · pasture isocan-percy stays — it is yours");
+      const verbs = (await sheepCalls()).map((c) => c.argv[0]);
+      expect(verbs.slice(verbs.indexOf("rm"))).toEqual(["rm", "ls", "abort", ...verbs.slice(verbs.indexOf("abort") + 1)]);
+      expect((await sheepState()).sessions.map((s: { id: string; state: string }) => [s.id, s.state])).toEqual([["s_1", "idle"]]);
+      expect(await rcRows()).toEqual([]);
+    }, 40_000);
+
+    it("a sheep already gone from its home is said as already ended, not as a failure", async () => {
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      expect((await run("rc", "turn", "Percy", "hello")).code).toBe(0);
+      // Another withdrawal got there first.
+      const state = await sheepState();
+      state.sessions = [];
+      await fs.writeFile(stateFile, JSON.stringify(state));
+
+      const removed = await run("rc", "remove", "Percy");
+      expect(removed.code, removed.stderr).toBe(0);
+      expect(removed.stdout).toContain("Percy · sheep s_1 was already ended — the local sheep home in");
+      expect(removed.stdout).not.toContain("still at");
+      expect((await sheepCalls()).some((c) => c.argv[0] === "abort")).toBe(false);
+    }, 40_000);
+  });
 
   it("`isocan harness` finds sheep by the scan, with the home its kennel names", async () => {
     const scan = JSON.parse((await run("--json", "harness")).stdout) as { harnesses: Array<{ name: string } & Record<string, unknown>> };

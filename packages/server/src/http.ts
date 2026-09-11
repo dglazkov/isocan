@@ -27,6 +27,7 @@ import type {
   MintPassRequest,
   MintPassResponse,
   Pass,
+  PassResponse,
   PostOpRequest,
   Canvas,
   RcAskRequest,
@@ -119,6 +120,7 @@ import {
   narrowed,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
+  PASS_UNKNOWN,
   RUNGS,
   SERVING_ROUTE,
   SIGN_BLOBS_LIMIT,
@@ -2931,8 +2933,9 @@ export function registerRoutes(
   // passes would be handing out admissions to a canvas it does not own.
 
   /**
-   * Mint one. The token comes back exactly once — there is no route that
-   * reads a pass back out, and the desk keeps only its hash.
+   * Mint one. The token comes back exactly once — no route reads it back out
+   * (the read below returns the row, never the secret), and the desk keeps
+   * only its hash.
    *
    * `actorId` is optional and both shapes are real (see `Pass.actorId`): with
    * it the redeemer arrives being somebody, without it the redeemer arrives
@@ -2983,6 +2986,32 @@ export function registerRoutes(
     });
     await desk.putPass(record);
     return { pass: withoutSecret(record), token } satisfies MintPassResponse;
+  });
+
+  /**
+   * Read one back — **for the badge that minted it, and nobody else**
+   * (sheep-harness phase 2). The row without its secret, so the minter learns
+   * whether its pass was spent and by which badge (`redeemedBy`): the exact
+   * surface the pass made. An rc that minted a pass for a sheep's cell uses
+   * it to end that cell's badge when the agent is withdrawn.
+   *
+   * Another badge's pass, a pass for another canvas, and no pass at all
+   * answer the same `unknown-pass`, so this is no oracle over passes the
+   * caller did not mint. On a replica it forwards to the canvas's home, where
+   * the row is and where the minter was this daemon's badge.
+   */
+  app.get("/api/projects/:id/passes/:passId", async (req, reply) => {
+    const { id, passId } = req.params as { id: string; passId: string };
+    const home = options.homes?.for(id) ?? null;
+    if (home) return home.pass(id, passId);
+    const held = await desk.pass(passId);
+    if (!held || held.canvasId !== id || held.mintedBy !== req.badge!.badgeId) {
+      return reply.status(404).send({
+        error: `no pass ${passId} minted by this badge for ${id}`,
+        code: PASS_UNKNOWN,
+      });
+    }
+    return { pass: withoutSecret(held) } satisfies PassResponse;
   });
 
   /**

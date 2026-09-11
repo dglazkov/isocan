@@ -134,7 +134,10 @@ what the cell syncs and the container's disk is not
 fourth turn's fresh container was still Shaun.
 
 A pass lives fifteen minutes and works once, so it is minted at the
-moment of birth and never stored on the rc's side.
+moment of birth, and its token is never stored on the rc's side. Its id
+is, on the rc row (phase 2): the desk tells the badge that minted a pass
+which badge redeemed it, and that badge is the cell's, which withdrawal
+ends.
 
 ### Where the home is
 
@@ -164,12 +167,14 @@ Recorded here as what a full build owes, not as trajectory.
 - **The install on every fresh container.** Two minutes per cold turn is
   the CLI installed from the release branch. The fix is on the sheep
   side: a way for a pasture's tools to be installed once, [sheep#2](https://github.com/dglazkov/sheep/issues/2). Until then the brief should say the first turn after a
-  quiet night is slow.
+  quiet night is slow. *The brief says so from phase 2.*
 - **Withdrawal does not end the sheep.** `agent.withdraw` drops the
   enrolment and the rc row; the sheep stays in `sheep ls` with a
   workspace and a badge. Sheep has no verb that ends a session for good,
   [sheep#1](https://github.com/dglazkov/sheep/issues/1). Until it exists, withdrawal should at least `sheep abort`
-  and narrate what is left.
+  and narrate what is left. *Answered in phase 2: withdrawal runs `sheep
+  rm` and ends the cell's badge, and a home deployed before sheep's end
+  verb gets `sheep abort` and a sentence saying what remains.*
 - **The birth spends a turn.** `sheep new --detach` needs a prompt, so
   the rc pays one model turn to get an id, [sheep#3](https://github.com/dglazkov/sheep/issues/3). It also means a first summons is queued behind the birth,
   which `--wait` handles.

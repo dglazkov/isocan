@@ -97,6 +97,12 @@ export function sheepPlaceFor(cwd: string, env: NodeJS.ProcessEnv = process.env)
   return home ? { kennel, home } : null;
 }
 
+/** The pasture an agent's sheep are born into: one per agent, named for it.
+ * The rc makes it and never removes it — a pasture is the shepherd's. */
+export function pastureFor(name: string): string {
+  return `isocan-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
 /** A place, said: the address, or which local home. */
 export function describePlace(place: SheepPlace): string {
   return place.home === "local" ? `the local sheep home in ${path.dirname(place.kennel)}` : place.home;
@@ -176,6 +182,13 @@ through the CLI (\`isocan --agent-help\` is the protocol; \`isocan comment
 reply <threadId> "…"\` answers a comment), and then stop. Never run
 \`isocan wait\`: your session rests when your turn ends, and the next
 summons wakes you.
+
+The first command after a quiet spell can take a couple of minutes: the
+cell's container was released, and a fresh one runs setup (installing
+isocan) before your command runs. Wait for it. If a command fails because
+the container could not start, do not sleep and retry: if \`isocan\` still
+answers, say on the thread that the cell could not start its container,
+and end your turn.
 `;
 
 /** The home's idle period: a cell quiet this long has had its container
@@ -297,8 +310,10 @@ async function runSheep(
 
 export interface SheepBirth {
   /** The pass address the sheep redeems — minted by the caller, who holds
-   * the agent's claim. Called once, only when a sheep is being born. */
-  pass: () => Promise<string>;
+   * the agent's claim — and the pass's id, which the caller keeps on the rc
+   * row so withdrawal can ask which badge redeemed it. Called once, only
+   * when a sheep is being born. */
+  pass: () => Promise<{ address: string; passId: string }>;
   canvasTitle: string;
   /** Where the canvas lives, as this machine reaches it: a station cannot
    * reach a loopback one. */
@@ -309,6 +324,10 @@ export interface SheepBirth {
 
 /** The same three verbs `AcpAgentProcess` has, over `sheep`. */
 export class SheepAgent {
+  /** The id of the pass minted for the sheep this agent just birthed, or
+   * null when `ensureSession` resumed one. The caller writes it to the row. */
+  bornPass: string | null = null;
+
   private constructor(
     private readonly command: string[],
     /** Where this agent's sheep live — the row's, or the directory's kennel
@@ -357,7 +376,7 @@ export class SheepAgent {
   }
 
   private get pasture(): string {
-    return `isocan-${this.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+    return pastureFor(this.name);
   }
 
   private async sheep(args: string[], opts: Parameters<typeof runSheep>[3] = {}) {
@@ -374,6 +393,10 @@ export class SheepAgent {
       this.narrate(`making pasture ${name}`);
       const made = await this.sheep(["pasture", "new", name]);
       if (made.code !== 0) throw new Error(`sheep pasture new failed: ${made.stderr.trim()}`);
+    } else {
+      // A pasture outlives its sheep (withdrawal keeps it), so a birth into
+      // one that exists is a re-enrolment or a retry, and the sheep is new.
+      this.narrate(`pasture ${name} already exists; the sheep born into it is new and does not remember an earlier one`);
     }
     // The tree is re-put every birth: cheap, and it keeps the script current.
     this.narrate(`putting setup.sh, brief.md${this.birth.skill ? " and the collab skill" : ""} in pasture ${name}`);
@@ -387,9 +410,10 @@ export class SheepAgent {
     // A pass is single-use and lives fifteen minutes, so it is minted at
     // the moment of birth, and only then.
     this.narrate(`minting a pass for ${this.name} — single-use, fifteen minutes, redeemed by the pasture's setup`);
-    const address = await this.birth.pass();
+    const { address, passId } = await this.birth.pass();
     const secret = await this.sheep(["pasture", "secret", "set", name, "ISOCAN_PASS"], { stdin: `${address}\n` });
     if (secret.code !== 0) throw new Error(`sheep pasture secret set failed: ${secret.stderr.trim()}`);
+    this.bornPass = passId;
     return name;
   }
 
@@ -512,4 +536,74 @@ export class SheepAgent {
   close(): void {
     /* nothing runs here between turns: the sheep rests in its cell */
   }
+}
+
+/**
+ * **End a sheep for good** (sheep-harness phase 2) — withdrawal's half at
+ * the sheep home, and the one place every withdrawal path comes to.
+ *
+ * `sheep rm --json` aborts a running turn, releases the container, and drops
+ * the sheep's rows; the pasture stays, and that is said. A refusal is read
+ * against the home's own listing rather than its wording, because homes
+ * word it differently: a sheep the home no longer lists is already ended
+ * (a second withdrawal racing the first), and one it still lists is at a
+ * home deployed before sheep's end verb, which gets `sheep abort` and a
+ * sentence saying what remains. Run beside the row's kennel, by
+ * `runSheep`'s rules, never beside the directory's.
+ */
+export async function endSheep(
+  target: { name: string; sessionId: string; place: SheepPlace },
+  narrate: Narrate,
+  command: string[] = [SHEEP_HARNESS],
+): Promise<void> {
+  const { name, sessionId: id, place } = target;
+  const where = describePlace(place);
+  const quiet = { narrate: () => {} };
+  const kept = () => narrate(`pasture ${pastureFor(name)} stays — it is yours`);
+  narrate(`ending sheep ${id} at ${where}`);
+  let rm: Awaited<ReturnType<typeof runSheep>>;
+  try {
+    rm = await runSheep(command, place, ["rm", "--json", id], quiet);
+  } catch (err) {
+    narrate(
+      `sheep ${id} is still at ${where}: \`sheep\` would not run here (${(err as Error).message}) — ` +
+        `${SHEEP_INSTALL}, then \`sheep rm ${id}\` in ${path.dirname(place.kennel)}`,
+    );
+    return;
+  }
+  if (rm.code === 0) {
+    let aborted = false;
+    try {
+      aborted = (JSON.parse(rm.stdout) as { aborted?: unknown }).aborted === true;
+    } catch {
+      /* a plain `<id>\tended` says as much */
+    }
+    if (aborted) narrate("the running turn was aborted first");
+    narrate(`sheep ${id} ended — its container and workspace are gone`);
+    kept();
+    return;
+  }
+  const refusal = rm.stderr.trim().replace(/^sheep:\s*/, "") || `exit ${rm.code}`;
+  const ls = await runSheep(command, place, ["ls", "--json"], quiet).catch(() => null);
+  let listed: boolean | null = null;
+  if (ls?.code === 0) {
+    try {
+      listed = (JSON.parse(ls.stdout) as SheepRow[]).some((s) => s.id === id);
+    } catch {
+      /* no list: unknown */
+    }
+  }
+  if (listed === false) {
+    narrate(`sheep ${id} was already ended — ${where} no longer lists it`);
+    kept();
+    return;
+  }
+  const abort = await runSheep(command, place, ["abort", id], quiet).catch(() => null);
+  if (abort?.code === 0 && /\taborted\b/.test(abort.stdout)) narrate("its running turn was aborted");
+  narrate(
+    listed
+      ? `sheep ${id} is still at ${where}: this home cannot end a sheep (sheep rm: ${refusal}); \`sheep ls\` lists it`
+      : `sheep ${id} may still be at ${where}: sheep rm refused (${refusal}) and \`sheep ls\` did not answer`,
+  );
+  kept();
 }
