@@ -1082,6 +1082,43 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
       await done;
     }, 60_000);
 
+    it("mid-turn at a station too old to end a sheep: aborted, and still read as a withdrawal though the turn exits cleanly", async () => {
+      // As walked on sheep-2 on 11 Sep 2026: `sheep rm` is refused, the rc
+      // falls back to `sheep abort`, and the attach it stopped exits 0 —
+      // which read as "turn ended — end_turn" until the dispatch the
+      // withdraw branch dropped was consulted too.
+      await fs.writeFile(stateFile, JSON.stringify({ sessions: [], pastures: {}, entries: {}, next: 1, attachMs: 60_000, oldHome: true }));
+      await run("rc", "add", "Percy", "--harness", "sheep");
+      const { rc, seen, done } = parked();
+      await until(async () => seen.out, (o) => o.includes("Percy's sheep will live at"), "the rc to come up");
+      await post("/api/ops", {
+        canvasId: "prj_1",
+        actor: dimitri,
+        op: {
+          type: "thread.create",
+          threadId: "th_1",
+          x: 0,
+          y: 0,
+          anchorItemId: null,
+          comment: { id: "cmt_1", body: "@Percy count slowly" },
+        },
+      });
+      await until(async () => (await sheepState().catch(() => null))?.sessions?.[0]?.state, (s) => s === "busy", "the turn to be running in the cell");
+
+      const removed = await run("rc", "remove", "Percy");
+      expect(removed.code, removed.stderr).toBe(0);
+      expect(removed.stdout).toContain("its running turn was aborted");
+      expect(removed.stdout).toContain("this home cannot end a sheep (sheep rm: not found)");
+      await until(async () => seen.out, (o) => o.includes("Percy · turn stopped — Percy was withdrawn"), "the turn to read as a withdrawal");
+      await new Promise((r) => setTimeout(r, 3_000));
+      expect(seen.out).not.toContain("Percy · turn ended");
+      expect(seen.out).not.toContain("turn FAILED");
+      expect(await commentsOn("th_1")).toHaveLength(1);
+      expect((await sheepCalls()).filter((c) => c.argv[0] === "attach")).toHaveLength(1);
+      rc.kill("SIGINT");
+      await done;
+    }, 60_000);
+
     it("the web's withdraw, seen by a parked rc, ends the sheep — reading the row before reaping it", async () => {
       await run("rc", "add", "Percy", "--harness", "sheep");
       expect((await run("rc", "turn", "Percy", "hello")).code).toBe(0);

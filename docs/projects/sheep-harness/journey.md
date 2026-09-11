@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-10
 see: sheep-harness, on-demand, standing-agents, agent-custody, harnesses
-note: phases 0 and 1 closed 10 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, the birth and a quiet cell narrated, tool beats on the face from the transcript. Journeys 1 and 2 walked on the deployed station against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Journey 4 is phase 2's, and waits on sheep#1 (its verb is on sheep's main); phase 3 is the week with the bill.
+note: phases 0–2 closed 10–11 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, tool beats on the face from the transcript; withdrawal ends the sheep and the badge its cell redeemed, named exactly through the pass the rc minted, and keeps the pasture. Journeys 1, 2 and 4 walked on the deployed station and a local sheep home against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Phase 3, the week with the bill, needs the shepherd; sheep#2 and sheep#3 are still open.
 ---
 # The sheep harness — the journeys
 

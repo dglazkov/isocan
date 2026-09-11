@@ -12732,9 +12732,15 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
          * exits non-zero under a summons whose agent is already gone. An ACP
          * turn runs on to its own end when its agent is withdrawn; a sheep's
          * is stopped, and it is said as that: no failure, no system voice in
-         * the thread, nothing held for a retry.
+         * the thread, nothing held for a retry. A home too old to end a sheep
+         * gets `sheep abort`, and an aborted turn exits cleanly — so a
+         * dispatch the withdraw branch already dropped says the same, whatever
+         * the stop reason (walked on such a station, 11 Sep 2026).
          */
-        if (turn.stopReason !== "end_turn" && (await withdrawnHere(record.actor.id))) {
+        if (
+          !dispatches.has(record.actor.id) ||
+          (turn.stopReason !== "end_turn" && (await withdrawnHere(record.actor.id)))
+        ) {
           console.log(rcLine(tag, `${record.actor.name} · turn stopped — ${record.actor.name} was withdrawn`));
           return;
         }

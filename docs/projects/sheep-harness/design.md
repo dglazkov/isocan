@@ -208,6 +208,16 @@ Recorded here as what a full build owes, not as trajectory.
   sheep's every command failed, it ended the turn with `end_turn`, the rc
   advanced the cursor, and the thread heard nothing; the next summons
   worked. From the rc's side this is an agent that chose not to reply.
+- **At a station too old to end a sheep, re-enrolment resumes a sheep
+  with a dead badge.** Withdrawal there aborts the sheep and ends its
+  cell's badge, and the sheep stays in its pasture. Re-enrolling the agent
+  finds it in the herd and resumes it rather than birthing a new one, and
+  its turns then fail because the badge it holds was ended. Redeploying the
+  station removes the case. Found in phase 2 by reading, not walked.
+- **A machine linked to several homes ends a badge at the wrong one.**
+  `killBadge` goes to the machine's birth-default home. When a sheep's
+  canvas lives at another home, the kill is refused there and the rc
+  reports the badge as already ended. Found in phase 2 by reading.
 
 ## Open doors
 

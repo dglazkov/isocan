@@ -4,9 +4,10 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phases 0 and 1 closed 10 September. Phase 2 is built
-and waits for its walk; its sheep verb, `sheep rm`, is on sheep's main
-([sheep#1](https://github.com/dglazkov/sheep/issues/1), closed).** Three steps below wait on the sheep side and
+**Where we are: phases 0 to 2 closed, 10 and 11 September. Phase 3,
+the week with the bill, is next and needs the shepherd (⚑); so does
+redeploying sheep-2, which predates `sheep rm` and cannot end a sheep
+until it is.** Three steps below wait on the sheep side and
 are marked ⇢ with the journey filed there. Three more journeys are filed
 for findings phase 1 works around rather than waits on, and one for what
 phase 1 found:
@@ -117,7 +118,23 @@ that would connect them.
 
 ## Phase 2 — Withdrawal, and the cost of a cold turn
 
-**Status: BUILT, not yet walked (2026-09-10).**
+**Status: CLOSED (2026-09-11).** Journey 4 walked by the conductor on
+two sheep homes against the scratch canvas at dev.isocan.io, with the
+pass route deployed there. On a local sheep home (Docker, the faux
+model) `rc remove` ended the sheep, `sheep ls` came back empty, the
+pasture stayed with a herd of none, the row went, and the pass read back
+through the laptop's replica said it was never redeemed; re-enrolling
+birthed a new sheep into the kept pasture and said it would not remember
+the first. On sheep-2, a station deployed before sheep's end verb, a new
+agent's first turn redeemed its pass, `isocan badges` listed the cell as
+`cell (Shirley's sheep)`, and `rc remove` during a 90-second turn aborted
+it, said the station cannot end a sheep, kept the pasture, and ended the
+cell's badge by name; no system voice reached the thread. The same
+station's phase-1 agent, whose row had no pass, was withdrawn with the
+sentence naming `isocan badges --kill`. That walk found the aborted turn
+exiting cleanly, which the parked rc logged as "turn ended"; it now
+reads as a withdrawal, with a test. The walk left Timmy's and Shirley's
+sheep, and a probe, idle on sheep-2 until it can end them.
 
 **Outcome:** `agent.withdraw` for a sheep-harnessed agent aborts a
 running turn, ends the sheep for good, leaves the pasture and says so,

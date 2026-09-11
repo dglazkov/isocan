@@ -13,8 +13,9 @@
 //
 // Three switches live in the state file itself, so a test sets them before
 // anything runs: `attachMs` makes a turn take that long, with the sheep
-// "busy" meanwhile, and a turn ended or aborted under it exits 1 the way a
-// real attach does; `newMs` makes a birth take that long; `oldHome` answers
+// "busy" meanwhile; a turn under a sheep that is ended exits 1, and one
+// stopped by `abort` exits 0, which is what a real attach did when a
+// station's `sheep abort` stopped it (walked 11 Sep 2026); `newMs` makes a birth take that long; `oldHome` answers
 // `rm` the way a station deployed before
 // sheep's end verb does ("not found" for a sheep it has). The current home's
 // answer to an id it does not have is its own sentence, and both are exit 2.
@@ -102,8 +103,8 @@ if (verb === "ls") {
   const id = argv[argv.indexOf("--") - 1];
   if (!find(id)) await finish(2, `sheep: no session ${id}`);
   if (state.attachMs) {
-    // A turn that takes a while: busy while it runs, and stopped — exit 1,
-    // no reply — when `rm` or `abort` lands under it.
+    // A turn that takes a while: busy while it runs, and stopped with no
+    // reply when `rm` (exit 1) or `abort` (exit 0) lands under it.
     find(id).state = "busy";
     save();
     const until = Date.now() + state.attachMs;
@@ -111,7 +112,7 @@ if (verb === "ls") {
       await new Promise((resolve) => setTimeout(resolve, 50));
       state = load();
       if (!find(id)) await finish(1, "sheep: the session ended");
-      if (find(id).state !== "busy") await finish(1, "sheep: the turn was aborted");
+      if (find(id).state !== "busy") await finish(0, "");
     }
     state = load();
     find(id).state = "idle";
