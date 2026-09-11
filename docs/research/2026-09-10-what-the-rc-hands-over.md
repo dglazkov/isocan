@@ -2,16 +2,18 @@
 status: partial
 since: 2026-09-10
 see: on-demand, harnesses, agent-custody, standing-agents
-note: layer 1 built 11 Sep — permissions answered by kind (allow_once, else the agent's reject; a mode switch is never chosen), and the adapter's environment is a list (a process's needs, ISOCAN_*, the vendors' namespaces, config.json's `adapterEnv` hook) instead of the whole shell. Measured 10 Sep — a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, and codex forced to full access because its sandbox refused loopback; any admitted member of a shared canvas can ring. The srt spike ran on Linux 11 Sep — the fence holds, the daemon is reachable through the proxy, a real Claude turn completed under srt through the rc, sessions resume — with five things a wrapper must know (srt's bridge dies silently on a kernel without IPv6 until its listener is IPv4; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys and the registry allowed for `npx`; `~/.claude` re-allowed). macOS and codex nested still unmeasured. Still owed — a reach word on the enrolment translated per harness, the second-user recipe, and owner-only summons
+note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS is the one gating measurement left — `scripts/spike-srt.sh` is it in one command — and codex nested with it. Still owed: a reach word on the enrolment translated per harness, the second-user recipe, owner-only summons
 ---
 
 # What the rc hands over, and how to hand over less
 
-**10 September 2026.** Research. **Layer 1 built 11 September** — permissions
-answered by kind and the environment as a list, both in `acp.ts`, with
-`config.json`'s `adapterEnv` hook for what the list does not know
-(`harnesses.ts`). Layers 2 and 3, the second-user recipe and the consent
-default are owed.
+**10 September 2026.** Research. **Layers 1 and 3 built 11 September.**
+Layer 1 is in `acp.ts`: permissions answered by kind, the environment as a
+list, with `config.json`'s `adapterEnv` hook for what the list does not
+know. Layer 3 is `sandbox.ts`: `isocan rc --sandbox`, written from what the
+measurement below found rather than from the documentation. Layer 2, the
+second-user recipe and the consent default are owed — and so is the macOS
+half of the measurement, which `scripts/spike-srt.sh` exists to get.
 
 > "I realise that when I run rc and give it my harness... it pretty much has
 > access to my entire system :)"
@@ -176,7 +178,17 @@ entry schema has no permission fields either. `session/set_mode` and
 ### Layer 3 — an operating-system boundary around the adapter
 
 For pi, for Claude's non-Bash tools, and for anyone who wants the fence to
-hold whatever the harness does.
+hold whatever the harness does. **Built 11 September** as
+`packages/cli/src/sandbox.ts`: `isocan rc --sandbox` (or `{"sandbox": true}`
+in `config.json`, with `--unsandboxed` to override) wraps every adapter
+spawn, on both dispatch paths, in a policy derived from the enrolment — the
+row's directory, `~/.isocan`, `/tmp` and the harness's own config to write;
+the rest of `$HOME` denied; the daemon's address and the harness's vendor
+domains to reach. Asking for a fence this machine cannot build is a
+refusal that names what is missing, never a quiet unfenced run, and
+`isocan harness` says in advance whether a machine could fence at all. The
+survey below is what that was chosen from; the measurement that shaped it
+is further down.
 
 **`@anthropic-ai/sandbox-runtime` (`srt`)** — the same engine Claude Code's
 `/sandbox` uses, published as a library (v0.0.75 on 1 Sep; "research
@@ -263,10 +275,8 @@ backends and would still need their files mounted.
 
 ## Recommendation
 
-1. **Now, with no decision needed:** answer permissions by kind and
-   allow-list the environment. Both are one function each in `acp.ts`,
-   both are the difference between "everything you have" and "what a
-   harness needs to run", and neither changes what works.
+1. ~~**Now, with no decision needed:** answer permissions by kind and
+   allow-list the environment.~~ Built 11 September, both in `acp.ts`.
 2. **Give the enrolment a word for reach.** The rc half of the record
    (`rc-agents.json`) says how and where; it should also say how far —
    one field, two values: the enrolment's directory (default) or the
@@ -278,12 +288,12 @@ backends and would still need their files mounted.
 3. **Spike codex loopback** under `agent` mode with the network-proxy
    config. If it passes, the full-access line goes; if it fails, the
    finding is the bug report codex needs.
-4. **Spike `srt` around the adapter** on both platforms, with the CLI's
-   WebSocket to the daemon as the first test. If it holds, it is the
-   `machine`-or-`directory` word enforced from outside the harness, which
-   is the only place it holds for pi and for Claude's non-Bash tools. Gate
-   it on the dependencies being present and say "unsandboxed" plainly when
-   they are not — the same `failIfUnavailable` posture Claude Code takes.
+4. ~~**Spike `srt` around the adapter**~~ — done on Linux, and built:
+   `isocan rc --sandbox`. What is left is the macOS run
+   (`scripts/spike-srt.sh`), which decides whether the fence becomes the
+   default rather than an opt-in. The dependency gate went in as a refusal
+   rather than a warning, which is stricter than this line first proposed:
+   one word cannot also mean its opposite.
 5. **Write the second-user recipe** in `docs/`, and point at Docker
    Sandboxes for anyone who wants a VM. Neither costs code.
 6. **Close the consent door** in agent-custody: owner-only summons by
@@ -394,14 +404,26 @@ answered "Hi! What are you working on today?" and `end_turn`.
 and has no login. On Linux codex sandboxes with Landlock and seccomp, not
 `sandbox-exec`, so the nesting question is macOS's; unmeasured.
 
+**A sixth thing, found while building the wrapper.** srt must be readable
+INSIDE its own fence. `npx -y @anthropic-ai/sandbox-runtime` dies with "No
+such file or directory" naming its own seccomp helper at a path that is
+plainly on disk — because the npx cache lives under `$HOME` and the policy
+denies `$HOME`, so srt's files vanish in the mount namespace srt itself
+just built. Re-allowing the npm cache fixes it, and the same trap catches a
+global install under nvm or fnm. Hence two things in the wrapper: it
+resolves srt's package root and adds it to `allowRead`, and it looks for
+srt on the PATH rather than fetching it.
+
 **What this settles.** Layer 3 is real on Linux: the fence holds, the
 daemon is reachable, the adapter runs, sessions resume. The cost is a
-wrapper that knows five things — the IPv4 listener (until upstream fixes
+wrapper that knows six things — the IPv4 listener (until upstream fixes
 it), `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside, npm's proxy keys
-and the registry domain for `npx`, and the harness's own directory
-re-allowed — and a dependency check for `bwrap` and `socat` with an
-"unsandboxed" line when they are absent. macOS is still unmeasured, and
-the recommendation stands: adopt when step 1 holds there too.
+and the registry domain for `npx`, the harness's own directory re-allowed,
+and srt's own files re-allowed — and a dependency check that refuses rather
+than running open. **Built the same day** as
+`packages/cli/src/sandbox.ts`. macOS is still unmeasured, and the
+recommendation stands: make the fence the default when step 1 holds there
+too.
 
 ## What this leaves open
 
@@ -413,10 +435,21 @@ the recommendation stands: adopt when step 1 holds there too.
   unverified; the docs were unreachable.
 - pi's proposed native `--mode acp` with an ask/code option (discussion
   #4444, July 2026): merged or not.
-- srt on macOS: step 1 with `allowLocalBinding` and with the IP literal;
-  codex nested inside it. On Linux, whether pi's and codex's own clients
-  honour the proxy variables the way the isocan CLI does. Whether srt's
-  IP-literal allow-list resolves Claude Code issue #28018 (loopback
-  blocked in the Bash sandbox, open as of February).
+- **srt on macOS — the one measurement that gates the default.**
+  `scripts/spike-srt.sh` is that measurement in one command: step 1, step 2,
+  and with `--harness codex` step 3, against a throwaway daemon and home so
+  it touches nothing of the person's. It prints a table and the sentence to
+  paste back into this section. It also tries `allowLocalBinding`, which
+  isocan deliberately does not use, so a broken proxy path on macOS would
+  still be diagnosed rather than just failing.
+- Whether pi's and codex's own clients honour the proxy variables on Linux
+  the way the isocan CLI does; and whether srt's IP-literal allow-list
+  resolves Claude Code issue #28018 (loopback blocked in the Bash sandbox,
+  open as of February).
+- An upstream issue worth filing: srt's Linux bridge uses
+  `socat TCP-LISTEN`, which opens an IPv6 socket, and sends the listener's
+  output to `/dev/null` — so on a kernel without IPv6 it fails with no
+  diagnostic at all. `TCP4-LISTEN` is the one-word change that made the
+  spike work.
 - Keyring-backed logins (Antigravity, codex `keyring` mode) inside any
   fence that hides the secret service.

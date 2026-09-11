@@ -209,6 +209,74 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(adapterEnv("prj_1", "Sian", { source: shell })).not.toHaveProperty("MY_HARNESS_TOKEN");
   });
 
+  it("a fence asked for and not buildable is refused, not quietly run open", async () => {
+    // The rule the module's comment states: one word cannot also mean its
+    // opposite. On a machine that cannot fence, `--sandbox` fails and names
+    // what is missing — it does not start the agent with the person's reach.
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const refused = await isocan("rc", "turn", "--sandbox", "Sian", "hello");
+    expect(refused.code).toBe(1);
+    // This runner may be able to fence; only assert the shape it takes when
+    // it cannot, which is the half that must never be silent.
+    if (refused.stderr.includes("--sandbox was asked for")) {
+      expect(refused.stderr).toMatch(/srt is not on the PATH|bwrap|IPv6|ripgrep/);
+      expect(refused.stderr).not.toContain("turn ended");
+    }
+  }, 30_000);
+
+  /**
+   * **The fence, for real** — opt-in, because it needs a working srt and,
+   * on Linux, bubblewrap. `ISOCAN_REAL_SANDBOX=<srt command>` names one
+   * (a path, or a command line), and it is declared through
+   * `config.json`'s `sandboxCommand`, so this runs on a machine whose srt
+   * needs a wrapper — which is how it was first run: the 11 Sep spike's
+   * host has no IPv6, so its srt is a patched one the scan rightly refuses.
+   *
+   * What it pins is the pair of facts the whole layer rests on, in ONE
+   * turn: the daemon is still reachable from inside, and the person's home
+   * is not.
+   */
+  it.runIf(process.env.ISOCAN_REAL_SANDBOX)(
+    "a fenced adapter reaches the daemon, and cannot read the person's home",
+    async () => {
+      const canary = path.join(os.homedir(), ".isocan-fence-canary");
+      await fs.writeFile(canary, "the person's own file");
+      try {
+        await fs.writeFile(
+          path.join(home, "config.json"),
+          JSON.stringify({
+            acpAdapters: { fake: [process.execPath, fakeAcp] },
+            sandboxCommand: process.env.ISOCAN_REAL_SANDBOX!.trim().split(/\s+/),
+            // The scripted adapter and the CLI it runs live in the
+            // checkout, which is nobody's working directory — the hook
+            // doing exactly the job it exists for.
+            sandboxRead: [fileURLToPath(new URL("../../..", import.meta.url))],
+            adapterEnv: ["FAKE_ACP_*"],
+          }),
+        );
+        await isocan("rc", "add", "Sian", "--harness", "fake");
+        const run = await collect(
+          spawnCli(["rc", "turn", "--sandbox", "Sian", "hello"], {
+            FAKE_ACP_PROBE: canary,
+            FAKE_ACP_REPLY: "0",
+          }),
+        );
+        expect(run.stderr).toContain("fenced");
+        expect(run.stderr).toContain("turn ended — end_turn");
+        // Reachable: the adapter ran and the injected identity arrived, so
+        // the fence did not break the one connection the agent needs.
+        expect(run.stdout).toContain("env:agent:Sian");
+        // Fenced: the person's own file is not readable from inside, and
+        // the refusal is the filesystem's, not a guess.
+        expect(run.stdout).toMatch(/probe:refused:ENOENT|probe:refused:EACCES/);
+        expect(run.stdout).not.toContain("the person's own file");
+      } finally {
+        await fs.rm(canary, { force: true });
+      }
+    },
+    120_000,
+  );
+
   it("pi ships known: `--harness pi` resolves to the pi-acp adapter without config", async () => {
     // The registry's current pi-acp, pinned to the version the index names.
     expect(await adapterFor(home, "pi")).toMatchObject({

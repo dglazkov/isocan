@@ -10,7 +10,7 @@
 // can genuinely load what a first spawn created. FAKE_ACP_FAIL_FIRST_LOAD=1
 // makes the first session/load of a process fail the way a violently killed
 // session transiently does, to exercise the client's retry.
-import { readFileSync, writeFileSync } from "node:fs";
+import { promises as fsp, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 const STORE = "fake-acp-sessions.json";
@@ -193,8 +193,20 @@ function handle(msg) {
           }
         }
       }
+      // What a fenced adapter can still read, asked and answered in the
+      // turn's own text: the sandbox test probes a canary in the person's
+      // home, which a fence makes unreadable while the daemon stays
+      // reachable. Absent, this says nothing.
+      let probe = "";
+      if (process.env.FAKE_ACP_PROBE) {
+        probe = await fsp
+          .readFile(process.env.FAKE_ACP_PROBE, "utf8")
+          .then((read) => `read:${read.trim()}`)
+          .catch((err) => `refused:${err.code ?? "?"}`);
+      }
       const text =
         `echo:${promptText} ` +
+        (probe ? `probe:${probe} ` : "") +
         `env:${process.env.ISOCAN_HARNESS ?? ""}:${process.env.ISOCAN_SESSION_ID ?? ""} ` +
         `resumed:${loaded.has(params.sessionId)} ` +
         `permission:${outcome?.outcome?.optionId ?? "?"}`;
