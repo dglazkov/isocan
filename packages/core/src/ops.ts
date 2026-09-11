@@ -10,6 +10,12 @@ import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./m
  * first-class inverse.
  */
 
+/**
+ * A version as a client proposes it: `ItemVersion` without `createdAt` and
+ * `createdBy`, which the reducer stamps from the envelope (`toItemVersion`).
+ * The content goes by hash and the bytes travel separately, so the log
+ * records facts about files and never the files themselves.
+ */
 export interface NewVersion {
   id: string;
   blobHash: string;
@@ -47,6 +53,12 @@ export type Placement =
     }
   | { anchorItemId: string };
 
+/**
+ * A comment as its author sends it. `author` and `createdAt` are stamped
+ * from the envelope when it lands; `mentions` and `items` arrive already
+ * resolved, because what they resolve against is what the author could see
+ * (`Comment.mentions`), and that is known where the comment is written.
+ */
 export interface NewComment {
   id: string;
   body: string;
@@ -56,6 +68,12 @@ export interface NewComment {
   items?: string[];
 }
 
+/**
+ * An edit to the fields a canvas and an item share — title, description,
+ * properties — so `project.update` and `item.update` carry one shape and
+ * `invert.ts` computes one kind of inverse for both. `properties` merges, so
+ * taking a key away needs `removeProperties`; a merge alone never could.
+ */
 export interface MetaPatch {
   title?: string;
   description?: string;
@@ -64,6 +82,15 @@ export interface MetaPatch {
   removeProperties?: string[];
 }
 
+/**
+ * The vocabulary itself: the contract at the top of this file, as a type.
+ *
+ * An arm added here is a word both surfaces must now speak. The isomorphism
+ * check (`scripts/isomorphism.mjs`) asks whether the CLI can send it, and the
+ * architect persona bounds how many there are through `measure.mjs op-types`,
+ * which counts the distinct `type` literals in this union and nothing else in
+ * the file — so a neighbouring type can be reshaped without moving it.
+ */
 export type Operation =
   // ---- actors ----
   | {
@@ -374,6 +401,12 @@ export type Operation =
       actorId: string;
     };
 
+/**
+ * The vocabulary as names alone. Derived rather than listed, so it cannot
+ * disagree with the union — and `INTERNAL_OP_TYPES` is typed against it,
+ * which makes a misspelt name there a compile error instead of an op that is
+ * quietly never treated as internal.
+ */
 export type OperationType = Operation["type"];
 
 /** Ops the engine accepts directly from clients (everything non-internal). */
@@ -385,6 +418,12 @@ export const INTERNAL_OP_TYPES: ReadonlySet<OperationType> = new Set([
   "thread.restore",
 ]);
 
+/**
+ * An operation as the daemon logs and broadcasts it. The op is what was asked
+ * for; the envelope is what the engine wrapped it in — its own id and its own
+ * clock (`newOpId`, `ts`), the actor it is recorded against, the connection
+ * it came from — so every timestamp in a log comes from one clock.
+ */
 export interface OpEnvelope {
   /** Op id (nanoid). */
   id: string;
@@ -399,6 +438,12 @@ export interface OpEnvelope {
   op: Operation;
 }
 
+/**
+ * One line of a canvas's oplog: the op as applied, and the inverse computed
+ * from the state before it. That is what makes undo an ordinary op rather
+ * than a second vocabulary — undoing applies the stored inverse, and `cause`
+ * says which entry it undid.
+ */
 export interface LogEntry {
   /** Monotonic per canvas. */
   seq: number;

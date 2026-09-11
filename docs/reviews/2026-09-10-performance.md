@@ -12,7 +12,7 @@ Run by `scripts/persona-run.mjs` at `86cc4cb`. **Nothing was changed.**
 | Finding | Outcome |
 | --- | --- |
 | the entry chunk a first visit downloads is 645806, past 640000 | unanswered |
-| bytes past the last size somebody agreed to is 4706, past 0 | unanswered |
+| bytes past the last size somebody agreed to is 4706, past 0 | accepted — see the 8 September row: the ceiling moves to 646,844, with its reason in `scripts/bundle-ceiling.mjs`. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

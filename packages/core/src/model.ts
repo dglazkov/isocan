@@ -7,6 +7,13 @@
  * an Actor is created, not this model.
  */
 
+/**
+ * Who did something, as stamped on what they did.
+ *
+ * `name` is the name at the time — a log entry, not an identity — so anything
+ * that has to survive a rename stores `id` and looks the name up, which is
+ * why reactions and mentions hold ids (`Item.reactions` says so at length).
+ */
 export interface Actor {
   id: string;
   name: string;
@@ -34,6 +41,11 @@ export function isSystemActor(actorId: string): boolean {
   return actorId.startsWith("sys_");
 }
 
+/**
+ * The canvas RECORD — title, properties, who touched it last — as opposed to
+ * what is on it, which is `CanvasContents`. The wire and the disk still call
+ * this `project`, for the reason `CanvasState` gives.
+ */
 export interface Canvas {
   id: string;
   title: string;
@@ -72,6 +84,16 @@ export interface Canvas {
   lastOp?: string;
 }
 
+/**
+ * What a version looks like, when that is a different file from what it is:
+ * the visual face of a dual-face artifact (#215).
+ *
+ * The source stays in `ItemVersion.blobHash`, so `isocan get` and `isocan
+ * save` go on round-tripping it, while the card, fullscreen and the stage
+ * draw this. `filename` and `size` may be left out and fall back to the
+ * source's in `visualFaceOf`. A second blob per version is also a second
+ * thing gc has to count as in use, which it did not at first (#223).
+ */
 export interface VisualFace {
   /** sha256 of visual content; stored at blobs/<hash>.<ext> */
   blobHash: string;
@@ -80,6 +102,12 @@ export interface VisualFace {
   size?: number;
 }
 
+/**
+ * One file an item has been. Content-addressed — `blobHash` names the bytes —
+ * and never edited in place: no operation changes a version once it exists,
+ * so a change is a new version and an item's history is a stack rather than
+ * an overwrite.
+ */
 export interface ItemVersion {
   id: string;
   /** sha256 of content; stored at blobs/<hash>.<ext>. The source face of the artifact. */
@@ -147,6 +175,12 @@ export function hasDistinctVisualFace(version: ItemVersion): boolean {
   return version.visual !== undefined && version.visual.blobHash !== version.blobHash;
 }
 
+/**
+ * One thing on a canvas: a box in world coordinates, wearing its current
+ * version. No client can take a version away — `item.removeVersion` is
+ * internal, there only so adding one can be undone — so replacing an
+ * artifact never loses the one it replaced.
+ */
 export interface Item {
   id: string;
   /** World coordinates, top-left corner. */
@@ -233,6 +267,11 @@ export interface CommentThread {
   createdBy: Actor;
 }
 
+/**
+ * An item after deletion, kept whole with who deleted it and when, so
+ * `item.restore` puts back exactly what was there. `trash.empty` is what
+ * finally forgets it, and it has no inverse.
+ */
 export interface TrashEntry {
   item: Item;
   deletedAt: string;
@@ -255,6 +294,11 @@ export interface EnrolledAgent {
   rules?: unknown;
 }
 
+/**
+ * What is ON a canvas — items, threads, the trash, standing agents — as
+ * opposed to the record about it (`Canvas`). It is what `canvas.json` holds
+ * on disk.
+ */
 export interface CanvasContents {
   items: Record<string, Item>;
   threads: Record<string, CommentThread>;
@@ -280,6 +324,11 @@ export interface CanvasState {
   canvas: CanvasContents;
 }
 
+/**
+ * A new canvas's contents. `agents` is set even though the type lets it be
+ * absent: that optionality is for snapshots already on disk, not permission
+ * for a new canvas to leave it out.
+ */
 export function emptyCanvas(): CanvasContents {
   return { items: {}, threads: {}, trash: [], agents: {} };
 }

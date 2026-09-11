@@ -52,9 +52,24 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * measure working as intended: it asked, somebody read, and the answer was
  * "thirty of these, not a hundred and eight".
  *
- * ## Why the ceiling is 331
+ * **331 → 315 on 10 Sep 2026, by documenting the model and the vocabulary.**
+ * `model.ts` and `ops.ts` are the other half of the contract `protocol.ts`
+ * is: what a canvas, an item, a version and an operation ARE, as both
+ * surfaces hold them. Seven types and a constructor in the model and seven
+ * types in the vocabulary had nothing saying what they were for — `Operation`
+ * among them, the one type the isomorphism is written against. The sixteenth
+ * is `overlaps`, which #228 named as owed along with `VisualFace`.
  *
- * It is the measurement after that pass — the same trade
+ * Done for room rather than tidiness. A ratchet sitting exactly at its
+ * ceiling reddens on the next bare export, and 332 would also have outgrown
+ * the answer covering the reviewer's finding (accepted at 301, so good to
+ * 331.1 and no further) — one export turning one red test into four. Sixteen
+ * sentences that each say something is the honest way to buy that room;
+ * raising the ceiling was the other way.
+ *
+ * ## Why the ceiling is 315
+ *
+ * It is the measurement after the second pass — the same trade
  * `test/bundle-budget.test.ts` and `test/unused-exports.test.ts` make, for
  * the same reason: a test asserting the goal would redden the trunk on every
  * commit and be turned off within the day.
@@ -63,7 +78,7 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * declares, so the suite and the nightly can never answer differently for one
  * name (`docs/reviews/lessons.md` #5).
  */
-const CEILING = 331;
+const CEILING = 315;
 const GOAL = 253;
 
 describe("exports with no comment above them", () => {

@@ -95,6 +95,46 @@
  * asked, this is the sentence, and the half of the raise that was avoidable
  * was avoided before it was written down.
  *
+ * **641,100 → 646,844 on 10 Sep, and the first 1,305 bytes were over before
+ * the ceiling was written.** 5,744 bytes past it, and building every commit
+ * since the last raise accounts for all of them:
+ *
+ * - **1,305 predate the number they were meant to fit under.** #214, areas
+ *   that grow to fit their items, cost 1,304 bytes of core and landed while
+ *   the 641,100 raise was in flight. That raise's own commit builds to
+ *   642,405 — 641,100 plus #214, to within a byte — which is what measuring
+ *   before a rebase and committing after it looks like. Nobody chose those
+ *   bytes; the sentence that should have covered them was written without
+ *   them.
+ * - **2,263 for #221**, telling an agent whose word wakes it: the rules in
+ *   core's `inbox.ts` and the row that shows them, the only two files it
+ *   touched.
+ * - **1,053 for #215's dual faces** — a version learning a second face, and
+ *   the card, the thumbnail and the viewer choosing which one to draw.
+ * - **888 for the Site address field** (#231 and the commit after it):
+ *   keeping an incomplete address editable, and saying nothing about one
+ *   until it is one.
+ * - **235 in four small pieces**: the rail's tooltips (#234, 138), the
+ *   embed's badge (#222, 78), a held Z letting go (#233, 12) and the overlay
+ *   slot (7).
+ *
+ * What it did NOT cost is the home peek. #224 and #226 rebuilt hover on the
+ * home page and moved this number by nothing, because that page is split out
+ * of the entry.
+ *
+ * Accepted rather than chased, by decision: each piece is a feature somebody
+ * asked for, none is the eager import JUMP exists to stop, and the gate did
+ * its job — it asked on three nights and waited for a sentence. The part
+ * worth keeping is the first bullet. A raise measured on one tree and
+ * committed on another agrees to a number no build produced, so measure after
+ * the rebase, not before it.
+ *
+ * It is also the fourth raise in this register, against two reductions, and
+ * it leaves the goal 6,844 bytes away. By the rule `test/bundle-budget.test.ts`
+ * wrote on 6 Sep — three justified raises, then a session taking bytes out —
+ * this one should have been that session. It was decided otherwise today, so
+ * the rule falls to whoever next finds this number over.
+ *
  * The second gate only works because the queue reaches `main` now and an
  * answer covers the nights that repeat it. Before 7 Sep it would have been a
  * warning into a void.
@@ -102,7 +142,7 @@
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 641_100;
+export const CEILING = 646_844;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

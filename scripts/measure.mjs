@@ -74,15 +74,42 @@ const METRICS = {
       },
     },
   },
+  /**
+   * **Operations, not union arms.**
+   *
+   * This counted every line of `ops.ts` that opens a union arm at two spaces
+   * of indent, which meant the same thing only while `Operation` was the one
+   * union written that way. On 9 Sep 2026 #214 reformatted `Placement` from
+   * one line into two arms on two lines, adding no operation, and the number
+   * went 33 → 35: the architect's nightly reported the vocabulary past its
+   * bound for a change that never touched it (answered `rejected` on
+   * `docs/reviews/2026-09-10-architect.md`).
+   *
+   * So it reads the `Operation` union and nothing else — its declaration up
+   * to the next top-level `export` — and counts the distinct `type` literals
+   * in it, which is what an operation is. A reformat cannot move that, and
+   * neither can a neighbouring type.
+   */
   "op-types": {
     what: "operations in the vocabulary — every one is a fact both surfaces must speak",
     take() {
       const src = readFileSync(path.join(repo, "packages/core/src/ops.ts"), "utf8");
-      return (src.match(/^ {2}\| \{/gm) ?? []).length;
+      const start = src.search(/^export type Operation =/m);
+      // Throw rather than answer 0: a vocabulary this cannot find is a broken
+      // instrument, and `ratchet.mjs` reports it as one instead of as a pass.
+      if (start === -1) throw new Error("no `export type Operation =` in packages/core/src/ops.ts");
+      const rest = src.slice(start);
+      const end = rest.slice(1).search(/^export /m);
+      const union = (end === -1 ? rest : rest.slice(0, end + 1)).replace(/\/\*[\s\S]*?\*\//g, "");
+      return new Set([...union.matchAll(/\btype: "([^"]+)"/g)].map((m) => m[1])).size;
     },
     breakIt: {
       file: "packages/core/src/ops.ts",
-      apply: (t) => t + "\n// selftest\ntype Extra =\n  | { type: \"selftest.noop\" };\n",
+      // A new arm INSIDE the union. The first version appended a separate
+      // `type Extra` to the end of the file, which the whole-file count saw
+      // and the corrected one rightly does not — a selftest has to break the
+      // thing being measured, not something beside it.
+      apply: (t) => t.replace("export type Operation =", 'export type Operation =\n  | { type: "selftest.noop" }'),
     },
   },
   /**
@@ -177,23 +204,7 @@ const METRICS = {
      * sheet names, and the right answer there is to raise the bound WITH THE
      * REASON — which is what happened at 47.
      */
-    take() {
-      const css = readFileSync(path.join(repo, "packages/web/src/styles.css"), "utf8");
-      const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
-      const seen = new Map();
-      let copies = 0;
-      for (const [, body] of bare.matchAll(/\{([^{}]*)\}/g)) {
-        const decls = body
-          .split(";")
-          .map((d) => d.trim().replace(/\s+/g, " "))
-          .filter(Boolean);
-        if (decls.length < 3) continue;
-        const key = decls.sort().join(";");
-        if (seen.has(key)) copies += 1;
-        else seen.set(key, true);
-      }
-      return copies;
-    },
+    take: () => copiedRules().length,
     breakIt: {
       file: "packages/web/src/styles.css",
       // Paste the shared panel header back as a private copy — the exact
@@ -432,6 +443,7 @@ function scanExports(names = false) {
   let unused = 0;
   let bare = 0;
   const found = [];
+  const bareFound = [];
   for (const file of sources) {
     const src = bodies.get(file) ?? readFileSync(path.join(repo, file), "utf8");
     const lines = src.split("\n");
@@ -441,7 +453,10 @@ function scanExports(names = false) {
       const name = m[1];
       // A comment on the line above — a block's `*/`, a `//`, or a continuation.
       const prev = (lines[i - 1] ?? "").trim();
-      if (!(prev.endsWith("*/") || prev.startsWith("//") || prev.startsWith("*"))) bare += 1;
+      if (!(prev.endsWith("*/") || prev.startsWith("//") || prev.startsWith("*"))) {
+        bare += 1;
+        if (names) bareFound.push(`${file}:${i + 1}  ${name}`);
+      }
       const word = new RegExp(`\\b${name}\\b`);
       let usedElsewhere = false;
       for (const [other, body] of bodies) {
@@ -454,15 +469,65 @@ function scanExports(names = false) {
       }
     });
   }
-  return { unused, bare, found };
+  return { unused, bare, found, bareFound };
+}
+
+/**
+ * Every CSS rule body that repeats an earlier one, and where — one scan for
+ * the count and for `--names`, so the two cannot disagree about which copies
+ * there are.
+ *
+ * Comments are blanked rather than removed, keeping every newline where it
+ * was, so a line number printed here is a line number in the file.
+ */
+function copiedRules() {
+  const css = readFileSync(path.join(repo, "packages/web/src/styles.css"), "utf8");
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " "));
+  let line = 1;
+  let at = 0;
+  // Matches arrive in order, so the line count only ever walks forward.
+  const lineAt = (i) => {
+    for (; at < i; at++) if (bare[at] === "\n") line++;
+    return line;
+  };
+  const seen = new Map();
+  const copies = [];
+  for (const m of bare.matchAll(/\{([^{}]*)\}/g)) {
+    const decls = m[1]
+      .split(";")
+      .map((d) => d.trim().replace(/\s+/g, " "))
+      .filter(Boolean);
+    if (decls.length < 3) continue;
+    const key = decls.sort().join(";");
+    const opens = Math.max(bare.lastIndexOf("}", m.index - 1), bare.lastIndexOf("{", m.index - 1)) + 1;
+    const here = { line: lineAt(m.index), selector: bare.slice(opens, m.index).trim().replace(/\s+/g, " ") };
+    if (seen.has(key)) copies.push({ ...here, first: seen.get(key) });
+    else seen.set(key, here);
+  }
+  return copies;
 }
 
 const argv = process.argv.slice(2);
 
-// `unused-exports --names` prints the offenders rather than the count, so a
-// tripped ratchet is actionable without a second scan somewhere else.
-if (argv[0] === "unused-exports" && argv.includes("--names")) {
-  for (const line of scanExports(true).found) console.log(line);
+/**
+ * `--names` prints the offenders rather than the count, so a tripped ratchet
+ * is actionable without a second scan somewhere else.
+ *
+ * Three guards end their failure message by promising it, and until 10 Sep
+ * 2026 only `unused-exports` kept the promise: the other two ignored the flag
+ * and printed their count a second time, to somebody who had just been told
+ * the count and was asking which.
+ */
+const NAMES = {
+  "unused-exports": () => scanExports(true).found,
+  "undocumented-exports": () => scanExports(true).bareFound,
+  "copied-rules": () =>
+    copiedRules().map(
+      (c) => `packages/web/src/styles.css:${c.line}  ${c.selector}  (repeats :${c.first.line} ${c.first.selector})`,
+    ),
+};
+if (argv.includes("--names") && NAMES[argv[0]]) {
+  for (const line of NAMES[argv[0]]()) console.log(line);
   process.exit(0);
 }
 

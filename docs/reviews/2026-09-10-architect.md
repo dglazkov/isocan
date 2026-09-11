@@ -12,7 +12,7 @@ Run by `scripts/persona-run.mjs` at `86cc4cb`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| operations in the vocabulary is 35, past 33 | unanswered |
+| operations in the vocabulary is 35, past 33 | rejected — the vocabulary is still 33 and the bound held; the instrument miscounted. `op-types` counted every line of `ops.ts` that opens a union arm at two spaces of indent, and #214 (`c8213d7`) reformatted `Placement`, a neighbouring type and not an operation, from one line into a two-arm union across several. Those two arms (lines 40 and 48) scored as two new operations. The `Operation` union did not change and still carries 33 distinct `type` literals. The metric now reads that union alone and counts its `type` literals, so neither a reformat nor a neighbouring type can move it, and its selftest breaks the union itself rather than appending a type elsewhere in the file, which the corrected count would rightly ignore. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

@@ -58,6 +58,13 @@ export function anchorOffset(item: { width: number; height: number }): {
 /** Anything already taking up room — an item, or one just placed this pass. */
 export type Placed = Box;
 
+/**
+ * Whether two boxes come within `pad` of each other: the one collision test
+ * both placers ask — `nearestFreeSpot` here and the area placer in `area.ts`
+ * — so "clear of" is one distance wherever an item is put. The comparisons
+ * are strict, so boxes exactly `pad` apart are clear: the pad is room left,
+ * not room exceeded.
+ */
 export const overlaps = (a: Box, b: Box, pad: number): boolean =>
   a.x < b.x + b.width + pad &&
   b.x < a.x + a.width + pad &&

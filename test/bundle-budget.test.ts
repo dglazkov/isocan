@@ -106,6 +106,11 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * **The goal is now 96,800 bytes away**, and that is the debt this records.
  * Three of these raises have been justified individually; the fourth should
  * be somebody deciding to spend a session on shell code instead.
+ *
+ * It was: the entry below is that session, the same day (768,993 → 689,550).
+ * Seven more raises followed before the gate split on 7 Sep, and the register
+ * has lived in `scripts/bundle-ceiling.mjs` since — which is where to count
+ * raises now.
  */
 /**
  * **Lowered again, 727,300 → 690,000 — and the whole story is that nobody was
