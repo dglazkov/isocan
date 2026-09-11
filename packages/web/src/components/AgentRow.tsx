@@ -1,7 +1,17 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { AgentRow } from "@isocan/core";
-import { answeringExcerpt, listenWords, recentActivity, rulesOf, workbenchItemPath } from "@isocan/core";
+import {
+  LISTEN_ANYONE,
+  answeringExcerpt,
+  listenWords,
+  mayWake,
+  policyWords,
+  recentActivity,
+  rulesOf,
+  sameActor,
+  workbenchItemPath,
+} from "@isocan/core";
 import { quietFor } from "../lib/presence.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { goStage } from "../lib/goStage.ts";
@@ -9,7 +19,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { ItemThumb } from "./ItemThumb.tsx";
-import { useAnsweredAt } from "../lib/answerable.ts";
+import { useAnsweredAt, useRcPolicies } from "../lib/answerable.ts";
 import { useClockSecond } from "../lib/sprint.ts";
 
 /**
@@ -54,6 +64,8 @@ export function AgentRowView({
   following,
   onFollow,
   onDismiss,
+  viewer,
+  onListen,
 }: {
   canvasId: string;
   row: AgentRow;
@@ -79,6 +91,17 @@ export function AgentRowView({
    * the history — the op it sends says exactly that.
    */
   onDismiss?: () => void;
+  /** Who is reading — so the row can say *listens only to you*, and not
+   * invite a summons its reader cannot make (owner-only summons). */
+  viewer?: string;
+  /**
+   * **Widen or narrow whose word wakes it — the owner's control, the tray's
+   * only** (owner-only summons). Offered exactly when the reader is the
+   * person whose rc answers: `true` lets anyone admitted here ask, `false`
+   * puts it back to the owner alone. The same `agent.enroll` `isocan rc
+   * listen` sends, and the rc honours it because its owner wrote it.
+   */
+  onListen?: (open: boolean) => void;
 }) {
   // The peek is position:FIXED at a measured point — the roster scrolls,
   // and a peek positioned inside it gets clipped by the scroll box (the
@@ -107,9 +130,26 @@ export function AgentRowView({
    * so the tray and `isocan who` cannot word it differently.
    */
   const names = useActorNames();
-  const gate = listenWords(rulesOf(canvas?.agents?.[row.actorId]?.rules), (id) =>
-    actorNameIn(names, { id, name: id }),
-  );
+  const joined = useCanvasStore((s) => s.actorJoins);
+  const policies = useRcPolicies(canvasId);
+  const nameOf = (id: string) => actorNameIn(names, { id, name: id });
+  /**
+   * **Since owner-only summons (11 Sep 2026) the answering rc SAYS whose word
+   * it takes**, with its hold, and that is what this row reads — the policy
+   * dispatch applies, not the stored field it was derived from. An agent
+   * nothing answers for has only its stored gate to show.
+   */
+  const policy = row.state === "answerable" ? policies[row.actorId] : undefined;
+  const gate = policy
+    ? policyWords(policy, nameOf, viewer, joined)
+    : listenWords(rulesOf(canvas?.agents?.[row.actorId]?.rules), nameOf);
+  /** The reader is outside the gate: a summons from them would be turned
+   * away, so the row must not promise one. */
+  const shut = policy !== undefined && viewer !== undefined && !mayWake(policy, viewer, joined);
+  /** The reader is the owner — the one person who may widen it. */
+  const owns = policy !== undefined && viewer !== undefined && sameActor(joined, policy.owner.id, viewer);
+  const openToAll = policy?.listen.includes(LISTEN_ANYONE) ?? false;
+  const ownerName = policy ? nameOf(policy.owner.id) : "";
 
   // An enrolled row is a RECORD made visible (agents-on-demand phase 2.5):
   // standing to answer here, no session because nothing has arrived. Not
@@ -147,9 +187,11 @@ export function AgentRowView({
               exactly like the weakest, "nobody is home". The dot is what a
               person scans; the sentence is what they read afterwards, if at
               all. Answerable gets a centre. */}
+          {/* Ready only for a reader whose word it takes: to somebody outside
+              the gate "a summons WILL land" is the one thing that is false. */}
           <span
-            className={`wb-dot hollow${row.state === "answerable" ? " ready" : ""}`}
-            style={{ borderColor: color, ...(row.state === "answerable" ? { color } : {}) }}
+            className={`wb-dot hollow${row.state === "answerable" && !shut ? " ready" : ""}`}
+            style={{ borderColor: color, ...(row.state === "answerable" && !shut ? { color } : {}) }}
             aria-hidden
           />
           <span className="wb-row-name">
@@ -162,17 +204,38 @@ export function AgentRowView({
                 into a fact, and it warns on its own at four minutes without
                 anybody writing a warning. */}
             {row.state === "answerable"
-              ? heardFrom
-                ? `answers if you comment · heard ${heardFrom} ago`
-                : "answers if you comment"
+              ? shut
+                ? /* Owner-only summons: no promise to a reader the rc will
+                     turn away — who it answers, and who can change that. */
+                  `${gate ?? `listens only to ${ownerName}`} — ask ${ownerName} to let you in`
+                : heardFrom
+                  ? `answers if you comment · heard ${heardFrom} ago`
+                  : "answers if you comment"
               : row.lastAct
                 ? `${describeAct(row.lastAct.kind, row.lastAct.subject)} · ${ago(row.lastAct.at)}`
                 : "enrolled — nobody is listening right now"}
             {/* Qualifies the promise above rather than replacing it: "answers
-                if you comment" is simply false for anyone outside the gate,
-                and this is the sentence that says so before they type. */}
-            {gate && <em> · {gate}</em>}
+                if you comment" is true only inside the gate, and this is the
+                sentence that says whose — *listens only to you*, to its
+                owner. */}
+            {gate && !shut && <em> · {gate}</em>}
           </span>
+          {owns && onListen && (
+            <button
+              className="wb-listen"
+              title={
+                openToAll
+                  ? `Only you can wake ${row.name} again — its turns spend your tokens on your machine`
+                  : `Let anyone admitted here wake ${row.name} — its turns spend your tokens on your machine`
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                onListen(!openToAll);
+              }}
+            >
+              {openToAll ? "Only me" : "Let anyone ask"}
+            </button>
+          )}
           {onDismiss && (
             <button
               className="wb-dismiss"

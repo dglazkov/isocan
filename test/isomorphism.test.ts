@@ -75,10 +75,17 @@ describe("every shared fact is an operation either surface can send", () => {
   });
 
   it("does not mistake writing ABOUT an operation for sending it", () => {
-    /* `AddAgent.tsx` explains that "the `agent.enroll` op lands" and does not
-       send it — enrolment is a handshake the rc completes (agent-custody). A
-       reading that counted prose would report the web as able to enrol. */
-    expect(mentionedIn("packages/web/src").has("agent.enroll")).toBe(false);
+    /* `OnIt.tsx` explains that retracting a request "is `comment.remove`" and
+       never sends it — it is internal, reached only as undo's inverse. A
+       reading that counted prose would report the web as able to send it.
+
+       This guard read `agent.enroll` until 11 Sep 2026, when the web began
+       sending it for real: the owner's "Let anyone ask" on their own agent's
+       row re-enrols it with a wider gate (owner-only summons), the same op
+       `isocan rc listen` sends. Adding an agent is still the rc's handshake —
+       `agenttray.test.ts` pins that the add dialog never sends the op. */
+    expect(mentionedIn("packages/web/src").has("comment.remove")).toBe(false);
+    expect(mentionedIn("packages/web/src").has("agent.enroll")).toBe(true);
     expect(mentionedIn("packages/cli/src").has("agent.enroll")).toBe(true);
   });
 

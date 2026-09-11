@@ -1,6 +1,6 @@
 import type { ActorJoins } from "./identity.js";
 import type { CommentThread } from "./model.js";
-import type { PresenceSession } from "./protocol.js";
+import type { PresenceSession, RcPolicy } from "./protocol.js";
 /**
  * **Did the thing you asked for actually reach anybody.**
  *
@@ -69,6 +69,17 @@ export type SummonsState =
     state: "unanswered";
     waitedMs: number;
     rcParked: boolean;
+}
+/**
+ * The rc that answers for this agent does not take this asker's word
+ * (owner-only summons, 11 Sep 2026). Known the moment the ask is made, not
+ * after the bound, and never counted as *nothing answered*: nothing was
+ * asked of the agent at all — the gate turned the ask away, and the
+ * sentence names the one person who can change that.
+ */
+ | {
+    state: "refused";
+    policy: RcPolicy;
 };
 /**
  * Where one summons stands.
@@ -80,7 +91,11 @@ export declare function summonsState(summons: {
     actorId: string;
     threadId: string;
     askedAt: number;
+    /** Who asked — needed to read the policy. Absent: the old reading. */
+    askerId?: string;
 }, seen: {
+    /** What the answering rc announced for this agent, if anything did. */
+    policy?: RcPolicy | undefined;
     /** Live sessions, as the facepile has them. */
     sessions: readonly PresenceSession[];
     /** The thread as it stands, for a reply that beat presence. */
@@ -103,7 +118,9 @@ export declare function summonsState(summons: {
  * copy persona's rule applies: name what happened, and when it is bad, say
  * which bad thing.
  */
-export declare function summonsLine(name: string, state: SummonsState): string;
+export declare function summonsLine(name: string, state: SummonsState, 
+/** For a refusal: resolves the owner's and the gate's names. */
+nameOf?: (actorId: string) => string | undefined): string;
 /**
  * **What to say when an agent was woken and has said nothing.**
  *

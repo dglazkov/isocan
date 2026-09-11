@@ -1,7 +1,7 @@
 import { textAttention } from "@isocan/core";
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { Capability, ClientMessage, PresenceSession, ServerMessage } from "@isocan/core";
+import type { Actor, Capability, ClientMessage, PresenceSession, RcPolicy, ServerMessage } from "@isocan/core";
 import {
   atLeast,
   narrowed,
@@ -21,7 +21,7 @@ import { admittingGrant, heldCapability } from "./grants.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
 import { isContentRequest } from "./content.ts";
 import { PresenceHub } from "./presence.ts";
-import type { RcHolds } from "./rc-holds.ts";
+import { type RcHolds, rcPoliciesOf } from "./rc-holds.ts";
 import type { SweepHub } from "./sweep.ts";
 
 /**
@@ -668,9 +668,34 @@ export function attachWebSockets(
             }
             allowed.add(actorId);
           }
+          // Owners are checked like faces (owner-only summons): a policy is
+          // a statement in its owner's name. Each policy is then re-made
+          // with the vouched owner, for relayed agents only.
+          const owners: Actor[] = [];
+          for (const owner of Array.isArray(message.owners) ? message.owners : []) {
+            if (!owner?.id || typeof owner.name !== "string") continue;
+            if (!vouched.has(owner.id)) {
+              const ok = await engine.requireActor(badgeId, owner.id).then(
+                () => true,
+                () => false,
+              );
+              if (!ok) continue;
+              vouched.add(owner.id);
+            }
+            owners.push({ id: owner.id, name: owner.name });
+          }
+          const policies: Record<string, RcPolicy> = {};
+          for (const [actorId, policy] of Object.entries(message.policies ?? {})) {
+            const owner = owners.find((o) => o.id === policy?.owner?.id);
+            if (!owner) continue;
+            const made = rcPoliciesOf({ [actorId]: policy }, allowed, owner);
+            if (made?.[actorId]) policies[actorId] = made[actorId];
+          }
           rc.mirror(relayOrigin, canvasId!, {
             parked,
             actorIds: allowed,
+            owners,
+            policies,
             // The return path for an ask: down this socket, to become a local
             // ask at the daemon whose rc is actually parked.
             sendAsk: (ask) => {

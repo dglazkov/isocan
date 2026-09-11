@@ -3155,6 +3155,16 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .wb-dismiss:hover { color: var(--ink); background: var(--chip); }
 
+/* Whose word wakes it, the owner's one control on their own agent's row
+   (owner-only summons): a quiet word, like Dismiss — widening spends the
+   reader's own tokens, so it is offered, never pressed on anybody. */
+.wb-listen {
+  flex: none; border: 1px solid var(--line); background: none; cursor: pointer;
+  color: var(--ink-soft); font: inherit; font-size: 11px; line-height: 1.2;
+  padding: 1px 6px; border-radius: 999px; white-space: nowrap;
+}
+.wb-listen:hover { color: var(--ink); background: var(--chip); }
+
 /* Follow's toggle, in the Chat's own header because that is what it follows.
    Quiet when off and wearing the accent when on: this moves the canvas on
    somebody's behalf, so whether it is armed has to be readable at a glance

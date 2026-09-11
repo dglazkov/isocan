@@ -219,6 +219,22 @@ export interface EnrolledAgent {
     actor: Actor;
     /** Opaque until phase 4 defines the vocabulary; stored as handed over. */
     rules?: unknown;
+    /**
+     * **Who wrote the enrolment as it stands** — the author of the last
+     * `agent.enroll` for this actor, stamped by the reducer from the envelope
+     * the way an item's `updatedBy` is (owner-only summons, 11 Sep 2026).
+     *
+     * It exists because `rules.listen` is a consent fact written into a record
+     * every admitted member can write: without it, "answers only its owner" is
+     * one hand-made `agent.enroll` away from "answers everyone", and the rc
+     * could not tell the owner's widening from a stranger's. The rc that
+     * answers honours a stored gate only when this is its owner's word (or an
+     * actor speaking from the owner's machine); anyone else's write reads as
+     * owner-only there. Absent on rows written before the stamp, which the rc
+     * takes as they stand — until that day the only verbs that wrote a gate ran
+     * on the machine that answers.
+     */
+    writtenBy?: Actor;
 }
 export interface CanvasContents {
     items: Record<string, Item>;

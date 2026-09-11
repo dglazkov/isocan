@@ -107,6 +107,8 @@ import {
   normalizeSubject,
   NO_ATTESTER,
   NO_RC_CODE,
+  NOT_YOUR_RC_CODE,
+  sameActor,
   NOT_YOUR_BADGE,
   OplogFencedError,
   OpValidationError,
@@ -191,7 +193,7 @@ import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
 import type { ParkCursors } from "./park.ts";
 import { DocRefusal, fetchGoogleDoc, type GoogleToken } from "./google.ts";
-import { RcHolds } from "./rc-holds.ts";
+import { RcHolds, rcPoliciesOf } from "./rc-holds.ts";
 import { isContentPath, isContentRequest, registerContentRoutes, type ContentSigning } from "./content.ts";
 import { signedBlobPath } from "./content-auth.ts";
 import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
@@ -3424,10 +3426,26 @@ export function registerRoutes(
    */
   const rc = options.rc ?? new RcHolds();
   app.post("/api/rc/hold", async (req) => {
-    const body = (req.body ?? {}) as { canvasId?: string; actorIds?: string[]; waitMs?: number };
+    const body = (req.body ?? {}) as Partial<import("@isocan/core").RcHoldRequest>;
     const canvasId = body.canvasId ?? "";
     const actorIds = new Set((body.actorIds ?? []).filter((a) => typeof a === "string"));
-    const hold = rc.hold(canvasId, actorIds, Math.min(Number(body.waitMs) || 0, 55_000));
+    // **Whose rc this is** (owner-only summons), believed only for an actor
+    // the holding badge may speak as — "Sian listens only to Nico" is said in
+    // Nico's name, and an ask to add an agent is routed by it. A hold never
+    // fails for want of the label: an rc that cannot say whose it is simply
+    // is not announced as anybody's.
+    const owner =
+      body.owner?.id && typeof body.owner.name === "string"
+        ? await engine.requireActor(req.badge!.badgeId, body.owner.id).then(
+            () => ({ id: body.owner!.id, name: body.owner!.name }),
+            () => undefined,
+          )
+        : undefined;
+    const policies = owner ? rcPoliciesOf(body.policies, actorIds, owner) : undefined;
+    const hold = rc.hold(canvasId, actorIds, Math.min(Number(body.waitMs) || 0, 55_000), {
+      ...(owner ? { owner } : {}),
+      ...(policies ? { policies } : {}),
+    });
     req.raw.on("close", hold.release);
     const asks = await hold.done;
     return { ok: true, asks };
@@ -3469,7 +3487,23 @@ export function registerRoutes(
       return reply.code(403).send({ error: `this badge may not speak as ${body.from.id}` });
     }
     const ask = { askId: newId("ask"), name, from: body.from };
-    if (!rc.ask(id, ask)) {
+    // Owner-only: an rc takes an ask from its owner — or anybody joined with
+    // them, which is why the comparison is made here, with the registry.
+    const joined = await engine.actorJoins();
+    const isOwner = (owner: import("@isocan/core").Actor, askerId: string) =>
+      sameActor(joined, owner.id, askerId);
+    if (!rc.ask(id, ask, isOwner)) {
+      const owners = rc.answering(id).owners;
+      if (owners.length > 0) {
+        const names = owners.map((o) => o.name);
+        const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`;
+        return reply.code(403).send({
+          error:
+            `the isocan rc parked here is ${who}'s, and adding an agent to a machine is its owner's gesture — ` +
+            `ask ${who} to add it, or run \`isocan rc\` on a machine of your own`,
+          code: NOT_YOUR_RC_CODE,
+        });
+      }
       return reply.code(409).send({
         error:
           "no `isocan rc` is parked on this canvas — someone with the project checked out runs one, and this gesture appears",

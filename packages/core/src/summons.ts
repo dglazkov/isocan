@@ -1,6 +1,7 @@
 import type { ActorJoins } from "./identity.ts";
 import type { Comment, CommentThread } from "./model.ts";
-import type { PresenceSession } from "./protocol.ts";
+import type { PresenceSession, RcPolicy } from "./protocol.ts";
+import { mayWake, policyWords } from "./inbox.ts";
 
 /**
  * **Did the thing you asked for actually reach anybody.**
@@ -59,7 +60,15 @@ export type SummonsState =
    * is a broken agent, where no rc at all is nobody home. The two want
    * different sentences and different next moves.
    */
-  | { state: "unanswered"; waitedMs: number; rcParked: boolean };
+  | { state: "unanswered"; waitedMs: number; rcParked: boolean }
+  /**
+   * The rc that answers for this agent does not take this asker's word
+   * (owner-only summons, 11 Sep 2026). Known the moment the ask is made, not
+   * after the bound, and never counted as *nothing answered*: nothing was
+   * asked of the agent at all — the gate turned the ask away, and the
+   * sentence names the one person who can change that.
+   */
+  | { state: "refused"; policy: RcPolicy };
 
 /**
  * Where one summons stands.
@@ -68,8 +77,16 @@ export type SummonsState =
  * test can stand anywhere on the timeline without waiting.
  */
 export function summonsState(
-  summons: { actorId: string; threadId: string; askedAt: number },
+  summons: {
+    actorId: string;
+    threadId: string;
+    askedAt: number;
+    /** Who asked — needed to read the policy. Absent: the old reading. */
+    askerId?: string;
+  },
   seen: {
+    /** What the answering rc announced for this agent, if anything did. */
+    policy?: RcPolicy | undefined;
     /** Live sessions, as the facepile has them. */
     sessions: readonly PresenceSession[];
     /** The thread as it stands, for a reply that beat presence. */
@@ -86,6 +103,16 @@ export function summonsState(
   now: number,
 ): SummonsState {
   const waitedMs = Math.max(0, now - summons.askedAt);
+
+  // Turned away at the gate outranks the clock: there is nothing to wait
+  // for, and "asked" would be a promise the rc already declined.
+  if (
+    seen.policy &&
+    summons.askerId !== undefined &&
+    !mayWake(seen.policy, summons.askerId, seen.joined)
+  ) {
+    return { state: "refused", policy: seen.policy };
+  }
 
   // A reply outranks everything: it is the outcome the other states are
   // predicting, and an agent fast enough to answer before its presence
@@ -125,9 +152,21 @@ export function summonsState(
  * copy persona's rule applies: name what happened, and when it is bad, say
  * which bad thing.
  */
-export function summonsLine(name: string, state: SummonsState): string {
+export function summonsLine(
+  name: string,
+  state: SummonsState,
+  /** For a refusal: resolves the owner's and the gate's names. */
+  nameOf: (actorId: string) => string | undefined = () => undefined,
+): string {
   const secs = (ms: number) => `${Math.max(1, Math.round(ms / 1000))}s`;
   switch (state.state) {
+    case "refused": {
+      // Never "nothing answered": nothing was asked of the agent. The gate
+      // turned the ask away, and the owner is the one person who can change
+      // that — so the sentence ends with them.
+      const owner = nameOf(state.policy.owner.id) ?? state.policy.owner.name;
+      return `${name} ${policyWords(state.policy, nameOf) ?? "listens to everyone"} — this did not wake ${name}. Ask ${owner} to widen it.`;
+    }
     case "asked":
       return `asked ${name}`;
     case "picked-up":

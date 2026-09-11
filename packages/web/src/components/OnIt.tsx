@@ -1,7 +1,9 @@
 import {
   ANSWER_WITHIN_MS,
   listeners,
+  refusedMentions,
   summonedBy,
+  summonsLine,
   waitingLine,
   wokenLine,
   workersOn,
@@ -9,6 +11,8 @@ import {
   type CommentThread,
 } from "@isocan/core";
 import { undo } from "../lib/api.ts";
+import { useRcPolicies } from "../lib/answerable.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { makeComment } from "./CommentLayer.tsx";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -49,6 +53,10 @@ export function OnIt({
   // Above the early returns: a hook's order may not depend on whether anybody
   // happens to be working right now.
   const second = useClockSecond();
+  const policies = useRcPolicies(canvasId);
+  const joined = useCanvasStore((s) => s.actorJoins);
+  const agents = useCanvasStore((s) => s.canvas?.agents);
+  const names = useActorNames();
   const working = workersOn(sessions, thread.id);
 
   if (working.length > 0) {
@@ -83,6 +91,31 @@ export function OnIt({
   // the thread IS the ask, so its timestamp is when you asked.
   const last = thread.comments[thread.comments.length - 1];
   const waitedMs = last ? Math.max(0, second * 1000 - Date.parse(last.createdAt)) : 0;
+
+  /**
+   * **Turned away at the gate** (owner-only summons, 11 Sep 2026). An agent
+   * you named whose rc does not take your word will not pick this up, and
+   * the rc will say so in the thread a moment from now — but "Sent" or a
+   * clock here meanwhile would be a promise already broken. Known the
+   * instant the ask lands, from the policy the rc announced; never counted
+   * as "nothing answered", because nothing was asked of the agent at all.
+   */
+  const refused = refusedMentions(last?.mentions, actor.id, policies, joined);
+  if (refused.length > 0) {
+    const nameOf = (id: string) => actorNameIn(names, { id, name: id });
+    return (
+      <div className="onit waiting" aria-live="polite">
+        {refused.map(({ actorId, policy }) => (
+          <div className="onit-row" key={actorId}>
+            <span className="onit-dot idle" />
+            <span>
+              {summonsLine(agents?.[actorId]?.actor.name ?? nameOf(actorId), { state: "refused", policy }, nameOf)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   // Woken, but not a word yet. Worth saying on its own: it is the difference
   // between "did that go anywhere?" and "give it a second". It also needs

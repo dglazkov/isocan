@@ -303,6 +303,7 @@ function Roster({
           open={openRow === row.actorId}
           focused={focused}
           onToggle={() => setOpenRow(openRow === row.actorId ? null : row.actorId)}
+          viewer={viewer}
         />
       ))}
       <SectionResizer value={rosterH} onChange={setRosterH} label="Resize the agent list" />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Actor, RcPolicy } from "@isocan/core";
 
 import { fetchRcAnswering } from "./api.ts";
 import { everyWhileVisible } from "./whilevisible.ts";
@@ -41,6 +42,15 @@ interface Answering {
    * anybody writing a warning.
    */
   at: number;
+  /**
+   * **Whose word each answerable agent takes, and whose rcs are parked**
+   * (owner-only summons, 11 Sep 2026). The rc announces its policy with its
+   * hold, and this is the same poll carrying it: a row must not invite a
+   * summons its reader cannot make, and the add dialog is its owner's.
+   * Empty from a daemon older than the announcement.
+   */
+  policies: Readonly<Record<string, RcPolicy>>;
+  owners: readonly Actor[];
 }
 
 interface Watch {
@@ -53,7 +63,7 @@ interface Watch {
 
 const watches = new Map<string, Watch>();
 
-const NOBODY: Answering = { parked: false, ids: new Set(), at: 0 };
+const NOBODY: Answering = { parked: false, ids: new Set(), at: 0, policies: {}, owners: [] };
 
 function useAnswering(canvasId: string | null): Answering {
   const [state, setState] = useState<Answering>(
@@ -78,7 +88,13 @@ function useAnswering(canvasId: string | null): Answering {
     const read = () => {
       fetchRcAnswering(canvasId)
         .then((r) => {
-          here.state = { parked: r.parked === true, ids: new Set(r.actorIds), at: Date.now() };
+          here.state = {
+            parked: r.parked === true,
+            ids: new Set(r.actorIds),
+            at: Date.now(),
+            policies: r.policies ?? {},
+            owners: r.owners ?? [],
+          };
           for (const listener of here.listeners) listener(here.state);
         })
         .catch(() => {
@@ -132,4 +148,17 @@ export function useRcParked(canvasId: string | null): boolean {
  */
 export function useAnsweredAt(canvasId: string | null): number {
   return useAnswering(canvasId).at;
+}
+
+/** Whose word each answerable agent takes (`RcPolicy`, announced by its rc).
+ * An answerable agent missing here is held by an rc older than owner-only
+ * summons. Same poll, one question. */
+export function useRcPolicies(canvasId: string | null): Readonly<Record<string, RcPolicy>> {
+  return useAnswering(canvasId).policies;
+}
+
+/** The people whose rcs are parked here — who the add dialog is for. Empty
+ * means nobody said, which an older rc never did. */
+export function useRcOwners(canvasId: string | null): readonly Actor[] {
+  return useAnswering(canvasId).owners;
 }

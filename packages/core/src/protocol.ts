@@ -193,7 +193,17 @@ export type ClientMessage =
    * `presence-relay`, and the home checks every actor id against the relaying
    * badge's claims for the same reason it checks relayed faces.
    */
-  | { type: "rc-relay"; parked: boolean; actorIds: string[] };
+  | {
+      type: "rc-relay";
+      parked: boolean;
+      actorIds: string[];
+      /** The owners of the rcs parked behind this daemon, and the policy
+       * each applies per relayed agent (owner-only summons). The home checks
+       * every owner against the relaying badge's claims, as it checks faces:
+       * "Sian listens only to Nico" is a claim made in Nico's name. */
+      owners?: Actor[];
+      policies?: Record<string, RcPolicy>;
+    };
 
 // ---- presence sessions ----
 
@@ -483,6 +493,24 @@ export interface RcAsk {
   from: Actor;
 }
 
+/**
+ * **Whose word one agent's rc honours** — owner-only summons (decided
+ * 11 Sep 2026; `docs/research/2026-09-10-what-the-rc-hands-over.md`,
+ * recommendation 6). The rc computes it (`answerPolicy`), applies it at
+ * dispatch, and ANNOUNCES it with its hold, so the web and `isocan who` can
+ * say who may summon before anybody tries — a gate only the rc could read
+ * would be the silent gate the sheepdog design refuses.
+ */
+export interface RcPolicy {
+  /** The person whose machine answers — whose tokens a summons spends. The
+   * machine's home identity; always admitted, and through `actor.join` so is
+   * anybody they are joined with. */
+  owner: Actor;
+  /** Who else may wake it: `[]` nobody else (the default), `["*"]` everyone
+   * admitted here, otherwise actor ids. */
+  listen: string[];
+}
+
 /** An rc parking against the home: hold this connection open, and wake me
  *  if somebody rings for one of these agents. */
 export interface RcHoldRequest {
@@ -490,6 +518,12 @@ export interface RcHoldRequest {
   /** The agents this rc currently answers for — answerable while held. */
   actorIds: string[];
   waitMs: number;
+  /** The person this rc answers to — its machine's home identity. Absent from
+   * an rc older than owner-only summons, which answered everyone. The daemon
+   * believes it only for an actor the holding badge may speak as. */
+  owner?: Actor;
+  /** Per held agent, the policy the rc applies (`RcPolicy`). */
+  policies?: Record<string, RcPolicy>;
 }
 
 /** The hold returning — nearly always empty, because the interesting
@@ -507,6 +541,14 @@ export interface RcHoldResponse {
 export interface RcAnsweringResponse {
   parked: boolean;
   actorIds: string[];
+  /** The people whose rcs are parked here, as each announced itself. Absent
+   * from a daemon older than owner-only summons. An rc takes an ask to add an
+   * agent only from its owner, so this is who the add dialog is for. */
+  owners?: Actor[];
+  /** Per answerable agent, whose word wakes it (`RcPolicy`). An answerable
+   * agent with no entry is held by an rc older than owner-only summons, which
+   * answers everyone its canvas-state gate admits. */
+  policies?: Record<string, RcPolicy>;
 }
 
 /** The doorbell: somebody wants an agent by name, on this canvas. */
@@ -525,6 +567,11 @@ export interface RcAskResponse {
  * the Web UI should not have offered the gesture (the gate), but a gate is a
  * poll and an rc can die between polls. */
 export const NO_RC_CODE = "no-rc";
+
+/** The ask route's refusal when every rc parked here belongs to somebody
+ * else (owner-only summons): an rc runs what its owner says, and adding an
+ * agent to a machine is its owner's gesture. The error names them. */
+export const NOT_YOUR_RC_CODE = "not-your-rc";
 
 // ---- a client older than this home ----
 

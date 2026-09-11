@@ -2,7 +2,7 @@ import type { Server } from "node:http";
 import { Engine } from "./engine.js";
 import type { Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
-import type { RcHolds } from "./rc-holds.js";
+import { type RcHolds } from "./rc-holds.js";
 import type { SweepHub } from "./sweep.js";
 /**
  * Per-canvas rooms. Server→client: snapshot on connect, op-applied per

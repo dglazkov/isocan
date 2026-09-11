@@ -2,6 +2,7 @@ import type { Actor, CanvasContents, Comment, CommentThread } from "./model.js";
 import type { NewComment, Operation } from "./ops.js";
 import type { MentionCandidate } from "./mentions.js";
 import type { ActorJoins } from "./identity.js";
+import type { RcPolicy } from "./protocol.js";
 /**
  * **What is addressed to you, wherever it landed.**
  *
@@ -99,11 +100,13 @@ export interface AgentRules {
      * everything, `wait --all-ops`'s spelling. */
     ops?: string[];
     /**
-     * **Whose word wakes this agent** — actor ids. Absent, empty, or
-     * `["*"]` means anyone admitted here, which is what every enrolment
-     * written before this field means and what a team's agent wants; a list
-     * is a NARROWING (`docs/research/2026-09-04-sheepdog.md`, "whom it
-     * listens to").
+     * **Whose word wakes this agent** — actor ids, read at the rc that answers
+     * for it by `answerPolicy`. Absent or empty means **its owner alone** — the
+     * person whose machine answers — which is owner-only summons, the default
+     * since 11 Sep 2026 (from 9 to 11 Sep it meant anyone admitted). A list
+     * admits the owner and those people; `["*"]` admits everyone, what a team's
+     * agent wants (`docs/research/2026-09-04-sheepdog.md`, "whom it listens
+     * to").
      *
      * It is a gate on the SPEAKER, and `items`/`ops` are filters on what
      * changed — a different question, which is why it is a third field here
@@ -124,31 +127,144 @@ export declare const LISTEN_ANYONE = "*";
  * summons. */
 export declare function rulesOf(raw: unknown): AgentRules;
 /**
- * **Does this agent's gate admit that speaker?**
+ * **Does this agent's gate admit that speaker — with no owner in sight?**
  *
- * The predicate on its own, because two surfaces ask it for two reasons:
- * `dispatchReason` asks it to decide a turn, and a facepile asks it to say
- * *listens to Dion* beside a name. A gate one of them applied and the other
- * could not describe is the failure the sheepdog design names first — *"a
- * silent gate: a person mentions a sheepdog that does not listen to them
- * and nothing says so."*
+ * The reading of `listen` for a caller that answers for nobody else: a
+ * `wait` park is its own session, run by the person at its keyboard, so it
+ * has no owner to protect and absent still admits everyone there. The rc,
+ * which spends somebody's tokens on somebody's machine, reads the same field
+ * through `answerPolicy` instead, where absent means its owner alone.
  *
- * No gate is the default and stays the default: an enrolment with no
- * `listen` admits everyone, so nothing written before this field goes deaf.
+ * A gate one surface applied and another could not describe is the failure
+ * the sheepdog design names first — *"a silent gate: a person mentions a
+ * sheepdog that does not listen to them and nothing says so"* — which is why
+ * the rc announces its policy with its hold and `policyWords` says it.
  */
 export declare function listensTo(rules: AgentRules | null | undefined, authorId: string, 
 /** The registry's joins, when the caller holds them — a gate naming
  * `Dimitri 2` must still admit Dimitri. */
 joined?: ActorJoins): boolean;
 /**
- * How every surface says the gate — null when there is none to say, so a
- * caller can append it without asking whether there is anything to append.
+ * How a surface says a STORED gate when no rc is in sight to say its policy
+ * (`policyWords` is the words once one is) — null when there is none to say,
+ * so a caller can append it without asking whether there is anything to
+ * append. With nobody answering, the stored list is all there is to read.
  *
  * `nameOf` resolves an actor id to the name that reader would show; ids are
  * the fallback, never a blank, because a gate nobody can read is the silent
  * gate wearing a different hat.
  */
 export declare function listenWords(rules: AgentRules | null | undefined, nameOf: (actorId: string) => string | undefined): string | null;
+/**
+ * **Owner-only summons** (decided 11 Sep 2026; issue #238, the rc research
+ * note's recommendation 6, agent-custody's open question).
+ *
+ * A summoned turn runs on the rc owner's machine and spends the rc owner's
+ * tokens, and until this any member admitted to a shared canvas could start
+ * one. `rc --sandbox` bounds what a turn may REACH; this bounds who may START
+ * one, and a shared canvas makes it the sharper question of the two.
+ *
+ * **The owner** is the person whose machine answers: the rc's home identity
+ * (`~/.isocan/identity.json`, the actor its badge holds under `home:person`).
+ * Not whoever enrolled the agent — an agent can enrol an agent, and the web's
+ * add is an ask the rc completes — but whose bill it is, which only the
+ * machine can say. Compared through `actor.join`, so the same person under a
+ * second, joined identity is the owner too.
+ *
+ * **The owner's hands** are every other actor the owner's machine speaks as —
+ * the agents its rc runs, the person's own interactive sessions. Their word
+ * counts as the owner's: they run on the owner's machine and the owner's
+ * tokens already, a chain of them is bounded by the cycle guard, and without
+ * it two agents on one laptop could no longer ask each other anything.
+ *
+ * **The default is the owner alone.** `listen` absent or empty now means
+ * exactly that (it meant everyone from 9 to 11 Sep); a list admits the owner
+ * AND those people; `["*"]` admits everyone, which is what a team's agent
+ * wants and is now said out loud with `isocan rc listen <name> --to everyone`.
+ *
+ * **Only the owner's word widens.** The gate lives in a record every admitted
+ * member can write, so the rc reads it only when `writtenBy` is the owner's
+ * word; anybody else's enrolment reads as owner-only there. A stranger can
+ * still make an agent do less (withdraw it, narrow nothing into something) —
+ * the canvas may narrow; it may never spend.
+ */
+export interface Keeping {
+    owner: Actor;
+    /** Actor ids the owner's machine speaks as — `actorBindings()` on the rc's
+     * badge, plus the agents it answers for. */
+    hands?: readonly string[];
+}
+/** Is this actor the owner, or one of the owner's hands? */
+export declare function ownersWord(keeping: Keeping, actorId: string, joined?: ActorJoins): boolean;
+/**
+ * What a stored enrolment means at the rc that answers for it — the policy it
+ * applies AND the one it announces with its hold, computed once so the two
+ * cannot differ.
+ */
+export declare function answerPolicy(rules: AgentRules | null | undefined, keeping: Keeping, 
+/** `EnrolledAgent.writtenBy`'s id; undefined for a row older than the
+ * stamp, which is taken as it stands. */
+writtenBy: string | undefined, joined?: ActorJoins): RcPolicy;
+/** Whether a gate was set aside because somebody other than the owner wrote
+ * it — so the rc can SAY why it answers only its owner, rather than seeming
+ * to ignore a gate everybody can read. */
+export declare function gateSetAside(rules: AgentRules | null | undefined, keeping: Keeping, writtenBy: string | undefined, joined?: ActorJoins): boolean;
+/** Does this policy admit that speaker? `hands` is the rc's own knowledge
+ * and never crosses the wire; a reader without it asks about people. */
+export declare function mayWake(policy: RcPolicy, authorId: string, joined?: ActorJoins, hands?: readonly string[]): boolean;
+/**
+ * **Whose word an agent's turn carries** — the provenance `onBehalfOf`
+ * reads. For each author of the entries that started the turn: an agent the
+ * rc runs contributes the speakers ITS turn carried (followed as far as the
+ * rc has seen), anybody else contributes themselves. An agent with nothing
+ * recorded — started by its owner's machine, or before this rc began —
+ * speaks for itself, which is its owner's hand.
+ */
+export declare function speakersFor(authorIds: readonly string[], carried: (agentId: string) => ReadonlySet<string> | undefined): Set<string>;
+/**
+ * How every surface says a policy: *listens only to Nico*, *listens only to
+ * you*, *listens to Nico and Usama*, *listens to Nico and 2 others* — or null
+ * for everyone, when there is nothing to qualify. The same vocabulary as
+ * `listenWords`, so a tray, `isocan who` and a refusal in a thread all say
+ * one thing one way.
+ */
+export declare function policyWords(policy: RcPolicy, nameOf: (actorId: string) => string | undefined, 
+/** Who is reading, so the owner reads *you* rather than their own name. */
+viewerId?: string, joined?: ActorJoins): string | null;
+/**
+ * **Did the gate turn away a direct ask?** Only a MENTION is answered in
+ * words: somebody asked this agent by name and deserves to know why nothing
+ * came. The Chat being loud, or a reply in a thread the agent was once in,
+ * is the room talking, and an agent narrating every sentence it did not
+ * answer would be the noise the gate exists to spare.
+ */
+export declare function turnedAway(op: Operation, authorId: string, agent: {
+    actorId: string;
+    names: readonly MentionCandidate[];
+    policy: RcPolicy;
+    hands?: readonly string[];
+    joined?: ActorJoins | undefined;
+    onBehalfOf?: readonly string[] | undefined;
+}): boolean;
+/**
+ * The same question asked by a CLIENT, before or just after it posts: which
+ * of the agents this comment names will the answering rc turn away? Read
+ * against the policies the rcs announced (`RcAnsweringResponse.policies`),
+ * so the CLI's note and the web's line say what the rc will do rather than
+ * guessing at it. Agents with no announced policy are nobody's to predict.
+ */
+export declare function refusedMentions(mentions: readonly string[] | undefined, authorId: string, policies: Readonly<Record<string, RcPolicy>> | undefined, joined?: ActorJoins): {
+    actorId: string;
+    policy: RcPolicy;
+}[];
+/**
+ * The sentence a turned-away asker reads — the rc's system voice in the
+ * thread, the CLI's note after a comment, the web under it. It names the
+ * owner, because the owner is the only person who can change the answer, and
+ * it names the exact gesture, because "ask them to widen it" with no verb is
+ * a riddle.
+ */
+export declare function turnedAwayLine(agentName: string, policy: RcPolicy, nameOf: (actorId: string) => string | undefined, asker: string): string;
 /**
  * **THE routing composition, stated once** (agents-on-demand phase 4).
  * `reasonFor` is the is-this-for-me predicate; this is the whole rule a
@@ -176,6 +292,24 @@ export declare function dispatchReason(op: Operation, authorId: string, agent: {
     rules?: AgentRules | null | undefined;
     /** The registry's joins, when the caller holds them — see `addressesActor`. */
     joined?: ActorJoins | undefined;
+    /**
+     * Whose word wakes it, from the rc that answers for it (`answerPolicy`).
+     * When present it IS the gate, and the default it carries is the owner
+     * alone; absent — a `wait` park, which answers for itself — the gate is
+     * `rules.listen` read by `listensTo`.
+     */
+    policy?: RcPolicy | null | undefined;
+    /** The owner's hands (`Keeping.hands`), when the caller is the rc. */
+    hands?: readonly string[] | undefined;
+    /**
+     * **Whose word the author is carrying** — when the author is an agent
+     * the rc runs and its turn was started by somebody's ask, the people
+     * whose asks those were (`speakersFor`). The gate reads THEM, not the
+     * agent: otherwise a stranger turned away by an agent that listens only
+     * to its owner reaches it anyway, one hop later, through a sibling that
+     * listens to everyone. Absent: the author speaks for itself.
+     */
+    onBehalfOf?: readonly string[] | undefined;
 }, canvas: CanvasContents | null | undefined): InboxReason | "change" | null;
 export declare function inboxOn(canvas: CanvasContents, actor: Actor, names: readonly MentionCandidate[], canvasId: string, canvasTitle?: string, 
 /** The registry's joins, when the caller holds them — see `addressesActor`. */

@@ -31,6 +31,15 @@ const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 const dimitri = { id: "usr_dimitri", name: "Dimitri" };
 
+/**
+ * **A team's agent, said out loud** (owner-only summons, 11 Sep 2026). The
+ * summonses in this file come from Dimitri at the test badge, and the rc is
+ * Nico's — so an agent enrolled with nothing said answers Nico alone. Where a
+ * test is about something other than consent, its agent is opened to everyone
+ * explicitly; `dispatch.test.ts` pins what the default does.
+ */
+const TEAM = ["--listen", "everyone"];
+
 let home: string;
 let daemon: Daemon;
 let base: string;
@@ -250,24 +259,32 @@ describe("the enrolment record, in two halves", () => {
    * WRITTEN where every surface reads it, that one gesture reaches every
    * canvas the agent stands on, and that a person who looks can see it.
    */
-  it("`--listen me` writes the gate into canvas state and says so", async () => {
-    const run = await isocan("agent", "add", "Sian", "--listen", "me");
+  it("`--listen` writes the gate into canvas state and says so", async () => {
+    // Owner-only summons: with nothing said, an agent already listens to its
+    // owner alone — so the flag that means something now is a widening.
+    const plain = await isocan("agent", "add", "Percy");
+    expect(plain.stdout).toContain("listens only to you");
+    expect(plain.stdout).toContain("isocan rc listen Percy --to <names|everyone>");
+
+    const run = await isocan("agent", "add", "Sian", "--listen", "Dimitri");
     expect(run.code).toBe(0);
-    expect(run.stdout).toContain("listens to Nico");
+    expect(run.stdout).toContain("listens to you and Dimitri");
 
     const agents = await snapshotAgents();
     const row = Object.values(agents).find((a) => a.actor.name === "Sian") as
-      | { rules?: { listen?: string[] } }
+      | { rules?: { listen?: string[] }; writtenBy?: { id: string } }
       | undefined;
     // In canvas state, not a machine file: a gate a mentioner cannot see is
-    // the silent gate the design refuses.
-    expect(row?.rules?.listen).toEqual([nico.id]);
+    // the silent gate the design refuses — stamped with who wrote it, so the
+    // rc can tell its owner's widening from anybody else's.
+    expect(row?.rules?.listen).toEqual([dimitri.id]);
+    expect(row?.writtenBy?.id).toBe(nico.id);
 
     // And it is readable where somebody looks after being ignored.
     const who = await isocan("--canvas", "prj_1", "who");
-    expect(who.stdout).toContain("listens to Nico");
+    expect(who.stdout).toContain("listens to you and Dimitri");
     const rules = await isocan("--canvas", "prj_1", "agent", "rules", "Sian");
-    expect(rules.stdout).toContain("listens to Nico");
+    expect(rules.stdout).toContain("listens to you and Dimitri");
   });
 
   it("`rc listen --to` reaches every canvas the agent stands on, in one gesture", async () => {
@@ -279,12 +296,12 @@ describe("the enrolment record, in two halves", () => {
     await isocan("--canvas", "prj_1", "rc", "add", "Percy");
     await isocan("--canvas", "prj_2", "rc", "add", "Percy");
 
-    // No gate is where every enrolment starts — nothing written before this
-    // field goes deaf.
+    // Nothing written is where every enrolment starts — and since owner-only
+    // summons that means its owner alone, on both canvases.
     const before = await isocan("--json", "rc", "listen", "Percy");
     expect(JSON.parse(before.stdout).map((r: { listens: string }) => r.listens)).toEqual([
-      "everyone",
-      "everyone",
+      "listens only to you",
+      "listens only to you",
     ]);
 
     const set = await isocan("rc", "listen", "Percy", "--to", "me,Dimitri");
@@ -380,7 +397,7 @@ describe("the running rc — quiet start, events narrated", () => {
     expect(out).toContain("/p/prj_1");
 
     // An enrolment created by verb, noticed by the running rc — no restart.
-    await isocan("agent", "add", "Sian");
+    await isocan("agent", "add", "Sian", ...TEAM);
     await until(async () => out, (o) => o.includes("enrolled Sian"), "the enrolment narrated");
 
     // A summons is recognized, narrated — and since phase 4, ANSWERED: the
@@ -509,6 +526,19 @@ describe("the vocabulary divide, enforced", () => {
     expect(run.stderr).toContain("isocan agent");
   });
 
+  it("`rc listen --to` refuses inside a harness session — widening is the owner's gesture", async () => {
+    // Consent to spend somebody's tokens is not an agent's to give (owner-
+    // only summons): an agent a stranger can talk to must not be the thing
+    // that opens its owner's agents to strangers. Reading stays open.
+    await isocan("--canvas", "prj_1", "rc", "add", "Percy");
+    const widen = await collect(spawnCli(["rc", "listen", "Percy", "--to", "everyone"], { ISOCAN_SESSION_ID: "sess-1" }));
+    expect(widen.code).toBe(1);
+    expect(widen.stderr).toContain("the owner's gesture");
+    const agents = await snapshotAgents();
+    const row = Object.values(agents).find((a) => a.actor.name === "Percy") as { rules?: { listen?: string[] } } | undefined;
+    expect(row?.rules?.listen).toBeUndefined();
+  });
+
   it("`isocan agent add` refuses --canvas — the syntax is the containment", async () => {
     const run = await isocan("--canvas", "prj_1", "agent", "add", "Sian");
     expect(run.code).toBe(1);
@@ -593,8 +623,8 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
       actor: dimitri,
       op: { type: "project.create", canvasId: "prj_2", title: "Q" },
     });
-    await isocan("--canvas", "prj_1", "rc", "add", "Sian");
-    await isocan("--canvas", "prj_2", "rc", "add", "Sian");
+    await isocan("--canvas", "prj_1", "rc", "add", "Sian", ...TEAM);
+    await isocan("--canvas", "prj_2", "rc", "add", "Sian", ...TEAM);
 
     const rc = spawnCli(["rc", "--all"]);
     let out = "";
@@ -904,7 +934,7 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
   }, 30_000);
 
   it("a parked rc says where the sheep will live, and answers a summons from a cell", async () => {
-    await run("rc", "add", "Percy", "--harness", "sheep");
+    await run("rc", "add", "Percy", "--harness", "sheep", ...TEAM);
     const rc = spawnCli(["rc"], env);
     let out = "";
     rc.stdout!.setEncoding("utf8");
@@ -987,7 +1017,7 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
       });
 
     it("a parked rc's summons mints the sheep with --detach --secret and no prompt, and is its one attach", async () => {
-      await run("rc", "add", "Percy", "--harness", "sheep");
+      await run("rc", "add", "Percy", "--harness", "sheep", ...TEAM);
       const rc = spawnCli(["rc"], env);
       let out = "";
       rc.stdout!.setEncoding("utf8");
@@ -1166,7 +1196,7 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     it("mid-turn at a parked rc: the turn is aborted and reads as a withdrawal — no failure, no system voice, no retry", async () => {
       // A turn that takes a minute, so the withdrawal lands under it.
       await fs.writeFile(stateFile, JSON.stringify({ sessions: [], pastures: {}, entries: {}, next: 1, attachMs: 60_000 }));
-      await run("rc", "add", "Percy", "--harness", "sheep");
+      await run("rc", "add", "Percy", "--harness", "sheep", ...TEAM);
       const { rc, seen, done } = parked();
       await until(async () => seen.out, (o) => o.includes("Percy's sheep will live at"), "the rc to come up");
       await post("/api/ops", {
@@ -1211,7 +1241,7 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
       // which read as "turn ended — end_turn" until the dispatch the
       // withdraw branch dropped was consulted too.
       await fs.writeFile(stateFile, JSON.stringify({ sessions: [], pastures: {}, entries: {}, next: 1, attachMs: 60_000, oldHome: true }));
-      await run("rc", "add", "Percy", "--harness", "sheep");
+      await run("rc", "add", "Percy", "--harness", "sheep", ...TEAM);
       const { rc, seen, done } = parked();
       await until(async () => seen.out, (o) => o.includes("Percy's sheep will live at"), "the rc to come up");
       await post("/api/ops", {
@@ -1306,7 +1336,7 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
 
     it("withdrawn while its sheep is being born: the summons ends the sheep it birthed, and runs no turn", async () => {
       await fs.writeFile(stateFile, JSON.stringify({ sessions: [], pastures: {}, entries: {}, next: 1, newMs: 3_000 }));
-      await run("rc", "add", "Percy", "--harness", "sheep");
+      await run("rc", "add", "Percy", "--harness", "sheep", ...TEAM);
       const { actorId } = (await rcRows()).find((r) => r.name === "Percy")!;
       const { rc, seen, done } = parked();
       await until(async () => seen.out, (o) => o.includes("Percy's sheep will live at"), "the rc to come up");

@@ -47,10 +47,28 @@ describe("the roster says what it knows, with an age on it", () => {
     /* D3: "the difference a person acts on must be visible without reading."
        A centre fills the ring — something is in there — and it stays the
        actor's colour, so the dot still says WHO as well as what. */
-    expect(row).toMatch(/wb-dot hollow\$\{row\.state === "answerable" \? " ready" : ""\}/);
+    /* …and since owner-only summons (11 Sep 2026), only for a reader whose
+       word it takes: to somebody outside the gate "a summons WILL land" is
+       the one thing that is false. */
+    expect(row).toMatch(/wb-dot hollow\$\{row\.state === "answerable" && !shut \? " ready" : ""\}/);
     expect(css).toContain(".wb-dot.hollow.ready");
     const rule = css.slice(css.indexOf(".wb-dot.hollow.ready"), css.indexOf(".wb-dot.hollow.ready") + 120);
     expect(rule, "the actor's colour, not a new one").toContain("currentColor");
+  });
+
+  it("carries whose word each agent takes, on the same poll (owner-only summons)", () => {
+    // The rc announces its policy with its hold; the row reads THAT — the
+    // value dispatch applies — and the add dialog reads whose rc it is.
+    expect(poll).toMatch(/policies: r\.policies \?\? \{\}/);
+    expect(poll).toContain("export function useRcPolicies");
+    expect(poll).toContain("export function useRcOwners");
+    expect(row).toMatch(/policyWords\(policy, nameOf, viewer, joined\)/);
+    // No promise to a reader the rc will turn away: who it answers, and who
+    // can change that, instead of "answers if you comment".
+    expect(row).toMatch(/shut\s*\?/);
+    expect(row).toContain("to let you in");
+    // The owner's widening is offered to the owner only.
+    expect(row).toMatch(/owns && onListen/);
   });
 
   it("does not make them differ by text alone", () => {

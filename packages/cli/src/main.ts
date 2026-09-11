@@ -7,8 +7,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 import type {
+  ActorJoins,
   AgentRules,
   EnrolledAgent,
+  RcPolicy,
   Persona,
   RunFinding,
   InboxEntry,
@@ -271,6 +273,16 @@ import {
   namesFor,
   PARK_ADOPTED_CODE,
   dispatchReason,
+  answerPolicy,
+  gateSetAside,
+  ownersWord,
+  policyWords,
+  mayWake,
+  refusedMentions,
+  sameActor,
+  speakersFor,
+  turnedAway,
+  turnedAwayLine,
   isSystemActor,
   LISTEN_ANYONE,
   listenWords,
@@ -10033,7 +10045,92 @@ async function newComment(
 ): Promise<NewComment> {
   // The API's one spelling (`buildComment`), so a mention posted from a
   // script and from this CLI resolve identically (iso-api phase 2).
-  return buildComment(ctx.client, canvasId, snapshot, body);
+  const comment = await buildComment(ctx.client, canvasId, snapshot, body);
+  await noteTurnedAway(ctx, canvasId, snapshot, comment.mentions);
+  return comment;
+}
+
+/**
+ * **Said before it is sent: an agent that will not take your word**
+ * (owner-only summons, 11 Sep 2026). A mention of an agent whose answering rc
+ * does not listen to you would otherwise be a comment that summons nothing
+ * and says nothing — the rc answers it in the thread a moment later, but the
+ * person (or agent) typing deserves the sentence here, where they are
+ * looking. On stderr, so `--json` stays one document; the comment still
+ * posts, because words to a canvas are never refused for being unanswerable.
+ *
+ * Read against the policies the rcs announced, the same value dispatch
+ * applies. A CLI on the owner's own machine is the owner's hands and is never
+ * told this — it would be told wrongly.
+ */
+async function noteTurnedAway(
+  ctx: Ctx,
+  canvasId: string,
+  snapshot: CanvasSnapshotResponse,
+  mentions: readonly string[] | undefined,
+): Promise<void> {
+  const agents = snapshot.canvas.agents ?? {};
+  if (!(mentions ?? []).some((id) => agents[id])) return;
+  const answering = await ctx.client.rcAnswering(canvasId).catch(() => null);
+  const person = await readIdentity(ctx.home).catch(() => null);
+  const nameOf = nameResolver(snapshot);
+  for (const { actorId, policy } of refusedMentions(mentions, ctx.actor.id, answering?.policies, snapshot.joined)) {
+    if (person && sameActor(snapshot.joined, policy.owner.id, person.id)) continue;
+    const name = agents[actorId]?.actor.name ?? nameOf(actorId) ?? actorId;
+    console.error(`note: ${turnedAwayLine(name, policy, nameOf, ctx.actor.name)}`);
+  }
+}
+
+/**
+ * **Whose word wakes a standing agent, in the words every surface uses** —
+ * `who`, `agent rules` and `rc listen` read it here so the three cannot word
+ * one gate three ways.
+ *
+ * The policy an answering rc ANNOUNCED comes first: it is what will happen.
+ * With no rc answering, an agent this machine answers for is read as this
+ * machine's rc would read it (its person the owner, its enrolments the
+ * hands); anybody else's agent has only its stored gate to show, and
+ * `sayDefault` decides whether its absence is spelled out.
+ */
+/** Who is reading, for "listens only to you" — or nobody yet: a read must
+ * not demand a name (`ctx.actor` throws with no identity). */
+function viewerIdOf(ctx: Ctx): string | undefined {
+  try {
+    return ctx.actor.id;
+  } catch {
+    return undefined;
+  }
+}
+
+function gateOf(
+  record: EnrolledAgent,
+  snapshot: CanvasSnapshotResponse,
+  policies: Readonly<Record<string, RcPolicy>> | undefined,
+  here: { person: Actor | null; rows: readonly RcAgentRow[]; canvasId: string },
+  viewerId: string | undefined,
+  sayDefault: boolean,
+): { policy: RcPolicy | null; words: string | null } {
+  const nameOf = nameResolver(snapshot);
+  const rules = rulesOf(record.rules);
+  const ours = here.rows.some((r) => r.canvasId === here.canvasId && r.actorId === record.actor.id);
+  const policy =
+    policies?.[record.actor.id] ??
+    (ours && here.person
+      ? answerPolicy(
+          rules,
+          { owner: here.person, hands: [here.person.id, ...here.rows.map((r) => r.actorId)] },
+          record.writtenBy?.id,
+          snapshot.joined,
+        )
+      : null);
+  if (policy) return { policy, words: policyWords(policy, nameOf, viewerId, snapshot.joined) };
+  const stored = listenWords(rules, nameOf);
+  if (stored) return { policy: null, words: `${stored} (and whoever runs its rc)` };
+  const open = (rules.listen ?? []).includes(LISTEN_ANYONE);
+  return {
+    policy: null,
+    words: sayDefault && !open ? "listens only to whoever runs its rc (the default)" : null,
+  };
 }
 
 /** One projection for browser selections, CLI quotes, and comment resolution. */
@@ -10545,31 +10642,41 @@ program
        * when the record stands but nobody is listening. Three readings,
        * distinguishable without knowing how any of it works.
        */
-      const answering = new Set(
-        (await ctx.client.rcAnswering(p.id).catch(() => ({ actorIds: [] as string[] }))).actorIds,
-      );
+      const answeringNow = await ctx.client.rcAnswering(p.id).catch(() => null);
+      const answering = new Set(answeringNow?.actorIds ?? []);
       const liveActorIds = new Set(sessions.filter((s) => s.kind !== "rc").map((s) => s.actor.id));
       // Which harness a standing agent would run on — said only for agents
       // THIS machine has an rc half for (a null half means the machine's
       // default); an agent another machine answers for gets no guess.
       const rcRows = await readRcAgents(ctx.home);
       const machineDefault = (await scanHarnesses(ctx.home)).default?.name ?? null;
+      const person = await readIdentity(ctx.home).catch(() => null);
+      const viewer = viewerIdOf(ctx);
       const standing = Object.values(canvas.agents ?? {})
         .filter((a) => !liveActorIds.has(a.actor.id))
         .map((a) => {
           const row = rcRows.find((r) => r.canvasId === p.id && r.actorId === a.actor.id);
           // The gate, in the roster — because the roster is where somebody
           // looks after a mention went unanswered, and a gate nobody can read
-          // is the silent gate the sheepdog design refuses. PRESENT ONLY WHEN
-          // THERE IS ONE: no gate is the overwhelmingly common case, and a
-          // `"listens": null` on every standing row would be a change to a
-          // shape readers already parse in exchange for saying nothing.
-          const listens = listenWords(rulesOf(a.rules), nameOf);
+          // is the silent gate the sheepdog design refuses. Since owner-only
+          // summons (11 Sep) an answering agent nearly always HAS one — its
+          // owner — and the words are the policy its rc announced. Absent
+          // only when there is nothing to qualify: everyone may ask.
+          const { policy, words: listens } = gateOf(
+            a,
+            snapshot,
+            answeringNow?.policies,
+            { person, rows: rcRows, canvasId: p.id },
+            viewer,
+            false,
+          );
+          const state = answering.has(a.actor.id) ? ("answerable" as const) : ("enrolled" as const);
           return {
             actor: a.actor,
-            state: answering.has(a.actor.id) ? ("answerable" as const) : ("enrolled" as const),
+            state,
             harness: row ? (row.harness ?? machineDefault) : null,
             ...(listens ? { listens } : {}),
+            ...(policy && state === "answerable" ? { policy } : {}),
           };
         });
       if (ctx.json) return printJson({ sessions, standing });
@@ -10606,9 +10713,18 @@ program
           // The gate qualifies the promise rather than replacing it: "answers
           // if you comment" is false for everybody outside it, and a roster
           // that says it anyway is the thing a person acts on and is wrong.
+          // …and since owner-only summons, the promise is not made at all to
+          // somebody the policy leaves out: the roster must not invite a
+          // summons the reader cannot make.
           status:
             (a.state === "answerable"
-              ? "answers if you comment"
+              ? a.policy &&
+                viewer &&
+                !mayWake(a.policy, viewer, snapshot.joined) &&
+                // A reader on the owner's own machine is the owner's hands.
+                !(person && sameActor(snapshot.joined, a.policy.owner.id, person.id))
+                ? "answerable — not by you"
+                : "answers if you comment"
               : "enrolled — nobody is listening right now") + (a.listens ? ` · ${a.listens}` : ""),
           seen: "—",
         })),
@@ -11438,11 +11554,24 @@ async function enrolAgent(
       ? handed
       : { ...(handed && typeof handed === "object" ? handed : {}), listen };
   const agent = await mintAndEnrol(ctx, p.id, name, { cwd, harness, rules });
-  const gate = listenWords(rulesOf(rules), (id) => (id === ctx.actor.id ? ctx.actor.name : undefined));
-  if (ctx.json) return printJson({ enrolled: agent, canvasId: p.id, ...(listen ? { listen } : {}) });
+  // Whose word will wake it, said at the moment it is decided: this
+  // machine's person is its owner (owner-only summons), and with no
+  // `--listen` the owner is the only one it answers.
+  const person = (await readIdentity(ctx.home).catch(() => null)) ?? ctx.actor;
+  const policy = answerPolicy(rulesOf(rules), { owner: person }, undefined);
+  const named = policy.listen.length > 0 && !policy.listen.includes(LISTEN_ANYONE)
+    ? nameResolver(await ctx.client.snapshot(p.id))
+    : () => undefined;
+  const gate =
+    policyWords(policy, (id) => (id === person.id ? person.name : named(id)), ctx.actor.id) ??
+    "listens to everyone";
+  if (ctx.json) return printJson({ enrolled: agent, canvasId: p.id, ...(listen ? { listen } : {}), policy });
   console.log(
-    `enrolled ${agent.name} — answerable on "${p.title}"${gate ? ` · ${gate}` : ""}. ` +
-      "A running `isocan rc` picks this up without a restart; nothing runs until something arrives.",
+    `enrolled ${agent.name} — answerable on "${p.title}" · ${gate}. ` +
+      "A running `isocan rc` picks this up without a restart; nothing runs until something arrives." +
+      (policy.listen.length === 0
+        ? ` Nobody else's word wakes it — \`isocan rc listen ${agent.name} --to <names|everyone>\` widens that.`
+        : ""),
   );
 }
 
@@ -11509,7 +11638,7 @@ agentCommand
   .command("add <name>")
   .description("Enrol an agent beside yourself — on this canvas, in this directory")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
-  .option("--listen <who>", "whose word wakes it: me, everyone (default), or names/ids, comma-separated")
+  .option("--listen <who>", "whose word wakes it besides its owner: names/ids comma-separated, or everyone (default: its owner alone — the person whose rc answers)")
   .action(
     run(async (name: string, opts: { rules?: string; listen?: string }, cmd: Command) =>
       enrolAgent(cmd, name, opts, true),
@@ -11535,16 +11664,25 @@ agentCommand
         ? agents.filter((a) => a.actor.name.toLowerCase() === name.toLowerCase() || a.actor.id === name)
         : agents;
       if (name && wanted.length === 0) throw new Error(`no standing agent "${name}" on "${p.title}"`);
+      // Whose word wakes each — the answering rc's announced policy first,
+      // this machine's own reading of an agent it answers for next (`gateOf`).
+      const answeringNow = await ctx.client.rcAnswering(p.id).catch(() => null);
+      const here = { person: await readIdentity(ctx.home).catch(() => null), rows: await readRcAgents(ctx.home), canvasId: p.id };
+      const gates = new Map(
+        wanted.map((a) => [a.actor.id, gateOf(a, snapshot, answeringNow?.policies, here, viewerIdOf(ctx), true)]),
+      );
       if (ctx.json) {
         return printJson(
-          wanted.map((a) => ({ actor: a.actor, rules: rulesOf(a.rules) })),
+          wanted.map((a) => {
+            const gate = gates.get(a.actor.id);
+            return { actor: a.actor, rules: rulesOf(a.rules), ...(gate?.policy ? { policy: gate.policy } : {}) };
+          }),
         );
       }
       if (wanted.length === 0) {
         console.log(`nobody is enrolled on "${p.title}"`);
         return;
       }
-      const nameOf = nameResolver(snapshot);
       for (const a of wanted) {
         const rules = rulesOf(a.rules);
         const parts: string[] = [];
@@ -11553,7 +11691,7 @@ agentCommand
         // The gate is said FIRST and separately, not folded into the filter
         // list: it answers a different question (who, not what), and it is
         // the one line that explains a mention going unanswered.
-        const gate = listenWords(rules, nameOf);
+        const gate = gates.get(a.actor.id)?.words ?? null;
         console.log(
           `${a.actor.name} — ${gate ? `${gate}; ` : ""}` +
             `${parts.length > 0 ? parts.join("; ") : "comments addressed to them (the default)"}`,
@@ -11564,7 +11702,8 @@ agentCommand
       console.log(
         "(always: a comment naming an agent — or landing in the Chat, or in a thread they are part of — " +
           "comes through any rule set; an agent's own ops never wake it. A gate is the exception that " +
-          "outranks all of it: outside it, nothing wakes them and nothing is charged)",
+          "outranks all of it: outside it, nothing wakes them and nothing is charged — and the gate is " +
+          "its owner alone unless its owner widens it, `isocan rc listen <name> --to <names|everyone>`)",
       );
     }),
   );
@@ -11651,6 +11790,14 @@ once in ~/.isocan/config.json: {"adapterEnv": ["MY_VAR", "MY_PREFIX_*"]}.
 Permission prompts are answered for the one call only; an option that
 would outlast the turn (a standing rule, a mode switch) is refused and said.
 
+Whose word starts a turn is yours to say, because the turn spends your
+tokens here: an agent answers only you (and anything this machine speaks
+as) until you widen it — \`isocan rc listen <name> --to <names|everyone>\`.
+Somebody else's mention is answered in its thread by isocan, naming you and
+that command; nothing starts and nothing counts against the ceiling. The rc
+tells the canvas whose word each agent takes, so the tray and \`isocan who\`
+can say it before anybody asks.
+
 --sandbox goes further and fences the adapter from outside the harness, so
 the limit holds whatever the harness does: it writes only its own directory,
 ~/.isocan and /tmp, reads nothing else of your home, and reaches only this
@@ -11672,7 +11819,7 @@ rcCommand
   .option("--dir <path>", "the agent's working directory (default: here)")
   .option("--harness <name>", "how its sessions start: claude-code, pi, codex, antigravity, or sheep for a cell at a sheep home (default: yours, else unsaid)")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
-  .option("--listen <who>", "whose word wakes it: me, everyone (default), or names/ids, comma-separated")
+  .option("--listen <who>", "whose word wakes it besides its owner: names/ids comma-separated, or everyone (default: its owner alone — the person whose rc answers)")
   .action(
     run(async (name: string, opts: { dir?: string; harness?: string; rules?: string; listen?: string }, cmd: Command) =>
       enrolAgent(cmd, name, opts, false),
@@ -11698,14 +11845,27 @@ rcCommand
  * record at the home rather than on the enrolments. `listen` changes
  * rarely and reads on every surface, so the enrolment is the right home
  * for it and the wrong home for the switch.
+ *
+ * **Since owner-only summons (11 Sep 2026) this is how an agent is WIDENED.**
+ * With nothing written, an agent answers only the person whose rc runs it;
+ * `--to` adds people, `--to everyone` makes it a team's agent, `--to me`
+ * puts it back. The rc honours the gate only when its owner wrote it, so
+ * this verb is the person's and refuses inside a harness session, like bare
+ * `isocan rc`: consent to spend somebody's tokens is not an agent's to give.
  */
 rcCommand
   .command("listen <name>")
-  .description("Whose word wakes an agent — read it, or set it everywhere they stand")
-  .option("--to <who>", "me, everyone, or names/ids comma-separated; omit to read what stands")
+  .description("Whose word wakes an agent — read it, or widen or narrow it everywhere they stand")
+  .option("--to <who>", "names/ids comma-separated, everyone, or me (only you — the default); omit to read what stands")
   .addHelpText(
     "after",
     `
+An agent answers only its owner — the person whose \`isocan rc\` runs it,
+since a summoned turn spends that person's tokens on that person's machine —
+and the agents that person's machine speaks as. Nobody else's word wakes it
+until the owner says so here. A mention from outside the gate is answered in
+its thread by isocan, saying whose word the agent takes and this command.
+
 Without --to this reads: one line per canvas this machine's records say the
 agent stands on, and what its gate says there. With --to it writes the same
 gate to all of them, so a gate cannot mean two things in two rooms.
@@ -11715,14 +11875,21 @@ admit is not a summons, is not a change, and is never counted against the
 agent's hourly ceiling. A mention pierces every other filter; it does not
 pierce this one.
 
-  isocan rc listen Scout --to me            only you can wake her
-  isocan rc listen Scout --to me,Usama      you and Usama
-  isocan rc listen Scout --to everyone      the gate off, said out loud
-  isocan --canvas <ref> rc listen Scout --to me    one canvas only`,
+  isocan rc listen Scout --to Usama         you and Usama
+  isocan rc listen Scout --to everyone      anyone admitted here — a team's agent
+  isocan rc listen Scout --to me            only you again (the default)
+  isocan --canvas <ref> rc listen Scout --to Usama    one canvas only`,
   )
   .action(
     run(async (name: string, opts: { to?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
+      if (opts.to !== undefined && (await harnessSessions(ctx.home)).length > 0) {
+        throw new Error(
+          "`isocan rc listen --to` is the owner's gesture — it decides whose word may spend their tokens — and " +
+            "this is a harness session. Tell the person the command; reading (no --to) is fine from here.",
+        );
+      }
+      const person = (await readIdentity(ctx.home).catch(() => null)) ?? ctx.actor;
       const pointed = canvasRefOf(cmd.optsWithGlobals() as { canvas?: string; project?: string }, null) !== undefined;
       // Where this agent stands, from the machine's own records — the same
       // set `rc --all` answers on. Pointing at one canvas narrows it, for
@@ -11741,18 +11908,23 @@ pierce this one.
       const titleOf = (id: string) => canvases.find((c) => c.id === id)?.title ?? id;
 
       if (opts.to === undefined) {
-        const read: { canvas: string; canvasId: string; listens: string }[] = [];
+        const read: { canvas: string; canvasId: string; listens: string; policy?: RcPolicy }[] = [];
+        const allRows = await readRcAgents(ctx.home);
         for (const canvasId of canvasIds) {
           const snapshot = await ctx.client.snapshot(canvasId);
           const record = Object.values(snapshot.canvas.agents ?? {}).find(
             (a) => a.actor.name.toLowerCase() === name.toLowerCase(),
           );
+          // Read as this machine's rc reads it — the owner is this machine's
+          // person — so what is printed here is what a summons will meet.
+          const gate = record
+            ? gateOf(record, snapshot, undefined, { person, rows: allRows, canvasId }, viewerIdOf(ctx), true)
+            : null;
           read.push({
             canvas: titleOf(canvasId),
             canvasId,
-            listens: record
-              ? (listenWords(rulesOf(record.rules), nameResolver(snapshot)) ?? "everyone")
-              : "— not enrolled here",
+            listens: record ? (gate?.words ?? "everyone") : "— not enrolled here",
+            ...(gate?.policy ? { policy: gate.policy } : {}),
           });
         }
         if (ctx.json) return printJson(read);
@@ -11777,8 +11949,12 @@ pierce this one.
         });
         written.push(titleOf(canvasId));
       }
-      const gate = listenWords({ listen }, nameResolver(await ctx.client.snapshot(canvasIds[0]!))) ?? "listens to everyone";
-      if (ctx.json) return printJson({ agent: name, listen, canvases: written });
+      const policy = answerPolicy({ listen }, { owner: person }, undefined);
+      const firstNames = nameResolver(await ctx.client.snapshot(canvasIds[0]!));
+      const gate =
+        policyWords(policy, (id) => (id === person.id ? person.name : firstNames(id)), viewerIdOf(ctx)) ??
+        "listens to everyone";
+      if (ctx.json) return printJson({ agent: name, listen, canvases: written, policy });
       if (written.length === 0) {
         throw new Error(
           `"${name}" has rc records here but no standing on ${canvasIds.length === 1 ? "that canvas" : "any of those canvases"} — ` +
@@ -12016,6 +12192,16 @@ interface RcShared {
   codexSandbox: boolean;
   guards: Map<string, GuardState>;
   sessionIds: Map<string, string>;
+  /**
+   * **Whose word each agent's latest turn carries** (owner-only summons) —
+   * agent actor id → the people whose asks started it, followed through
+   * agents that were themselves asked by somebody. Per agent across rooms,
+   * like the guards. It is what stops a stranger reaching an agent that
+   * listens only to its owner by way of one that listens to everyone: the
+   * open agent's reply is still its owner's machine talking, but the word
+   * in it is the stranger's, and the gate reads the word.
+   */
+  origins: Map<string, ReadonlySet<string>>;
   upgrade: { upgrading: boolean; upgraded: string | null };
   standDowns: (() => Promise<void>)[];
 }
@@ -12189,6 +12375,7 @@ rcCommand
       codexSandbox: nativeCodex,
       guards: new Map(),
       sessionIds: new Map(),
+      origins: new Map(),
       upgrade: { upgrading: false, upgraded: null },
       standDowns: [],
     };
@@ -12329,6 +12516,76 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
     const opening = await rosterOf();
     for (const [id, row] of Object.entries(opening)) known.set(id, row.actor.name);
     await reconcile(opening);
+
+    /**
+     * **Owner-only summons** (decided 11 Sep 2026 — issue #238, the rc
+     * research note's recommendation 6). A summoned turn runs HERE, on this
+     * person's machine and this person's tokens, so whose word may start one
+     * is this machine's to decide, and the default is this person alone.
+     *
+     * The owner is the rc's own person — `isocan rc` refuses inside a harness
+     * session, so `ctx.actor` is the home identity. Their hands are every
+     * actor this machine's badge speaks as (the agents it answers for, the
+     * person's own interactive sessions): run here, spending the same tokens,
+     * so their word counts as the owner's. Read again at most every ten
+     * seconds on a lap that carries something, because a new agent session
+     * on this machine is a new hand. `answerPolicy` (core) turns an
+     * enrolment's stored gate into what this rc does, and the same value is
+     * announced with the hold so the web and `isocan who` can say it.
+     */
+    const owner: Actor = { id: ctx.actor.id, name: ctx.actor.name };
+    const keeping: { owner: Actor; hands: string[] } = { owner, hands: [owner.id] };
+    let handsAt = 0;
+    const refreshHands = async (): Promise<void> => {
+      if (Date.now() - handsAt < 10_000) return;
+      handsAt = Date.now();
+      const bound = await ctx.client.actorBindings().catch(() => [] as { actor: Actor }[]);
+      const rows = await readRcAgents(ctx.home).catch(() => [] as { actorId: string }[]);
+      keeping.hands = [...new Set([owner.id, ...rows.map((r) => r.actorId), ...bound.map((b) => b.actor.id)])];
+    };
+    await refreshHands();
+    /** The roster and joins the hold's announcement reads — kept here because
+     * the hold loop starts before the dispatch loop's own variables exist. */
+    const policyState: {
+      roster: Record<string, EnrolledAgent>;
+      joined: ActorJoins | undefined;
+      nameOf: (actorId: string) => string | undefined;
+    } = {
+      roster: opening,
+      joined: undefined,
+      nameOf: (id) => known.get(id),
+    };
+    {
+      const first = await ctx.client.snapshot(p.id).catch(() => null);
+      policyState.joined = first?.joined;
+      if (first) policyState.nameOf = nameResolver(first);
+    }
+    const policyOf = (record: EnrolledAgent): RcPolicy =>
+      answerPolicy(rulesOf(record.rules), keeping, record.writtenBy?.id, policyState.joined);
+    const policyLine = (record: EnrolledAgent): string =>
+      policyWords(policyOf(record), (id) => known.get(id) ?? policyState.nameOf(id), owner.id, policyState.joined) ??
+      "listens to everyone";
+    /** Said once per agent per change, so a gate someone else wrote is never
+     * silently set aside. */
+    const setAsideSaid = new Set<string>();
+    const sayPolicy = (record: EnrolledAgent): void => {
+      const key = `${record.actor.id} ${record.writtenBy?.id ?? ""} ${JSON.stringify(rulesOf(record.rules).listen ?? null)}`;
+      if (setAsideSaid.has(key)) return;
+      setAsideSaid.add(key);
+      if (gateSetAside(rulesOf(record.rules), keeping, record.writtenBy?.id, policyState.joined)) {
+        console.log(
+          rcLine(
+            tag,
+            `${record.actor.name}'s gate was last written by ${record.writtenBy?.name ?? "somebody else"}, not you — ` +
+              `answering only you until you say otherwise: isocan rc listen ${record.actor.name} --to <names|everyone>`,
+          ),
+        );
+      }
+    };
+    /** Turned-away asks already answered in words — by thread, speaker and
+     * agent, so a person asking twice is told once. The thread itself is
+     * checked too, so a restarted rc does not say it again. */
+    const turnedAwaySaid = new Set<string>();
     /**
      * The parked rc announces itself: a presence session of kind "rc" —
      * rendered nowhere (no cursor, no face, no roster row), it exists so the
@@ -12360,6 +12617,31 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
           : `${enrolledCount} ${enrolledCount === 1 ? "agent" : "agents"} enrolled (\`isocan who\` names them) — quiet until something arrives (Ctrl-C stops answering)`,
       ),
     );
+    /**
+     * Whose word wakes them, said at start and grouped — the one place the
+     * person who pays is guaranteed to look, and the line that tells somebody
+     * upgrading past 11 Sep that their agents now answer them alone. Names
+     * are listed here, unlike the roster, because this is a consent fact and
+     * a count would hide whose it is.
+     */
+    if (enrolledCount > 0) {
+      const byWords = new Map<string, string[]>();
+      for (const record of Object.values(opening)) {
+        const words = policyLine(record);
+        byWords.set(words, [...(byWords.get(words) ?? []), record.actor.name]);
+        sayPolicy(record);
+      }
+      for (const [words, names] of byWords) {
+        const narrowed = words !== "listens to everyone";
+        console.log(
+          rcLine(
+            tag,
+            `${names.join(", ")} ${names.length === 1 ? words : words.replace(/^listens/, "listen")}` +
+              (narrowed ? " — `isocan rc listen <name> --to <names|everyone>` widens one" : ""),
+          ),
+        );
+      }
+    }
     // An agent on the sheep harness runs somewhere else, and where is the
     // one thing the person cannot see from here: said once, at start, as
     // the home the row carries or the kennel would name — or why it can't.
@@ -12498,10 +12780,21 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
     void (async () => {
       for (;;) {
         try {
+          const actorIds = [...dispatches.keys()];
+          // The policy rides the hold (owner-only summons): the web and
+          // `isocan who` read whose word this rc takes from the same value
+          // dispatch applies, so the two cannot differ.
+          const policies: Record<string, RcPolicy> = {};
+          for (const actorId of actorIds) {
+            const record = policyState.roster[actorId];
+            if (record) policies[actorId] = policyOf(record);
+          }
           const held = await ctx.client.rcHold({
             canvasId: p.id,
-            actorIds: [...dispatches.keys()],
+            actorIds,
             waitMs: 10_000,
+            owner,
+            policies,
           });
           /**
            * **The handshake's last hop** (agent-custody mechanism 2): the Web
@@ -12514,6 +12807,15 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
            * surfaces at the dialog as its countdown running out.
            */
           for (const ask of held.asks ?? []) {
+            // Adding an agent to this machine is its owner's gesture. The
+            // home already routes only the owner's asks here; this is the
+            // same rule held where the machine is, for a home too old to.
+            if (!ownersWord(keeping, ask.from.id, policyState.joined)) {
+              console.log(
+                rcLine(tag, `${ask.from.name} asked from the canvas to add ${ask.name} — this rc takes that only from you; nothing enrolled`),
+              );
+              continue;
+            }
             console.log(rcLine(tag, `${ask.from.name} asked from the canvas to add ${ask.name} — enrolling here`));
             try {
               await mintAndEnrol(ctx, p.id, ask.name, { cwd: rcCwd, harness: null });
@@ -12611,6 +12913,16 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       );
       const reason = summoned ? "summons" : "change";
       const from = flagged[0]?.envelope.actor.name ?? "someone";
+      // Whose word this turn carries, recorded before anything it writes can
+      // land — what the gate reads when this agent's replies reach a sibling
+      // that listens only to its owner (owner-only summons).
+      shared.origins.set(
+        record.actor.id,
+        speakersFor(
+          flagged.map((e) => e.envelope.actor.id),
+          (id) => shared.origins.get(id),
+        ),
+      );
       console.log(
         rcLine(
           tag,
@@ -12900,6 +13212,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
      * The roster read now includes both, so it is reaped and taken up here.
      */
     const settled = await rosterOf();
+    policyState.roster = settled;
     for (const [id, row] of Object.entries(settled)) known.set(id, row.actor.name);
     await reap(settled, "as this rc started");
     for (const actorId of [...dispatches.keys()]) if (!settled[actorId]) dispatches.delete(actorId);
@@ -12972,7 +13285,15 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       // never meets this; a loaded one meets it in one run out of four.
       if (snapshot) {
         lastRoster = snapshot.canvas.agents ?? {};
+        policyState.roster = lastRoster;
+        policyState.joined = snapshot.joined;
+        policyState.nameOf = nameResolver(snapshot);
         for (const [id, row] of Object.entries(lastRoster)) known.set(id, row.actor.name);
+        // A word from somebody this rc does not know yet may be a new
+        // session on this very machine — its hands are read again first.
+        if (batch.entries.some((e) => !ownersWord(keeping, e.envelope.actor.id, snapshot.joined))) {
+          await refreshHands();
+        }
       }
       const roster = lastRoster;
       /**
@@ -13008,7 +13329,16 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         if (op.type === "agent.enroll") {
           known.set(op.agent.id, op.agent.name);
           if (entry.seq > startTip) {
-            console.log(rcLine(tag, `${by.name} enrolled ${op.agent.name} — answerable here`));
+            // Whose word wakes it, said with the enrolment — a gate changed
+            // by `rc listen` arrives as exactly this op.
+            const record = roster[op.agent.id];
+            console.log(
+              rcLine(
+                tag,
+                `${by.name} enrolled ${op.agent.name} — answerable here${record ? ` · ${policyLine(record)}` : ""}`,
+              ),
+            );
+            if (record) sayPolicy(record);
             const adopted = await adoptRcAgent(ctx.home, {
               canvasId: p.id,
               actorId: op.agent.id,
@@ -13040,17 +13370,53 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         for (const record of Object.values(roster)) {
           const dispatch = dispatches.get(record.actor.id);
           if (!dispatch || entry.seq <= dispatch.scannedTip) continue;
-          const reason = dispatchReason(
-            op,
-            by.id,
-            {
-              actorId: record.actor.id,
-              names: [{ id: record.actor.id, name: record.actor.name }],
-              rules: rulesOf(record.rules),
-            },
-            snapshot?.canvas ?? null,
-          );
-          if (reason) dispatch.pending.push(entry);
+          const joined = snapshot?.joined;
+          // An agent this rc runs speaks with the word of whoever started
+          // its turn (`shared.origins`), so a stranger turned away here is
+          // not let in one hop later by an open sibling's reply.
+          const carried = shared.origins.get(by.id);
+          const agent = {
+            actorId: record.actor.id,
+            names: [{ id: record.actor.id, name: record.actor.name }],
+            rules: rulesOf(record.rules),
+            policy: policyOf(record),
+            hands: keeping.hands,
+            ...(joined ? { joined } : {}),
+            ...(carried && carried.size > 0 ? { onBehalfOf: [...carried] } : {}),
+          };
+          const reason = dispatchReason(op, by.id, agent, snapshot?.canvas ?? null);
+          if (reason) {
+            dispatch.pending.push(entry);
+            continue;
+          }
+          /**
+           * **Turned away, in words** (owner-only summons). A mention the
+           * gate refused is answered in the thread by the system voice —
+           * never the agent's (it did not run) and never silence (the
+           * sheepdog design's first failure mode). Once per thread, asker
+           * and agent, and not again if the thread already says it: a
+           * restarted rc re-reading its backlog must not repeat itself.
+           * Nothing is pending, nothing counts against the ceiling, and
+           * nothing was spent.
+           */
+          if (turnedAway(op, by.id, agent) && (op.type === "thread.create" || op.type === "thread.reply")) {
+            const key = `${op.threadId} ${by.id} ${record.actor.id}`;
+            if (turnedAwaySaid.has(key)) continue;
+            turnedAwaySaid.add(key);
+            const nameOf = snapshot ? nameResolver(snapshot) : (id: string) => known.get(id);
+            // Through an agent, the asker is whoever that agent speaks for.
+            const askers = agent.onBehalfOf
+              ? agent.onBehalfOf.filter((id) => !mayWake(agent.policy, id, joined, keeping.hands)).map((id) => nameOf(id) ?? id)
+              : [by.name];
+            const asker = askers.join(",") || by.name;
+            const line = turnedAwayLine(record.actor.name, agent.policy, nameOf, asker);
+            const already = snapshot?.canvas.threads[op.threadId]?.comments.some(
+              (c) => isSystemActor(c.author.id) && c.body === line,
+            );
+            const who = agent.onBehalfOf ? `${by.name}, for ${askers.join(" and ")},` : by.name;
+            console.log(rcLine(tag, `${record.actor.name} · ${who} asked; ${policyLine(record)} — said so in the thread, nothing started`));
+            if (!already) await sayInThread(op.threadId, line);
+          }
         }
       }
       // Every agent has now been shown everything up to the lap tip — the
