@@ -36,8 +36,18 @@ for arg in "$@"; do
   esac
 done
 
+# The repo is found relative to this script, so the script has to be IN the
+# repo. Copied somewhere else — a Downloads folder, say — that resolves to
+# the wrong tree and every line below fails on a missing module instead of
+# saying the one true thing.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ISOCAN="node $REPO/packages/cli/bin/isocan.js"
+if [ ! -f "$REPO/packages/cli/bin/isocan.js" ]; then
+  echo "This script has to run from inside an isocan checkout: it looked for" >&2
+  echo "  $REPO/packages/cli/bin/isocan.js" >&2
+  echo "and found nothing. Run it as ./scripts/spike-srt.sh from the repo root." >&2
+  exit 2
+fi
 SPIKE="$(mktemp -d)"
 HOME_DIR="$SPIKE/home"
 PROJ="$SPIKE/proj"
