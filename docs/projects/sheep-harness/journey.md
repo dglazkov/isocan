@@ -32,12 +32,16 @@ laptop stops running it.*
 4. `sheep ls` on the same machine lists Percy, idle, in pasture
    `isocan-percy`. `sheep log <id>` is the transcript of the turn you
    just watched, tool calls and all.
-5. Activity Monitor shows one process for the rc and nothing for Percy.
+5. Activity Monitor shows one process for the rc. While Percy's turn
+   runs there is one more, `sheep attach`, a thin client waiting on the
+   cell; when the reply lands it is gone. No model and no agent runtime
+   ever appear.
 
 **Acceptance:** No new gesture beyond the harness's name. The summons
 Percy receives is the same text a local adapter would receive. The reply
-is by the enrolled actor, not by you and not by the rc. Nothing about
-Percy runs on the laptop between the comment and the reply, or after it.
+is by the enrolled actor, not by you and not by the rc. The only thing
+of Percy's that runs on the laptop is the client that carries a turn,
+for the length of that turn, and nothing after it.
 
 ## Journey 2 — The same Percy, a day later, in a fresh container
 
@@ -47,8 +51,10 @@ has been torn down.*
 1. The next afternoon, well past the home's idle period, comment again:
    `@Percy and the heading above it`.
 2. The rc narrates *session <id> resumed*. The turn is slower than
-   yesterday's, and the rc says why while it waits: the container is
-   fresh and setup is running.
+   yesterday's, and the rc says while it waits that the cell has been
+   quiet long enough for its container to be fresh, so setup is
+   probably running. It is a guess from the clock, and the rc says so,
+   until the home can tell it.
 3. Percy's reply refers to yesterday's comment without being told about
    it. `isocan history Percy` shows both replies by one actor.
 4. `isocan badges` on your machine lists the badge Percy's cell holds,
@@ -56,7 +62,9 @@ has been torn down.*
 
 **Acceptance:** One sheep id per agent across days, resumed and never
 reborn while it exists at the home. One badge across containers. The rc
-never mints a second pass for an agent whose cell already redeemed one.
+never mints a second pass for an agent whose sheep still exists: before
+a birth it reads the pasture's herd, not only its own row, and a sheep
+found there is resumed even when the row had forgotten it.
 
 ## Journey 3 — The credential never touches a transcript
 
@@ -68,35 +76,45 @@ if you tried.*
 2. `sheep pasture secret ls isocan-percy` prints the name `ISOCAN_PASS`
    and no value.
 3. In a turn, ask Percy to print its environment. The pass is not in it.
+   Ask Percy to show its isocan home. It can: the badge the pass redeemed
+   is Percy's own, kept in the workspace so it survives the container,
+   and Percy holds it the way any agent holds its own badge. What Percy
+   cannot do is mint a pass for anyone, because its badge holds no
+   claim but Percy's.
 4. Mint a pass by hand as yourself and try to hand it to Percy's pasture.
    The pass Percy redeems is for Percy's actor; a pass for yours makes
    Percy's cell arrive as you, which `isocan history` would show as your
    replies from a cell. The rc mints for the agent's actor and the desk
    refuses a claim the rc's badge does not hold.
 
-**Acceptance:** The credential is environment for the pasture's setup
-script and for nothing the model runs. The rc can mint a pass for an
+**Acceptance:** The pass is environment for the pasture's setup script
+and for nothing the model runs. The badge it redeems is the agent's
+standing credential, readable by the agent and by nothing outside its
+cell, and it speaks for the agent alone. The rc can mint a pass for an
 actor it holds and for no other. Spent passes are not kept on the rc's
 side.
 
 ## Journey 4 — Withdrawal ends the sheep
 
 *When Percy is withdrawn, nothing of Percy is left running, listed, or
-billed.*
+billed. The pasture stays: it is yours, not Percy's.*
 
 1. `isocan rc remove Percy`, or the withdraw gesture in the web app.
 2. The rc narrates the withdrawal, then *ending sheep <id>*. If the sheep
    is mid-turn, the turn is aborted first and the rc says so.
-3. `sheep ls` no longer lists Percy. `sheep pasture ls` no longer lists
-   `isocan-percy`. `isocan badges` no longer lists the cell's badge.
-4. Enrol Percy again a week later. A new sheep, a new pasture, a new
-   pass, and a Percy who does not remember the first one, which the rc
-   says at the birth.
+3. `sheep ls` no longer lists Percy. `isocan badges` no longer lists the
+   cell's badge. `sheep pasture isocan-percy` still names the pasture,
+   with a herd of none, and the rc said it would be left.
+4. Enrol Percy again a week later. A new sheep born into the same
+   pasture, a new pass, and a Percy who does not remember the first one,
+   which the rc says at the birth.
 
 **Acceptance:** Withdrawal leaves no session at the sheep home and no
-badge at the isocan home. This step waits on a sheep verb that ends a
-session for good, filed there as a journey; until it lands, the rc
-aborts, drops the pasture's secret, and narrates what it could not end.
+badge at the isocan home. The pasture is never removed by the rc; sheep
+has no verb for it and the pasture is the shepherd's. This step waits on
+a sheep verb that ends a session for good, filed there as a journey;
+until it lands, the rc aborts and narrates what it could not end. The
+pasture's secret is a spent pass and needs no dropping.
 
 ## Journey 5 — A machine with no sheep says so
 

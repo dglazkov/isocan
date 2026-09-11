@@ -46,15 +46,19 @@ or `~/.sheep`, printing the home the kennel names. The `sheep` config
 block goes away; `homeAs` survives as the one thing a scan cannot know,
 under a name that says what it is. The rc row carries the sheep home's
 address beside the sheep id, so a summons from a different directory
-resumes the same sheep. The birth narrates each step it takes and what
-it costs, and the first summons after a quiet period says setup is
-running while it waits. The summoned face gets tool beats: `prompt`
+resumes the same sheep, and before any birth the rc reads the pasture's
+herd, so a sheep the row forgot is resumed rather than born twice. The
+birth narrates each step it takes and what it costs, and the first
+summons after a quiet period says setup is probably running while it
+waits, a guess from the clock until
+[sheep#4](https://github.com/dglazkov/sheep/issues/4) lets the home say. The summoned face gets tool beats: `prompt`
 reads `sheep attach --json` and turns pi's tool-call entries into the
 inferred statuses the ACP path already produces.
 
 **Proof:** `packages/cli/test/rc.test.ts` gains the sheep harness against
 a fake `sheep` on PATH that records its arguments and answers from a
-script: enrol, birth, summons, resume, the row's home and id. The scan's
+script: enrol, birth, summons, resume, the row's home and id, and a
+birth refused because the pasture's herd already holds a sheep. The scan's
 kennel walk is a pure function with a table test.
 
 **Door:** whether `--harness sheep` on a canvas that lives on a laptop
@@ -66,14 +70,15 @@ both homes. Decide at the door.
 ## Phase 2 — Withdrawal, and the cost of a cold turn
 
 **Outcome:** `agent.withdraw` for a sheep-harnessed agent aborts a
-running turn, ends the sheep for good, removes its pasture, and narrates
-each. `isocan badges` on the rc's machine lists a cell's badge as the
+running turn, ends the sheep for good, leaves the pasture and says so,
+and narrates each. `isocan badges` on the rc's machine lists a cell's badge as the
 agent's surface and ends it with the sheep. A cold turn's install goes
 away: the pasture's setup finds the CLI already there.
 
 ⇢ Ending a sheep for good needs a sheep verb
 ([sheep#1](https://github.com/dglazkov/sheep/issues/1)). Until it lands,
-withdrawal aborts, drops the secret, and says what remains.
+withdrawal aborts and says what remains. The secret is a spent pass and
+sheep has no verb to drop it, so it stays.
 
 ⇢ Installing once needs a sheep mechanism
 ([sheep#2](https://github.com/dglazkov/sheep/issues/2)). Until it lands,
@@ -82,10 +87,13 @@ the brief says a cold turn is slow.
 ⇢ A birth without a spent turn needs `sheep new` to mint without a
 prompt ([sheep#3](https://github.com/dglazkov/sheep/issues/3)).
 Until it lands, the opening prompt stays and `--wait` queues the first
-summons behind it.
+summons behind it. Once it lands, the pass moves from the birth to the
+first summons: a pass lives fifteen minutes and setup runs on the first
+command that rents a container, so a pass minted at an idle birth would
+expire unredeemed.
 
 **Proof:** the rc test's withdraw case against the fake `sheep`: abort
-then end, pasture removed, badge ended; and a birth case asserting no
+then end, pasture kept, badge ended; and a birth case asserting no
 opening prompt once the verb exists.
 
 **Trajectory:** to be written at close.
