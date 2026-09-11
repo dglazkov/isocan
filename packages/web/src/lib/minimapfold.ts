@@ -44,8 +44,11 @@
  * 460px)` is the same number, and `minimapnarrow.test.ts` holds them together.
  */
 export const NARROW_MINIMAP_PX = 460;
+/** The same number as a media query — what the Minimap watches and the store
+ *  reads at creation, so the width is asked one way everywhere. */
 export const NARROW_MINIMAP_QUERY = `(max-width: ${NARROW_MINIMAP_PX}px)`;
 
+/** The three facts the drawn state is derived from; only `kept` is stored. */
 export interface MinimapFold {
   /** The stored preference, from a window wide enough for the map. */
   kept: boolean;
