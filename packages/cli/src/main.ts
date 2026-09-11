@@ -421,6 +421,7 @@ import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
+import { SHEEP_HARNESS, SheepAgent, homeAddressForCell, sheepConfig } from "./sheep.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, scanHarnesses, setDefaultHarness } from "./harnesses.ts";
 import {
   checkoutState,
@@ -11694,10 +11695,18 @@ the ACP registry's current bridge, fetched on first use (Antigravity's is a
       });
 
       console.error(rcLine("", `${record.actor.name} · starting ${spec.harness} (${spec.command}) in ${row.cwd}`));
-      const agent = await AcpAgentProcess.spawn(spec, {
-        cwd: row.cwd,
-        env: adapterEnv(p.id, record.actor.name),
-      });
+      const agent =
+        spec.harness === SHEEP_HARNESS
+          ? await SheepAgent.spawn(spec, {
+              home: ctx.home,
+              name: record.actor.name,
+              narrate: (line) => console.error(rcLine("", `${record.actor.name} · ${line}`)),
+              birth: await sheepBirth(ctx, p, record.actor.id),
+            })
+          : await AcpAgentProcess.spawn(spec, {
+              cwd: row.cwd,
+              env: adapterEnv(p.id, record.actor.name),
+            });
       try {
         const session = await agent.ensureSession(row.cwd, row.sessionId);
         console.error(
@@ -11749,6 +11758,28 @@ interface RcShared {
  * enrolment records name, plus the bound one if there is one; a canvas the
  * records name that the home no longer has is said and skipped.
  */
+/**
+ * What a sheep needs to be born as this agent (the sheep spike, 10 Sep
+ * 2026): a pass minted for the agent's own actor — the rc's badge holds the
+ * claim, so the home allows it — at the address the cell can reach, and the
+ * collab skill for its pasture. The pass is minted lazily, only when a
+ * pasture is actually made, because it is single-use and short-lived.
+ */
+async function sheepBirth(ctx: Ctx, p: Canvas, actorId: string): Promise<import("./sheep.ts").SheepBirth> {
+  const cfg = await sheepConfig(ctx.home);
+  if (!cfg) throw new Error('harness "sheep" needs a "sheep" block in config.json');
+  const skill = await fs.readFile(path.join(skillSource(), "SKILL.md"), "utf8").catch(() => undefined);
+  return {
+    canvasTitle: p.title,
+    ...(skill ? { skill } : {}),
+    pass: async () => {
+      const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
+      const { token } = await ctx.client.mintPass(p.id, actorId);
+      return canvasUrlWithPass(homeAddressForCell(origin, cfg), p.id, token);
+    },
+  };
+}
+
 async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
   const canvases = await ctx.client.listCanvases();
   const wanted = new Set((await readRcAgents(ctx.home)).map((row) => row.canvasId));
@@ -12292,11 +12323,19 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       // silent half. The interval is the floor under everything else.
       const heartbeat = setInterval(() => beat({}), 60_000);
       heartbeat.unref?.();
-      const agent = await AcpAgentProcess.spawn(spec, {
-        cwd: row.cwd,
-        env: adapterEnv(p.id, record.actor.name),
-        narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
-      });
+      const agent =
+        spec.harness === SHEEP_HARNESS
+          ? await SheepAgent.spawn(spec, {
+              home: ctx.home,
+              name: record.actor.name,
+              narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
+              birth: await sheepBirth(ctx, p, record.actor.id),
+            })
+          : await AcpAgentProcess.spawn(spec, {
+              cwd: row.cwd,
+              env: adapterEnv(p.id, record.actor.name),
+              narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
+            });
       try {
         // One session handle per AGENT (phase 2): a summons on any canvas
         // resumes the same conversation — this row's handle, else the one
