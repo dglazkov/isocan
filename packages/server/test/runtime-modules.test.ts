@@ -54,7 +54,7 @@ describe("what the home advertises", () => {
   it("lists a loaded module's manifest and not a refused one", async () => {
     const rows = readRuntimeModules(home);
     expect(rows.map((r) => [r.manifest.name, r.refused])).toEqual([
-      ["@acme/future", "needs isocan >=9.0.0, and this is 0.1.0"],
+      ["@acme/future", "needs module API >=9.0.0, and this build is 0.2.0"],
       ["@acme/hello", null],
     ]);
     const serving = (await (await get(SERVING_ROUTE)).json()) as { modules?: { name: string }[] };

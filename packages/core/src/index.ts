@@ -86,3 +86,8 @@ export * from "./canvassort.ts";
 export * from "./canvasswitch.ts";
 export * from "./lens.ts";
 export * from "./export.ts";
+
+export * from "./text-attention.ts";
+
+export * from "./text-anchor.ts";
+export { markdownResource, SOURCE_PATH_PROP } from "./markdown-resources.ts";

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
@@ -27,6 +27,7 @@ import { AgentRowView } from "./AgentRow.tsx";
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { moduleInspectorsFor } from "../modules.ts";
+import { webHostFor } from "../lib/modulehost.ts";
 import { readBlobText } from "../lib/api.ts";
 import { useAnswerable } from "../lib/answerable.ts";
 
@@ -101,6 +102,9 @@ export function Workbench({
   const openItem = useCanvasStore((s) => (itemId ? (s.canvas?.items[itemId] ?? null) : null));
   useUiStore((s) => s.modulesGeneration);
   const inspectors = openItem ? moduleInspectorsFor(itemKind(openItem)) : [];
+  /* An inspector can change what it inspects now (#156) — the point of the
+     slot, and the thing it could not do until there was a host. */
+  const host = useMemo(() => webHostFor(canvasId, actor), [canvasId, actor]);
   const openHash = openItem ? (openItem.versions.find((v) => v.id === openItem.currentVersionId) ?? openItem.versions[0])?.blobHash ?? null : null;
   const readOpenItem = useCallback(() => (openHash ? readBlobText(canvasId, openHash) : Promise.resolve("")), [canvasId, openHash]);
   const [rail, setRail] = useState(() => readRail(canvasId));
@@ -227,7 +231,7 @@ export function Workbench({
               return (
                 <section key={inspector.label} className="wb-inspector-section">
                   <h3>{inspector.label}</h3>
-                  <Body canvasId={canvasId} item={openItem} readText={readOpenItem} />
+                  <Body canvasId={canvasId} item={openItem} readText={readOpenItem} host={host} />
                 </section>
               );
             })}

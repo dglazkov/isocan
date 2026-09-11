@@ -118,6 +118,69 @@ export function moduleKindOf(mime: string): ModuleKind | null {
 }
 
 /**
+ * **What a module's components are handed to CHANGE anything** (9 Sep 2026).
+ *
+ * The web twin of `CliHost`, and it exists for the same reason that one does.
+ * Until now `ModuleAction.run` returning `readonly Operation[]` was the only
+ * place in this whole file that produced an operation: underlays, renderers,
+ * inspectors and pages were read-only by construction, and four of those five
+ * are components a person interacts with. The one that could write was a
+ * palette entry with no UI of its own.
+ *
+ * That was invisible while the modules were a mind map, a Mermaid renderer and
+ * a documents inspector, none of which changes anything from inside a
+ * component. It stopped being invisible the moment somebody built a tray you
+ * drag things out of (#156, romannurik's stickers), because dragging a sticker
+ * onto the canvas IS a write made from a panel.
+ *
+ * It also contradicted a rule the design already states — *"a hidden store:
+ * module state is an item, visible and versioned"* — since most of the places
+ * a module could put UI could not write an item.
+ *
+ * ## Two members, and why not more
+ *
+ * `send` is the same door `ModuleAction.run` returns into, so a write from a
+ * component is an `item.add` or an `item.update` like any other: echoed,
+ * undoable, groupable, and visible to the terminal as the same op. No new
+ * authority — the palette could already send these.
+ *
+ * `putBlob` is the one thing an operation cannot say. `item.add` and
+ * `item.addVersion` both name a `blobHash`, and a blob is minted through a
+ * channel that is not an op — so a module could express every canvas change
+ * EXCEPT the ones that need new content, which is what a node-type module
+ * spends its life doing.
+ *
+ * ## Deliberately not `dropFile(file, placement)`
+ *
+ * The exploration that found this asked for exactly that, and for an
+ * `addVersion` beside it. Both bundle decisions that belong to the module:
+ * mint the bytes, choose the placement, send the op. A module given `dropFile`
+ * cannot set its own title, size or properties, cannot group two writes into
+ * one undo, and needs a second helper the day it wants a version instead of an
+ * item — which is how a per-slot helper list starts. `putBlob` plus ops
+ * composes, and it is one member instead of a growing family.
+ *
+ * ## Who gets it
+ *
+ * The slots a person interacts with: overlays, inspectors and pages.
+ * Underlays and renderers DRAW, and nothing has needed to write from one yet
+ * — so they do not get it, and the day a module needs that it is a review
+ * question rather than a private import, which is the rule `CliHost` already
+ * carries and the reason this interface exists at all.
+ */
+export interface WebHost {
+  /** Sent as the viewer, through the door the palette already uses. One
+   *  `group` for one undo, exactly as a multi-op action groups today. */
+  send: (ops: readonly Operation[], group?: string) => Promise<void>;
+  /** Bytes in, a hash out — the half no operation carries. What a module does
+   *  with the hash is an `item.add` or an `item.addVersion` of its own. */
+  putBlob: (
+    bytes: Blob,
+    filename: string,
+  ) => Promise<{ blobHash: string; size: number }>;
+}
+
+/**
  * **What the web shell mounts** — the slots, as data. Generic over the
  * component type so this file stays free of React: the shell narrows `C` to
  * `ComponentType<UnderlayFacts>`, and a module's `web.tsx` types its export
@@ -184,6 +247,9 @@ export interface InspectorFacts {
   canvasId: string;
   item: Item;
   readText: () => Promise<string>;
+  /** Changing the thing you are inspecting is the point of inspecting it.
+   *  An `item.addVersion` naming a hash from `host.putBlob` is how. */
+  host: WebHost;
 }
 
 export interface ModuleInspector<I> {
@@ -202,6 +268,7 @@ export interface ModuleInspector<I> {
 export interface PageFacts {
   canvasId: string;
   canvas: CanvasContents;
+  host: WebHost;
 }
 
 export interface ModulePage<P> {
@@ -212,7 +279,84 @@ export interface ModulePage<P> {
   component: P;
 }
 
-export interface WebModule<C, R = never, I = never, P = never> {
+/**
+ * **What an overlay is handed**: the canvas, and the way to change it.
+ *
+ * An overlay is screen-space chrome above the viewport — a tray, a dock, a
+ * palette of things to drag out. The sixth slot, and the one the design
+ * anticipated when it said *"panel, page, inspector, tool: each lands when a
+ * module asks"*.
+ *
+ * **It is also the one with real risk, and the region is why.** `underlays`
+ * is safe because it is beneath everything in world space, where a module can
+ * only draw under the work. An overlay is the app's own chrome space, and N
+ * modules mounting floating panels wherever they like is how a shell turns
+ * into a mess — the failure the rail's and the dock's fixed lists exist to
+ * prevent. So an overlay names a REGION rather than positioning itself, the
+ * shell owns where that region is, and two modules in one region stack in
+ * module order instead of overlapping.
+ */
+export type OverlayRegion = "left" | "right";
+
+/** What an overlay draws with: the canvas, and the way to change it. */
+export interface OverlayFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+  host: WebHost;
+}
+
+/**
+ * **A drag a module claims** (#156).
+ *
+ * The canvas's drop handler read `dataTransfer.files` and `text/uri-list`,
+ * both spelled into the handler, so a module could put a tray on the screen
+ * and had no way to catch what you dragged out of it.
+ *
+ * The shape is the one the module system already uses rather than a second
+ * one: a module claims MIMES for its kinds, and a drag carries mimes, so a
+ * module claims the drag mimes it accepts and is handed the data. What it
+ * returns is ops, like everything else — and with `host.putBlob` it can mint
+ * the content those ops name.
+ *
+ * Native OS file drops are not offered here. They are the shell's, they have
+ * a hundred handlers' worth of behaviour behind them (versions onto an item,
+ * a row laid out rather than a stack, the notice when one fails), and a
+ * module intercepting them would be taking over the app's own gesture rather
+ * than adding one of its own.
+ */
+export interface DropFacts {
+  canvasId: string;
+  /** The dragged payload, by the mime this drop matched. */
+  data: string;
+  mimeType: string;
+  /** Where it landed, in world units. */
+  at: { x: number; y: number };
+  host: WebHost;
+}
+
+/** One claim on a dragged mime, and what to do with what arrives. */
+export interface ModuleDrop {
+  /** The `dataTransfer` types this claims. First match wins, module order. */
+  mimes: readonly string[];
+  /** Returns the ops to send, or nothing when it decides this is not for it
+   *  after all — a claim on a mime is not a promise to handle every payload
+   *  carried under it. */
+  run: (facts: DropFacts) => Promise<readonly Operation[] | void>;
+}
+
+/** A tray or dock a module hangs against one edge of the canvas. Not
+ *  exported: a module names its overlays through `WebModule`, the way it
+ *  names its renderers, and nothing outside core has needed the type itself. */
+interface ModuleOverlay<O> {
+  /** Which edge it sits against. The shell decides where that is. */
+  region: OverlayRegion;
+  /** For the chrome registry, so a person can turn it off like any other
+   *  floating thing — an overlay nobody chose is chrome nobody chose. */
+  label: string;
+  component: O;
+}
+
+export interface WebModule<C, R = never, I = never, P = never, O = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
@@ -225,6 +369,10 @@ export interface WebModule<C, R = never, I = never, P = never> {
   inspectors?: readonly ModuleInspector<I>[];
   /** Whole sections of the app, each a cover route with an address. */
   pages?: readonly ModulePage<P>[];
+  /** Screen-space chrome above the viewport, against a named edge. */
+  overlays?: readonly ModuleOverlay<O>[];
+  /** Drags this module catches on the canvas, by mime. */
+  drops?: readonly ModuleDrop[];
 }
 
 /**
@@ -252,11 +400,63 @@ export interface ModuleManifest {
   cli?: string;
   /** The guide section, printed after the base guide while loaded. */
   guide?: string;
+  /**
+   * The unstable parts of the API this module uses (`PROPOSED`). A module
+   * naming any is refused unless the person adding it says yes — the same
+   * bargain VS Code's proposed API makes, and the reason we can keep changing
+   * these slots without breaking somebody who never asked for them.
+   */
+  proposed?: readonly string[];
 }
 
-/** The version a module's `engines` is judged against. One place; the
- *  packaging test holds it equal to the root manifest's. */
-export const ISOCAN_VERSION = "0.1.0";
+/**
+ * **The module API's own version, which is not the app's** (9 Sep 2026).
+ *
+ * It was `ISOCAN_VERSION`, pinned by a test to the root package's version,
+ * which is 0.1.0 and has never moved. So the engines check — real, enforced on
+ * `module add`, refused with a sentence by the daemon — could never refuse
+ * anything, because the number it compares against was a constant. A bound
+ * that exists and does not bind, which is this repo's oldest shape.
+ *
+ * **Decoupled because ours will break and VS Code's does not.** VS Code can
+ * judge `engines.vscode` against the app version because their stable API has
+ * essentially never broken since 1.0: every app release is compatible, so the
+ * app version is a safe proxy for the API version. isocan's module API is
+ * pre-1.0 and changing weekly. Tying it to the app would mean either bumping
+ * the app for an API change nobody outside a module can see, or never bumping
+ * at all — which is what happened.
+ *
+ * So this moves when the module API moves, and only then.
+ *
+ * **0.1.0 → 0.2.0 on 9 Sep 2026**, and it is a break rather than an addition:
+ * `InspectorFacts` and `PageFacts` gained a required `host`, so a module built
+ * against 0.1 no longer compiles. Under semver's pre-1.0 rule a minor bump is
+ * exactly how you say that, and `^0.1.0` is refused by the check below — which
+ * is the first time it has ever refused anything.
+ */
+export const MODULE_API_VERSION = "0.2.0";
+
+/**
+ * **The parts of the API we intend to change**, named so a module can say it
+ * is using one and a home can say yes before it runs.
+ *
+ * VS Code's proposed API in the shape this codebase can afford: an extension
+ * names the proposals it uses, only runs where somebody enabled them, and
+ * cannot be published to the marketplace at all. Fast on one side of the line,
+ * frozen on the other, and the line is a list a person opts into.
+ *
+ * Everything here landed on 9 Sep for one module's sake and has had exactly
+ * one caller. That is not stability, and calling it stable because it shipped
+ * is how an API gets frozen by accident.
+ */
+export const PROPOSED = ["overlays", "drops", "host"] as const;
+
+/** Which of a manifest's proposals this build does not recognise. A module
+ *  asking for something that no longer exists is a refusal with a name, not a
+ *  module that quietly loads without the thing it needed. */
+export function unknownProposals(wanted: readonly string[] | undefined): string[] {
+  return (wanted ?? []).filter((one) => !(PROPOSED as readonly string[]).includes(one));
+}
 
 /** The name a module is addressed by on disk and in a URL: the package
  *  name's last segment — `@isocan/<name>` → `<name>`. */
@@ -290,25 +490,25 @@ function compare(a: [number, number, number], b: [number, number, number]): numb
 }
 
 /**
- * Does this isocan satisfy a module's `engines`? Three shapes, on purpose
+ * Does this build's MODULE API satisfy a module's `engines`? Three shapes, on purpose
  * no more: `*` (or nothing) is anything; `>=a.b.c` is at least; `^a.b.c` is
  * at least and the same major (same minor while the major is 0, as npm
  * reads it). A range this cannot read is a refusal that says so, because a
  * module that cannot state what it needs is not a module a home should run.
  */
-export function enginesSatisfied(range: string | undefined, version: string = ISOCAN_VERSION): { ok: true } | { ok: false; why: string } {
+export function enginesSatisfied(range: string | undefined, version: string = MODULE_API_VERSION): { ok: true } | { ok: false; why: string } {
   const have = parseVersion(version);
-  if (!have) return { ok: false, why: `this isocan's version "${version}" cannot be read` };
+  if (!have) return { ok: false, why: `this build's module API version "${version}" cannot be read` };
   const r = (range ?? "*").trim();
   if (r === "*" || r === "") return { ok: true };
   const m = /^(>=|\^)?\s*(.+)$/.exec(r);
   const want = m ? parseVersion(m[2]!) : null;
   if (!m || !want) return { ok: false, why: `cannot read the engines range "${r}" — use >=a.b.c, ^a.b.c or *` };
   const op = m[1] ?? "^";
-  if (compare(have, want) < 0) return { ok: false, why: `needs isocan ${r}, and this is ${version}` };
+  if (compare(have, want) < 0) return { ok: false, why: `needs module API ${r}, and this build is ${version}` };
   if (op === "^") {
     const sameLine = want[0] === 0 ? have[0] === 0 && have[1] === want[1] : have[0] === want[0];
-    if (!sameLine) return { ok: false, why: `needs isocan ${r}, and this is ${version}` };
+    if (!sameLine) return { ok: false, why: `needs module API ${r}, and this build is ${version}` };
   }
   return { ok: true };
 }

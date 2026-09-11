@@ -1,6 +1,6 @@
 # The journeys — the app, opened and used.
 #
-# **Weekly, not on every push, and that is a cost decision made on purpose.**
+# **Nightly, not on every push, and that is a cost decision made on purpose.**
 # This boots a daemon and drives a headless browser through the real app: about
 # ninety seconds, against a suite that answers in one. The value is not in
 # catching a regression the minute it lands — `review.yml` does that for
@@ -58,14 +58,18 @@ jobs:
 
       - name: Walk them
         id: walk
+        env:
+          JOURNEY_ONLY: ${{ inputs.only }}
         run: |
-          ONLY=""
-          if [ -n "${{ inputs.only }}" ]; then ONLY="--only ${{ inputs.only }}"; fi
-          # `|| true` because a failing journey is news here, not a broken build.
-          OUT=$(node scripts/journeys.mjs $ONLY 2>&1) || true
+          args=()
+          if [ -n "$JOURNEY_ONLY" ]; then args+=(--only "$JOURNEY_ONLY"); fi
+          # Keep the exit status: boot/teardown errors need not print FAIL.
+          # The walk stays advisory, but a broken runner must still be reported.
+          status=0
+          OUT=$(node scripts/journeys.mjs "${args[@]}" 2>&1) || status=$?
           echo "$OUT"
-          printf '%s\n' "$OUT" > /tmp/journeys.txt
-          if echo "$OUT" | grep -q "^FAIL"; then
+          printf '%s\nRunner exit status: %s\n' "$OUT" "$status" > "$RUNNER_TEMP/journeys.txt"
+          if [ "$status" -ne 0 ] || grep -q "^FAIL" <<< "$OUT"; then
             echo "failing=yes" >> "$GITHUB_OUTPUT"
           else
             echo "failing=no" >> "$GITHUB_OUTPUT"
@@ -77,10 +81,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "**A journey did not walk.**"
+            echo "**The journey run needs attention.**"
             echo
             echo '```'
-            cat /tmp/journeys.txt
+            cat "$RUNNER_TEMP/journeys.txt"
             echo '```'
             echo
             echo "---"

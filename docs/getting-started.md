@@ -14,6 +14,14 @@ the moment anything here does not work. [Architecture](architecture.md) is
 why the pieces are shaped the way they are; it is worth reading once, on the
 second day, when the names mean something.
 
+Three of these live on canvases too, which is the medium they are about. The
+[\[isocan\] Getting Started](https://isocan.io/p/prj_6nodKBn0oA) canvas is the user's
+version of this page as a deck; [\[isocan\] System design](https://isocan.io/p/prj_6fgykNN1_m) is the
+architecture as thirteen instruments you can drive, each citing the files it
+was read from; and [\[isocan\] History](https://isocan.io/p/prj_Gi8oGKNALt) is how it was
+built, day by day, from the first commit. All three are open to anyone with
+the address.
+
 ## What this is, in one paragraph
 
 isocan is an infinite shared canvas driven from two surfaces: a web app and a

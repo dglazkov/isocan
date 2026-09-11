@@ -38,6 +38,7 @@ import {
   renamedFilename,
   titleRoom,
   paperOf,
+  visualFaceOf,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
@@ -1041,6 +1042,12 @@ function ItemViewInner({
           {SLIDE_EMOJI} Notes for {noteSlideTitle}
         </span>
       )}
+      {["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
+        <button type="button" className="btn item-read" aria-label={entered ? "Done reading" : `Read ${item.title} and select text`}
+          onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
+          {entered ? "Done reading" : "Read / select text"}
+        </button>
+      )}
       <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
         {/**
          * Too far away to read: draw the mark, not the words.
@@ -1072,22 +1079,27 @@ function ItemViewInner({
            * would trade a memory problem for a flicker one.
            */
           <span className="item-standby" aria-hidden="true" />
-        ) : (
-        <VersionContent
-          canvasId={canvasId}
-          blobHash={current.blobHash}
-          mimeType={current.mimeType}
-          filename={current.filename}
-          entered={entered}
-          designSystem={isDesignSystem(item)}
-          textNode={isText}
-          canvasOf={canvasIdOf(item)}
-          canvasSource={source}
-          size={{ width, height }}
-          reloadToken={reloadToken}
-          liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
-        />
-        )}
+        ) : (() => {
+          const visual = visualFaceOf(current);
+          return (
+            <VersionContent
+              canvasId={canvasId}
+              blobHash={visual.blobHash}
+              mimeType={visual.mimeType}
+              filename={visual.filename ?? current.filename}
+              entered={entered}
+              itemId={item.id}
+              versionId={current.id}
+              designSystem={isDesignSystem(item)}
+              textNode={isText}
+              canvasOf={canvasIdOf(item)}
+              canvasSource={source}
+              size={{ width, height }}
+              reloadToken={reloadToken}
+              liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
+            />
+          );
+        })()}
 
         {/* Over the content rather than instead of it: a pale block says
             little at this size but it is not nothing, and replacing it would
@@ -1347,6 +1359,8 @@ export function VersionContent({
   mimeType,
   filename,
   entered,
+  itemId,
+  versionId,
   reloadToken = 0,
   designSystem,
   textNode,
@@ -1371,6 +1385,8 @@ export function VersionContent({
   /** The item's box, for content that lays itself out to it (the canvas card). */
   size?: { width: number; height: number };
   entered: boolean;
+  itemId?: string | undefined;
+  versionId?: string | undefined;
   /** Blobs to render out of sight because they are probably next — the slides
    *  either side of this one. See `HtmlView`. */
   warm?: readonly string[];
@@ -1419,9 +1435,13 @@ export function VersionContent({
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
     return (
       <MarkdownView
+        key={blobHash}
         canvasId={canvasId}
         blobHash={blobHash}
         plain={mimeType === "text/plain"}
+        itemId={itemId}
+        versionId={versionId}
+        active={entered}
         breaks={textNode === true}
       />
     );
@@ -1745,10 +1765,16 @@ function MarkdownViewInner({
   blobHash,
   plain,
   breaks,
+  itemId,
+  versionId,
+  active,
 }: {
   canvasId: string;
   blobHash: string;
   plain: boolean;
+  itemId?: string | undefined;
+  versionId?: string | undefined;
+  active: boolean;
   breaks?: boolean;
 }) {
   const [load, setLoad] = useState<TextLoad>(() => {
@@ -1768,11 +1794,10 @@ function MarkdownViewInner({
 
   if (load === null) return <div className="file-view">…</div>;
   if ("failed" in load) return <BlobError reason={load.failed} />;
-  if (plain) return <div className="md-view" style={{ whiteSpace: "pre-wrap" }}>{load.text}</div>;
   return (
     <div className="md-view">
       {/* GFM: tables, strikethrough, task lists, autolinks */}
-      <Markdown breaks={breaks}>{load.text}</Markdown>
+      <Markdown plain={plain} breaks={breaks} attention={itemId && versionId ? { itemId, versionId, blobHash, active, flavor: plain ? "plain" : breaks ? "text-node" : "document" } : undefined}>{load.text}</Markdown>
     </div>
   );
 }

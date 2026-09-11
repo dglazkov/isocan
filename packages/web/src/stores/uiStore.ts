@@ -1,3 +1,4 @@
+import type { TextAnchor } from "@isocan/core";
 import { create } from "zustand";
 import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
@@ -78,6 +79,8 @@ export interface PendingText {
 }
 
 export interface PendingComment {
+  /** A quote captured before the composer takes focus. */
+  textAnchor?: TextAnchor;
   /** World coordinates of the click. */
   x: number;
   y: number;
@@ -227,6 +230,11 @@ interface UiStore {
    *  browser, like the theme: taste, not a canvas fact. */
   hiddenChrome: string[];
   setChromeHidden: (id: string, hidden: boolean) => void;
+  /** Unfinished work a person switched on for themselves — `lib/experiments.ts`.
+   *  This browser's, like `hiddenChrome`: it changes what YOU see, never what
+   *  the canvas is. */
+  experiments: string[];
+  setExperiment: (id: string, on: boolean) => void;
   /**
    * **Messages this reader has folded away**, by comment id.
    *
@@ -440,6 +448,7 @@ function readWbAgentsWidth(): number {
 }
 
 const HIDDEN_CHROME_KEY = "isocan.hiddenChrome";
+const EXPERIMENTS_KEY = "isocan.experiments";
 /** The cursor glow, which some people find delightful and some find busy. */
 const GLOW_KEY = "isocan.cursorGlow";
 const LIVE_DOCS_KEY = "isocan.liveDocs";
@@ -622,6 +631,7 @@ export const useUiStore = create<UiStore>((set) => {
     marksOpen: false,
     historyOpen: false,
     hiddenChrome: readHiddenChrome(),
+    experiments: readIdList(EXPERIMENTS_KEY),
     collapsedComments: [],
     modulesGeneration: 0,
     bumpModules: () => set((s) => ({ modulesGeneration: s.modulesGeneration + 1 })),
@@ -732,6 +742,22 @@ export const useUiStore = create<UiStore>((set) => {
           : s.hiddenChrome.filter((one) => one !== id);
         writeHiddenChrome(hiddenChrome);
         return { hiddenChrome };
+      }),
+    setExperiment: (id, on) =>
+      set((s) => {
+        const experiments = on
+          ? s.experiments.includes(id)
+            ? s.experiments
+            : [...s.experiments, id]
+          : s.experiments.filter((one) => one !== id);
+        try {
+          localStorage.setItem(EXPERIMENTS_KEY, JSON.stringify(experiments));
+        } catch {
+          // A browser that will not store this still runs the app; the switch
+          // simply does not survive a reload, which is the same bargain every
+          // other preference here makes.
+        }
+        return { experiments };
       }),
     toggleComment: (id) =>
       set((s) => ({

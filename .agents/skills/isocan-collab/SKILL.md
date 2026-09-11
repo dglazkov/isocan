@@ -44,8 +44,15 @@ carries the `export PATH=…` that reaches it. Prefixing every command with
 
 ## The one rule to carry in
 
-**The canvas is the only channel.** The human is watching the web app, not
-your terminal — anything you say outside a comment is said to nobody, and
-every lap of work ends parked on `isocan wait`, never on a summary typed at
-a terminal nobody is reading. `isocan --agent-help` is how you do that
-properly; go read it.
+**The canvas is the channel that keeps.** The human is watching the web app,
+and so is everyone else here — what you put on the canvas is the record, and
+anything you say only in your own conversation is invisible to all of them.
+So every lap of work ends parked on `isocan wait`, never on a summary typed
+at a person, however attentive that person is.
+
+If somebody IS reading your terminal — you are in an IDE or an agent manager,
+and your conversation is a window they have open — then you have two channels
+and they are a team room and a DM, not two chats to keep in sync. The guide's
+"Who is at your terminal" says which belongs where, and how to tell which
+mode you are in. `isocan --agent-help` is how you do all of this properly; go
+read it.

@@ -51,6 +51,7 @@ const Workbench = lazy(() =>
 const FullScreen = lazy(() => import("../components/FullScreen.tsx").then((m) => ({ default: m.FullScreen })));
 import { DeckPrint } from "../components/DeckPrint.tsx";
 import { ModulePage } from "../components/ModulePage.tsx";
+import { ModuleOverlays } from "../components/ModuleOverlays.tsx";
 import { useChromeHidden } from "../lib/hideable.ts";
 import { Viewer } from "../components/Viewer.tsx";
 import { CanvasTools } from "../components/CanvasTools.tsx";
@@ -928,6 +929,10 @@ function CanvasSurface({
           style={fadeTone === null ? undefined : ({ "--canvas-ground": `var(${fadeTone})` } as CSSProperties)}
         />
       )}
+      {/* Module overlays: screen-space trays against an edge (#156). Above the
+          canvas and below the app's own chrome, so a module can add to the
+          screen without covering the controls the app promises. */}
+      <ModuleOverlays canvasId={canvasId!} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}
@@ -999,7 +1004,7 @@ function CanvasSurface({
       {/* The deck on paper: every slide stacked, printed one to a sheet. A
           route like full screen, mounted here so it reads the open replica. */}
       {onDeck && <DeckPrint canvasId={canvasId} />}
-      {pageSegment && <ModulePage canvasId={canvasId} segment={pageSegment} />}
+      {pageSegment && <ModulePage canvasId={canvasId} segment={pageSegment} actor={actor} />}
       {/* The other cover: same architecture, different room. Lazy, so the
           canvas path never pays for it; Suspense falls back to nothing for
           the frame the chunk takes. */}

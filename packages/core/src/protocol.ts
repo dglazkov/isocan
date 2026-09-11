@@ -1,3 +1,4 @@
+import type { TextAttention } from "./text-attention.ts";
 import { INSTALL_SPEC } from "./address.ts";
 import type { Capability } from "./grants.ts";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.ts";
@@ -158,6 +159,7 @@ export type ClientMessage =
       actor: Actor;
       cursor: { x: number; y: number } | null;
       selection: string[];
+      textSelection?: TextAttention | null;
     }
   /**
    * A whole roster, from a connection that speaks for several people at once.
@@ -240,6 +242,8 @@ export interface PresenceSession {
   label: string | null;
   cursor: { x: number; y: number } | null;
   selection: string[];
+  /** Temporary text attention, absent on older clients. */
+  textSelection?: TextAttention | null;
   status: string | null;
   /**
    * Who is speaking when `status` is set — the same tri-state the update
@@ -336,6 +340,7 @@ export interface UpdateSessionRequest {
   actor?: Actor;
   cursor?: { x: number; y: number } | null;
   selection?: string[];
+  textSelection?: TextAttention | null;
   status?: string | null;
   /** Who is speaking when `status` is set. "explicit" (default) — the actor
    * said it (`session say/work --say`); it sticks until they post a comment

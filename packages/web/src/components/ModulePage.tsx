@@ -1,4 +1,7 @@
 import { useEffect } from "react";
+import { useMemo } from "react";
+import type { Actor } from "@isocan/core";
+import { webHostFor } from "../lib/modulehost.ts";
 import { useNavigate } from "react-router-dom";
 import { canvasPath } from "@isocan/core";
 import { modulePage } from "../modules.ts";
@@ -17,7 +20,10 @@ import { useUiStore } from "../stores/uiStore.ts";
  * blank cover: a link from a home that had the module still lands
  * somewhere legible on one that does not.
  */
-export function ModulePage({ canvasId, segment }: { canvasId: string; segment: string }) {
+export function ModulePage({ canvasId, segment, actor }: { canvasId: string; segment: string; actor: Actor }) {
+  /* One host per mount, memoised: a new object every render would remount a
+     page that took it as a prop and lose whatever it was holding. */
+  const host = useMemo(() => webHostFor(canvasId, actor), [canvasId, actor]);
   const navigate = useNavigate();
   const canvas = useCanvasStore((s) => s.canvas);
   // A runtime module's page may arrive after first paint.
@@ -47,7 +53,7 @@ export function ModulePage({ canvasId, segment }: { canvasId: string; segment: s
       </div>
       <div className="module-page-body">
         {Body && canvas ? (
-          <Body canvasId={canvasId} canvas={canvas} />
+          <Body canvasId={canvasId} canvas={canvas} host={host} />
         ) : (
           <p className="module-page-missing">
             {page ? "Loading the canvas…" : `No page called “${segment}” on this home — the module that adds it is not loaded here.`}

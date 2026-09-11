@@ -161,6 +161,7 @@ export function invertOperation(
         type: "thread.setAnchor",
         threadId: op.threadId,
         anchorItemId: thread.anchorItemId,
+        ...(thread.textAnchor ? { textAnchor: thread.textAnchor } : {}),
         x: thread.x,
         y: thread.y,
       };

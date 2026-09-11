@@ -1,3 +1,4 @@
+import { textAttention } from "@isocan/core";
 import { createReadStream, existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { createHash } from "node:crypto";
@@ -27,6 +28,7 @@ import type {
   MintPassRequest,
   MintPassResponse,
   Pass,
+  PassResponse,
   PostOpRequest,
   Canvas,
   RcAskRequest,
@@ -81,6 +83,7 @@ import {
   DOOR_ROUTE,
   FILENAME_HEADER,
   fileOf,
+  visualFileOf,
   FREE_NAME_ROUTE,
   actorNameIn,
   attestationSatisfying,
@@ -118,6 +121,7 @@ import {
   narrowed,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
+  PASS_UNKNOWN,
   RUNGS,
   SERVING_ROUTE,
   SIGN_BLOBS_LIMIT,
@@ -174,6 +178,7 @@ import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
 import {
   badgeCookie,
+  framedRequest,
   isSecureRequest,
   mintBadge,
   originAllowed,
@@ -935,7 +940,11 @@ export function registerRoutes(
       // value of HttpOnly is that page JavaScript cannot read the credential,
       // and returning it in JSON hands it straight back.
       const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
-      reply.header("Set-Cookie", badgeCookie(token, secure));
+      // Framed is STATED here and sniffed on the page path, for the reason
+      // `carrier` is stated: this route is `fetch`ed by the app, whose
+      // `Sec-Fetch-Dest` is `empty` either way. Only the page knows.
+      const framed = ((req.body ?? {}) as DoorRequest).framed === true;
+      reply.header("Set-Cookie", badgeCookie(token, secure, framed));
       return { badgeId: record.badgeId } satisfies DoorResponse;
     }
     return { badgeId: record.badgeId, secret: token.slice(record.badgeId.length + 1) } satisfies DoorResponse;
@@ -2925,8 +2934,9 @@ export function registerRoutes(
   // passes would be handing out admissions to a canvas it does not own.
 
   /**
-   * Mint one. The token comes back exactly once — there is no route that
-   * reads a pass back out, and the desk keeps only its hash.
+   * Mint one. The token comes back exactly once — no route reads it back out
+   * (the read below returns the row, never the secret), and the desk keeps
+   * only its hash.
    *
    * `actorId` is optional and both shapes are real (see `Pass.actorId`): with
    * it the redeemer arrives being somebody, without it the redeemer arrives
@@ -2977,6 +2987,32 @@ export function registerRoutes(
     });
     await desk.putPass(record);
     return { pass: withoutSecret(record), token } satisfies MintPassResponse;
+  });
+
+  /**
+   * Read one back — **for the badge that minted it, and nobody else**
+   * (sheep-harness phase 2). The row without its secret, so the minter learns
+   * whether its pass was spent and by which badge (`redeemedBy`): the exact
+   * surface the pass made. An rc that minted a pass for a sheep's cell uses
+   * it to end that cell's badge when the agent is withdrawn.
+   *
+   * Another badge's pass, a pass for another canvas, and no pass at all
+   * answer the same `unknown-pass`, so this is no oracle over passes the
+   * caller did not mint. On a replica it forwards to the canvas's home, where
+   * the row is and where the minter was this daemon's badge.
+   */
+  app.get("/api/projects/:id/passes/:passId", async (req, reply) => {
+    const { id, passId } = req.params as { id: string; passId: string };
+    const home = options.homes?.for(id) ?? null;
+    if (home) return home.pass(id, passId);
+    const held = await desk.pass(passId);
+    if (!held || held.canvasId !== id || held.mintedBy !== req.badge!.badgeId) {
+      return reply.status(404).send({
+        error: `no pass ${passId} minted by this badge for ${id}`,
+        code: PASS_UNKNOWN,
+      });
+    }
+    return { pass: withoutSecret(held) } satisfies PassResponse;
   });
 
   /**
@@ -3479,6 +3515,7 @@ export function registerRoutes(
     // Every beat re-asserts who is holding the face (that is what makes a
     // rename re-label it live), so every beat is checked.
     if (body.actor) await engine.requireActor(req.badge!.badgeId, body.actor.id);
+    if (body.textSelection !== undefined) body.textSelection = textAttention(body.textSelection, Date.now(), (await engine.getSnapshot(id)).canvas);
     if (!presence.touch(id, sid, body)) {
       return reply.status(404).send({ error: "session expired or unknown", code: "unknown-session" });
     }
@@ -4003,7 +4040,33 @@ export function registerRoutes(
         .status(result.refusal === "drifted" ? 409 : 400)
         .send({ error: sentence[result.refusal ?? "unwritable"], code: result.refusal });
     }
-    return { root, path: rel, wrote: current.blobHash };
+
+    const visualRel = visualFileOf(item);
+    let visualResult: { path: string; wrote: string } | undefined;
+    if (visualRel && current.visual) {
+      const vStream = await store.openBlob(id, current.visual.blobHash);
+      if (vStream) {
+        const vChunks: Buffer[] = [];
+        for await (const chunk of vStream) vChunks.push(Buffer.from(chunk as Buffer));
+        const vBytes = Buffer.concat(vChunks);
+        const vOurs = force
+          ? [(await hashBound(root, visualRel, hashOf)) ?? ""]
+          : item.versions
+              .map((v) => v.visual?.blobHash)
+              .filter((h): h is string => typeof h === "string");
+        const vRes = await writeBound(root, visualRel, vBytes, vOurs, hashOf);
+        if (vRes.ok) {
+          visualResult = { path: visualRel, wrote: current.visual.blobHash };
+        }
+      }
+    }
+
+    return {
+      root,
+      path: rel,
+      wrote: current.blobHash,
+      ...(visualResult ? { visualPath: visualResult.path, wroteVisual: visualResult.wrote } : {}),
+    };
   });
 
   /**
@@ -4024,9 +4087,15 @@ export function registerRoutes(
     if (bound.length > 0) {
       for (const item of Object.values(snapshot.canvas.items)) {
         const rel = fileOf(item);
-        if (!rel || onDisk[rel] !== undefined) continue;
-        const hash = await hashBound(bound[0]!, rel, hashOf);
-        if (hash !== null) onDisk[rel] = hash;
+        if (rel && onDisk[rel] === undefined) {
+          const hash = await hashBound(bound[0]!, rel, hashOf);
+          if (hash !== null) onDisk[rel] = hash;
+        }
+        const vRel = visualFileOf(item);
+        if (vRel && onDisk[vRel] === undefined) {
+          const hash = await hashBound(bound[0]!, vRel, hashOf);
+          if (hash !== null) onDisk[vRel] = hash;
+        }
       }
     }
     return { bound: bound.length > 0, onDisk };
@@ -4626,7 +4695,9 @@ function registerPages(
         const { record, token } = mintBadge("cookie");
         await desk.put(record);
         const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
-        reply.header("Set-Cookie", badgeCookie(token, secure));
+        // A canvas opened in an agent manager's pane arrives HERE first, and
+        // this is the one request that can still tell it is a frame (#220).
+        reply.header("Set-Cookie", badgeCookie(token, secure, framedRequest(req.headers)));
       }
     }
     return send(reply, path.join(dist, "index.html")); // SPA fallback

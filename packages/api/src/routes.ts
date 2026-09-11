@@ -19,6 +19,7 @@ import type {
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
+  PassResponse,
   Operation,
   PostOpResponse,
   PresenceSession,
@@ -77,6 +78,7 @@ import {
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
   passesRoute,
+  passRoute,
   SERVING_ROUTE,
 } from "@isocan/core";
 import type { UpgradeVerdict } from "@isocan/core";
@@ -643,6 +645,13 @@ export class DaemonRoutes {
    * the admission-only shape. The token comes back exactly once. */
   mintPass(canvasId: string, actorId?: string): Promise<MintPassResponse> {
     return this.request("POST", passesRoute(canvasId), actorId ? { actorId } : {});
+  }
+
+  /** One pass this badge minted, read back without its secret: whether it
+   * was spent, and by which badge (`redeemedBy`). `unknown-pass` for any
+   * pass this badge did not mint. */
+  pass(canvasId: string, passId: string): Promise<PassResponse> {
+    return this.request("GET", passRoute(canvasId, passId));
   }
 
   /**

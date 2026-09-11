@@ -1,3 +1,4 @@
+import { validateTextAnchor } from "./text-anchor.ts";
 import type {
   Actor,
   Canvas,
@@ -346,6 +347,7 @@ export function applyOperation(
       requireBody(op.comment.body);
       requireFinite({ x: op.x, y: op.y }, "thread.create");
       if (op.anchorItemId !== null) getItem(op.anchorItemId);
+      const textAnchor = validateTextAnchor(op.textAnchor, op.anchorItemId ? canvas.items[op.anchorItemId] : undefined);
       // Strict, not takeover: a race between two clients birthing a main
       // thread must not leave one silently demoted — the loser errors and
       // replies to the winner's thread instead. Keeps undo exact, too.
@@ -357,6 +359,7 @@ export function applyOperation(
         x: op.x,
         y: op.y,
         anchorItemId: op.anchorItemId,
+        ...(textAnchor ? { textAnchor } : {}),
         comments: [toComment(op.comment, actor, ts)],
         ...(op.main ? { main: true } : {}),
         createdAt: ts,
@@ -401,7 +404,10 @@ export function applyOperation(
       ) {
         throw new OpValidationError("unknown-item", `unknown item: ${op.anchorItemId}`);
       }
+      const anchorItem = op.anchorItemId ? canvas.items[op.anchorItemId] ?? canvas.trash.find(t => t.item.id === op.anchorItemId)?.item : undefined;
+      const textAnchor = validateTextAnchor(op.textAnchor, anchorItem);
       const next = { ...thread, anchorItemId: op.anchorItemId, x: op.x, y: op.y };
+      if (textAnchor) next.textAnchor = textAnchor; else delete next.textAnchor;
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
     }
 

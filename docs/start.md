@@ -52,6 +52,9 @@ the app. Run it again any time; it is idempotent.
 **That is the whole of getting started.** Everything below is for later, and
 none of it is needed to have a canvas working:
 
+* [\[isocan\] Getting Started, on a canvas](https://isocan.io/p/prj_6nodKBn0oA) — the same five
+  steps as a deck, and the concepts underneath them. Open to anyone with the
+  address; a good way to see what a canvas is before making one.
 * [How to use isocan](how-to.md) — now that it runs: asking for work, talking
   about it, pointing a canvas at a directory.
 * [Getting started as a contributor](getting-started.md) — working *on*

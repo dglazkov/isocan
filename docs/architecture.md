@@ -10,6 +10,13 @@ later. The record of what moved it lives in the phase findings of
 [the multiuser phases](projects/multiuser/phases.md): a finding that redraws
 the map edits this doc in the same change.
 
+The same system is drawn as instruments on the
+[\[isocan\] System design](https://isocan.io/p/prj_6fgykNN1_m) canvas — the hourglass, the
+life of an operation, the door, the two ledgers, home and replica, the
+storage seam, the GCP map — each screen citing the files it was read from.
+Drive that first if the names here do not yet mean anything; this doc is the
+one that has to stay exact.
+
 ## Givens
 
 - **Google Cloud**, one region (`us-west1` — compute, Firestore, and
@@ -742,3 +749,16 @@ When reality produces something this map didn't see, the map changes
 surfaced it, in [phases.md](projects/multiuser/phases.md). Things seen during mapping
 (the 32 MiB blob cap, deploy overlap) are in the map above, not there
 — the findings are only for what the map missed.
+
+
+### Shared document attention
+
+Markdown/plain-text selections travel as optional `textSelection` presence,
+not operations: item/version/blob identity, `markdown-hast-v1` code-point
+range, rendering flavor and a 15-second expiry independent of session beats.
+The web captures only saved, entered documents. The CLI's `session select`
+uses core's lazy `@isocan/core/markdown` projection, tested against the actual
+renderer (including React's table-whitespace removal). Receivers resolve local
+DOM ranges; CSS Custom Highlights never replace native selection. Older
+browsers retain the named attention status and explicit Show selection action.
+Version changes clear the highlight instead of guessing at another sentence.

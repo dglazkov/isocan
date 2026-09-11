@@ -133,4 +133,31 @@ describe("a sheet, and what is on it", () => {
     expect(run.stderr).toContain('no area called "Nowhere"');
     expect(run.stderr).toContain("isocan area ls");
   });
+
+  it("automatically grows the area when it cannot fit additional nodes", async () => {
+    await isocan("canvas", "create", "Gallery");
+    const sheet = await json("area", "new", "Screens");
+    const initialHeight = sheet.height;
+    expect(initialHeight).toBe(1000);
+
+    // Add 3 full-sized screens (1280x800 each) --in Screens.
+    // Inner area is 1552x800, so only 1 screen fits in the default sheet.
+    // The 2nd and 3rd screens must cause the area to auto-grow downward.
+    const s1 = await json("text", "Screen 1", "--in", "Screens", "--size", "1280x800");
+    const s2 = await json("text", "Screen 2", "--in", "Screens", "--size", "1280x800");
+    const s3 = await json("text", "Screen 3", "--in", "Screens", "--size", "1280x800");
+
+    expect(s1.placement.y).not.toBe(s2.placement.y);
+    expect(s2.placement.y).not.toBe(s3.placement.y);
+    expect(s2.placement.y).toBeGreaterThan(s1.placement.y);
+    expect(s3.placement.y).toBeGreaterThan(s2.placement.y);
+
+    const all = await json("ls");
+    const sheetNow = all.find((one: any) => one.title === "Screens");
+    expect(sheetNow.height).toBeGreaterThan(2500);
+
+    const held = await json("ls", "--in", "Screens");
+    expect(held.length).toBe(3);
+    expect(held.map((one: any) => one.title).sort()).toEqual(["Screen 1", "Screen 2", "Screen 3"]);
+  });
 });

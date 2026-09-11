@@ -441,8 +441,10 @@ if (repeats.length > 0) {
  * past. `trigger` is read by `isocan persona ls` and the board's panel, and
  * both only display it — nothing schedules from it.
  *
- * The staleness column reports and does not fail: a run whose pull request is
- * still open reads a day behind through no fault of the persona. What IS
+ * Last-run dates are absolute: a committed index must not become stale at
+ * midnight with no source change. `node scripts/cadence.mjs` reports live
+ * ages when asked. A run whose pull request is still open reads a day behind
+ * through no fault of the persona. What IS
  * guarded is the declaration itself (`test/cadence.test.ts`), because declared
  * twice and not declared at all are true or false in the tree and nowhere
  * else.
@@ -466,7 +468,7 @@ lines.push(
   "| --- | --- | --- | --- |",
 );
 for (const row of cadence) {
-  const when = row.lastRan ? `${row.lastRan} · ${row.ageDays}d ago` : "never";
+  const when = row.lastRan ?? "never";
   lines.push(
     `| ${row.name} | \`${row.cron ?? "—"}\` | ${when} | ${row.verdict === "agrees" ? "" : `**${row.verdict}**`} |`,
   );
