@@ -86,7 +86,7 @@ export async function inlineCssUrls(css: string, baseDir: string): Promise<strin
     /\burl\(\s*(["']?)(.*?)\1\s*\)/gi,
     (full, quote, ref) => {
       const dataUri = refsToReplace.get(ref);
-      return dataUri ? `url("${dataUri}")` : full;
+      return dataUri ? `url(${quote}${dataUri}${quote})` : full;
     },
   );
 }
@@ -220,7 +220,7 @@ export async function inlineHtmlAssets(
       /\burl\(\s*(["']?)(.*?)\1\s*\)/gi,
       (full, quote, ref) => {
         const dataUri = refsToReplace.get(ref);
-        return dataUri ? `url("${dataUri}")` : full;
+        return dataUri ? `url(${quote}${dataUri}${quote})` : full;
       },
     );
 
