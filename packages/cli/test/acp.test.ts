@@ -55,7 +55,7 @@ beforeEach(async () => {
   // door any unknown harness uses.
   await fs.writeFile(
     path.join(home, "config.json"),
-    JSON.stringify({ acpAdapters: { fake: [process.execPath, fakeAcp] } }),
+    JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { fake: [process.execPath, fakeAcp] } }),
   );
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
@@ -142,6 +142,73 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(inside.stdout).toContain("Sian");
   }, 30_000);
 
+  it("a permission is granted for this call only — never by index, never a mode switch", async () => {
+    // The Claude adapter's plan-exit prompt: every option allow_always
+    // and each one a mode switch, bypass among them. The old answer (the
+    // first option matching /allow/) chose one. The answer is by kind:
+    // no allow_once here, so the agent's own reject — and the narration
+    // says what was offered and why it was refused.
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const run = await collect(spawnCli(["rc", "turn", "Sian", "hello"], { FAKE_ACP_PERMISSION: "plan-exit" }));
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("permission:reject");
+    expect(run.stderr).toContain("refused: no allow-once option (offered: exit-plan-auto, exit-plan-bypass, exit-plan-default, reject)");
+    // …and the everyday prompt, reject listed first, still gets its yes:
+    // kind chooses, not position (the first test above pins this too).
+    const plain = await isocan("rc", "turn", "Sian", "again");
+    expect(plain.stdout).toContain("permission:yes");
+  }, 40_000);
+
+  it("the adapter's environment is a list, not the shell: needs pass, accidents do not, the hook adds", () => {
+    const shell: NodeJS.ProcessEnv = {
+      PATH: "/usr/bin",
+      HOME: "/Users/nico",
+      LC_ALL: "en_US.UTF-8",
+      HTTPS_PROXY: "http://proxy:3128",
+      ISOCAN_HOME_URL: "https://isocan.io",
+      ANTHROPIC_API_KEY: "sk-ant",
+      OPENAI_API_KEY: "sk-oai",
+      GEMINI_API_KEY: "g",
+      CLAUDE_CONFIG_DIR: "/Users/nico/.claude-work",
+      npm_config_cache: "/tmp/npm",
+      // The accidents: exported for something else, never for an agent.
+      AWS_SECRET_ACCESS_KEY: "aws",
+      GITHUB_TOKEN: "gh",
+      SSH_AUTH_SOCK: "/tmp/agent.sock",
+      DATABASE_URL: "postgres://",
+      // A harness variable, and the nested-session guard's tripwire.
+      CLAUDE_CODE_SESSION_ID: "stale",
+      CLAUDECODE: "1",
+      // What the hook names: one exact, one by prefix.
+      MY_HARNESS_TOKEN: "t",
+      FAKE_ACP_CRASH: "no",
+      FAKE_OTHER: "x",
+    };
+    const env = adapterEnv("prj_1", "Sian", { source: shell, pass: ["MY_HARNESS_TOKEN", "FAKE_ACP_*"] });
+    expect(env).toMatchObject({
+      PATH: "/usr/bin",
+      HOME: "/Users/nico",
+      LC_ALL: "en_US.UTF-8",
+      HTTPS_PROXY: "http://proxy:3128",
+      ISOCAN_HOME_URL: "https://isocan.io",
+      ANTHROPIC_API_KEY: "sk-ant",
+      OPENAI_API_KEY: "sk-oai",
+      GEMINI_API_KEY: "g",
+      CLAUDE_CONFIG_DIR: "/Users/nico/.claude-work",
+      npm_config_cache: "/tmp/npm",
+      MY_HARNESS_TOKEN: "t",
+      FAKE_ACP_CRASH: "no",
+      ISOCAN_HARNESS: "agent",
+      ISOCAN_SESSION_ID: "Sian",
+      ISOCAN_CANVAS: "prj_1",
+    });
+    for (const name of ["AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "DATABASE_URL", "CLAUDE_CODE_SESSION_ID", "CLAUDECODE", "FAKE_OTHER"]) {
+      expect(env).not.toHaveProperty(name);
+    }
+    // Without the hook, the hook's names stay behind too.
+    expect(adapterEnv("prj_1", "Sian", { source: shell })).not.toHaveProperty("MY_HARNESS_TOKEN");
+  });
+
   it("pi ships known: `--harness pi` resolves to the pi-acp adapter without config", async () => {
     // The registry's current pi-acp, pinned to the version the index names.
     expect(await adapterFor(home, "pi")).toMatchObject({
@@ -152,7 +219,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // The config hook still wins over the builtin, as it does for claude-code.
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { pi: ["pi-acp", "--flag"], fake: [process.execPath, fakeAcp] } }),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { pi: ["pi-acp", "--flag"], fake: [process.execPath, fakeAcp] } }),
     );
     expect(await adapterFor(home, "pi")).toEqual({ harness: "pi", command: "pi-acp", args: ["--flag"] });
   });
@@ -260,7 +327,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // said outright, since the runner may have pi or claude installed too.
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
     );
     const run = await isocan("rc", "turn", "Percy", "hi");
     expect(run.code).toBe(0);

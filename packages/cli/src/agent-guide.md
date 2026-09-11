@@ -432,6 +432,15 @@ machine can run and which is the default (`--json` adds a `runnable`
 field) — the thing to read before presenting the choice to a person, and
 the thing to tell them when a summons fails for want of one.
 
+A summoned session's environment is a list, not the person's shell: what a
+process needs, `ISOCAN_*`, and each vendor's own namespace (`ANTHROPIC_*`,
+`CLAUDE_*`, `OPENAI_*`, `CODEX_*`, `GEMINI_*`, `PI_*`). If something you
+need is missing inside a summons, the person names it once in
+`~/.isocan/config.json` under `adapterEnv` (`["MY_VAR", "MY_PREFIX_*"]`) —
+tell them the variable, not the mechanism. And a permission you ask for is
+granted for that one call; an option that would outlast the turn (a standing
+rule, a mode switch) is refused, so do not ask for those — do the call.
+
 ## The Chat
 
 **The web app calls it the Chat**; on the wire and in this CLI it is the

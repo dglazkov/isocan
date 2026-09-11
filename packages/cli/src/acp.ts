@@ -73,21 +73,79 @@ import type { AdapterSpec } from "./harnesses.ts";
  * `INITIAL_AGENT_MODE=agent-full-access` (`harnesses.ts`), which is the
  * posture below said in codex's words.
  *
- * **Permissions are auto-allowed, provisionally.** The agent runs as the
- * person, in the person's directory, with the person's credentials — the
- * same trust as the person typing the harness's name themselves — and a
- * summoned session has nobody at a keyboard to ask. What a summoned agent
- * may do unattended is phase 4/5's door (a ceiling and a reason); this
- * module's policy is one function below, so the door has one thing to
- * change.
+ * **Permissions: this call, and nothing that outlasts it** (decided
+ * 2026-09-11; the research is `docs/research/2026-09-10-what-the-rc-hands-over.md`).
+ * A summoned session has nobody at a keyboard, so the client answers. It
+ * used to answer with the first option whose kind, id or name matched
+ * `/allow/i`, else the first option — which on the Claude adapter's
+ * plan-exit prompt, where every option is `allow_always` and each one a
+ * mode switch, chose a mode switch. Now the answer is by kind: the
+ * `allow_once` option, and where there is none, the agent's own reject —
+ * a standing rule, a mode switch, a directory added for good are the
+ * person's to grant, at a keyboard, not a turn's to grant itself. The
+ * agent still runs as the person, in the person's directory; what fences
+ * it beyond this is the research note's layers 2 and 3, not yet built.
  */
 
-/** The environment a spawned adapter gets: the person's, scrubbed of every
- * harness variable (a stale one would misidentify the agent; `CLAUDECODE`
- * trips the adapter's nested-session guard), then the injection that makes
- * the CLI inside speak as the enrolled actor. */
-export function adapterEnv(canvasId: string, agentName: string): NodeJS.ProcessEnv {
-  const env = { ...process.env };
+/**
+ * **What an adapter's environment carries** (decided 2026-09-11, from
+ * `docs/research/2026-09-10-what-the-rc-hands-over.md`). It used to be the
+ * whole of `process.env` minus the harness variables — every exported token
+ * the person's shell happened to hold (`AWS_*`, `GITHUB_TOKEN`,
+ * `SSH_AUTH_SOCK`) travelled into every shell the agent opened. Now it is
+ * a list: what a process needs to run, the network plumbing, the vendors'
+ * own namespaces (where the logins live), and the person's additions.
+ * Same posture as `harnessVars`: a list isocan knows, with a `config.json`
+ * hook (`adapterEnv: ["MY_VAR", "MY_PREFIX_*"]`) for what it does not.
+ */
+const PASSED_NAMES = new Set([
+  // A process, on any platform
+  "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TMP", "TEMP", "TERM", "COLORTERM",
+  "NO_COLOR", "FORCE_COLOR", "TZ", "LANG", "LANGUAGE", "EDITOR", "VISUAL",
+  "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR",
+  // Windows
+  "SYSTEMROOT", "SystemRoot", "SYSTEMDRIVE", "SystemDrive", "WINDIR", "COMSPEC", "ComSpec",
+  "PATHEXT", "APPDATA", "LOCALAPPDATA", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "USERNAME",
+  "PROGRAMFILES", "ProgramFiles", "PROGRAMDATA", "ProgramData",
+  // Network plumbing: proxies and trust stores
+  "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
+  "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+  "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+]);
+
+/** Prefixes: isocan's own, Node version managers and npm's config (the
+ * builtin bridges are `npx`), locale, and each vendor's namespace — the
+ * API keys, base URLs and config directories a harness reads. */
+const PASSED_PREFIXES = [
+  "ISOCAN_", "LC_", "npm_config_", "NVM_", "FNM_", "VOLTA_",
+  "ANTHROPIC_", "CLAUDE_", "OPENAI_", "CODEX_", "GEMINI_", "GOOGLE_API_", "PI_",
+];
+
+function passes(name: string, extra: string[]): boolean {
+  if (PASSED_NAMES.has(name)) return true;
+  if (PASSED_PREFIXES.some((p) => name.startsWith(p))) return true;
+  return extra.some((rule) =>
+    rule.endsWith("*") ? name.startsWith(rule.slice(0, -1)) : name === rule,
+  );
+}
+
+/** The environment a spawned adapter gets: the passed subset of the
+ * person's (above), scrubbed of every harness variable (a stale one would
+ * misidentify the agent; `CLAUDECODE` trips the adapter's nested-session
+ * guard), then the injection that makes the CLI inside speak as the
+ * enrolled actor. `pass` is config.json's `adapterEnv` — names, or
+ * `PREFIX_*` — and `source` is a parameter so a test can hand it a shell. */
+export function adapterEnv(
+  canvasId: string,
+  agentName: string,
+  options: { pass?: string[]; source?: NodeJS.ProcessEnv } = {},
+): NodeJS.ProcessEnv {
+  const source = options.source ?? process.env;
+  const extra = options.pass ?? [];
+  const env: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(source)) {
+    if (value !== undefined && passes(name, extra)) env[name] = value;
+  }
   for (const name of [...harnessVars, "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[name];
   env["ISOCAN_HARNESS"] = "agent";
   env["ISOCAN_SESSION_ID"] = agentName;
@@ -296,24 +354,39 @@ export class AcpAgentProcess {
     }
   }
 
-  /** Agent-to-client requests. Permission is the one we grant (see the
-   * module comment — provisional, phase 4/5's door); everything else is
-   * declared unsupported, matching the capabilities we sent. */
+  /** Agent-to-client requests. Permission is the one we answer (see the
+   * module comment); everything else is declared unsupported, matching the
+   * capabilities we sent. */
   private answer(msg: JsonRpcMessage): void {
     if (msg.method === "session/request_permission") {
       const options: Array<{ optionId?: string; name?: string; kind?: string }> =
         msg.params?.options ?? [];
-      const allow =
-        options.find((o) => /allow/i.test(`${o.kind ?? ""} ${o.optionId ?? ""} ${o.name ?? ""}`)) ??
-        options[0];
+      const title = msg.params?.toolCall?.title ?? "a tool";
+      const once = options.find((o) => o.kind === "allow_once");
+      if (once) {
+        this.onEvent?.({ kind: "permission", detail: `${title} → ${once.optionId ?? "?"}` });
+        this.send({
+          jsonrpc: "2.0",
+          id: msg.id!,
+          result: { outcome: { outcome: "selected", optionId: once.optionId } },
+        });
+        return;
+      }
+      // Nothing here is for this call alone — every option would outlast
+      // the turn (a standing rule, a mode switch). Refuse, by the agent's
+      // own reject option where it offers one, and say what was offered.
+      const reject = options.find((o) => o.kind === "reject_once") ?? options.find((o) => o.kind === "reject_always");
+      const offered = options.map((o) => o.optionId ?? o.name ?? "?").join(", ") || "nothing";
       this.onEvent?.({
         kind: "permission",
-        detail: `${msg.params?.toolCall?.title ?? "a tool"} → ${allow?.optionId ?? "?"}`,
+        detail: `${title} → refused: no allow-once option (offered: ${offered}); a summoned turn grants nothing that outlasts it`,
       });
       this.send({
         jsonrpc: "2.0",
         id: msg.id!,
-        result: { outcome: { outcome: "selected", optionId: allow?.optionId } },
+        result: reject
+          ? { outcome: { outcome: "selected", optionId: reject.optionId } }
+          : { outcome: { outcome: "cancelled" } },
       });
       return;
     }

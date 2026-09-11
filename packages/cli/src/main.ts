@@ -421,7 +421,7 @@ import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, type GuardState } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
-import { adapterFor, defaultLine, noDefaultLine, noNeedLine, scanHarnesses, setDefaultHarness } from "./harnesses.ts";
+import { adapterFor, defaultLine, noDefaultLine, noNeedLine, passedEnv, scanHarnesses, setDefaultHarness } from "./harnesses.ts";
 import {
   checkoutState,
   planUpgrade,
@@ -11489,6 +11489,14 @@ the only harness installed here, or the one \`--default-harness <name>\` picked
 none picked, a terminal start asks; a start with no terminal refuses and
 names the flag. \`isocan harness\` prints what is installed and runnable.
 
+A summoned agent's environment is a list, not your shell: what a process
+needs (PATH, HOME, locale, proxies), isocan's own variables, and each
+vendor's namespace (ANTHROPIC_*, CLAUDE_*, OPENAI_*, CODEX_*, GEMINI_*, PI_*).
+Anything else you export stays behind. A harness that needs more is named
+once in ~/.isocan/config.json: {"adapterEnv": ["MY_VAR", "MY_PREFIX_*"]}.
+Permission prompts are answered for the one call only; an option that
+would outlast the turn (a standing rule, a mode switch) is refused and said.
+
 An agent never starts an rc — inside a harness session this refuses, and
 the agent's spelling of the verbs is \`isocan agent\`.`,
   );
@@ -11696,7 +11704,7 @@ the ACP registry's current bridge, fetched on first use (Antigravity's is a
       console.error(rcLine("", `${record.actor.name} · starting ${spec.harness} (${spec.command}) in ${row.cwd}`));
       const agent = await AcpAgentProcess.spawn(spec, {
         cwd: row.cwd,
-        env: adapterEnv(p.id, record.actor.name),
+        env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
       });
       try {
         const session = await agent.ensureSession(row.cwd, row.sessionId);
@@ -12294,7 +12302,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       heartbeat.unref?.();
       const agent = await AcpAgentProcess.spawn(spec, {
         cwd: row.cwd,
-        env: adapterEnv(p.id, record.actor.name),
+        env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
         narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
       });
       try {

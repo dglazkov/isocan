@@ -1,13 +1,17 @@
 ---
-status: open
+status: partial
 since: 2026-09-10
 see: on-demand, harnesses, agent-custody, standing-agents
-note: measured 10 Sep — a summoned agent gets the whole environment (`{ ...process.env }` minus harness variables), the person's shell on the host (fs/terminal declared unsupported means the harness uses its own), every permission auto-allowed by a regex, and codex forced to full access because its sandbox refused loopback; any admitted member of a shared canvas can ring. What the agent NEEDS is one directory, one loopback port, its own config, and the vendor's API. Three layers weighed — answer by kind and allow-list the env (no dependency), each harness's own narrowing through the ACP client isocan already is (`_meta.claudeCode.options`, `INITIAL_AGENT_MODE=agent`), and `@anthropic-ai/sandbox-runtime` around the adapter — plus the boring boundary that needs no code, a second OS user
+note: layer 1 built 11 Sep — permissions answered by kind (allow_once, else the agent's reject; a mode switch is never chosen), and the adapter's environment is a list (a process's needs, ISOCAN_*, the vendors' namespaces, config.json's `adapterEnv` hook) instead of the whole shell. Measured 10 Sep — a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, and codex forced to full access because its sandbox refused loopback; any admitted member of a shared canvas can ring. Still owed — a reach word on the enrolment translated per harness (`_meta.claudeCode.options`, codex `agent` mode after the loopback spike), the `@anthropic-ai/sandbox-runtime` spike, the second-user recipe, and owner-only summons
 ---
 
 # What the rc hands over, and how to hand over less
 
-**10 September 2026.** Research. Nothing built.
+**10 September 2026.** Research. **Layer 1 built 11 September** — permissions
+answered by kind and the environment as a list, both in `acp.ts`, with
+`config.json`'s `adapterEnv` hook for what the list does not know
+(`harnesses.ts`). Layers 2 and 3, the second-user recipe and the consent
+default are owed.
 
 > "I realise that when I run rc and give it my harness... it pretty much has
 > access to my entire system :)"

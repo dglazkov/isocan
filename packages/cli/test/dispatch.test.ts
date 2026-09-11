@@ -42,7 +42,7 @@ beforeEach(async () => {
   );
   await fs.writeFile(
     path.join(home, "config.json"),
-    JSON.stringify({ acpAdapters: { fake: [process.execPath, fakeAcp] } }),
+    JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { fake: [process.execPath, fakeAcp] } }),
   );
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
@@ -365,7 +365,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
     await fs.writeFile(
       path.join(home, "config.json"),
       JSON.stringify({
-        acpAdapters: { fake: [process.execPath, fakeAcp] },
+        adapterEnv: ["FAKE_ACP_*"], acpAdapters: { fake: [process.execPath, fakeAcp] },
         rcLimits: { turnsPerHour: 1 },
       }),
     );
@@ -405,7 +405,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
         // Both spellings of the adapter key: Sian enrols with --harness
         // fake; Percy arrives the web way (harness unsaid → the machine's
         // default, which this file names so the runner's PATH cannot vote).
-        acpAdapters: {
+        adapterEnv: ["FAKE_ACP_*"], acpAdapters: {
           fake: [process.execPath, fakeAcp],
           "claude-code": [process.execPath, fakeAcp],
         },
@@ -505,7 +505,7 @@ describe("the scene, for real (opt-in: ISOCAN_REAL_ACP=1)", () => {
       // credentials, and an agent that has to READ the brief, orient cold,
       // and answer through the CLI on its own. The one process started by
       // hand is the rc.
-      await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ acpAdapters: {} }));
+      await fs.writeFile(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: {} }));
       await isocan("rc", "add", "Sian", "--harness", "claude-code");
       const rc = startRc({ FAKE_ACP_REPLY: "0" });
       await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");

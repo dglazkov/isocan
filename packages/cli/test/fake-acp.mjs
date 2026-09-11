@@ -119,10 +119,22 @@ function handle(msg) {
       params: {
         sessionId: params.sessionId,
         toolCall: { toolCallId: "tool_1", title: "Bash" },
-        options: [
-          { optionId: "deny", name: "Deny", kind: "reject_once" },
-          { optionId: "yes", name: "Yes", kind: "allow_once" },
-        ],
+        // The everyday shape, reject first so a client choosing by index
+        // shows itself; or, under FAKE_ACP_PERMISSION=plan-exit, the
+        // Claude adapter's plan-exit prompt — every option allow_always,
+        // each a mode switch, bypass among them — plus its reject.
+        options:
+          process.env.FAKE_ACP_PERMISSION === "plan-exit"
+            ? [
+                { optionId: "exit-plan-auto", name: "Yes, and auto-approve", kind: "allow_always" },
+                { optionId: "exit-plan-bypass", name: "Yes, and bypass permissions", kind: "allow_always" },
+                { optionId: "exit-plan-default", name: "Yes, and ask", kind: "allow_always" },
+                { optionId: "reject", name: "No", kind: "reject_once" },
+              ]
+            : [
+                { optionId: "deny", name: "Deny", kind: "reject_once" },
+                { optionId: "yes", name: "Yes", kind: "allow_once" },
+              ],
       },
     });
     void answered.then(async (outcome) => {
