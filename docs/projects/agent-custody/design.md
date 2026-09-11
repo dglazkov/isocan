@@ -171,7 +171,13 @@ sequenceDiagram
   compute-consent question the gate narrows but does not answer. (This
   is also the posture the rc's adoption of enrolments already had.)
   Candidates: owner-only by default with an rc-side allow, or the rc
-  announcing its policy with its hold.
+  announcing its policy with its hold. *(Still open on 11 Sep 2026, and
+  now the sharper half of the pair: what a summoned turn may REACH was
+  bounded that day —
+  [`docs/research/2026-09-10-what-the-rc-hands-over.md`](../../research/2026-09-10-what-the-rc-hands-over.md),
+  layers 1 and 3 — which leaves WHO MAY START one as the question the
+  fence cannot answer. A fenced agent asked for by a stranger is still a
+  stranger spending your tokens on your laptop.)*
 - **The dialog does not name the machine.** With two rcs parked it says
   "the parked rc" and first-wins picks silently; the promise should
   name its keeper once the hold carries a machine label.

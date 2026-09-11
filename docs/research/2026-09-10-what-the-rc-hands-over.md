@@ -268,7 +268,7 @@ backends and would still need their files mounted.
 | Claude `_meta.claudeCode.options` | tools and dirs; Bash sandbox | Bash only | likely (`127.0.0.1:port`, unverified) | no | all | per-harness knowledge |
 | codex `agent` + loopback config | workspace-write | yes | unverified (#33227) | no | all | a spike |
 | pi | none | none | — | — | — | needs layer 3 |
-| `srt` as a library | yes | yes, by domain | macOS direct; Linux via proxy only | no | macOS, Linux | a dependency, three spikes |
+| `srt`, on the PATH | yes | yes, by domain | Linux via proxy: measured, holds | no | macOS, Linux | **built** — no dependency, six things known |
 | bubblewrap `--share-net` | yes | no | yes | no | Linux | one command line |
 | Docker Sandboxes (`sbx`) | microVM | yes, with secret injection | yes, by policy | install | all | spawn a CLI |
 | Second OS user | yes (ownership) | no | yes | once | macOS, Linux | a doc |

@@ -441,6 +441,18 @@ tell them the variable, not the mechanism. And a permission you ask for is
 granted for that one call; an option that would outlast the turn (a standing
 rule, a mode switch) is refused, so do not ask for those — do the call.
 
+**You may be fenced, and it is deliberate.** A person can start the rc with
+`--sandbox`, which runs your session inside a sandbox: you write your own
+working directory, `~/.isocan` and `/tmp`, you read nothing else of their
+home, and you reach this daemon and your own harness's API and nothing else
+on the network. So a refused read outside your directory, or a fetch of some
+other site that fails, is the fence doing its job — not a broken machine, and
+not something to work around. Say what you could not reach and why it
+mattered; the person decides whether to widen it (`sandboxRead`,
+`sandboxWrite` and `sandboxDomains` in `~/.isocan/config.json`) or to leave
+it closed. What never changes is the canvas work: the `isocan` CLI reaches
+the daemon from inside a fence exactly as it does outside.
+
 ## The Chat
 
 **The web app calls it the Chat**; on the wire and in this CLI it is the
