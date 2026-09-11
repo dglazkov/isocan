@@ -6,8 +6,8 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**21 built · 46 still open** — of which 31 partly
-built, 14 designed, 0 blocked, and
+**21 built · 47 still open** — of which 31 partly
+built, 15 designed, 0 blocked, and
 **1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
@@ -52,13 +52,14 @@ and the done column should not be flattered by either.
 | research | [The night shift](docs/research/2026-08-24-the-night-shift.md) | 2026-08-29 | steps 1–4 built — nightly grades (29 Aug), convergence (the fold), and on 3 Sep the converge lane one item wide (`scripts/converge-night.mjs`, its verdicts read by `isocan evals converge`) and the morning comment (`npm run night`, posted by the Night actor); the diverge lane and "what changed while you were gone" are open · see evals, personas · [#138](https://github.com/dglazkov/isocan/issues/138) |
 | research | [What the rc hands over, and how to hand over less](docs/research/2026-09-10-what-the-rc-hands-over.md) | 2026-09-10 | Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS is the one gating measurement left — `scripts/spike-srt.sh` is it in one command — and codex nested with it. Still owed: a reach word on the enrolment translated per harness, the second-user recipe, owner-only summons · see on-demand, harnesses, agent-custody, standing-agents · [#238](https://github.com/dglazkov/isocan/issues/238) |
 
-## Designed, not built <sub>14</sub>
+## Designed, not built <sub>15</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A story is a URL](docs/research/2026-08-24-storybook.md) | 2026-08-30 | the outward half — a canvas holding somebody's components — is unbuilt; there is no component item kind · [#137](https://github.com/dglazkov/isocan/issues/137) |
 | research | [Analytics: what the oplog cannot already tell us](docs/research/2026-09-07-analytics.md) | 2026-09-07 | not to be built yet — the finding is that isocan already has three measurement systems and an event stream, and the honest first question is what none of them can answer · see evals, personas · [#200](https://github.com/dglazkov/isocan/issues/200) |
 | **project** | [atlas](docs/projects/atlas/journey.md) | 2026-08-29 | both mechanisms designed, neither built · see atlas |
+| **project** | [browser-surface](docs/projects/browser-surface/journey.md) | 2026-09-11 | registration seed — the full browser-surface docset is drafted on the track branch (8973ae18) and pending its own review; roadmap defined, nothing built · see embed, multiuser, standing-agents, inception |
 | research | [Internationalization: which words, for whom](docs/research/2026-09-07-internationalization.md) | 2026-09-07 | low priority and deliberately not built — the interesting finding is that this codebase has two audiences for its words, and only one of them is human · see personas, ui-refresh · [#199](https://github.com/dglazkov/isocan/issues/199) |
 | research | [Live mode: voice on an isomorphic canvas](docs/research/2026-08-24-voice.md) | 2026-08-30 | voice as an input surface over the existing vocabulary · [#139](https://github.com/dglazkov/isocan/issues/139) |
 | research | [Mobile web: a phone talks to the canvas](docs/research/2026-09-05-mobile-web.md) | 2026-09-05 | measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with a finger, the chrome overlaps, the Chat fits by accident and the deck fits on purpose; the field draws one line (a phone views, comments and presents; a tablet edits); recommends touch physics for every coarse pointer, a phone face built from the Chat, the viewer and the deck, and no native app. Nothing built · see multi-identity, workbench, on-demand, ui-refresh · [#182](https://github.com/dglazkov/isocan/issues/182) |
