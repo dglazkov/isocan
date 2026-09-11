@@ -23,6 +23,7 @@ import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CEILING } from "./bundle-ceiling.mjs";
+import { operationMembers } from "./isomorphism.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const run = (cmd, args, opts = {}) =>
@@ -74,15 +75,30 @@ const METRICS = {
       },
     },
   },
+  /**
+   * **The members of `Operation`, not every union in the file.**
+   *
+   * This counted each line shaped like `  | {` in `ops.ts`, and its own
+   * selftest proved it with exactly the wrong mutation: a NEW union appended
+   * beside `Operation`, which moved the number — so the instrument was shown
+   * to count unions, and believed to count operations. On 9 Sep 2026
+   * `c8213d70` reformatted `Placement` into a multi-line union and the
+   * vocabulary read 35 against 33 real operations for two nights.
+   *
+   * The reading lives in `isomorphism.mjs` beside the list the isomorphism
+   * audit uses, so "which operations exist" has one answer; the mutation now
+   * adds a member to `Operation` itself, and `test/measure.test.ts` holds that
+   * the old trap no longer moves it.
+   */
   "op-types": {
     what: "operations in the vocabulary — every one is a fact both surfaces must speak",
     take() {
-      const src = readFileSync(path.join(repo, "packages/core/src/ops.ts"), "utf8");
-      return (src.match(/^ {2}\| \{/gm) ?? []).length;
+      return operationMembers(readFileSync(path.join(repo, "packages/core/src/ops.ts"), "utf8")).length;
     },
     breakIt: {
       file: "packages/core/src/ops.ts",
-      apply: (t) => t + "\n// selftest\ntype Extra =\n  | { type: \"selftest.noop\" };\n",
+      apply: (t) =>
+        t.replace("export type Operation =\n", 'export type Operation =\n  | { type: "selftest.noop" }\n'),
     },
   },
   /**

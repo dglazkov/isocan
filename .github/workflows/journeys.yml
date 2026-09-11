@@ -8,9 +8,22 @@
 # blind to, which does not need to be caught within the minute.
 #
 # **It does not gate anything**, for the same reason `review.yml` does not: a
-# check that goes red is a check somebody turns off, and a browser walk has more
-# ways to go red than a unit test. `release.yml` remains the gate; this is the
-# notice, and it says which journey and why.
+# check that goes red on a push is a check somebody turns off, and a browser
+# walk has more ways to go red than a unit test. `release.yml` remains the gate;
+# this is the notice, and it says which journey and why.
+#
+# **But a failing journey turns THIS run red** (11 Sep 2026). The notice used to
+# be a commit comment under a green tick, and `text-tool` failed on 9, 10 and
+# 11 Sep that way: three comments on three commits, a run list of green, and
+# nobody looked. A run that measured a failure and reported success is the
+# failure mode `test/journeys.test.ts` opens by naming. A red scheduled run
+# still gates nothing (no branch requires it, and it never runs on a push), so
+# the reason above does not reach it; what it adds is the one notice GitHub
+# delivers on its own. The alternative — a goal for the journeys persona, so a
+# failure became a finding in the review queue — is refused by
+# `test/journeys.test.ts`, because `ratchet.mjs` measures every goal on every
+# push, and a ninety-second walk per commit is the cost this file exists to
+# avoid.
 name: journeys
 
 on:
@@ -94,3 +107,12 @@ jobs:
           } > /tmp/comment.md
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
             -f body="$(cat /tmp/comment.md)"
+
+      # Last, so the comment above is always written first. A failing journey
+      # is a red run, not a green one with a note attached — see the header.
+      - name: A failing journey fails the run
+        if: steps.walk.outputs.failing == 'yes'
+        run: |
+          cat "$RUNNER_TEMP/journeys.txt"
+          echo "::error title=journeys::a journey failed — the walk above says which, and the commit comment says how to reproduce it"
+          exit 1

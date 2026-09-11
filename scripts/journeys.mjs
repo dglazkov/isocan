@@ -246,6 +246,22 @@ async function rig() {
       await sleep(600);
     },
     /**
+     * A key held DOWN, with the release handed back — the gesture a tap is
+     * not. T and H are tap-to-latch, hold-to-borrow, and since 4a758df6 a held
+     * T that placed something keeps itself, so the hold has to be a real one:
+     * down, something else happens, then up. `rawKeyDown` carries no text, so
+     * nothing is typed while the key is down.
+     */
+    hold: async (key) => {
+      const codes = { t: { windowsVirtualKeyCode: 84, key: "t", code: "KeyT" } };
+      const k = codes[key];
+      if (!k) throw new Error(`journeys cannot hold ${key} yet`);
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...k });
+      return async () => {
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", ...k });
+      };
+    },
+    /**
      * A press, some moves and a release, through Chrome's own input pipeline.
      * `Input.dispatchMouseEvent` produces trusted events with a real active
      * pointer — the thing a synthetic `PointerEvent` cannot be.
@@ -440,19 +456,64 @@ export const JOURNEYS = [
   },
   {
     name: "text-tool",
-    /** The bug: ⌘Enter appeared to add nothing, because the write had no
-     *  local echo and the socket was dead. */
-    what: "typing text and pressing ⌘Enter puts it on the canvas",
+    /**
+     * The bug: ⌘Enter appeared to add nothing, because the write had no
+     * local echo and the socket was dead.
+     *
+     * And the tool's two endings, which this journey got wrong for three
+     * nights. `4a758df6` (8 Sep 2026) gave T's two gestures two endings on
+     * purpose — "when you click away it switches to the select tool UNLESS
+     * the user was holding down the T key": a CLICKED T puts one node down and
+     * hands itself back to Select, a HELD T means "several" and stays. The
+     * journey still asserted the old ending, so it failed 9, 10 and 11 Sep
+     * with "the Text tool did not stay selected" — reporting the requested
+     * behaviour as a bug, under a workflow that stayed green. Both endings
+     * are asserted now, each with a real gesture.
+     */
+    what: "⌘Enter puts typed text on the canvas; a clicked T places one, a held T keeps going",
     async run(rig) {
       await makeCanvas(rig, "Text journey");
-      const before = await rig.b.ev(`document.querySelectorAll(".item").length`);
+      const items = () => rig.b.ev(`document.querySelectorAll(".item").length`);
+      const armed = (label) =>
+        rig.b.ev(
+          `[...document.querySelectorAll(".tool-btn")].some(b => b.getAttribute("aria-label") === ${JSON.stringify(label)} && /active|on/.test(b.className))`,
+        );
+
+      // Clicked: one note, then the tool hands itself back.
+      const before = await items();
       await addText(rig, "a typed note");
-      const after = await rig.b.ev(`document.querySelectorAll(".item").length`);
-      if (after <= before) throw new Error("⌘Enter added nothing to the canvas");
-      const stillText = await rig.b.ev(
-        `[...document.querySelectorAll(".tool-btn")].some(b => b.getAttribute("aria-label") === "Text" && /active|on/.test(b.className))`,
+      if ((await items()) <= before) throw new Error("⌘Enter added nothing to the canvas");
+      if (await armed("Text")) throw new Error("a clicked Text tool stayed selected after placing one note");
+      if (!(await armed("Select"))) throw new Error("a clicked Text tool did not hand back to Select");
+
+      // Held: T down, a real press on empty canvas, T up — the intent is read
+      // at the press, so the release can come before the typing, as it does
+      // for a person (nobody types with T held down).
+      const release = await rig.hold("t");
+      try {
+        await until(
+          rig.b,
+          `/active|on/.test(document.querySelector('.tool-btn[aria-label="Text"]')?.className ?? "")`,
+          "holding T to arm the Text tool",
+          4000,
+        );
+        await sleep(400); // past HOLD_MS (250), so the release reads as a hold
+        await rig.stroke([[460, 380]]);
+        await until(rig.b, `!!document.querySelector(".text-composer textarea")`, "the composer, opened with T held");
+      } finally {
+        await release();
+      }
+      const mid = await items();
+      await rig.type("and another");
+      await until(
+        rig.b,
+        `document.querySelector(".text-composer textarea")?.value === "and another"`,
+        "the typed words to reach the composer",
       );
-      if (!stillText) throw new Error("the Text tool did not stay selected");
+      await rig.press("Enter", { meta: true });
+      await sleep(900);
+      if ((await items()) <= mid) throw new Error("⌘Enter with T held added nothing to the canvas");
+      if (!(await armed("Text"))) throw new Error("a held Text tool did not stay selected after placing a note");
     },
   },
   {

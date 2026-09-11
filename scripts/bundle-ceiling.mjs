@@ -95,6 +95,45 @@
  * asked, this is the sentence, and the half of the raise that was avoidable
  * was avoided before it was written down.
  *
+ * **641,100 → 653,500 on 11 Sep, and this one arrived the way the soft gate
+ * was built to let things arrive: as a question, answered late.** The
+ * performance persona asked on 8 Sep ("bytes past the last size somebody
+ * agreed to") and four nights running; nobody answered, and the queue was one
+ * day from reddening `main` over it. Dion's call: raise it, with the reason.
+ *
+ * Measured at `1e846a1f`: **653,406**. Rebuilt commit by commit on a machine
+ * whose build reproduces the nightly's own readings exactly (645,806 at
+ * `86cc4cb`, 646,899 at `a2deb19`), the 12,306 bytes are:
+ *
+ *   1,305  already there at 4caba2f2, the commit that wrote 641,100
+ *   2,263  whose word wakes an agent — the gate in core's routing, and its
+ *          words in the agent tray (#221)
+ *   1,053  an artifact's two faces, visual and source (#215)
+ *     888  a Site address that stays editable and says why it is not one yet
+ *          (#231, and the follow-up)
+ *     798  reading Markdown together — shared text selections
+ *   1,303  the guide canvases, listed in the Help panel
+ *   3,373  durable quoted comments — a thread anchored to a passage of text
+ *   1,033  the switcher's scope toggle, and the minimap folding below 460px
+ *          (#265 — it landed while this was being measured, which is the
+ *          creep in miniature)
+ *     290  smaller: the embed badge (#222), rail tooltips (#234), a held Z
+ *          (#233), the sheep's withdrawal badge, the overlay slot
+ *
+ * Every one is a feature somebody asked for, in core or in the canvas shell,
+ * and the largest single step is 3,373 bytes — a sixth of `JUMP`, so none of
+ * this is the eager-import accident the hard gate exists for. Accepted for
+ * that reason. The margin is 94 bytes, the round-up to the hundred every
+ * ceiling here has used: a comment's worth, not a feature's, so the next
+ * feature asks.
+ *
+ * **What it did not buy, written down so it is not forgotten:** the goal is
+ * now 13,406 bytes away, the furthest since the namespace import came out on
+ * 8 Sep. The first place to look is the Help panel — `CanvasPage` imports it
+ * statically and renders it on every visit, so the guide catalog's 1,303
+ * bytes are paid by everyone before anyone presses `?`; that is the `lazy()`
+ * shape the 6 Sep list took seventy-nine kilobytes out with.
+ *
  * The second gate only works because the queue reaches `main` now and an
  * answer covers the nights that repeat it. Before 7 Sep it would have been a
  * warning into a void.
@@ -102,7 +141,7 @@
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 641_100;
+export const CEILING = 653_500;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

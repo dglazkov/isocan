@@ -54,6 +54,44 @@ describe("the workflow reports unsuccessful runs", () => {
   });
 });
 
+describe("a failing journey fails the run", () => {
+  /**
+   * `text-tool` failed on 9, 10 and 11 Sep 2026 and the workflow finished
+   * green each night, with the failure in a commit comment nobody opened. A
+   * scheduled run gates nothing, so red costs nobody a merge — it only stops
+   * the run list saying "fine" about a walk that said otherwise.
+   */
+  const step = workflow.split("- name: A failing journey fails the run")[1] ?? "";
+
+  it("is the last step, and runs only when the walk said so", () => {
+    expect(step, "the step is missing from journeys.yml").not.toBe("");
+    // Last, so the comment is always written before the run goes red.
+    expect(step).not.toMatch(/- name:/);
+    expect(workflow.indexOf("- name: Say so")).toBeLessThan(workflow.indexOf("- name: A failing journey fails the run"));
+    expect(step).toContain("if: steps.walk.outputs.failing == 'yes'");
+    expect(step).not.toContain("continue-on-error");
+  });
+
+  it("actually exits non-zero", () => {
+    // Run the shipped shell rather than grepping for `exit 1`: a step that
+    // prints the failure and succeeds is the bug this replaces.
+    const shell = step.split("run: |\n")[1]!.split("\n")
+      .map((line) => line.replace(/^ {10}/, "")).join("\n").trim();
+    const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-red-"));
+    try {
+      writeFileSync(path.join(dir, "journeys.txt"), "FAIL  text-tool\nRunner exit status: 1\n");
+      expect(() =>
+        execFileSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
+          cwd: dir, encoding: "utf8", timeout: 10_000, stdio: "pipe",
+          env: { ...process.env, RUNNER_TEMP: dir },
+        }),
+      ).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+});
+
 describe("the journeys runner", () => {
   it("can prove it is able to report a failure", () => {
     /* A checker that cannot fail proves nothing, and this one drives a
