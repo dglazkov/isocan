@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-09-10
 see: sheep-harness, on-demand, standing-agents, agent-custody, harnesses
-note: phases 0–2.5 closed 10–11 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, tool beats on the face from the transcript; a birth mints the sheep with the pass as its own secret and spends no turn; withdrawal ends the sheep and the badge its cell redeemed, and keeps the pasture. Journeys 1, 2 and 4 walked on the deployed station and a local sheep home against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Phase 3, the week with the bill, needs the shepherd; sheep#2 is still open.
+note: phases 0–2.5 closed 10–11 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, tool beats on the face from the transcript; a birth mints the sheep with the pass as its own secret and spends no turn; withdrawal ends the sheep and the badge its cell redeemed, and keeps the pasture. Journeys 1, 2 and 4 walked on the deployed station and a local sheep home against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Closed at phase 2.5 on 11 Sep; phase 3 retired, since a week of use is use. The install on every cold turn stays until sheep#2 lands.
 ---
 # The sheep harness — the journeys
 

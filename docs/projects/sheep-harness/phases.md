@@ -4,8 +4,10 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phases 0 to 2.5 closed, 10 and 11 September. Phase 3,
-the week with the bill, is next and needs the shepherd (⚑).** Three steps below wait on the sheep side and
+**Where we are: THE PROJECT IS CLOSED (2026-09-11), at phase 2.5.
+Phase 3 was retired unstarted: a week of use is using the harness, not a
+phase. The steps below that wait on sheep-side journeys stay as they
+stand, and each is a small change when its journey lands.** Three steps below wait on the sheep side and
 are marked ⇢ with the journey filed there. Three more journeys are filed
 for findings phase 1 works around rather than waits on, and one for what
 phase 1 found:
@@ -274,6 +276,11 @@ and putting back the pasture secret five.
 
 ## Phase 3 — The walk, with the bill
 
+**Status: RETIRED 2026-09-11, unstarted.** A week on one canvas with
+the harness is using it, and bugs found in use are filed as they come.
+The number #210 asked for is read the same way, from the station's `GET
+/home`, whenever it is wanted.
+
 **Outcome:** journeys 1 to 5 walked on the deployed station with a real
 model, by the shepherd, over a week on one canvas with two agents on the
 sheep harness and one on a local one. `GET /home` on the station read
@@ -292,5 +299,5 @@ narration and `sheep log`, and the two numbers.
 The rc in a cell, which is #210's shape 2 and the on-demand sketch's
 isocannery in full. A pasture per canvas once secrets can be per sheep.
 The web dialog offering a harness. Each is a project of its own; this
-one ends when an agent on the sheep harness can be enrolled, summoned,
-resumed and withdrawn with nothing left behind, and its cost is known.
+one ended when an agent on the sheep harness could be enrolled, summoned,
+resumed and withdrawn with nothing left behind.

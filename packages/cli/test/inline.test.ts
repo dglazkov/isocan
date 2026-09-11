@@ -65,6 +65,30 @@ describe("inlineHtmlAssets", () => {
     await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
+  it("keeps a style attribute intact when the url() it inlines is quoted", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "inline-quote-test-"));
+    const imgPath = path.join(tmpDir, "hero.png");
+    await fs.writeFile(
+      imgPath,
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+
+    const htmlPath = path.join(tmpDir, "screen.html");
+    const html = `<div style="background-image: url('hero.png')"></div>
+<div style='background-image: url("hero.png")'></div>`;
+
+    const inlined = await inlineHtmlAssets(htmlPath, html);
+
+    expect(inlined).toContain("url('data:image/png;base64,");
+    expect(inlined).toContain('url("data:image/png;base64,');
+    expect(inlined).not.toContain("hero.png");
+
+    await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+
   it("handles html without local assets gracefully", async () => {
     const html = `<div>Hello world</div>`;
     const inlined = await inlineHtmlAssets("/tmp/nonexistent.html", html);
