@@ -7803,29 +7803,13 @@ program
         const status = spawnSync(editor, [tmp], { stdio: "inherit", shell: false });
         if (status.status !== 0) throw new Error(`${editor} exited with ${status.status}`);
         data = await fs.readFile(tmp);
-        if (data.equals(original) && !opts.visual) {
+        if (data.equals(original)) {
           console.log("no changes — no new version created");
           return;
         }
         filename = current.filename;
         mimeType = current.mimeType;
-        if (opts.visual) {
-          const visRaw = await fs.readFile(opts.visual);
-          const visFilename = path.basename(opts.visual);
-          const visMime = mimeFor(visFilename);
-          let visData = visRaw;
-          if (visMime === "text/html") {
-            const inlined = await inlineHtmlAssets(opts.visual, visRaw.toString("utf8"));
-            visData = Buffer.from(inlined, "utf8");
-          }
-          const visUpload = await ctx.client.uploadBlob(p.id, visData, visMime, visFilename);
-          visualFace = {
-            blobHash: visUpload.blobHash,
-            mimeType: visMime,
-            filename: visFilename,
-            size: visUpload.size,
-          };
-        } else if ((mimeType === "text/html" && current.visual) || (mimeType === "text/markdown" && (!current.visual || (current.visual.mimeType === mimeType && !item.properties[VISUAL_FILE_PROP])))) {
+        if ((mimeType === "text/html" && current.visual) || (mimeType === "text/markdown" && (!current.visual || (current.visual.mimeType === mimeType && !item.properties[VISUAL_FILE_PROP])))) {
           const assetBase = mimeType === "text/markdown" ? path.resolve(item.properties[FILE_PROP] ?? item.properties[SOURCE_PATH_PROP] ?? current.filename) : tmp;
           const inlined = await (mimeType === "text/markdown" ? inlineMarkdownAssets : inlineHtmlAssets)(assetBase, data.toString("utf8"));
           const inlinedData = Buffer.from(inlined, "utf8");
