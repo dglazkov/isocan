@@ -238,7 +238,9 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
     <div className="add-door">
       <button
         className={`tool-btn${open ? " active" : ""}`}
-        title="Add to the canvas — files, a site, a Google Doc, or a canvas"
+        /* The rail's drawn tip (`.tool-btn[data-tip]`); none while the
+           popover is open, or it would land on the popover. */
+        data-tip={open ? undefined : "Add to the canvas — files, a site, a Google Doc, or a canvas"}
         aria-label="Add"
         aria-pressed={open}
         onClick={() => {

@@ -37,8 +37,18 @@ import { postToMain } from "../lib/mainthread.ts";
 interface ToolDef {
   tool: Tool;
   label: string;
+  /** The tip's first line: the name and its key. */
   hint: string;
+  /** The tip's second line, when the key alone does not say how the tool
+   *  behaves — a hold, a latch, where the ink goes. */
+  more?: string;
   icon: ReactNode;
+}
+
+/** One string for `data-tip`: the CSS draws it `pre-line`, so a newline is a
+ *  line, and a tip with nothing more to say stays one line. */
+function tipText(hint: string, more?: string): string {
+  return more ? `${hint}\n${more}` : hint;
 }
 
 const CURSOR = (
@@ -125,10 +135,16 @@ const TEXT = (
 
 const TOOLS: ToolDef[] = [
   { tool: "select", label: "Select", hint: "Select — V", icon: CURSOR },
-  { tool: "hand", label: "Hand", hint: "Hand — H (or hold Space)", icon: HAND },
-  { tool: "zoom", label: "Zoom", hint: "Zoom — Z (tap to latch, hold to zoom a region)", icon: ZOOM },
-  { tool: "pen", label: "Pen", hint: "Pen — P (draw in your color; ink lands as an item a moment after you lift)", icon: PEN },
-  { tool: "text", label: "Text", hint: "Text — T (click the canvas and type)", icon: TEXT },
+  { tool: "hand", label: "Hand", hint: "Hand — H", more: "or hold Space", icon: HAND },
+  { tool: "zoom", label: "Zoom", hint: "Zoom — Z", more: "tap to latch, hold to zoom a region", icon: ZOOM },
+  {
+    tool: "pen",
+    label: "Pen",
+    hint: "Pen — P",
+    more: "draw in your color; ink lands as an item a moment after you lift",
+    icon: PEN,
+  },
+  { tool: "text", label: "Text", hint: "Text — T", more: "click the canvas and type", icon: TEXT },
   { tool: "comment", label: "Comment", hint: "Comment — C", icon: COMMENT },
 ];
 
@@ -204,7 +220,15 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
         <div key={t.tool} className="tool-slot">
           <button
             className={`tool-btn${activeTool === t.tool ? " active" : ""}`}
-            title={t.hint}
+            /* Drawn beside the button (`.tool-btn[data-tip]` in styles.css)
+               rather than handed to `title`: the native tip waits about a
+               second, lands at the pointer, and covers the buttons below the
+               one it names. `aria-label` still carries the name for anyone
+               not hovering.
+
+               No tip while the ink well is open beside the Pen: it would land
+               on the very thing the button opened. */
+            data-tip={t.tool === "pen" && activeTool === "pen" ? undefined : tipText(t.hint, t.more)}
             aria-label={t.label}
             aria-pressed={activeTool === t.tool}
             onClick={() => setActiveTool(t.tool)}
@@ -254,7 +278,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       <div className="tool-sep" />
       <button
         className={`tool-btn${marksOpen ? " active" : ""}`}
-        title={hasMarks ? "Reactions — the canvas by its marks" : "Reactions — nothing marked yet"}
+        data-tip={hasMarks ? "Reactions — the canvas by its marks" : "Reactions — nothing marked yet"}
         aria-label="Reactions"
         aria-pressed={marksOpen}
         onClick={() => openReactionBar(canvasId, !marksOpen)}
@@ -269,7 +293,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       {!historyHidden && (
         <button
           className={`tool-btn${historyOpen ? " active" : ""}`}
-          title="History — the canvas as it was"
+          data-tip="History — the canvas as it was"
           aria-label="History"
           aria-pressed={historyOpen}
           onClick={() => onHistory(!historyOpen)}
@@ -294,7 +318,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
         <button
           key={t.itemId}
           className="tool-btn tool-ext"
-          title={toolHint(t)}
+          data-tip={toolHint(t)}
           aria-label={t.tool ? t.tool.label : `${t.title} — unavailable`}
           disabled={!t.tool}
           onClick={() => {
