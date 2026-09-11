@@ -141,11 +141,15 @@ describe("the chrome fits a phone", () => {
     expect(rule(".canvases-head")?.body).toContain("flex-wrap: wrap");
   });
 
-  it("lifts the minimap clear of the zoom row on a narrow window", () => {
+  it("lifts an unfolded minimap clear of the zoom row on a narrow window", () => {
+    /* Below 460 the map starts folded by the width (`minimapnarrow.test.ts`),
+       and its handle sits in the corner clear of the row. The lift is for a
+       map somebody tapped open there, so it applies to the unfolded dock
+       only — a lifted handle would float for no reason. */
     const lifted = sheet.find(
-      (r) => r.selector === ".minimap-dock" && r.body.includes("var(--zoom-row)"),
+      (r) => r.selector === ".minimap-dock:not(.folded)" && r.body.includes("var(--zoom-row)"),
     );
-    expect(lifted, "a narrow-window rule stacks them").toBeTruthy();
+    expect(lifted, "a narrow-window rule stacks an open map").toBeTruthy();
     expect(lifted!.at.join(" "), "and only on a narrow window").toMatch(/max-width/);
   });
 

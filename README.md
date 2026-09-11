@@ -182,9 +182,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the rail stay put, because they are the same chrome. "Lately" is this
   browser's memory (the daemon sees writes, not visits), so the list paints
   before the canvas list arrives and still works offline, where it is exactly
-  the canvases the replica can open. An agent switches canvases by naming one
-  — every verb takes `--canvas` — so there is no CLI verb for a viewport
-  gesture.
+  the canvases the replica can open. Archived canvases are out of it unless
+  you tick **Include archived** under the field (or press `⌥A`), which is the
+  same scope as `canvas list --with-archived` and resets every time the window
+  opens; a line under the results says when the shelf holds matches you are
+  not seeing. An agent switches canvases by naming one — every verb takes
+  `--canvas` — so there is no CLI verb for a viewport gesture.
 - **Names**: an item's name sits above it rather than inside a chrome bar —
   the item is the content — and stays hidden until you point at the item or
   select it, so a canvas of sketches reads as the sketches rather than as a
@@ -237,7 +240,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   telling you where it is.
 - **The minimap folds away**: hover it for the fold control and it slides into
   its corner, leaving a handle that slides it back. Remembered per browser, and
-  instant for anyone who has asked for less motion.
+  instant for anyone who has asked for less motion. Below 460px wide it starts
+  folded — the width folds it without touching what you chose, so a phone
+  never changes what your desktop shows — and a tap on the handle there opens
+  it for the visit.
 - **Walking the canvas**: `⌘`/`Ctrl` + an arrow moves the SELECTION to the next
   item that way — edge distance with a heavy penalty on sideways drift, so a
   walk stays in its row instead of wandering to whatever is nearest in a

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor, Canvas, SlashCommand } from "@isocan/core";
-import { ago, litRuns, rankCanvases, type SwitchRow } from "@isocan/core";
+import { ago, isShelved, keyFor, litRuns, rankCanvases, type ShelfScope, type SwitchRow } from "@isocan/core";
 import { useUiStore, type PaletteMode } from "../stores/uiStore.ts";
 import { useCommands } from "../lib/commands.ts";
 import { availableActions, type Action, type ActionContext } from "../lib/actions.ts";
@@ -81,6 +81,35 @@ export function CommandPalette({
   const canvases = useCanvasList(canvasId, mode === "canvases" || query.trim().length > 0);
   const recents = useMemo(() => readRecents(), []);
 
+  /**
+   * **Which canvases this window searches: the list, or the list and the
+   * shelf** (#194). The issue asked for a search whose default scope is not
+   * everything and a toggle that widens it; `scope` is the `ShelfScope` the
+   * home screen's `Archived` and `canvas list --with-archived` pass to the
+   * same `inScope`, so "include archived" is one set on every surface.
+   *
+   * **Not remembered, deliberately** — every opening starts at `"live"`. The
+   * shelf exists to keep put-away canvases out of the way, and a widening
+   * that stuck would quietly un-archive every one of them from this window
+   * after a single search; the home screen's `Archived` resets for the same
+   * reason, and a CLI flag is per invocation. Held across the two faces of one
+   * opening, though: stepping back to the commands and forward again is still
+   * the same search.
+   *
+   * Offered only while something is on the shelf. A toggle that widens to
+   * nothing is a control that does nothing, and offline the recents that
+   * stand in for the list carry no properties to be archived by.
+   */
+  const [withArchived, setWithArchived] = useState(false);
+  const scope: ShelfScope = withArchived ? "all" : "live";
+  const hasShelf = useMemo(() => canvases.some(isShelved), [canvases]);
+  const toggleArchived = () => {
+    setWithArchived((was) => !was);
+    // Back to the field: the toggle is a change to what the typing finds, so
+    // the next key belongs to the typing, however the toggle was reached.
+    field.current?.focus();
+  };
+
   const ctx: ActionContext = useMemo(
     () => ({ canvasId, actor, navigate, selection }),
     [canvasId, actor, navigate, selection],
@@ -98,7 +127,7 @@ export function CommandPalette({
    */
   const rows = useMemo((): Row[] => {
     if (mode === "canvases") {
-      return rankCanvases(canvases, query, recents.map((r) => r.id), canvasId).map((row) => ({
+      return rankCanvases(canvases, query, recents.map((r) => r.id), canvasId, scope).map((row) => ({
         kind: "canvas" as const,
         row,
       }));
@@ -116,16 +145,30 @@ export function CommandPalette({
     // face is the place for the list, and it is one row away.
     const jumps =
       terms.length > 0
-        ? rankCanvases(canvases, query, recents.map((r) => r.id), canvasId).slice(0, INLINE_JUMPS)
+        ? rankCanvases(canvases, query, recents.map((r) => r.id), canvasId, scope).slice(0, INLINE_JUMPS)
         : [];
     return [
       ...actions.map((action) => ({ kind: "action" as const, action })),
       ...asks.map((command) => ({ kind: "ask" as const, command })),
       ...jumps.map((row) => ({ kind: "canvas" as const, row })),
     ];
-  }, [mode, query, ctx, commands, canvasId, canEdit, canvases, recents]);
+  }, [mode, query, ctx, commands, canvasId, canEdit, canvases, recents, scope]);
 
-  useEffect(() => setAt(0), [query, mode]);
+  /**
+   * **What the list scope is hiding from this query**, so a default that is
+   * not everything never reads as "there is no such canvas". Counted by the
+   * same ranking under the shelf's own scope, so the number is the rows the
+   * toggle would add — not a second matcher's opinion of them.
+   */
+  const hiddenOnShelf = useMemo(
+    () =>
+      mode === "canvases" && !withArchived && hasShelf && query.trim().length > 0
+        ? rankCanvases(canvases, query, [], canvasId, "shelved").length
+        : 0,
+    [mode, withArchived, hasShelf, query, canvases, canvasId],
+  );
+
+  useEffect(() => setAt(0), [query, mode, withArchived]);
 
   /* Keep the chosen row on screen when arrowing past the fold. */
   useEffect(() => {
@@ -180,6 +223,24 @@ export function CommandPalette({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape") return onClose();
+            /* ⌥A widens the scope from the field, so the toggle never costs a
+               trip off the keyboard. By `code`, because on a Mac ⌥A TYPES
+               "å" and `key` is that letter; and only while there is a shelf,
+               so a title with an å in it can still be typed on a home with
+               nothing archived. The chord is VS Code's for its search toggles
+               (⌥C, ⌥W, ⌥R): a letter held with Option flips a scope. */
+            if (
+              switching &&
+              hasShelf &&
+              e.altKey &&
+              !e.metaKey &&
+              !e.ctrlKey &&
+              e.code === "KeyA"
+            ) {
+              e.preventDefault();
+              toggleArchived();
+              return;
+            }
             // The door back: an empty field and Backspace is "not this face".
             if (e.key === "Backspace" && switching && query.length === 0) {
               e.preventDefault();
@@ -199,6 +260,26 @@ export function CommandPalette({
             }
           }}
         />
+        {/**
+          * **The scope, as a checkbox under the field** (#194). Native, so it
+          * is a Tab away from the field and Space flips it, and a screen
+          * reader says "Include archived, checkbox" without being told; ⌥A
+          * does the same from the field. Worded as what it adds rather than
+          * as the shelf's name: "Archived" alone reads as "only archived",
+          * which is `--archived`, a different scope.
+          */}
+        {switching && hasShelf && (
+          <label className="palette-scope">
+            <input
+              type="checkbox"
+              checked={withArchived}
+              aria-keyshortcuts="Alt+A"
+              onChange={toggleArchived}
+            />
+            <span>Include archived</span>
+            <kbd className="palette-keys">{keyFor(INCLUDE_ARCHIVED)}</kbd>
+          </label>
+        )}
         <div className="palette-rows" ref={list} role="listbox">
           {rows.length === 0 && (
             <p className="palette-none">
@@ -206,7 +287,9 @@ export function CommandPalette({
                 ? canvases.length === 0
                   ? "No other canvas here yet."
                   : "This is the only canvas here."
-                : `Nothing matches “${query.trim()}”.`}
+                : hiddenOnShelf > 0
+                  ? `No canvas in the list matches “${query.trim()}”.`
+                  : `Nothing matches “${query.trim()}”.`}
             </p>
           )}
           {rows.map((row, i) => {
@@ -249,6 +332,16 @@ export function CommandPalette({
             );
           })}
         </div>
+        {/* A default that is not everything must never read as "there is no
+            such canvas": when the list scope is hiding matches, say how many
+            and make the sentence the door. Outside the listbox, because it is
+            not a canvas to choose and a listbox holds only options. */}
+        {hiddenOnShelf > 0 && (
+          <button type="button" className="palette-shelf-hint" onClick={toggleArchived}>
+            {hiddenOnShelf === 1 ? "1 archived canvas matches" : `${hiddenOnShelf} archived canvases match`}
+            {" — include archived"}
+          </button>
+        )}
         {switching && (
           <div className="palette-foot">
             <span>↑↓ to choose · ↵ to go</span>
@@ -262,6 +355,10 @@ export function CommandPalette({
 
 /** The action whose choice flips the window instead of closing it. */
 const SWITCH_ACTION = "switch-canvas";
+
+/** The scope toggle's name in `SHORTCUTS`, so the key printed beside the
+ *  checkbox is the one the `?` panel and `isocan shortcuts` print. */
+const INCLUDE_ARCHIVED = "Include archived canvases";
 
 /** How many canvases the commands face shows under the actions. Enough for
  *  the canvas you meant to be there; few enough that the actions stay the
@@ -312,11 +409,10 @@ function CanvasRow({ row, nowMs }: { row: SwitchRow; nowMs: number }) {
       </span>
       {/**
         * **Said, because it is offered** (#194). `rankCanvases` keeps archived
-        * canvases out of the list this window shows with an empty field and
-        * puts them under every live match once something is typed — so the
-        * only way one reaches this row is that somebody typed its name, and
-        * the honest thing is to take them there and say what it is. Unmarked,
-        * it would be a canvas they put away arriving as though they hadn't.
+        * canvases out of this window until somebody ticks Include archived,
+        * and then ranks them among the live ones — so the honest thing is to
+        * take them there and say what each one is. Unmarked, it would be a
+        * canvas they put away arriving as though they hadn't.
         */}
       {row.shelved && <span className="shelf-tag">Archived</span>}
       {row.canvas.description && <span className="palette-hint">{row.canvas.description}</span>}

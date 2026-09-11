@@ -2142,7 +2142,9 @@ canvas out of the list and changes nothing else — the address, the history,
 the agents and any view link all keep working, and `--undo` puts it back.
 `canvas list --archived` finds what is on the shelf, `--with-archived` shows
 both with a column saying which, and `--with-archived --filter <text>`
-searches across the two. Every other verb reaches an archived canvas by name
+searches across the two — the same scope a person gets from **Include
+archived** in the app's ⌘O switcher, which otherwise leaves them out of its
+search as well as its list. Every other verb reaches an archived canvas by name
 with no flag at all, so a canvas somebody archives while you are parked on it
 is still the canvas you are standing on. `canvas background
 <galaxy|mountains|ocean|none>` sets the ground a canvas stands on, and

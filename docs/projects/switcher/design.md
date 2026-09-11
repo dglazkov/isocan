@@ -121,6 +121,48 @@ where it stands. A viewport gesture gets no verb (AGENTS.md, "done on both
 surfaces", line 2). The ranking is in core anyway, so the terminal could show
 the same order the day it wants to.
 
+## The shelf's scope (11 Sep 2026, #194)
+
+Archive (#194) shipped into this window on 7 Sep without the control the
+issue asked for: with an empty field archived canvases were out, and with
+anything typed they were all offered, under every live match, marked. The
+argument was that the reach-in is found by typing rather than by learning a
+control. Dion asked for the issue's version instead, and it is built.
+
+**A scope, and the default is not everything.** `rankCanvases` takes the
+`ShelfScope` that the home screen's `Archived` and `canvas list
+--archived / --with-archived` already pass to core's `inScope`. The window
+starts at `"live"` — out of the list AND the search — and an **Include
+archived** checkbox under the field widens it to `"all"`, which is
+`--with-archived` in the app's words. One comparison on three surfaces, and a
+core test holds that each scope offers exactly the set `inScope` hands the
+terminal.
+
+**Once asked for, an archived canvas ranks on its match.** The 7 Sep rule
+sank them below every live match, which was right while nobody had asked for
+them. Somebody who ticked the box is most likely looking for one, so it takes
+its place like any other row — one order with a mark, the way
+`--with-archived` prints one table with a column.
+
+**Reachable without a pointer.** A native checkbox, so it is one Tab from the
+field and Space flips it, and ⌥A from inside the field — by `code`, since
+⌥A types "å" on a Mac, and only while something is archived, so an å can
+still be typed on a home with no shelf. The chord is VS Code's shape for its
+search toggles; the key is in `SHORTCUTS`, so the `?` panel and the checkbox
+print the same thing.
+
+**Not remembered.** Every opening starts at the list. A widening that stuck
+would un-archive the whole shelf from this window after one search, which is
+Archive changing one list and not the other again; the home screen's
+`Archived` resets for the same reason, and a CLI flag lasts one invocation.
+It holds across the two faces of one opening.
+
+**The default never reads as "no such canvas".** When the live scope is
+hiding matches, a line under the rows says how many and is itself the toggle
+— counted by the same ranking under `"shelved"`, so the number is the rows
+the box would add. The commands face's "Switch to" group follows the same
+scope and has no box of its own: the switcher is one row away.
+
 ## Open questions, honestly
 
 - **⌘O in a real browser window.** The journey presses ⌘O through the

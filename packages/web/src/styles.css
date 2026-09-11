@@ -3457,8 +3457,11 @@ button.mt-card:hover { border-color: var(--accent); }
 
 .minimap-dock {
   position: absolute; bottom: var(--edge); z-index: var(--z-float);
-  /* left comes from the component: it steps aside for a docked panel. */
-  transition: left 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+  /* left comes from the component: it steps aside for a docked panel. And
+     `bottom` eases too, because below 460 an unfold also lifts the map clear
+     of the zoom row, and a map that jumped up while it slid in would be two
+     motions where there is one. */
+  transition: left 0.22s cubic-bezier(0.2, 0.8, 0.3, 1), bottom 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
   /* …but not on the way in. Until the map has been placed once, `left` is
      where it belongs rather than somewhere it moved to, and easing into it
      drew a slide across the screen on every load. `.placed` arrives a frame
@@ -3495,11 +3498,14 @@ button.mt-card:hover { border-color: var(--accent); }
  * bottom-right corner under the zoom cluster's left end, on every phone, since
  * both were placed against opposite edges of a window wide enough for both.
  *
- * They stack rather than fold. Folding the map is what the mobile note
- * recommends and it writes `isocan.minimap` to localStorage — a width
- * deciding a PREFERENCE, which would then follow the person to their desktop
- * and be a setting they never chose and cannot connect to anything they did.
- * Stacking is CSS, holds no state, and comes back on rotation.
+ * **Below 460 the map is folded, by the width** (11 Sep; `lib/minimapfold.ts`).
+ * It first STACKED instead, because folding wrote `isocan.minimap` — a width
+ * deciding a PREFERENCE that followed the person to their desktop. The fold
+ * and the preference are two facts now, and the width only ever sets the
+ * first, so the handle sits in its corner clear of the zoom row and nothing
+ * is stored. What is left of the stack is for somebody who taps the handle on
+ * a phone: an OPEN map below 460 still has to clear the zoom row, so the lift
+ * is kept, for the unfolded dock only.
  *
  * **460, and the number is arithmetic rather than a phone.** The map's right
  * edge is 20 + 168 = 188; the zoom row's is `width - 20 - its own width`, so
@@ -3513,10 +3519,11 @@ button.mt-card:hover { border-color: var(--accent); }
  * to grow by a button. Deliberately NOT the mobile note's 640: between 405
  * and 640 the two sit a comfortable 231px apart, and moving chrome there
  * would be chrome moving for no reason. Measured at 640, 461, 460, 403 and
- * 375 the day it was written.
+ * 375 the day it was written. `NARROW_MINIMAP_PX` is the same number for the
+ * fold, and a test holds the two together.
  */
 @media (max-width: 460px) {
-  .minimap-dock { bottom: calc(var(--edge) + var(--zoom-row) + 8px); }
+  .minimap-dock:not(.folded) { bottom: calc(var(--edge) + var(--zoom-row) + 8px); }
 }
 .minimap-panel {
   /* Claimed back from the dock above — this one is drawn, so it is clickable
@@ -5981,9 +5988,8 @@ button.mt-card:hover { border-color: var(--accent); }
  * **The archive, said out loud** (#194).
  *
  * One chip, wherever a canvas somebody put away can appear beside one they
- * did not: the switcher's rows, which offer archived canvases under every
- * live match once something is typed, and the home screen's cards under
- * `Archived`, which shows both. One rule rather than one per surface — two
+ * did not: the switcher's rows under Include archived, and the home screen's
+ * cards under `Archived` — both of which show the two together. One rule rather than one per surface — two
  * would end up two different words for one state, which is how this codebase
  * got `faceMark`/`initial`.
  *
@@ -6013,6 +6019,28 @@ button.mt-card:hover { border-color: var(--accent); }
   text-underline-offset: 2px;
 }
 .palette-when { margin-left: auto; flex: none; color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
+/**
+ * **The switcher's scope** (#194): one checkbox under the field, only while
+ * something is archived. A strip rather than a chip in the field's corner,
+ * because the field's width is the query's and a long title typed into it
+ * should not run under a control. The kbd is the palette's own, so ⌥A reads
+ * as the same kind of thing as every other key it prints.
+ */
+.palette-scope {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 16px; border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-muted); font-size: 12px; cursor: pointer;
+}
+.palette-scope input { margin: 0; accent-color: var(--accent); }
+/* The sentence that says what the list scope is hiding, and is the door to
+   it. Quiet, left-aligned like the rows, and a link's colour because it IS
+   one: it changes what the list shows rather than going anywhere. */
+.palette-shelf-hint {
+  margin: 0 6px 6px; padding: 6px 10px;
+  border: none; border-radius: 7px; background: transparent;
+  color: var(--accent-text); font-size: 12px; text-align: left; cursor: pointer;
+}
+.palette-shelf-hint:hover { background: var(--accent-wash); }
 .palette-foot {
   display: flex; justify-content: space-between; gap: 12px;
   padding: 7px 14px; border-top: 1px solid var(--line-soft);
