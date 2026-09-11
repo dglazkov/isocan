@@ -71,6 +71,14 @@ import { WhatsNew } from "../components/WhatsNew.tsx";
 const CommandPalette = lazy(() =>
   import("../components/CommandPalette.tsx").then((m) => ({ default: m.CommandPalette })),
 );
+/**
+ * **The same argument, and the bytes #267 named to reclaim first.** Help is
+ * opened with `?` by somebody who wants it and by nobody else, and it pulled
+ * the shortcut tables and the command registry into the first paint to sit
+ * there closed. Split here because the ceiling commit says to look for a cheap
+ * win before raising the number, and this was the win it pointed at.
+ */
+const HelpPanel = lazy(() => import("../components/HelpPanel.tsx").then((m) => ({ default: m.HelpPanel })));
 import { ZoomControls } from "../components/ZoomControls.tsx";
 import { Toolbar } from "../components/Toolbar.tsx";
 import { Minimap } from "../components/Minimap.tsx";
@@ -90,7 +98,6 @@ import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
 import { SprintChip } from "../components/SprintChip.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
-import { HelpPanel } from "../components/HelpPanel.tsx";
 import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
 import { recordVisit } from "../lib/recents.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
@@ -202,6 +209,9 @@ function CanvasSurface({
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const historyOpen = useUiStore((s) => s.historyOpen);
+  /* Read here rather than inside the panel, because the panel is no longer
+     mounted while it is shut — the flag has to be the thing that mounts it. */
+  const helpOpen = useUiStore((s) => s.helpOpen);
   const paletteOpen = useUiStore((s) => s.paletteOpen);
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
@@ -991,7 +1001,11 @@ function CanvasSurface({
           than living inside one, and decides its own visibility from the
           store — there is no per-canvas state to hand it. */}
       <WhatsNew />
-      <HelpPanel />
+      {helpOpen && (
+        <Suspense fallback={null}>
+          <HelpPanel />
+        </Suspense>
+      )}
       <OwnCursor actor={actor} />
       {/* Last, so it covers the panels and the toolbar: full screen means the
           screen. Driven by the route rather than by state — see

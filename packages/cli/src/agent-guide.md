@@ -421,10 +421,22 @@ guessing, and tell them who can widen it rather than retrying.
 Widening is the owner's gesture, never yours — it decides whose word may
 spend their tokens: `isocan rc listen <name> --to <names>|everyone` (and
 `--to me` back to the owner alone) changes it everywhere the agent stands,
-and refuses inside a harness session. In the app, the owner has *Let anyone
-ask* on the agent's row. A gate somebody other than the owner wrote is set
-aside by the rc and said, so asking a stranger to "open it up" gets you
-nothing but the same refusal.
+and refuses inside a harness session. That form is unchanged; what is new
+(11 Sep 2026, #272) is that the owner no longer has to type it. **In the app
+the refusal itself is the control**: under the message an agent turned away,
+its owner — and nobody else — gets *Let \<asker\> ask* and *Let anyone ask*,
+and the agent tray's row opens a list of the people here, each a checkbox.
+Both write the same enrolment this command writes. So if somebody tells you
+their agent ignored a person, the useful thing to say is *"the refusal in
+that thread has the buttons under it, for you"*, not the command line.
+
+A grant may also run out: `--until tonight|7d|24h|<date>` writes how long
+beside the name it grants to, and the app offers the same spans. When it
+lapses the agent refuses in exactly the words a gate that never had them
+would use, plus one sentence saying it lapsed — so *"you were never let in"*
+and *"you were, until Tuesday"* do not read alike. A gate somebody other
+than the owner wrote is set aside by the rc and said, so asking a stranger
+to "open it up" gets you nothing but the same refusal.
 
 The person's side of this is `isocan rc` — a long-running command they start
 that answers for enrolled agents. It is not your verb: inside a harness

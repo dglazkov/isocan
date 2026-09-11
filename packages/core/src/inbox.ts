@@ -164,12 +164,205 @@ export interface AgentRules {
    *
    * `["*"]` is the same spelling `ops` uses for "everything", said
    * explicitly so a person can turn a gate off without deleting a field.
+   *
+   * A name may carry how long it lasts — `{ id, until }` beside the bare ids
+   * every older gate is made of (`ListenEntry`, issue #272 phase 3). Read it
+   * with `parseListen` / `listenGrants` rather than by hand; the union is
+   * deliberate, so a reader that forgets is a type error rather than a gate
+   * that quietly matches nobody.
    */
-  listen?: string[];
+  listen?: ListenEntry[];
 }
 
 /** The `listen` spelling for "anyone" — `ops`'s idiom, one definition. */
 export const LISTEN_ANYONE = "*";
+
+/**
+ * **How long a grant lasts, written into the name it grants to** (issue #272
+ * phase 3, 11 Sep 2026).
+ *
+ * A timed grant needed somewhere to live, and there were two places it could
+ * have gone: a sibling field on `AgentRules` (`until: { [id]: iso }`) or the
+ * entry itself. The entry wins, and the reason is which way each one FAILS on
+ * a reader that has never heard of expiry.
+ *
+ * `rulesOf` drops keys it does not know, deliberately — the record has
+ * carried rules opaquely since phase 2. So a sibling `until` map would be
+ * invisible to an older build, which would go on honouring a grant that
+ * lapsed a month ago: a gate failing OPEN, on the one field whose whole job
+ * is to decide who may spend somebody's tokens.
+ *
+ * **The expiry belongs to the name, so it is written on the name.** An entry
+ * is a bare actor id — which is every gate written before today, unchanged —
+ * or `{ id, until }`. Two reasons this rather than packing the date into the
+ * string (`usr_dion until <ISO>`), which was the first shape and was wrong:
+ *
+ * - **The type system can enforce it.** With `ListenEntry[]`, a reader that
+ *   treats an element as an id gets a type error; with `string[]`, the same
+ *   reader compiles and silently matches nobody. A gate that fails by
+ *   accident — in either direction — is exactly what this field exists to
+ *   prevent, so the failure has to be one a compiler can see.
+ * - **An older reader drops it cleanly.** `rulesOf` has always kept only
+ *   strings in this list, so a build that has never heard of expiry does not
+ *   see a listener id that is not an id: it sees no entry at all, the grant
+ *   is absent, and the agent answers its owner alone. Fail closed, and
+ *   nothing anywhere renders half a date as a person's name.
+ *
+ * There is no migration to write, because both shapes are read: a plain
+ * string is a grant with no expiry, which is what every stored gate already
+ * is, and `spellListen` still writes a bare string when nobody said how long
+ * — so a gate that gains no expiry is byte-identical to what it was.
+ *
+ * `listen` staying a list on one field is what lets phase 3 be a field on
+ * the record rather than a new op: the vocabulary stays at 33, and
+ * `agent.enroll` carries this as it carried the gate before.
+ */
+
+/** One name in the gate, read: who, and — when the owner said how long —
+ *  until when, as an ISO instant (absolute, so two machines in two timezones
+ *  cannot read one grant two ways). */
+interface ListenGrant {
+  id: string;
+  until?: string;
+}
+
+/** A name in the gate, stored: an actor id, or that id with how long the
+ *  grant lasts. `LISTEN_ANYONE` is the one id that is not a person. */
+export type ListenEntry = string | ListenGrant;
+
+/** A stored entry, read. An `until` that is not a time is ignored rather
+ *  than trusted: a gate must never widen because a value was malformed. */
+export function parseListen(entry: ListenEntry): ListenGrant {
+  if (typeof entry === "string") return { id: entry };
+  const until = entry.until;
+  return until !== undefined && Number.isFinite(Date.parse(until))
+    ? { id: entry.id, until }
+    : { id: entry.id };
+}
+
+/** The entry to store — the inverse of `parseListen`, here so the two
+ *  spellings cannot drift apart. A grant with no expiry stays a bare string,
+ *  so a gate that never gains one is byte-identical to what it always was
+ *  and every older reader goes on reading it. */
+export function spellListen(id: string, until?: string | null): ListenEntry {
+  return until ? { id, until } : id;
+}
+
+/** Has this grant run out? A grant with no expiry never does. */
+function grantLapsed(grant: ListenGrant, now: number = Date.now()): boolean {
+  return grant.until !== undefined && Date.parse(grant.until) <= now;
+}
+
+/**
+ * The gate's names, parsed and dated — what every surface that wants to SHOW
+ * a gate reads, rather than each one learning the spelling. `lapsed` is kept
+ * in the list rather than filtered out of it, because a grant that ran out is
+ * the thing a refusal has to be able to name.
+ */
+export function listenGrants(
+  listen: readonly ListenEntry[] | undefined,
+  now: number = Date.now(),
+): (ListenGrant & { lapsed: boolean })[] {
+  return (listen ?? [])
+    .filter((entry) => entry !== LISTEN_ANYONE)
+    .map((entry) => {
+      const grant = parseListen(entry);
+      return { ...grant, lapsed: grantLapsed(grant, now) };
+    });
+}
+
+/**
+ * **The list a grant writes.** One name added to — or taken out of — the gate
+ * that already STANDS, which is `RcPolicy.listen` and not the stored field:
+ * a gate somebody other than the owner wrote has already been set aside
+ * (`answerPolicy`), and appending to the stored value would quietly bring it
+ * back. The owner's click says one thing; it must not also resurrect
+ * somebody else's.
+ *
+ * `LISTEN_ANYONE` swallows the list, because "anyone" is not one more name —
+ * it is the answer instead of the list — and taking it away leaves the names
+ * that were there before it, which is the gate the owner last chose by hand.
+ */
+export function withListener(
+  policy: RcPolicy,
+  actorId: string,
+  admit: boolean,
+  opts?: { until?: string | null; joined?: ActorJoins; now?: number },
+): ListenEntry[] {
+  const joined = opts?.joined;
+  const now = opts?.now ?? Date.now();
+  const standing = policy.listen.filter((e) => e !== LISTEN_ANYONE);
+  if (actorId === LISTEN_ANYONE) {
+    if (!admit) return standing.filter((e) => !grantLapsed(parseListen(e), now));
+    return [LISTEN_ANYONE];
+  }
+  const others = standing.filter((entry) => !sameActor(joined, parseListen(entry).id, actorId));
+  const open = policy.listen.includes(LISTEN_ANYONE);
+  if (!admit) return open ? [LISTEN_ANYONE] : others;
+  // Naming somebody while the gate stands open is not a narrowing: the list
+  // is already the whole room, and rewriting it to one name would be a
+  // different decision than the one the click made.
+  if (open) return [LISTEN_ANYONE];
+  return [...others.filter((e) => !grantLapsed(parseListen(e), now)), spellListen(actorId, opts?.until)];
+}
+
+/** When this asker's grant ran out, if they had one and it did — so a
+ *  refusal can say *lapsed* rather than repeating *never*. */
+export function lapsedFor(
+  policy: RcPolicy,
+  actorId: string,
+  joined?: ActorJoins,
+  now: number = Date.now(),
+): string | undefined {
+  for (const grant of listenGrants(policy.listen, now)) {
+    if (grant.lapsed && sameActor(joined, grant.id, actorId)) return grant.until;
+  }
+  return undefined;
+}
+
+/**
+ * **How long, as a person says it** — `tonight`, `7d`, `30d`, `never`, or an
+ * instant spelled out. Resolved to an absolute instant at the moment of the
+ * grant, on the granter's clock, because a gate read on three machines in
+ * three timezones must mean one moment.
+ */
+export function listenUntil(spec: string, now: number = Date.now()): string | null {
+  const said = spec.trim().toLowerCase();
+  if (said === "" || said === "never" || said === "forever") return null;
+  if (said === "tonight") {
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    return midnight.toISOString();
+  }
+  const days = /^(\d+)d$/.exec(said);
+  if (days) return new Date(now + Number(days[1]) * 86_400_000).toISOString();
+  const hours = /^(\d+)h$/.exec(said);
+  if (hours) return new Date(now + Number(hours[1]) * 3_600_000).toISOString();
+  const at = Date.parse(spec);
+  if (Number.isFinite(at)) return new Date(at).toISOString();
+  throw new Error(
+    `"${spec}" is not a length of time — try tonight, 7d, 24h, never, or a date`,
+  );
+}
+
+/** A grant's remaining life, in the clipped vocabulary the rosters use:
+ *  *until tonight*, *for 6 days*, *lapsed 2h ago*. */
+export function untilWords(until: string, now: number = Date.now()): string {
+  const left = Date.parse(until) - now;
+  if (!Number.isFinite(left)) return "";
+  if (left <= 0) {
+    const gone = -left;
+    if (gone < 3_600_000) return `lapsed ${Math.max(1, Math.round(gone / 60_000))}m ago`;
+    if (gone < 86_400_000) return `lapsed ${Math.round(gone / 3_600_000)}h ago`;
+    return `lapsed ${Math.round(gone / 86_400_000)}d ago`;
+  }
+  if (left < 3_600_000) return `for ${Math.max(1, Math.round(left / 60_000))}m`;
+  const tonight = new Date(now);
+  tonight.setHours(24, 0, 0, 0);
+  if (Date.parse(until) <= tonight.getTime()) return "until tonight";
+  if (left < 86_400_000) return `for ${Math.round(left / 3_600_000)}h`;
+  return `for ${Math.round(left / 86_400_000)}d`;
+}
 
 /** The stored rules field, read tolerantly — it has been opaque since
  * phase 2, and a malformed hand-me-down must cost the filter, not the
@@ -178,9 +371,22 @@ export function rulesOf(raw: unknown): AgentRules {
   if (raw === null || typeof raw !== "object") return {};
   const strings = (value: unknown): string[] | undefined =>
     Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined;
+  /* `listen` is the one list whose entries may be more than a name (#272
+     phase 3). Kept tolerantly and by SHAPE: an id, or an object with a
+     string id. Anything else is dropped, exactly as a string list drops a
+     number — a gate must never admit somebody because a value was
+     malformed. */
+  const entries = (value: unknown): ListenEntry[] | undefined =>
+    Array.isArray(value)
+      ? value.filter(
+          (v): v is ListenEntry =>
+            typeof v === "string" ||
+            (typeof v === "object" && v !== null && typeof (v as { id?: unknown }).id === "string"),
+        )
+      : undefined;
   const items = strings((raw as { items?: unknown }).items);
   const ops = strings((raw as { ops?: unknown }).ops);
-  const listen = strings((raw as { listen?: unknown }).listen);
+  const listen = entries((raw as { listen?: unknown }).listen);
   return {
     ...(items ? { items } : {}),
     ...(ops ? { ops } : {}),
@@ -208,10 +414,11 @@ export function listensTo(
   /** The registry's joins, when the caller holds them — a gate naming
    * `Dimitri 2` must still admit Dimitri. */
   joined?: ActorJoins,
+  now: number = Date.now(),
 ): boolean {
   const listen = rules?.listen ?? [];
   if (listen.length === 0 || listen.includes(LISTEN_ANYONE)) return true;
-  return listen.some((id) => sameActor(joined, id, authorId));
+  return listenGrants(listen, now).some((g) => !g.lapsed && sameActor(joined, g.id, authorId));
 }
 
 /**
@@ -227,10 +434,17 @@ export function listensTo(
 export function listenWords(
   rules: AgentRules | null | undefined,
   nameOf: (actorId: string) => string | undefined,
+  now: number = Date.now(),
 ): string | null {
   const listen = rules?.listen ?? [];
   if (listen.length === 0 || listen.includes(LISTEN_ANYONE)) return null;
-  const names = listen.map((id) => nameOf(id) ?? id);
+  // A grant that has run out is not a name this gate admits, so it is not a
+  // name these words may say: reading "listens to Dion" of a gate that will
+  // turn Dion away is the silent gate wearing the opposite hat.
+  const names = listenGrants(listen, now)
+    .filter((g) => !g.lapsed)
+    .map((g) => nameOf(g.id) ?? g.id);
+  if (names.length === 0) return "listens to nobody else — every grant has lapsed";
   if (names.length === 1) return `listens to ${names[0]}`;
   if (names.length === 2) return `listens to ${names[0]} and ${names[1]}`;
   return `listens to ${names[0]} and ${names.length - 1} others`;
@@ -300,8 +514,25 @@ export function answerPolicy(
   if (listen.includes(LISTEN_ANYONE)) return { owner: keeping.owner, listen: [LISTEN_ANYONE] };
   // The owner is always in; naming them (`--to me`) adds nothing, and must
   // not make the words say "listens to Nico and Nico".
-  const others = listen.filter((id) => !sameActor(joined, id, keeping.owner.id));
-  return { owner: keeping.owner, listen: [...new Set(others)] };
+  const others = listen.filter((entry) => !sameActor(joined, parseListen(entry).id, keeping.owner.id));
+  // Deduplicated by WHO rather than by entry, so a name granted twice with
+  // two expiries is one grant — the longer one, because the owner widening a
+  // grant they already gave is widening it.
+  const byId = new Map<string, ListenEntry>();
+  for (const entry of others) {
+    const { id, until } = parseListen(entry);
+    const had = byId.get(id);
+    if (had === undefined) byId.set(id, entry);
+    else if (until === undefined) byId.set(id, entry);
+    else {
+      const kept = parseListen(had).until;
+      if (kept !== undefined && Date.parse(until) > Date.parse(kept)) byId.set(id, entry);
+    }
+  }
+  // Lapsed grants are KEPT here rather than swept: the rc's refusal reads
+  // this list to say *your access lapsed* instead of *you never had any*,
+  // and `mayWake` is the thing that decides, not the presence of a name.
+  return { owner: keeping.owner, listen: [...byId.values()] };
 }
 
 /** Whether a gate was set aside because somebody other than the owner wrote
@@ -314,7 +545,7 @@ export function gateSetAside(
   joined?: ActorJoins,
 ): boolean {
   if (writtenBy === undefined || ownersWord(keeping, writtenBy, joined)) return false;
-  return (rules?.listen ?? []).some((id) => !sameActor(joined, id, keeping.owner.id));
+  return (rules?.listen ?? []).some((e) => !sameActor(joined, parseListen(e).id, keeping.owner.id));
 }
 
 /** Does this policy admit that speaker? `hands` is the rc's own knowledge
@@ -324,10 +555,14 @@ export function mayWake(
   authorId: string,
   joined?: ActorJoins,
   hands?: readonly string[],
+  /** The clock a timed grant is read against — a parameter so a test can
+   *  stand at a moment, and `Date.now()` because every real caller is at
+   *  this one. */
+  now: number = Date.now(),
 ): boolean {
   if (ownersWord({ owner: policy.owner, ...(hands ? { hands } : {}) }, authorId, joined)) return true;
   if (policy.listen.includes(LISTEN_ANYONE)) return true;
-  return policy.listen.some((id) => sameActor(joined, id, authorId));
+  return listenGrants(policy.listen, now).some((g) => !g.lapsed && sameActor(joined, g.id, authorId));
 }
 
 /** The gate as dispatch applies it: the author, or — when the author is
@@ -375,12 +610,17 @@ export function policyWords(
   /** Who is reading, so the owner reads *you* rather than their own name. */
   viewerId?: string,
   joined?: ActorJoins,
+  now: number = Date.now(),
 ): string | null {
   if (policy.listen.includes(LISTEN_ANYONE)) return null;
   const you = (id: string) => viewerId !== undefined && sameActor(joined, id, viewerId);
   const owner = you(policy.owner.id) ? "you" : (nameOf(policy.owner.id) ?? policy.owner.name);
-  if (policy.listen.length === 0) return `listens only to ${owner}`;
-  const others = policy.listen.map((id) => (you(id) ? "you" : (nameOf(id) ?? id)));
+  // Only the grants that still stand are named: a lapsed one is a name this
+  // gate will turn away, and the whole point of one wording is that what it
+  // says and what dispatch does are the same sentence.
+  const live = listenGrants(policy.listen, now).filter((g) => !g.lapsed);
+  if (live.length === 0) return `listens only to ${owner}`;
+  const others = live.map((g) => (you(g.id) ? "you" : (nameOf(g.id) ?? g.id)));
   if (others.length === 1) return `listens to ${owner} and ${others[0]}`;
   return `listens to ${owner} and ${others.length} others`;
 }
@@ -422,12 +662,17 @@ export function refusedMentions(
   authorId: string,
   policies: Readonly<Record<string, RcPolicy>> | undefined,
   joined?: ActorJoins,
-): { actorId: string; policy: RcPolicy }[] {
+  now: number = Date.now(),
+): { actorId: string; policy: RcPolicy; lapsed?: string }[] {
   if (!policies) return [];
-  const out: { actorId: string; policy: RcPolicy }[] = [];
+  const out: { actorId: string; policy: RcPolicy; lapsed?: string }[] = [];
   for (const actorId of new Set(mentions ?? [])) {
     const policy = policies[actorId];
-    if (policy && !mayWake(policy, authorId, joined)) out.push({ actorId, policy });
+    if (!policy || mayWake(policy, authorId, joined, undefined, now)) continue;
+    // Turned away WITH a grant that ran out is a different sentence from
+    // turned away with none, and the difference is the asker's to know.
+    const ran = lapsedFor(policy, authorId, joined, now);
+    out.push({ actorId, policy, ...(ran ? { lapsed: ran } : {}) });
   }
   return out;
 }
@@ -444,17 +689,53 @@ export function turnedAwayLine(
   policy: RcPolicy,
   nameOf: (actorId: string) => string | undefined,
   asker: string,
+  /** When this asker's own grant ran out, if it did — the one clause a
+   *  lapsed grant adds to the refusal a gate that never had it would give
+   *  (issue #272 phase 3). */
+  opts?: { lapsed?: string | undefined; now?: number },
 ): string {
+  const now = opts?.now ?? Date.now();
   const owner = nameOf(policy.owner.id) ?? policy.owner.name;
-  const gate = policyWords(policy, nameOf) ?? `listens only to ${owner}`;
-  // `--to` replaces the list, so the suggestion carries who is already in.
-  const names = [...policy.listen.map((id) => nameOf(id) ?? id), asker];
+  const gate = policyWords(policy, nameOf, undefined, undefined, now) ?? `listens only to ${owner}`;
+  // `--to` replaces the list, so the suggestion carries who is already in —
+  // by name and without their expiry, because it is a command to retype, and
+  // without the lapsed, because re-granting what ran out is the owner's
+  // decision to make again rather than one to smuggle into a suggestion.
+  const names = [
+    ...listenGrants(policy.listen, now)
+      .filter((g) => !g.lapsed)
+      .map((g) => nameOf(g.id) ?? g.id),
+    asker,
+  ];
   const to = names.join(",");
   const quoted = /[\s"'$`\\]/.test(to) ? `"${to.replace(/(["$`\\])/g, "\\$1")}"` : to;
+  const ran = opts?.lapsed ? ` ${asker}'s access ${untilWords(opts.lapsed, now)}.` : "";
   return (
-    `${agentName} ${gate} — this did not wake ${agentName}, and spent nothing. ` +
+    `${agentName} ${gate} — ${turnedAwayMark(agentName)}${ran} ` +
     `${owner} can widen it: isocan rc listen ${/\s/.test(agentName) ? `"${agentName}"` : agentName} --to ${quoted}`
   );
+}
+
+/**
+ * **The clause every refusal carries**, so a surface can RECOGNISE one it did
+ * not write (issue #272 phase 1). The refusal lands in the thread as a system
+ * comment and stays there forever; once the owner widens the gate, the words
+ * above the reader are no longer true, and the only way to say so beside them
+ * is to know which comment they are.
+ *
+ * A marker in the comment would have been the other way, and it would have
+ * been a change to what a comment IS for one feature's benefit. The sentence
+ * is already core's, written in one place; being able to read it back is the
+ * same fact, not a new one.
+ */
+function turnedAwayMark(agentName: string): string {
+  return `this did not wake ${agentName}, and spent nothing.`;
+}
+
+/** Does this comment body read as the refusal this agent got? The system
+ *  voice is the only author that writes one, which the caller checks. */
+export function readsAsTurnedAway(body: string, agentName: string): boolean {
+  return body.includes(turnedAwayMark(agentName));
 }
 
 /**

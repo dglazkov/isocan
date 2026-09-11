@@ -286,6 +286,12 @@ import {
   isSystemActor,
   LISTEN_ANYONE,
   listenWords,
+  listenGrants,
+  type ListenEntry,
+  listenUntil,
+  spellListen,
+  untilWords,
+  lapsedFor,
   newId,
   rulesOf,
   SYSTEM_ACTOR,
@@ -10074,10 +10080,15 @@ async function noteTurnedAway(
   const answering = await ctx.client.rcAnswering(canvasId).catch(() => null);
   const person = await readIdentity(ctx.home).catch(() => null);
   const nameOf = nameResolver(snapshot);
-  for (const { actorId, policy } of refusedMentions(mentions, ctx.actor.id, answering?.policies, snapshot.joined)) {
+  for (const { actorId, policy, lapsed } of refusedMentions(
+    mentions,
+    ctx.actor.id,
+    answering?.policies,
+    snapshot.joined,
+  )) {
     if (person && sameActor(snapshot.joined, policy.owner.id, person.id)) continue;
     const name = agents[actorId]?.actor.name ?? nameOf(actorId) ?? actorId;
-    console.error(`note: ${turnedAwayLine(name, policy, nameOf, ctx.actor.name)}`);
+    console.error(`note: ${turnedAwayLine(name, policy, nameOf, ctx.actor.name, { lapsed })}`);
   }
 }
 
@@ -11432,7 +11443,15 @@ function nameResolver(snapshot: CanvasSnapshotResponse): (actorId: string) => st
  * explicitly rather than by deleting the field, so `rc listen --to
  * everyone` is legible as a decision in the op log.
  */
-async function resolveListen(ctx: Ctx, canvasIds: readonly string[], spec: string): Promise<string[]> {
+async function resolveListen(
+  ctx: Ctx,
+  canvasIds: readonly string[],
+  spec: string,
+  /** `--until`, already resolved to an instant — written into each name
+   *  (`spellListen`) rather than beside them, so a reader that has never
+   *  heard of expiry admits nobody rather than everybody. */
+  until?: string | null,
+): Promise<ListenEntry[]> {
   const wanted = spec
     .split(",")
     .map((s) => s.trim())
@@ -11471,7 +11490,7 @@ async function resolveListen(ctx: Ctx, canvasIds: readonly string[], spec: strin
     }
     ids.push(hit.id);
   }
-  return [...new Set(ids)];
+  return [...new Set(ids)].map((id) => spellListen(id, until));
 }
 
 /** Both add verbs land here; `contained` is the agent spelling's rule. */
@@ -11857,6 +11876,10 @@ rcCommand
   .command("listen <name>")
   .description("Whose word wakes an agent — read it, or widen or narrow it everywhere they stand")
   .option("--to <who>", "names/ids comma-separated, everyone, or me (only you — the default); omit to read what stands")
+  .option(
+    "--until <when>",
+    "how long the grant lasts: tonight, 7d, 24h, a date, or never (the default — it stands until you change it)",
+  )
   .addHelpText(
     "after",
     `
@@ -11875,14 +11898,24 @@ admit is not a summons, is not a change, and is never counted against the
 agent's hourly ceiling. A mention pierces every other filter; it does not
 pierce this one.
 
+A grant may run out. \`--until\` writes how long beside the name it grants
+to; when it lapses the agent refuses in the same words as a gate that never
+had it, plus one saying it lapsed, and the gate is back where it was with
+nobody having to remember. Without --until a grant stands until you change
+it.
+
   isocan rc listen Scout --to Usama         you and Usama
   isocan rc listen Scout --to everyone      anyone admitted here — a team's agent
   isocan rc listen Scout --to me            only you again (the default)
+  isocan rc listen Scout --to Usama --until 7d       a week, then it lapses
   isocan --canvas <ref> rc listen Scout --to Usama    one canvas only`,
   )
   .action(
-    run(async (name: string, opts: { to?: string }, cmd: Command) => {
+    run(async (name: string, opts: { to?: string; until?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
+      if (opts.until !== undefined && opts.to === undefined) {
+        throw new Error("`--until` says how long a grant lasts — it wants a `--to` to grant");
+      }
       if (opts.to !== undefined && (await harnessSessions(ctx.home)).length > 0) {
         throw new Error(
           "`isocan rc listen --to` is the owner's gesture — it decides whose word may spend their tokens — and " +
@@ -11908,7 +11941,13 @@ pierce this one.
       const titleOf = (id: string) => canvases.find((c) => c.id === id)?.title ?? id;
 
       if (opts.to === undefined) {
-        const read: { canvas: string; canvasId: string; listens: string; policy?: RcPolicy }[] = [];
+        const read: {
+          canvas: string;
+          canvasId: string;
+          listens: string;
+          until?: string;
+          policy?: RcPolicy;
+        }[] = [];
         const allRows = await readRcAgents(ctx.home);
         for (const canvasId of canvasIds) {
           const snapshot = await ctx.client.snapshot(canvasId);
@@ -11920,18 +11959,30 @@ pierce this one.
           const gate = record
             ? gateOf(record, snapshot, undefined, { person, rows: allRows, canvasId }, viewerIdOf(ctx), true)
             : null;
+          // How long each named grant has left, beside the gate rather than
+          // inside its words: `policyWords` is the one wording every surface
+          // shares, and a timed grant nobody can SEE is the silent gate in a
+          // slower form — it lapses and the person is left guessing.
+          const timed = listenGrants(gate?.policy?.listen)
+            .filter((g) => g.until !== undefined)
+            .map((g) => `${nameResolver(snapshot)(g.id) ?? g.id} ${untilWords(g.until!)}`)
+            .join(", ");
           read.push({
             canvas: titleOf(canvasId),
             canvasId,
             listens: record ? (gate?.words ?? "everyone") : "— not enrolled here",
+            ...(timed ? { until: timed } : {}),
             ...(gate?.policy ? { policy: gate.policy } : {}),
           });
         }
         if (ctx.json) return printJson(read);
-        return printTable(read.map((r) => ({ canvas: r.canvas, listens: r.listens })));
+        return printTable(
+          read.map((r) => ({ canvas: r.canvas, listens: r.listens, ...(r.until ? { until: r.until } : {}) })),
+        );
       }
 
-      const listen = await resolveListen(ctx, canvasIds, opts.to);
+      const until = opts.until === undefined ? null : listenUntil(opts.until);
+      const listen = await resolveListen(ctx, canvasIds, opts.to, until);
       const written: string[] = [];
       for (const canvasId of canvasIds) {
         const snapshot = await ctx.client.snapshot(canvasId);
@@ -11962,7 +12013,7 @@ pierce this one.
         );
       }
       console.log(
-        `${name} ${gate} — on ${written.length} canvas${written.length === 1 ? "" : "es"} (${written.join(", ")}). ` +
+        `${name} ${gate}${until ? ` ${untilWords(until)}` : ""} — on ${written.length} canvas${written.length === 1 ? "" : "es"} (${written.join(", ")}). ` +
           "A running `isocan rc` reads this on its next lap; nothing needs restarting.",
       );
     }),
@@ -13409,7 +13460,15 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
               ? agent.onBehalfOf.filter((id) => !mayWake(agent.policy, id, joined, keeping.hands)).map((id) => nameOf(id) ?? id)
               : [by.name];
             const asker = askers.join(",") || by.name;
-            const line = turnedAwayLine(record.actor.name, agent.policy, nameOf, asker);
+            // A grant that ran out refuses in the same words as a gate that
+            // never had one, plus the one clause that says which this is:
+            // "you were never let in" and "you were, until Tuesday" are
+            // different facts, and only the second has an obvious next move.
+            const askerIds = agent.onBehalfOf ?? [by.id];
+            const ran = askerIds
+              .map((id) => lapsedFor(agent.policy, id, joined))
+              .find((at) => at !== undefined);
+            const line = turnedAwayLine(record.actor.name, agent.policy, nameOf, asker, { lapsed: ran });
             const already = snapshot?.canvas.threads[op.threadId]?.comments.some(
               (c) => isSystemActor(c.author.id) && c.body === line,
             );

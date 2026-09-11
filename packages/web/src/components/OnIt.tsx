@@ -4,6 +4,7 @@ import {
   refusedMentions,
   summonedBy,
   summonsLine,
+  untilWords,
   waitingLine,
   wokenLine,
   workersOn,
@@ -105,11 +106,15 @@ export function OnIt({
     const nameOf = (id: string) => actorNameIn(names, { id, name: id });
     return (
       <div className="onit waiting" aria-live="polite">
-        {refused.map(({ actorId, policy }) => (
+        {refused.map(({ actorId, policy, lapsed }) => (
           <div className="onit-row" key={actorId}>
             <span className="onit-dot idle" />
             <span>
               {summonsLine(agents?.[actorId]?.actor.name ?? nameOf(actorId), { state: "refused", policy }, nameOf)}
+              {/* Turned away WITH a grant that ran out is a different fact
+                  from turned away with none (#272 phase 3): the same words,
+                  plus the one clause that says which this is. */}
+              {lapsed && ` Your access ${untilWords(lapsed)}.`}
             </span>
           </div>
         ))}

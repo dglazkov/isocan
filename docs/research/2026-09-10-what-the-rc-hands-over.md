@@ -639,3 +639,90 @@ talking (the walk saw exactly that, and the cycle guard stopped it at
 three), and an interactive session on the owner's machine that a stranger
 talked into mentioning a gated agent is read as the owner's hand — nothing
 records whose word it carries.
+
+
+## Granting from the UI — 11 September, the same evening
+
+The gate above shipped in the afternoon and was proved by the first thing it
+refused. Dion asked Lamb — Dimitri's sheep-harnessed agent — for a canvas,
+nothing woke, and the thread said so correctly and completely, in a command
+line he could not run. *"Maybe we can have UI that lets you give me access to
+a lamb … instead of just saying the command line lol"* is issue #272, and its
+answer is one sentence: **the refusal is the control.**
+
+**Where the control is.** Under the refusal, which is already a system
+comment in the thread where the asking happened, and only for the owner —
+the person the announced policy names. Nobody else's screen changes; a
+stranger keeps reading the words, which were already the right words. This
+is the same rule as everything else in this note, applied to pixels: *never
+render a control to somebody whose click would be set aside*, because the rc
+discards a gate its owner did not write and a discarded click is worse than
+no button.
+
+**What the click writes.** The same `agent.enroll` `rc listen --to` writes,
+computed by the same function in core (`withListener`) — appended to the gate
+that already STANDS (`RcPolicy.listen`, the announced value) rather than to
+the stored field, so a grant can never quietly resurrect a gate the rc had
+set aside. Still no new op; the vocabulary stays at 33.
+
+**What the thread shows afterwards.** A line, not a comment. The enrolment op
+is the record already; what the thread needed was for the refusal above to
+stop reading as true, so the same place says *Lamb listens to you now — ask
+again*. Recognising the refusal to sit under is core's job too
+(`readsAsTurnedAway`, one phrase shared by the writer and the reader), rather
+than a marker bolted onto what a comment is.
+
+**Naming people, from the web.** The tray's two-position toggle becomes the
+gate itself: everybody here, each a checkbox, plus *anyone*, worded by
+`policyWords`. This closes "widening from the web offers
+everyone-or-only-me" above — and it closes it in the direction the story
+asked for, since the case that produced the issue was one person wanting one
+other person let in.
+
+**How long, and where the expiry lives.** A grant may carry one, and
+`docs/research/2026-09-11-per-asker-scopes.md` asked that `listen` stop being
+a list of strings **exactly once**, becoming an entry per name. It has:
+`ListenEntry` is an actor id, or `{ id, until }`, and `ListenGrant` —
+`parseListen`'s reading of either — is the single shape a plain grant and an
+expiring grant both take.
+
+The first attempt packed the date into the string (`usr_dion until <ISO>`),
+and it was wrong for a reason worth keeping written down: **a gate that fails
+by accident, in either direction, is exactly what this field exists to
+prevent, so the failure has to be one a compiler can see.** With `string[]` a
+reader that forgets to parse compiles fine and silently matches nobody; with
+the union it is a type error, which is how the three call sites outside core
+were found. The other half is what an older build does with an entry it does
+not understand: `rulesOf` has always kept only strings in this list, so the
+object is dropped whole — the grant is absent, the agent answers its owner
+alone, and nothing anywhere renders half a date as a person's name. Fail
+closed, tested as such (`packages/core/test/agents.test.ts`, "is dropped
+whole by a reader that has never heard of expiry").
+
+There is no migration to write, because both shapes are read and a grant with
+no expiry is still a bare id — so every gate written before today is
+unchanged, and one that gains no expiry stays byte-identical. A sibling
+`until` map beside `listen` was the third option and the only unsafe one:
+`rulesOf` drops keys it does not know, so an older build would have gone on
+honouring a grant that lapsed a month ago — a gate failing OPEN on the one
+field that decides who may spend somebody's tokens.
+
+A lapsed grant refuses in the words a gate that never had one would use, plus
+one sentence saying it lapsed: *"you were never let in"* and *"you were,
+until Tuesday"* have different next moves, and only the second is the owner's
+to repeat.
+
+**Left open, still.** The mockup's other two switches — *create and edit
+items* and *run shell commands* — are deliberately not built: what an agent
+MAY DO is its rung on the canvas and the fence on its owner's machine,
+neither of which is per-asker, and a capability that travels with a summons
+does not exist anywhere today. Shipping it as a switch that silently did
+nothing would be worse than not having it; it is the missing half of compute
+consent, and `docs/research/2026-09-11-per-asker-scopes.md` (#273) is the
+note that examined it and declined it for now. The panel says so in one line
+rather than leaving the absence to be read as an oversight: *a grant decides
+whether this agent answers this person; what it may do here is its own rung
+on this canvas.* And a grant's expiry is read
+against each reader's clock: the gate is applied at the rc, so the rc's clock
+is the one that decides, and a tray a minute behind may still show a grant
+the rc has already let lapse.
