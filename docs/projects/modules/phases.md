@@ -4,7 +4,11 @@ Each phase ends with something a person can remove and watch disappear.
 Ordered by what settles the most with the least: the registries before any
 loader, because a loader with nothing to load into is a loader.
 
-**Where we are:** phases 1–4 built 4–5 September 2026. Phase 5 waits on three named gates.
+**Where we are:** phases 1–4.5 built 4–9 September 2026. Phase 5's three gates
+were read on 12 September: two clear, the third clear for the agent-side
+sandbox and still shut for the browser-frame one — so phase 5 walks its
+agent-side half and the frame half stays gated behind extensions stages 3–4.
+See [the gate check](#the-gate-check-12-september-2026).
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
@@ -246,3 +250,97 @@ was decided 11 Sep and is being built separately. Neither is a module sandbox
 — this gate asks whose machine runs a module's compute and on whose say-so,
 and the rc work answers that for an agent's turn — but it is the same question
 one layer over, and the answer this gate will want is now visible.
+
+### The gate check, 12 September 2026
+
+Read against what the gates were actually written to mean, rather than against
+their names. **Two of the three are clear, the third is clear for one of
+phase 5's two shapes and genuinely shut for the other** — so phase 5 starts,
+on the half the gate does not bind, and the other half re-queues where it
+belongs.
+
+**The content origin — CLEAR.** Unchanged since 6 Sep: live on prod, short-
+lived signed reads over `(canvasId, blobHash, expiry)` from a second
+registrable domain holding no cookie, badge or API. It is a prerequisite of
+the browser-frame shape only; nothing on the agent-side shape touches it.
+
+**Compute consent — CLEAR, and narrower than its name.** The gate is not a
+principle, it is a *named question in a named document*: the
+[research note's §7](../../research/2026-09-04-modules.md) says "the
+compute-consent question
+[agent-custody](../agent-custody/design.md) left open", and
+[`docs/projects/README.md`](../README.md) glosses which question that is, in
+those words: agent-custody's *"whose ask a parked rc honors (compute
+consent)"*. That question is answered.
+[agent-custody's Open section](../agent-custody/design.md) now strikes it
+through: **answered 11 Sep 2026 — its owner's.** Owner-only summons was
+decided (D2) and built the same day; only the owner's word widens it
+(`writtenBy` on the enrolment), the refusal carries the owner's own buttons
+(#272), and the rc announces its policy with its hold. The reach half, which
+the gate did not name but which a sandbox plainly wants, is `isocan rc
+--sandbox` — and it brought the posture phase 5 should copy verbatim:
+*asked for and not buildable is a refusal, never a quiet unfenced run.*
+
+The paragraph above this one read the gate wider — "whose machine runs a
+**module's** compute and on whose say-so" — and that reading has an answer
+too, in this phase's own shape rather than in a decision still owed. A module
+runs no compute of its own: `isocan sandbox run` is a verb a person or an
+agent types, on the machine they typed it on, and the typing is the consent.
+The one place that argument does not reach is a **hosted** home running
+modules on somebody else's behalf, and that is already a separate open
+question in [`design.md`](design.md) ("who runs modules on isocan.io", the
+same decision as running `release` unattended) — not a gate this phase can
+close, and not one it opens either, because the hosted home loads no runtime
+module.
+
+**Extension actors — SHUT for the frame, CLEAR for the verb.** The gate's
+own gloss in the research note is *"who stamps a sandbox's writes"*, and
+phase 5 has two shapes with two different answers:
+
+- **The sandbox node in a frame** — HTML and JavaScript running in the
+  viewer's browser on the content origin. That is extensions **tier 3**, it
+  acts on its own, and it is somebody else's code: it needs a subject, and
+  the gate holds. It is shut twice over, because tier 3 is unbuilt and
+  [extensions stage 4](../extensions/design.md) says its own real predecessor
+  is a panel that ACTS (stage 3), also unbuilt. The
+  [workbench exfiltration finding](../../research/2026-09-04-modules.md) rides
+  with it: the served CSP must say `connect-src <content-origin>` before the
+  first frame renders.
+- **The sandbox an agent runs where the agent is** — `isocan sandbox run`,
+  the way `isocan edit` opens `$EDITOR` on the agent's machine. Nothing acts
+  on its own here. A person or an agent typed a verb; the version it posts is
+  stamped with the actor who typed it — an actor that already exists, is
+  already attributed, already undoable per actor and already revocable. This
+  is stage 4's own finding applied without changing a word: *a tier-1 tool
+  does not act, it asks*, and giving the asker a second actor would make the
+  log say the button asked for something when a person did.
+
+So the gate was a dependency on the **declarative and hosted panel work**, not
+on sandboxes as a category. Named precisely: it binds the shape whose writer
+is code somebody else wrote, and does not bind the shape whose writer is
+whoever typed the verb.
+
+**The verdict.** Phase 5 walks its agent-side half now. The browser-frame half
+is **not** built around: it stays gated, behind extensions stages 3 and 4 and
+the CSP line, and the module built here deliberately has no frame, no
+`postMessage` surface and no route.
+
+## Phase 5 — sandboxes, the agent-side half
+
+*Started 12 Sep 2026, after the gate check above.*
+
+**The sentence.** *A sandbox is a program that lives on the canvas as a file
+and runs on the machine that typed the verb, fenced, with what it printed
+posted back as a version.* isocan still never runs compute — the
+[architecture](../../architecture.md)'s given — and this does not change that:
+the home orders the ops, and the program runs where a person already trusts
+their own shell.
+
+**The trust line this must not blur, stated where it can be checked.** A
+**module** is trusted like the CLI you installed; an **extension** — and
+anything that arrives *on a canvas* — is trusted like a collaborator. A
+sandbox module sits exactly on that seam, because the module is ours and the
+bytes it runs are a collaborator's. So: the module is loaded as the app, and
+**the program is never**. The fence is not the module's to build, weaken or
+skip — it asks the CLI's host for it, gets the app's own fence or a refusal,
+and has no other way to start a process.
