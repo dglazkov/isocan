@@ -2,7 +2,7 @@
 status: built
 since: 2026-09-11
 see: anatomy, modules, atlas
-note: phases 1–7 built on branch anatomy; native file graph, module workspace API, fluid focus, guarded edits, addressable navigation, four lenses, CLI parity, evidence, native discussion and checkpoints; acceptance in fluid-exploration.md
+note: phases 1–8 built on branch anatomy; native file graph, module workspace API, fluid focus, guarded edits, addressable navigation, four lenses, CLI parity, evidence, native discussion and checkpoints; acceptance in fluid-exploration.md
 ---
 # Anatomy on an isocan canvas
 

@@ -3,14 +3,14 @@
 Plan completed 11 September 2026 before implementation, on branch `anatomy`.
 Read [analysis.md](analysis.md), then [design.md](design.md).
 
-**Where we are:** phases 1–7 built, with fluid-exploration acceptance recorded on 12 September 2026, on branch `anatomy`.
+**Where we are:** phases 1–8 built, including recoverable reads and targeted request receipts on 12 September 2026, on branch `anatomy`.
 The plan below was completed before implementation; acceptance evidence is
 collected in [verification.md](verification.md).
 
 The [12 September usability review](usability-review.md) records remaining
 workflow gaps. Phase 7 implements the motion work and its two edit-preservation
-fixes; the wider review’s analysis lifecycle and semantic editing work remain
-follow-ups.
+fixes. Phase 8 adds read recovery and the request lifecycle; the wider review’s
+semantic editing, graph update previews and transactional updates remain follow-ups.
 
 ## 1. Built — File model and portable graph
 
@@ -92,3 +92,13 @@ local canvas, keeping fixtures synthetic.
 The [step-by-step implementation and acceptance record](fluid-exploration.md)
 covers guarded drafts, temporary native geometry, focus-dependent detail,
 addressable navigation, local camera/pane continuity and scale verification.
+
+
+## 8. Recoverable reads and targeted analysis requests
+
+[Recovery and request design](recovery-and-requests.md) covers item-scoped
+read failures, version preview/recovery, consistent analysis/repository targets,
+native request files, dispatch receipts, guarded executor claims and outcomes,
+cancellation acknowledgement and linked retries. Both surfaces use the same
+helpers and existing native operations. The module does not own worker dispatch
+or claim that an executor remains alive after reporting work.

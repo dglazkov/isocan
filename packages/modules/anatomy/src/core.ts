@@ -1,6 +1,8 @@
 import type { CanvasContents, Item } from "@isocan/core";
 import {
   PROJECT_MIME,
+  NODE_MIME,
+  CHECKPOINT_MIME,
   PROP,
   hasMime,
   nodesOn,
@@ -38,6 +40,7 @@ export async function readProject(
   const byNative = new Map(items.map((i) => [i.id, originId(i)]));
   const nodes = await Promise.all(
     items.map(async (item): Promise<AnatomyNode> => {
+      if (!hasMime(item, NODE_MIME)) throw new Error(`Concept ${item.id} changed file type; restore its Anatomy version before exporting or editing the graph.`);
       const details = nodeBodySchema.parse(
         JSON.parse(await read(currentVersion(item).blobHash)),
       );
@@ -84,6 +87,8 @@ export async function readProject(
       return to ? [{ ...e, from: originId(item), to }] : [];
     }),
   );
+  for (const file of checkpointsOn(canvas, projectItem.id))
+    if (!hasMime(file, CHECKPOINT_MIME)) throw new Error(`Checkpoint ${file.id} changed file type; restore its Anatomy version.`);
   const checkpoints = await Promise.all(
     checkpointsOn(canvas, projectItem.id).map(async (item) => ({
       ...checkpointSchema.parse(

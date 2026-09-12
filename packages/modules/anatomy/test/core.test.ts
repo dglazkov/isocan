@@ -1,13 +1,9 @@
-import { createHash } from "node:crypto";
+import { memory } from "./memory.ts";
 import { describe, expect, it } from "vitest";
 import {
-  applyOperation,
-  invertOperation,
   registerModule,
   unregisterModule,
   itemKind,
-  type CanvasState,
-  type Operation,
 } from "@isocan/core";
 import {
   anatomyModule,
@@ -32,64 +28,9 @@ import {
   saveNode,
   saveProject,
   requestAnalysis,
-  type AnatomyIO,
 } from "../src/operations.ts";
 import { sampleProject } from "./fixture.ts";
 
-function memory() {
-  let seq = 0;
-  let state: CanvasState | null = null;
-  const actor = { id: "usr_test", name: "Test writer" };
-  const blobs = new Map<string, string>();
-  const batches: Operation[][] = [];
-  const undo: Operation[][] = [];
-  function apply(op: Operation) {
-    state = applyOperation(state, {
-      id: `op_${++seq}`,
-      canvasId: op.type === "project.create" ? null : "prj_test",
-      actor,
-      ts: new Date(1780000000000 + seq * 1000).toISOString(),
-      op,
-    });
-  }
-  apply({
-    type: "project.create",
-    canvasId: "prj_test",
-    title: "Synthetic test",
-  });
-  const io: AnatomyIO = {
-    read: async (hash) => {
-      if (!blobs.has(hash)) throw new Error("Missing blob");
-      return blobs.get(hash)!;
-    },
-    put: async (text) => {
-      const blobHash = createHash("sha256").update(text).digest("hex");
-      blobs.set(blobHash, text);
-      return { blobHash, size: Buffer.byteLength(text) };
-    },
-    snapshot: async () => state!.canvas,
-    send: async (ops) => {
-      const inverses: Operation[] = [];
-      for (const op of ops) {
-        const inverse = invertOperation(state, op);
-        if (inverse) inverses.unshift(inverse);
-        apply(op);
-      }
-      batches.push([...ops]);
-      undo.push(inverses);
-    },
-  };
-  return {
-    io,
-    batches,
-    blobs,
-    canvas: () => state!.canvas,
-    project: () => state!.project,
-    undo: () => {
-      for (const op of undo.pop() ?? []) apply(op);
-    },
-  };
-}
 
 describe("Anatomy as native files and operations", () => {
   it("attaches an imported analysis to its canvas and undoes the association", async () => {
@@ -98,25 +39,25 @@ describe("Anatomy as native files and operations", () => {
     expect(m.project().properties[PROP.analysis]).toBe(first);
     expect(m.project().properties[PROP.repository]).toBe("/example/acme");
     const second = await importProject(m.io, sampleProject());
-    expect(m.project().properties[PROP.analysis]).toBe(second);
+    expect(m.project().properties[PROP.analysis]).toBe(first);
     m.undo();
     expect(m.project().properties[PROP.analysis]).toBe(first);
     expect(m.canvas().items[second]).toBeUndefined();
   });
   it("requests repository analysis through one reusable native Chat", async () => {
     const m = memory();
-    await expect(requestAnalysis(m.io, "  ")).rejects.toThrow(
+    await expect(requestAnalysis(m.io, { repository: "  " })).rejects.toThrow(
       "Associate a repository",
     );
     expect(m.batches).toHaveLength(0);
-    await requestAnalysis(m.io, "/example/acme");
-    await requestAnalysis(m.io, "/example/acme");
+    await requestAnalysis(m.io, { repository: "/example/acme" });
+    await requestAnalysis(m.io, { repository: "/example/acme" });
     const threads = Object.values(m.canvas().threads);
     expect(threads).toHaveLength(1);
     expect(threads[0]!.main).toBe(true);
-    expect(threads[0]!.comments).toHaveLength(2);
+    expect(threads[0]!.comments).toHaveLength(1);
     expect(threads[0]!.comments[0]!.body).toContain("/anatomy /example/acme");
-    expect(m.project().properties[PROP.repository]).toBe("/example/acme");
+    expect(m.project().properties[PROP.repository]).toBeUndefined();
   });
   it("explores one hop including hierarchy and incoming/outgoing connections", () => {
     const p = sampleProject();

@@ -133,10 +133,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   native selection, anchored discussion and item-focused collaboration. Browser
   Back retraces exploration; the project shortcut resumes it. Existing concept
   edits use `anatomy draft` and a conditional save to preserve concurrent changes.
+  Broken files have item-scoped diagnostics and version recovery; healthy concepts
+  stay readable. `anatomy validate` and `recover` provide the same repair path.
   Overview, Open Decisions and Coverage show the same graph through different
   lenses. Import/export Anatomy JSON, discuss concepts, attach source evidence,
   propose HTML mocks, and save or restore checkpoints. Associate a repository
-  and ask an agent to analyze it through `/anatomy` in Chat. Attached analyses
+  and ask an agent to analyze it through `/anatomy` in Chat. Requests record their
+  target, Chat delivery, executor reports, reviewed revision and result; inspect
+  them with `anatomy runs` or the workspace. Retries and cancellation preserve
+  the original receipt. Attached analyses
   expose **View Anatomy** in the project menu and right rail. Open **Anatomy** from
   the command palette, or `isocan open --page anatomy`; the `isocan anatomy`
   command family provides the same reads and edits. This is a removable module

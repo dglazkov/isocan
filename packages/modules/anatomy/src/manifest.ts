@@ -8,6 +8,7 @@ import type { AnatomyProject, AnatomyNode, AnatomyEdge } from "./schema.ts";
 
 export const PROJECT_MIME = "application/vnd.isocan.anatomy-project+json";
 export const NODE_MIME = "application/vnd.isocan.anatomy-node+json";
+export const RUN_MIME = "application/vnd.isocan.anatomy-run+json";
 export const CHECKPOINT_MIME = "application/vnd.isocan.anatomy-checkpoint+json";
 export const PROP = {
   project: "anatomy.project",
@@ -18,6 +19,7 @@ export const PROP = {
   source: "anatomy.source",
   analysis: "anatomy.analysis",
   repository: "anatomy.repository",
+  requestTarget: "anatomy.requestTarget",
 } as const;
 export const NODE_SIZE = { width: 320, height: 210 };
 export const currentVersion = (item: Item) =>
@@ -25,15 +27,15 @@ export const currentVersion = (item: Item) =>
 export const hasMime = (item: Item, mime: string) =>
   currentVersion(item)?.mimeType === mime;
 export const projectsOn = (canvas: CanvasContents) =>
-  Object.values(canvas.items).filter((i) => hasMime(i, PROJECT_MIME));
+  Object.values(canvas.items).filter((i) => i.versions.some(v => v.mimeType === PROJECT_MIME));
 export const nodesOn = (canvas: CanvasContents, projectId: string) =>
   Object.values(canvas.items).filter(
-    (i) => i.properties[PROP.project] === projectId && hasMime(i, NODE_MIME),
+    (i) => i.properties[PROP.project] === projectId && i.versions.some(v => v.mimeType === NODE_MIME),
   );
 export const checkpointsOn = (canvas: CanvasContents, projectId: string) =>
   Object.values(canvas.items).filter(
     (i) =>
-      i.properties[PROP.project] === projectId && hasMime(i, CHECKPOINT_MIME),
+      i.properties[PROP.project] === projectId && i.versions.some(v => v.mimeType === CHECKPOINT_MIME),
   );
 export const originId = (item: Item) => item.properties[PROP.origin] ?? item.id;
 export function outgoing(item: Item): AnatomyEdge[] {
@@ -192,14 +194,15 @@ export const anatomyModule: CoreModule = {
       source: "module",
       description:
         "Analyze this project's repository as concepts, decisions and evidence",
-      body: `Read the requested repository using your existing access. If no repository is supplied, read the canvas's anatomy.repository property with isocan canvas show. Do not claim an analysis is running unless you are doing it.
+      body: `Read the requested repository using your existing access. If this message names an analysis request, inspect it with isocan anatomy run <request> and claim it with --start. If this is a direct /anatomy message without a request ID, record it with anatomy analyze [repository] --record-only (use --analysis or --new when needed), then claim the returned request. Do not post another Chat request. If no repository is supplied, read the canvas's anatomy.repository property with isocan canvas show. Do not claim an analysis is running unless you are doing it.
 
 Read the repository's instructions, README, architecture, relevant implementations and tests. Infer its goal from those sources. Model cross-functional goals, workflows, data/state boundaries and rules, not a directory inventory or implementation tickets. Distinguish implemented behavior from proposals. Give every concept a summary; give every risk/conflict/missing concept a clear reason, conflictAxis and source citations. Consider product, experience, engineering and security; leave unreviewed lenses unassessed. Never invent evidence or runtime checks.
 
-Use isocan anatomy ls/show to find an existing analysis (the anatomy.analysis canvas property names the attached project item). Read anatomy draft <project> <node> before editing an existing concept; preserve its base and save with anatomy node. Update relationships with anatomy edge; use anatomy sample for new concept JSON. For a first analysis, build a validated portable Anatomy JSON file and anatomy import it onto this canvas. Import attaches the new analysis to the canvas. Record repoPath and the reviewed revision in the overview. Keep original concept IDs stable on subsequent runs, preserve comments and unrelated canvas content, and save an anatomy checkpoint baseline after the read. Publish a concise receipt with findings and limitations in Chat. Analysis is work you carry out through the ordinary CLI, comments, presence and operations.`,
+Use isocan anatomy ls/show to find an existing analysis (the anatomy.analysis canvas property names the attached project item). Read anatomy draft <project> <node> before editing an existing concept; preserve its base and save with anatomy node. Update relationships with anatomy edge; use anatomy sample for new concept JSON. For a first analysis, build a validated portable Anatomy JSON file and anatomy import it onto this canvas. Import attaches an analysis only when this canvas has no attachment; anatomy attach is the explicit way to change it. Record repoPath and the reviewed revision in the overview. Keep original concept IDs stable on subsequent runs, preserve comments and unrelated canvas content, and save an anatomy checkpoint baseline after the read. Report success with anatomy run <request> --complete <analysis-item> --revision <reviewed-revision> --message <findings-and-limitations>, or report failure with --fail <reason>. Inspect the request for cancelRequested during work; stop and acknowledge with --cancelled when requested. Publish a concise receipt with findings and limitations in Chat. Analysis is work you carry out through the ordinary CLI, comments, presence and operations.`,
     },
   ],
   kinds: [
+    { id: "anatomy-run", mimes: [RUN_MIME], label: "Analysis requests", noun: "analysis request", icon: "file" },
     {
       id: "anatomy-project",
       mimes: [PROJECT_MIME],

@@ -1,3 +1,6 @@
+import { recoverFile } from "./recovery.ts";
+import { dispatchRun, listRuns, readRun, retryRun, updateRun } from "./runs.ts";
+import { inspectProject } from "./diagnostics.ts";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +10,7 @@ import { newId } from "@isocan/core";
 import {
   anatomyModule,
   convergence,
+  currentVersion,
   decisions,
   DISCIPLINES,
   projectsOn,
@@ -23,6 +27,7 @@ import {
   importProject,
   layoutProject,
   loadProject,
+  findProject,
   requestAnalysis,
   promoteMock,
   restoreCheckpoint,
@@ -33,6 +38,9 @@ import {
   type AnatomyIO,
 } from "./operations.ts";
 
+function runReceipt(receipt: Awaited<ReturnType<typeof readRun>>) {
+  return { requestId: receipt.id, ...receipt.run, threadId: receipt.threadId, dispatched: receipt.dispatched, createdAt: receipt.item.createdAt, updatedAt: currentVersion(receipt.item).createdAt };
+}
 function register(host: CliHost): void {
   const family = host.program
     .command("anatomy")
@@ -51,6 +59,7 @@ function register(host: CliHost): void {
         for (const op of ops) await host.sendOp(ctx, canvas.id, op, group);
       },
       snapshot: async () => (await ctx.client.snapshot(canvas.id)).canvas,
+      record: async () => (await ctx.client.snapshot(canvas.id)).project,
     };
     return { ctx, io };
   }
@@ -78,7 +87,7 @@ function register(host: CliHost): void {
   ).action(
     host.run(async (ref: string, _opts: unknown, cmd: Command) => {
       const { io } = await context(cmd);
-      const { item } = await loadProject(io, ref);
+      const { item } = await findProject(io, ref);
       await io.send([
         {
           type: "project.update",
@@ -87,35 +96,37 @@ function register(host: CliHost): void {
       ]);
     }),
   );
-  command(
-    "analyze [repository]",
-    "Ask an agent in Chat to analyze the associated repository",
-  ).action(
-    host.run(
-      async (repository: string | undefined, _opts: unknown, cmd: Command) => {
-        const { io, ctx } = await context(cmd);
-        const record = (
-          await ctx.client.snapshot(
-            await host.resolveCanvas(ctx).then((c) => c.id),
-          )
-        ).project;
-        const linked = record.properties[PROP.analysis];
-        const canvas = await io.snapshot();
-        const analysis = projectsOn(canvas).find((p) => p.id === linked);
-        await requestAnalysis(
-          io,
-          repository ??
-            record.properties[PROP.repository] ??
-            record.properties.repository ??
-            "",
-          analysis?.id,
-        );
-        console.log(
-          "Analysis requested in Chat; an agent with repository access can pick it up.",
-        );
-      },
-    ),
-  );
+  command("analyze [repository]", "Record a targeted analysis request and ask an agent in Chat")
+    .option("--analysis <id>", "Update this analysis explicitly")
+    .option("--new", "Request a new analysis without replacing the attached analysis")
+    .option("--record-only", "Record work already requested directly in Chat, without posting another message")
+    .action(host.run(async (repository: string | undefined, opts: { analysis?: string; new?: boolean; recordOnly?: boolean }, cmd: Command) => {
+      const { io, ctx } = await context(cmd);
+      const receipt = await requestAnalysis(io, { ...(repository !== undefined ? { repository } : {}), ...(opts.analysis ? { analysis: opts.analysis } : {}), ...(opts.new ? { create: true } : {}) }, undefined, !opts.recordOnly);
+      if (ctx.json) host.printJson(runReceipt(receipt));
+      else console.log(`Request ${receipt.id}: ${receipt.run.status}; ${receipt.run.repository} → ${receipt.run.analysisTitle}. ${receipt.dispatched ? "Posted in Chat; awaiting an agent claim does not guarantee a worker is available." : "Recorded without Chat dispatch."}`);
+    }));
+  command("runs", "List durable analysis requests, dispatch evidence and reported outcomes").action(host.run(async (_opts: unknown, cmd: Command) => {
+    const { io } = await context(cmd);
+    host.printJson((await listRuns(io)).map(r => r.run ? runReceipt({ ...r, run: r.run }) : { requestId: r.id, error: r.error }));
+  }));
+  command("run <request>", "Inspect, claim, finish, cancel, retry or resume an analysis request")
+    .option("--start", "Claim this request as the current actor before working")
+    .option("--complete <analysis>", "Report the resulting analysis item")
+    .option("--revision <revision>", "Repository revision actually reviewed")
+    .option("--message <text>", "Completion findings or limitations")
+    .option("--fail <reason>", "Report failure with a reason")
+    .option("--cancel-request", "Ask the worker to stop; does not undo its work")
+    .option("--cancelled", "Acknowledge cancellation after stopping")
+    .option("--retry", "Create a linked retry of a failed or cancelled request")
+    .option("--dispatch", "Resume Chat delivery of this existing request")
+    .action(host.run(async (id: string, opts: { start?: boolean; complete?: string; revision?: string; message?: string; fail?: string; cancelRequest?: boolean; cancelled?: boolean; retry?: boolean; dispatch?: boolean }, cmd: Command) => {
+      const { io, ctx } = await context(cmd);
+      const actions = [opts.start, opts.complete, opts.fail, opts.cancelRequest, opts.cancelled, opts.retry, opts.dispatch].filter(v => v !== undefined && v !== false);
+      if (actions.length > 1) throw new Error("Choose one request action at a time.");
+      const receipt = opts.retry ? await retryRun(io, id) : opts.dispatch ? await dispatchRun(io, id) : opts.cancelRequest ? await updateRun(io, id, { type: "cancel-request" }) : opts.start ? await updateRun(io, id, { type: "start" }, ctx.actor) : opts.cancelled ? await updateRun(io, id, { type: "cancelled" }, ctx.actor) : opts.fail !== undefined ? await updateRun(io, id, { type: "fail", message: opts.fail }, ctx.actor) : opts.complete ? await updateRun(io, id, { type: "complete", resultId: opts.complete, revision: opts.revision ?? "", ...(opts.message ? { message: opts.message } : {}) }, ctx.actor) : await readRun(io, id);
+      host.printJson(runReceipt(receipt));
+    }));
   command(
     "new <title>",
     "Create an empty Anatomy project on this canvas",
@@ -167,12 +178,16 @@ function register(host: CliHost): void {
     .action(
       host.run(async (ref: string, opts: { node?: string }, cmd: Command) => {
         const { io, ctx } = await context(cmd);
-        const { project } = await loadProject(io, ref);
+        const { canvas, item } = await findProject(io, ref);
+        const report = await inspectProject(canvas, item, io.read);
+        const project = report.project;
+        if (!project) { host.printJson(report); return; }
         const view = opts.node
           ? projectNeighborhood(project, opts.node)
           : project;
-        if (ctx.json) host.printJson(view);
-        else {
+        if (ctx.json) host.printJson(report.diagnostics.length ? { ...view, diagnostics: report.diagnostics, items: report.items } : view);
+        else if (report.diagnostics.length) console.error(`${report.diagnostics.length} file problems; run anatomy validate ${ref} for repair details.`);
+        if (!ctx.json) {
           console.log(
             `${project.projectName}: ${convergence(project.nodes)}% settled\n${project.goalStatement}`,
           );
@@ -181,6 +196,20 @@ function register(host: CliHost): void {
         }
       }),
     );
+  command("recover <project> <item> <version>", "Restore a validated historical file body as one guarded native edit").action(host.run(async (ref: string, itemId: string, versionId: string, _opts: unknown, cmd: Command) => {
+    const { io } = await context(cmd);
+    const { canvas, item: analysis } = await findProject(io, ref);
+    const item = canvas.items[itemId];
+    if (!item) throw new Error("Unknown file.");
+    await recoverFile(io, analysis.id, item, versionId);
+    host.printJson({ itemId, restoredFrom: versionId, versionId: (await io.snapshot()).items[itemId]!.currentVersionId });
+  }));
+  command("validate <project>", "Read item-scoped diagnostics and native IDs without modifying files").action(host.run(async (ref: string, _opts: unknown, cmd: Command) => {
+    const { io } = await context(cmd);
+    const { canvas, item } = await findProject(io, ref);
+    const report = await inspectProject(canvas, item, io.read);
+    host.printJson({ analysisId: item.id, valid: report.diagnostics.length === 0, ...report });
+  }));
   command(
     "export <project> <file>",
     "Export portable Anatomy JSON, including source citations and checkpoints",

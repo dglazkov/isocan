@@ -6,7 +6,7 @@ import {
   newCommentId,
   newThreadId,
   anchorOffset,
-  mainThread,
+  type Canvas,
   type CanvasContents,
   type Item,
   type NewVersion,
@@ -24,6 +24,7 @@ import {
   hasMime,
   layoutProject,
   nodesOn,
+  projectsOn,
   originId,
   readProject,
   type ReadText,
@@ -51,6 +52,7 @@ export interface AnatomyIO {
   ) => Promise<{ blobHash: string; size: number }>;
   send: (ops: readonly Operation[], group?: string) => Promise<void>;
   snapshot: () => Promise<CanvasContents>;
+  record: () => Promise<Canvas>;
 }
 const json = (value: unknown) => JSON.stringify(value, null, 2) + "\n";
 async function version(
@@ -143,6 +145,7 @@ export async function importProject(
 ): Promise<string> {
   const project = parseProject(input);
   const before = await io.snapshot();
+  const record = await io.record();
   const projectId = newItemId();
   const ids = new Map(project.nodes.map((n) => [n.id, newItemId()]));
   const x = Math.max(
@@ -204,8 +207,8 @@ export async function importProject(
     type: "project.update",
     patch: {
       properties: {
-        [PROP.analysis]: projectId,
-        ...(project.repoPath ? { [PROP.repository]: project.repoPath } : {}),
+        ...(!record.properties[PROP.analysis] ? { [PROP.analysis]: projectId } : {}),
+        ...(!record.properties[PROP.repository] && !record.properties.repository && project.repoPath ? { [PROP.repository]: project.repoPath } : {}),
       },
     },
   });
@@ -601,81 +604,24 @@ export function commentOp(
       };
 }
 
-/** Asking for analysis is a normal Chat message that parked agents can hear.
- * A birth race retries against the winning main thread, keeping one channel. */
-export async function requestAnalysis(
-  io: AnatomyIO,
-  repository: string,
-  projectId?: string,
-) {
-  const repo = repository.trim();
-  if (!repo) throw new Error("Associate a repository path or URL first");
-  const group = newGroupId();
-  const body = `/anatomy ${repo}${projectId ? `\nUpdate the attached analysis #${projectId}.` : "\nCreate an analysis and attach it to this project."}`;
-  await io.send(
-    [
-      {
-        type: "project.update",
-        patch: {
-          properties: {
-            [PROP.repository]: repo,
-            ...(projectId ? { [PROP.analysis]: projectId } : {}),
-          },
-        },
-      },
-    ],
-    group,
-  );
-  const comment = {
-    id: newCommentId(),
-    body,
-    ...(projectId ? { items: [projectId] } : {}),
-  };
-  const existing = mainThread(await io.snapshot());
-  if (existing) {
-    await io.send(
-      [{ type: "thread.reply", threadId: existing.id, comment }],
-      group,
-    );
-  } else {
-    try {
-      await io.send(
-        [
-          {
-            type: "thread.create",
-            threadId: newThreadId(),
-            x: 0,
-            y: 0,
-            main: true,
-            anchorItemId: null,
-            comment,
-          },
-        ],
-        group,
-      );
-    } catch (error) {
-      const winner = mainThread(await io.snapshot());
-      if (!winner) throw error;
-      await io.send(
-        [{ type: "thread.reply", threadId: winner.id, comment }],
-        group,
-      );
-    }
-  }
-}
+export { requestAnalysis } from "./runs.ts";
 
-export async function loadProject(io: AnatomyIO, ref: string) {
+/** Resolve a native analysis without requiring its files to be healthy. */
+export async function findProject(io: AnatomyIO, ref: string) {
   const canvas = await io.snapshot();
-  const candidates = Object.values(canvas.items).filter(
-    (i) =>
-      hasMime(i, PROJECT_MIME) &&
-      (i.id === ref || i.title.toLowerCase() === ref.toLowerCase()),
+  const candidates = projectsOn(canvas).filter(
+    i => i.id === ref || i.title.toLowerCase() === ref.toLowerCase(),
   );
   if (candidates.length !== 1)
     throw new Error(
       `Choose one Anatomy project by its item id (found ${candidates.length})`,
     );
   const item = candidates[0]!;
+  return { canvas, item };
+}
+
+export async function loadProject(io: AnatomyIO, ref: string) {
+  const { canvas, item } = await findProject(io, ref);
   return { canvas, item, project: await readProject(canvas, item, io.read) };
 }
 

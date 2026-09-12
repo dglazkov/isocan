@@ -1,3 +1,7 @@
+import { Dialog } from "./dialog.tsx";
+import { RecoveryDialog } from "./recovery-dialog.tsx";
+import { AnalysisRequests } from "./requests-pane.tsx";
+import { inspectProject, type AnatomyDiagnostic } from "./diagnostics.ts";
 import {
   useEffect,
   useMemo,
@@ -43,7 +47,6 @@ import {
   saveEdge,
   saveNode,
   saveProject,
-  requestAnalysis,
   type AnatomyIO,
 } from "./operations.ts";
 import "./style.css";
@@ -69,7 +72,7 @@ export default function Workspace({
   project: canvasRecord,
   host,
   selection,
-  canEdit,
+  canEdit: allowedToEdit,
   canvasView,
 }: WorkspaceFacts<ReactNode>) {
   const projects = projectsOn(canvas);
@@ -86,11 +89,16 @@ export default function Workspace({
     "";
   const [loaded, setLoaded] = useState<{
     itemId: string;
-    project: AnatomyProject;
+    project: AnatomyProject | null;
+    diagnostics: AnatomyDiagnostic[];
     canvas: CanvasContents;
   } | null>(null);
   const project =
     loaded?.itemId === selectedProject?.id ? (loaded?.project ?? null) : null;
+  const diagnostics = loaded && loaded.itemId === selectedProject?.id ? loaded.diagnostics : [];
+  const canEdit = allowedToEdit && diagnostics.length === 0;
+  const [retryRead, setRetryRead] = useState(0);
+  const [recovering, setRecovering] = useState<Item | null>(null);
   const focal = nodeId ? { projectId: selectedProject?.id, nodeId } : null;
   const [search, setSearch] = useState("");
   const prefKey = `anatomy:pane:${canvasRecord.id}`;
@@ -124,8 +132,9 @@ export default function Workspace({
         host.putBlob(new Blob([text], { type: mime }), filename),
       send: host.send,
       snapshot: async () => host.getCanvas(),
+      record: async () => canvasRecord,
     }),
-    [host],
+    [host, canvasRecord],
   );
   // Geometry and selection do not change file bodies. A drag never refetches
   // the graph, and hash-cached reads make a one-file edit a one-file download.
@@ -142,24 +151,25 @@ export default function Workspace({
     let live = true;
     if (!selectedProject) return;
     const snapshot = host.getCanvas();
-    readProject(snapshot, selectedProject, host.readText)
+    inspectProject(snapshot, selectedProject, host.readText)
       .then((p) => {
         if (live)
           setLoaded({
             itemId: selectedProject.id,
-            project: p,
+            project: p.project,
+            diagnostics: p.diagnostics,
             canvas: snapshot,
           });
       })
       .catch((err: Error) => {
-        if (live) setMessage(`Unable to read project: ${err.message}`);
+        if (live) setLoaded({ itemId: selectedProject.id, project: null, canvas: snapshot, diagnostics: [{ itemId: selectedProject.id, title: selectedProject.title, section: "overview", message: err.message }] });
       });
     return () => {
       live = false;
     };
     // The revision includes every durable field read above, but not geometry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revision, selectedProject?.id, host]);
+  }, [revision, selectedProject?.id, host, retryRead]);
   const nativeNodes = selectedProject
     ? nodesOn(canvas, selectedProject.id)
     : [];
@@ -440,25 +450,23 @@ export default function Workspace({
               Attach to this project
             </button>
           )}
-        {canEdit && (
-          <button
-            disabled={busy || !repository}
-            onClick={() =>
-              void run(async () => {
-                await requestAnalysis(io, repository, selectedProject?.id);
-                host.openChat();
-                setMessage(
-                  "Analysis requested in Chat. An agent with repository access can pick it up.",
-                );
-              })
-            }
-          >
-            {selectedProject
-              ? "Ask agent to update analysis"
-              : "Ask agent to analyze"}
-          </button>
-        )}
+        <AnalysisRequests io={io} canvas={canvas} record={canvasRecord} analysis={projectId || undefined} canEdit={allowedToEdit} host={host} />
       </div>
+      {diagnostics.length > 0 && (
+        <section className="anatomy-notice" aria-label="Analysis file problems">
+          <strong>{diagnostics.length} file problem{diagnostics.length === 1 ? "" : "s"}. Healthy concepts remain available.</strong>
+          <p>Repair the affected files before editing this analysis. Saved content has not been changed.</p>
+          <details><summary>Show repair details</summary>
+            <ul>{diagnostics.map((d, i) => <li key={`${d.itemId}:${i}`}>
+              <button onClick={() => host.openItem(d.itemId)}>{d.title}: open file</button>
+              <button onClick={() => setRecovering(canvas.items[d.itemId] ?? null)}>Review versions of {d.title}</button>
+              <p>{d.section}: {d.message}</p>
+            </li>)}</ul>
+          </details>
+          <button onClick={() => setRetryRead(n => n + 1)}>Retry reading files</button>
+        </section>
+      )}
+      {recovering && selectedProject && <RecoveryDialog io={io} item={recovering} analysisId={selectedProject.id} canEdit={allowedToEdit} close={() => setRecovering(null)} />}
       {message && (
         <div className="anatomy-notice" role="alert">
           {message}
@@ -507,7 +515,7 @@ export default function Workspace({
           </p>
         </section>
       ) : !project ? (
-        <p className="anatomy-loading">Reading project files…</p>
+        <p className="anatomy-loading">{diagnostics.length ? "The overview could not be read. Open its file to repair it, then retry." : "Reading project files…"}</p>
       ) : (
         <>
           {historyOpen && (
@@ -849,15 +857,16 @@ export default function Workspace({
           )}
         </>
       )}
-      {editor && canEdit && (
+      {editor && allowedToEdit && (
         <NodeEditor
-          saveError={message}
+          saveError={diagnostics.length ? "Repair the reported file problems before saving. Your draft is still here." : message}
           node={editor.node}
           nodes={editor.project.nodes}
-          busy={busy}
+          busy={busy || diagnostics.length > 0}
           close={() => setEditor(null)}
           save={(node) =>
             run(async () => {
+              if (diagnostics.length) throw new Error("Repair the reported file problems before saving. Your draft is still here.");
               if (node.id !== editor.node.id)
                 throw new Error("A concept’s id cannot change while editing");
               const id = await saveNode(
@@ -1505,65 +1514,6 @@ function CoverageGroup({
   );
 }
 
-function Dialog({
-  title,
-  close,
-  children,
-}: {
-  title: string;
-  close: () => void;
-  children: ReactNode;
-}) {
-  const dialog = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement;
-    dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    return () => {
-      if (previous instanceof HTMLElement && previous.isConnected)
-        previous.focus();
-    };
-  }, []);
-  return (
-    <div
-      className="anatomy-backdrop"
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Escape") close();
-        if (e.key === "Tab") {
-          const controls = Array.from(
-            dialog.current?.querySelectorAll<HTMLElement>(
-              "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]",
-            ) ?? [],
-          );
-          const first = controls[0],
-            last = controls.at(-1);
-          if (e.shiftKey && document.activeElement === first) {
-            e.preventDefault();
-            last?.focus();
-          }
-          if (!e.shiftKey && document.activeElement === last) {
-            e.preventDefault();
-            first?.focus();
-          }
-        }
-      }}
-    >
-      <section
-        ref={dialog}
-        className="anatomy-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
-        <header>
-          <h2>{title}</h2>
-          <button onClick={close}>Close</button>
-        </header>
-        {children}
-      </section>
-    </div>
-  );
-}
 function NodeEditor({
   saveError,
   node,
