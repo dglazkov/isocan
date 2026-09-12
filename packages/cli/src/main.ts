@@ -449,6 +449,7 @@ import { adapterFor, defaultLine, noDefaultLine, noNeedLine, onPath, passedEnv, 
 import {
   noSandboxLine,
   policyFor,
+  runFenced,
   sandboxAsked,
   sandboxLine,
   scanSandbox,
@@ -6215,6 +6216,9 @@ const moduleHost: CliHost = {
   sizeFor,
   placementFor,
   truncate,
+  // Fenced or refused; there is no third answer, and no flag that makes one
+  // (`sandbox.ts`, "A program that came from a canvas").
+  runFenced: (request) => runFenced(paths.isocanHome(), request),
 };
 for (const m of CLI_MODULES) {
   registerModule(m.core);
