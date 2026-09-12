@@ -50,6 +50,8 @@ import type {
   SeenResponse,
   GroupResponse,
   GroupsResponse,
+  OperatorLogResponse,
+  OperatorShowResponse,
 } from "@isocan/core";
 import {
   encodeFilename,
@@ -57,6 +59,8 @@ import {
   groupMemberRoute,
   groupRoute,
   GROUPS_ROUTE,
+  OPERATOR_LOG_ROUTE,
+  OPERATOR_PROOF_HEADER,
   spaceActingRoute,
   spaceCanvasRoute,
   spaceGrantRevokeRoute,
@@ -194,9 +198,17 @@ export class DaemonRoutes {
     url: string,
     body?: unknown,
     signal?: AbortSignal,
+    /**
+     * Headers beside the badge, for the one caller that has a second thing to
+     * present: the operator's proof (`OPERATOR_PROOF_HEADER`). It rides HERE
+     * rather than replacing `Authorization` because the request still carries
+     * its badge through the door unchanged — two credentials answering two
+     * different questions, which is what keeps operator standing off the badge.
+     */
+    extra?: Record<string, string>,
   ): Promise<T> {
     const send = async () => {
-      const headers: Record<string, string> = { ...(await this.authHeader()) };
+      const headers: Record<string, string> = { ...(await this.authHeader()), ...extra };
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return fetch(`${this.base}${url}`, {
         method,
@@ -928,6 +940,47 @@ export class DaemonRoutes {
    * works in a directory that is bound to none. */
   gcHome(request: GcRequest): Promise<HomeGcReport> {
     return this.request("POST", HOME_GC_ROUTE, request);
+  }
+
+  // ---- the operator (docs/projects/operator/design.md, phase 1) ----
+  //
+  // **Two reads, and each one presents a proof that was made a moment ago in a
+  // browser.** They are here, on the typed route surface, rather than in the
+  // CLI's own `fetch`, for this class's whole reason: everything a surface can
+  // ask a daemon is one method with one shape, and a second spelling of the
+  // proof header is a second place for it to drift from the server's.
+  //
+  // Nothing here holds the token. It is a parameter, used for one request and
+  // dropped with the stack frame — decision D2's "the CLI holds the token in
+  // memory for one invocation", expressed as the absence of a field.
+
+  /** What this home holds under that id (journey 1 step 4). Changes nothing. */
+  async operatorShow(canvasId: string, proof: string): Promise<OperatorShowResponse> {
+    return this.request(
+      "GET",
+      `/api/operator/canvases/${encodeURIComponent(canvasId)}`,
+      undefined,
+      undefined,
+      { [OPERATOR_PROOF_HEADER]: proof },
+    );
+  }
+
+  /** The ledger, newest first — the operator reads it and nobody else does. */
+  async operatorLog(
+    proof: string,
+    options: { target?: string | null; limit?: number } = {},
+  ): Promise<OperatorLogResponse> {
+    const query = new URLSearchParams();
+    if (options.target) query.set("target", options.target);
+    if (options.limit !== undefined) query.set("limit", String(options.limit));
+    const suffix = query.toString();
+    return this.request(
+      "GET",
+      `${OPERATOR_LOG_ROUTE}${suffix ? `?${suffix}` : ""}`,
+      undefined,
+      undefined,
+      { [OPERATOR_PROOF_HEADER]: proof },
+    );
   }
 
   async uploadBlob(

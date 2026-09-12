@@ -6,7 +6,7 @@ import { Engine } from "./engine.ts";
 import { registerRoutes } from "./http.ts";
 import { ParkCursors } from "./park.ts";
 import { RcHolds } from "./rc-holds.ts";
-import { attachWebSockets } from "./ws.ts";
+import { attachWebSockets, SocketCensus } from "./ws.ts";
 import { SweepHub } from "./sweep.ts";
 import { buildStamp } from "./build.ts";
 import { FileStore } from "./file-store.ts";
@@ -19,6 +19,7 @@ import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
 import { readGoogleToken } from "./google.ts";
 import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
+import { resolveOperators } from "./operator.ts";
 import { startBlobKeeper } from "./blobkeeper.ts";
 import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
 import { HomeLinks } from "./home-links.ts";
@@ -123,6 +124,18 @@ export interface DaemonOptions {
    * which a test needs to be able to say on a machine whose environment has.
    */
   auth?: AuthConfig | null;
+  /**
+   * **The addresses this home calls its operator**, or `[]` for none — which
+   * is every daemon in this repo, and is not a defect (operator phase 1).
+   *
+   * Read from `ISOCAN_OPERATORS` by `resolveOperators`, beside the attester
+   * and for exactly its reason: who can set a home's configuration is who
+   * decides who its operator is, so this is configuration rather than a flag
+   * and there is no compiled-in default. An explicit list is a test — or a
+   * caller composing a home by hand — saying so on a machine whose
+   * environment says otherwise.
+   */
+  operators?: string[];
   /** Where the public keys a presented ID token is checked against come from.
    * Defaults to Google's published endpoint; `SigningKeys` in `attest.ts`
    * carries the argument for why it is configuration at all. */
@@ -336,6 +349,18 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // and an explicit value is a caller (a test) saying so on a machine whose
   // environment says otherwise.
   const auth = options.auth !== undefined ? options.auth : resolveAuth();
+  /**
+   * **Who runs this home**, read beside the attester and at the same moment,
+   * because they are two halves of one capability: a list with no attester
+   * cannot be proved and an attester with no list recognises nobody.
+   * `undefined` means go and look; an explicit list is a test saying so on a
+   * machine whose environment says otherwise. See `operator.ts`.
+   */
+  const operators = options.operators !== undefined ? options.operators : resolveOperators();
+  /** Counted by the socket layer, read by the operator's `show`. Made here
+   * because `registerRoutes` runs before `attachWebSockets` and both need the
+   * same object. */
+  const sockets = new SocketCensus();
 
   // The composition root, and the ONE place any backing is named.
   const { store, desk } = await openBacking(home);
@@ -451,6 +476,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     birthHome,
     homes,
     auth,
+    operators,
+    sockets,
     sweeps,
     contentBase: null as string | null,
     contentHost,
@@ -550,6 +577,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     ...(options.heartbeatMs !== undefined ? { heartbeatMs: options.heartbeatMs } : {}),
     ...(revision !== undefined ? { revision } : {}),
     sweeps,
+    // The room map lets itself be counted, for `isocan operator show`.
+    census: sockets,
     // The content origin has no socket either — the upgrade is hijacked off
     // the raw server and never sees the door hook that refuses it everything
     // but blob bytes.

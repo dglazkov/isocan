@@ -16,9 +16,13 @@ after, because a takedown answers every one of those reports on its own,
 more bluntly. The words on `/terms` come first of all, because they are
 untrue today and fixing them costs nothing.
 
-**Where we are:** designed 11 Sep 2026. Nothing built. Phase 0 waits on
-Dion's call on the wording; phase 1 is next and needs nothing decided
-except isocan.io's list, which is Dimitri's.
+**Where we are:** phase 1 is PART-DONE (12 Sep 2026) — the operator is proved
+per act, refused in words, and every act writes its ledger row before it
+answers; all of it green here, none of it walked on dev yet. Phase 0 still
+waits on Dion's call on the wording. Phase 1's walk waits on a person:
+`ISOCAN_OPERATORS` set on dev.isocan.io, a sign-in, and a second account —
+and on a decision about journey 1 step 3, which says Google where this app
+has only an emailed link. Phase 2 is next, and needs none of that.
 
 **Sizes.** S is a day's work with its tests. M is two or three. L would be a
 week; nothing here is one.
@@ -46,7 +50,10 @@ unchanged, since both sections keep their sources in `innkeeper.md`.
 
 ## Phase 1 — The operator, proved (M)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE (2026-09-12).** Built, and everything provable without a
+browser is proved: the refusals, the ledger, the two verbs, and both
+no-operator sentences against a real daemon through the real binary. The walk
+waits on a person — the list set on dev, a sign-in, and a second account.
 
 Closes journeys 1, 10 and 11.
 
@@ -72,6 +79,34 @@ account proving an unlisted address is refused with that address named;
 an `isocan operator` run from an rc session is refused before a browser
 opens; eleven minutes after a proof the next act asks again; both acts are
 in `log`. A local daemon with no attester says why it has no operator.
+
+**Trajectory:**
+
+- **2026-09-12** — A verb must ask the home before it opens anything. The
+  no-operator sentence was built, served and tested on the route, yet
+  unreachable from the only surface a person uses: `operator show` on a home
+  with no attester opened the prove page and hung. Every later operator verb
+  reaches the same preflight.
+- **2026-09-12** — The ledger records refusals, not only acts. Somebody who
+  signed in and asked this home to act is what an operator ledger exists to
+  answer about afterwards.
+- **2026-09-12** — `auth_time` travels beside the attestation, never on it. A
+  freshness field on `Attestation` would be operator standing written onto a
+  badge — D2 defeated by a type rather than a route.
+- **2026-09-12** — The handoff rides in one path segment, because
+  `/__/auth/action` keeps only the path and appends `continueUrl` unencoded.
+- **2026-09-12** — Operator acts are never forwarded: a replica answers 409
+  naming the home, since a proof is made against one attester project. Every
+  phase-2 verb needs the branch.
+- **2026-09-12** — Open: the walk — `ISOCAN_OPERATORS` on dev.isocan.io, a
+  sign-in, a second account. Waits on Dion; the list is Dimitri's.
+- **2026-09-12** — Open: journey 1 says *signs in with Google*; `signin.ts`
+  offers only an emailed link. Either the walk is that link, or the button
+  comes first.
+- **2026-09-12** — Open: `show` on a soft-deleted canvas is a 404 and
+  `OperatorReach` has no `deleted`. Takedown is where it comes from.
+- **2026-09-12** — Open: the reach says *N relaying now*, never *linked* — no
+  registry of machines that have linked exists.
 
 ## Phase 2 — Look, and take it down (M)
 

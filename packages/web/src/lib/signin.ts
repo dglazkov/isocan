@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, AuthOffer } from "@isocan/core";
+import { proveSegmentIn } from "@isocan/core";
 import { attest, attestOffer } from "./api.ts";
 
 /**
@@ -251,13 +252,66 @@ export type SignIn = Promise<SignInLanding> | null;
  * Nothing here throws. A refusal is copy to render, not an error to swallow.
  */
 export function beginSignIn(): SignIn {
-  const code = readCode();
+  /**
+   * **The operator's prove page exchanges its own code**, so this must not.
+   *
+   * A sign-in code is single-use. If the entry point spent it on `POST
+   * /api/attest` the way every other landing does, the prove page would find
+   * nothing left to exchange and the operator could never get a token at all —
+   * and the one thing that WOULD have happened is an attestation row on the
+   * badge, which is the standing decision D2 refuses to create.
+   *
+   * The rule lives here rather than in `main.tsx` for the reason `faceFor`
+   * lives in `lib/`: it is a fact about which landing this is, and a caller
+   * that had to remember to ask is a caller that eventually forgets.
+   */
+  if (onProvePage()) return null;
+  const code = takeSignInCode();
   if (!code) return null;
-  stripCode();
   return settle(code);
 }
 
-async function settle(code: string): Promise<SignInLanding> {
+/** Is this tab on `/operator/prove/<handoff>`? Total; false with no document. */
+function onProvePage(): boolean {
+  try {
+    return proveSegmentIn(location.pathname) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * **The code this tab came back from an inbox with, taken out of the bar.**
+ *
+ * Read and stripped in one act, because those two must not come apart: a
+ * credential left in the address bar is a credential in a screenshot, a
+ * bookmark and a reload. Exported so the operator's prove page takes its code
+ * the same way this file's own landing does, rather than re-deriving which
+ * parameters the provider appends.
+ */
+export function takeSignInCode(): string | null {
+  const code = readCode();
+  if (!code) return null;
+  stripCode();
+  return code;
+}
+
+/** An ID token, or the sentence to render instead. */
+type TokenExchange = { idToken: string } | { error: string };
+
+/**
+ * **Hop 3 alone: the inbox's code for an ID token, and nothing written
+ * anywhere.**
+ *
+ * Split out of `settle` for the operator (`docs/projects/operator/design.md`,
+ * "A proof, carried with the act"): the prove page runs the sign-in this file
+ * already runs and then, *instead of hop 4*, hands the token to a loopback
+ * address. One mechanism, two destinations — and the split is what keeps that
+ * true rather than a second copy of the exchange drifting from this one.
+ *
+ * Nothing here throws. A refusal is copy to render.
+ */
+export async function exchangeSignInCode(code: string): Promise<TokenExchange> {
   const email = recalled();
   if (!email) {
     return {
@@ -281,12 +335,22 @@ async function settle(code: string): Promise<SignInLanding> {
     const body = (await res.json().catch(() => null)) as { idToken?: string } | null;
     if (!res.ok || !body?.idToken) return { error: providerError(body) };
     forget();
+    return { idToken: body.idToken };
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+}
+
+async function settle(code: string): Promise<SignInLanding> {
+  const exchanged = await exchangeSignInCode(code);
+  if ("error" in exchanged) return exchanged;
+  try {
     /**
      * The ID token is used HERE and dropped. It is not stored, not refreshed,
      * and nothing in this app ever reads it again — see this file's header for
      * why that is the point rather than an omission.
      */
-    const written = await attest(body.idToken);
+    const written = await attest(exchanged.idToken);
     // The offer is stale the moment the row lands — it carried the old
     // attestations and the old resumable list — so the next reader re-asks,
     // and any door already on screen is told to.

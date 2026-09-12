@@ -10,6 +10,7 @@ import type {
   SeenMark,
   SeenMarks,
   Space,
+  OperatorAct,
 } from "@isocan/core";
 import {
   advanceSeen,
@@ -117,7 +118,23 @@ type DeskLogEntry =
    * `advanceSeen` is idempotent anyway, which is what makes replaying a tail
    * out of order harmless. Losing one costs a canvas showing as unread that
    * you had read — the only direction this feature is allowed to fail in. */
-  | { seq: number; type: "seen"; actorId: string; canvasId: string; mark: SeenMark; at: string };
+  | { seq: number; type: "seen"; actorId: string; canvasId: string; mark: SeenMark; at: string }
+  /**
+   * **One operator act, WHOLE** (operator phase 1), on both writes: the row
+   * put down before the act answers, and the same row again when its outcome
+   * is settled. Replayed as a replacement rather than a `??=`, for the space's
+   * reason — the latest write is the row.
+   *
+   * It is on this log rather than in a canvas's oplog because an operator act
+   * is a desk write and never an op (design, "Not an op"): the vocabulary is
+   * closed and isomorphic, the canvas log replicates and belongs to its
+   * members, and the log cannot carry authority. And it is LOGGED rather than
+   * derived because it is the sharpest kind of unrecoverable there is: an act
+   * whose record was lost is a power that was exercised and cannot be
+   * accounted for, which is the Firestore hand edit the whole project exists
+   * to replace.
+   */
+  | { seq: number; type: "operator"; act: OperatorAct; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -153,6 +170,10 @@ interface DeskSnapshot {
    * yet" — the first ask mints one. Local homes never ask: loopback content
    * reads carry no signature and need none. */
   contentKey?: string;
+  /** `operator/{id}` (operator phase 1), keyed by act id. Absent on every desk
+   * written before it, and correctly EMPTY: a home whose ledger has no rows
+   * has had no operator act, which is true of every home in this repo. */
+  operator?: Record<string, OperatorAct>;
 }
 
 /** How stale `lastSeen` may get before a touch costs a snapshot rewrite. A
@@ -161,7 +182,7 @@ interface DeskSnapshot {
 const TOUCH_DEBOUNCE_MS = 60_000;
 
 export class FileDesk implements Desk {
-  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {}, spaces: {}, groups: {} };
+  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {}, spaces: {}, groups: {}, operator: {} };
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(readonly home: string) {}
@@ -192,6 +213,10 @@ export class FileDesk implements Desk {
       // has looked at anything, which is what an inbox should say about a
       // person this home has never seen read a canvas.
       seen: snapshot?.seen ?? {},
+      // Absent on every desk written before the operator; empty means no
+      // operator act has ever been taken here, which is the truth about a
+      // home that has none.
+      operator: snapshot?.operator ?? {},
       // Absent until a hosted home first signs a content read. Undefined
       // means "none minted", never "sign with nothing".
       ...(snapshot?.contentKey ? { contentKey: snapshot.contentKey } : {}),
@@ -660,6 +685,49 @@ export class FileDesk implements Desk {
     return this.state.contentKey!;
   }
 
+  // ---- the operator's ledger (operator phase 1) ----
+
+  async recordOperatorAct(act: OperatorAct): Promise<void> {
+    await this.enqueue(async () => {
+      this.state.operator![act.id] = { ...act };
+      await this.append({ type: "operator", act, at: act.at });
+    });
+  }
+
+  /**
+   * The outcome, onto the row that is already there.
+   *
+   * Silent when the row is missing rather than throwing, for `touch`'s reason
+   * and a sharper one: this runs on the way OUT of an act, and a settle that
+   * threw would turn a successful act into a refusal the person reads as the
+   * act having failed. A row that is not there stays not there, and the act's
+   * own answer is still the truth about what happened.
+   */
+  async settleOperatorAct(id: string, outcome: string, reach?: unknown): Promise<void> {
+    await this.enqueue(async () => {
+      const row = this.state.operator![id];
+      if (!row) return;
+      const settled: OperatorAct = { ...row, outcome, ...(reach !== undefined ? { reach } : {}) };
+      this.state.operator![id] = settled;
+      await this.append({ type: "operator", act: settled, at: settled.at });
+    });
+  }
+
+  /**
+   * Newest first, in memory: this ledger is small by construction — one row
+   * per act a person performed by hand, at a sign-in page — so a sort over all
+   * of it costs nothing a query would save. The cloud desk pages instead,
+   * because Firestore charges by document read rather than by array length.
+   */
+  async operatorActs(options: { target?: string | null; limit?: number } = {}): Promise<OperatorAct[]> {
+    const target = options.target ?? null;
+    return Object.values(this.state.operator ?? {})
+      .filter((act) => target === null || act.target === target)
+      .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id))
+      .slice(0, options.limit ?? 100)
+      .map((act) => ({ ...act }));
+  }
+
   // ---- internals ----
 
   /**
@@ -782,6 +850,13 @@ export class FileDesk implements Desk {
         // on the same answer — the property `advanceSeen` exists for.
         const marks = (this.seen()[entry.actorId] ??= {});
         marks[entry.canvasId] = advanceSeen(marks[entry.canvasId], entry.mark);
+        return;
+      }
+      case "operator": {
+        // A replacement, not a `??=`: the second write of an act id is its
+        // settled outcome, and a replay that kept the first would recover
+        // every completed act as `attempted`.
+        (this.state.operator ??= {})[entry.act.id] = { ...entry.act };
         return;
       }
       case "contentkey": {

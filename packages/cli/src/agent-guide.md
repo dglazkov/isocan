@@ -2258,13 +2258,22 @@ given to once; `remove` reaches every canvas the group is shared with),
 `pass` (a credential for another MACHINE — never post
 it, never commit it; `share`'s address is what you hand a person),
 `badges` (the surfaces carrying this identity; `--kill` ends one — ask first),
+`operator show|log <canvas>` — **this one is not yours.** `isocan operator` is
+for the person who runs the home; it needs their sign-in in a browser and
+refuses inside a session — if asked to take something down, say so and give the
+address on /terms.
 `open`, `setup`, `home` (which home this daemon answers to — read it
 freely, set it only when asked).
 
 Every one of these is the same operation the web app sends. If you find
 something a person can do on the canvas that you cannot do from here, that is
 a bug in isocan, not a limit of yours — say so (see "If you hit a product
-bug").
+bug"). **`operator` is the one deliberate exception in the whole surface**: it
+is built on both surfaces and reachable by only one kind of hand, because what
+it needs is a person at a sign-in page. Nothing you hold could perform one —
+your badge was admitted by a pass and has proved nothing, and this home stores
+no operator standing on any badge for you to borrow. That is not a limit to
+report; it is the design.
 
 
 ### Pointing to words together
