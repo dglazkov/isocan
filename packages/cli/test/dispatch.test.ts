@@ -670,9 +670,16 @@ describe("owner-only summons (issue #238)", () => {
   it("a stranger's mention of a default agent starts nothing, is said in words, and the owner's widening lets them in", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
     const rc = startRc();
-    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
-    // Said at start, where the person who pays is guaranteed to look.
-    expect(rc.out()).toContain("Sian listens only to you");
+    // Said at start, where the person who pays is guaranteed to look — and
+    // printed AFTER "answering on", which is why THIS is what the start
+    // waits for. Waiting on "answering on" and asserting on a line the rc
+    // has not written yet is the shape lessons.md #53 is about; it cost
+    // `rc.test.ts` five releases on 11 Sep 2026.
+    await until(
+      async () => rc.out(),
+      (o) => o.includes("Sian listens only to you"),
+      "the rc to come up and announce Sian's gate",
+    );
 
     // The rc announces its policy with its hold: `who` reads it, and to
     // Nico it is his own.
