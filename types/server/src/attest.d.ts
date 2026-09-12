@@ -165,6 +165,34 @@ export declare class BadIdTokenError extends Error {
  * header is the attacker's to write; the algorithm is ours.
  */
 export declare function verifyIdToken(token: string, auth: AuthConfig, keys: Record<string, string>, now?: number): Promise<Attestation>;
+/**
+ * **The same verification, plus the one claim an attestation deliberately does
+ * not carry: `auth_time`.**
+ *
+ * The split exists for the operator (`docs/projects/operator/design.md`, "A
+ * proof, carried with the act"), which needs two things this file already
+ * proves and one it threw away. *When was this person last at a sign-in page*
+ * is the whole difference between an operator proof and an attestation: an
+ * attestation rides the badge and lasts as long as the badge, and a proof is
+ * for an act, ten minutes wide.
+ *
+ * It is **not** on `Attestation`, and that absence is load-bearing rather than
+ * tidy: `Attestation` is what `Desk.attest` writes onto a badge, so a field
+ * there would be freshness STORED — the operator standing on a badge that
+ * decision D2 refuses, arriving through a type instead of through a route.
+ * Here it is a return value that the operator route reads and nobody keeps.
+ *
+ * `auth_time` is null when the provider did not send one. Null is refused by
+ * the operator's own judge rather than here, because an ATTESTATION does not
+ * care: the address was proved either way.
+ */
+interface VerifiedToken {
+    attestation: Attestation;
+    /** `auth_time`, in epoch milliseconds, or null when the token carries none. */
+    authTime: number | null;
+}
+/** The verification above, with `auth_time` beside the attestation. */
+export declare function verifyIdTokenClaims(token: string, auth: AuthConfig, keys: Record<string, string>, now?: number): Promise<VerifiedToken>;
 export declare function googleSigningKeys(now?: number): Promise<Record<string, string>>;
 /**
  * Where a home gets the keys it verifies with.
@@ -189,3 +217,4 @@ export declare function googleSigningKeys(now?: number): Promise<Record<string, 
  * `Engine`: injectable because the alternative is testing less.
  */
 export type SigningKeys = () => Promise<Record<string, string>>;
+export {};

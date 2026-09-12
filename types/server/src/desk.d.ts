@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, GrantSubject, Group, Pass, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, GrantSubject, Group, OperatorAct, Pass, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
  * `BadgeSummary` puts it on the wire — see `core/badge.ts`. */
@@ -587,4 +587,57 @@ export interface Desk {
      * this ledger.
      */
     contentKey(): Promise<string>;
+    /**
+     * **Write the act down, before it is answered.**
+     *
+     * The operator project's one rule for every phase: *every act writes its
+     * ledger row before it answers, from the first act in phase 1. A power that
+     * exists before its record does is the Firestore hand edit again.* So this
+     * is called between "the proof checks out" and "the act runs", and a crash
+     * in between leaves a row saying `attempted` — which is the point, and the
+     * reason it is not one write at the end.
+     *
+     * It is a DESK collection and not an op, for the three reasons the design
+     * gives and any one of which is sufficient: the op vocabulary is closed and
+     * isomorphic, the canvas log replicates and belongs to its members, and the
+     * log cannot carry authority. `operator/{id}` on Firestore, a line type in
+     * the file desk's log.
+     *
+     * **Refusals are written too**, which is a decision this method's callers
+     * make rather than one it enforces, recorded here because the alternative is
+     * a ledger that records only what worked. A refused act is the interesting
+     * one: `not-operator` is somebody who proved an address this home does not
+     * recognise, at a moment, and a home that kept no record of that would be
+     * unable to answer the only question anybody would ask afterwards. Nothing
+     * is written before a token VERIFIES, because a token that does not verify
+     * proved nothing and named nobody.
+     */
+    recordOperatorAct(act: OperatorAct): Promise<void>;
+    /**
+     * **How the act came out**, written onto the row that already exists.
+     *
+     * Not a second row. "Append-only" in the design is about ACTS — a lift is a
+     * new row naming the one it lifts, never an edit of the row it lifts — and
+     * settling the outcome of the act you are in the middle of is the other half
+     * of writing the row first. A row whose outcome is still `attempted` is a
+     * crash, and it can only mean that if a completed act stops saying it.
+     */
+    settleOperatorAct(id: string, outcome: string, reach?: unknown): Promise<void>;
+    /**
+     * **The ledger, newest first** — `isocan operator log`.
+     *
+     * Innkeeper-private, like every ledger on this desk: the operator reads it
+     * and nobody else does over the wire. That is enforced by the route, which
+     * demands the same proof every other operator act does; this method is the
+     * read underneath it.
+     *
+     * `target` narrows to one canvas, badge, actor or address — the id a report
+     * named — and is the only filter, because a filter on the OPERATOR would be
+     * a question with one answer at every home that has one operator, and a
+     * filter on the outcome is a thing to do to a list you already hold.
+     */
+    operatorActs(options?: {
+        target?: string | null;
+        limit?: number;
+    }): Promise<OperatorAct[]>;
 }

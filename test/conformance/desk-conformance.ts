@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActorClaim, Grant, Group, Space } from "@isocan/core";
+import type { ActorClaim, Grant, Group, OperatorAct, Space } from "@isocan/core";
 import { groupSubject, LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
 import type { BadgeRecord, Desk, PassRecord } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
@@ -827,7 +827,75 @@ export function deskConformance(
         });
       }),
     );
+
+    /**
+     * **The operator's ledger** (operator phase 1) — the desk's seventh row,
+     * and the first that records a POWER rather than an access.
+     *
+     * The property both backings must have is the project's one rule for every
+     * phase: *every act writes its ledger row before it answers*. So the shape
+     * under test is two writes for one act — the row, then its outcome — and
+     * what must be true afterwards is that the second found the first rather
+     * than making a second row. A backing that appended twice would turn every
+     * completed act into a completed act beside an eternally attempted one,
+     * and `isocan operator log` would read as a home that crashes constantly.
+     *
+     * A settle for an act that is not there is silent rather than an error, and
+     * that is asserted too: it runs on the way OUT of an act, and a throw there
+     * would turn a successful act into a refusal the operator reads as failure.
+     */
+    test(
+      "an operator act is written before it answers, and settled onto the same row",
+      withDesk(async ({ desk }) => {
+        expect(await desk.operatorActs(), "no act has been taken at a fresh home").toEqual([]);
+
+        await desk.recordOperatorAct(operatorAct("opr_1", "show", "prj_1", ts(10)));
+        const attempted = await desk.operatorActs();
+        expect(attempted).toHaveLength(1);
+        expect(attempted[0]!.outcome, "the row goes down before the act runs").toBe("attempted");
+        expect(attempted[0]!.proof.attribute).toBe("email:olu@acme.test");
+
+        await desk.settleOperatorAct("opr_1", "done", { badges: 3 });
+        const settled = await desk.operatorActs();
+        expect(settled, "settling is not a second row").toHaveLength(1);
+        expect(settled[0]!.outcome).toBe("done");
+        expect(settled[0]!.reach).toEqual({ badges: 3 });
+
+        // Append-only across ACTS: a later act is a new row, never an edit.
+        await desk.recordOperatorAct(operatorAct("opr_2", "show", "prj_2", ts(11)));
+        await desk.settleOperatorAct("opr_2", "not-operator");
+        const both = await desk.operatorActs();
+        expect(both.map((row) => row.id), "newest first").toEqual(["opr_2", "opr_1"]);
+
+        // One target, which is how a report is answered.
+        expect((await desk.operatorActs({ target: "prj_1" })).map((row) => row.id)).toEqual([
+          "opr_1",
+        ]);
+        expect(await desk.operatorActs({ target: "prj_nothing" })).toEqual([]);
+        expect(await desk.operatorActs({ limit: 1 })).toHaveLength(1);
+
+        // Settling something that is not there changes nothing and says nothing.
+        await desk.settleOperatorAct("opr_gone", "done");
+        expect(await desk.operatorActs()).toHaveLength(2);
+      }),
+    );
   });
+}
+
+/** One operator act, as the desk holds it — the row written before the act
+ * answers. The token hash stands in for a real one: hashing is the route's job
+ * (`server/operator.ts`), and what the desk owes is that the row survives and
+ * that its outcome settles onto it rather than beside it. */
+export function operatorAct(id: string, act: string, target: string, at: string): OperatorAct {
+  return {
+    id,
+    act,
+    target,
+    proof: { attribute: "email:olu@acme.test", authTime: at, tokenHash: `hash_${id}` },
+    badgeId: "bdg_desk",
+    at,
+    outcome: "attempted",
+  };
 }
 
 /** An instant, for the seen-marks case: readable, ordered, and the same on

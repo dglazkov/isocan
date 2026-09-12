@@ -243,6 +243,8 @@ import {
   // wraps it with the refusals a person typing an address has earned. Two
   // names because they answer two questions — see both doc comments.
   normalizeHomeUrl as normalizeAddress,
+  NO_OPERATOR,
+  NO_OPERATOR_PROOF,
   normalizeSiteUrl,
   siteFilename,
   siteLabel,
@@ -447,6 +449,7 @@ import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
+import { proveInBrowser, summonedRefusal } from "./operator.ts";
 import { SHEEP_HARNESS, SheepAgent, describePlace, endSheep, homeAddressForCell, loopbackFromCell, noSheepLine, placeLine, sheepPlaceFor } from "./sheep.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, onPath, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
 import {
@@ -3751,6 +3754,219 @@ and withdrawing the agent (\`isocan rc remove\`) ends it with the sheep.`,
       console.log(
         "\n`isocan badges --kill <badge>` ends one. The row marked (this one) is the surface\n" +
           "you are typing at, so ending it signs this machine out.",
+      );
+    }),
+  );
+
+// ---------- the operator (docs/projects/operator/design.md, phase 1) ----------
+//
+// **The CLI is the operator's surface.** Abuse mail is read by a person at a
+// desk, the reach and the purge horizon read best as lines, and the loopback
+// proof is a pattern people already know from `gcloud` and `gh`.
+//
+// **This is the one feature that is deliberately half by the AGENTS.md rule** —
+// done on both surfaces, and reachable by only one kind of hand. Every verb
+// here needs a person at a sign-in page in a browser, so an agent holding this
+// CLI cannot use them however well it is told about them. The agent guide names
+// them anyway, and says exactly that, because the useful thing to tell an agent
+// asked to take a canvas down is the sentence it should reply with.
+
+/**
+ * **Where to prove**, and it is a HOME rather than this daemon.
+ *
+ * `isocan operator show prj_…` is run from a laptop and acts on the home that
+ * hosts the canvas — journey 1's whole setting. So the address is, in order:
+ * what `--home` says, then where that canvas actually lives (`ctx.homeOf`,
+ * off `GET /api/homes`), then this machine's birth default, then the local
+ * daemon.
+ *
+ * The order matters in the one case that bites: a canvas bound to
+ * dev.isocan.io, on a laptop whose birth default is somewhere else. Asking the
+ * birth default first would open a prove page on a home that has never heard
+ * of the canvas — the cheerful wrong address, in the one string a person is
+ * about to sign in at.
+ */
+async function operatorHome(ctx: Ctx, canvasId: string | null, stated?: string): Promise<string> {
+  if (stated) return normalizeAddress(stated);
+  if (canvasId) {
+    const where = await ctx.homeOf(canvasId).catch(() => null);
+    if (where) return where;
+  }
+  return ctx.birthHome ?? ctx.client.base;
+}
+
+/**
+ * **The first line of every operator verb**, before a context is resolved.
+ *
+ * Journey 10 says *refused before any browser opens*, and the honest reading
+ * of that is stronger than it sounds: before anything at all. `ctxOf` starts a
+ * daemon if none is running and waits up to twenty seconds for it — so a
+ * refusal that came after it would leave an agent sitting for twenty seconds
+ * before reading a sentence it could have read at once, and would have spawned
+ * a process on somebody's machine on the way. Found by the test that runs the
+ * real binary: it timed out rather than refusing.
+ */
+function refuseInSession(): void {
+  const refusal = summonedRefusal();
+  if (refusal) throw new Error(refusal);
+}
+
+/**
+ * **Ask the home whether it has an operator at all, before opening anything.**
+ *
+ * Journey 11 step 2 and the phase's last acceptance sentence both name the
+ * VERB: *a local daemon with no attester says why it has no operator.* Without
+ * this the verb could not say it. The home's refusal was built and reachable —
+ * the door hook answers `no-operator` for the whole `/api/operator/` prefix —
+ * but `operatorProof` opened a browser and sat on a loopback listener first, so
+ * **the home that would say the sentence was never asked.** Found by the
+ * conductor walking the verb rather than the route: no output, and a hang until
+ * it was killed. A check nobody's surface can reach is not a check.
+ *
+ * The preflight is free by construction rather than by care: the prefix is
+ * refused *before* anything looks at a proof, so a request carrying none is a
+ * complete answer to "does this home have an operator" and nothing is written
+ * down — `proveAct` records a ledger row only after a token verifies, and there
+ * is no token here.
+ *
+ * Three answers and each is a different thing to do:
+ *
+ * - **`no-operator`** — this home has no attester, or an empty list. The
+ *   sentence is the home's own, printed verbatim, because the words come from
+ *   the home rather than from this file (design, "Not an op").
+ * - **`no-operator-proof`** — this home has an operator and wants one proved.
+ *   Go and open the page.
+ * - **anything else** — an older home that has never heard of these routes, or
+ *   a home that is not answering. Said plainly rather than turned into a
+ *   browser nobody can complete.
+ *
+ * And a 200 is refused loudly: a home that answers an operator read to a caller
+ * who proved nothing is a home whose proof is not being checked, and a CLI that
+ * shrugged at that would be the worst possible place to be quiet.
+ */
+async function requireOperatorHome(client: DaemonRoutes, home: string): Promise<void> {
+  try {
+    await client.operatorLog("");
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    if (err.code === NO_OPERATOR_PROOF) return;
+    if (err.code === NO_OPERATOR) throw new Error(err.message);
+    if (err.status === 404) {
+      throw new Error(
+        `${home} does not answer operator acts — it is running a build older than this CLI, ` +
+          "so there is nothing to prove to yet.",
+      );
+    }
+    throw err;
+  }
+  throw new Error(
+    `${home} answered an operator read to a caller that proved nothing. That home is not ` +
+      "checking operator proofs; do not act on it, and tell whoever runs it.",
+  );
+}
+
+/**
+ * The proof, for one act, or the refusal that stops before a browser opens.
+ *
+ * Two refusals, in the order a person meets them. `refuseInSession` is re-asked
+ * here as well as at the top of each verb — one spelling called twice rather
+ * than two rules, so a phase-2 verb that forgot the early call still refuses
+ * before a browser opens. Then the home is asked, because a browser opened at a
+ * home with no operator is a page nobody can complete.
+ */
+async function operatorProof(client: DaemonRoutes, home: string, act: string): Promise<string> {
+  refuseInSession();
+  await requireOperatorHome(client, home);
+  const { idToken } = await proveInBrowser({ home, act });
+  return idToken;
+}
+
+/** A client for a home that is not necessarily this machine's daemon. The
+ * badge is per-base already (`readBadge(home, base)`), so this knocks on that
+ * home's door by itself on its first 401 — which is what carries the badge
+ * through the door unchanged, beside the proof. */
+function clientAt(ctx: Ctx, home: string): DaemonClient {
+  return home === ctx.client.base ? ctx.client : new DaemonClient(home, ctx.home);
+}
+
+const operatorCommand = program
+  .command("operator")
+  .description(
+    "For the person who runs this home. Needs their sign-in in a browser, for each act, and " +
+      "refuses inside an agent session",
+  )
+  .addHelpText(
+    "after",
+    `
+An operator act is not a canvas act. It is refused unless a person proves, in
+a browser, that their address is one this home's configuration names — freshly,
+for the act the page shows them before it asks anything. Nothing is stored: no
+token on disk, no standing on any badge, nothing an agent could inherit.
+
+Every act is written into this home's ledger before it answers, and
+\`isocan operator log\` is how the operator reads it back.`,
+  );
+
+operatorCommand
+  .command("show <canvas>")
+  .description("What this home holds under that id — counts, the maker, and nothing else. Changes nothing")
+  .option("--home <url>", "the home to prove at; by default, where that canvas lives")
+  .action(
+    run(async (canvasId: string, opts: { home?: string }, cmd: Command) => {
+      refuseInSession();
+      const ctx = await ctxOf(cmd);
+      const home = await operatorHome(ctx, canvasId, opts.home);
+      const client = clientAt(ctx, home);
+      const proof = await operatorProof(client, home, `show ${canvasId}`);
+      const { reach } = await client.operatorShow(canvasId, proof);
+      if (ctx.json) return printJson(reach);
+      printKeyValues({
+        canvas: `${reach.title} (${reach.canvasId})`,
+        made: `${reach.madeBy.name || reach.madeBy.id} on ${reach.at.slice(0, 10)}`,
+        link: reach.link ? `on, at ${reach.link}` : "off",
+        grants: String(reach.grants),
+        badges: `${reach.badges} admitted`,
+        sockets: `${reach.sockets} open here`,
+        files: `${reach.files} — ${formatBytes(reach.bytes)}`,
+        replicas: reach.replicas.length === 0 ? "none relaying now" : `${reach.replicas.length} relaying now`,
+      });
+      console.log(
+        "\nNothing was changed, and this look is in this home's ledger — `isocan operator log`.",
+      );
+    }),
+  );
+
+operatorCommand
+  .command("log")
+  .description("This home's operator ledger, newest first — every act, with what proved it")
+  .option("--home <url>", "the home to prove at; by default, this machine's")
+  .option("--target <id>", "one canvas, badge, actor or address")
+  .option("--limit <n>", "how many rows", "50")
+  .action(
+    run(async (opts: { home?: string; target?: string; limit?: string }, cmd: Command) => {
+      refuseInSession();
+      const ctx = await ctxOf(cmd);
+      const home = await operatorHome(ctx, opts.target ?? null, opts.home);
+      const client = clientAt(ctx, home);
+      const proof = await operatorProof(
+        client,
+        home,
+        opts.target ? `log for ${opts.target}` : "read the log",
+      );
+      const { acts } = await client.operatorLog(proof, {
+        ...(opts.target ? { target: opts.target } : {}),
+        ...(opts.limit ? { limit: Number(opts.limit) } : {}),
+      });
+      if (ctx.json) return printJson(acts);
+      if (acts.length === 0) return console.log("no operator act has been taken at this home.");
+      printTable(
+        acts.map((row) => ({
+          when: row.at.slice(0, 19).replace("T", " "),
+          act: row.act,
+          target: row.target ?? "—",
+          who: row.proof.attribute.replace(/^email:/, ""),
+          outcome: row.outcome,
+        })),
       );
     }),
   );

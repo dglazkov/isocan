@@ -1,4 +1,5 @@
 import type { Actor } from "@isocan/core";
+import { proveSegmentIn } from "@isocan/core";
 
 /**
  * **One address, two faces** (phase 13.5).
@@ -30,6 +31,18 @@ export type Face =
    * not depend on who is asking; see `faceFor`.
    */
   | "terms"
+  /**
+   * **The operator's prove page** (operator phase 1) — the one page a terminal
+   * opens so a person can prove, in a browser, that they run this home.
+   *
+   * A face rather than a route for the terms page's reason exactly: it must
+   * not depend on whether this browser is anybody yet. A person who has never
+   * typed a name here — the innkeeper on a fresh laptop is the obvious one —
+   * would otherwise meet *pick your name* instead of *a terminal asks to take
+   * down prj_…*, which is both the wrong question and the wrong first thing
+   * for a consent page to say.
+   */
+  | "operator-prove"
   /** Nobody here yet, and standing anywhere else: the identity dialog. This is
    *  what phases 7-9 proved for a share-link arrival, and it is unchanged. */
   | "door"
@@ -72,6 +85,12 @@ export function faceFor(pathname: string, actor: Actor | null): Face {
    * phase 13.5.
    */
   if (at === TERMS_PATH) return "terms";
+  /**
+   * Above the `actor` branch, for the terms' reason and one more: the page is
+   * opened by a terminal in whatever browser this person happens to use, which
+   * is very often not the one their canvases are in.
+   */
+  if (proveSegmentIn(pathname) !== null) return "operator-prove";
   if (actor) return "here";
   return at === "" ? "front-page" : "door";
 }

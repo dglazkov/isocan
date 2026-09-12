@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, SeenMark, SeenMarks, Space, OperatorAct } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
@@ -90,6 +90,27 @@ export declare class FileDesk implements Desk {
      * about how long a secret is.
      */
     contentKey(): Promise<string>;
+    recordOperatorAct(act: OperatorAct): Promise<void>;
+    /**
+     * The outcome, onto the row that is already there.
+     *
+     * Silent when the row is missing rather than throwing, for `touch`'s reason
+     * and a sharper one: this runs on the way OUT of an act, and a settle that
+     * threw would turn a successful act into a refusal the person reads as the
+     * act having failed. A row that is not there stays not there, and the act's
+     * own answer is still the truth about what happened.
+     */
+    settleOperatorAct(id: string, outcome: string, reach?: unknown): Promise<void>;
+    /**
+     * Newest first, in memory: this ledger is small by construction — one row
+     * per act a person performed by hand, at a sign-in page — so a sort over all
+     * of it costs nothing a query would save. The cloud desk pages instead,
+     * because Firestore charges by document read rather than by array length.
+     */
+    operatorActs(options?: {
+        target?: string | null;
+        limit?: number;
+    }): Promise<OperatorAct[]>;
     /**
      * The badge behind an id, **or nothing if it was killed** — the one lookup
      * every method here goes through, so "a killed badge is a badge nobody

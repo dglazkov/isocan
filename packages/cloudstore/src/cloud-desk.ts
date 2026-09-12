@@ -7,6 +7,7 @@ import type {
   Grant,
   GrantSubject,
   Group,
+  OperatorAct,
   SeenMark,
   SeenMarks,
   Space,
@@ -85,6 +86,23 @@ export const GROUPS = "groups";
  * could accidentally expose.
  */
 export const SEEN = "seen";
+/**
+ * `operator/{id}` — the desk's seventh row, and the first one that records a
+ * POWER rather than an access (operator phase 1).
+ *
+ * A collection for the grants' reason and a sharper one: it is append-only by
+ * intent — a lift is a new row naming the one it lifts — so it only ever
+ * grows, and a ledger that grew inside an array on some other document would
+ * eventually stop being writable at all. Queried two ways, both single-field
+ * and served by the automatic indexes with nothing in
+ * `firestore.indexes.json`: `orderBy("at", "desc")` for the log, and
+ * `target == <id>` for one canvas's or one badge's history. See
+ * `operatorActs` for why those two are deliberately never combined.
+ *
+ * Innkeeper-private like every other ledger here, and more so: the operator
+ * reads it over the wire and nobody else does.
+ */
+export const OPERATOR = "operator";
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -712,6 +730,55 @@ export class CloudDesk implements Desk {
       tx.set(ref, { marks: { ...marks, [canvasId]: merged } });
       return merged;
     });
+  }
+
+  // ---- the operator's ledger (operator phase 1) ----
+
+  async recordOperatorAct(act: OperatorAct): Promise<void> {
+    await this.db.collection(OPERATOR).doc(act.id).set(jsonSafe(act));
+  }
+
+  /**
+   * A merge onto the row already there, and NOT a transaction.
+   *
+   * The two writes of one act are strictly ordered by one request in one
+   * process — the row goes down, the act runs, the outcome is merged — so
+   * there is no second writer to race. That is the difference between this and
+   * `markSeen` beside it, which merges two machines' opinions of one number.
+   * `{merge: true}` rather than `set`, so a field a later phase adds between
+   * the two writes is not erased by the settle.
+   */
+  async settleOperatorAct(id: string, outcome: string, reach?: unknown): Promise<void> {
+    const patch = { outcome, ...(reach !== undefined ? { reach } : {}) };
+    // One line, with the collection on it, so `cloud-desk-writers.test.ts` can
+    // resolve this write rather than reporting it as one it cannot vouch for.
+    await this.db.collection(OPERATOR).doc(id).set(jsonSafe(patch), { merge: true });
+  }
+
+  /**
+   * Newest first, paged by Firestore rather than in memory.
+   *
+   * **Two shapes, and neither needs a composite index** — which is the whole
+   * care here, because a query that needs one fails in production and nowhere
+   * else. Unfiltered is `orderBy("at", "desc")`, a single field. Filtered is
+   * `where("target", "==", …)` with the ordering done in memory, because
+   * `where` plus `orderBy` on two different fields is exactly the pair
+   * Firestore asks for an index for. The filtered list is one target's acts,
+   * which is small; `firestore.indexes.json` stays a file this repo does not
+   * have.
+   */
+  async operatorActs(options: { target?: string | null; limit?: number } = {}): Promise<OperatorAct[]> {
+    const limit = options.limit ?? 100;
+    const target = options.target ?? null;
+    if (target !== null) {
+      const found = await this.db.collection(OPERATOR).where("target", "==", target).get();
+      return found.docs
+        .map((doc) => doc.data() as OperatorAct)
+        .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id))
+        .slice(0, limit);
+    }
+    const found = await this.db.collection(OPERATOR).orderBy("at", "desc").limit(limit).get();
+    return found.docs.map((doc) => doc.data() as OperatorAct);
   }
 
   // ---- internals ----

@@ -4533,6 +4533,44 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .terms-foot a { color: var(--accent-text); }
 
+/* ---------- the operator's prove page (operator phase 1) ----------
+   The terms page's column, deliberately: both are one address a person lands
+   on from outside the app, reads, and leaves. Reusing the measure and the
+   rhythm is what makes this read as the same home rather than as a sign-in
+   page somebody bolted on — which is exactly what a consent page must not
+   look like. The ACT is the largest thing on it, above every control, because
+   the one failure this page can have is somebody authorising something they
+   did not read. */
+.operator-prove {
+  /* `.notfound-page`'s inset, not the terms page's: this is a standalone page
+     inside the APP's scale, and the terms and front pages are measured as
+     their own column (`scale.test.ts`'s partition). Reusing 96/24 is what
+     keeps that guard at full strength rather than one step wider. */
+  max-width: 560px; margin: 0 auto; padding: 96px 24px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.operator-prove h1 {
+  margin: 0; font-size: 18px;
+  font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance;
+}
+.operator-prove p { margin: 0; font-size: 13.5px; line-height: 1.5; }
+/* The act, larger than the prose around it and in full ink — NOT `--ink-muted`.
+   It is the sentence the whole page exists to put in front of somebody, and
+   greying it is exactly how a consent page comes to be signed unread. */
+.operator-act {
+  font-size: 15px; font-weight: 600;
+  padding: 12px 14px; border-radius: var(--radius);
+  background: var(--chip); border: 1px solid var(--line-soft);
+}
+.operator-where { color: var(--ink-muted); }
+.operator-where code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+}
+.operator-error { color: var(--danger); }
+.operator-signin { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.operator-signin label { font-size: 12.5px; color: var(--ink-muted); }
+.operator-signin input { min-width: min(320px, 100%); }
+
 /* ---------- nothing here ---------- */
 .notfound-page {
   max-width: 560px; margin: 0 auto; padding: 96px 24px;

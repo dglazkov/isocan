@@ -62,6 +62,45 @@ interface WebSocketOptions {
    * not of the routed half.
    */
   contentHost?: string | null;
+  /**
+   * **Where the room map lets itself be counted** (operator phase 1).
+   *
+   * `isocan operator show` prints how many sockets are open on a canvas right
+   * now, and the rooms below are the only place that is known: presence
+   * undercounts, because a socket below `read` never registers a face
+   * (`atLeast(capability, "read")` further down), and a viewer watching a
+   * canvas is exactly the kind of connection an abuse report is about.
+   *
+   * A census handed IN rather than a count handed out, because
+   * `attachWebSockets` returns its closer and nothing else — one seam instead
+   * of a second return value every existing caller would have to unpack.
+   * Absent in every test that attaches sockets without a daemon, and then the
+   * number is simply not available rather than wrong.
+   */
+  census?: SocketCensus;
+}
+
+/**
+ * **How many sockets are open on one canvas, at THIS instance.**
+ *
+ * The bound is stated rather than hidden: the hub is in-process, so a home
+ * running two revisions during a rollout counts only the half that answered
+ * the request — the same bound the sweep lives with (design, "What it
+ * reaches"). A number that quietly meant "some of them" would be worse than
+ * one the verb labels honestly, which is why the CLI prints it as *open here*.
+ */
+export class SocketCensus {
+  private read: ((canvasId: string) => number) | null = null;
+
+  /** Registered once, by the socket layer, over its own room map. */
+  servedBy(read: (canvasId: string) => number): void {
+    this.read = read;
+  }
+
+  /** Open sockets on that canvas, or 0 when no socket layer is attached. */
+  open(canvasId: string): number {
+    return this.read?.(canvasId) ?? 0;
+  }
 }
 
 /**
@@ -85,6 +124,9 @@ export function attachWebSockets(
 ): () => void {
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, Map<WebSocket, Member>>();
+  // The one reader of the room map from outside this closure, and it can only
+  // count — see `SocketCensus`.
+  options.census?.servedBy((canvasId) => rooms.get(canvasId)?.size ?? 0);
   const revision = options.revision !== undefined ? { revision: options.revision } : {};
 
   /**

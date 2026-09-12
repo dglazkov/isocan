@@ -104,6 +104,18 @@ export interface DaemonOptions {
      * which a test needs to be able to say on a machine whose environment has.
      */
     auth?: AuthConfig | null;
+    /**
+     * **The addresses this home calls its operator**, or `[]` for none — which
+     * is every daemon in this repo, and is not a defect (operator phase 1).
+     *
+     * Read from `ISOCAN_OPERATORS` by `resolveOperators`, beside the attester
+     * and for exactly its reason: who can set a home's configuration is who
+     * decides who its operator is, so this is configuration rather than a flag
+     * and there is no compiled-in default. An explicit list is a test — or a
+     * caller composing a home by hand — saying so on a machine whose
+     * environment says otherwise.
+     */
+    operators?: string[];
     /** Where the public keys a presented ID token is checked against come from.
      * Defaults to Google's published endpoint; `SigningKeys` in `attest.ts`
      * carries the argument for why it is configuration at all. */

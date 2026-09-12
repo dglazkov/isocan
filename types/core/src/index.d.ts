@@ -60,6 +60,7 @@ export * from "./tokens.js";
 export * from "./fit.js";
 export * from "./attest.js";
 export * from "./authaction.js";
+export * from "./operator.js";
 export * from "./lane.js";
 export * from "./frameable.js";
 export * from "./modules.js";

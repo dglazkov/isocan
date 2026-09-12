@@ -47,6 +47,21 @@ const CanvasListPage = lazy(() =>
   import("./pages/CanvasListPage.tsx").then((m) => ({ default: m.CanvasListPage })),
 );
 const NotHerePage = lazy(() => import("./pages/NotHerePage.tsx").then((m) => ({ default: m.NotHerePage })));
+/**
+ * **The operator's prove page, behind the same boundary** (operator phase 1).
+ *
+ * The rarest surface this app has: one page, opened by a terminal, for the one
+ * person who runs the home — so every byte of it in the entry chunk would be
+ * paid for by every visitor who will never see it. `LazyGate`'s argument
+ * exactly, and the entry chunk is near `scripts/bundle-ceiling.mjs`'s bound.
+ *
+ * It is rendered from `Doorway` rather than from `<Routes>` (see `faceFor`),
+ * so it carries its own `Suspense`: the router's boundary is inside the
+ * branch this never reaches.
+ */
+const OperatorProvePage = lazy(() =>
+  import("./pages/OperatorProvePage.tsx").then((m) => ({ default: m.OperatorProvePage })),
+);
 
 export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
   // A tab holding a pass is not anybody yet, whatever localStorage says: the
@@ -216,6 +231,19 @@ export function Doorway({
   // same document for a stranger, for somebody with a badge, and for an agent
   // (phase 13.7).
   if (face === "terms") return <TermsPage />;
+  /**
+   * Beside the terms and above the actor branch, for the same reason: a
+   * terminal opens this in whatever browser the person uses, and asking them
+   * to pick a name before showing them what they are being asked to authorise
+   * is both the wrong question and the wrong order.
+   */
+  if (face === "operator-prove") {
+    return (
+      <Suspense fallback={null}>
+        <OperatorProvePage />
+      </Suspense>
+    );
+  }
   if (face === "here" && actor) return <>{children(actor)}</>;
   if (face === "front-page") return <FrontPage onIdentity={onIdentity} />;
   /**

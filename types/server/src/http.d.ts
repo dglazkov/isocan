@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { Engine } from "./engine.js";
 import { type AuthConfig, type SigningKeys } from "./attest.js";
+import type { SocketCensus } from "./ws.js";
 import { SweepHub } from "./sweep.js";
 import type { Store } from "./store.js";
 import type { BadgeRecord, Desk } from "./desk.js";
@@ -120,6 +121,23 @@ interface RouteOptions {
      * boolean somebody could set wrongly.
      */
     auth?: AuthConfig | null;
+    /**
+     * **The addresses this home calls its operator** (operator phase 1), or
+     * absent/empty for none — which is every daemon in this repo.
+     *
+     * Configuration reaching the routes the way `auth` does, and inseparable
+     * from it: a list with no attester cannot be proved, and an attester with no
+     * list recognises nobody. `operatorAbsence` in `operator.ts` is the one
+     * reader that holds both and says which is missing.
+     */
+    operators?: readonly string[];
+    /**
+     * **How many sockets are open on a canvas right now**, for the reach
+     * `isocan operator show` prints. Absent in a caller that wired the routes
+     * without a socket layer, and then the number is simply absent rather than
+     * a confident zero — see `SocketCensus`.
+     */
+    sockets?: SocketCensus;
     /**
      * Where the public keys a presented token is checked against come from.
      * Defaults to Google's published endpoint; see `SigningKeys` in `attest.ts`

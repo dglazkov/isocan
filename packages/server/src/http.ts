@@ -147,6 +147,16 @@ import {
   normalizeSiteUrl,
   bindVerdict,
   takenSentence,
+  NO_OPERATOR,
+  NO_OPERATOR_PROOF,
+  OPERATOR_API_PREFIX,
+  OPERATOR_LOG_ROUTE,
+  OPERATOR_PROOF_HEADER,
+  OPERATOR_SHOW_ROUTE,
+  type OperatorAct,
+  type OperatorLogResponse,
+  type OperatorReach,
+  type OperatorShowResponse,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
@@ -180,6 +190,8 @@ import {
   TOO_MANY_BADGES,
   type MintRefusal,
 } from "./meter.ts";
+import { NO_PROOF_PRESENTED, operatorAbsence, proveOperator } from "./operator.ts";
+import type { SocketCensus } from "./ws.ts";
 import { killAndSweep, sweepCanvas, sweepCanvases, sweepSpace, SweepHub } from "./sweep.ts";
 import { mintPass, PassRefusedError, redeemPass } from "./passes.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
@@ -478,6 +490,23 @@ interface RouteOptions {
    */
   auth?: AuthConfig | null;
   /**
+   * **The addresses this home calls its operator** (operator phase 1), or
+   * absent/empty for none — which is every daemon in this repo.
+   *
+   * Configuration reaching the routes the way `auth` does, and inseparable
+   * from it: a list with no attester cannot be proved, and an attester with no
+   * list recognises nobody. `operatorAbsence` in `operator.ts` is the one
+   * reader that holds both and says which is missing.
+   */
+  operators?: readonly string[];
+  /**
+   * **How many sockets are open on a canvas right now**, for the reach
+   * `isocan operator show` prints. Absent in a caller that wired the routes
+   * without a socket layer, and then the number is simply absent rather than
+   * a confident zero — see `SocketCensus`.
+   */
+  sockets?: SocketCensus;
+  /**
    * Where the public keys a presented token is checked against come from.
    * Defaults to Google's published endpoint; see `SigningKeys` in `attest.ts`
    * for why this is configuration and what it buys.
@@ -542,6 +571,11 @@ export function registerRoutes(
   const auth = options.auth ?? null;
   const attesters = attestersOf(auth);
   const signingKeys = options.signingKeys ?? googleSigningKeys;
+  /** Who this home calls its operator, derived once for `auth`'s reason: it
+   * cannot change while the process is up, and a list recomputed per call
+   * would invite somebody to make it a lookup that can fail halfway through
+   * an act. */
+  const operators = options.operators ?? [];
 
   /**
    * **The door's meter** (phase 13.7 — `innkeeper.md`: badges are free to
@@ -830,6 +864,24 @@ export function registerRoutes(
 
     if (req.badge) {
       await desk.touch(req.badge.badgeId, new Date().toISOString());
+      /**
+       * **A home with no operator says so, for the whole prefix** (operator
+       * journey 11 step 2).
+       *
+       * Here rather than in each handler for this hook's standing reason:
+       * coverage by DEFAULT. Phase 2 adds `takedown`, `purge`, `end`,
+       * `revoke` and `refuse` under the same prefix, and a home that answered
+       * five of the six honestly would be worse than one that answered none.
+       *
+       * After the badge and not before it, so the order of the two facts is
+       * the order they matter in: a caller with no badge is told about the
+       * badge, which is what it must fix before this answer is even
+       * reachable.
+       */
+      if (pathname.startsWith(OPERATOR_API_PREFIX)) {
+        const absence = operatorAbsence(auth, operators);
+        if (absence) return reply.status(400).send({ error: absence, code: NO_OPERATOR });
+      }
       // The door's test, re-asked. One hook rather than a call in each
       // handler, for the same reason the badge check is one hook: a
       // canvas-scoped route added later is covered by DEFAULT instead of by
@@ -2994,6 +3046,194 @@ export function registerRoutes(
       attestation,
       resumable: (await engine.resumable(req.badge!.badgeId)).map((row) => row.actor),
     } satisfies AttestResponse;
+  });
+
+  // ---- the operator (docs/projects/operator/design.md, phase 1) ----
+  //
+  // **The operator is a proof, not a credential.** An address this home's
+  // configuration names, proved fresh for each act by the attester the home
+  // already borrows, carried in one header and stored nowhere. Everything
+  // under `/api/operator/` is refused without that proof and writes its ledger
+  // row before it answers.
+  //
+  // **Not canvas-scoped, and that is the point rather than a convenience.**
+  // `CANVAS_API_ROUTE` matches `/api/projects/:id/`, so the door's admission
+  // hook does not run here — which is exactly journey 1's first act: *show on
+  // a canvas the operator was never admitted to*. The badge still travels and
+  // is still resolved; what it does NOT do is decide anything, because
+  // operator standing is not on it and never will be (decision D2). And
+  // journey 12 stands: Olu's badge is an ordinary badge, and opening a canvas
+  // he is not admitted to still refuses him like anyone.
+
+  /**
+   * **The proof, judged and written down — or the refusal, judged and written
+   * down.** Every operator route's first line.
+   *
+   * It answers `null` when it has already sent the reply, which is the shape
+   * `refuseAmbiguousHome` beside it uses: the caller writes `const proven =
+   * await proveAct(...); if (!proven) return;` and cannot proceed by
+   * forgetting an `if`.
+   *
+   * **The ledger row goes down BEFORE the act runs**, which is the operator
+   * project's one rule for every phase — *a power that exists before its
+   * record does is the Firestore hand edit again*. So the order here is:
+   * verify, write `attempted`, hand back the id, and let the caller settle it.
+   * A crash between the row and the answer leaves a row that says an act was
+   * attempted, which is the whole reason it is two writes.
+   *
+   * **A refusal is written too**, and this is the decision worth stating.
+   * `not-operator` is somebody who signed in, at a moment, and asked this home
+   * to act — the single most interesting thing an operator ledger could
+   * record. Nothing is written for a token that does not VERIFY: there is no
+   * address to name and nobody proved anything, so a row would be a record of
+   * a stranger's ability to post a string.
+   */
+  const proveAct = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    what: { act: string; target: string | null },
+  ): Promise<OperatorAct | null> => {
+    const header = req.headers[OPERATOR_PROOF_HEADER];
+    const token = (Array.isArray(header) ? header[0] : header)?.trim() ?? "";
+    if (!token) {
+      await reply.status(403).send({ error: NO_PROOF_PRESENTED, code: NO_OPERATOR_PROOF });
+      return null;
+    }
+    // `auth` is non-null here: the door hook refuses the whole prefix when it
+    // is not, with the sentence that says why.
+    const verdict = await proveOperator({ token, auth: auth!, keys: signingKeys, operators });
+    const row: OperatorAct = {
+      id: newId("opr"),
+      act: what.act,
+      target: what.target,
+      proof: verdict.ok ? verdict.proof : verdict.proof!,
+      badgeId: req.badge?.badgeId ?? null,
+      at: new Date().toISOString(),
+      outcome: verdict.ok ? "attempted" : verdict.code,
+    };
+    await desk.recordOperatorAct(row);
+    if (!verdict.ok) {
+      await reply.status(403).send({ error: verdict.error, code: verdict.code });
+      return null;
+    }
+    return row;
+  };
+
+  /**
+   * **What this home holds under that id** (journey 1 step 4), and nothing
+   * that would be a roster.
+   *
+   * Counts and one name. "No names of people other than the maker" is the
+   * journey's own line and it is the same rule `http.ts`'s badge comment gives:
+   * a listing would be a roster of people to act against. So the badges are a
+   * number, the sockets are a number, and the only person named is the one
+   * whose canvas it is.
+   *
+   * **Nothing is changed**, which is what makes `show` the right first verb:
+   * the whole proof path, the whole ledger path and the whole refusal path are
+   * exercised by an act that cannot hurt anybody if any of them is wrong.
+   */
+  const reachOf = async (canvasId: string): Promise<OperatorReach> => {
+    const snapshot = await engine.getSnapshot(canvasId);
+    const grants = liveGrants(await desk.grantsFor(canvasId));
+    const link = grants.find((grant) => grant.subject === LINK);
+    const blobs = await store.listBlobs(canvasId);
+    /**
+     * **Which replicas are relaying for this canvas right now**, which is a
+     * narrower fact than journey 1's "which replicas are linked" and is the
+     * honest one this home can tell.
+     *
+     * A member daemon relaying presence stamps every face it sends with a
+     * relay origin, and the distinct origins on a canvas are its live relay
+     * connections. There is no registry of machines that have ever linked —
+     * `home-links.ts` is the REPLICA's table of the homes it dials, and the
+     * home keeps no mirror of it — so a laptop that is linked and asleep is
+     * not here. The verb prints these as *relaying now* rather than as
+     * *linked*, because the difference is the whole difference between a
+     * takedown's reach and a guess at it.
+     */
+    const relays = new Set(
+      presence
+        .roster(canvasId)
+        .map((session) => session.via)
+        .filter((via): via is string => typeof via === "string"),
+    );
+    return {
+      canvasId,
+      title: snapshot.project.title,
+      madeBy: {
+        id: snapshot.project.createdBy.id,
+        name: await ownerName(snapshot.project),
+      },
+      at: snapshot.project.createdAt,
+      link: link ? capabilityOf(link) : null,
+      grants: grants.length,
+      badges: (await desk.badgesIn(canvasId)).length,
+      sockets: options.sockets?.open(canvasId) ?? 0,
+      files: blobs.length,
+      bytes: blobs.reduce((total, blob) => total + blob.meta.size, 0),
+      replicas: [...relays],
+    };
+  };
+
+  app.get(OPERATOR_SHOW_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    /**
+     * **An operator act is never forwarded**, and a replica says so instead of
+     * relaying one.
+     *
+     * Every other canvas-scoped route hands its request to the home that owns
+     * the canvas. This one must not, and the reason is the proof: it was made
+     * at THIS origin, for a list THIS home's configuration names, and a
+     * daemon that passed it up would be asking another home to honour a
+     * credential minted against a different project — or, worse, would honour
+     * one on behalf of a home whose ledger never heard about it. The ledger
+     * belongs to the home that acted, so the act has to be sent there.
+     */
+    const elsewhere = options.homes?.homeOf(id) ?? null;
+    if (elsewhere) {
+      return reply.status(409).send({
+        error:
+          `this daemon is a replica of ${id}, not its home — an operator proof is made at one ` +
+          `home and honoured by that home only. Ask ${elsewhere}.`,
+        code: "not-this-home",
+      });
+    }
+    const proven = await proveAct(req, reply, { act: "show", target: id });
+    if (!proven) return;
+    const reach = await reachOf(id);
+    await desk.settleOperatorAct(proven.id, "done", reach);
+    return { reach } satisfies OperatorShowResponse;
+  });
+
+  /**
+   * **The ledger, read by the operator and nobody else** (design, "The
+   * record").
+   *
+   * Innkeeper-private like every desk ledger, and enforced the same way every
+   * operator act is: by the proof, not by a second rule. That a look at the
+   * ledger is in the ledger is the property the design asks for one section
+   * later, about the LOOK: *an act is never unrecorded, even when it is
+   * unannounced*.
+   *
+   * **So the newest row in the answer is this read itself, saying
+   * `attempted`** — because the row goes down before the act runs, and this
+   * act is the reading. That is the one-rule-for-every-phase made visible
+   * rather than an artefact to hide: filtering the row out would mean the
+   * ledger showed one thing to its reader and another to the disk.
+   */
+  app.get(OPERATOR_LOG_ROUTE, async (req, reply) => {
+    const query = (req.query ?? {}) as { target?: string; limit?: string };
+    const target = typeof query.target === "string" && query.target ? query.target : null;
+    const proven = await proveAct(req, reply, { act: "log", target });
+    if (!proven) return;
+    const limit = Number.parseInt(query.limit ?? "", 10);
+    const acts = await desk.operatorActs({
+      target,
+      limit: Number.isFinite(limit) && limit > 0 ? Math.min(limit, 500) : 100,
+    });
+    await desk.settleOperatorAct(proven.id, "done", { rows: acts.length });
+    return { acts } satisfies OperatorLogResponse;
   });
 
   // ---- passes: what an admitted badge hands an unadmitted one (Scene 5) ----
