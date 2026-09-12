@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Actor, Canvas, InboxEntry, SeenMarks } from "../src/index.ts";
-import {
-  advanceSeen,
-  hasNew,
-  latelyOrder,
-  mergeSeen,
-  movedSince,
-  newSince,
-} from "../src/seen.ts";
+import { advanceSeen, latelyOrder, mergeSeen, movedSince, newSince } from "../src/seen.ts";
 
 /**
  * `docs/research/2026-09-12-seen-marks.md`. What is held here is the merge
@@ -72,19 +65,17 @@ describe("the merge", () => {
 });
 
 describe("has anything happened here", () => {
-  it("is a seq comparison, with no clock in it", () => {
-    expect(hasNew(mark(5, "2026-09-12T10:00:00.000Z"), 6)).toBe(true);
-    expect(hasNew(mark(5, "2026-09-12T10:00:00.000Z"), 5)).toBe(false);
+  const canvas = { id: "prj_a", updatedAt: "2026-09-12T11:00:00.000Z" } as Canvas;
+
+  it("reads the canvas row, which is what a list has to hand", () => {
+    expect(movedSince(mark(5, "2026-09-12T10:00:00.000Z"), canvas)).toBe(true);
+    expect(movedSince(mark(5, "2026-09-12T12:00:00.000Z"), canvas)).toBe(false);
   });
 
   it("says yes about a canvas you have never opened", () => {
-    expect(hasNew(undefined, 0), "an unmarked canvas is entirely new").toBe(true);
-  });
-
-  it("reads a canvas row when there is no snapshot to hand", () => {
-    const canvas = { id: "prj_a", updatedAt: "2026-09-12T11:00:00.000Z" } as Canvas;
-    expect(movedSince(mark(5, "2026-09-12T10:00:00.000Z"), canvas)).toBe(true);
-    expect(movedSince(mark(5, "2026-09-12T12:00:00.000Z"), canvas)).toBe(false);
+    // An unmarked canvas is entirely new — the case a browser's localStorage
+    // structurally could not see.
+    expect(movedSince(undefined, canvas)).toBe(true);
   });
 });
 

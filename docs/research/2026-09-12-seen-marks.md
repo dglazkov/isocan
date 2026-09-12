@@ -73,6 +73,18 @@ So both, each doing the thing the other cannot, and each monotonic on its own.
 The oplog is the clock **within** one canvas; the wall clock is the only thing
 comparable **across** canvases, which is exactly what "lately" needs.
 
+**What each half actually does on the day this shipped, said plainly rather
+than implied.** `at` is read by everything: `newSince` compares it to
+`comment.createdAt`, `latelyOrder` sorts by it, and `movedSince` — which reads
+a canvas ROW, because the list route gives rows and not heads — compares it to
+`updatedAt`. `seq` is read by nothing except the merge, and there it is
+load-bearing: it is the half that carries no clock, so two machines converge on
+the further-along reading position whatever their clocks say to each other, and
+a fast clock cannot claim you had read further than you had. The clock-free
+"has anything happened" comparison is the one step 3's panel will make, against
+a snapshot's `lastSeq`; it is written down here rather than shipped as an
+exported function with no caller.
+
 ---
 
 ## Where it lives, and why it is not on the canvas
@@ -280,11 +292,14 @@ itself replicate; a per-canvas high-water mark costs one write per visit and
 answers the inbox's question exactly. The per-thread watermarks stay in
 `localStorage`, per browser, doing the fine-grained job they already do.
 
-**D2. "Seen" is a seq AND a timestamp.** 12 Sep 2026. The seq answers "has
-anything happened here" against `lastSeq` with no clock and no scan; the
-timestamp answers "which comment is new" (comments carry `createdAt`, not a
-seq) and is the only thing comparable across canvases, which is what "lately"
-orders by. Each is monotonic on its own, so a revisit that changed nothing
+**D2. "Seen" is a seq AND a timestamp.** 12 Sep 2026. The timestamp answers
+"which comment is new" (comments carry `createdAt`, not a seq) and is the only
+thing comparable across canvases, which is what "lately" orders by. The seq is
+the clock-free half: it is what makes two machines converge on the
+further-along reading position whatever their clocks say to each other, and it
+is the exact answer to "has anything happened here" against a snapshot's
+`lastSeq` — the comparison step 3's home panel will make, and the one nothing
+makes yet. Each is monotonic on its own, so a revisit that changed nothing
 still moves `at`.
 
 **D3. A seen-mark is desk state, not canvas state.** 12 Sep 2026. It fails all

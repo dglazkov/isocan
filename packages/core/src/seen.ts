@@ -15,12 +15,21 @@ import type { InboxEntry } from "./inbox.ts";
  *
  * `seq` is the canvas's own oplog head as you last had it in front of you;
  * `at` is when you were there, stamped by the home that holds the canvas.
- * Both, because they answer different questions and neither one can do the
- * other's job (D2): `seq` says *has anything happened here at all*, in one
- * integer against `lastSeq`, with no clock and no scan — a `Comment` carries
- * `createdAt` and not the seq of the op that wrote it, so it cannot say which
- * comment is new. `at` says exactly that, and is the only half comparable
- * ACROSS canvases, which is what "lately" is ordered by.
+ * Both, because they answer different questions and neither can do the other's
+ * job (D2):
+ *
+ * - **`at` is what everything reads today.** It says which comment is new
+ *   (`newSince`), because a `Comment` carries `createdAt` and not the seq of
+ *   the op that wrote it; and it is the only half comparable ACROSS canvases,
+ *   which is what "lately" is ordered by.
+ * - **`seq` is the clock-free half, and it is load-bearing in the MERGE.**
+ *   Two machines' marks converge on the further-along reading position
+ *   whatever their clocks say to each other, so a fast clock cannot claim you
+ *   had read further than you had. It is also the exact answer to *has
+ *   anything happened here at all* — one integer against a snapshot's
+ *   `lastSeq`, no clock and no scan — which is what #147 step 3's home panel
+ *   will ask. Nothing asks it yet; `movedSince` reads the canvas row instead,
+ *   because a `Canvas` carries no head.
  *
  * **Where it lives is the decision, and it is not here.** A seen-mark is DESK
  * state at the home — the private ledger beside grants, passes and spaces —
@@ -129,23 +138,21 @@ export function mergeSeen(...sources: readonly SeenMarks[]): SeenMarks {
 }
 
 /**
- * **Has this canvas moved since you were here?** One integer, no clock.
+ * **Has this canvas moved since you were here?**
  *
- * `lastSeq` from a snapshot, or `updatedAt` when the caller has only the
- * canvas row (the list route gives that and not a head) — `movedSince` below
- * is the one that takes the row. Unmarked means yes: a canvas you have never
- * opened has everything new in it, which is the right answer for an inbox and
- * the wrong one for a greeting, so the WEB marks a canvas on open rather than
- * pretending a newcomer has read it.
+ * From the canvas ROW, because that is what the list route gives and what
+ * `isocan seen` has: the reducer stamps `updatedAt` on every op, so a canvas
+ * whose last write is newer than your mark has moved. Unmarked means yes — a
+ * canvas you have never opened has everything new in it.
+ *
+ * **The seq would be the better test and has no caller for it yet.** A
+ * comparison against a snapshot's `lastSeq` is clock-free where this is not,
+ * and it is what #147 step 3's home panel will ask; a `Canvas` row carries no
+ * head, so asking it here would mean a snapshot per canvas. The seq is not
+ * idle in the meantime — it is the clock-free half of the merge, which is what
+ * stops a machine with a fast clock from claiming you had read further than
+ * you had.
  */
-export function hasNew(mark: SeenMark | undefined, lastSeq: number): boolean {
-  return !mark || lastSeq > mark.seq;
-}
-
-/** The same question from a canvas ROW rather than a snapshot: the reducer
- *  stamps `updatedAt` on every op, so a canvas whose last write is newer than
- *  your mark has moved. Used by `isocan seen`, which lists canvases without
- *  fetching a snapshot each. */
 export function movedSince(mark: SeenMark | undefined, canvas: Canvas): boolean {
   return !mark || canvas.updatedAt > mark.at;
 }
