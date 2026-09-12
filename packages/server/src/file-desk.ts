@@ -1,7 +1,18 @@
 import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
-import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "@isocan/core";
+import type {
+  ActorClaim,
+  Attestation,
+  Capability,
+  Grant,
+  GrantSubject,
+  Group,
+  SeenMark,
+  SeenMarks,
+  Space,
+} from "@isocan/core";
 import {
+  advanceSeen,
   groupSubject,
   isGroupLive,
   isLive,
@@ -99,7 +110,14 @@ type DeskLogEntry =
    * open tab breaks at once and stays broken until each one re-mints. A key
    * is also the one row here that a replay must never overwrite with a newer
    * one, and it cannot: it is written only when there is none. */
-  | { seq: number; type: "contentkey"; key: string; at: string };
+  | { seq: number; type: "contentkey"; key: string; at: string }
+  /** One person's mark on one canvas, ALREADY MERGED (#147, #134). The merged
+   * value rather than the incoming one, so a replay is a plain replacement
+   * and cannot re-derive a different answer from a different starting point;
+   * `advanceSeen` is idempotent anyway, which is what makes replaying a tail
+   * out of order harmless. Losing one costs a canvas showing as unread that
+   * you had read — the only direction this feature is allowed to fail in. */
+  | { seq: number; type: "seen"; actorId: string; canvasId: string; mark: SeenMark; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -125,6 +143,11 @@ interface DeskSnapshot {
    * and correctly EMPTY: a `group:` row whose group was never written admits
    * nobody. */
   groups?: Record<string, Group>;
+  /** `seen/{actorId}` (#147, #134), keyed by actor id and holding that
+   * person's marks by canvas. Absent in every desk written before seen-marks,
+   * and correctly EMPTY: somebody who has never marked anything has seen
+   * nothing as far as this home knows, which is what everybody was. */
+  seen?: Record<string, SeenMarks>;
   /** The HMAC key this home signs content reads with (content-read-auth.md).
    * Absent on every desk written before it, and absent means "not minted
    * yet" — the first ask mints one. Local homes never ask: loopback content
@@ -165,6 +188,10 @@ export class FileDesk implements Desk {
       // Absent before roles phase 5; empty means no group exists, so a
       // `group:` row admits nobody, which is the only safe reading.
       groups: snapshot?.groups ?? {},
+      // Absent in every desk written before seen-marks; empty means nobody
+      // has looked at anything, which is what an inbox should say about a
+      // person this home has never seen read a canvas.
+      seen: snapshot?.seen ?? {},
       // Absent until a hosted home first signs a content read. Undefined
       // means "none minted", never "sign with nothing".
       ...(snapshot?.contentKey ? { contentKey: snapshot.contentKey } : {}),
@@ -463,6 +490,35 @@ export class FileDesk implements Desk {
     return (this.state.spaces ??= {});
   }
 
+  // ---- seen-marks (#147, #134) ----
+
+  async seenOf(actorId: string): Promise<SeenMarks> {
+    return { ...(this.seen()[actorId] ?? {}) };
+  }
+
+  /**
+   * Read-modify-write on the serialized chain, which is what makes the merge
+   * safe: two requests racing cannot interleave a read with the other's
+   * write, and `advanceSeen` then makes the ORDER they land in irrelevant.
+   * `CloudDesk` gets the same property from a transaction.
+   */
+  async markSeen(actorId: string, canvasId: string, mark: SeenMark): Promise<SeenMark> {
+    return this.enqueue(async () => {
+      const marks = (this.seen()[actorId] ??= {});
+      const merged = advanceSeen(marks[canvasId], mark);
+      marks[canvasId] = merged;
+      await this.append({ type: "seen", actorId, canvasId, mark: merged, at: merged.at });
+      return merged;
+    });
+  }
+
+  /** The seen ledger, which every desk written before 12 Sep 2026 lacks —
+   *  correctly empty, since a person who has never marked anything has seen
+   *  nothing as far as this home knows. */
+  private seen(): Record<string, SeenMarks> {
+    return (this.state.seen ??= {});
+  }
+
   // ---- groups (roles phase 5) ----
 
   async putGroup(group: Group): Promise<void> {
@@ -719,6 +775,13 @@ export class FileDesk implements Desk {
       case "group": {
         // A replacement, like a space's: the newest write is the row.
         this.groups()[entry.group.id] = { ...entry.group, members: [...entry.group.members] };
+        return;
+      }
+      case "seen": {
+        // Merged rather than replaced, so a tail replayed in any order lands
+        // on the same answer — the property `advanceSeen` exists for.
+        const marks = (this.seen()[entry.actorId] ??= {});
+        marks[entry.canvasId] = advanceSeen(marks[entry.canvasId], entry.mark);
         return;
       }
       case "contentkey": {

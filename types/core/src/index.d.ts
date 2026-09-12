@@ -84,6 +84,7 @@ export * from "./timeline.js";
 export * from "./opwords.js";
 export * from "./canvassort.js";
 export * from "./canvasswitch.js";
+export * from "./seen.js";
 export * from "./lens.js";
 export * from "./export.js";
 export * from "./text-attention.js";

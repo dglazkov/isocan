@@ -29,6 +29,8 @@ import type {
   SpaceLinkResponse,
   SpaceResponse,
   SpacesResponse,
+  SeenMarksResponse,
+  SeenResponse,
   GroupResponse,
   GroupsResponse,
   UndoRedoRequest,
@@ -47,6 +49,8 @@ import {
   spaceLinkRoute,
   spaceRoute,
   SPACES_ROUTE,
+  SEEN_ROUTE,
+  seenRoute,
   BADGES_ROUTE,
   badgeRoute,
   encodeFilename,
@@ -286,6 +290,17 @@ export interface HomeConnection {
    * actor acting, as a grant write does, so the home asks `own` of the person
    * and not of the machine.
    */
+  /**
+   * The seen routes, forwarded (#147, #134) — for the space routes' reason
+   * and one more of their own. A seen-mark is desk state at the home, so a
+   * replica holds no row for it; and the whole point of the feature is that
+   * your OTHER machine finds what this one saw, which it can only do if both
+   * write to the same desk. A replica that answered from its own ledger would
+   * hand back this laptop's marks, which is short, plausible and exactly the
+   * per-browser answer seen-marks exist to replace.
+   */
+  seen(actor?: Actor): Promise<SeenMarksResponse>;
+  markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
   spaces(): Promise<SpacesResponse>;
   createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
   deleteSpace(spaceId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
@@ -1738,6 +1753,30 @@ export class HomeLink implements HomeConnection {
 
   killBadge(badgeId: string): Promise<KillBadgeResponse> {
     return this.api<KillBadgeResponse>("DELETE", badgeRoute(badgeId));
+  }
+
+  // ---- the seen routes, forwarded (#147, #134) ----
+  //
+  // The claim goes up before either call, read included, and that is the one
+  // place these differ from the space routes: a read of somebody's own marks
+  // is scoped to the actors the home's copy of this badge claims, so a badge
+  // that has never introduced this person up there would be handed an empty
+  // ledger rather than theirs.
+
+  async seen(actor?: Actor): Promise<SeenMarksResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<SeenMarksResponse>(
+      "GET",
+      actor ? `${SEEN_ROUTE}?actorId=${encodeURIComponent(actor.id)}` : SEEN_ROUTE,
+    );
+  }
+
+  async markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<SeenResponse>("PUT", seenRoute(canvasId), {
+      seq,
+      ...(actor ? { actorId: actor.id } : {}),
+    });
   }
 
   // ---- the space routes, forwarded (roles phase 4) ----

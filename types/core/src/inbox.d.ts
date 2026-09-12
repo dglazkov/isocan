@@ -18,12 +18,19 @@ import type { RcPolicy } from "./protocol.js";
  * answer to a question that has one, and the two would disagree silently —
  * which shows up as somebody not being told something.
  *
- * **No read state.** Version one is a LIST, not a count. Seen-marks live in
- * `localStorage` per canvas per actor, so a count would mean "in this browser"
- * and could not see a mention on a canvas this browser has never opened —
- * which is exactly the case an inbox is for. The research recommends a
- * per-canvas high-water mark as an operation when a count is wanted; until
- * then this reports what exists and lets the reader decide what is new.
+ * **This file knows nothing about read state, and that is deliberate.**
+ *
+ * Version one was a LIST with no count at all, because the only seen-marks
+ * were `localStorage` ones — per canvas per actor per BROWSER, so a count
+ * would have meant "in this browser" and could not have seen a mention on a
+ * canvas this browser had never opened, which is exactly the case an inbox is
+ * for. There is a durable mark now (`seen.ts`, 12 Sep 2026: one row per person
+ * per canvas, kept by the home, not an op) and `newSince` answers the count.
+ *
+ * It stays a SEPARATE function over the entries this one produces, rather than
+ * a clause inside `reasonFor`. "Is this comment for me" has one definition and
+ * `isocan wait` parks on it; folding "have I looked since" into it would make a
+ * parked agent's summons depend on whether somebody had read a canvas.
  */
 /** Why a comment is yours. Kept because the reasons are not equally urgent —
  *  a direct mention is somebody asking you; the Chat is the room being loud. */

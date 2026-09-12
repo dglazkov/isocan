@@ -1,4 +1,4 @@
-import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, GroupResponse, GroupsResponse } from "../../core/src/index.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupsResponse } from "../../core/src/index.js";
 import type { UpgradeVerdict } from "../../core/src/index.js";
 import type { BuildStamp } from "../../server/src/index.js";
 /** The health route: who is holding the port, and which build they are. */
@@ -200,6 +200,13 @@ export declare class DaemonRoutes {
         ended: number;
     }>;
     listCanvases(): Promise<Canvas[]>;
+    /** Your own marks, every canvas, one read. There is deliberately no way to
+     *  ask for anybody else's. */
+    seen(actorId?: string): Promise<SeenMarksResponse>;
+    /** Move the mark for one canvas to the head you had in front of you. The
+     *  answer may be AHEAD of what you sent: another machine of yours may have
+     *  got further, and the merge never goes backwards. */
+    markSeen(canvasId: string, seq: number, actorId?: string): Promise<SeenResponse>;
     grants(canvasId: string): Promise<GrantsResponse>;
     createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, 
     /** Who is acting — the CLI's actor. A write to grants asks `own`, which

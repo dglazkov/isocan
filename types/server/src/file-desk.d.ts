@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
@@ -41,6 +41,18 @@ export declare class FileDesk implements Desk {
     spacesFor(badge: BadgeRecord): Promise<Space[]>;
     /** The spaces ledger, which a desk from before roles phase 4 lacks. */
     private spaces;
+    seenOf(actorId: string): Promise<SeenMarks>;
+    /**
+     * Read-modify-write on the serialized chain, which is what makes the merge
+     * safe: two requests racing cannot interleave a read with the other's
+     * write, and `advanceSeen` then makes the ORDER they land in irrelevant.
+     * `CloudDesk` gets the same property from a transaction.
+     */
+    markSeen(actorId: string, canvasId: string, mark: SeenMark): Promise<SeenMark>;
+    /** The seen ledger, which every desk written before 12 Sep 2026 lacks —
+     *  correctly empty, since a person who has never marked anything has seen
+     *  nothing as far as this home knows. */
+    private seen;
     putGroup(group: Group): Promise<void>;
     group(groupId: string): Promise<Group | null>;
     groupsFor(badge: BadgeRecord): Promise<Group[]>;

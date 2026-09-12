@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-06
 issue: 134
 see: ui-refresh, roles, standing-agents, 2026-09-06-project-and-canvas.md
-note: phase 1 built 6 Sep — ⌘O, ⌘K → Switch canvas…, and the same row in the bar's ··· menu (which replaced the caret beside the name that evening) open one window that leads with the canvases this browser was on lately, finds one from a few letters, and moves you there; recents on the home screen and in the lens, spaces as headings, a shared "lately", and the project › canvas row are open. Decided 11 Sep — a shared "lately" may take a new op if one is needed, designed together with the inbox's seen-marks
+note: phase 1 built 6 Sep — ⌘O, ⌘K → Switch canvas…, and the same row in the bar's ··· menu (which replaced the caret beside the name that evening) open one window that leads with the canvases this browser was on lately, finds one from a few letters, and moves you there; recents on the home screen and in the lens, spaces as headings and the project › canvas row are open. Step 4 built 12 Sep — a shared "lately" is the home's seen-marks, designed with the inbox's step 2 in `docs/research/2026-09-12-seen-marks.md` and needing no new op
 ---
 # The switcher
 
@@ -100,6 +100,14 @@ rows, title riding along). The title is what lets the list paint before
 `listCanvases()` answers, and instead of it: offline, the recents are the
 whole list, and every one opens from the replica.
 
+*(Half of that held and half of it did not. **"A visit is a fact only the
+browser knows" was true of the daemon as it stood and false as a
+commitment** — step 4 made the visit a fact the HOME knows, because the
+person on two machines is one person. The browser's list is still written on
+every visit and still leads when the daemon cannot answer; what changed is
+that it is no longer the only answer. 12 Sep 2026,
+[seen-marks](../../research/2026-09-12-seen-marks.md).)*
+
 **Fuzzy here, and only here.** `fuzzyMatch` in `core/canvasswitch.ts` takes
 the letters in order from anywhere and scores letters together, word starts
 and a prefix above the same letters scattered, so among titles that all
@@ -125,6 +133,11 @@ every verb takes `--canvas`, and `isocan history <actor>` already leads with
 where it stands. A viewport gesture gets no verb (AGENTS.md, "done on both
 surfaces", line 2). The ranking is in core anyway, so the terminal could show
 the same order the day it wants to.
+
+*(It wanted to on 12 Sep, and the verb is `isocan seen` rather than a switch:
+the ANSWER to "where was I lately" is a durable fact worth reading in a
+terminal, and it is the same fact the inbox reads. Switching is still not a
+verb.)*
 
 ## The shelf's scope (11 Sep 2026, #194)
 
@@ -183,12 +196,15 @@ scope and has no box of its own: the switcher is one row away.
   it qualifies, and somebody who hides the zoom cluster's arrows will expect
   to be able to hide this too. Recorded on that project's issue (#151) rather
   than done here, because the registry is its author's to grow.
-- **Recents are per browser.** A person on two machines has two histories,
-  and the person the identity desk lets resume across browsers (multi-identity)
-  does not carry their "lately" with them. Whether that should be desk state
-  — a per-actor visit high-water mark, the shape the inbox research proposed
-  for seen-marks — is the same deferred decision, and it should be decided
-  once for both.
+- ~~**Recents are per browser.**~~ *Answered 12 Sep 2026: they are desk
+  state, the shape the inbox research proposed, decided once for both — see
+  [seen-marks](../../research/2026-09-12-seen-marks.md). The home keeps one
+  mark per person per canvas, `{ seq, at }`, written when you open one; the
+  switcher orders by `at` and the inbox reads `seq` and `at` for "what is
+  new". Not an op: a fact that cannot be undone, must not be visible to
+  everyone and degrades harmlessly offline is not canvas state. This
+  browser's own recents stay underneath it, and are the whole list when the
+  daemon cannot answer.*
 - **The word.** The switcher says "canvas" everywhere, which is right today
   and stays right when a project holds several canvases — you still switch
   canvases; the row grows a project above it. See
@@ -210,14 +226,17 @@ scope and has no box of its own: the switcher is one row away.
    `listSpaces()`), and the home screen draws a heading per space. With no
    query the switcher should too, under Recent: a person who works in a
    space thinks in it. With a query, one ranked list, as now.
-4. **A shared "lately".** Decide, once, with the inbox's seen-marks: either
-   visits stay a browser's business (and the lens's per-actor rows are the
-   cross-device answer) or a per-actor visit mark becomes desk state at the
-   home. Not before multi-identity's resume is something people actually use,
-   because that is the first time two browsers would disagree. *Decided
-   11 Sep 2026 (Dion): a new op is acceptable if one is needed, and this is
-   designed together with the inbox's step 2 rather than after it — D1 in
-   [the inbox note](../../research/2026-08-29-the-inbox.md).*
+4. **A shared "lately".** *Built 12 Sep 2026.* A per-actor visit mark IS
+   desk state at the home, decided once for both features in
+   [seen-marks](../../research/2026-09-12-seen-marks.md) — and it is the same
+   row the inbox reads, because the mark written when you open a canvas means
+   both *I was here at `at`* and *everything up to `seq` was in front of me*.
+   The switcher reads the first half, the inbox the second. **The rule that
+   keeps one fact honest for two readers: only a visit writes a mark** — a
+   sweep or a "mark all read" would fill this list with canvases nobody went
+   to. `web/lib/seen.ts` (the mark), `web/lib/lately.ts` (the merge, behind
+   the palette's existing `lazy()`), `core/seen.ts` (`latelyOrder`), and
+   `isocan seen` in the terminal. No new op: the vocabulary stayed at 33.
 5. **The project › canvas row.** When a project holds more than one canvas,
    a row is `Project › Canvas`, the fuzzy match runs over both names, and
    Recent stays a flat list of canvases because that is what you go to. The

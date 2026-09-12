@@ -207,11 +207,58 @@
  * **A barrel a module imports eagerly is not automatically a cost**; the
  * cost is what something eager actually references, and the way to know is
  * to grep the built chunk for a string only that code has.
+ * **660,100 → 661,500 the same day, for seen-marks (#147, #134)** — and it
+ * stacks on the raise above rather than replacing it, because the two landed
+ * within an hour of each other on separate branches. The arithmetic, both
+ * ends measured on one machine so the delta is a subtraction and not a
+ * comparison of two people's laptops: **660,076 on `main` at `4b62212a`,
+ * 661,329 with this branch rebased onto it.**
+ *
+ *   1,367  gross: `lib/seen.ts` (the mark cache, `loadSeen`, `noteVisit`),
+ *          `fetchSeen`/`putSeen` in `lib/api.ts`, the route spellings out of
+ *          core, the visit effect on `CanvasPage`, and the switcher's
+ *          "lately" merge
+ *    −114  `latelyIds` and core's `latelyOrder` moved to `lib/lately.ts`,
+ *          which only `CommandPalette` imports — and the palette is already
+ *          behind `lazy()`. Small, and the right shape: the merge is read
+ *          when somebody opens ⌘O, not when a canvas loads.
+ *   1,253  NET
+ *
+ * **What is left is genuinely eager, and this is the sentence for it.**
+ * Opening a canvas IS the act that writes the mark, so the write cannot be
+ * deferred behind a boundary without either delaying it or paying a second
+ * chunk fetch on every canvas open — which is worse for the person than a
+ * kilobyte. The `arrow.ts` lesson three paragraphs up is why the split that
+ * WAS available was taken first rather than the ceiling being raised for the
+ * gross.
+ *
+ * 661,329 measured, rounded to 661,500 so the margin is 171 bytes — a
+ * comment's worth and not a feature's, which is the whole point of the
+ * round-up: the next feature asks. The goal is 21,329 away, and the first
+ * place to look is still a `lazy()` boundary rather than a smaller feature.
+ *
+ * **The delta survived a rebase unchanged, which is the check worth naming.**
+ * This branch measured 1,253 bytes against `657,915` before modules phase 5
+ * landed, and 1,253 against `660,076` after. A feature whose cost moves when
+ * somebody else's lands is a feature sharing code with it by accident; this
+ * one does not, and re-measuring both ends after the rebase is how you know
+ * rather than assume. (This machine also reads ~76 bytes above the one that
+ * wrote 660,000 above, which is why the number here comes from subtracting
+ * two readings taken on the SAME machine.)
+ *
+ * Two late movements, both worth naming because they pull opposite ways. **+32
+ * for lessons.md #54's fix** — the mark's write sequenced after its read so
+ * the two cannot race the claim recovery; a bug a real browser found and three
+ * green test files did not, paid for in a sentence of bytes. **−44 for
+ * deleting `hasNew` from core**, an export whose only caller was its own test:
+ * the clock-free "has anything happened" comparison belongs to #147 step 3's
+ * panel, and a function shipped ahead of its caller is bytes every first visit
+ * downloads to reach nothing.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 660_100;
+export const CEILING = 661_500;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

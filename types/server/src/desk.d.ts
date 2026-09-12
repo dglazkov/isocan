@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, GrantSubject, Group, Pass, Space } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, BadgeKind, Capability, Grant, GrantSubject, Group, Pass, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
  * `BadgeSummary` puts it on the wire — see `core/badge.ts`. */
@@ -526,6 +526,31 @@ export interface Desk {
         pass: PassRecord;
         redeemed: boolean;
     } | null>;
+    /**
+     * **One person's marks, whole** — canvas id → `{ seq, at }`. An actor who
+     * has never looked at anything has no row here, and an empty answer is the
+     * truth about them rather than a fallback.
+     *
+     * Keyed by ACTOR and never by badge: a person on two machines holds two
+     * badges and one actor, and the whole point is that the second machine
+     * finds what the first one saw.
+     */
+    seenOf(actorId: string): Promise<SeenMarks>;
+    /**
+     * **Move one mark, monotonically.** The stored row and the incoming one are
+     * merged with core's `advanceSeen` — a max on the seq and a max on the
+     * instant, independently — and the merged mark is returned, which may be
+     * AHEAD of what was passed in because another machine of this person's got
+     * there first.
+     *
+     * The contract that matters is the same one `redeemPass` states: two
+     * machines racing must converge, and neither may pull the other backwards.
+     * Because the merge is a join on each component, that holds whatever order
+     * the writes land in — but each write must still READ-MODIFY-WRITE without
+     * interleaving, or a lost update undoes it. `CloudDesk` does that with a
+     * transaction, `FileDesk` with its serialized write chain.
+     */
+    markSeen(actorId: string, canvasId: string, mark: SeenMark): Promise<SeenMark>;
     /**
      * Adopt a shelved pre-badge claim onto a badge, once. Returns the row if
      * there was one. First-come: a sessionKey another badge already adopted is

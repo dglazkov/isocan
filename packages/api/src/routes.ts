@@ -46,6 +46,8 @@ import type {
   SpaceLinkResponse,
   SpaceResponse,
   SpacesResponse,
+  SeenMarksResponse,
+  SeenResponse,
   GroupResponse,
   GroupsResponse,
 } from "@isocan/core";
@@ -60,6 +62,8 @@ import {
   spaceGrantRevokeRoute,
   spaceGrantsRoute,
   spaceLinkRoute,
+  SEEN_ROUTE,
+  seenRoute,
   spaceRoute,
   SPACES_ROUTE,
   FILENAME_HEADER,
@@ -439,6 +443,29 @@ export class DaemonRoutes {
 
   listCanvases(): Promise<Canvas[]> {
     return this.request("GET", "/api/projects");
+  }
+
+  // ---- what you have already seen (#147, #134) ----
+  //
+  // Desk state at the home, so this asks the daemon rather than keeping a
+  // local record: the point of the feature is that your other machine finds
+  // what this one saw. `docs/research/2026-09-12-seen-marks.md`.
+
+  /** Your own marks, every canvas, one read. There is deliberately no way to
+   *  ask for anybody else's. */
+  seen(actorId?: string): Promise<SeenMarksResponse> {
+    const query = actorId ? `?actorId=${encodeURIComponent(actorId)}` : "";
+    return this.request("GET", `${SEEN_ROUTE}${query}`);
+  }
+
+  /** Move the mark for one canvas to the head you had in front of you. The
+   *  answer may be AHEAD of what you sent: another machine of yours may have
+   *  got further, and the merge never goes backwards. */
+  markSeen(canvasId: string, seq: number, actorId?: string): Promise<SeenResponse> {
+    return this.request("PUT", seenRoute(canvasId), {
+      seq,
+      ...(actorId ? { actorId } : {}),
+    });
   }
 
   // ---- who may enter a canvas: `isocan share`'s three calls ----

@@ -268,6 +268,9 @@ import {
   tallyOutcomes,
   inboxOn,
   inboxNewestFirst,
+  newSince,
+  latelyOrder,
+  movedSince,
   inboxTally,
   inboxLine,
   namesFor,
@@ -8257,11 +8260,15 @@ persona
  * for the agent, moved so the person gets the identical answer rather than a
  * second one written later.
  *
- * **A list, not a count.** Read state lives in the browser's `localStorage`
- * per canvas per actor, so a count here would either be wrong or would need a
- * durable read marker — an operation, and one whose cheap form the research
- * recommends designing before anybody writes it. Until then this says what
- * exists and lets you decide what is new.
+ * **A list, and now a count you can trust on a second machine.** Read state
+ * used to be the browser's `localStorage` alone, so a count here would have
+ * been either wrong or a lie about somewhere else. `--new` reads the seen-mark
+ * the HOME keeps — one row per person per canvas, `docs/research/
+ * 2026-09-12-seen-marks.md` — and the tally line carries the same number.
+ *
+ * Best-effort, for the reason one unreachable canvas must not empty the list:
+ * a home that cannot answer leaves the marks empty and everything reads as
+ * new, which is honest, where going quiet would not be.
  */
 /**
  * **Where a document stands**, read out of its own front matter.
@@ -8345,14 +8352,92 @@ async function writeJsonCanvas(
   }
 }
 
+/**
+ * **What you have already seen, and where you were lately** — one fact, read
+ * two ways (`docs/research/2026-09-12-seen-marks.md`).
+ *
+ * The mark is `(person, canvas) → { seq, at }`, kept on the home's DESK and
+ * not on any canvas's log: it fails all three of the canvas-is-the-record
+ * tests on purpose — it cannot be undone, everyone must NOT see it, and
+ * offline it degrades harmlessly. So there is no op for it, the vocabulary
+ * stayed at 33, and a `read`-rung viewer is never refused their own marks.
+ *
+ * **The read is the default and the write is the flag**, deliberately. A verb
+ * that wrote just because somebody typed it would be a verb you cannot use to
+ * look; and the write is a claim about attention, so it should be asked for.
+ *
+ * **Only a visit writes a mark.** That one rule is what lets a single fact
+ * serve two readers — the inbox reads "what has arrived since", the switcher
+ * reads "where I was" — and a sweep that marked canvases nobody opened would
+ * quietly break the second.
+ */
+program
+  .command("seen")
+  .description("Canvases you have looked at, most recent first — and `--mark` to say you have")
+  .option("--mark", "mark a canvas seen up to its head: the one thing that writes")
+  .option("--canvas <canvas>", "which one to mark (default: the bound canvas)")
+  .option("-n, --limit <n>", "how many to list (default 20)")
+  .action(
+    run(async (opts: { mark?: boolean; canvas?: string; limit?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.mark) {
+        const canvas = await resolveCanvas(
+          opts.canvas !== undefined ? { ...ctx, canvasRef: opts.canvas } : ctx,
+        );
+        // The head this command actually had in front of it, which is what a
+        // high-water mark means. The home merges it monotonically and answers
+        // with the mark as it now stands — possibly AHEAD, because another
+        // machine of yours may have got further.
+        const snapshot = await ctx.client.snapshot(canvas.id);
+        const { mark } = await ctx.client.markSeen(canvas.id, snapshot.lastSeq, ctx.actor.id);
+        if (ctx.json) return printJson({ canvasId: canvas.id, title: canvas.title, mark });
+        return console.log(`${canvas.title} — seen up to seq ${mark.seq}`);
+      }
+      const [{ marks }, canvases] = await Promise.all([
+        ctx.client.seen(ctx.actor.id),
+        ctx.client.listCanvases(),
+      ]);
+      const byId = new Map(canvases.map((canvas) => [canvas.id, canvas]));
+      const rows = latelyOrder(marks).slice(0, Number(opts.limit ?? 20));
+      if (ctx.json) {
+        return printJson(
+          rows.map((row) => ({
+            canvasId: row.canvasId,
+            title: byId.get(row.canvasId)?.title,
+            ...row.mark,
+            // A canvas whose last write is newer than your mark has moved
+            // since — the canvas ROW answers that without a snapshot each.
+            moved: byId.has(row.canvasId) ? movedSince(row.mark, byId.get(row.canvasId)!) : undefined,
+          })),
+        );
+      }
+      if (rows.length === 0) {
+        return console.log(
+          "nothing marked yet — `isocan seen --mark` after you have read a canvas, " +
+            "and the web app marks one when you open it",
+        );
+      }
+      const now = Date.now();
+      for (const row of rows) {
+        const canvas = byId.get(row.canvasId);
+        // A canvas this home no longer holds still had a mark; say the id
+        // rather than dropping the row, which would be a silent short list.
+        const where = canvas?.title ?? row.canvasId;
+        const moved = canvas && movedSince(row.mark, canvas) ? " · moved since" : "";
+        console.log(`${where} — seen ${ago(row.mark.at, now)} ago${moved}`);
+      }
+    }),
+  );
+
 program
   .command("inbox")
   .description("Comments addressed to you, across every canvas here")
   .option("--canvas <canvas>", "just this one")
   .option("--mentions", "only where somebody named you — not the Chat, not threads you are in")
+  .option("--new", "only what has arrived since you last looked (`isocan seen`)")
   .option("-n, --limit <n>", "how many to show (default 20)")
   .action(
-    run(async (opts: { canvas?: string; mentions?: boolean; limit?: string }, cmd: Command) => {
+    run(async (opts: { canvas?: string; mentions?: boolean; new?: boolean; limit?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const canvases = opts.canvas
         ? [await resolveCanvas({ ...ctx, canvasRef: opts.canvas })]
@@ -8375,12 +8460,32 @@ program
           ...inboxOn(snapshot.canvas, ctx.actor, names, canvas.id, canvas.title, snapshot.joined),
         );
       }
-      const wanted = opts.mentions ? entries.filter((e) => e.reason === "mentioned") : entries;
+      /**
+       * **What is NEW, from the mark the home keeps** (#147 step 2). A second
+       * function over the entries the routing rule already produced, never a
+       * second filter inside it: "is this for me" has one definition and this
+       * asks a different question — have I looked since. The marks are one
+       * read for every canvas, and a canvas with no mark is entirely new,
+       * which is exactly what an inbox should say about one you have never
+       * opened — the case a browser's `localStorage` could not see.
+       *
+       * Best-effort, for the same reason one unreachable canvas must not
+       * empty the list: a home that cannot answer leaves the marks empty, and
+       * an inbox that shows everything as new is honest, where one that went
+       * quiet would not be.
+       */
+      const { marks } = await ctx.client.seen(ctx.actor.id).catch(() => ({ marks: {} }));
+      const byReason = opts.mentions ? entries.filter((e) => e.reason === "mentioned") : entries;
+      const wanted = opts.new ? newSince(byReason, marks) : byReason;
       const ordered = inboxNewestFirst(wanted).slice(0, Number(opts.limit ?? 20));
       if (ctx.json) return printJson(ordered);
       if (ordered.length === 0) {
         return console.log(
-          opts.mentions ? "nobody has named you" : "nothing addressed to you",
+          opts.new
+            ? "nothing new since you last looked"
+            : opts.mentions
+              ? "nobody has named you"
+              : "nothing addressed to you",
         );
       }
       for (const entry of ordered) {
@@ -8391,9 +8496,14 @@ program
         );
       }
       const tally = inboxTally(wanted);
+      // The count stays PER REASON — the 29 Aug reading is why: the Chat was
+      // twenty times the volume of being named, so one number would say
+      // nothing. "New" is a fourth number beside them rather than a
+      // replacement, and it is omitted under `--new`, where every row is.
+      const fresh = opts.new ? "" : ` · ${newSince(wanted, marks).length} new`;
       console.log(
         `\n${tally.mentioned} named you · ${tally["main-thread"]} in the Chat · ` +
-          `${tally["in-your-thread"]} in threads you are in`,
+          `${tally["in-your-thread"]} in threads you are in${fresh}`,
       );
     }),
   );

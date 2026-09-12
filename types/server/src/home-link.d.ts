@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, GroupResponse, GroupsResponse, UndoRedoRequest } from "../../core/src/index.js";
+import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupsResponse, UndoRedoRequest } from "../../core/src/index.js";
 import type { Engine } from "./engine.js";
 import type { PresenceHub } from "./presence.js";
 import { type HomeBuild } from "./build.js";
@@ -102,6 +102,17 @@ export interface HomeConnection {
      * actor acting, as a grant write does, so the home asks `own` of the person
      * and not of the machine.
      */
+    /**
+     * The seen routes, forwarded (#147, #134) — for the space routes' reason
+     * and one more of their own. A seen-mark is desk state at the home, so a
+     * replica holds no row for it; and the whole point of the feature is that
+     * your OTHER machine finds what this one saw, which it can only do if both
+     * write to the same desk. A replica that answered from its own ledger would
+     * hand back this laptop's marks, which is short, plausible and exactly the
+     * per-browser answer seen-marks exist to replace.
+     */
+    seen(actor?: Actor): Promise<SeenMarksResponse>;
+    markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
     spaces(): Promise<SpacesResponse>;
     createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
     deleteSpace(spaceId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
@@ -647,6 +658,8 @@ export declare class HomeLink implements HomeConnection {
     attest(body: AttestRequest): Promise<AttestResponse>;
     badges(): Promise<BadgesResponse>;
     killBadge(badgeId: string): Promise<KillBadgeResponse>;
+    seen(actor?: Actor): Promise<SeenMarksResponse>;
+    markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
     spaces(): Promise<SpacesResponse>;
     createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
     deleteSpace(spaceId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
