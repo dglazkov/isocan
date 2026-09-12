@@ -1,7 +1,18 @@
 import { randomBytes } from "node:crypto";
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
-import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "@isocan/core";
+import type {
+  ActorClaim,
+  Attestation,
+  Capability,
+  Grant,
+  GrantSubject,
+  Group,
+  SeenMark,
+  SeenMarks,
+  Space,
+} from "@isocan/core";
 import {
+  advanceSeen,
   groupSubject,
   isCapability,
   isGroupLive,
@@ -55,6 +66,25 @@ export const SPACES = "spaces";
  * collection: it reads one document per `group:` row, by id.
  */
 export const GROUPS = "groups";
+/**
+ * `seen/{actorId}` — the desk's sixth row (#147, #134): what one person has
+ * already looked at, `{ marks: { <canvasId>: { seq, at } } }`.
+ *
+ * **One document per PERSON rather than per (person, canvas)**, and the
+ * reason is the read it exists for: the inbox and the switcher both want
+ * every mark this person holds, in one go, before they can say anything at
+ * all. A row per pair would make that a collection query on every home
+ * screen; a document per person is one `get`, and the number of canvases one
+ * person visits is small and bounded by their own attention.
+ *
+ * **Never queried** — only read and written by actor id — so there is no
+ * index here and no denormalized array, and there is deliberately no way to
+ * ask this collection who has seen a canvas. That absence is the privacy
+ * guarantee (D5): the shape of the ledger is what makes read receipts
+ * something somebody would have to go and build rather than something they
+ * could accidentally expose.
+ */
+export const SEEN = "seen";
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -656,6 +686,32 @@ export class CloudDesk implements Desk {
     });
     this.cachedContentKey = key;
     return key;
+  }
+
+  // ---- seen-marks (#147, #134) ----
+
+  async seenOf(actorId: string): Promise<SeenMarks> {
+    const doc = await this.db.collection(SEEN).doc(actorId).get();
+    const marks = doc.data()?.["marks"];
+    return (marks ?? {}) as SeenMarks;
+  }
+
+  /**
+   * A transaction, for `redeemPass`'s reason rather than its own: the merge
+   * itself is order-independent (`advanceSeen` is a join on each half), but a
+   * read-modify-write that interleaves with another loses one of the two
+   * updates entirely, and a lost update is the one way a mark can go
+   * backwards.
+   */
+  async markSeen(actorId: string, canvasId: string, mark: SeenMark): Promise<SeenMark> {
+    const ref = this.db.collection(SEEN).doc(actorId);
+    return this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      const marks = (doc.data()?.["marks"] ?? {}) as SeenMarks;
+      const merged = advanceSeen(marks[canvasId], mark);
+      tx.set(ref, { marks: { ...marks, [canvasId]: merged } });
+      return merged;
+    });
   }
 
   // ---- internals ----

@@ -7,6 +7,8 @@ import type {
   GrantSubject,
   Group,
   Pass,
+  SeenMark,
+  SeenMarks,
   Space,
 } from "@isocan/core";
 
@@ -606,6 +608,48 @@ export interface Desk {
     at: string,
     by: string,
   ): Promise<{ pass: PassRecord; redeemed: boolean } | null>;
+
+  // ---- seen-marks: what one person has already looked at (#147, #134) ----
+  //
+  // The SIXTH ledger, `seen/{actorId}`, and the one whose reason for being
+  // here is the sharpest: it is the first row that is private FOR A PERSON
+  // rather than private to the innkeeper. A seen-mark fails all three of the
+  // context project's tests on purpose — it cannot be undone, everyone must
+  // NOT see it, and offline it degrades harmlessly — which is the proof that
+  // it is not canvas state and the reason there is no op for it.
+  //
+  // Putting it behind this seam is what makes "no other replica can learn
+  // what you have read" a fact about imports rather than a convention: there
+  // is no replication path out of the desk, and no wire shape anywhere
+  // returns another actor's marks. `docs/research/2026-09-12-seen-marks.md`,
+  // D3 and D5.
+
+  /**
+   * **One person's marks, whole** — canvas id → `{ seq, at }`. An actor who
+   * has never looked at anything has no row here, and an empty answer is the
+   * truth about them rather than a fallback.
+   *
+   * Keyed by ACTOR and never by badge: a person on two machines holds two
+   * badges and one actor, and the whole point is that the second machine
+   * finds what the first one saw.
+   */
+  seenOf(actorId: string): Promise<SeenMarks>;
+
+  /**
+   * **Move one mark, monotonically.** The stored row and the incoming one are
+   * merged with core's `advanceSeen` — a max on the seq and a max on the
+   * instant, independently — and the merged mark is returned, which may be
+   * AHEAD of what was passed in because another machine of this person's got
+   * there first.
+   *
+   * The contract that matters is the same one `redeemPass` states: two
+   * machines racing must converge, and neither may pull the other backwards.
+   * Because the merge is a join on each component, that holds whatever order
+   * the writes land in — but each write must still READ-MODIFY-WRITE without
+   * interleaving, or a lost update undoes it. `CloudDesk` does that with a
+   * transaction, `FileDesk` with its serialized write chain.
+   */
+  markSeen(actorId: string, canvasId: string, mark: SeenMark): Promise<SeenMark>;
 
   // ---- the migration shelf; it dies when it empties ----
 

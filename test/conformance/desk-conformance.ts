@@ -782,7 +782,58 @@ export function deskConformance(
         expect(new Set(racing)).toEqual(new Set([first]));
       }),
     );
+
+    /**
+     * **Seen-marks** (#147, #134) — the desk's sixth ledger, and the first row
+     * that is private for a PERSON rather than to the innkeeper.
+     *
+     * The property both backings must have is the one `redeemPass` has, for
+     * the same reason and by different means: a read-modify-write that
+     * interleaves loses an update, and a lost update is the only way a mark
+     * can go backwards. A serialized chain on one, a transaction on the other.
+     * The merge itself is order-independent, so the racing case below is
+     * deterministic about its ANSWER while being deliberately nondeterministic
+     * about the order.
+     */
+    test(
+      "a seen-mark merges monotonically, concurrent writers included",
+      withDesk(async ({ desk }) => {
+        expect(await desk.seenOf("usr_a"), "nobody has looked at anything yet").toEqual({});
+
+        const first = await desk.markSeen("usr_a", "prj_1", { seq: 4, at: ts(10) });
+        expect(first).toEqual({ seq: 4, at: ts(10) });
+
+        // A stale client cannot pull it back, and the revisit still counts.
+        expect(await desk.markSeen("usr_a", "prj_1", { seq: 2, at: ts(11) })).toEqual({
+          seq: 4,
+          at: ts(11),
+        });
+
+        // Three at once, in whatever order they land: the answer is the
+        // furthest seq and the latest instant, and no write is lost.
+        await Promise.all([
+          desk.markSeen("usr_a", "prj_1", { seq: 9, at: ts(12) }),
+          desk.markSeen("usr_a", "prj_1", { seq: 7, at: ts(14) }),
+          desk.markSeen("usr_a", "prj_1", { seq: 8, at: ts(13) }),
+        ]);
+        expect(await desk.seenOf("usr_a")).toEqual({ prj_1: { seq: 9, at: ts(14) } });
+
+        // One ledger per person, and a canvas is a key inside it.
+        await desk.markSeen("usr_a", "prj_2", { seq: 1, at: ts(9) });
+        await desk.markSeen("usr_b", "prj_1", { seq: 99, at: ts(20) });
+        expect(Object.keys(await desk.seenOf("usr_a")).sort()).toEqual(["prj_1", "prj_2"]);
+        expect(await desk.seenOf("usr_b"), "nobody else's marks leak in").toEqual({
+          prj_1: { seq: 99, at: ts(20) },
+        });
+      }),
+    );
   });
+}
+
+/** An instant, for the seen-marks case: readable, ordered, and the same on
+ *  both backings. */
+function ts(hour: number): string {
+  return new Date(Date.UTC(2026, 8, 12, hour)).toISOString();
 }
 
 // ---- fixtures ----

@@ -41,6 +41,8 @@ import type {
   SpaceLinkResponse,
   SpaceResponse,
   SpacesResponse,
+  SeenMarksResponse,
+  SeenResponse,
   GroupResponse,
   GroupsResponse,
 } from "@isocan/core";
@@ -55,6 +57,8 @@ import {
   spaceGrantRevokeRoute,
   spaceGrantsRoute,
   spaceLinkRoute,
+  SEEN_ROUTE,
+  seenRoute,
   spaceRoute,
   SPACES_ROUTE,
   badgeRoute,
@@ -390,6 +394,22 @@ export function fetchCommands(): Promise<SlashCommand[]> {
  */
 export function listCanvases(): Promise<Canvas[]> {
   return request("GET", canvasesRoute("here"));
+}
+
+/**
+ * **What you have already seen** (#147, #134) — your own marks, every canvas,
+ * one read. Desk state at the home, so this is asked rather than remembered:
+ * the point of the feature is that your other machine finds what this one
+ * saw. There is deliberately no way to ask for anybody else's.
+ */
+export function fetchSeen(actorId: string): Promise<SeenMarksResponse> {
+  return request("GET", `${SEEN_ROUTE}?actorId=${encodeURIComponent(actorId)}`);
+}
+
+/** Move the mark for one canvas to the head you had in front of you. Called
+ *  on a VISIT and nowhere else — see `lib/seen.ts`. */
+export function putSeen(canvasId: string, seq: number, actorId: string): Promise<SeenResponse> {
+  return request("PUT", seenRoute(canvasId), { seq, actorId });
 }
 
 /**

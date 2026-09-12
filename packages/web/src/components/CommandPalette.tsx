@@ -8,6 +8,7 @@ import { availableActions, type Action, type ActionContext } from "../lib/action
 import { useCanEdit } from "../lib/capability.ts";
 import { listCanvases } from "../lib/api.ts";
 import { readRecents } from "../lib/recents.ts";
+import { latelyIds } from "../lib/lately.ts";
 import { switchCanvas } from "../lib/canvasswitch.ts";
 
 /**
@@ -80,7 +81,14 @@ export function CommandPalette({
   }, [mode]);
 
   const canvases = useCanvasList(canvasId, mode === "canvases" || query.trim().length > 0);
-  const recents = useMemo(() => readRecents(), []);
+  /**
+   * **Lately, shared across your machines** (#134 walk step 4). The home's
+   * seen-marks, newest visit first, and then whatever this browser remembers
+   * that they have no mark for — so a person on two machines finds the same
+   * canvases at the top, and a person whose daemon is down still finds the
+   * ones they were just on.
+   */
+  const recents = useMemo(() => latelyIds(actor.id), [actor.id]);
 
   /**
    * **Which canvases this window searches: the list, or the list and the
@@ -128,7 +136,7 @@ export function CommandPalette({
    */
   const rows = useMemo((): Row[] => {
     if (mode === "canvases") {
-      return rankCanvases(canvases, query, recents.map((r) => r.id), canvasId, scope).map((row) => ({
+      return rankCanvases(canvases, query, recents, canvasId, scope).map((row) => ({
         kind: "canvas" as const,
         row,
       }));
@@ -146,7 +154,7 @@ export function CommandPalette({
     // face is the place for the list, and it is one row away.
     const jumps =
       terms.length > 0
-        ? rankCanvases(canvases, query, recents.map((r) => r.id), canvasId, scope).slice(0, INLINE_JUMPS)
+        ? rankCanvases(canvases, query, recents, canvasId, scope).slice(0, INLINE_JUMPS)
         : [];
     return [
       ...actions.map((action) => ({ kind: "action" as const, action })),

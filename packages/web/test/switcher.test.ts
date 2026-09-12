@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { SHORTCUTS, keyFor } from "@isocan/core";
+import { SHORTCUTS, keyFor, latelyOrder } from "@isocan/core";
 import { ACTIONS, availableActions } from "../src/lib/actions.ts";
 import { crossesCover } from "../src/lib/keys.ts";
 import { RECENT_LIMIT, rememberVisit } from "../src/lib/recents.ts";
@@ -53,6 +53,58 @@ describe("what this browser was on lately", () => {
     for (let i = 0; i < RECENT_LIMIT + 5; i++) list = rememberVisit(list, { id: `c_${i}`, title: `${i}` });
     expect(list).toHaveLength(RECENT_LIMIT);
     expect(list[0]!.id).toBe(`c_${RECENT_LIMIT + 4}`);
+  });
+});
+
+/**
+ * **And the half that is not this browser's** (#134 walk step 4, #147).
+ *
+ * "Lately" is the home's seen-marks now, so a person on two machines finds
+ * the same canvases at the top of ⌘O. What must hold is that it is the home
+ * FIRST and the browser UNDERNEATH: the durable answer leads, and a daemon
+ * that cannot answer costs an ordering rather than the switcher.
+ */
+describe("lately, shared across your machines", () => {
+  const marks = {
+    prj_old: { seq: 40, at: "2026-09-10T10:00:00.000Z" },
+    prj_new: { seq: 2, at: "2026-09-12T10:00:00.000Z" },
+  };
+
+  it("leads with the home's marks, newest visit first", () => {
+    expect(latelyOrder(marks).map((row) => row.canvasId)).toEqual(["prj_new", "prj_old"]);
+  });
+
+  it("keeps the write on the visit and nowhere else", () => {
+    // The one rule that lets the inbox and the switcher read one fact. A
+    // second caller is how "lately" starts naming canvases nobody opened.
+    const callers = [...bare(read("../src/lib/seen.ts")).matchAll(/putSeen\(/g)];
+    expect(callers).toHaveLength(1);
+    expect(page, "the canvas page is the visit").toContain("noteVisit(canvasId");
+  });
+
+  it("reads BEFORE it writes, so the two do not race the claim recovery", () => {
+    /**
+     * lessons.md #54, found by driving a real browser on the day this was
+     * built. `lib/api.ts` heals a `not-your-actor` once and replays, guarded
+     * by a single in-flight flag — so of two requests fired in the same tick
+     * only one may heal. Fired together, the READ healed and the WRITE died,
+     * silently, because a mark is deliberately allowed to fail quietly: every
+     * canvas opened after the first page load recorded nothing.
+     */
+    const seen = bare(read("../src/lib/seen.ts"));
+    expect(seen).toMatch(/loadSeen\(actorId\)\s*\.then\(\(\) => putSeen\(/);
+    expect(page, "and the page asks for one thing, not two in a row").not.toContain("loadSeen(");
+  });
+
+  it("reads the marks for the person, not for the browser", () => {
+    expect(bare(read("../src/lib/lately.ts"))).toContain("seenMarks(actorId)");
+    expect(palette).toContain("latelyIds(actor.id)");
+  });
+
+  it("falls back to this browser's recents underneath", () => {
+    // Offline the marks are empty and the recents are the whole list, which
+    // is what the 6 Sep design rested on and must keep resting on.
+    expect(bare(read("../src/lib/lately.ts"))).toContain("readRecents()");
   });
 });
 
@@ -113,11 +165,14 @@ describe("the doors", () => {
 });
 
 describe("the list", () => {
-  it("is ranked by core, with the recents handed in", () => {
+  it("is ranked by core, with lately handed in", () => {
     // One ranking for the inline "Switch to" group, the switcher's face, and
     // the count of what the list scope hides: two matchers would be two
     // answers to "which canvas did I mean".
     expect(palette.match(/rankCanvases\(/g)?.length).toBe(3);
+    // `latelyIds` leads with the home's marks and falls back to these; the
+    // palette still reads them directly for the offline stand-in list.
+    expect(palette).toContain("latelyIds(actor.id)");
     expect(palette).toContain("readRecents()");
   });
 
@@ -128,7 +183,7 @@ describe("the list", () => {
   });
 
   it("never offers the canvas you are on", () => {
-    expect(palette).toMatch(/rankCanvases\(canvases, query, recents\.map\(\(r\) => r\.id\), canvasId, scope\)/);
+    expect(palette).toMatch(/rankCanvases\(canvases, query, recents, canvasId, scope\)/);
   });
 
   it("lights the matched letters", () => {

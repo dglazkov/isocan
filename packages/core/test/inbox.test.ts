@@ -175,6 +175,20 @@ describe("both surfaces ask the same question", () => {
     expect(cli).toContain("namesFor(");
   });
 
+  it("and asks 'what is new' as a SECOND question, not a clause inside it", () => {
+    /**
+     * Seen-marks (#147 step 2, 12 Sep 2026). "Is this for me" has one
+     * definition; "have I looked since" is a different question, and folding
+     * it into `reasonFor` would mean a parked agent's summons started
+     * depending on whether somebody had read a canvas. `newSince` takes the
+     * entries the rule already produced.
+     */
+    const inbox = read("../src/inbox.ts");
+    expect(inbox, "the routing rule knows nothing about read state").not.toContain("SeenMark");
+    const cli = read("../../cli/src/main.ts");
+    expect(cli).toContain("newSince(");
+  });
+
   it("the three reasons are spelled once, here", () => {
     // If a surface grows its own list of why a comment is yours, the two lists
     // drift and the drift is invisible.

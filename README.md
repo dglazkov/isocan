@@ -179,10 +179,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   into `⌘K` itself also lists the matches under the actions, so the common
   trip is three letters and Enter with no mode to know about. The canvas you
   leave recedes and the one you chose comes forward in its place; the bar and
-  the rail stay put, because they are the same chrome. "Lately" is this
-  browser's memory (the daemon sees writes, not visits), so the list paints
-  before the canvas list arrives and still works offline, where it is exactly
-  the canvases the replica can open. Archived canvases are out of it unless
+  the rail stay put, because they are the same chrome. "Lately" is the
+  **seen-marks the home keeps** (#134, #147) — one row per person per canvas,
+  written when you open one — so the same canvases lead the list on your
+  laptop and your desktop. Underneath it, and instead of it when the daemon
+  cannot answer, is this browser's own memory of the canvases it was on, so
+  the list paints before the canvas list arrives and still works offline,
+  where it is exactly the canvases the replica can open. Archived canvases are out of it unless
   you tick **Include archived** under the field (or press `⌥A`), which is the
   same scope as `canvas list --with-archived` and resets every time the window
   opens; a line under the results says when the shelf holds matches you are
@@ -488,11 +491,27 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   picker offers it there. So a brand-new space is never empty: @-mention the
   agent, or just write in its main thread, and `wait` wakes, names the canvas
   that summoned it, and hands back a `--canvas` command that lands there.
+- **What is addressed to you**: `isocan inbox` lists every comment addressed to
+  you across every canvas at this home — named by somebody, in the Chat, or in
+  a thread you are already part of — newest first, with the command to reply to
+  each. It is the same rule `isocan wait` parks on, one function in core, so a
+  parked agent and the list can never disagree about what is for you.
+  `--mentions` narrows it to where somebody actually named you.
+- **What is NEW, on every machine you work from** (#147, #134): a **seen-mark**
+  — one row per person per canvas, the oplog head you had in front of you and
+  when — kept by the home rather than by a browser. `isocan inbox --new` shows
+  what arrived since; `isocan seen` lists the canvases you have been on, most
+  recent first, saying which have moved since; `isocan seen --mark` says you
+  have read one, and opening a canvas in the app does the same. A mark never
+  goes backwards and two machines racing converge. It is **not** a read
+  receipt: nobody else can see your marks, there is no route that returns
+  somebody else's, and being seen is not the canvas's business — which is why
+  a mark is not an operation and is not in the canvas's history.
 - **New comments announce themselves**: one arriving raises a toast naming who
   wrote it; clicking it flies to the pin. Until you read it the pin wears an
   unread badge, its author's face is badged in the pile, and the tab title
-  carries the count. Read state is per-viewer, kept in the browser — so
-  reopening a canvas shows what happened while you were away.
+  carries the count. Which THREADS you have read is per viewer, kept in the
+  browser — so reopening a canvas shows what happened while you were away.
 - **Two parties, two names**: the person who owns the machine, and the agents
   working on it. `~/.isocan/identity.json` is yours; an agent claims an actor
   against the session id its harness exports (`isocan identity --session` —
