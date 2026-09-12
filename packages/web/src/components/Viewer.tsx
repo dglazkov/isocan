@@ -48,6 +48,8 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
   const canvas = useCanvasStore((s) => s.canvas);
   const title = useCanvasStore((s) => s.project?.title ?? null);
   const connection = useCanvasStore((s) => s.connection);
+  // The home's own sentence about a canvas it took down (operator phase 2).
+  const takenDown = useCanvasStore((s) => s.takenDown);
 
   // The stranger path connects here (no actor — nobody to announce); the
   // CanvasPage path arrives already connected, and reconnecting would drop a
@@ -114,6 +116,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
     connection === "refused" ||
     connection === "withdrawn" ||
     connection === "gone" ||
+    connection === "taken-down" ||
     connection === "absent"
   ) {
     return (
@@ -122,7 +125,15 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
           ? "This canvas was deleted."
           : connection === "withdrawn"
             ? "Your access to this canvas was withdrawn."
-            : "This canvas will not have you."}
+            : // The home's own sentence, with the date, the reason and the
+              // address to write to (operator phase 2). The viewer is where a
+              // stranger with a view link lands, so this is the surface on
+              // which *this was removed, and here is who to ask* is most often
+              // read by the person who needs it.
+              connection === "taken-down"
+              ? (takenDown?.sentence ??
+                "This canvas was taken down by the operator of this home.")
+              : "This canvas will not have you."}
       </div>
     );
   }

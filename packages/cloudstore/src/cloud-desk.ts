@@ -3,6 +3,7 @@ import type { DocumentData, Firestore } from "@google-cloud/firestore";
 import type {
   ActorClaim,
   Attestation,
+  CanvasTakedown,
   Capability,
   Grant,
   GrantSubject,
@@ -23,6 +24,7 @@ import {
   SHELF,
   upsertAttestation,
 } from "@isocan/core";
+import { liveAdmission } from "@isocan/server";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
@@ -103,6 +105,23 @@ export const SEEN = "seen";
  * reads it over the wire and nobody else does.
  */
 export const OPERATOR = "operator";
+
+/**
+ * `takedowns/{canvasId}` (operator phase 2) — **keyed by the canvas**, which
+ * is the one difference from the ledger beside it.
+ *
+ * The ledger is acts and only grows; this is standing state and there is
+ * exactly one answer per canvas, so the document id IS the question. A lift
+ * merges onto the same document rather than adding a row: two rows would make
+ * "is this canvas down" a query that could return both, and the door asks it
+ * on a request path.
+ *
+ * One query, single-field and served by the automatic index — `liftedAt ==
+ * null` for the ones in force. `liftedAt` is therefore written explicitly as
+ * `null` rather than omitted, because Firestore cannot query for a field's
+ * absence.
+ */
+export const TAKEDOWNS = "takedowns";
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -323,7 +342,11 @@ export class CloudDesk implements Desk {
     capability?: Capability,
   ): Promise<void> {
     await this.mutate(badgeId, (badge) => {
-      if (badge.admissions.some((a) => a.canvasId === canvasId)) return null;
+      // An admission that has RUN OUT is replaced, not kept — the file desk's
+      // comment says why, and the two backings must answer this identically or
+      // a look behaves differently on a laptop and on the hosted home.
+      const existing = badge.admissions.find((a) => a.canvasId === canvasId);
+      if (existing && liveAdmission(existing)) return null;
       // Spread-in whenever it is not edit (`narrowed`): absent means edit
       // everywhere, and Firestore refuses an explicit `undefined` besides.
       const admission: Admission = {
@@ -332,7 +355,10 @@ export class CloudDesk implements Desk {
         at: new Date().toISOString(),
         ...(narrowed(capability) ? { capability } : {}),
       };
-      return { ...badge, admissions: [...badge.admissions, admission] };
+      return {
+        ...badge,
+        admissions: [...badge.admissions.filter((a) => a.canvasId !== canvasId), admission],
+      };
     });
   }
 
@@ -781,6 +807,44 @@ export class CloudDesk implements Desk {
     return found.docs.map((doc) => doc.data() as OperatorAct);
   }
 
+  // ---- takedowns (operator phase 2) ----
+
+  /**
+   * `liftedAt: null` is written explicitly, and it is the whole reason
+   * `takedowns()` below needs no composite index and no in-memory filter:
+   * Firestore has no "field is absent" operator, so a row that expressed "in
+   * force" by omission could only be found by reading every row.
+   */
+  async recordTakedown(row: CanvasTakedown): Promise<void> {
+    // One line, with the collection on it, so `cloud-desk-writers.test.ts` can
+    // resolve this write rather than reporting it as one it cannot vouch for —
+    // the same care `settleOperatorAct` takes, and the same reason.
+    const at = this.db.collection(TAKEDOWNS).doc(row.canvasId);
+    await at.set(jsonSafe({ liftedAt: null, ...row }));
+  }
+
+  /** A merge, not a transaction — one operator, at a browser, one act at a
+   * time; the argument `settleOperatorAct` makes, and there is no second
+   * writer of this document either. */
+  async liftTakedown(
+    canvasId: string,
+    lifted: { at: string; by: string; actId: string },
+  ): Promise<void> {
+    const at = this.db.collection(TAKEDOWNS).doc(canvasId);
+    const patch = { liftedAt: lifted.at, liftedBy: lifted.by, liftedActId: lifted.actId };
+    await at.set(jsonSafe(patch), { merge: true });
+  }
+
+  async takedownFor(canvasId: string): Promise<CanvasTakedown | null> {
+    const doc = await this.db.collection(TAKEDOWNS).doc(canvasId).get();
+    return doc.exists ? asTakedown(doc.data()!) : null;
+  }
+
+  async takedowns(): Promise<CanvasTakedown[]> {
+    const found = await this.db.collection(TAKEDOWNS).where("liftedAt", "==", null).get();
+    return found.docs.map((doc) => asTakedown(doc.data()));
+  }
+
   // ---- internals ----
 
   private async shelf(): Promise<Record<string, ActorClaim>> {
@@ -936,6 +1000,29 @@ function toPass(data: DocumentData): PassRecord {
     ...(typeof data["actorId"] === "string" ? { actorId: data["actorId"] } : {}),
     ...(typeof data["redeemedAt"] === "string" ? { redeemedAt: data["redeemedAt"] } : {}),
     ...(typeof data["redeemedBy"] === "string" ? { redeemedBy: data["redeemedBy"] } : {}),
+  };
+}
+
+/**
+ * A takedown document, back as a row — and the `null`s dropped.
+ *
+ * `liftedAt: null` is a storage detail this query needs (see {@link
+ * TAKEDOWNS}); a row handed back with it set would fail `inForce`, which asks
+ * whether the field is `undefined`. Field by field rather than a cast, so a
+ * `null` that arrives in any of the three lift fields cannot reach a caller
+ * that will compare it to a string.
+ */
+function asTakedown(data: DocumentData): CanvasTakedown {
+  return {
+    canvasId: data["canvasId"] as string,
+    at: data["at"] as string,
+    reason: data["reason"] as CanvasTakedown["reason"],
+    by: data["by"] as string,
+    actId: data["actId"] as string,
+    ...(typeof data["note"] === "string" ? { note: data["note"] } : {}),
+    ...(typeof data["liftedAt"] === "string" ? { liftedAt: data["liftedAt"] } : {}),
+    ...(typeof data["liftedBy"] === "string" ? { liftedBy: data["liftedBy"] } : {}),
+    ...(typeof data["liftedActId"] === "string" ? { liftedActId: data["liftedActId"] } : {}),
   };
 }
 

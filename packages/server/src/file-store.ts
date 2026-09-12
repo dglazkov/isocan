@@ -97,7 +97,25 @@ export class FileStore implements Store {
     return (await readJson<Canvas>(p.canvasMetaFile(this.home, id))) !== null;
   }
 
+  async takenDownAt(id: string): Promise<string | null> {
+    return (await readJson<{ at: string }>(p.takedownFile(this.home, id)))?.at ?? null;
+  }
+
+  async setTakenDown(id: string, at: string | null): Promise<void> {
+    if (at === null) {
+      await fs.rm(p.takedownFile(this.home, id), { force: true });
+      return;
+    }
+    await writeFileAtomic(p.takedownFile(this.home, id), pretty({ at }));
+  }
+
   async load(id: string): Promise<LoadedCanvas | null> {
+    // **Exactly where `deleted` refuses on the other backing**, and before any
+    // bytes are read: a canvas this home has stopped serving is not opened by
+    // anything, including the content origin's `getSnapshot` on the serve path
+    // (operator phase 2). The DIRECTORY is untouched — that is the whole
+    // difference from a delete, and it is what `--lift` walks back into.
+    if ((await this.takenDownAt(id)) !== null) return null;
     const record = await readJson<Canvas>(p.canvasMetaFile(this.home, id));
     if (!record) return null;
     const snapshot = await readJson<CanvasSnapshotFile>(p.canvasFile(this.home, id));

@@ -509,6 +509,38 @@ img { height: auto; }
     filter 0.14s ease;
 }
 /**
+ * **Taken down: still here, and visibly not open** (operator phase 2; journey
+ * 4 step 3 — *the canvas is there, greyed, with the same sentence, and it does
+ * not open*).
+ *
+ * Greyed rather than hidden, because a canvas that vanished from its owner's
+ * own list is indistinguishable from one she lost. Greyed rather than merely
+ * annotated, because the card has no link in it any more and a card that looks
+ * clickable and is not is a worse lie than a card that looks disabled.
+ *
+ * The cursor is the tell that costs nothing: `default`, not `pointer`, on the
+ * whole card. The hover lift below still applies — the peek still opens, and
+ * what happened here before it came down is exactly what somebody reading this
+ * card wants.
+ */
+.canvas-card.taken-down {
+  background: var(--chip);
+  cursor: default;
+}
+.canvas-card.taken-down h3 {
+  color: var(--ink-soft);
+}
+/** The home's own sentence, in the place the description would be. Not
+ * `danger`-coloured: this is an explanation, not an error, and painting it red
+ * would tell the owner she did something wrong. */
+.card-taken-down {
+  margin: 4px 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/**
  * **Lifted: nearer, not merely highlighted.**
  *
  * Hover and focus are one state here, because focus is the second way the

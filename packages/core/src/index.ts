@@ -61,6 +61,7 @@ export * from "./fit.ts";
 export * from "./attest.ts";
 export * from "./authaction.ts";
 export * from "./operator.ts";
+export * from "./takedown.ts";
 export * from "./lane.ts";
 export * from "./frameable.ts";
 export * from "./modules.ts";

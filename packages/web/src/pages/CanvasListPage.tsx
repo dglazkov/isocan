@@ -18,6 +18,7 @@ import {
   ownsSpace,
   sortCanvases,
   type CanvasSort,
+  type TakedownNotice,
   faceMark,
 } from "@isocan/core";
 import {
@@ -26,6 +27,7 @@ import {
   createSpace,
   deleteSpace,
   fetchHomes,
+  fetchTakedowns,
   listCanvases,
   listSpaces,
   removeFromSpace,
@@ -103,6 +105,17 @@ export function CanvasListPage({
    * but the headings.
    */
   const [spaces, setSpaces] = useState<Space[]>([]);
+  /**
+   * **Which of these this home has stopped serving, and what it says about
+   * them** (operator phase 2), by canvas id.
+   *
+   * Read BESIDE the canvases and never instead of them, exactly as the spaces
+   * beside it are: a home too old for the route, or one that simply will not
+   * answer, must cost this list nothing but the greying. Empty is the answer
+   * on every home in this repo, and an empty map renders the list it always
+   * rendered.
+   */
+  const [takenDown, setTakenDown] = useState<Map<string, TakedownNotice>>(new Map());
   const refresh = useCallback(
     () =>
       Promise.all([
@@ -111,10 +124,12 @@ export function CanvasListPage({
           (answer) => answer.spaces,
           () => [] as Space[],
         ),
+        fetchTakedowns().catch(() => [] as TakedownNotice[]),
       ]).then(
-        ([found, seen]) => {
+        ([found, seen, down]) => {
           setProjects(found);
           setSpaces(seen);
+          setTakenDown(new Map(down.map((row) => [row.canvasId, row])));
           setListError(null);
           return found;
         },
@@ -507,9 +522,22 @@ export function CanvasListPage({
    * share this page's state without a prop per control.
    */
   function card(canvas: Canvas) {
+    /**
+     * **A canvas this home has taken down is here, greyed, with the sentence**
+     * (operator phase 2; journey 4 step 3) — *listed for its members with the
+     * sentence, not hidden, so the owner is told.*
+     *
+     * Hiding it was the obvious alternative and is the wrong one: Priya's
+     * canvas disappearing from her own list is indistinguishable from her
+     * having lost it, and she would spend her afternoon looking for a thing
+     * that has an explanation nobody showed her.
+     */
+    const down = takenDown.get(canvas.id) ?? null;
     return (
           <div
-            className={`canvas-card${justMade === canvas.id ? " just-made" : ""}`}
+            className={`canvas-card${justMade === canvas.id ? " just-made" : ""}${
+              down ? " taken-down" : ""
+            }`}
             key={canvas.id}
             /* A card is dragged onto a heading (roles phase 4): the id rides
                the drag, and the drop is `move`. */
@@ -556,6 +584,23 @@ export function CanvasListPage({
                     link now and the other two are behind the same `···` the
                     canvas uses, which is also what stops Delete sitting one
                     pixel from Open. */}
+                {/**
+                 * **It does not open**, and the sentence is in its place.
+                 *
+                 * A `<Link>` that led to the refusal would be one more click
+                 * to reach the same words; a card that looked ordinary and
+                 * refused when clicked would be the silence this whole phase
+                 * exists to remove. So the card keeps its title and its meta
+                 * line — it is still her canvas — and the thing that opened it
+                 * is replaced by the home's own account of why it does not.
+                 */}
+                {down ? (
+                  <div className="card-open">
+                    <h3>{canvas.title}</h3>
+                    <div className="card-taken-down">{down.sentence}</div>
+                    <div className="meta">Nothing has been erased, and it can be brought back.</div>
+                  </div>
+                ) : (
                 <Link className="card-open" to={canvasPath(canvas.id)}>
                   {/**
                     * **Which of these did I put away?** (#194). `Archived`
@@ -597,6 +642,7 @@ export function CanvasListPage({
                     </span>
                   </div>
                 </Link>
+                )}
                 {/* In the card's box but OUT of its flow. This used to sit
                     in flow between the link and the ··· row — "the card has
                     room for it" — and every hover grew the card by the peek's

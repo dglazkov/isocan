@@ -48,6 +48,10 @@ export function mintPass(input: {
   mintedBy: string;
   actorId?: string;
   now?: string;
+  /** **The operator's look** (operator phase 2): this pass redeems into
+   * `{root: "operator", until}` at `view` rather than into the minter's rung.
+   * Minted only by the look route, and only after a proof. */
+  look?: { until: string };
 }): MintedPass {
   const createdAt = input.now ?? new Date().toISOString();
   const passId = newId("pss");
@@ -58,6 +62,7 @@ export function mintPass(input: {
       canvasId: input.canvasId,
       mintedBy: input.mintedBy,
       ...(input.actorId !== undefined ? { actorId: input.actorId } : {}),
+      ...(input.look !== undefined ? { look: input.look } : {}),
       secretHash: sha256(secret),
       createdAt,
       expiresAt: new Date(Date.parse(createdAt) + PASS_TTL_MS).toISOString(),
@@ -194,6 +199,28 @@ export async function redeemPass(
    * next sweep of the canvas resolves the chain the way it resolves any root
    * that does not stand.
    */
+  /**
+   * **A look is redeemed into its own root** (operator phase 2), and the
+   * branch is here rather than at the route because redemption is where an
+   * admission is written and this is the ONE admission that is not the
+   * minter's standing handed on.
+   *
+   * `view`, explicitly, and `{root: "operator", until}` — the door honours it
+   * until then, the sweep leaves it alone, and it is not in presence because
+   * no `view` connection is. The minter's rung is deliberately not consulted:
+   * the minter is the operator's own terminal badge, which was never admitted
+   * to this canvas at all, and consulting it would make the look's rung depend
+   * on an accident.
+   */
+  if (held.look) {
+    await desk.admit(
+      redeemer.badgeId,
+      held.canvasId,
+      { root: "operator", until: held.look.until },
+      "view",
+    );
+    return outcome.pass;
+  }
   const minter = await desk.badge(held.mintedBy);
   const minted = minter?.admissions.find((a) => a.canvasId === held.canvasId);
   await desk.admit(

@@ -220,6 +220,51 @@ export function storeConformance(
       }),
     );
 
+    /**
+     * **Taking down is not deleting, asserted on both backings** (operator
+     * phase 2).
+     *
+     * Four properties, and each is a way the two acts must stay distinguishable
+     * to anything that reads this store:
+     *
+     * 1. `load` refuses — the home stops serving it — exactly where it refuses
+     *    a delete.
+     * 2. **It is still in `listCanvases`.** The canvas list carries the
+     *    sentence rather than hiding the row (journey 4 step 3), so a backing
+     *    that filtered it out would take the surface's only chance to say what
+     *    happened. This is the one assertion where a takedown behaves
+     *    OPPOSITELY to a delete, and it is the load-bearing one.
+     * 3. `takenDownAt` reads back what was written, so a surface can say WHEN.
+     * 4. **`null` lifts it, and everything comes back** — the log was never
+     *    touched, so it replays as it was. "Nothing is irreversible until
+     *    purge", as a test rather than as a sentence in a design.
+     */
+    test(
+      "takes a canvas down: refused by load, still in the list, and lifted by clearing the flag",
+      withStore(async ({ store }) => {
+        await seed(store);
+        const before = await store.load("prj_1");
+        expect(before).not.toBeNull();
+        expect(await store.takenDownAt("prj_1")).toBeNull();
+
+        const at = "2026-09-12T10:00:00.000Z";
+        await store.setTakenDown("prj_1", at);
+        expect(await store.takenDownAt("prj_1")).toBe(at);
+        expect(await store.load("prj_1")).toBeNull();
+        // NOT hidden from the list: this is the whole difference from a delete
+        // on the read every canvas list is drawn from.
+        expect((await store.listCanvases()).map((canvas) => canvas.id)).toEqual(["prj_1"]);
+        expect(await store.canvasExists("prj_1")).toBe(true);
+
+        await store.setTakenDown("prj_1", null);
+        expect(await store.takenDownAt("prj_1")).toBeNull();
+        const after = await store.load("prj_1");
+        expect(after).not.toBeNull();
+        expect(after!.lastSeq).toBe(before!.lastSeq);
+        expect(after!.state.project.title).toBe(before!.state.project.title);
+      }),
+    );
+
     test(
       "returns null for unknown canvases",
       withStore(async ({ store }) => {

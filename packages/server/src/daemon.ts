@@ -7,6 +7,7 @@ import { registerRoutes } from "./http.ts";
 import { ParkCursors } from "./park.ts";
 import { RcHolds } from "./rc-holds.ts";
 import { attachWebSockets, SocketCensus } from "./ws.ts";
+import { Takedowns } from "./takedowns.ts";
 import { SweepHub } from "./sweep.ts";
 import { buildStamp } from "./build.ts";
 import { FileStore } from "./file-store.ts";
@@ -361,11 +362,26 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
    * because `registerRoutes` runs before `attachWebSockets` and both need the
    * same object. */
   const sockets = new SocketCensus();
+  /**
+   * **What this home has taken down** (operator phase 2), in memory, shared by
+   * the routes and the socket layer — both ask it on every request, and two
+   * registries would be two answers.
+   *
+   * Loaded from the desk once, below, after `desk.init()`: the design's shape
+   * for a home-scope refusal is *loaded into memory at boot on a
+   * single-instance home and re-read on write, so the door's cost is a set
+   * lookup*. What keeps that honest is that this is not the truth — the store
+   * flag is, and `load` reads it from the backing every time — so a registry
+   * that lagged means a canvas correctly refused with the wrong words, never a
+   * canvas wrongly served.
+   */
+  const takedowns = new Takedowns();
 
   // The composition root, and the ONE place any backing is named.
   const { store, desk } = await openBacking(home);
   await store.init();
   await desk.init();
+  await takedowns.load(desk);
   // The one-time migrations, composed across the two ledgers: the pre-badge
   // claims table, the pre-#57 `agents.json`, the link grants a pre-door world
   // has no rows for — and phase 10.3's, which writes down where the canvases
@@ -479,6 +495,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     operators,
     sockets,
     sweeps,
+    takedowns,
     contentBase: null as string | null,
     contentHost,
     contentSigning,
@@ -577,8 +594,12 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     ...(options.heartbeatMs !== undefined ? { heartbeatMs: options.heartbeatMs } : {}),
     ...(revision !== undefined ? { revision } : {}),
     sweeps,
-    // The room map lets itself be counted, for `isocan operator show`.
+    // The room map lets itself be counted, for `isocan operator show`, and
+    // closed with a reason, for a takedown (operator phase 2).
     census: sockets,
+    // Asked on every upgrade: a socket on a canvas this home has stopped
+    // serving is refused with `taken-down` rather than opened.
+    takedowns,
     // The content origin has no socket either — the upgrade is hijacked off
     // the raw server and never sees the door hook that refuses it everything
     // but blob bytes.

@@ -333,6 +333,25 @@ export async function sweepCanvas(
         // and `Provenance` in `desk.ts`.
         if (root.root === "link") return { fate: "keep", capability: rungOfAdmission(admission) };
         /**
+         * **The operator's look, which the sweep leaves alone as it leaves
+         * `created`** (operator phase 2; design, "The look").
+         *
+         * It names no grant row, so no revocation can find it, and re-testing
+         * it against the door would be the sweep inventing a root the desk
+         * never wrote — the `link` argument exactly, with one addition: a look
+         * ends by ITS OWN CLOCK, and the clock is read at the door, per
+         * request. A sweep that expelled an expired one would be tidy and
+         * would change nothing anybody can observe, because the door has
+         * already stopped honouring it; a sweep that expelled a LIVE one would
+         * mean the operator's ability to judge a report depended on whether
+         * somebody happened to revoke a grant while he was reading.
+         *
+         * Without this branch the fallthrough below reads `root.badgeId` off a
+         * root that has none and expels him. That is the concrete failure this
+         * line prevents, and it is why the branch is here rather than implied.
+         */
+        if (root.root === "operator") return { fate: "keep", capability: rungOfAdmission(admission) };
+        /**
          * The space creator's floor (roles phase 4) is re-asked every sweep,
          * unlike `created`: the canvas may have left the space. Kept only
          * when the door answers with the SAME floor at the same rung —

@@ -251,6 +251,8 @@ function CanvasSurface({
   }, [canvasId, actor.id, arrived]);
   const switching = useUiStore((s) => s.switching);
   const connection = useCanvasStore((s) => s.connection);
+  // The home's own sentence about a canvas it took down (operator phase 2).
+  const takenDown = useCanvasStore((s) => s.takenDown);
   const capability = useCanvasStore((s) => s.capability);
   const canEdit = useCanEdit();
   const joined = useCanvasStore((s) => s.actorJoins);
@@ -893,6 +895,27 @@ function CanvasSurface({
     absent: {
       note: "There is no canvas at this address.",
       hint: "Check the link you were sent — the Share dialog's copy button always produces a working one.",
+    },
+    /**
+     * **The operator of this home took it down** (operator phase 2; journey 4
+     * step 1, which is this sentence's specification).
+     *
+     * The note is the HOME's, verbatim, carrying the date, the reason category
+     * and the address to write to. Rendered here and nowhere composed: the
+     * three sentences above are about things this app can see, and this one is
+     * about an act performed by a person at a desk, whose account of it is the
+     * only true one.
+     *
+     * The fallback matters more than it looks. If the home cannot be reached
+     * for the sentence, this still must not say *not found* and must not say
+     * *your access was withdrawn* — so the short version says the one thing
+     * that is certainly true, and the hint says the other: nothing was erased.
+     */
+    "taken-down": {
+      note: takenDown?.sentence ?? "This canvas was taken down by the operator of this home.",
+      hint:
+        "Nothing has been erased. If you run a daemon that replicates it, your copy is still " +
+        "on your machine, and it can be brought back.",
     },
   };
   const end = dead[connection];

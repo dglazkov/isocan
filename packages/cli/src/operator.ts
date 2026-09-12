@@ -177,7 +177,16 @@ function timeout(ms: number, fail: (why: Error) => void): Promise<never> {
   });
 }
 
-function openInBrowser(url: string): void {
+/**
+ * Open an address in whatever the machine calls a browser.
+ *
+ * Exported since operator phase 2, for `look`: the proof and the look are two
+ * different pages — the first is where a person proves, the second is the
+ * canvas itself — and a second spelling of "how do you open a browser here"
+ * would be a second thing to get wrong on a machine with no session. The
+ * address is always PRINTED as well, by both callers, for that machine.
+ */
+export function openInBrowser(url: string): void {
   spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
     stdio: "ignore",
     detached: true,

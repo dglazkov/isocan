@@ -2,6 +2,7 @@ import type {
   ActorClaim,
   Attestation,
   BadgeKind,
+  CanvasTakedown,
   Capability,
   Grant,
   GrantSubject,
@@ -133,7 +134,34 @@ export type Provenance =
    * is a separate root: a canvas can LEAVE a space, so this admission must be
    * re-asked by every sweep, where `created` is never touched.
    */
-  | { root: "space"; spaceId: string };
+  | { root: "space"; spaceId: string }
+  /**
+   * **The operator, looking** (operator phase 2; design, "The look").
+   *
+   * The operator must judge a report and the canvas may be closed to the
+   * address, so `isocan operator look` mints — after the proof, and only after
+   * it — a pass the home redeems into the operator's browser as this. It is
+   * unlike every root above in three ways, and each is deliberate:
+   *
+   * - **It expires**, and it is the first admission in this system that does.
+   *   Everything else is live until somebody revokes it; a look is a window a
+   *   person opened for one report, and `until` is what closes it without
+   *   anybody remembering to. The door reads it (`liveAdmission` in
+   *   `grants.ts`); an expired one falls through to the ordinary door test and
+   *   the operator meets the refusal any stranger gets — journey 2 step 3,
+   *   which is the whole proof that the look ended.
+   * - **The sweep leaves it alone**, as it leaves `created`: it names no grant
+   *   row, so no revocation can find it, and re-testing it against the door
+   *   would be the sweep inventing a root the desk never wrote.
+   * - **It is admitted at `view`**, which is what keeps a look unannounced
+   *   without any code that hides anybody: a `view` connection is not in
+   *   presence, for every viewer, and that is the rule rather than an
+   *   exception made for this one.
+   *
+   * The ledger, not this row, is the counterweight: the home reads everything
+   * it hosts, so a look is never unrecorded even when it is unannounced.
+   */
+  | { root: "operator"; until: string };
 
 export interface Admission {
   canvasId: string;
@@ -749,4 +777,52 @@ export interface Desk {
    * filter on the outcome is a thing to do to a list you already hold.
    */
   operatorActs(options?: { target?: string | null; limit?: number }): Promise<OperatorAct[]>;
+
+  // ---- takedowns (operator phase 2) ----
+  //
+  // **One row per canvas, on the desk, beside grants.** Not on the store, and
+  // not in the ledger, and both halves of that are load-bearing.
+  //
+  // Not on the store, because the store's flag has to be readable by a loader
+  // with no desk in hand and must carry no sentence about a person — the note
+  // in particular is the operator's and travels nowhere.
+  //
+  // Not in the ledger, because the ledger is append-only acts and this is
+  // standing state: *is this canvas down right now, and what do the surfaces
+  // say about it*. The takedown act and the lift act are both in the ledger,
+  // each with its proof (journey 5 step 3); this row is what they leave
+  // behind, and a lift rewrites it rather than adding one, so there is never
+  // an ambiguity about which of two rows is in force.
+
+  /** Write the row. A lift is {@link liftTakedown}, never a second row here. */
+  recordTakedown(row: CanvasTakedown): Promise<void>;
+
+  /**
+   * Mark the row lifted, keeping it. The row stays because journey 5 step 3
+   * wants both halves readable — and because a row that vanished on a lift
+   * would leave `isocan operator log`'s two acts pointing at nothing.
+   *
+   * Silent when there is no row: the caller has already refused a lift on a
+   * canvas that is not down, and a throw here would turn a settled act into a
+   * failure the operator reads as the lift not having happened.
+   */
+  liftTakedown(canvasId: string, lifted: { at: string; by: string; actId: string }): Promise<void>;
+
+  /** The row for one canvas, lifted or not — null when there has never been
+   * one. Callers ask {@link inForce} about what comes back; a lifted row is
+   * still an answer, and "there was one, and it was lifted on the 14th" is a
+   * thing an innkeeper is asked. */
+  takedownFor(canvasId: string): Promise<CanvasTakedown | null>;
+
+  /**
+   * **Every takedown in force at this home.**
+   *
+   * The whole set rather than a lookup, because that is what its two readers
+   * want: the in-memory registry the door consults (loaded at boot, re-read on
+   * write — the same shape the design gives home-scope refusals) and the
+   * canvas list, which needs the sentence for every row it draws. It is small
+   * by construction: a row exists only because a person read a report and
+   * acted, and a home with a hundred of them has a different problem.
+   */
+  takedowns(): Promise<CanvasTakedown[]>;
 }
