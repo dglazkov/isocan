@@ -2,6 +2,7 @@ import type { TextAttention } from "./text-attention.js";
 import type { Capability } from "./grants.js";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.js";
 import type { Actor, Canvas, CanvasContents } from "./model.js";
+import type { ListenEntry } from "./inbox.js";
 import type { ModuleManifest } from "./modules.js";
 import type { NewsDay } from "./whatsnew.js";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.js";
@@ -512,8 +513,11 @@ export interface RcPolicy {
      * anybody they are joined with. */
     owner: Actor;
     /** Who else may wake it: `[]` nobody else (the default), `["*"]` everyone
-     * admitted here, otherwise actor ids. */
-    listen: string[];
+     * admitted here, otherwise actor ids — each an id, or `{ id, until }` when
+     * the owner said how long (`ListenEntry`). Lapsed grants stay in the list
+     * so a refusal can say *lapsed* rather than *never*; `mayWake` is what
+     * decides, never the presence of a name. */
+    listen: ListenEntry[];
 }
 /** An rc parking against the home: hold this connection open, and wake me
  *  if somebody rings for one of these agents. */

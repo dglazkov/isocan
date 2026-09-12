@@ -845,10 +845,14 @@ with srt; combining the two is refused until nesting has been validated.
 A summoned turn runs on the machine of the person whose `isocan rc` answers
 for the agent, and spends that person's tokens — so a standing agent answers
 **only its owner** (that machine's person, and anything the machine itself
-speaks as) until the owner widens it: `isocan rc listen <name> --to
-<names>|everyone`, or *Let anyone ask* on the agent's row in the app. A
-mention from anybody else starts nothing and counts against nothing; isocan
-answers it in the thread with whose word the agent takes and that command.
+speaks as) until the owner widens it. A mention from anybody else starts
+nothing and counts against nothing; isocan answers it in the thread with
+whose word the agent takes — and **that refusal is the control**: under it,
+for the owner and nobody else, are *Let \<them\> ask* and *Let anyone ask*.
+*Who can ask* on the agent's row opens everyone here as checkboxes, a grant
+can be given until tonight or for seven days (it lapses, and the agent says
+that is what happened), and `isocan rc listen <name> --to <names>|everyone
+[--until 7d]` is the same act in a terminal.
 The rc announces its policy with its hold, so the tray and `isocan who` say
 *listens only to Nico* before anybody asks, and the add-agent dialog is
 offered to the rc's owner alone. Only the owner's word widens: a gate

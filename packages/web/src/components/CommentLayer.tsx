@@ -27,6 +27,7 @@ import { markRead, unreadCount, useUnreadStore } from "../stores/unreadStore.ts"
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { CommandChip, awaitingReply, withoutCommand } from "./MainThreadPanel.tsx";
 import { OnIt } from "./OnIt.tsx";
+import { GateGrant } from "./LazyGate.tsx";
 import { liveActorIds } from "../lib/presence.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
@@ -394,6 +395,14 @@ function ThreadPopover({
                 </Markdown>
               </div>
             </CommentFold>
+            {/* The refusal is the control (#272): under the ask an agent's
+                gate turned away, the owner — and nobody else — gets the two
+                buttons that answer it. Mounted only for a comment that names
+                somebody: it subscribes to the rc poll, and a long thread of
+                plain messages should not open one subscription per line. */}
+            {comment.mentions && comment.mentions.length > 0 && (
+              <GateGrant canvasId={canvasId} viewer={actor} thread={thread} comment={comment} />
+            )}
           </div>
         ))}
         <OnIt

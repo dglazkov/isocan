@@ -200,9 +200,76 @@ describe("the tray's standing-agent doors", () => {
   });
 
   it("the owner's widening sends the same re-enrolment `isocan rc listen` does", () => {
-    expect(tray).toMatch(/onListen: \(open: boolean\)/);
-    expect(tray).toMatch(/listen: open \? \[LISTEN_ANYONE\] : \[\]/);
+    expect(tray).toMatch(/onListen: \(listen: ListenEntry\[\]\)/);
+    expect(tray).toMatch(/type: "agent\.enroll"/);
+    expect(tray).toMatch(/rules: \{ \.\.\.rulesOf\(record\.rules\), listen \}/);
     expect(tray).toMatch(/viewer=\{actor\.id\}/);
+  });
+
+  it("names people from the web, not only from the CLI (#272 phase 2)", () => {
+    const panel = read("components/GatePanel.tsx");
+    // The list core computes, so the checkbox and `rc listen --to` write one
+    // shape — the acceptance is that two names ticked here read back
+    // identically in `isocan rc listen <name>`.
+    expect(panel).toMatch(/withListener\(policy, actorId, admit/);
+    expect(panel).toMatch(/LISTEN_ANYONE, e\.target\.checked/);
+    // People, and never the owner: the owner is always in, and a checkbox
+    // that cannot be unticked is a control that lies.
+    expect(panel).toMatch(/!sameActor\(joined, p\.id, policy\.owner\.id\)/);
+    expect(panel).toMatch(/!agents\?\.\[p\.id\]/);
+    // The panel is drawn for the owner alone — a gate anybody else writes is
+    // set aside by the rc, so their click would be discarded in silence.
+    expect(read("components/AgentRow.tsx")).toMatch(/gateOpen && owns && onListen && policy/);
+    // How long lives beside the names (#272 phase 3).
+    expect(panel).toMatch(/listenUntil\(span\)/);
+  });
+
+  it("the refusal is the control — the owner gets buttons, everybody else the words", () => {
+    const grant = read("components/GateGrant.tsx");
+    // Offered exactly where the gate turned an ask away, and exactly to the
+    // person whose word widens it.
+    expect(grant).toMatch(/mayWake\(policy, asker\.id, joined\)/);
+    expect(grant).toMatch(/sameActor\(joined, policy\.owner\.id, viewer\.id\)/);
+    expect(grant).toMatch(/if \(!owns\) return \[\]/);
+    // The same op the CLI sends, with the gate that already stands kept.
+    expect(grant).toMatch(/withListener\(policy, to, true/);
+    expect(grant).toMatch(/type: "agent\.enroll"/);
+    // The buttons say what happens, by name.
+    expect(grant).toContain("Let {actorNameIn(names, asker)} ask");
+    expect(grant).toContain("Let anyone ask");
+    // After the click: a line under the same message, never a new system
+    // comment for every grant.
+    expect(grant).toContain("listens to {who} now");
+    expect(grant).toMatch(/readsAsTurnedAway\(c\.body, agentName\)/);
+    expect(grant).not.toMatch(/thread\.reply|thread\.create/);
+    // Under the ask in both places a mention can be made.
+    expect(read("components/CommentLayer.tsx")).toMatch(/<GateGrant /);
+    expect(read("components/MainThreadPanel.tsx")).toMatch(/<GateGrant /);
+  });
+
+  it("neither control is in the bytes a first visit downloads", () => {
+    /**
+     * Both are owner-only and occasional, and all three of their hosts — the
+     * comment popover, the Chat, the agent tray — are eager, so without a
+     * boundary the controls ride along into every first paint. Measured at
+     * 1,804 and 1,589 bytes (`scripts/bundle-ceiling.mjs`), which is most of
+     * what this feature would otherwise have cost everybody.
+     *
+     * Asserted on the IMPORT rather than on a number: `bundle-budget` owns
+     * the number, and a `lazy()` quietly turned back into a static import is
+     * the regression that test would report as an unexplained creep six
+     * weeks later.
+     */
+    const boundary = read("components/LazyGate.tsx");
+    expect(boundary).toMatch(/lazy\(\(\) => import\("\.\/GateGrant\.tsx"\)/);
+    expect(boundary).toMatch(/lazy\(\(\) => import\("\.\/GatePanel\.tsx"\)/);
+    expect(boundary).toMatch(/Suspense fallback=\{null\}/);
+    // The only import of either module is the boundary's own dynamic one.
+    for (const host of ["components/CommentLayer.tsx", "components/MainThreadPanel.tsx", "components/AgentRow.tsx"]) {
+      expect(read(host), `${host} must reach the gate controls through LazyGate`).not.toMatch(
+        /from "\.\/Gate(Grant|Panel)\.tsx"/,
+      );
+    }
   });
 
   it("an ask the gate will turn away says so under it, never 'Sent' (owner-only summons)", () => {

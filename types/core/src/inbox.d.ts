@@ -117,11 +117,114 @@ export interface AgentRules {
      *
      * `["*"]` is the same spelling `ops` uses for "everything", said
      * explicitly so a person can turn a gate off without deleting a field.
+     *
+     * A name may carry how long it lasts — `{ id, until }` beside the bare ids
+     * every older gate is made of (`ListenEntry`, issue #272 phase 3). Read it
+     * with `parseListen` / `listenGrants` rather than by hand; the union is
+     * deliberate, so a reader that forgets is a type error rather than a gate
+     * that quietly matches nobody.
      */
-    listen?: string[];
+    listen?: ListenEntry[];
 }
 /** The `listen` spelling for "anyone" — `ops`'s idiom, one definition. */
 export declare const LISTEN_ANYONE = "*";
+/**
+ * **How long a grant lasts, written into the name it grants to** (issue #272
+ * phase 3, 11 Sep 2026).
+ *
+ * A timed grant needed somewhere to live, and there were two places it could
+ * have gone: a sibling field on `AgentRules` (`until: { [id]: iso }`) or the
+ * entry itself. The entry wins, and the reason is which way each one FAILS on
+ * a reader that has never heard of expiry.
+ *
+ * `rulesOf` drops keys it does not know, deliberately — the record has
+ * carried rules opaquely since phase 2. So a sibling `until` map would be
+ * invisible to an older build, which would go on honouring a grant that
+ * lapsed a month ago: a gate failing OPEN, on the one field whose whole job
+ * is to decide who may spend somebody's tokens.
+ *
+ * **The expiry belongs to the name, so it is written on the name.** An entry
+ * is a bare actor id — which is every gate written before today, unchanged —
+ * or `{ id, until }`. Two reasons this rather than packing the date into the
+ * string (`usr_dion until <ISO>`), which was the first shape and was wrong:
+ *
+ * - **The type system can enforce it.** With `ListenEntry[]`, a reader that
+ *   treats an element as an id gets a type error; with `string[]`, the same
+ *   reader compiles and silently matches nobody. A gate that fails by
+ *   accident — in either direction — is exactly what this field exists to
+ *   prevent, so the failure has to be one a compiler can see.
+ * - **An older reader drops it cleanly.** `rulesOf` has always kept only
+ *   strings in this list, so a build that has never heard of expiry does not
+ *   see a listener id that is not an id: it sees no entry at all, the grant
+ *   is absent, and the agent answers its owner alone. Fail closed, and
+ *   nothing anywhere renders half a date as a person's name.
+ *
+ * There is no migration to write, because both shapes are read: a plain
+ * string is a grant with no expiry, which is what every stored gate already
+ * is, and `spellListen` still writes a bare string when nobody said how long
+ * — so a gate that gains no expiry is byte-identical to what it was.
+ *
+ * `listen` staying a list on one field is what lets phase 3 be a field on
+ * the record rather than a new op: the vocabulary stays at 33, and
+ * `agent.enroll` carries this as it carried the gate before.
+ */
+/** One name in the gate, read: who, and — when the owner said how long —
+ *  until when, as an ISO instant (absolute, so two machines in two timezones
+ *  cannot read one grant two ways). */
+interface ListenGrant {
+    id: string;
+    until?: string;
+}
+/** A name in the gate, stored: an actor id, or that id with how long the
+ *  grant lasts. `LISTEN_ANYONE` is the one id that is not a person. */
+export type ListenEntry = string | ListenGrant;
+/** A stored entry, read. An `until` that is not a time is ignored rather
+ *  than trusted: a gate must never widen because a value was malformed. */
+export declare function parseListen(entry: ListenEntry): ListenGrant;
+/** The entry to store — the inverse of `parseListen`, here so the two
+ *  spellings cannot drift apart. A grant with no expiry stays a bare string,
+ *  so a gate that never gains one is byte-identical to what it always was
+ *  and every older reader goes on reading it. */
+export declare function spellListen(id: string, until?: string | null): ListenEntry;
+/**
+ * The gate's names, parsed and dated — what every surface that wants to SHOW
+ * a gate reads, rather than each one learning the spelling. `lapsed` is kept
+ * in the list rather than filtered out of it, because a grant that ran out is
+ * the thing a refusal has to be able to name.
+ */
+export declare function listenGrants(listen: readonly ListenEntry[] | undefined, now?: number): (ListenGrant & {
+    lapsed: boolean;
+})[];
+/**
+ * **The list a grant writes.** One name added to — or taken out of — the gate
+ * that already STANDS, which is `RcPolicy.listen` and not the stored field:
+ * a gate somebody other than the owner wrote has already been set aside
+ * (`answerPolicy`), and appending to the stored value would quietly bring it
+ * back. The owner's click says one thing; it must not also resurrect
+ * somebody else's.
+ *
+ * `LISTEN_ANYONE` swallows the list, because "anyone" is not one more name —
+ * it is the answer instead of the list — and taking it away leaves the names
+ * that were there before it, which is the gate the owner last chose by hand.
+ */
+export declare function withListener(policy: RcPolicy, actorId: string, admit: boolean, opts?: {
+    until?: string | null;
+    joined?: ActorJoins;
+    now?: number;
+}): ListenEntry[];
+/** When this asker's grant ran out, if they had one and it did — so a
+ *  refusal can say *lapsed* rather than repeating *never*. */
+export declare function lapsedFor(policy: RcPolicy, actorId: string, joined?: ActorJoins, now?: number): string | undefined;
+/**
+ * **How long, as a person says it** — `tonight`, `7d`, `30d`, `never`, or an
+ * instant spelled out. Resolved to an absolute instant at the moment of the
+ * grant, on the granter's clock, because a gate read on three machines in
+ * three timezones must mean one moment.
+ */
+export declare function listenUntil(spec: string, now?: number): string | null;
+/** A grant's remaining life, in the clipped vocabulary the rosters use:
+ *  *until tonight*, *for 6 days*, *lapsed 2h ago*. */
+export declare function untilWords(until: string, now?: number): string;
 /** The stored rules field, read tolerantly — it has been opaque since
  * phase 2, and a malformed hand-me-down must cost the filter, not the
  * summons. */
@@ -143,7 +246,7 @@ export declare function rulesOf(raw: unknown): AgentRules;
 export declare function listensTo(rules: AgentRules | null | undefined, authorId: string, 
 /** The registry's joins, when the caller holds them — a gate naming
  * `Dimitri 2` must still admit Dimitri. */
-joined?: ActorJoins): boolean;
+joined?: ActorJoins, now?: number): boolean;
 /**
  * How a surface says a STORED gate when no rc is in sight to say its policy
  * (`policyWords` is the words once one is) — null when there is none to say,
@@ -154,7 +257,7 @@ joined?: ActorJoins): boolean;
  * the fallback, never a blank, because a gate nobody can read is the silent
  * gate wearing a different hat.
  */
-export declare function listenWords(rules: AgentRules | null | undefined, nameOf: (actorId: string) => string | undefined): string | null;
+export declare function listenWords(rules: AgentRules | null | undefined, nameOf: (actorId: string) => string | undefined, now?: number): string | null;
 /**
  * **Owner-only summons** (decided 11 Sep 2026; issue #238, the rc research
  * note's recommendation 6, agent-custody's open question).
@@ -211,7 +314,11 @@ writtenBy: string | undefined, joined?: ActorJoins): RcPolicy;
 export declare function gateSetAside(rules: AgentRules | null | undefined, keeping: Keeping, writtenBy: string | undefined, joined?: ActorJoins): boolean;
 /** Does this policy admit that speaker? `hands` is the rc's own knowledge
  * and never crosses the wire; a reader without it asks about people. */
-export declare function mayWake(policy: RcPolicy, authorId: string, joined?: ActorJoins, hands?: readonly string[]): boolean;
+export declare function mayWake(policy: RcPolicy, authorId: string, joined?: ActorJoins, hands?: readonly string[], 
+/** The clock a timed grant is read against — a parameter so a test can
+ *  stand at a moment, and `Date.now()` because every real caller is at
+ *  this one. */
+now?: number): boolean;
 /**
  * **Whose word an agent's turn carries** — the provenance `onBehalfOf`
  * reads. For each author of the entries that started the turn: an agent the
@@ -230,7 +337,7 @@ export declare function speakersFor(authorIds: readonly string[], carried: (agen
  */
 export declare function policyWords(policy: RcPolicy, nameOf: (actorId: string) => string | undefined, 
 /** Who is reading, so the owner reads *you* rather than their own name. */
-viewerId?: string, joined?: ActorJoins): string | null;
+viewerId?: string, joined?: ActorJoins, now?: number): string | null;
 /**
  * **Did the gate turn away a direct ask?** Only a MENTION is answered in
  * words: somebody asked this agent by name and deserves to know why nothing
@@ -253,9 +360,10 @@ export declare function turnedAway(op: Operation, authorId: string, agent: {
  * so the CLI's note and the web's line say what the rc will do rather than
  * guessing at it. Agents with no announced policy are nobody's to predict.
  */
-export declare function refusedMentions(mentions: readonly string[] | undefined, authorId: string, policies: Readonly<Record<string, RcPolicy>> | undefined, joined?: ActorJoins): {
+export declare function refusedMentions(mentions: readonly string[] | undefined, authorId: string, policies: Readonly<Record<string, RcPolicy>> | undefined, joined?: ActorJoins, now?: number): {
     actorId: string;
     policy: RcPolicy;
+    lapsed?: string;
 }[];
 /**
  * The sentence a turned-away asker reads — the rc's system voice in the
@@ -264,7 +372,17 @@ export declare function refusedMentions(mentions: readonly string[] | undefined,
  * it names the exact gesture, because "ask them to widen it" with no verb is
  * a riddle.
  */
-export declare function turnedAwayLine(agentName: string, policy: RcPolicy, nameOf: (actorId: string) => string | undefined, asker: string): string;
+export declare function turnedAwayLine(agentName: string, policy: RcPolicy, nameOf: (actorId: string) => string | undefined, asker: string, 
+/** When this asker's own grant ran out, if it did — the one clause a
+ *  lapsed grant adds to the refusal a gate that never had it would give
+ *  (issue #272 phase 3). */
+opts?: {
+    lapsed?: string | undefined;
+    now?: number;
+}): string;
+/** Does this comment body read as the refusal this agent got? The system
+ *  voice is the only author that writes one, which the caller checks. */
+export declare function readsAsTurnedAway(body: string, agentName: string): boolean;
 /**
  * **THE routing composition, stated once** (agents-on-demand phase 4).
  * `reasonFor` is the is-this-for-me predicate; this is the whole rule a

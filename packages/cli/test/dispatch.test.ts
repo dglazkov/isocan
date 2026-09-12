@@ -730,6 +730,42 @@ describe("owner-only summons (issue #238)", () => {
     await rc.done;
   }, 60_000);
 
+  it("a grant that ran out refuses in the same words, and says it lapsed (#272 phase 3)", async () => {
+    /* The phase's whole acceptance: a lapse must not read as a gate that
+       never had them — "you were never let in" and "you were, until
+       Tuesday" have different next moves, and only the second one is the
+       owner's to repeat. The gate is Nico's own word, written with an
+       expiry already behind it. */
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    // Nico's own word, through the verb a person would use — `--until` takes
+    // an instant as readily as a span, and this one is already behind us.
+    const ago = new Date(Date.now() - 3_600_000).toISOString();
+    const grant = await isocan("rc", "listen", "Sian", "--to", "Dimitri", "--until", ago);
+    expect(grant.code).toBe(0);
+    const rc = startRc();
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    await summon("th_lapsed", "@Sian still there?");
+    const said = await until(
+      threads,
+      (t) => (t["th_lapsed"]?.comments ?? []).some((c) => c.author.name === "isocan"),
+      "the refusal in the thread",
+    );
+    const refusal = said["th_lapsed"]!.comments.find((c) => c.author.name === "isocan")!.body;
+    // The same sentence a gate with no grant at all would give…
+    expect(refusal).toContain(
+      "Sian listens only to Nico — this did not wake Sian, and spent nothing.",
+    );
+    // …plus the one clause that says which refusal this is.
+    expect(refusal).toContain("Dimitri's access lapsed 1h ago.");
+    // And the suggestion does not carry the lapsed grant back in as though
+    // it still stood: re-granting is a decision, not a default.
+    expect(refusal).toContain("--to Dimitri");
+    expect(refusal).not.toContain(" until 2026");
+    expect(rc.out()).not.toContain("starting a session");
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 60_000);
+
   it("a stranger turned away is not let in one hop later by an open sibling's reply", async () => {
     /* Walked in a browser before it was a test: Dimitri's Chat line woke
        Percy (open to everyone), and Percy's reply in the Chat — Nico's own

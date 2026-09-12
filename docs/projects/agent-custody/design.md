@@ -182,7 +182,14 @@ sequenceDiagram
   who wrote it (`writtenBy`), and a gate somebody else wrote is set aside.
   What the fence bounds (reach) and what this bounds (who may start) are
   now both built; a stranger can no longer spend your tokens on your
-  laptop.
+  laptop. **The widening gesture stopped being a command line the same
+  evening** (#272): the refusal in the thread carries the owner's own
+  buttons — *Let \<asker\> ask*, *Let anyone ask* — the tray's row opens the
+  people here as checkboxes rather than a two-position switch, and a grant
+  may carry an expiry, carried as an entry beside the name it grants to
+  (`ListenEntry`; a bare id is still a grant with no expiry). Same op, same
+  `withListener` in core, same words; only the owner sees a control, because
+  only the owner's write survives the rc.
 - **The dialog does not name the machine.** With two rcs parked it says
   "the parked rc" and first-wins picks silently; the promise should
   name its keeper once the hold carries a machine label.

@@ -3,6 +3,7 @@ import { INSTALL_SPEC } from "./address.ts";
 import type { Capability } from "./grants.ts";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.ts";
 import type { Actor, Canvas, CanvasContents } from "./model.ts";
+import type { ListenEntry } from "./inbox.ts";
 import type { ModuleManifest } from "./modules.ts";
 import type { NewsDay } from "./whatsnew.ts";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
@@ -507,8 +508,11 @@ export interface RcPolicy {
    * anybody they are joined with. */
   owner: Actor;
   /** Who else may wake it: `[]` nobody else (the default), `["*"]` everyone
-   * admitted here, otherwise actor ids. */
-  listen: string[];
+   * admitted here, otherwise actor ids — each an id, or `{ id, until }` when
+   * the owner said how long (`ListenEntry`). Lapsed grants stay in the list
+   * so a refusal can say *lapsed* rather than *never*; `mayWake` is what
+   * decides, never the presence of a name. */
+  listen: ListenEntry[];
 }
 
 /** An rc parking against the home: hold this connection open, and wake me

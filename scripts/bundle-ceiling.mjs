@@ -137,11 +137,45 @@
  * The second gate only works because the queue reaches `main` now and an
  * answer covers the nights that repeat it. Before 7 Sep it would have been a
  * warning into a void.
+ *
+ * **653,500 → 658,000 the same evening, and almost all of it is a debt from
+ * earlier in the day.** Two creeps, one raise, both said out loud:
+ *
+ *   3,943  owner-only summons (#238/#269, the same afternoon), which measured
+ *          itself at 657,446 and deliberately did NOT raise the ceiling —
+ *          "it moves in the answer to the performance persona's finding, and
+ *          this is the sentence that answer can quote." Quoted, and paid: a
+ *          second unremarked creep stacked on the first is exactly the shape
+ *          this file exists to stop, and it is a worse shape than a raise.
+ *     473  granting an agent access from the UI (#272) — the grant control
+ *          under a refusal, the tray's who-panel, and the timed gate. NET,
+ *          and the two lines below are why the gross was 5,914.
+ *  −2,702  the Help panel, behind `lazy()`. Named in this file's own "what it
+ *          did not buy" three paragraphs up: `CanvasPage` imported it
+ *          statically and rendered it on every visit, so the shortcut tables
+ *          and the command registry were paid by everybody before anybody
+ *          pressed `?`. That is the whole point of writing the next place to
+ *          look down — the next feature read it and took it.
+ *  −2,739  #272's own two controls, behind the same boundary. Both are
+ *          owner-only and occasional — a grant appears under a message an
+ *          agent turned away, the who-panel when its owner opens a tray row
+ *          — but all three of their hosts (the comment popover, the Chat,
+ *          the tray) are eager, so the controls were too. Behind `lazy()`
+ *          they take `withListener`, `listenUntil`, `listenGrants` and
+ *          `readsAsTurnedAway` with them, since no eager reader wants those:
+ *          two chunks of 1,804 and 1,589 bytes, fetched by the people who
+ *          actually grant something. What stays eager is what a first visit
+ *          genuinely reads — the words on a tray row and under a comment.
+ *
+ * 657,916 measured, and the margin is 84 bytes. The goal is 17,916 away,
+ * and the shape is the one worth copying rather than the number: a feature
+ * that measured 5,914 bytes cost 473, because the parts of it a first visit
+ * never reaches were put where a first visit does not go.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 653_500;
+export const CEILING = 658_000;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

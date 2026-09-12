@@ -13,8 +13,16 @@ import {
   extractMentions,
   invertOperation,
   LISTEN_ANYONE,
+  lapsedFor,
   listensTo,
+  listenUntil,
   listenWords,
+  mayWake,
+  parseListen,
+  readsAsTurnedAway,
+  spellListen,
+  untilWords,
+  withListener,
   OpValidationError,
   roster,
   rulesOf,
@@ -465,6 +473,141 @@ describe("owner-only summons — the rc's reading of the gate", () => {
     ]);
     expect(refusedMentions([sian.id], nico.id, policies)).toEqual([]);
     expect(refusedMentions([sian.id], "usr_alice", undefined)).toEqual([]);
+  });
+
+  /**
+   * **Granting from the UI** (issue #272). The web writes the same `listen`
+   * list `isocan rc listen --to` writes, through the one function both call —
+   * so "the CLI and the button write the same op" is a property of the code
+   * rather than a promise in a commit message.
+   */
+  describe("a grant, with or without a clock on it", () => {
+    const nameOf = (id: string) => ({ usr_nico: "Nico", usr_usama: "Usama", usr_alice: "Alice" })[id];
+    const now = Date.parse("2026-09-11T18:00:00.000Z");
+    const later = new Date(now + 86_400_000).toISOString();
+    const before = new Date(now - 3_600_000).toISOString();
+
+    it("appends to the gate that already stands rather than replacing it", () => {
+      const one = { owner: nico, listen: ["usr_usama"] };
+      expect(withListener(one, "usr_alice", true)).toEqual(["usr_usama", "usr_alice"]);
+      // Taking a name out leaves the rest — the click says one thing.
+      expect(withListener({ owner: nico, listen: ["usr_usama", "usr_alice"] }, "usr_alice", false)).toEqual([
+        "usr_usama",
+      ]);
+      // "Anyone" is the answer INSTEAD of the list, and undoing it leaves the
+      // names the owner last chose by hand.
+      expect(withListener(one, LISTEN_ANYONE, true)).toEqual([LISTEN_ANYONE]);
+      expect(withListener({ owner: nico, listen: [LISTEN_ANYONE] }, LISTEN_ANYONE, false)).toEqual([]);
+      // Naming somebody while it stands open is not a narrowing.
+      expect(withListener({ owner: nico, listen: [LISTEN_ANYONE] }, "usr_alice", true)).toEqual([LISTEN_ANYONE]);
+    });
+
+    it("writes how long as an entry beside the name, and a grant with no expiry stays a bare id", () => {
+      const listen = withListener({ owner: nico, listen: [] }, "usr_alice", true, { until: later });
+      expect(listen).toEqual([{ id: "usr_alice", until: later }]);
+      expect(parseListen(listen[0]!)).toEqual({ id: "usr_alice", until: later });
+      // A gate that gains no expiry is byte-identical to what it always was,
+      // so nothing already stored changes shape and every reader goes on
+      // reading it.
+      expect(spellListen("usr_alice", null)).toBe("usr_alice");
+      expect(withListener({ owner: nico, listen: [] }, "usr_alice", true)).toEqual(["usr_alice"]);
+      // An `until` that is not a time is ignored rather than trusted: a gate
+      // must never widen — or narrow — because a value was malformed.
+      expect(parseListen({ id: "usr_alice", until: "soonish" })).toEqual({ id: "usr_alice" });
+    });
+
+    it("is dropped whole by a reader that has never heard of expiry — the fail-closed direction", () => {
+      /**
+       * The property the shape was chosen FOR (#272 phase 3, #273). An older
+       * build's `rulesOf` kept only strings in this list, so it does not see
+       * a listener id that is not an id — it sees no entry at all.
+       */
+      const asOlderBuildReads = (listen: readonly unknown[]) =>
+        listen.filter((v): v is string => typeof v === "string");
+      const stored = [`usr_usama`, { id: "usr_alice", until: later }];
+      expect(asOlderBuildReads(stored)).toEqual(["usr_usama"]);
+      // Alice's grant is simply absent there: she cannot wake it, and — the
+      // half that matters — nothing renders half a date as her name.
+      const old = answerPolicy({ listen: asOlderBuildReads(stored) }, keeping, nico.id);
+      expect(mayWake(old, "usr_alice", undefined, undefined, now)).toBe(false);
+      expect(policyWords(old, nameOf, undefined, undefined, now)).toBe("listens to Nico and Usama");
+      // `rulesOf` here keeps both shapes and nothing else: a malformed entry
+      // is dropped exactly as a string list drops a number.
+      expect(rulesOf({ listen: stored }).listen).toEqual(stored);
+      expect(rulesOf({ listen: [7, null, { until: later }, "usr_bob"] }).listen).toEqual(["usr_bob"]);
+    });
+
+    it("a lapsed grant wakes nothing, and is not named as though it did", () => {
+      const lapsedGate = { owner: nico, listen: [{ id: "usr_alice", until: before }] };
+      expect(mayWake(lapsedGate, "usr_alice", undefined, undefined, now)).toBe(false);
+      expect(mayWake(lapsedGate, nico.id, undefined, undefined, now)).toBe(true);
+      // The words say what dispatch does — never "listens to Alice" of a gate
+      // that will turn Alice away.
+      expect(policyWords(lapsedGate, nameOf, undefined, undefined, now)).toBe("listens only to Nico");
+      const live = { owner: nico, listen: [{ id: "usr_alice", until: later }] };
+      expect(mayWake(live, "usr_alice", undefined, undefined, now)).toBe(true);
+      expect(policyWords(live, nameOf, undefined, undefined, now)).toBe("listens to Nico and Alice");
+      // `wait`'s reading of a stored gate keeps the same clock.
+      expect(listensTo({ listen: [{ id: "usr_alice", until: before }] }, "usr_alice", undefined, now)).toBe(false);
+      expect(listensTo({ listen: [{ id: "usr_alice", until: later }] }, "usr_alice", undefined, now)).toBe(true);
+    });
+
+    it("refuses a lapsed grant in the same words, plus the one that says it lapsed", () => {
+      const gate = { owner: nico, listen: [{ id: "usr_alice", until: before }] };
+      const line = turnedAwayLine("Sian", gate, nameOf, "Alice", {
+        lapsed: lapsedFor(gate, "usr_alice", undefined, now),
+        now,
+      });
+      expect(line).toContain("Sian listens only to Nico — this did not wake Sian, and spent nothing.");
+      expect(line).toContain("Alice's access lapsed 1h ago.");
+      // The suggestion is a command to retype: names, no expiries, and the
+      // lapsed one is not smuggled back in as though it still stood.
+      expect(line).toContain("--to Alice");
+      expect(line).not.toContain("until 2026");
+      // A client reading the announced policy reaches the same two facts.
+      expect(refusedMentions([sian.id], "usr_alice", { [sian.id]: gate }, undefined, now)).toEqual([
+        { actorId: sian.id, policy: gate, lapsed: before },
+      ]);
+    });
+
+    it("lets a surface recognise a refusal it did not write", () => {
+      /* The refusal is a system comment and it stays in the thread forever.
+         Once the owner widens the gate the words above the reader are no
+         longer true, and saying so beside them means knowing which comment
+         they are (#272 phase 1). */
+      const body = turnedAwayLine("Sian", { owner: nico, listen: [] }, nameOf, "Alice");
+      expect(readsAsTurnedAway(body, "Sian")).toBe(true);
+      expect(readsAsTurnedAway(body, "Percy")).toBe(false);
+      expect(readsAsTurnedAway("Sian said hello", "Sian")).toBe(false);
+    });
+
+    it("says how long in one vocabulary, and resolves a span to an instant", () => {
+      expect(listenUntil("never")).toBeNull();
+      expect(listenUntil("7d", now)).toBe(new Date(now + 7 * 86_400_000).toISOString());
+      expect(listenUntil("24h", now)).toBe(new Date(now + 86_400_000).toISOString());
+      expect(() => listenUntil("soonish")).toThrow(/not a length of time/);
+      expect(untilWords(new Date(now + 7 * 86_400_000).toISOString(), now)).toBe("for 7d");
+      expect(untilWords(before, now)).toBe("lapsed 1h ago");
+    });
+
+    it("one name granted twice is one grant, and the longer one wins", () => {
+      /* Two clicks, two spans: the owner widening a grant they already gave
+         is widening it, and the gate must not end up naming Alice twice. */
+      const policy = answerPolicy(
+        { listen: [{ id: "usr_alice", until: before }, { id: "usr_alice", until: later }] },
+        keeping,
+        nico.id,
+      );
+      expect(policy.listen).toEqual([{ id: "usr_alice", until: later }]);
+      expect(mayWake(policy, "usr_alice", undefined, undefined, now)).toBe(true);
+      // A grant with no expiry is the longer one, whatever order it arrived in.
+      expect(
+        answerPolicy({ listen: [{ id: "usr_alice", until: later }, "usr_alice"] }, keeping, nico.id).listen,
+      ).toEqual(["usr_alice"]);
+      // And a gate somebody else wrote is still set aside, timed or not.
+      expect(answerPolicy({ listen: [{ id: "usr_alice", until: later }] }, keeping, "usr_bob").listen).toEqual([]);
+      expect(gateSetAside({ listen: [{ id: "usr_alice", until: later }] }, keeping, "usr_bob")).toBe(true);
+    });
   });
 });
 
