@@ -125,6 +125,14 @@ distribute`, `isocan mv --by`, `isocan set --title` (which renames the file
 too), `isocan add --drawing`, `isocan ls --kind`, `isocan identity --color`.
 That parity is a house rule with a test behind it: see AGENTS.md.
 
+- **Anatomy project exploration**: Blueprint puts goal, structure, data and rule
+  concepts on native canvas cards, with a searchable hierarchy and inspector.
+  Overview, Open Decisions and Coverage show the same graph through different
+  lenses. Import/export Anatomy JSON, discuss concepts, attach source evidence,
+  propose HTML mocks, and save or restore checkpoints. Open **Anatomy** from
+  the command palette, or `isocan open --page anatomy`; the `isocan anatomy`
+  command family provides the same reads and edits. This is a removable module
+  using the proposed workspace API. [Design and phased plan](docs/projects/anatomy/phases.md).
 - **Canvas**: infinite pan/zoom surface with a minimap; items are files —
   markdown, images, video, and HTML rendered live in sandboxed iframes
   (`allow-scripts` without `allow-same-origin`). "Double-click to interact"

@@ -1,0 +1,750 @@
+.anatomy-workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  font-size: 13px;
+  background: var(--ground);
+}
+.anatomy-workspace * {
+  box-sizing: border-box;
+}
+.anatomy-workspace button,
+.anatomy-file-button {
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.anatomy-workspace button:hover,
+.anatomy-file-button:hover {
+  background: var(--chip-hover);
+}
+.anatomy-workspace button:focus-visible,
+.anatomy-workspace input:focus-visible,
+.anatomy-workspace textarea:focus-visible,
+.anatomy-workspace select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.anatomy-workspace button[aria-pressed="true"] {
+  background: var(--chip-hover);
+  font-weight: 650;
+}
+.anatomy-workspace button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.anatomy-workspace input:not([type="checkbox"]),
+.anatomy-workspace textarea,
+.anatomy-workspace select {
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.anatomy-workspace textarea {
+  resize: vertical;
+  width: 100%;
+  line-height: 1.6;
+}
+.anatomy-workspace form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.anatomy-workspace form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.anatomy-workspace input[type="checkbox"] {
+  width: auto;
+}
+.anatomy-workspace h1,
+.anatomy-workspace h2 {
+  font-family: Georgia, serif;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+}
+.anatomy-workspace h1 {
+  font-size: 32px;
+  margin: 12px 0 28px;
+}
+.anatomy-workspace h2 {
+  font-size: 23px;
+  margin: 12px 0 20px;
+}
+.anatomy-workspace h3 {
+  font-size: 13px;
+  margin: 20px 0 10px;
+}
+.anatomy-workspace p {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.anatomy-workspace small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.anatomy-header {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  z-index: 2;
+}
+.anatomy-project-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+}
+.anatomy-project-picker select {
+  max-width: 240px;
+  font-weight: 650;
+}
+.anatomy-mark {
+  font-size: 27px;
+  color: var(--accent);
+}
+.anatomy-convergence {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.anatomy-convergence small {
+  display: block;
+  margin-top: 3px;
+}
+.anatomy-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 auto;
+}
+.anatomy-tabs button {
+  border-color: transparent;
+  white-space: nowrap;
+}
+.anatomy-tabs small {
+  display: inline-block;
+  margin-left: 7px;
+}
+.anatomy-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.anatomy-file-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+.anatomy-file-button input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  cursor: pointer;
+}
+.anatomy-file-button:focus-within {
+  outline: 2px solid var(--accent);
+}
+.anatomy-notice {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--card);
+  color: var(--danger);
+  border-bottom: 1px solid var(--line);
+  max-height: 160px;
+  overflow: auto;
+  z-index: 4;
+}
+.anatomy-saving {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  z-index: 5;
+}
+.anatomy-empty {
+  width: min(560px, 90%);
+  margin: auto;
+  padding: 45px 0;
+}
+.anatomy-empty form {
+  flex-direction: row;
+  margin: 28px 0;
+}
+.anatomy-empty form input {
+  flex: 1;
+}
+.anatomy-loading {
+  padding: 30px;
+}
+.anatomy-canvas-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  z-index: 2;
+}
+.anatomy-canvas-tools > span {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-soft);
+}
+.anatomy-blueprint {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.anatomy-blueprint.has-tree {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+.anatomy-blueprint.has-inspector {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.anatomy-blueprint.has-tree.has-inspector {
+  grid-template-columns: 240px minmax(0, 1fr) 340px;
+}
+.anatomy-tree {
+  padding: 14px 10px;
+  overflow: auto;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  z-index: 1;
+}
+.anatomy-tree > input {
+  width: 100%;
+  margin-bottom: 18px;
+}
+.anatomy-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.anatomy-tree-row > button:not(.anatomy-chevron) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  padding: 8px 3px;
+  text-align: left;
+}
+.anatomy-tree-row > button[aria-pressed="true"] {
+  background: var(--chip-hover);
+}
+.anatomy-tree-row > button > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.anatomy-workspace .anatomy-chevron {
+  width: 18px;
+  flex: 0 0 18px;
+  border: 0;
+  background: transparent;
+  padding: 3px;
+}
+.anatomy-axis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  border-radius: 50%;
+  background: var(--chip-hover);
+  flex-shrink: 0;
+}
+.anatomy-axis-goal {
+  color: #476f98;
+}
+.anatomy-axis-structure {
+  color: #49775d;
+}
+.anatomy-axis-data {
+  color: #957023;
+}
+.anatomy-axis-rules {
+  color: #9b5963;
+}
+.anatomy-dot {
+  font-size: 8px;
+}
+.anatomy-add {
+  margin-top: 20px;
+  width: 100%;
+}
+.anatomy-search-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 4px 0;
+}
+.anatomy-stage {
+  min-width: 0;
+  min-height: 0;
+}
+.anatomy-inspector {
+  overflow: auto;
+  padding: 24px;
+  border-left: 1px solid var(--line);
+  background: var(--card);
+  z-index: 1;
+}
+.anatomy-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.anatomy-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--chip-hover);
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.anatomy-status.anatomy-conflict,
+.anatomy-status.anatomy-risk {
+  color: #955116;
+  background: #fcf0dd;
+}
+.anatomy-status.anatomy-settled {
+  color: #386249;
+  background: #e6f1e9;
+}
+.anatomy-status.anatomy-missing {
+  color: #885568;
+  background: #f6e8ef;
+}
+.anatomy-prose {
+  white-space: pre-wrap;
+}
+.anatomy-muted,
+.anatomy-eyebrow {
+  color: var(--ink-soft);
+}
+.anatomy-eyebrow {
+  font-size: 12px;
+}
+.anatomy-assessment {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.anatomy-assessment > p {
+  width: 100%;
+  margin: 4px 0;
+}
+.anatomy-assessment > strong {
+  flex: 1;
+}
+.anatomy-relationship {
+  margin-bottom: 8px;
+}
+.anatomy-relationship p {
+  color: var(--ink-soft);
+  margin: 3px 0;
+}
+.anatomy-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  width: 100%;
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.anatomy-evidence q {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.anatomy-resolution {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.anatomy-comment {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+.anatomy-comment p {
+  white-space: pre-wrap;
+}
+.anatomy-overview {
+  overflow: auto;
+  flex: 1;
+  padding: 42px 28px;
+}
+.anatomy-overview article {
+  max-width: 780px;
+  margin: auto;
+}
+.anatomy-overview article > p {
+  font-size: 15px;
+}
+.anatomy-goal {
+  padding: 22px 26px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  margin-bottom: 35px;
+}
+.anatomy-goal h2 {
+  margin-top: 0;
+  font-size: 21px;
+}
+.anatomy-decisions {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+.anatomy-decision-nav {
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  overflow: auto;
+  padding: 12px;
+}
+.anatomy-decision-nav h3 {
+  padding: 0 8px;
+}
+.anatomy-decision-nav button {
+  display: block;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  padding: 12px 8px;
+  line-height: 1.4;
+  margin: 2px 0;
+}
+.anatomy-decision-nav small {
+  display: block;
+  margin-top: 6px;
+}
+.anatomy-report {
+  padding: 38px clamp(20px, 5vw, 90px);
+  overflow: auto;
+}
+.anatomy-report > h2 {
+  font-size: 32px;
+  margin-top: 22px;
+}
+.anatomy-report > section {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.anatomy-jump {
+  float: right;
+  margin-left: 15px;
+}
+.anatomy-coverage {
+  overflow: auto;
+  padding: 32px;
+}
+.anatomy-coverage table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 850px;
+  font-size: 12px;
+}
+.anatomy-table-scroll {
+  overflow-x: auto;
+}
+.anatomy-coverage th,
+.anatomy-coverage td {
+  border-bottom: 1px solid var(--line);
+  padding: 14px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 135px;
+}
+.anatomy-coverage th {
+  min-width: 200px;
+  font-weight: 500;
+}
+.anatomy-coverage button {
+  display: block;
+  text-align: left;
+  margin-bottom: 8px;
+}
+.anatomy-axis-row {
+  background: var(--card);
+}
+.anatomy-checkpoints {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--card);
+  z-index: 2;
+}
+.anatomy-checkpoints > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.anatomy-checkpoints form {
+  flex-direction: row;
+  margin-left: auto;
+}
+.anatomy-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #0005;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 90;
+}
+.anatomy-dialog {
+  width: min(760px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--card);
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 70px #0003;
+}
+.anatomy-dialog > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+.anatomy-dialog > header h2 {
+  margin: 0;
+}
+.anatomy-dialog > button {
+  margin-right: 10px;
+}
+.anatomy-dialog li {
+  margin-bottom: 14px;
+}
+.anatomy-form-row {
+  display: flex;
+  gap: 20px;
+}
+.anatomy-form-row > label {
+  flex: 1;
+  min-width: 0;
+}
+.anatomy-source {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--ground);
+  padding: 20px;
+  border-radius: 6px;
+  max-height: 55vh;
+  overflow: auto;
+}
+.anatomy-mock {
+  width: 100%;
+  height: 280px;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 6px;
+}
+.anatomy-card {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 20px;
+  color: var(--ink);
+  background: var(--card);
+  overflow: hidden;
+}
+.anatomy-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.anatomy-card h2 {
+  font:
+    600 23px/1.2 Georgia,
+    serif;
+  margin: 18px 0 14px;
+  overflow-wrap: anywhere;
+}
+.anatomy-card p {
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 1050px) {
+  .anatomy-header {
+    gap: 10px;
+    padding: 10px;
+  }
+  .anatomy-tabs {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  .anatomy-actions {
+    margin-left: auto;
+  }
+  .anatomy-blueprint.has-tree {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .anatomy-blueprint.has-inspector {
+    grid-template-columns: minmax(0, 1fr) 290px;
+  }
+  .anatomy-blueprint.has-tree.has-inspector {
+    grid-template-columns: 200px minmax(0, 1fr) 290px;
+  }
+  .anatomy-inspector {
+    padding: 18px;
+  }
+}
+@media (max-width: 760px) {
+  .anatomy-blueprint,
+  .anatomy-blueprint.has-tree,
+  .anatomy-blueprint.has-inspector,
+  .anatomy-blueprint.has-tree.has-inspector {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .anatomy-blueprint.has-inspector,
+  .anatomy-blueprint.has-tree.has-inspector {
+    grid-template-rows: minmax(150px, 1fr) minmax(0, 1fr);
+  }
+  .anatomy-stage {
+    grid-row: 1;
+  }
+  .anatomy-tree {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(260px, 85vw);
+    z-index: 3;
+    box-shadow: 0 4px 16px #0002;
+  }
+  .anatomy-inspector {
+    grid-row: 2;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .anatomy-blueprint.has-tree.has-inspector .anatomy-tree {
+    display: none;
+  }
+  .anatomy-project-picker select {
+    max-width: 160px;
+  }
+  .anatomy-convergence {
+    display: none;
+  }
+  .anatomy-tabs {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+  .anatomy-tabs button {
+    padding: 6px;
+  }
+  .anatomy-canvas-tools > span {
+    display: none;
+  }
+  .anatomy-canvas-tools {
+    justify-content: space-between;
+  }
+  .anatomy-decisions {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+  .anatomy-report {
+    padding: 22px 16px;
+  }
+  .anatomy-jump {
+    float: none;
+    margin: 0 0 14px;
+  }
+}
+
+@media (max-width: 540px) {
+  .anatomy-decisions {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .anatomy-decision-nav,
+  .anatomy-report {
+    overflow: visible;
+  }
+  .anatomy-header {
+    gap: 6px;
+  }
+  .anatomy-actions {
+    gap: 4px;
+  }
+  .anatomy-project-picker {
+    min-width: 0;
+  }
+  .anatomy-checkpoints form {
+    flex-wrap: wrap;
+  }
+  .anatomy-backdrop {
+    padding: 10px;
+  }
+  .anatomy-dialog {
+    padding: 16px;
+  }
+}

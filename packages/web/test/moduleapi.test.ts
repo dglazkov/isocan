@@ -75,7 +75,7 @@ describe("how early the API says it is", () => {
     /* The three that landed on 9 Sep with one caller each. Shipping is not
        stability, and calling it stable because it shipped is how an API gets
        frozen by accident. */
-    expect([...PROPOSED].sort()).toEqual(["drops", "host", "overlays"]);
+    expect([...PROPOSED].sort()).toEqual(["drops", "host", "overlays", "workspaces"]);
   });
 
   it("refuses a proposal this build has never heard of, by name", () => {

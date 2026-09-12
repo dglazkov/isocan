@@ -9,7 +9,7 @@ what it describes. Run `node scripts/roadmap.mjs` after changing one.
 The same board lives on a canvas, [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),
 open to anyone with the address — it should say what `main` says.
 
-**21 built · 46 still open** — of which 31 partly
+**22 built · 46 still open** — of which 31 partly
 built, 14 designed, 0 blocked, and
 **1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -80,12 +80,13 @@ and the done column should not be flattered by either.
 | --- | --- | --- | --- |
 | research | [Into somebody else's window](docs/research/2026-09-09-agent-managers.md) | 2026-09-09 | measured 9 Sep — isocan.io sends no frame-ancestors and no X-Frame-Options, so any manager may already frame it, and one does. The gate is not framing, it is ADMISSION: the badge cookie is SameSite=Lax with no Partitioned and the web app has no bearer path at all (0 hits for Authorization in packages/web/src), so in a partitioning browser an embedded canvas is anonymous, cannot persist a badge, mints a fresh one per load, and walks into the per-address mint meter. Four doors weighed; the recommendation is MCP for the vocabulary, MCP Apps (SEP-1865, stable since 26 Jan) for the surface, the plain iframe as the fallback that already works, and no per-vendor extension — the harnesses constraint, inverted · see harnesses, context, memory, iso-api, on-demand · [#220](https://github.com/dglazkov/isocan/issues/220) |
 
-## Built <sub>21</sub>
+## Built <sub>22</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A timeline for the canvas](docs/research/2026-08-26-timeline.md) | 2026-08-30 | the significance function and the CLI track are built; the scrubber is not |
 | **project** | [agent-custody](docs/projects/agent-custody/design.md) | 2026-08-31 | designed and built 31 Aug — no Add button without a visible rc; enrolment is a handshake the rc completes, the desk changed not at all. The Open section records what the build decided and what still waits. · see agent-custody |
+| **project** | [anatomy](docs/projects/anatomy/design.md) | 2026-09-11 | phases 1–5 built and verified on branch anatomy; native file graph, proposed workspace API, four lenses, CLI parity, evidence, native discussion, checkpoints and mock promotion; full suite, typecheck, production/runtime builds and desktop/phone browser journey passed · see anatomy, modules, atlas |
 | **project** | [auto-upgrade](docs/projects/auto-upgrade/journey.md) | 2026-08-29 | all four phases done 27–29 Aug 2026 — the home says which commit it runs, a CLI that disagrees says so once, an upgrade is a build installed aside and probed before `current` flips, and a managed install upgrades while parked. Three open items stay named at the top of phases.md. · see auto-upgrade |
 | research | [Design systems an agent writes, tokens a machine can read](docs/research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed 24 Aug; the round-trip landed 4 Sep — the export is DTCG 2025.10 and validates against the official schema for every file in a twelve-file slice of the corpus, the import reads the reference exporter's own files, and the linter went from 42 failing files of 74 to 13, all true findings |
 | **project** | [harnesses](docs/projects/harnesses/journey.md) | 2026-09-04 | built 4 Sep 2026 — pi, codex and antigravity (on a Gemini API key; the server fetched from Google on first use) join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan. · see harnesses, on-demand, standing-agents |

@@ -762,3 +762,20 @@ renderer (including React's table-whitespace removal). Receivers resolve local
 DOM ranges; CSS Custom Highlights never replace native selection. Older
 browsers retain the named attention status and explicit Show selection action.
 Version changes clear the highlight instead of guessing at another sentence.
+
+
+### Module workspaces
+
+The web and CLI module lists are the only host imports of a module. Anatomy
+adds no graph daemon: project records, concepts and checkpoints are ordinary
+versioned JSON items; membership and relationships are namespaced properties.
+Its CLI and React views use the same graph adapter and operation builders.
+
+`WebModule.workspaces` composes chrome around the host's native viewport at
+an existing module route. `ModuleWorkspace` owns capability, selection,
+navigation, history controls, lazy/error boundaries and measured stage bounds.
+A fixed viewport clipped to the measured slot keeps screen-coordinate drag
+math unchanged. `WorkspaceHost` promotes authenticated blob reads and native
+selection/focus/navigation; modules still import no web stores. The API and
+proposed declaration live in `core/modules.ts`; the full contract is in
+[the module authoring guide](projects/modules/authoring.md).

@@ -9,7 +9,7 @@ import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts"
 import { formatMoves, formatScope } from "@isocan/core";
 import { canEditNow } from "./capability.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
-import { modules, modulePages } from "../modules.ts";
+import { modules, moduleViews } from "../modules.ts";
 
 /**
  * **The things the app does itself.**
@@ -319,7 +319,7 @@ export const ACTIONS: readonly Action[] = [
  */
 function moduleActions(): Action[] {
   // A module's pages are doors like the workbench's: "Open Documents".
-  const pages = modulePages().map(
+  const pages = moduleViews().map(
     (page): Action => ({
       id: `open-page-${page.segment}`,
       name: `Open ${page.label}`,

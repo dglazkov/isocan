@@ -6365,6 +6365,13 @@ button.mt-card:hover { border-color: var(--accent); }
 .module-page-hint { color: var(--ink-soft); font-size: 13px; }
 .module-page-body { flex: 1; min-height: 0; overflow: auto; padding: 24px var(--edge); }
 .module-page-missing { max-width: 48ch; margin: 40px auto; text-align: center; color: var(--ink-soft); }
+.module-workspace { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--ground); }
+.module-canvas-slot { --module-clip: inset(100%); width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.module-workspace .module-page-bar { flex-wrap: wrap; }
+.module-workspace-history { display: flex; gap: 6px; margin-left: auto; }
+.module-workspace-history button { color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+@media (max-width: 760px) { .module-workspace .module-page-hint { display: none; } }
+.module-canvas-slot .canvas-viewport { position: fixed; inset: 0; clip-path: var(--module-clip, inset(100%)); }
 
 /* ---------- the inspector beside the workbench's stage ---------- */
 .wb-inspector {

@@ -1403,6 +1403,7 @@ export function VersionContent({
   // Stable per blob, so a module renderer keying an effect on it does not
   // refetch on every shell render (see modules/mermaid/src/diagram.tsx).
   const readText = useCallback(() => readBlobText(canvasId, blobHash), [canvasId, blobHash]);
+  const moduleItem = useCanvasStore((s) => itemId ? (s.past?.canvas ?? s.canvas)?.items[itemId] : undefined);
   // A runtime module that arrived after first paint may own this mime now.
   useUiStore((s) => s.modulesGeneration);
   if (liveDoc) {
@@ -1419,6 +1420,7 @@ export function VersionContent({
   if (ModuleRenderer) {
     return (
       <ModuleRenderer
+        item={moduleItem}
         canvasId={canvasId}
         blobHash={blobHash}
         mimeType={mimeType}

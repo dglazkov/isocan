@@ -84,7 +84,7 @@ describe("the handler is wired through the rule", () => {
     // gate rather than grow a second policy in the handler — so the guard
     // asserts the one gate names the pair.
     const gate = effect.search(
-      /if\s*\(\(itemId \|\| onWorkbench\)\s*&&\s*!crossesCover\(e\)\)\s*return/,
+      /if\s*\(\(itemId \|\| onWorkbench \|\| \(pageSegment && \(!workspace \|\| !document\.querySelector\("\[data-module-stage\]"\)\)\)\)\s*&&\s*!crossesCover\(e\)\)\s*return/,
     );
     expect(gate, "no route gate in onKeyDown").toBeGreaterThan(-1);
     // FIRST, not merely present: a gate that lets one dispatch run before it
@@ -102,6 +102,6 @@ describe("the handler is wired through the rule", () => {
     // dependency array, the listener registered on the canvas route keeps a
     // stale undefined forever — and the gate never turns on.
     // onWorkbench rides the same array for the same reason itemId does.
-    expect(effect).toMatch(/\}, \[canvasId, actor, itemId, onWorkbench\]\);$/);
+    expect(effect).toMatch(/\}, \[canvasId, actor, itemId, onWorkbench, pageSegment, workspace\]\);$/);
   });
 });

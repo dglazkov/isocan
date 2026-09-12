@@ -1,0 +1,30 @@
+{
+  "name": "@isocan/anatomy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Explore project concepts, decisions, coverage and evolution on the native canvas",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*",
+    "zod": "^4.5.1",
+    "react-markdown": "^9.0.3"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  },
+  "isocan": {
+    "engines": ">=0.2.1",
+    "proposed": [
+      "host",
+      "workspaces"
+    ]
+  }
+}

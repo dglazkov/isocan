@@ -3757,10 +3757,11 @@ export function registerRoutes(
       .send({ urls, expiresAt, ttlSeconds: signing.ttlSeconds } satisfies SignedBlobsResponse);
   });
 
-  // Its own scope, so `application/json` bytes arrive as bytes here and stay
-  // parsed everywhere else — see the note at the `*` parser above.
+  // Its own scope, so JSON and plain text bytes stay bytes here. Fastify
+  // has built-in parsers for both; the wildcard handles only unknown types.
+  // Anatomy source attachments exposed the text/plain half of the same bug.
   void app.register(async (blobs) => {
-    blobs.addContentTypeParser("application/json", { parseAs: "buffer" }, (_req, body, done) =>
+    blobs.addContentTypeParser(["application/json", "text/plain"], { parseAs: "buffer" }, (_req, body, done) =>
       done(null, body),
     );
     blobs.post("/api/projects/:id/blobs", async (req, reply) => {
