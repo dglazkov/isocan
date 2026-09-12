@@ -25,7 +25,7 @@ export function SandboxesPage({ canvasId, canvas }: PageFacts) {
   }
   return (
     <div className="docs-page">
-      <p className="doc-quiet">
+      <p className="doc-quiet sandbox-note">
         A program runs on the machine that types its verb — never on this canvas's home, and never in this browser.
       </p>
       <ol className="docs-list">
@@ -39,12 +39,12 @@ export function SandboxesPage({ canvasId, canvas }: PageFacts) {
                   <code>{runOf(program)}</code>
                 </small>
               </a>
-              <p className="doc-quiet">
+              <p className="sandbox-runs">
                 {out ? (
                   <>
-                    {out.versions.length} run{out.versions.length === 1 ? "" : "s"} ·{" "}
-                    <a href={workbenchItemPath(canvasId, out.id)}>last transcript</a> ·{" "}
-                    {new Date(out.updatedAt).toLocaleDateString()}
+                    {out.versions.length} run{out.versions.length === 1 ? "" : "s"}, last{" "}
+                    {new Date(out.updatedAt).toLocaleDateString()} —{" "}
+                    <a href={workbenchItemPath(canvasId, out.id)}>read the transcript</a>
                   </>
                 ) : (
                   <>
