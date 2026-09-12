@@ -11,7 +11,7 @@ of what is below.
 ## How early this is — read this first
 
 **The module API is pre-1.0 and we intend to break it.** It is at
-`MODULE_API_VERSION` 0.2.1, it moved on the day a second person wrote a module
+`MODULE_API_VERSION` 0.2.2, it moved on the day a second person wrote a module
 against it, and it will move again. Nothing here is frozen.
 
 Two things follow, and they are the whole contract:
@@ -193,7 +193,7 @@ Both use `x/<segment>`, so choose a distinct segment and give the workspace a
 `cli` equivalent. The launcher lists both; existing page registrations work
 unchanged. Anatomy is the worked example.
 
-`WorkspaceFacts<ReactNode>` supplies `canvasId`, `canvas`, `selection`,
+`WorkspaceFacts<ReactNode>` supplies `viewState`, `canvasId`, `canvas`, `selection`,
 `canEdit`, `host`, and `canvasView`. Render `canvasView` **once** in a sized
 container with real height and width. A report lens may omit it while that
 report is open. The shell measures the slot, clips the native viewport to it,
@@ -205,6 +205,8 @@ There is one replica and one socket. Never instantiate a second viewport.
 
 | Capability | Contract |
 | --- | --- |
+| `present(view)` | Temporary bounds/detail over native IDs; `null` restores saved geometry. See below. |
+| `navigateView(patch, replace?)` | Update query keys (`null` removes); push one browser Back step, or replace the current address. The reactive `viewState` reports the result. |
 | `readText(hash)` | Authenticated, hash-cached UTF-8 blob read for this canvas. |
 | `getCanvas()` | The currently displayed snapshot; re-read before writes to detect stale drafts. |
 | `select(ids)` | Replace native item selection; ignore missing ids. |
@@ -212,6 +214,33 @@ There is one replica and one socket. Never instantiate a second viewport.
 | `openItem(id)` | Navigate to the ordinary host item viewer. |
 | `openChat()` | Show the native Chat, for example after a module posts an agent request. |
 | `onActivateItem(handler)` | Subscribe to native double-clicks and underlay links; return true to consume, false for normal viewing. Returns cleanup. |
+
+`present` accepts `{items, isolate?, focusIds?, maxScale?}`. `items` maps native
+IDs to finite positive bounds (`x`, `y`, `width`, `height`) plus `detail`
+(`full`, `compact`, `marker`) and optional `emphasis`. The host animates from its
+current frame, honors reduced motion, and stops scheduling frames when settled.
+No `items.move` is sent. Explicit native drags still apply a durable delta.
+`isolate` limits the stage to these items. Omit `focusIds` on incoming content
+updates: a collaborator editing a concept must not move the reader’s camera.
+Use it only for navigation; `maxScale` limits magnification.
+
+The same frame drives card hit targets, selection, connection underlays,
+spatial navigation, version fans and anchored comments. `UnderlayFacts.canvas`
+is the disposable geometry view; `presentation` supplies detail/emphasis.
+`RendererFacts.presentation` is supplied only inside this local presentation.
+Marker content is a lightweight native glyph. Compact and full structured
+content uses the module renderer, which can adapt to the supplied detail;
+compact unstructured files fall back to a native title.
+
+Item selection outlines and working-session labels remain native. Free-space
+cursors and pins are hidden in an isolated layout, because their coordinates
+have no meaning in somebody else’s focus view. Pin new discussion to an item.
+Saved sizes can be edited on the ordinary canvas or from the CLI; projected
+sizes express semantic detail and have no resize handles. A workspace is for
+exploring its native items, while free placement and annotation use the canvas.
+The host restores the ordinary camera on exit and remembers the workspace’s
+last address and view cameras for this browser session. Modules own their local
+pane preferences. These capabilities require module API **0.2.2**.
 
 `canEdit` is false for a reader or a past-state view. Hide mutation controls;
 `host.send` still enforces the host's capability gate. The shell supplies Back,

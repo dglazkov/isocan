@@ -119,12 +119,12 @@ describe("isocan module", () => {
     const dir = await builtModule("future", { name: "@acme/future", version: "9.0.0", engines: ">=9.0.0", cli: "dist/cli.mjs" }, HELLO_CLI);
     const refused = await isocan("module", "add", dir, "--yes");
     expect(refused.code).not.toBe(0);
-    expect(refused.stderr).toContain("needs module API >=9.0.0, and this build is 0.2.1");
+    expect(refused.stderr).toContain("needs module API >=9.0.0, and this build is 0.2.2");
     // Dropped in by hand — the check at load is the one that protects a home
     // whose isocan moved after the module was installed.
     await fs.cp(dir, path.join(home, "modules", "future"), { recursive: true });
     const rows = await json("module", "ls");
-    expect(rows).toContainEqual({ name: "@acme/future", version: "9.0.0", refused: "needs module API >=9.0.0, and this build is 0.2.1" });
+    expect(rows).toContainEqual({ name: "@acme/future", version: "9.0.0", refused: "needs module API >=9.0.0, and this build is 0.2.2" });
     expect((await isocan("hello")).code).not.toBe(0);
   });
 

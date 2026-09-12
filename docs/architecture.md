@@ -785,3 +785,18 @@ canvas record's properties. Anatomy uses `anatomy.analysis` and
 `anatomy.repository`; requesting a repository read posts an ordinary `/anatomy`
 Chat message for an agent. Workspace-scoped activation routes native card
 double-clicks and underlay links without putting module semantics in ItemView.
+
+
+Anatomy’s fluid exploration adds a workspace-local presentation store in the
+web host. Modules provide target bounds and semantic detail over native IDs;
+React consumers and imperative gestures read the same interpolated frame.
+Canonical geometry remains in the daemon’s replica. The host maps item-anchored
+comments between saved and displayed coordinates, while unscoped presence is
+not projected across different local layouts. Module API 0.2.2 also makes local
+view state addressable through host navigation. See the [workspace contract](projects/modules/authoring.md).
+
+`item.edit` is a conditional body-and-metadata replacement. The reducer checks
+the version originally read and optional title/property preconditions before
+changing either field. Anatomy’s form and guarded CLI drafts use it; undo and
+redo restore body and metadata together. An older daemon rejects the new op
+rather than silently dropping a precondition it does not understand.

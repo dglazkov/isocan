@@ -75,6 +75,7 @@ function hashesInOperation(op: Operation): string[] {
   switch (op.type) {
     case "item.add":
     case "item.addVersion":
+    case "item.edit":
     case "item.restoreVersion": {
       const hashes = [op.version.blobHash];
       if (op.version.visual?.blobHash) hashes.push(op.version.visual.blobHash);

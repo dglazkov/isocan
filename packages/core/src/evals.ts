@@ -576,7 +576,7 @@ export function harvestPreferences(
       seen.set(op.itemId, [op.version.id]);
       continue;
     }
-    if (op.type === "item.addVersion") {
+    if (op.type === "item.addVersion" || op.type === "item.edit") {
       const stack = seen.get(op.itemId) ?? [];
       seen.set(op.itemId, [...stack, op.version.id]);
       continue;

@@ -392,6 +392,17 @@ describe("Anatomy as native files and operations", () => {
       saveProject(m.io, item, { ...p, goalStatement: "Stale change" }),
     ).rejects.toThrow("changed while editing");
   });
+  it("allows independent concept edits and refuses an old file against a fresh snapshot", async () => {
+    const m = memory(), p = sampleProject(), id = await importProject(m.io, p);
+    const before = m.canvas(), item = before.items[id]!;
+    const original = nodesOn(before, id)[1]!;
+    const base = { versionId: original.currentVersionId, title: original.title, properties: original.properties };
+    await saveNode(m.io, before, item, p, { ...p.nodes[3], summary: "Independent change" });
+    await saveNode(m.io, before, item, p, { ...p.nodes[1], evidence: [{ sourceId: "latest", snippet: "New evidence" }] });
+    const now = m.canvas(), current = await readProject(now, now.items[id]!, m.io.read);
+    await expect(saveNode(m.io, now, now.items[id]!, current, { ...p.nodes[1], summary: "Stale file" }, base)).rejects.toThrow("changed while editing");
+    expect((await readProject(m.canvas(), m.canvas().items[id]!, m.io.read)).nodes[1]!.evidence[0]!.sourceId).toBe("latest");
+  });
   it("does not manufacture assessment or convergence for an empty graph", () => {
     expect(convergence([])).toBe(0);
     expect(

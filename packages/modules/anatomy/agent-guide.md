@@ -9,7 +9,7 @@ can share a canvas; use their item ids to avoid ambiguous names.
 | Start, import, find, read, export | `anatomy new <title>`, `anatomy import <file>`, `anatomy ls`, `anatomy show <project>`, `anatomy export <project> <file>` |
 | Associate, attach, request analysis | `anatomy repository <path-or-url>`, `anatomy attach <project>`, `anatomy analyze [repository]` |
 | Change intent or narrative | `anatomy goal <project> <text>`, `anatomy brief <project> <markdown-file>` |
-| Create/edit a concept or directed relationship | `anatomy sample <project>`, `anatomy node <project> <json-file>`, `anatomy edge <project> <json-file>` |
+| Create/edit a concept or directed relationship | `anatomy sample <project>`, `anatomy draft <project> <node>`, `anatomy node <project> <json-file>`, `anatomy edge <project> <json-file>` |
 | Arrange and explore | `anatomy show <project> --node <original-id>`, `anatomy layout <project>`, `anatomy decisions <project>`, `anatomy coverage <project>` |
 | Attach cited UTF-8 source bytes | `anatomy source <project> <source-id> <file>` |
 | Propose or approve an HTML mock | `anatomy propose <project> <node-id> <html-file> --title <title> --constraints 'a;b'`, `anatomy promote <project> <node-id>` |
@@ -27,8 +27,12 @@ Concept JSON has `id`, `title`, `category` (goal/structure/data/rules), `status`
 `lenses`, and `proposedMock`. Use domain concepts, workflows, states and
 contracts, rather than implementation tickets. Explain unsettled concepts in
 plain English. Missing discipline assessments mean not assessed, never settled.
-`anatomy node` replaces the concept body; start from `anatomy show --json` to
-preserve its citations and optional fields. Edges have `id`, `from`, `to`,
+`anatomy node` replaces the concept body. For an existing concept, start with
+`anatomy draft <project> <node>`: edit its `node` fields while preserving `base`.
+Save that JSON with `anatomy node`; stale drafts are refused by the daemon's
+conditional `item.edit` operation. It changes body and metadata as one undo,
+and preserves geometry. Plain concept JSON is accepted only for new concepts.
+Keep citations and optional fields unless deliberately changing them. Edges have `id`, `from`, `to`,
 optional `label` and `coupling` (tight/contract/loose), using original concept
 ids. The canvas item ids are separate, and native properties map them.
 

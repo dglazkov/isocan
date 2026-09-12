@@ -6486,3 +6486,18 @@ button.mt-card:hover { border-color: var(--accent); }
 .text-comment-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; position: sticky; top: 0; z-index: 2; background: var(--card); padding: 4px; }
 .fullscreen-stage .md-view { padding-top: 96px; scroll-padding-top: 96px; }
 .fullscreen-stage .text-comment-actions { top: 64px; }
+
+/* Workspace detail is ephemeral; selection, discussion and work stay native. */
+.item[data-presentation] > .item-titlebar,
+.item[data-presentation] > .item-under,
+.item[data-presentation] > .ply,
+.item[data-presentation] > .version-badge { display: none; }
+.item[data-presentation] { border-radius: 14px; }
+.item[data-presentation="marker"] { border-radius: 50%; background: var(--card); }
+.item[data-presentation] .item-content { inset: 0; }
+.item[data-emphasis] { border-color: var(--ink-soft); }
+.presentation-marker { display: grid; place-items: center; height: 100%; color: var(--ink-soft); font-size: 18px; }
+.presentation-compact { display: flex; align-items: center; height: 100%; padding: 12px 18px; box-sizing: border-box; font-size: 16px; line-height: 1.3; overflow: hidden; }
+.presentation-presence { position: absolute; z-index: 4; top: -22px; left: 0; padding: 2px 6px; border-radius: 5px; background: var(--card); color: var(--ink); font: inherit; font-size: 11px; white-space: nowrap; }
+.item[data-content-changed] { outline: 3px solid var(--ink-soft); outline-offset: 5px; }
+.item[data-presentation]:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }

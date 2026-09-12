@@ -189,6 +189,7 @@ export interface WebHost {
  */
 export interface UnderlayFacts {
   canvas: CanvasContents;
+  presentation?: WorkspacePresentation["items"] | undefined;
   /** Workspace-scoped activation, e.g. following a graph connection. */
   activateItem?: ((itemId: string) => boolean) | undefined;
   /** The live drag, so a line can ride the gesture before the replica moves. */
@@ -224,6 +225,8 @@ export interface ModuleAction {
  * blob path.
  */
 export interface RendererFacts {
+  /** Local workspace emphasis; saved file content and native geometry are unchanged. */
+  presentation?: { detail: "full" | "compact" | "marker"; emphasis?: boolean } | undefined;
   /** Native metadata for structured files whose title lives on the item. */
   item?: Item | undefined;
   canvasId: string;
@@ -285,6 +288,11 @@ export interface ModulePage<P> {
 
 /** A module can frame the native canvas without owning its replica or camera. */
 export interface WorkspaceHost extends WebHost {
+  /** Temporary bounds for native items. Null restores their saved canvas layout.
+   * The host resolves animation, hit targets, edges and anchored discussion. */
+  present: (view: WorkspacePresentation | null) => void;
+  /** Addressable local exploration state. Null removes a key; one call is one Back step. */
+  navigateView: (state: Record<string, string | null>, replace?: boolean) => void;
   readText: (blobHash: string) => Promise<string>;
   getCanvas: () => CanvasContents;
   select: (itemIds: readonly string[]) => void;
@@ -296,8 +304,21 @@ export interface WorkspaceHost extends WebHost {
   onActivateItem: (handler: (itemId: string) => boolean) => () => void;
 }
 
+/** A local layout over existing item IDs; it never mutates the shared canvas. */
+export interface WorkspacePresentation {
+  /** Show just this view’s items, keeping other analyses and attachments out of the stage. */
+  isolate?: boolean;
+  items: Record<string, { x: number; y: number; width: number; height: number;
+    detail: "full" | "compact" | "marker"; emphasis?: boolean }>;
+  /** Only a navigation act frames the camera. Live content changes omit this. */
+  focusIds?: string[];
+  /** Cap framing magnification without forcing distant context onto the screen. */
+  maxScale?: number;
+}
+
 /** Reactive facts plus one host-created viewport, mounted wherever the module needs it. */
 export interface WorkspaceFacts<Surface> {
+  viewState: Readonly<Record<string, string>>;
   canvasId: string;
   project: Canvas;
   canvas: CanvasContents;
@@ -478,7 +499,7 @@ export interface ModuleManifest {
  * exactly how you say that, and `^0.1.0` is refused by the check below — which
  * is the first time it has ever refused anything.
  */
-export const MODULE_API_VERSION = "0.2.1";
+export const MODULE_API_VERSION = "0.2.2";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it

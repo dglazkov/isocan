@@ -7,13 +7,16 @@ export function InspectorPane({
   width,
   height,
   resize,
+  resetKey,
 }: {
+  resetKey?: string;
   children: ReactNode;
   width: number;
   height: number;
   resize: (axis: "width" | "height", value: number) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
+  useEffect(() => { const content = ref.current?.querySelector(".anatomy-inspector-content"); if (content) content.scrollTop = 0; }, [resetKey]);
   const gesture = useRef<{
     axis: "width" | "height";
     start: number;

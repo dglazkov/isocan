@@ -2566,6 +2566,7 @@ function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
   switch (target.envelope.op.type) {
     case "item.add": // re-add would collide with the trashed item → restore it
     case "item.addVersion": // restoreVersion keeps original authorship
+    case "item.edit": // conditional content + metadata edit restores both
     case "thread.create": // thread.restore keeps replies added before the undo
     case "thread.reply": // comment.restore keeps author + timestamp
       return undoEntry.inverse!;

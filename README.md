@@ -127,7 +127,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
 
 - **Anatomy project exploration**: Blueprint puts goal, structure, data and rule
   concepts on native canvas cards, with a searchable hierarchy and resizable inspector.
-  Double-click a concept or follow a connection to explore its neighborhood.
+  Double-click a concept or follow a connection to explore its neighborhood:
+  the focused card expands, neighbors move into compact cards, and distant
+  concepts become markers. This temporary view preserves saved canvas positions,
+  native selection, anchored discussion and item-focused collaboration. Browser
+  Back retraces exploration; the project shortcut resumes it. Existing concept
+  edits use `anatomy draft` and a conditional save to preserve concurrent changes.
   Overview, Open Decisions and Coverage show the same graph through different
   lenses. Import/export Anatomy JSON, discuss concepts, attach source evidence,
   propose HTML mocks, and save or restore checkpoints. Associate a repository

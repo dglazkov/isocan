@@ -15,6 +15,7 @@ export default function Card({
   mimeType,
   item,
   canvasId,
+  presentation,
 }: RendererFacts) {
   const [content, setContent] = useState<{
     label: string;
@@ -63,7 +64,7 @@ export default function Card({
     };
   }, [readText, mimeType]);
   return (
-    <article className="anatomy-card">
+    <article className={`anatomy-card${presentation?.detail === "compact" ? " anatomy-card-compact" : ""}`}>
       <div className="anatomy-card-meta">
         <span>{content?.label ?? "Anatomy"}</span>
         {content?.status && (
@@ -73,12 +74,12 @@ export default function Card({
         )}
       </div>
       <h2>{item?.title ?? "Anatomy file"}</h2>
-      <p>
+      {presentation?.detail !== "compact" && <p>
         {error
           ? `Unable to read this file: ${error}`
           : (content?.text ?? "Loading…")}
-      </p>
-      {mimeType === PROJECT_MIME && item && (
+      </p>}
+      {mimeType === PROJECT_MIME && item && !presentation && (
         <a
           className="anatomy-card-open"
           href={`${modulePagePath(canvasId, "anatomy")}?project=${encodeURIComponent(item.id)}`}

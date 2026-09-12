@@ -229,10 +229,12 @@ export async function saveProject(
   await assertFresh(io, [item]);
   await io.send(
     [
-      { type: "item.addVersion", itemId: item.id, version: next },
       {
-        type: "item.update",
+        type: "item.edit",
         itemId: item.id,
+        version: next,
+        expectedVersionId: item.currentVersionId,
+        expectedMetadata: { title: item.title, properties: item.properties },
         patch: { title: project.projectName },
       },
     ],
@@ -246,6 +248,7 @@ export async function saveNode(
   projectItem: Item,
   project: AnatomyProject,
   input: unknown,
+  base?: { versionId: string; title: string; properties: Record<string, string> },
 ): Promise<string> {
   const node = nodeSchema.parse(input);
   validateGraph(
@@ -263,14 +266,16 @@ export async function saveNode(
     NODE_MIME,
     "concept.anatomy.json",
   );
-  await assertFresh(io, [projectItem, ...items]);
+  if (existing) await assertFresh(io, [existing]);
   const props = nodeProps(node, projectItem.id, ids);
   const ops: Operation[] = existing
     ? [
-        { type: "item.addVersion", itemId: nativeId, version: next },
         {
-          type: "item.update",
+          type: "item.edit",
           itemId: nativeId,
+          version: next,
+          expectedVersionId: base?.versionId ?? existing.currentVersionId,
+          expectedMetadata: base ?? { title: existing.title, properties: existing.properties },
           patch: { title: node.title, properties: props },
         },
       ]

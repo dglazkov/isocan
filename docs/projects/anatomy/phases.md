@@ -3,13 +3,14 @@
 Plan completed 11 September 2026 before implementation, on branch `anatomy`.
 Read [analysis.md](analysis.md), then [design.md](design.md).
 
-**Where we are:** phases 1–6 built and verified, 11 September 2026, on branch `anatomy`.
+**Where we are:** phases 1–7 built, with fluid-exploration acceptance recorded on 12 September 2026, on branch `anatomy`.
 The plan below was completed before implementation; acceptance evidence is
 collected in [verification.md](verification.md).
 
 The [12 September usability review](usability-review.md) records remaining
-workflow gaps and proposes the next five phases. Those recommendations are
-not included in the built status above.
+workflow gaps. Phase 7 implements the motion work and its two edit-preservation
+fixes; the wider review’s analysis lifecycle and semantic editing work remain
+follow-ups.
 
 ## 1. Built — File model and portable graph
 
@@ -84,3 +85,10 @@ keyboard resize, text-versus-canvas undo, card/menu/rail return paths, empty
 repository analysis request, and persisted native project association. Run the
 full suite and typecheck; analyze the actual repository only into a separate
 local canvas, keeping fixtures synthetic.
+
+
+## 7. Fluid exploration and edit preservation
+
+The [step-by-step implementation and acceptance record](fluid-exploration.md)
+covers guarded drafts, temporary native geometry, focus-dependent detail,
+addressable navigation, local camera/pane continuity and scale verification.

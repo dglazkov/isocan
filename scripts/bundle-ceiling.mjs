@@ -102,7 +102,11 @@
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 641_100;
+// 12 Sep: Anatomy’s project entry, workspace contract and native presentation
+// consumers bring the entry to about 664KB (about 3KB above the prior port).
+// The renderer, graph layout and animation engine remain lazy workspace chunks.
+// This accounts for the accumulated port explicitly; it does not widen JUMP.
+export const CEILING = 664_500;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

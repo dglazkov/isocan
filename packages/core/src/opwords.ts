@@ -28,6 +28,7 @@ const OP_WORDS: Partial<Record<OperationType, string>> = {
   "item.restore": "restored something",
   "items.restore": "restored several things",
   "item.addVersion": "made a new version",
+  "item.edit": "edited",
   "item.setCurrentVersion": "switched version",
   "item.removeVersion": "removed a version",
   "item.restoreVersion": "restored a version",

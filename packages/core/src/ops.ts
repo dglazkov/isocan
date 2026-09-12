@@ -248,6 +248,17 @@ export type Operation =
       filename?: string;
     }
   | { type: "item.addVersion"; itemId: string; version: NewVersion }
+  | {
+      /** Replace content and its metadata as one conditional, undoable act.
+       * A distinct type makes older daemons refuse instead of ignoring a
+       * precondition they do not implement. Geometry remains independent. */
+      type: "item.edit";
+      itemId: string;
+      version: NewVersion;
+      patch: MetaPatch;
+      expectedVersionId: string;
+      expectedMetadata?: { title: string; properties: Record<string, string> };
+    }
   | { type: "item.setCurrentVersion"; itemId: string; versionId: string }
   | {
       // internal: inverse of item.addVersion only
@@ -255,6 +266,7 @@ export type Operation =
       itemId: string;
       versionId: string;
       prevCurrentVersionId: string;
+      patch?: MetaPatch;
     }
   | {
       // internal: inverse of item.removeVersion (redo of addVersion) — carries
@@ -262,6 +274,7 @@ export type Operation =
       type: "item.restoreVersion";
       itemId: string;
       version: ItemVersion;
+      patch?: MetaPatch;
     }
   | { type: "item.delete"; itemId: string } // → trash, all versions travel with it
   | { type: "item.restore"; itemId: string } // ← trash

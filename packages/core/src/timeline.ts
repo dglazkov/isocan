@@ -39,6 +39,7 @@ const WEIGHT: Record<string, number> = {
   // A version is the artifact itself changing, which is what the focused
   // scrubber is for and the strongest single signal on the whole track.
   "item.addVersion": 6,
+  "item.edit": 6,
   // Conversation. The FIRST comment on a thread is a seam; a reply is the
   // conversation continuing, which is not the same event.
   "thread.create": 4,
@@ -106,6 +107,7 @@ function aboutOf(op: Operation): string | null {
     case "item.add":
       return firstLine(o.title) ?? firstLine(o.version?.filename);
     case "item.addVersion":
+    case "item.edit":
       return firstLine(o.version?.filename);
     case "thread.create":
     case "thread.reply":

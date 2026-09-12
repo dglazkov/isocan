@@ -21,7 +21,7 @@ it("builds a portable workspace with declared proposals and a stylesheet loader"
       await fs.readFile(path.join(out, "manifest.json"), "utf8"),
     );
     expect(manifest).toMatchObject({
-      engines: ">=0.2.1",
+      engines: ">=0.2.2",
       proposed: ["host", "workspaces"],
       web: "dist/web.js",
       cli: "dist/cli.mjs",

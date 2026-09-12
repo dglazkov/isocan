@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type CSSProperties,
 } from "react";
+import { explorationLayout, explorationState, type ExplorationLayout } from "./exploration.ts";
 import { InspectorPane } from "./inspector-pane.tsx";
 import ReactMarkdown from "react-markdown";
 import type { CanvasContents, Item, WorkspaceFacts } from "@isocan/core";
@@ -25,6 +26,7 @@ import {
   convergence,
   decisions,
   projectNeighborhood,
+  nodeSchema,
   type AnatomyNode,
   type AnatomyProject,
   type Checkpoint,
@@ -35,7 +37,6 @@ import {
   commentOp,
   emptyProject,
   importProject,
-  layoutProject,
   promoteMock,
   restoreCheckpoint,
   saveCheckpoint,
@@ -64,6 +65,7 @@ const status = (value: string) => (
 
 export default function Workspace({
   canvas,
+  viewState,
   project: canvasRecord,
   host,
   selection,
@@ -71,9 +73,9 @@ export default function Workspace({
   canvasView,
 }: WorkspaceFacts<ReactNode>) {
   const projects = projectsOn(canvas);
-  const [projectId, setProjectId] = useState<string | null>(() =>
-    new URLSearchParams(window.location.search).get("project"),
-  );
+  const { projectId, lens, nodeId } = explorationState(viewState);
+  const setProjectId = (id: string) => host.navigateView({ project: id, focus: null, lens: "blueprint" });
+  const setLens = (next: Lens) => host.navigateView({ lens: next });
   const selectedProject =
     projects.find((p) => p.id === projectId) ??
     projects.find((p) => p.id === canvasRecord.properties[PROP.analysis]) ??
@@ -89,18 +91,18 @@ export default function Workspace({
   } | null>(null);
   const project =
     loaded?.itemId === selectedProject?.id ? (loaded?.project ?? null) : null;
-  const [lens, setLens] = useState<Lens>("blueprint");
-  const [focal, setFocal] = useState<{
-    projectId: string;
-    nodeId: string;
-  } | null>(null);
+  const focal = nodeId ? { projectId: selectedProject?.id, nodeId } : null;
   const [search, setSearch] = useState("");
-  const [leftOpen, setLeftOpen] = useState(() => window.innerWidth > 760);
-  const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 760);
-  const [inspectorSize, setInspectorSize] = useState({
-    width: 340,
-    height: 280,
+  const prefKey = `anatomy:pane:${canvasRecord.id}`;
+  const [panePrefs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(prefKey) ?? "null") as { left?: boolean; right?: boolean; width?: number; height?: number } | null; } catch { return null; }
   });
+  const [leftOpen, setLeftOpen] = useState(() => panePrefs?.left ?? window.innerWidth > 760);
+  const [rightOpen, setRightOpen] = useState(() => panePrefs?.right ?? window.innerWidth > 760);
+  const [inspectorSize, setInspectorSize] = useState({ width: Math.max(220, Math.min(560, Number(panePrefs?.width) || 340)), height: Math.max(120, Math.min(600, Number(panePrefs?.height) || 280)) });
+  useEffect(() => {
+    try { localStorage.setItem(prefKey, JSON.stringify({ left: leftOpen, right: rightOpen, ...inspectorSize })); } catch { /* Restricted storage leaves a normal session-local pane. */ }
+  }, [prefKey, leftOpen, rightOpen, inspectorSize]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -179,30 +181,18 @@ export default function Workspace({
     host.select([item.id]);
     setRightOpen(true);
     if (window.innerWidth <= 760) setLeftOpen(false);
-    if (focus) requestAnimationFrame(() => host.focus([item.id]));
+    if (focus) host.navigateView({ project: selectedProject!.id, focus: nodeId, lens: "blueprint" });
   };
   const jump = (nodeId: string) => {
     if (!project || !selectedProject) return;
-    const neighborhood = projectNeighborhood(project, nodeId);
-    setLens("blueprint");
-    setFocal({ projectId: selectedProject.id, nodeId });
+    host.navigateView({ project: selectedProject.id, lens: "blueprint", focus: nodeId });
     choose(nodeId, false);
-    requestAnimationFrame(() =>
-      host.focus(
-        neighborhood.nodes.flatMap((n) => {
-          const item = findNative(n.id);
-          return item ? [item.id] : [];
-        }),
-      ),
-    );
   };
   const fitGraph = () => {
     if (!selectedProject) return;
-    setFocal(null);
+    host.navigateView({ project: selectedProject.id, focus: null, lens: "blueprint" });
     host.select([]);
-    requestAnimationFrame(() =>
-      host.focus([selectedProject.id, ...nativeNodes.map((i) => i.id)]),
-    );
+    if (!nodeId) host.focus([selectedProject.id]);
   };
   const focalNode =
     focal?.projectId === selectedProject?.id
@@ -210,6 +200,29 @@ export default function Workspace({
       : undefined;
   const neighborhood =
     project && focalNode ? projectNeighborhood(project, focalNode.id) : null;
+  const previousLayout = useRef<ExplorationLayout>();
+  const presentedKey = useRef("");
+  const viewKey = `${selectedProject?.id}:${lens}:${focalNode?.id ?? ""}`;
+  useEffect(() => {
+    if (!project || !selectedProject || lens !== "blueprint") { host.present(null); presentedKey.current = ""; return; }
+    const layout = explorationLayout(project, focalNode?.id, previousLayout.current);
+    previousLayout.current = layout;
+    const native = new Map([[layout.root, selectedProject.id], ...nativeNodes.map(i => [originId(i), i.id] as [string, string])]);
+    const items = Object.fromEntries(Object.entries(layout.items).flatMap(([id, bounds]) => native.has(id) ? [[native.get(id)!, bounds]] : []));
+    const navigated = presentedKey.current !== viewKey;
+    // One frame lets pane changes establish the actual visible stage first.
+    const frame = requestAnimationFrame(() => {
+      host.present({ items, isolate: true, ...(navigated ? { focusIds: [native.get(layout.focus)!], maxScale: 0.9 } : {}) });
+      // Only a delivered frame consumes navigation; a superseded read can cancel
+      // this callback before the native slot is ready.
+      presentedKey.current = viewKey;
+    });
+    if (navigated) host.select(focalNode ? [native.get(focalNode.id)!] : []);
+    return () => cancelAnimationFrame(frame);
+    // Native movement is resolved by the host; body revisions are the graph input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, viewKey, host]);
+  useEffect(() => () => host.present(null), [host]);
   // The host owns gestures; the module supplies their navigation meaning only
   // while its Blueprint is mounted. Other files retain the native viewer.
   useEffect(() =>
@@ -354,7 +367,6 @@ export default function Workspace({
                       );
                       setProjectId(id);
                       host.select([id]);
-                      setLens("blueprint");
                       requestAnimationFrame(() => host.focus([id]));
                     });
                   e.target.value = "";
@@ -580,21 +592,8 @@ export default function Workspace({
                     Explore connections
                   </button>
                 )}
-                <button onClick={fitGraph}>Fit graph</button>
-                {canEdit && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void run(async () => {
-                        const moves = layoutProject(canvas, selectedProject.id);
-                        if (moves.length)
-                          await host.send([{ type: "items.move", moves }]);
-                      })
-                    }
-                  >
-                    Arrange
-                  </button>
-                )}
+                <button onClick={() => host.focus(focalNode ? [findNative(focalNode.id)!.id] : [selectedProject.id])}>Center view</button>
+
                 <button
                   aria-pressed={rightOpen}
                   onClick={() => {
@@ -651,6 +650,7 @@ export default function Workspace({
                 {rightOpen && (
                   <InspectorPane
                     {...inspectorSize}
+                    resetKey={selected?.id ?? selectedProject.id}
                     resize={(axis, value) =>
                       setInspectorSize((size) => ({ ...size, [axis]: value }))
                     }
@@ -851,6 +851,7 @@ export default function Workspace({
       )}
       {editor && canEdit && (
         <NodeEditor
+          saveError={message}
           node={editor.node}
           nodes={editor.project.nodes}
           busy={busy}
@@ -883,7 +884,6 @@ export default function Workspace({
                 host.select([id]);
                 setCreating(false);
                 setNewTitle("");
-                setLens("blueprint");
               });
             }}
           >
@@ -1565,12 +1565,14 @@ function Dialog({
   );
 }
 function NodeEditor({
+  saveError,
   node,
   nodes,
   busy,
   close,
   save,
 }: {
+  saveError: string;
   node: AnatomyNode;
   nodes: AnatomyNode[];
   busy: boolean;
@@ -1583,6 +1585,7 @@ function NodeEditor({
     [error, setError] = useState("");
   return (
     <Dialog title={node.title ? "Edit concept" : "Add concept"} close={close}>
+      {saveError && <p role="alert">{saveError}</p>}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -1598,8 +1601,14 @@ function NodeEditor({
             type="checkbox"
             checked={rawMode}
             onChange={(e) => {
-              setRawMode(e.target.checked);
-              if (e.target.checked) setAdvanced(JSON.stringify(draft, null, 2));
+              try {
+                if (e.target.checked) setAdvanced(JSON.stringify(draft, null, 2));
+                else setDraft(nodeSchema.parse(JSON.parse(advanced)));
+                setRawMode(e.target.checked);
+                setError("");
+              } catch (err) {
+                setError(`Keep editing the JSON to correct this error: ${String(err)}`);
+              }
             }}
           />{" "}
           Edit complete JSON (citations, assessments and options)

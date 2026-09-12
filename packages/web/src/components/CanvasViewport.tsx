@@ -82,7 +82,12 @@ const INK_WIDTH = 3;
 const INK_MIN_STEP = 2;
 
 
+import { usePresentation, currentPresentation, freezePresentation } from "../lib/canvasPresentation.ts";
+import { presentedCanvas, presentedItem } from "../lib/presentation.ts";
+import { stopGlide } from "../lib/zoomactions.ts";
+
 export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const presentation = usePresentation();
   /**
    * **The past wins when there is one.** The scrubber folds a moment with
    * core's `at` and parks it beside the live replica (`canvasStore.past`);
@@ -232,6 +237,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
 
     function onWheel(e: WheelEvent) {
+      stopGlide();
+      freezePresentation();
       const target = e.target as HTMLElement;
       if (e.ctrlKey || e.metaKey) {
         // Pinch (or ctrl+wheel): always own it, wherever the cursor is, so the
@@ -562,6 +569,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   }
 
   function onPointerDown(e: React.PointerEvent) {
+    stopGlide();
     const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
     // through activeTool too.) The Hand tool pans from anywhere — an item
@@ -663,6 +671,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
 
     if (isBackground && commentMode && e.button === 0 && !wantsPan) {
+      if (currentPresentation()?.isolate) { setNotice("Click a concept to pin a comment in this view."); return; }
       const ui = useUiStore.getState();
       const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
       ui.setPendingComment({ x: world.x, y: world.y, anchorItemId: null });
@@ -938,7 +947,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       const maxX = Math.max(startWorld.x, current.x);
       const minY = Math.min(startWorld.y, current.y);
       const maxY = Math.max(startWorld.y, current.y);
-      const items = useCanvasStore.getState().canvas?.items ?? {};
+      const snapshot = useCanvasStore.getState().canvas;
+      const items = snapshot ? presentedCanvas(snapshot, currentPresentation()).items : {};
       const hit = Object.values(items)
         .filter(
           (item) =>
@@ -1068,7 +1078,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   // siblings at one z-index, and DOM order is the only order there is. A
   // stable sort keeps the rest as they were.
   const items = canvas
-    ? Object.values(canvas.items).sort((a, b) => Number(isArea(b)) - Number(isArea(a)))
+    ? Object.values(canvas.items).filter(item => !presentation?.isolate || presentation.items[item.id]).sort((a, b) => Number(isArea(b)) - Number(isArea(a)))
     : [];
 
   return (
@@ -1081,11 +1091,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
       }}
+      onPointerDownCapture={() => { stopGlide(); freezePresentation(); }}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
       onPointerMove={(e) => {
         const ui = useUiStore.getState();
-        publishCursor(screenToWorld(ui.viewport, e.clientX, e.clientY));
+        publishCursor(currentPresentation() ? null : screenToWorld(ui.viewport, e.clientX, e.clientY));
       }}
       onPointerLeave={() => publishCursor(null)}
       /**
@@ -1146,17 +1157,17 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         ))}
         {fannedItemId && canvas?.items[fannedItemId] && (
           <Suspense fallback={null}>
-            <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />
+            <VersionFanOut item={presentedItem(canvas.items[fannedItemId]!, presentation)} canvasId={canvasId} actor={actor} />
           </Suspense>
         )}
         <InkLayer />
         {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}
       </div>
       <CommentLayer canvasId={canvasId} actor={actor} />
-      <CursorLayer />
+      {!presentation && <CursorLayer />}
       <MarqueeRect />
       <GuideLines />
-      <EdgeRadar canvasId={canvasId} />
+      {!presentation && <EdgeRadar canvasId={canvasId} />}
       <SketchBar canvasId={canvasId} actor={actor} />
       {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
       {menu && (

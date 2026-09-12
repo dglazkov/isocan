@@ -56,13 +56,17 @@ export function makeComment(body: string): NewComment {
  * positioned from world coordinates via the viewport transform. Anchored
  * threads store an offset from their item's origin, so pins follow drags.
  */
+import { usePresentation } from "../lib/canvasPresentation.ts";
+import { presentedOffset } from "../lib/presentation.ts";
+
 export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Actor }) {
-  const canvas = useCanvasStore((s) => s.canvas);
+  const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   const viewport = useUiStore((s) => s.viewport);
   const marks = useActorMarks();
   const drag = useUiStore((s) => s.drag);
   const openThreadId = useUiStore((s) => s.openThreadId);
   const pendingComment = useUiStore((s) => s.pendingComment);
+  const presentation = usePresentation();
   const textViews = useTextAnchorStore(s => s.views);
   const seen = useUnreadStore((s) => s.seen);
   const joined = useCanvasStore((s) => s.actorJoins);
@@ -75,7 +79,8 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
   function pinWorldPos(thread: CommentThread): { x: number; y: number } {
     const view = textViews[thread.id];
     const positioned = thread.textAnchor && view?.x !== undefined && view.y !== undefined ? { ...thread, x: view.x, y: view.y } : thread;
-    const world = threadWorldPos(canvas!, positioned);
+    const anchor = positioned.anchorItemId ? canvas!.items[positioned.anchorItemId] : undefined;
+    const world = anchor ? presentedOffset(anchor, presentation, positioned) : threadWorldPos(canvas!, positioned);
     // While a drag is live the item has not moved in the replica yet, so the
     // pin rides the gesture's delta to stay glued to it.
     const riding =
@@ -84,7 +89,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
   }
 
   // The main thread has no pin — it lives in the docked panel instead.
-  const threads = Object.values(canvas.threads).filter((thread) => !thread.main);
+  const threads = Object.values(canvas.threads).filter((thread) => !thread.main && (!presentation?.isolate || (thread.anchorItemId && presentation.items[thread.anchorItemId])));
   const screenOf = (thread: CommentThread) => {
     const world = pinWorldPos(thread);
     return worldToScreen(viewport, world.x, world.y);
@@ -496,19 +501,21 @@ function ComposePopover({
   pending: PendingComment;
 }) {
   const viewport = useUiStore((s) => s.viewport);
-  const canvas = useCanvasStore((s) => s.canvas);
+  const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   const marks = useActorMarks();
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const [body, setBody] = useState("");
+  const presentation = usePresentation();
 
   // Pending world position: anchored offsets resolve against the item.
   let wx = pending.x;
   let wy = pending.y;
   if (pending.anchorItemId && canvas?.items[pending.anchorItemId]) {
     const item = canvas.items[pending.anchorItemId]!;
-    wx = item.x + pending.x;
-    wy = item.y + pending.y;
+    const point = presentedOffset(item, presentation, pending);
+    wx = point.x;
+    wy = point.y;
   }
   const screen = worldToScreen(viewport, wx, wy);
   const { ref, style } = usePopoverPlacement(screen, 0, 0);

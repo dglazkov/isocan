@@ -2,9 +2,12 @@ import { useId } from "react";
 import type { UnderlayFacts } from "@isocan/core";
 import { projectsOn, projectEdges } from "./manifest.ts";
 
-export default function Edges({ canvas, drag, activateItem }: UnderlayFacts) {
+export default function Edges({ canvas, drag, activateItem, presentation }: UnderlayFacts) {
   const marker = useId();
-  const edges = projectsOn(canvas).flatMap((p) => projectEdges(canvas, p.id));
+  const edges = projectsOn(canvas).flatMap((p) => projectEdges(canvas, p.id))
+    .filter(edge => !presentation || presentation[edge.from.id]?.detail !== "marker" || presentation[edge.to.id]?.detail !== "marker")
+    // Focus links paint last, so distant relationships cannot intercept them.
+    .sort((a, b) => Number(Boolean(presentation?.[a.from.id]?.emphasis || presentation?.[a.to.id]?.emphasis)) - Number(Boolean(presentation?.[b.from.id]?.emphasis || presentation?.[b.to.id]?.emphasis)));
   if (!edges.length) return null;
   const at = (item: (typeof edges)[number]["from"]) => ({
     x:
@@ -39,6 +42,7 @@ export default function Edges({ canvas, drag, activateItem }: UnderlayFacts) {
         </marker>
       </defs>
       {edges.map((e, index) => {
+        const context = presentation?.[e.from.id]?.detail === "marker" || presentation?.[e.to.id]?.detail === "marker";
         const a = at(e.from),
           b = at(e.to);
         const dx = b.x - a.x,
@@ -59,8 +63,9 @@ export default function Edges({ canvas, drag, activateItem }: UnderlayFacts) {
           <g
             key={`${e.from.id}:${e.to.id}:${index}`}
             className={activateItem ? "anatomy-connection" : undefined}
+            data-context={context || undefined}
             role={activateItem ? "button" : undefined}
-            tabIndex={activateItem ? 0 : undefined}
+            tabIndex={activateItem ? (context ? -1 : 0) : undefined}
             aria-label={
               activateItem
                 ? `Explore ${e.to.title} via ${e.label || "connection"} from ${e.from.title}`
@@ -105,12 +110,12 @@ export default function Edges({ canvas, drag, activateItem }: UnderlayFacts) {
               d={`M ${a.x} ${a.y} C ${(a.x + b.x) / 2} ${a.y}, ${(a.x + b.x) / 2} ${b.y}, ${b.x} ${b.y}`}
               fill="none"
               stroke="var(--ink-soft)"
-              strokeOpacity=".4"
+              strokeOpacity={context ? ".14" : ".5"}
               strokeWidth="2"
               markerEnd={`url(#${marker})`}
               strokeDasharray={e.coupling === "loose" ? "6 5" : undefined}
             />
-            {e.label && (
+            {e.label && !context && (
               <text
                 x={(a.x + b.x) / 2}
                 y={(a.y + b.y) / 2 - 8}

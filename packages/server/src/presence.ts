@@ -416,6 +416,7 @@ export function opLocus(op: Operation, canvas: CanvasContents): { x: number; y: 
     case "item.resize":
     case "item.update":
     case "item.addVersion":
+    case "item.edit":
     case "item.setCurrentVersion":
     case "item.restoreVersion":
     case "item.delete":

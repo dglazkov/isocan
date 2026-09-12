@@ -121,16 +121,21 @@ describe("Anatomy through the real CLI and daemon", () => {
     await inCanvas("anatomy", "checkpoint", itemId, "--save", "Before review");
     const checkpoint = (await show()).checkpoints[0]!;
     const edit = path.join(home, "concept.json");
+    const draft = await json<{ node: AnatomyProject["nodes"][number]; base: unknown }>("anatomy", "draft", itemId, "workflow", "--canvas", canvasId);
     await fs.writeFile(
       edit,
       JSON.stringify({
-        ...sample.nodes[1],
-        status: "settled",
-        summary: "Recovery is explicit",
+        ...draft,
+        node: { ...draft.node, status: "settled", summary: "Recovery is explicit" },
       }),
     );
     const nativeId = (await inCanvas("anatomy", "node", itemId, edit)).trim();
+    await expect(inCanvas("anatomy", "node", itemId, edit)).rejects.toThrow("changed while editing");
     expect((await show()).nodes[1]!.status).toBe("settled");
+    await inCanvas("undo");
+    expect((await show()).nodes[1]!.status).toBe(sample.nodes[1]!.status);
+    await inCanvas("redo");
+    expect((await show()).nodes[1]!).toMatchObject({ status: "settled", summary: "Recovery is explicit" });
     await inCanvas(
       "comment",
       "add",

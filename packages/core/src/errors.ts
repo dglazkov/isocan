@@ -1,4 +1,5 @@
 type OpErrorCode =
+  | "edit-conflict"
   | "unknown-item"
   | "unknown-version"
   | "unknown-thread"

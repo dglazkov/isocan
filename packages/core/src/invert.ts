@@ -84,12 +84,14 @@ export function invertOperation(
       };
     }
 
+    case "item.edit":
     case "item.addVersion":
       return {
         type: "item.removeVersion",
         itemId: op.itemId,
         versionId: op.version.id,
         prevCurrentVersionId: getItem(op.itemId).currentVersionId,
+        ...(op.type === "item.edit" ? { patch: invertMetaPatch(getItem(op.itemId), op.patch) } : {}),
       };
 
     case "item.setCurrentVersion":
@@ -105,7 +107,9 @@ export function invertOperation(
       if (!version) {
         throw new OpValidationError("unknown-version", `unknown version: ${op.versionId}`);
       }
-      return { type: "item.restoreVersion", itemId: op.itemId, version };
+      return { type: "item.restoreVersion", itemId: op.itemId, version,
+        ...(op.patch ? { patch: invertMetaPatch(item, op.patch) } : {}),
+      };
     }
 
     case "item.restoreVersion":
@@ -114,6 +118,7 @@ export function invertOperation(
         itemId: op.itemId,
         versionId: op.version.id,
         prevCurrentVersionId: getItem(op.itemId).currentVersionId,
+        ...(op.patch ? { patch: invertMetaPatch(getItem(op.itemId), op.patch) } : {}),
       };
 
     case "item.delete":

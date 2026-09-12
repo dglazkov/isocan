@@ -11,6 +11,8 @@ import {
   DISCIPLINES,
   projectsOn,
   nodesOn,
+  originId,
+  nodeSchema,
   readProject,
   projectNeighborhood,
   PROP,
@@ -227,22 +229,39 @@ function register(host: CliHost): void {
     ),
   );
   command(
+    "draft <project> <node>",
+    "Read an editable concept with its version guard; save it with anatomy node",
+  ).action(host.run(async (ref: string, nodeRef: string, _opts: unknown, cmd: Command) => {
+    const { io } = await context(cmd);
+    const { canvas, item, project } = await loadProject(io, ref);
+    const native = nodesOn(canvas, item.id).find((i) => i.id === nodeRef || originId(i) === nodeRef);
+    const node = project.nodes.find((n) => n.id === (native ? originId(native) : nodeRef));
+    if (!native || !node) throw new Error(`Unknown concept: ${nodeRef}`);
+    host.printJson({ node, base: { versionId: native.currentVersionId, title: native.title, properties: native.properties } });
+  }));
+  command(
     "node <project> <file>",
-    "Upsert one concept from JSON, by its original concept id",
+    "Create from concept JSON, or save a guarded anatomy draft",
   ).action(
     host.run(
       async (ref: string, file: string, _opts: unknown, cmd: Command) => {
-        const { io } = await context(cmd);
+        const { io, ctx } = await context(cmd);
         const { canvas, item, project } = await loadProject(io, ref);
-        console.log(
-          await saveNode(
+        const input = JSON.parse(readFileSync(file, "utf8"));
+        const node = nodeSchema.parse(input.node ?? input);
+        const existing = project.nodes.some((n) => n.id === node.id);
+        if (existing && (!input.base || typeof input.base.versionId !== "string" || typeof input.base.title !== "string" || !input.base.properties || typeof input.base.properties !== "object" || Array.isArray(input.base.properties)))
+          throw new Error("Existing concepts require a guarded draft. Run anatomy draft <project> <node> and edit its node fields, preserving base.");
+        const itemId = await saveNode(
             io,
             canvas,
             item,
             project,
-            JSON.parse(readFileSync(file, "utf8")),
-          ),
-        );
+            node,
+            input.base,
+          );
+        if (ctx.json) host.printJson({ itemId });
+        else console.log(itemId);
       },
     ),
   );

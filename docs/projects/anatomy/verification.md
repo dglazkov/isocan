@@ -170,3 +170,11 @@ passed **4,161 tests, 70 skipped**, across 416 passing and five skipped files;
 typecheck and production build passed. The generated roadmap was refreshed to
 include phase 6, which its earlier committed note omitted. An unrelated agent
 teardown assertion failed on the first full run and passed on the full rerun.
+
+
+## Fluid exploration follow-up, 12 September
+
+The [fluid exploration acceptance record](fluid-exploration.md) supersedes the
+initial port’s client-only stale checks, static geometry and unmeasured large
+local graphs. It records the conditional operation, native presentation API,
+30/100/300-concept tests, browser gestures and remaining limits separately.
