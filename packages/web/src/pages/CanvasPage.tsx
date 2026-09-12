@@ -100,7 +100,7 @@ import { SprintChip } from "../components/SprintChip.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
 import { recordVisit } from "../lib/recents.ts";
-import { loadSeen, noteVisit } from "../lib/seen.ts";
+import { noteVisit } from "../lib/seen.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { fitToContent } from "../lib/fititem.ts";
 import { useCanvasHome } from "../lib/homes.ts";
@@ -242,7 +242,8 @@ function CanvasSurface({
   const arrived = canvasTitle !== null;
   useEffect(() => {
     if (!canvasId || !arrived) return;
-    loadSeen(actor.id);
+    // One call: `noteVisit` reads before it writes, deliberately — see
+    // `lib/seen.ts`, where the reason is a bug a browser found.
     noteVisit(canvasId, useCanvasStore.getState().lastSeq, actor.id);
     // `arrived` rather than the title itself: the head is only worth
     // recording once the snapshot has landed, and a RENAME while you stand

@@ -35,9 +35,10 @@ export function seenMarks(actorId: string): SeenMarks {
 
 /** Ask once per identity. Safe to call on every render; it is a no-op after
  *  the first, and a failure leaves the marks empty rather than retrying in a
- *  loop behind somebody's back. */
-export function loadSeen(actorId: string): void {
-  if (cached?.actorId === actorId || asking) return;
+ *  loop behind somebody's back. Awaitable, which `noteVisit` depends on. */
+export function loadSeen(actorId: string): Promise<void> {
+  if (cached?.actorId === actorId) return Promise.resolve();
+  if (asking) return asking;
   asking = fetchSeen(actorId)
     .then(
       ({ marks }) => {
@@ -50,6 +51,7 @@ export function loadSeen(actorId: string): void {
     .finally(() => {
       asking = null;
     });
+  return asking;
 }
 
 /**
@@ -66,12 +68,32 @@ export function loadSeen(actorId: string): void {
 export function noteVisit(canvasId: string, seq: number, actorId: string): void {
   const at = new Date().toISOString();
   if (cached?.actorId === actorId) cached.marks[canvasId] = { seq, at };
-  void putSeen(canvasId, seq, actorId).then(
-    ({ mark }) => {
-      // The home may be AHEAD — another machine of yours got further — and
-      // its answer is the one that stands.
-      if (cached?.actorId === actorId) cached.marks[canvasId] = mark;
-    },
-    () => {},
-  );
+  /**
+   * **After the read, never beside it** — and this is a bug that only a real
+   * browser found.
+   *
+   * A fresh page load holds a badge whose CLAIM on this persona the home may
+   * have forgotten, so the first request asserting an actor comes back
+   * `not-your-actor`. `lib/api.ts` heals exactly that, once, by re-claiming
+   * and replaying — but the healing is guarded by a single `reclaiming` flag,
+   * so of two requests fired in the same tick only one gets to heal and the
+   * other fails for good. Fired together, the read healed and the WRITE was
+   * the one that died: marks stopped being written on every load after the
+   * first, silently, because a mark is deliberately allowed to fail quietly.
+   *
+   * Sequencing is the whole fix. The read goes first, heals the claim if it
+   * needs healing, and the write follows a claim that is already good. It
+   * costs a round trip on a nicety and buys a feature that works on the
+   * second page load.
+   */
+  void loadSeen(actorId)
+    .then(() => putSeen(canvasId, seq, actorId))
+    .then(
+      ({ mark }) => {
+        // The home may be AHEAD — another machine of yours got further — and
+        // its answer is the one that stands.
+        if (cached?.actorId === actorId) cached.marks[canvasId] = mark;
+      },
+      () => {},
+    );
 }

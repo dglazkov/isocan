@@ -211,7 +211,7 @@
  * arithmetic, measured on a machine that reproduces the reading (657,915
  * before the change, one byte off the number above):
  *
- *   1,379  gross: `lib/seen.ts` (the mark cache, `loadSeen`, `noteVisit`),
+ *   1,411  gross: `lib/seen.ts` (the mark cache, `loadSeen`, `noteVisit`),
  *          `fetchSeen`/`putSeen` in `lib/api.ts`, the route spellings out of
  *          core, the visit effect on `CanvasPage`, and the switcher's
  *          "lately" merge
@@ -219,7 +219,7 @@
  *          which only `CommandPalette` imports — and the palette is already
  *          behind `lazy()`. Small, and the right shape: the merge is read
  *          when somebody opens ⌘O, not when a canvas loads.
- *   1,265  NET
+ *   1,297  NET
  *
  * **What is left is genuinely eager, and this is the sentence for it.**
  * Opening a canvas IS the act that writes the mark, so the write cannot be
@@ -229,10 +229,15 @@
  * WAS available was taken first rather than the ceiling being raised for the
  * gross.
  *
- * 659,180 measured, rounded to 659,300 so the margin is 120 bytes — a
+ * 659,212 measured, rounded to 659,300 so the margin is 88 bytes — a
  * comment's worth and not a feature's, which is the whole point of the
- * round-up: the next feature asks. The goal is 19,180 away, and the first
+ * round-up: the next feature asks. The goal is 19,212 away, and the first
  * place to look is still a `lazy()` boundary rather than a smaller feature.
+ *
+ * (32 of those bytes are lessons.md #54's fix — the mark's write sequenced
+ * after its read so the two cannot race the claim recovery. A bug a real
+ * browser found and three green test files did not, paid for in a sentence
+ * of bytes.)
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with

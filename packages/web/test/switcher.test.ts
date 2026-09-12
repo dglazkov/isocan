@@ -82,6 +82,20 @@ describe("lately, shared across your machines", () => {
     expect(page, "the canvas page is the visit").toContain("noteVisit(canvasId");
   });
 
+  it("reads BEFORE it writes, so the two do not race the claim recovery", () => {
+    /**
+     * lessons.md #54, found by driving a real browser on the day this was
+     * built. `lib/api.ts` heals a `not-your-actor` once and replays, guarded
+     * by a single in-flight flag — so of two requests fired in the same tick
+     * only one may heal. Fired together, the READ healed and the WRITE died,
+     * silently, because a mark is deliberately allowed to fail quietly: every
+     * canvas opened after the first page load recorded nothing.
+     */
+    const seen = bare(read("../src/lib/seen.ts"));
+    expect(seen).toMatch(/loadSeen\(actorId\)\s*\.then\(\(\) => putSeen\(/);
+    expect(page, "and the page asks for one thing, not two in a row").not.toContain("loadSeen(");
+  });
+
   it("reads the marks for the person, not for the browser", () => {
     expect(bare(read("../src/lib/lately.ts"))).toContain("seenMarks(actorId)");
     expect(palette).toContain("latelyIds(actor.id)");
