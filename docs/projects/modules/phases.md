@@ -6,9 +6,10 @@ loader, because a loader with nothing to load into is a loader.
 
 **Where we are:** phases 1–4.5 built 4–9 September 2026. Phase 5's three gates
 were read on 12 September: two clear, the third clear for the agent-side
-sandbox and still shut for the browser-frame one — so phase 5 walks its
-agent-side half and the frame half stays gated behind extensions stages 3–4.
-See [the gate check](#the-gate-check-12-september-2026).
+sandbox and still shut for the browser-frame one. The
+[agent-side half is built](#phase-5--sandboxes-the-agent-side-half); the frame
+half stays gated behind extensions stages 3–4 and a CSP line. See
+[the gate check](#the-gate-check-12-september-2026).
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
@@ -325,9 +326,9 @@ is **not** built around: it stays gated, behind extensions stages 3 and 4 and
 the CSP line, and the module built here deliberately has no frame, no
 `postMessage` surface and no route.
 
-## Phase 5 — sandboxes, the agent-side half
+## Phase 5 — sandboxes, the agent-side half ✅
 
-*Started 12 Sep 2026, after the gate check above.*
+*Built 12 Sep 2026, after the gate check above.*
 
 **The sentence.** *A sandbox is a program that lives on the canvas as a file
 and runs on the machine that typed the verb, fenced, with what it printed
@@ -344,3 +345,76 @@ bytes it runs are a collaborator's. So: the module is loaded as the app, and
 **the program is never**. The fence is not the module's to build, weaken or
 skip — it asks the CLI's host for it, gets the app's own fence or a refusal,
 and has no other way to start a process.
+
+**`CliHost.runFenced`, the first helper promotion the design predicted.**
+`design.md` has said since 4 Sep that a module wanting a helper is *"a review
+question, not a private import"*; this is the first time the answer was yes.
+It is the fence `isocan rc --sandbox` already builds
+(`@anthropic-ai/sandbox-runtime`) with every optional allowance taken out,
+because an adapter needs its vendor's API, its config directory and the
+daemon, and a program off a canvas needs none of them: **no network at all,
+one writable scratch directory, `$HOME` denied with nothing carved back but
+the interpreter's install.** An argv, not `sh -c` — a program with no network
+needs no proxy and should get no shell.
+
+It is **not a mode**. `--sandbox` is opt-in for an adapter because the person
+chose that harness and has run it themselves a hundred times; a canvas's
+program has no such history, so there is no flag, and a machine that cannot
+fence gets the rc's own refusal wording rather than a quiet unfenced run.
+
+**`packages/modules/sandbox`: no kind, no op, no mime, two properties.** A
+program is an ordinary item wearing `sandbox.run` (the argv); a transcript is
+an ordinary text item wearing `sandbox.of` (the program it belongs to). Four
+verbs — `sandbox ls / set / clear / run` — a context row, a `/run` command,
+and one page. `set` and `clear` are `item.update` patches; `run` is a fenced
+spawn plus an `item.add` the first time and an `item.addVersion` every time
+after, so a program's runs are a version history with a diff between them.
+**The op vocabulary is unchanged at 33.**
+
+**The transcript is a file rather than a record only we can read.** Its first
+line is the command, its last is `exit 0 · 43 ms · fenced by <engine>`. The
+exit code could have been an item description — two ops and a fact only the
+app understands — and instead `isocan show`, the stage, a canvas export and a
+person with no isocan at all can all read it.
+
+**The web half reads, and there is no Run button.** A Sandboxes page lists
+every program, its argv and its runs, and says in one line that a program runs
+on the machine that types its verb. A button that posted *"somebody please run
+this"* would be a summons wearing a different word, and summons have an owner
+rule of their own. The page component is behind `lazy()`; only the core record
+is eager, and `scripts/bundle-ceiling.mjs` carries the arithmetic for the
+2,084 bytes it cost.
+
+**Proved the way phase 3 was proved — by running it, not only by testing it.**
+On a scratch home: `sandbox set` made a `.mjs` a program, `sandbox ls` and
+`isocan context` both saw it, and `sandbox run` **refused** — *"this program
+came from a canvas, so it only runs fenced — and the fence cannot be built
+here: srt needs rg on the PATH"* — which is the posture working, since this
+machine has neither srt nor ripgrep. Through a declared jail
+(`config.json`'s `sandboxCommand`, the bring-your-own path the scan already
+supports) the walk completed: the program ran, the policy handed to the fence
+was exactly the four lines above, and the transcript landed as an item. A
+second run made **version 2 of the same item**, not a second item. Then both
+list entries came out: `--help` lost the family, `--agent-help` lost the
+section, `isocan context` lost the row, `sandbox ls` became *"did you mean
+inbox?"* — and both items were still there and still readable, `fib.mjs`
+(other) and `fib.mjs — output` (document), the orphaned `sandbox.of` key
+printed as an ordinary property. The oplog was untouched.
+
+**A product bug the proof found, which nothing else would have.** Fastify
+parses `text/plain` as well as `application/json`, so the blob route's `*`
+parser never saw a transcript: `Buffer.isBuffer` said no and every upload was
+refused **`empty blob body`** — a message about a body that was neither empty
+nor wrong. This is the second instance of a bug fixed on 6 Sep, whose note
+predicted exactly this recurrence; the scoped parser now lists both types and
+`blobs.test.ts` holds them. Found by the first code to post a `text/plain`
+blob deliberately, which is how the JSON one was found too.
+
+**What remains of phase 5**, and it is the half the gate still binds: the
+**browser sandbox node** — HTML and JavaScript in a frame on the content
+origin, the extensions design's tier 3 — which needs a panel that acts
+(extensions stage 3), an extension actor to stamp its writes (stage 4), and
+`connect-src <content-origin>` in the served CSP before the first frame
+renders. Also unbuilt and smaller: a Sandboxes *section* in the workbench
+(logs, a terminal), which the research note calls "a page plus a hosted
+panel" and which therefore waits on the same gate.

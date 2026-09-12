@@ -3791,12 +3791,30 @@ export function registerRoutes(
       .send({ urls, expiresAt, ttlSeconds: signing.ttlSeconds } satisfies SignedBlobsResponse);
   });
 
-  // Its own scope, so `application/json` bytes arrive as bytes here and stay
-  // parsed everywhere else — see the note at the `*` parser above.
+  /**
+   * Its own scope, so bytes whose media type Fastify already parses arrive
+   * here as bytes and stay parsed everywhere else — see the note at the `*`
+   * parser above.
+   *
+   * **`text/plain` is the second one, found the same way as the first** (12
+   * Sep 2026). Fastify ships parsers for `application/json` AND `text/plain`;
+   * the JSON one was fixed on 6 Sep by the first code to upload a blob with a
+   * deliberate mime, and the note written then says exactly this would happen
+   * again. It did: the sandbox module posts a run's transcript as
+   * `text/plain`, Fastify handed the route a string, `Buffer.isBuffer` said
+   * no, and the upload was refused with `empty blob body` — the same message
+   * about the same non-empty body. Nothing else had hit it because the mime
+   * tables call a `.txt` file `text/plain` only on the way OUT; an upload
+   * from the CLI falls through to `application/octet-stream`.
+   *
+   * Listed rather than discovered, because the list is short and closed: a
+   * parser Fastify adds in a future version would be a third instance, and
+   * `blobs.test.ts` holds both of these.
+   */
   void app.register(async (blobs) => {
-    blobs.addContentTypeParser("application/json", { parseAs: "buffer" }, (_req, body, done) =>
-      done(null, body),
-    );
+    for (const parsed of ["application/json", "text/plain"]) {
+      blobs.addContentTypeParser(parsed, { parseAs: "buffer" }, (_req, body, done) => done(null, body));
+    }
     blobs.post("/api/projects/:id/blobs", async (req, reply) => {
       const { id } = req.params as { id: string };
       await engine.getSnapshot(id); // 404 for unknown canvases

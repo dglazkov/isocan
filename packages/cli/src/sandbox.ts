@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -466,4 +467,181 @@ export function sandboxLine(scan: SandboxScan): string {
  * that is missing, never as "sandbox unavailable". */
 export function noSandboxLine(scan: SandboxScan): string {
   return `--sandbox was asked for and cannot be honoured here: ${scan.why}`;
+}
+
+/* ------------------------------------------------------------------ *
+ * A program that came from a canvas (modules phase 5, 12 Sep 2026)
+ * ------------------------------------------------------------------ */
+
+/**
+ * **The policy for bytes nobody vouched for.**
+ *
+ * Everything above this line fences an ADAPTER: a harness the person chose,
+ * which has to reach its vendor's API, its own config directory and the
+ * daemon, because a turn that cannot do those three is not a turn. A program
+ * that arrived on a canvas needs none of them, and the trust classes say why:
+ * a module is trusted like the CLI you installed, and the bytes it runs are a
+ * collaborator's. So this policy is the adapter's with everything optional
+ * taken out.
+ *
+ * - **No network at all.** Not the daemon, not a registry, not a vendor. A
+ *   program that could reach the daemon could act as the person who ran it,
+ *   and one that could reach anywhere is the workbench review's exfiltration
+ *   finding with a different renderer. The result comes back through the
+ *   verb that started it, which already has a badge.
+ * - **One writable directory**, the scratch the program was unpacked into,
+ *   which is thrown away after. Not `/tmp` at large, not the isocan home.
+ * - **`$HOME` denied, and NOT carved back.** The adapter policy re-allows
+ *   the harness's config so sessions resume; nothing here has a session.
+ *   `~/.isocan` stays denied too — the badge lives there.
+ * - **Read the toolchain, because the interpreter is the point.** `node` (or
+ *   whatever the argv names) has to be readable or nothing runs; that is the
+ *   one carve-out, plus srt's own files (thing 6).
+ */
+export function programPolicy(options: {
+  /** The scratch directory: the program's only writable place. */
+  dir: string;
+  /** srt's own files, from the scan (thing 6). */
+  sandboxRoot?: string | null;
+  /** Extra readable roots — the interpreter's install, nothing else. */
+  toolchain?: readonly string[];
+}): SandboxPolicy {
+  return {
+    network: { allowedDomains: [], deniedDomains: [], allowLocalBinding: false },
+    filesystem: {
+      denyRead: [os.homedir()],
+      allowRead: dedupe([
+        options.dir,
+        ...(options.toolchain ?? []),
+        ...(options.sandboxRoot ? [options.sandboxRoot] : []),
+      ]),
+      allowWrite: dedupe([options.dir]),
+      denyWrite: [],
+    },
+  };
+}
+
+export interface FencedRequest {
+  command: string;
+  args: readonly string[];
+  /** The scratch directory: the cwd, and the only place it may write. */
+  dir: string;
+  /** Extra readable roots — an interpreter's install. Never `$HOME`. */
+  toolchain?: readonly string[];
+  /** Whatever the run is called, for the settings file's name. */
+  key: string;
+  timeoutMs?: number;
+  /** How much of each stream to keep. A program that prints forever is a
+   *  program, not an attack, and truncation says so out loud. */
+  maxBytes?: number;
+}
+
+export interface FencedRun {
+  code: number | null;
+  signal: string | null;
+  stdout: string;
+  stderr: string;
+  ms: number;
+  timedOut: boolean;
+  truncated: boolean;
+  /** What did the fencing, for the line a person reads. */
+  engine: string;
+}
+
+const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_MAX_BYTES = 256 * 1024;
+
+/**
+ * **Run a command inside this machine's fence, or refuse.**
+ *
+ * The one door a module gets to a process, promoted onto `CliHost` for
+ * modules phase 5 — the review question `design.md` says a module wanting a
+ * helper should be, rather than a private import of this file.
+ *
+ * There is deliberately **no unfenced path through it**, and no flag that
+ * would make one. `isocan rc --sandbox` is opt-in because the thing it fences
+ * is an adapter the person chose and ran themselves a hundred times before
+ * isocan existed; a program from a canvas has no such history, so the fence
+ * is not a mode here, it is the only way in. The refusal wording is the rc's,
+ * for the same stated reason: a person who wants "fence if you can, otherwise
+ * run" cannot be answered by one word that also means its opposite.
+ *
+ * It is `--` and an argv, not `sh -c`: {@link innerScript}'s exports exist to
+ * get an adapter's calls through srt's proxy, and a program with no network
+ * needs no proxy and should get no shell.
+ */
+export async function runFenced(
+  home: string,
+  request: FencedRequest,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): Promise<FencedRun> {
+  const scan = await scanSandbox(home, env, platform);
+  if (!scan.can) {
+    throw new Error(
+      `this program came from a canvas, so it only runs fenced — and the fence cannot be built here: ${scan.why}`,
+    );
+  }
+  const settings = await writeSandboxSettings(
+    home,
+    request.key,
+    programPolicy({ dir: request.dir, sandboxRoot: scan.root, toolchain: request.toolchain ?? [] }),
+  );
+  const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxBytes = request.maxBytes ?? DEFAULT_MAX_BYTES;
+  const started = Date.now();
+
+  return await new Promise<FencedRun>((resolve, reject) => {
+    const child = spawn(
+      scan.command,
+      [...scan.args, "--settings", settings, "--", request.command, ...request.args],
+      {
+        cwd: request.dir,
+        // The environment is a list, not an inheritance — layer 1's posture
+        // from the rc note, with a shorter list because nothing here needs a
+        // key. PATH is what lets the fence find the interpreter.
+        env: { PATH: env.PATH ?? "", HOME: request.dir, TMPDIR: request.dir },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let out = "";
+    let err = "";
+    let truncated = false;
+    const keep = (buffer: string, chunk: Buffer): string => {
+      if (buffer.length >= maxBytes) {
+        truncated = true;
+        return buffer;
+      }
+      const next = buffer + chunk.toString("utf8");
+      if (next.length <= maxBytes) return next;
+      truncated = true;
+      return next.slice(0, maxBytes);
+    };
+    child.stdout.on("data", (c: Buffer) => (out = keep(out, c)));
+    child.stderr.on("data", (c: Buffer) => (err = keep(err, c)));
+
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, timeoutMs);
+
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      resolve({
+        code,
+        signal: signal ?? null,
+        stdout: out,
+        stderr: err,
+        ms: Date.now() - started,
+        timedOut,
+        truncated,
+        engine: scan.engine,
+      });
+    });
+  });
 }

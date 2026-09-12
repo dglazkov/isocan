@@ -4,9 +4,9 @@ Everything you need to add a module to isocan: what one is, where it lives,
 every extension point it can fill and the exact shape each expects, how it
 reaches the platform, how it is built and installed, and the guards that
 will hold it. [`design.md`](design.md) is the argument; this is the manual.
-The three modules in `packages/modules/` — `mindmap`, `mermaid`,
-`documents` — are the worked examples, and each one uses a different subset
-of what is below.
+The modules in `packages/modules/` — `mindmap`, `mermaid`, `documents`,
+`stickers`, `sandbox` — are the worked examples, and each one uses a
+different subset of what is below.
 
 ## How early this is — read this first
 
@@ -266,9 +266,76 @@ export default myCli;
 | `sizeFor(spec, fallback)` | `--size WxH` |
 | `placementFor(snapshot, opts, size?)` | `--at`, `--anchor`, `--in`, `--cell` |
 | `truncate(text, max)` | for a table cell |
+| `runFenced(request)` | the only way a module starts a process — see below |
 
 A module that wants a helper not on this list is asking for one to be
-promoted — a review question, not a private import. Keep the guide path as
+promoted — a review question, not a private import. `runFenced` is what that
+looks like when the answer is yes: it was promoted for
+[phase 5](phases.md#phase-5--sandboxes-the-agent-side-half) rather than let a
+module import `packages/cli/src/sandbox.ts`.
+
+### `runFenced` — running bytes that came off a canvas
+
+```ts
+const result = await host.runFenced({
+  command: "node", args: ["build.mjs"],
+  dir,                       // a scratch directory: the cwd, and the ONLY writable path
+  toolchain: [nodeRoot],     // extra READABLE roots — an interpreter's install. Never $HOME.
+  key: `run-${item.id}`,     // names the policy file
+  timeoutMs: 60_000,
+});
+// { code, signal, stdout, stderr, ms, timedOut, truncated, engine }
+```
+
+It is the same fence `isocan rc --sandbox` puts around an adapter
+(`@anthropic-ai/sandbox-runtime`), with everything optional taken out,
+because a program that arrived on a canvas needs none of it:
+
+| | an adapter's fence | `runFenced` |
+| --- | --- | --- |
+| network | the daemon, the vendor's API, npm | **none at all** |
+| writable | the enrolment's directory, `~/.isocan`, `/tmp` | **`dir`, and nothing else** |
+| readable | `$HOME` denied, harness config re-allowed | `$HOME` denied, **nothing carved back but `toolchain`** |
+| asked for? | opt-in (`--sandbox`) | **not a mode — there is no unfenced path** |
+
+**On a machine that cannot fence, it throws**, naming what is missing
+(usually `srt` and `ripgrep`). Catch it to say it better if you like; do not
+catch it to run the program anyway. "Fence if you can, otherwise run" is not
+something one word can mean, and a person told their program was sandboxed
+when it was not is worse off than one told it could not run.
+
+There is deliberately **no `sh -c`**: you pass an argv. A module that wants a
+pipeline should say so out loud rather than reaching for a shell, because a
+shell is a second language on top of the one the person read.
+
+### What a module that runs things may never do
+
+The [two trust classes](design.md#two-trust-classes) meet inside a module like
+this, and the whole of the care is in not blurring them. **A module is trusted
+like the CLI you installed; anything that arrived on a canvas is trusted like
+a collaborator.** So:
+
+- **Never spawn.** No `node:child_process`, no `node:worker_threads`, no
+  `node:vm`, no `eval`. If `runFenced` will not do what you need, that is a
+  review question — the fence is the app's, and a module that could build its
+  own weaker one has made the class distinction decorative.
+  `packages/modules/sandbox/test/core.test.ts` is the guard shape: read your
+  own source and assert the imports are absent.
+- **Never run canvas bytes in the browser.** No `<iframe>` with a canvas's
+  content, no `dangerouslySetInnerHTML` of it, no `postMessage` API of your
+  own. The safe shape for that is a frame on the
+  [content origin](../atlas/content-origin.md), and it is still gated —
+  phase 5's gate check found the extension-actors gate binds exactly that
+  shape and nothing else.
+- **Never reach the daemon from inside the fence.** A program that can talk
+  to the home can act as the person who ran it; the result comes back through
+  the verb that started it, which already has a badge.
+- **Say where it runs, in the words a person reads.** The machine that typed
+  the verb, never the canvas's home and never a viewer's browser. A surface
+  that is vague about whose computer is spending is a surface that will be
+  read the generous way.
+
+Keep the guide path as
 `../agent-guide.md` relative to `src/`: the build puts `cli.mjs` in `dist/`,
 one level down, so the same relative path resolves in both layouts.
 
@@ -385,6 +452,10 @@ put something beside the work today). No per-module CSS file, and an overlay
 that needs positioning still needs a rule in `styles.css` — the stickers tray
 shipped invisible for a day because the region had no CSS at all.
 No way for a card to name the module a file came from when that module is
-absent. A prose editor for documents, deferred. Sandboxes, which wait on the
-content origin, extension actors and compute consent. Each is listed in
-[`phases.md`](phases.md) with what unblocks it.
+absent. A prose editor for documents, deferred. The BROWSER shape of a
+sandbox — a frame on the content origin that runs a canvas's code where a
+viewer is looking — which is the one thing phase 5's gate check left shut,
+behind extensions stages 3 and 4 and a `connect-src` line in the served CSP.
+The agent-side shape is built: see
+[`phases.md`](phases.md#phase-5--sandboxes-the-agent-side-half), and
+`packages/modules/sandbox` as the worked example.

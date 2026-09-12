@@ -511,6 +511,31 @@ describe("bytes that look like something else", () => {
     expect(await read.text()).toBe(text);
   });
 
+  it("takes a plain-text file as a file too — the second instance", async () => {
+    // Fastify parses `text/plain` as well as JSON, and the note above said the
+    // shape would recur. It did, on 12 Sep: the sandbox module posts a run's
+    // transcript as text/plain and every upload was refused `empty blob body`.
+    // Found by the first code to post one deliberately, exactly as before.
+    const text = "$ node fib.mjs\n\nhello\n\nexit 0 · 12 ms · fenced by Seatbelt\n";
+    const { status, body } = await put(text, "text/plain");
+    expect(status, JSON.stringify(body)).toBe(200);
+    expect(body.size).toBe(Buffer.byteLength(text));
+    expect(body.mimeType).toBe("text/plain");
+  });
+
+  it("keeps plain-text bytes exactly, trailing blank lines and all", async () => {
+    // A transcript's shape is load-bearing — its first line is the command and
+    // its last is how the run ended — so a parser that trimmed would be a
+    // silent edit of somebody's record.
+    const text = "a\n\n\nb\n";
+    const { status, body } = await put(text, "text/plain");
+    expect(status).toBe(200);
+    const read = await fetch(`${base}/api/projects/prj_1/blobs/${body.blobHash as string}`, {
+      headers: badge.headers,
+    });
+    expect(await read.text()).toBe(text);
+  });
+
   it("still refuses a body that really is empty", async () => {
     // The negative control: the refusal this displaced must still fire, or the
     // fix has traded one wrong answer for another.

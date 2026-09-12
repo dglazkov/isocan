@@ -171,11 +171,47 @@
  * and the shape is the one worth copying rather than the number: a feature
  * that measured 5,914 bytes cost 473, because the parts of it a first visit
  * never reaches were put where a first visit does not go.
+ *
+ * **658,000 → 660,100 on 12 Sep, for a whole module's registry weight.**
+ * Modules phase 5 added `@isocan/sandbox` — a program that lives on the
+ * canvas as a file and runs fenced on the machine that typed the verb. The
+ * margin was 84 bytes, so it could not have been anything but a raise; this
+ * is the sentence, written with the feature rather than left for the fourth
+ * night of a persona finding, which is the mistake the paragraph above this
+ * one is an apology for.
+ *
+ * Measured: **660,000**, up 2,084. All of it is the module's CORE record,
+ * because that is the half of a module a first visit registers:
+ *
+ *   ~900  the `/run` command's body, which is the skill an agent reads in
+ *         the composer's menu — the one place a browser-side agent learns
+ *         that running a canvas's program spends its own machine, and that
+ *         a refused fence is not to be worked around. The obvious trim, and
+ *         refused: the CLI surface has `--agent-help` to say this and the
+ *         web has only the body.
+ *   ~700  the record, the context row and the page route's wiring
+ *   ~480  the lazy boundary and the module's entry in the shell's list
+ *
+ * **What it did not cost, which is the part worth copying.** The page
+ * component is behind `lazy()`, so the list, the dates and the links are a
+ * chunk nobody fetches until they open Sandboxes. And the whole terminal
+ * half — the argv split, the transcript writer, the fence request — is
+ * `cli.ts`, which the web never imports.
+ *
+ * The one measurement worth writing down because it was wrong: the CLI-only
+ * readers in `core.ts` (`argvOf`, `transcriptOf`, `statusLine`) were split
+ * into a `run.ts` on the theory they were riding into the entry chunk on the
+ * web half's eager import of the record. Measured, the split changed the
+ * chunk's content hash not at all — vite had already shaken them out, since
+ * nothing in `web.tsx` or `page.tsx` names them. The split was reverted.
+ * **A barrel a module imports eagerly is not automatically a cost**; the
+ * cost is what something eager actually references, and the way to know is
+ * to grep the built chunk for a string only that code has.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 658_000;
+export const CEILING = 660_100;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.
