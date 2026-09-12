@@ -28,6 +28,7 @@ import type {
 } from "@isocan/core";
 import {
   INTERNAL_OP_TYPES,
+  validateItemChanges,
   OplogFencedError,
   OpValidationError,
   DEFAULT_COMMANDS,
@@ -1907,7 +1908,7 @@ export class Engine {
     try {
       inverse = incoming.inverse !== undefined
         ? incoming.inverse
-        : invertOperation(runtime.state, op);
+        : invertOperation(runtime.state, op, envelope);
       nextState = applyOperation(runtime.state, envelope);
     } catch {
       // The reducer refused an op the home accepted, so our state is not the
@@ -2340,7 +2341,8 @@ export class Engine {
     const { op } = request;
 
     // Internal ops only ever arrive via undo/redo (from stored inverses).
-    if (cause === undefined && INTERNAL_OP_TYPES.has(op.type)) {
+    if (cause === undefined && (INTERNAL_OP_TYPES.has(op.type) ||
+        (op.type === "items.change" && Array.isArray(op.changes) && op.changes.some(change => change && INTERNAL_OP_TYPES.has(change.type))))) {
       throw new OpValidationError("internal-op", `${op.type} cannot be issued directly`);
     }
 
@@ -2358,6 +2360,7 @@ export class Engine {
       throw new OpValidationError("bad-op", "canvasId is required");
     }
     const runtime = await this.runtime(canvasId);
+    if (op.type === "items.change") validateItemChanges(runtime.state.canvas, op);
 
     // Normalize placement so the logged op never references ephemeral client
     // state — and so it records where the item ACTUALLY went.
@@ -2373,28 +2376,25 @@ export class Engine {
     // is what makes the reducer's own call a no-op on the way back: any
     // correct search returns a free spot unchanged, so the layout survives the
     // algorithm changing.
-    const normalizedOp: Operation =
-      op.type === "item.add"
-        ? {
-            ...op,
-            placement: {
-              ...resolvePlacement(
-                runtime.state.canvas,
-                op.placement,
-                op.width,
-                op.height,
-                positionIsMeaningful(op),
-              ),
-              // The log keeps WHY it landed there: a chosen spot stays
-              // marked, so a replay — and anyone reading the log — sees a
-              // person's gesture rather than a coincidence of clear ground.
-              ...("x" in op.placement && op.placement.chosen ? { chosen: true } : {}),
-            },
-          }
-        : op;
+    const normalize = (state: CanvasState, op: Operation): Operation => op.type === "item.add" ? {
+      ...op,
+      placement: {
+        ...resolvePlacement(state.canvas, op.placement, op.width, op.height, positionIsMeaningful(op)),
+        ...("x" in op.placement && op.placement.chosen ? { chosen: true } : {}),
+      },
+    } : op;
+    let normalizedOp: Operation = normalize(runtime.state, op);
+    if (op.type === "items.change") {
+      let preview = runtime.state;
+      normalizedOp = { ...op, changes: op.changes.map(change => {
+        const normalized = normalize(preview, change) as typeof change;
+        preview = applyOperation(preview, this.envelope(request, normalized))!;
+        return normalized;
+      }) };
+    }
 
     const envelope = this.envelope(request, normalizedOp);
-    const inverse = invertOperation(runtime.state, normalizedOp);
+    const inverse = invertOperation(runtime.state, normalizedOp, envelope);
     const nextState = applyOperation(runtime.state, envelope);
     const seq = runtime.lastSeq + 1;
     const entry: LogEntry = {
@@ -2564,6 +2564,7 @@ export class Engine {
  */
 function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
   switch (target.envelope.op.type) {
+    case "items.change": // inverse of undo restores original items and version authorship
     case "item.add": // re-add would collide with the trashed item → restore it
     case "item.addVersion": // restoreVersion keeps original authorship
     case "item.edit": // conditional content + metadata edit restores both

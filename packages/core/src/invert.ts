@@ -1,5 +1,7 @@
 import type { CanvasState } from "./model.ts";
-import type { MetaPatch, NewVersion, Operation } from "./ops.ts";
+import { applyOperation } from "./reducer.ts";
+import { validateItemChanges } from "./itemchanges.ts";
+import type { ItemChange, OpEnvelope, MetaPatch, NewVersion, Operation } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
 
 /**
@@ -13,6 +15,7 @@ import { OpValidationError, unknownOperation } from "./errors.ts";
 export function invertOperation(
   stateBefore: CanvasState | null,
   op: Operation,
+  envelope?: OpEnvelope,
 ): Operation | null {
   if (op.type === "project.create") {
     // Not undoable: its inverse would be project.delete, and canvas deletion
@@ -31,6 +34,21 @@ export function invertOperation(
   };
 
   switch (op.type) {
+    case "items.change": {
+      validateItemChanges(canvas, op);
+      let next = stateBefore;
+      const changes: ItemChange[] = [];
+      for (const change of op.changes) {
+        changes.unshift(invertOperation(next, change) as ItemChange);
+        next = applyOperation(next, {
+          id: "inverse-preview", canvasId: project.id,
+          actor: project.updatedBy, ts: project.updatedAt,
+          ...envelope, op: change,
+        })!;
+      }
+      return { type: "items.change", changes };
+    }
+
     case "actor.claim":
     case "actor.setColor":
     case "actor.setMark":

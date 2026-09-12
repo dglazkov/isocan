@@ -73,6 +73,7 @@ export function chooseRetained(entries: LogEntry[], keepOps: number): LogEntry[]
 /** Every blobHash an operation can (re-)introduce. */
 function hashesInOperation(op: Operation): string[] {
   switch (op.type) {
+    case "items.change": return op.changes.flatMap(hashesInOperation);
     case "item.add":
     case "item.addVersion":
     case "item.edit":

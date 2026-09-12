@@ -11,10 +11,13 @@ can share a canvas; use their item ids to avoid ambiguous names.
 | Diagnose partial reads | `anatomy validate <project>`, `anatomy recover <project> <item> <version>` |
 | Change intent or narrative | `anatomy goal <project> <text>`, `anatomy brief <project> <markdown-file>` |
 | Create/edit a concept or directed relationship | `anatomy sample <project>`, `anatomy draft <project> <node>`, `anatomy node <project> <json-file>`, `anatomy edge <project> <json-file>` |
+| Patch fields or choose a decision | `anatomy patch <project> <concept> <file>`, `anatomy resolve <project> <concept> <option>` |
+| Review and apply a graph | `anatomy diff <project> <file> --out <review-file>`, `anatomy apply <review-file>` |
+| Remove a relationship | `anatomy edge-remove <project> <edge>` |
 | Arrange and explore | `anatomy show <project> --node <original-id>`, `anatomy layout <project>`, `anatomy decisions <project>`, `anatomy coverage <project>` |
 | Attach cited UTF-8 source bytes | `anatomy source <project> <source-id> <file>` |
 | Propose or approve an HTML mock | `anatomy propose <project> <node-id> <html-file> --title <title> --constraints 'a;b'`, `anatomy promote <project> <node-id>` |
-| Read/save/inspect/restore checkpoints | `anatomy checkpoint <project>`, `anatomy checkpoint <project> --save <title>`, `anatomy checkpoint <project> --show <id>`, `anatomy checkpoint <project> --restore <id>` |
+| Read/save/inspect/restore checkpoints | `anatomy checkpoint <project>`, `anatomy checkpoint <project> --save <title>`, `anatomy checkpoint <project> --show <id>`, `anatomy checkpoint <project> --restore <id>`, `anatomy checkpoint <project> --diff <id> --out <review-file>` |
 
 All verbs take `--canvas`; reads support global `--json`. Import accepts the
 prototype's `.anatomy.json` project export and always makes a fresh project.
@@ -42,7 +45,7 @@ Use ordinary `session` presence while actually working. A changed goal requests
 reevaluation; it does not mark anything automatically analysed. Imported
 activity and comments are historical provenance, not live agent activity.
 Checkpoint restore changes only that project's concepts/edges and is undoable.
-Mock promotion makes a source item and settles the concept in one undo group.
+Mock promotion makes a source item and settles the concept in one atomic undoable operation.
 
 A canvas carries `anatomy.analysis` (the attached project item) and
 `anatomy.repository` (the repository path or URL to analyze). Import/new attaches
@@ -87,3 +90,26 @@ A direct `/anatomy` Chat message without a request ID is already a work request:
 use `analyze --record-only` to record it without dispatching another message,
 then claim the returned receipt. Native item versions preserve request history;
 reported outcomes and revisions are separate from the concepts' settled status.
+
+Use `patch` for explicit fields (for example `{"title":"Delivery recovery"}`):
+omitted evidence, options, imported comments and discipline assessments survive.
+Arrays you supply replace that array. `resolve` chooses one recorded option ID;
+it settles the concept without claiming its discipline assessments were reviewed.
+Both accept portable concept IDs and native item IDs and return explicit receipts.
+`edge` accepts either kind of endpoint ID; `edge-remove` takes a relationship ID.
+A relationship source change/removal is atomic and takes one undo.
+
+For a revised analysis, run `diff --out` on a portable project or checkpoint
+file. Output lists added/changed/removed/restored concepts and relationships,
+including before/after fields; the saved review captures the exact base and
+proposed graph. Inspect it before `apply`. `checkpoint --diff --out` is the same
+review against a saved checkpoint. `checkpoint --restore` remains the immediate
+explicit restore command; prefer diff/apply when reviewing changes first.
+
+Apply changes concepts and relationships only, preserving the overview, sources,
+positions and native discussions. Matching trashed concepts regain their original
+native IDs and history; ambiguous matches are refused. Changed versions, metadata,
+identity or graph membership require a new review. Moves and comments may continue.
+The daemon applies one bounded `items.change` operation: all changes succeed or
+none publish, and one undo reverses it. An unchanged proposal writes nothing.
+The module requires API 0.2.3; older daemons cannot accept this operation.

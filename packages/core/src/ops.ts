@@ -65,7 +65,7 @@ export interface MetaPatch {
   removeProperties?: string[];
 }
 
-export type Operation =
+type SingleOperation =
   // ---- actors ----
   | {
       /**
@@ -390,6 +390,36 @@ export type Operation =
       type: "agent.withdraw";
       actorId: string;
     };
+
+/** A flat, bounded content transaction; no home, comment or destructive GC ops. */
+export type ItemChange = Extract<SingleOperation, { type:
+  | "item.add" | "item.edit" | "item.update" | "item.delete" | "item.restore"
+  | "item.removeVersion" | "item.restoreVersion"
+}>;
+
+/** The content facts a reviewer saw, including an absent or trashed identity. */
+export type ItemGuard = { itemId: string } & (
+  | { location: "absent" }
+  | { location: "live" | "trash"; versionId: string; title: string; properties: Record<string, string> }
+);
+
+/** Exact live membership prevents an unseen addition from escaping a graph review. */
+export interface ItemScope {
+  property: string;
+  value: string;
+  /** Any version may establish membership, including a damaged current file. */
+  mimeTypes?: string[];
+  itemIds: string[];
+}
+
+/** The complete shared vocabulary, including bounded atomic content updates. */
+export type Operation = SingleOperation | {
+  /** One publication, log entry and undo. Preconditions describe the pre-state. */
+  type: "items.change";
+  changes: ItemChange[];
+  guards?: ItemGuard[];
+  scope?: ItemScope;
+};
 
 export type OperationType = Operation["type"];
 

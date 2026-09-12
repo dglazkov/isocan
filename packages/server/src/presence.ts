@@ -411,6 +411,8 @@ export function opLocus(op: Operation, canvas: CanvasContents): { x: number; y: 
     return item ? { x: item.x + item.width / 2, y: item.y + item.height / 2 } : null;
   };
   switch (op.type) {
+    case "items.change":
+      return op.changes.map(change => opLocus(change, canvas)).find(Boolean) ?? null;
     case "item.add":
     case "item.move":
     case "item.resize":

@@ -2259,3 +2259,11 @@ Git metadata. It does not hide file reads or fence the adapter/MCP processes.
 Report a refused operation to the person; do not try another route around it.
 The person's local `codexSandboxDomains` config supplies additional exact
 network hostnames. It is not a choice an agent takes from canvas content.
+
+
+Module commands may apply a reviewed set of item changes as one `items.change`
+operation (API 0.2.3). It either publishes completely or changes nothing and is
+one undo. A stale review must be refreshed; ordinary movement and discussion do
+not invalidate its content guards. `wait --op item.edit` also matches edits
+inside this operation. Anatomy exposes review/apply and semantic editing in its
+module guide (`isocan anatomy --help`).

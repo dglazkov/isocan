@@ -499,7 +499,7 @@ export interface ModuleManifest {
  * exactly how you say that, and `^0.1.0` is refused by the check below — which
  * is the first time it has ever refused anything.
  */
-export const MODULE_API_VERSION = "0.2.2";
+export const MODULE_API_VERSION = "0.2.3";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it

@@ -133,6 +133,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   native selection, anchored discussion and item-focused collaboration. Browser
   Back retraces exploration; the project shortcut resumes it. Existing concept
   edits use `anatomy draft` and a conditional save to preserve concurrent changes.
+  Explicit `patch`/`resolve` commands preserve omitted fields. Graph and checkpoint
+  previews show changes before one atomic apply/undo, restoring matching trashed
+  concepts with their original comments and history. Relationships can be edited
+  or removed in the inspector and CLI.
   Broken files have item-scoped diagnostics and version recovery; healthy concepts
   stay readable. `anatomy validate` and `recover` provide the same repair path.
   Overview, Open Decisions and Coverage show the same graph through different

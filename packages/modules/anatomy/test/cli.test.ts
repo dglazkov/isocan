@@ -202,4 +202,45 @@ describe("Anatomy through the real CLI and daemon", () => {
     expect(await receipt<unknown[]>("anatomy", "runs")).toHaveLength(3);
   }, 120_000);
 
+  it("patches and resolves by ID, reviews graph changes, refuses stale plans and restores native identity through one undo/redo", async () => {
+    const { canvasId } = await json<{ canvasId: string }>("canvas", "create", "Synthetic graph review");
+    const invoke = (...args: string[]) => run(...args, "--canvas", canvasId);
+    const receipt = <T>(...args: string[]) => json<T>(...args, "--canvas", canvasId);
+    const input = path.join(home, "review-project.json"), patch = path.join(home, "patch.json"), plan = path.join(home, "review-plan.json");
+    const sample = sampleProject();
+    await fs.writeFile(input, JSON.stringify(sample));
+    const { itemId } = await receipt<{ itemId: string }>("anatomy", "import", input);
+    const report = await receipt<{ items: Record<string, string> }>("anatomy", "validate", itemId);
+    const show = () => receipt<AnatomyProject>("anatomy", "show", itemId);
+    await invoke("anatomy", "checkpoint", itemId, "--save", "Baseline");
+    const checkpoint = (await show()).checkpoints[0]!;
+    await fs.writeFile(patch, JSON.stringify({ title: "Reviewed workflow" }));
+    expect(await receipt("anatomy", "patch", itemId, report.items.workflow!, patch)).toMatchObject({ itemId: report.items.workflow, conceptId: "workflow" });
+    expect((await show()).nodes.find(n => n.id === "workflow")!.evidence).toEqual(sample.nodes[1]!.evidence);
+    expect(await receipt("anatomy", "resolve", itemId, "workflow", "recover")).toMatchObject({ status: "settled", optionId: "recover" });
+    await invoke("anatomy", "edge-remove", itemId, sample.edges[0]!.id);
+    expect((await show()).edges.some(e => e.id === sample.edges[0]!.id)).toBe(false);
+    await invoke("undo");
+    await invoke("comment", "add", "--item", report.items.policy!, "Preserve this discussion");
+    await invoke("rm", report.items.policy!);
+    const diff = await receipt<{ concepts: Array<{ kind: string; id: string }> }>("anatomy", "checkpoint", itemId, "--diff", checkpoint.id, "--out", plan);
+    expect(diff.concepts).toEqual(expect.arrayContaining([expect.objectContaining({ id: "policy", kind: "restore" }), expect.objectContaining({ id: "workflow", kind: "change" })]));
+    const before = await show();
+    expect(await receipt("anatomy", "apply", plan)).toMatchObject({ status: "applied", projectId: itemId });
+    expect((await receipt<{ items: Record<string, string> }>("anatomy", "validate", itemId)).items.policy).toBe(report.items.policy);
+    expect(await invoke("comment", "list", "--json")).toContain("Preserve this discussion");
+    expect((await show()).nodes.find(n => n.id === "workflow")!.summary).toBe(sample.nodes[1]!.summary);
+    await invoke("undo");
+    expect((await show()).nodes).toEqual(before.nodes);
+    await invoke("redo");
+    expect((await show()).nodes.find(n => n.id === "workflow")!.summary).toBe(sample.nodes[1]!.summary);
+    sample.nodes[0]!.summary = "Proposed summary";
+    await fs.writeFile(input, JSON.stringify(sample));
+    await invoke("anatomy", "diff", itemId, input, "--out", plan);
+    await invoke("anatomy", "patch", itemId, "workflow", patch);
+    const competing = await show();
+    await expect(invoke("anatomy", "apply", plan)).rejects.toThrow("changed since review");
+    expect(await show()).toEqual(competing);
+  }, 120_000);
+
 });

@@ -473,3 +473,22 @@ No way for a card to name the module a file came from when that module is
 absent. A prose editor for documents, deferred. Sandboxes, which wait on the
 content origin, extension actors and compute consent. Each is listed in
 [`phases.md`](phases.md) with what unblocks it.
+
+
+### Atomic item changes (API 0.2.3)
+
+Use `items.change` for a reviewed content change that must publish as one unit,
+not an undo group of independent entries. It accepts 1–1,000 flat `item.add`,
+`item.edit`, `item.update`, `item.delete` and `item.restore` changes. No nesting,
+project mutations, comments or trash emptying; inverse-only version operations
+are accepted only from undo/redo. The daemon normalizes placements in sequence,
+persists one log entry and publishes one result. A failed final change publishes
+nothing. `guardItem(item)` captures content/metadata preconditions while leaving
+moves, reactions and comments independent. An optional `scope` compares exact
+membership by native property and MIME history, preventing a preview from
+silently ignoring a newly added or removed item. Filtered wait examines child
+operations; blob retention, replay and presence understand the same vocabulary.
+
+Anatomy's graph review is one client of this native operation, not a second
+mutation engine. Old undo groups retain their existing non-atomic semantics.
+Declare `engines: ">=0.2.3"` before issuing this vocabulary.

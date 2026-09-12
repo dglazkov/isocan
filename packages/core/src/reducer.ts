@@ -1,3 +1,4 @@
+import { validateItemChanges } from "./itemchanges.ts";
 import { validateTextAnchor } from "./text-anchor.ts";
 import type {
   Actor,
@@ -93,6 +94,13 @@ export function applyOperation(
   };
 
   switch (op.type) {
+    case "items.change": {
+      validateItemChanges(canvas, op);
+      let next = state;
+      for (const change of op.changes) next = applyOperation(next, { ...envelope, op: change })!;
+      return { ...next, project: { ...next.project, lastOp: op.type } };
+    }
+
     case "actor.claim":
     case "actor.setColor":
     case "actor.setMark":

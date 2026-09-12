@@ -178,3 +178,11 @@ The [fluid exploration acceptance record](fluid-exploration.md) supersedes the
 initial port’s client-only stale checks, static geometry and unmeasured large
 local graphs. It records the conditional operation, native presentation API,
 30/100/300-concept tests, browser gestures and remaining limits separately.
+
+
+## Semantic updates, 12 September
+
+[Phase 9 acceptance](semantic-updates.md#acceptance-12-september-2026) records
+atomic native changes, semantic CLI/browser parity and reviewed graph/checkpoint
+application. Final full suite: **4,206 passed, 70 skipped**; typecheck and build
+passed, with real-browser interaction checks and explicit viewport limitations.

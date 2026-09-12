@@ -40,6 +40,7 @@ const WEIGHT: Record<string, number> = {
   // scrubber is for and the strongest single signal on the whole track.
   "item.addVersion": 6,
   "item.edit": 6,
+  "items.change": 6,
   // Conversation. The FIRST comment on a thread is a seam; a reply is the
   // conversation continuing, which is not the same event.
   "thread.create": 4,
@@ -104,6 +105,8 @@ function aboutOf(op: Operation): string | null {
   };
   const o = op as unknown as Record<string, any>;
   switch (op.type) {
+    case "items.change":
+      return `${o.changes?.length ?? 0} item changes`;
     case "item.add":
       return firstLine(o.title) ?? firstLine(o.version?.filename);
     case "item.addVersion":

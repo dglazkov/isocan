@@ -1,3 +1,6 @@
+import { GraphReviewDialog } from "./graph-review-dialog.tsx";
+import { prepareGraphReview, type GraphReview } from "./graph-review.ts";
+import { resolveDecision } from "./semantic.ts";
 import { Dialog } from "./dialog.tsx";
 import { RecoveryDialog } from "./recovery-dialog.tsx";
 import { AnalysisRequests } from "./requests-pane.tsx";
@@ -33,7 +36,6 @@ import {
   nodeSchema,
   type AnatomyNode,
   type AnatomyProject,
-  type Checkpoint,
   type Evidence,
 } from "./core.ts";
 import {
@@ -42,7 +44,7 @@ import {
   emptyProject,
   importProject,
   promoteMock,
-  restoreCheckpoint,
+  removeEdge,
   saveCheckpoint,
   saveEdge,
   saveNode,
@@ -122,7 +124,7 @@ export default function Workspace({
   } | null>(null);
   const [creating, setCreating] = useState(false);
   const [evidence, setEvidence] = useState<Evidence | null>(null);
-  const [checkpoint, setCheckpoint] = useState<Checkpoint | null>(null);
+  const [graphReview, setGraphReview] = useState<{ title: string; plan: GraphReview } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [checkpointTitle, setCheckpointTitle] = useState("");
   const io = useMemo<AnatomyIO>(
@@ -136,6 +138,12 @@ export default function Workspace({
     }),
     [host, canvasRecord],
   );
+  const graphCanvas = loaded?.canvas ?? canvas;
+  const graphItem = selectedProject ? graphCanvas.items[selectedProject.id] ?? selectedProject : undefined;
+  const reviewGraph = (input: unknown, title: string) => {
+    if (!project || !graphItem) return;
+    setGraphReview({ title, plan: prepareGraphReview(graphCanvas, graphItem, project, input, canvasRecord.id) });
+  };
   // Geometry and selection do not change file bodies. A drag never refetches
   // the graph, and hash-cached reads make a one-file edit a one-file download.
   const revision = JSON.stringify(
@@ -298,7 +306,7 @@ export default function Workspace({
               setMessage("");
               setEditor(null);
               setEvidence(null);
-              setCheckpoint(null);
+              setGraphReview(null);
             }}
           >
             {!projects.length && <option value="">Choose a project</option>}
@@ -528,11 +536,18 @@ export default function Workspace({
                 </span>
               </div>
               {project.checkpoints.map((c) => (
-                <button key={c.id} onClick={() => setCheckpoint(c)}>
+                <button key={c.id} onClick={() => void run(async () => reviewGraph(c, `Review checkpoint: ${c.title}`))}>
                   {c.title} <small>{c.convergenceScore}%</small>
                 </button>
               ))}
               {!project.checkpoints.length && <span>No checkpoints yet.</span>}
+              {canEdit && <label className="anatomy-file-button">
+                Review graph update
+                <input type="file" accept="application/json,.json" aria-label="Review graph update" disabled={busy} onChange={event => {
+                  const file = event.currentTarget.files?.[0]; event.currentTarget.value = "";
+                  if (file) void run(async () => reviewGraph(JSON.parse(await file.text()), `Review update: ${file.name}`));
+                }} />
+              </label>}
               {canEdit && (
                 <form
                   onSubmit={(e) => {
@@ -677,9 +692,9 @@ export default function Workspace({
                         evidence={setEvidence}
                         jump={jump}
                         run={run}
-                        save={(node) =>
-                          saveNode(io, canvas, selectedProject, project, node)
-                        }
+                        save={(node) => saveNode(io, graphCanvas, graphItem!, project, node)}
+                        resolve={(option) => resolveDecision(io, graphCanvas, graphItem!, project, selected.id, option)}
+                        removeEdge={(id) => removeEdge(io, graphCanvas, graphItem!, project, id)}
                         promote={() =>
                           promoteMock(
                             io,
@@ -690,7 +705,7 @@ export default function Workspace({
                           )
                         }
                         edge={(edge) =>
-                          saveEdge(io, canvas, selectedProject, project, edge)
+                          saveEdge(io, graphCanvas, graphItem!, project, edge)
                         }
                       />
                     ) : (
@@ -788,9 +803,9 @@ export default function Workspace({
                       evidence={setEvidence}
                       jump={jump}
                       run={run}
-                      save={(node) =>
-                        saveNode(io, canvas, selectedProject, project, node)
-                      }
+                      save={(node) => saveNode(io, graphCanvas, graphItem!, project, node)}
+                        resolve={(option) => resolveDecision(io, graphCanvas, graphItem!, project, decision.id, option)}
+                      removeEdge={(id) => removeEdge(io, graphCanvas, graphItem!, project, id)}
                       promote={() =>
                         promoteMock(
                           io,
@@ -801,7 +816,7 @@ export default function Workspace({
                         )
                       }
                       edge={(edge) =>
-                        saveEdge(io, canvas, selectedProject, project, edge)
+                        saveEdge(io, graphCanvas, graphItem!, project, edge)
                       }
                     />
                   </>
@@ -920,46 +935,47 @@ export default function Workspace({
           run={run}
         />
       )}
-      {checkpoint && selectedProject && (
-        <Dialog title={checkpoint.title} close={() => setCheckpoint(null)}>
-          <p>
-            Saved {new Date(checkpoint.timestamp).toLocaleString()} ·{" "}
-            {checkpoint.convergenceScore}% settled
-          </p>
-          <p>This is a saved snapshot. The live canvas has not changed.</p>
-          <ul>
-            {checkpoint.nodes.map((n) => (
-              <li key={n.id}>
-                {status(n.status)} {n.title}
-                <p>{n.summary}</p>
-              </li>
-            ))}
-          </ul>
-          <button onClick={() => download(checkpoint, "checkpoint.json")}>
-            Export checkpoint
-          </button>
-          {canEdit && (
-            <button
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  await restoreCheckpoint(
-                    io,
-                    canvas,
-                    selectedProject,
-                    checkpoint,
-                  );
-                  setCheckpoint(null);
-                })
-              }
-            >
-              Restore these concepts
-            </button>
-          )}
-        </Dialog>
+      {graphReview && selectedProject && (
+        <GraphReviewDialog initial={graphReview.plan} title={graphReview.title} io={io} canEdit={canEdit}
+          close={() => setGraphReview(null)} exportPlan={plan => download(plan, "anatomy-review.json")} />
       )}
     </div>
   );
+}
+
+function RelationshipEditor({ value, project, busy, save, remove }: {
+  value: AnatomyProject["edges"][number]; project: AnatomyProject; busy: boolean;
+  save: (edge: AnatomyProject["edges"][number]) => Promise<boolean>; remove: () => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const original = useRef({ save, remove });
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) { setDraft(value); original.current = { save, remove }; }
+  }, [editing, value, save, remove]);
+  const change = (next: typeof value) => { setEditing(true); setDraft(next); };
+  return <details onToggle={event => {
+    if (event.currentTarget.open && !editing) {
+      original.current = { save, remove }; setDraft(value); setEditing(true);
+    }
+  }}>
+    <summary>Edit relationship</summary>
+    <form onSubmit={event => { event.preventDefault(); void original.current.save(draft).then(saved => { if (saved) setEditing(false); }); }}>
+      <label>From<select aria-label="Relationship from" value={draft.from} disabled={busy} onChange={e => change({ ...draft, from: e.target.value })}>
+        {project.nodes.map(node => <option key={node.id} value={node.id}>{node.title}</option>)}
+      </select></label>
+      <label>To<select aria-label="Relationship to" value={draft.to} disabled={busy} onChange={e => change({ ...draft, to: e.target.value })}>
+        {project.nodes.map(node => <option key={node.id} value={node.id}>{node.title}</option>)}
+      </select></label>
+      <label>Label<input aria-label="Edit relationship label" value={draft.label ?? ""} disabled={busy} onChange={e => change({ ...draft, label: e.target.value })} /></label>
+      <label>Coupling<select aria-label="Relationship coupling" value={draft.coupling ?? ""} disabled={busy} onChange={e => change({ ...draft, coupling: e.target.value ? e.target.value as "tight" | "contract" | "loose" : undefined })}>
+        <option value="">Not specified</option><option value="tight">Tight</option><option value="contract">Contract</option><option value="loose">Loose</option>
+      </select></label>
+      <button disabled={busy}>Save relationship</button>
+      <button type="button" disabled={busy} onClick={() => { setDraft(value); original.current = { save, remove }; }}>Reload relationship</button>
+      <button type="button" disabled={busy} onClick={() => void remove()}>Remove relationship</button>
+    </form>
+  </details>;
 }
 
 function Tree({
@@ -1173,8 +1189,10 @@ type InspectorProps = {
   jump: (id: string) => void;
   run: (action: () => Promise<unknown>) => Promise<boolean>;
   save: (node: AnatomyNode) => Promise<unknown>;
+  resolve: (option: string) => Promise<unknown>;
+  removeEdge: (id: string) => Promise<unknown>;
   promote: () => Promise<void>;
-  edge: (edge: unknown) => Promise<void>;
+  edge: (edge: unknown) => Promise<unknown>;
 };
 function Inspector({
   node,
@@ -1189,6 +1207,8 @@ function Inspector({
   jump,
   run,
   save,
+  resolve,
+  removeEdge,
   promote,
   edge,
 }: InspectorProps) {
@@ -1275,6 +1295,8 @@ function Inspector({
                     {e.label}
                     {e.coupling ? ` · ${e.coupling}` : ""}
                   </p>
+                  {canEdit && <RelationshipEditor key={e.id} value={e} project={project} busy={busy}
+                    save={value => run(() => edge(value))} remove={() => run(() => removeEdge(e.id))} />}
                 </div>
               );
             })}
@@ -1353,12 +1375,7 @@ function Inspector({
                   disabled={busy}
                   onClick={() =>
                     void run(() =>
-                      save({
-                        ...node,
-                        summary: o.resultingSummary,
-                        status: "settled",
-                        reason: `Resolved: ${o.label}`,
-                      }),
+                      resolve(o.id),
                     )
                   }
                 >

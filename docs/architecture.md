@@ -800,3 +800,12 @@ the version originally read and optional title/property preconditions before
 changing either field. Anatomy’s form and guarded CLI drafts use it; undo and
 redo restore body and metadata together. An older daemon rejects the new op
 rather than silently dropping a precondition it does not understand.
+
+
+Reviewed multi-item content changes use the native `items.change` vocabulary
+(API 0.2.3). Flat item mutations and optional content/membership guards are
+validated and reduced into one state before one durable log append and
+publication. Inverses compose in reverse order; redo restores original item and
+version identities. This bounded operation is separate from non-atomic undo
+groups. Anatomy uses it for graph application, checkpoint restore, relationship
+edits and mock promotion. See [module authoring](projects/modules/authoring.md).

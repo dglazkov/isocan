@@ -1,4 +1,6 @@
+import { inspectProject } from "./diagnostics.ts";
 import {
+  guardItem,
   newGroupId,
   newItemId,
   newVersionId,
@@ -11,6 +13,7 @@ import {
   type Item,
   type NewVersion,
   type Operation,
+  type ItemChange,
 } from "@isocan/core";
 import {
   CHECKPOINT_MIME,
@@ -55,7 +58,7 @@ export interface AnatomyIO {
   record: () => Promise<Canvas>;
 }
 const json = (value: unknown) => JSON.stringify(value, null, 2) + "\n";
-async function version(
+export async function version(
   io: AnatomyIO,
   value: unknown,
   mime: string,
@@ -68,7 +71,7 @@ async function version(
     filename,
   };
 }
-function nodeBody(node: AnatomyNode) {
+export function nodeBody(node: AnatomyNode) {
   const {
     id: _id,
     title: _title,
@@ -89,7 +92,7 @@ function projectBody(project: AnatomyProject) {
   } = project;
   return projectBodySchema.parse(body);
 }
-function nodeProps(
+export function nodeProps(
   node: AnatomyNode,
   projectId: string,
   ids: Map<string, string>,
@@ -101,7 +104,7 @@ function nodeProps(
     [PROP.relation]: node.parentRelation ?? "",
   };
 }
-function edgeProps(
+export function edgeProps(
   project: Pick<AnatomyProject, "edges">,
   nodeId: string,
   ids: Map<string, string>,
@@ -300,41 +303,50 @@ export async function saveNode(
           },
         },
       ];
-  await io.send(ops, newGroupId());
+  const previous = project.nodes.find(n => n.id === node.id);
+  const hierarchyChanged = !existing || previous?.parentId !== node.parentId;
+  await io.send(hierarchyChanged ? [{ type: "items.change", changes: ops as ItemChange[],
+    guards: [projectItem, ...items].map(item => guardItem(item)),
+    scope: { property: PROP.project, value: projectItem.id, mimeTypes: [NODE_MIME], itemIds: items.map(item => item.id) },
+  }] : ops, newGroupId());
   return nativeId;
 }
 
 export async function saveEdge(
-  io: AnatomyIO,
-  canvas: CanvasContents,
-  projectItem: Item,
-  project: AnatomyProject,
-  input: unknown,
-): Promise<void> {
+  io: AnatomyIO, canvas: CanvasContents, projectItem: Item, project: AnatomyProject, input: unknown,
+) {
   const edge = edgeSchema.parse(input);
-  const next = {
-    ...project,
-    edges: [...project.edges.filter((e) => e.id !== edge.id), edge],
-  };
-  validateGraph(next.nodes, next.edges);
+  // Both portable and native concept IDs are accepted at the boundary.
   const items = nodesOn(canvas, projectItem.id);
-  const ids = new Map(items.map((i) => [originId(i), i.id]));
-  const affected = items.filter(
-    (i) =>
-      originId(i) === edge.from ||
-      project.edges.some((e) => e.id === edge.id && e.from === originId(i)),
-  );
-  await assertFresh(io, affected);
-  await io.send(
-    affected.map((item): Operation => ({
-      type: "item.update",
-      itemId: item.id,
-      patch: {
-        properties: { [PROP.edges]: edgeProps(next, originId(item), ids) },
-      },
-    })),
-    newGroupId(),
-  );
+  const logical = (ref: string) => items.find(item => item.id === ref)?.properties[PROP.origin] ?? ref;
+  edge.from = logical(edge.from); edge.to = logical(edge.to);
+  await writeEdges(io, canvas, projectItem, project, [...project.edges.filter(e => e.id !== edge.id), edge]);
+  return { projectId: projectItem.id, edgeId: edge.id, from: edge.from, to: edge.to };
+}
+
+export async function removeEdge(
+  io: AnatomyIO, canvas: CanvasContents, projectItem: Item, project: AnatomyProject, edgeId: string,
+) {
+  if (!project.edges.some(edge => edge.id === edgeId)) throw new Error(`No relationship ${edgeId}`);
+  await writeEdges(io, canvas, projectItem, project, project.edges.filter(edge => edge.id !== edgeId));
+  return { projectId: projectItem.id, edgeId, removed: true };
+}
+
+async function writeEdges(
+  io: AnatomyIO, canvas: CanvasContents, projectItem: Item, project: AnatomyProject, edges: AnatomyProject["edges"],
+) {
+  validateGraph(project.nodes, edges);
+  const items = nodesOn(canvas, projectItem.id);
+  const ids = new Map(items.map(item => [originId(item), item.id]));
+  const changes = items.flatMap(item => {
+    const before = edgeProps(project, originId(item), ids);
+    const after = edgeProps({ edges }, originId(item), ids);
+    return before === after ? [] : [{ type: "item.update" as const, itemId: item.id, patch: { properties: { [PROP.edges]: after } } }];
+  });
+  if (changes.length) await io.send([{ type: "items.change", changes,
+    guards: [projectItem, ...items].map(item => guardItem(item)),
+    scope: { property: PROP.project, value: projectItem.id, mimeTypes: [NODE_MIME], itemIds: items.map(item => item.id) },
+  }]);
 }
 
 async function checkpointOp(
@@ -390,61 +402,12 @@ export async function saveCheckpoint(
   ]);
 }
 
-/** Restore concepts only; the project goal, attached sources and other work stay put. */
-export async function restoreCheckpoint(
-  io: AnatomyIO,
-  canvas: CanvasContents,
-  projectItem: Item,
-  input: unknown,
-): Promise<void> {
+/** Compatibility helper; interactive callers show the prepared review before applying. */
+export async function restoreCheckpoint(io: AnatomyIO, canvas: CanvasContents, projectItem: Item, input: unknown) {
+  const { prepareGraphReview, applyGraphReview } = await import("./graph-review.ts");
   const checkpoint = checkpointSchema.parse(input);
-  validateGraph(checkpoint.nodes, checkpoint.edges);
-  const items = nodesOn(canvas, projectItem.id);
-  const byOrigin = new Map(items.map((i) => [originId(i), i]));
-  const ids = new Map(
-    checkpoint.nodes.map((n) => [n.id, byOrigin.get(n.id)?.id ?? newItemId()]),
-  );
-  const wanted = new Set(checkpoint.nodes.map((n) => n.id));
-  const ops: Operation[] = [];
-  const edgeProject = { edges: checkpoint.edges };
-  for (const [index, node] of checkpoint.nodes.entries()) {
-    const existing = byOrigin.get(node.id);
-    const next = await version(
-      io,
-      nodeBody(node),
-      NODE_MIME,
-      "concept.anatomy.json",
-    );
-    const props = {
-      ...nodeProps(node, projectItem.id, ids),
-      [PROP.edges]: edgeProps(edgeProject, node.id, ids),
-    };
-    if (existing)
-      ops.push(
-        { type: "item.addVersion", itemId: existing.id, version: next },
-        {
-          type: "item.update",
-          itemId: existing.id,
-          patch: { title: node.title, properties: props },
-        },
-      );
-    else
-      ops.push({
-        type: "item.add",
-        itemId: ids.get(node.id)!,
-        title: node.title,
-        ...NODE_SIZE,
-        version: next,
-        properties: props,
-        placement: { x: projectItem.x + 460, y: projectItem.y + index * 300 },
-      });
-  }
-  const removed = items
-    .filter((i) => !wanted.has(originId(i)))
-    .map((i) => i.id);
-  if (removed.length) ops.push({ type: "items.delete", itemIds: removed });
-  await assertFresh(io, [projectItem, ...items]);
-  await io.send(ops, newGroupId());
+  const project = await readEditableProject(canvas, projectItem, io.read);
+  return applyGraphReview(io, prepareGraphReview(canvas, projectItem, project, checkpoint, (await io.record()).id));
 }
 
 export async function attachSource(
@@ -560,8 +523,7 @@ export async function promoteMock(
     "project.anatomy.json",
   );
   await assertFresh(io, [projectItem, item]);
-  await io.send(
-    [
+  await io.send([{ type: "items.change", guards: [guardItem(projectItem), guardItem(item)], changes: [
       {
         type: "item.add",
         itemId: newItemId(),
@@ -573,14 +535,13 @@ export async function promoteMock(
         version: html,
       },
       {
-        type: "item.addVersion",
+        type: "item.edit",
         itemId: projectItem.id,
         version: projectVersion,
+        expectedVersionId: projectItem.currentVersionId, patch: {},
       },
-      { type: "item.addVersion", itemId: item.id, version: nodeVersion },
-    ],
-    newGroupId(),
-  );
+      { type: "item.edit", itemId: item.id, version: nodeVersion, expectedVersionId: item.currentVersionId, patch: {} },
+    ] }]);
 }
 
 export function commentOp(
@@ -620,9 +581,17 @@ export async function findProject(io: AnatomyIO, ref: string) {
   return { canvas, item };
 }
 
+/** Mutations must not turn a diagnostic display subset into the authoritative graph. */
+export async function readEditableProject(canvas: CanvasContents, item: Item, read: ReadText): Promise<AnatomyProject> {
+  const inspection = await inspectProject(canvas, item, read);
+  if (!inspection.project || inspection.diagnostics.length)
+    throw new Error(`Repair Anatomy files before editing: ${inspection.diagnostics.map(d => `${d.title}: ${d.message}`).join("; ")}`);
+  return inspection.project;
+}
+
 export async function loadProject(io: AnatomyIO, ref: string) {
   const { canvas, item } = await findProject(io, ref);
-  return { canvas, item, project: await readProject(canvas, item, io.read) };
+  return { canvas, item, project: await readEditableProject(canvas, item, io.read) };
 }
 
 export { layoutProject, checkpointsOn };

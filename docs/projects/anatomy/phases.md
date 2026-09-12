@@ -3,14 +3,14 @@
 Plan completed 11 September 2026 before implementation, on branch `anatomy`.
 Read [analysis.md](analysis.md), then [design.md](design.md).
 
-**Where we are:** phases 1–8 built, including recoverable reads and targeted request receipts on 12 September 2026, on branch `anatomy`.
+**Where we are:** phases 1–9 built, including atomic semantic edits and reviewed graph updates on 12 September 2026, on branch `anatomy`.
 The plan below was completed before implementation; acceptance evidence is
 collected in [verification.md](verification.md).
 
 The [12 September usability review](usability-review.md) records remaining
 workflow gaps. Phase 7 implements the motion work and its two edit-preservation
 fixes. Phase 8 adds read recovery and the request lifecycle; the wider review’s
-semantic editing, graph update previews and transactional updates remain follow-ups.
+semantic editing, graph update previews and bounded atomic updates are implemented in phase 9. Collaborator studies and the remaining discovery/assessment usability findings remain separate follow-ups.
 
 ## 1. Built — File model and portable graph
 
@@ -102,3 +102,17 @@ native request files, dispatch receipts, guarded executor claims and outcomes,
 cancellation acknowledgement and linked retries. Both surfaces use the same
 helpers and existing native operations. The module does not own worker dispatch
 or claim that an executor remains alive after reporting work.
+
+
+## 9. Built and verified — Semantic edits and reviewed graph updates
+
+[Semantic update design and acceptance](semantic-updates.md) covers a bounded
+native `items.change`, concept patches, decision options, relationship editing
+and removal, and graph/checkpoint reviews with stale-base protection. The browser
+and CLI apply one shared plan. Restoring a matching trashed concept preserves
+its native identity, discussion and history. Module API 0.2.3 makes the atomic
+vocabulary an explicit host requirement.
+
+Next: the remaining discovery and assessment-state findings in the usability
+review, then validation with collaborators. Automated and synthetic browser
+checks do not substitute for that study.

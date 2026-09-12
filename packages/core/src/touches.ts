@@ -26,6 +26,8 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
   };
 
   switch (op.type) {
+    case "items.change":
+      return [...new Set(op.changes.flatMap(change => itemsTouchedBy(change, canvas)))];
     case "item.add":
     case "item.move":
     case "item.resize":
@@ -82,7 +84,9 @@ export function opMatchesFilters(
   filters: { items?: readonly string[]; types?: readonly string[] },
   canvas?: CanvasContents | null,
 ): boolean {
-  if (!opTypeMatches(op.type, filters.types ?? [])) return false;
+  if (!opTypeMatches(op.type, filters.types ?? [])) {
+    return op.type === "items.change" && op.changes.some(change => opMatchesFilters(change, filters, canvas));
+  }
   const items = filters.items ?? [];
   if (items.length === 0) return true;
   const touched = itemsTouchedBy(op, canvas);

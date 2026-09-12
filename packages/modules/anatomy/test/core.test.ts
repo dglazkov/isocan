@@ -243,7 +243,7 @@ describe("Anatomy as native files and operations", () => {
     m.undo();
     expect(await readProject(m.canvas(), aItem, m.io.read)).toEqual(before);
   });
-  it("promotes a sandboxed proposal through normal file versions in one undo group", async () => {
+  it("promotes a sandboxed proposal atomically through native file versions", async () => {
     const m = memory(),
       p = sampleProject();
     p.nodes[1]!.proposedMock = {
@@ -266,11 +266,7 @@ describe("Anatomy as native files and operations", () => {
     expect(
       Object.values(m.canvas().items).filter((i) => i.properties[PROP.source]),
     ).toHaveLength(1);
-    expect(m.batches.at(-1)?.map((o) => o.type)).toEqual([
-      "item.add",
-      "item.addVersion",
-      "item.addVersion",
-    ]);
+    expect(m.batches.at(-1)?.map((o) => o.type)).toEqual(["items.change"]);
     m.undo();
     expect(
       await readProject(m.canvas(), m.canvas().items[id]!, m.io.read),

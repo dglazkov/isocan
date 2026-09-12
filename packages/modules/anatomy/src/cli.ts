@@ -1,3 +1,5 @@
+import { patchConcept, resolveDecision } from "./semantic.ts";
+import { prepareGraphReview, applyGraphReview, graphDifferences } from "./graph-review.ts";
 import { recoverFile } from "./recovery.ts";
 import { dispatchRun, listRuns, readRun, retryRun, updateRun } from "./runs.ts";
 import { inspectProject } from "./diagnostics.ts";
@@ -33,6 +35,7 @@ import {
   restoreCheckpoint,
   saveCheckpoint,
   saveEdge,
+  removeEdge,
   saveNode,
   saveProject,
   type AnatomyIO,
@@ -294,6 +297,38 @@ function register(host: CliHost): void {
       },
     ),
   );
+  command("patch <project> <concept> <file>", "Patch explicit concept fields from JSON; omitted fields are preserved")
+    .action(host.run(async (ref: string, concept: string, file: string, _opts: unknown, cmd: Command) => {
+      const { io } = await context(cmd);
+      const { canvas, item, project } = await loadProject(io, ref);
+      host.printJson(await patchConcept(io, canvas, item, project, concept, JSON.parse(readFileSync(file, "utf8"))));
+    }));
+  command("resolve <project> <concept> <option>", "Choose a recorded decision option by ID")
+    .action(host.run(async (ref: string, concept: string, option: string, _opts: unknown, cmd: Command) => {
+      const { io } = await context(cmd);
+      const { canvas, item, project } = await loadProject(io, ref);
+      host.printJson(await resolveDecision(io, canvas, item, project, concept, option));
+    }));
+  command("edge-remove <project> <edge>", "Remove a directed relationship by ID in one undoable operation")
+    .action(host.run(async (ref: string, edge: string, _opts: unknown, cmd: Command) => {
+      const { io } = await context(cmd);
+      const { canvas, item, project } = await loadProject(io, ref);
+      host.printJson(await removeEdge(io, canvas, item, project, edge));
+    }));
+  command("diff <project> <file>", "Prepare a guarded concept-graph review from project or checkpoint JSON; no writes")
+    .option("--out <file>", "Save the review plan for anatomy apply")
+    .action(host.run(async (ref: string, file: string, opts: { out?: string }, cmd: Command) => {
+      const { io } = await context(cmd);
+      const { canvas, item, project } = await loadProject(io, ref);
+      const plan = prepareGraphReview(canvas, item, project, JSON.parse(readFileSync(file, "utf8")), (await io.record()).id);
+      if (opts.out) writeFileSync(opts.out, JSON.stringify(plan, null, 2) + "\n");
+      host.printJson({ review: plan, ...graphDifferences(plan) });
+    }));
+  command("apply <file>", "Apply a reviewed concept graph atomically; a changed base requires a fresh review")
+    .action(host.run(async (file: string, _opts: unknown, cmd: Command) => {
+      const { io } = await context(cmd);
+      host.printJson(await applyGraphReview(io, JSON.parse(readFileSync(file, "utf8"))));
+    }));
   command(
     "edge <project> <file>",
     "Upsert one directed edge from JSON, with original concept ids as endpoints",
@@ -302,13 +337,13 @@ function register(host: CliHost): void {
       async (ref: string, file: string, _opts: unknown, cmd: Command) => {
         const { io } = await context(cmd);
         const { canvas, item, project } = await loadProject(io, ref);
-        await saveEdge(
+        host.printJson(await saveEdge(
           io,
           canvas,
           item,
           project,
           JSON.parse(readFileSync(file, "utf8")),
-        );
+        ));
       },
     ),
   );
@@ -441,6 +476,8 @@ function register(host: CliHost): void {
     "checkpoint <project>",
     "List saved checkpoints, save one, inspect one, or explicitly restore concepts",
   )
+    .option("--diff <id>", "Preview a checkpoint as a guarded graph review")
+    .option("--out <file>", "Save the checkpoint review for anatomy apply")
     .option("--save <title>", "save current concepts and edges")
     .option("--show <id>", "print a checkpoint as JSON")
     .option(
@@ -451,20 +488,24 @@ function register(host: CliHost): void {
       host.run(
         async (
           ref: string,
-          opts: { save?: string; show?: string; restore?: string },
+          opts: { save?: string; show?: string; restore?: string; diff?: string; out?: string },
           cmd: Command,
         ) => {
-          if ([opts.save, opts.show, opts.restore].filter(Boolean).length > 1)
+          if ([opts.save, opts.show, opts.restore, opts.diff].filter(Boolean).length > 1)
             throw new Error("Choose one checkpoint action");
           const { io } = await context(cmd);
           const { canvas, item, project } = await loadProject(io, ref);
           if (opts.save) return saveCheckpoint(io, item, project, opts.save);
-          const id = opts.show ?? opts.restore;
+          const id = opts.show ?? opts.restore ?? opts.diff;
           if (id) {
             const checkpoint = project.checkpoints.find((c) => c.id === id);
             if (!checkpoint) throw new Error(`No checkpoint ${id}`);
-            if (opts.restore)
-              await restoreCheckpoint(io, canvas, item, checkpoint);
+            if (opts.diff) {
+              const plan = prepareGraphReview(canvas, item, project, checkpoint, (await io.record()).id);
+              if (opts.out) writeFileSync(opts.out, JSON.stringify(plan, null, 2) + "\n");
+              host.printJson({ review: plan, ...graphDifferences(plan) });
+            } else if (opts.restore)
+              host.printJson(await restoreCheckpoint(io, canvas, item, checkpoint));
             else host.printJson(checkpoint);
           } else
             host.printJson(

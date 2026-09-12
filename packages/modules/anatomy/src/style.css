@@ -891,3 +891,15 @@
 .anatomy-requests[open] { max-height: min(38vh, 320px); overflow: auto; }
 .anatomy-requests[open] > summary { position: sticky; top: 0; background: var(--card); }
 @media (max-width: 760px) { .anatomy-requests[open] { max-height: min(24vh, 180px); } }
+
+.anatomy-graph-diff details { border-top: 1px solid var(--anatomy-border, #38404b); padding: .7rem 0; }
+.anatomy-graph-diff summary { overflow-wrap: anywhere; cursor: pointer; }
+.anatomy-diff-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 1rem; }
+.anatomy-diff-values > div { display: grid; align-content: start; gap: .4rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.anatomy-diff-values dl { margin: 0; }
+.anatomy-diff-values dt { color: var(--muted); text-transform: capitalize; }
+.anatomy-diff-values dd { margin: .2rem 0 .6rem; }
+.anatomy-graph-diff h4 { text-transform: capitalize; }
+.anatomy-dialog-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.anatomy-relationship form { display: grid; gap: .5rem; }
+.anatomy-relationship label { display: grid; gap: .2rem; }

@@ -571,7 +571,7 @@ export function harvestPreferences(
   const seen = new Map<string, string[]>();
 
   for (const entry of log) {
-    const op = entry.envelope.op;
+    for (const op of entry.envelope.op.type === "items.change" ? entry.envelope.op.changes : [entry.envelope.op]) {
     if (op.type === "item.add") {
       seen.set(op.itemId, [op.version.id]);
       continue;
@@ -599,6 +599,8 @@ export function harvestPreferences(
       chosenById: entry.envelope.actor.id,
       against,
     });
+  }
+
   }
 
   return pairs;
