@@ -10,10 +10,13 @@ D=$ROOT/docs/projects/$P
 PH=$D/phases.md; J=$D/journey.md; IDX=$ROOT/docs/projects/README.md
 [ -f "$PH" ] || { echo "no such project: $P ($PH)"; exit 2; }
 
-section() { # section <heading-regex>: print from the heading to the next ## heading
-  awk -v re="$1" '$0 ~ re {on=1} on && /^## / && !($0 ~ re) {exit} on {print}' "$PH"
+section() { # section <heading-line>: print from that exact heading to the next ## heading
+  # Exact string compare, not a regex: a title carrying (S) or any other
+  # metacharacter cannot be matched as one, because awk strips the backslash
+  # out of a -v assignment before the regex ever sees it.
+  awk -v want="$1" '$0 == want {on=1; print; next} on && /^## / {exit} on {print}' "$PH"
 }
-esc() { printf '%s' "$1" | sed 's/[][\.*^$]/\\&/g'; }
+esc() { printf '%s' "$1" | sed 's/[][\.*^$(){}+?|]/\\&/g'; }  # still used by the where-we-are lint
 
 echo "== $P: where we are"
 awk 'tolower($0) ~ /^\*\*where we are/ {on=1} on && /^$/ {exit} on {print}' "$PH"
@@ -38,9 +41,9 @@ grep -n -i -E 'waits on|waiting on' "$PH" | sed -n '1,6p' | sed 's/^/   /'
 if [ -n "$NEXT" ]; then
   echo
   echo "== the next phase's proof"
-  proof=$(section "^$(esc "$NEXT")\$" | awk '/^\*\*(Proof|Acceptance|Done when)/ {on=1} on && /^$/ {exit} on {print "   " $0}'); echo "${proof:-   (no Proof paragraph: fix the doc before briefing)}"
+  proof=$(section "$NEXT" | awk '/^\*\*(Proof|Acceptance|Done when)/ {on=1} on && /^$/ {exit} on {print "   " $0}'); echo "${proof:-   (no Proof paragraph: fix the doc before briefing)}"
   echo "== its provision steps (⚑): asked out loud first, with the price"
-  prov=$(section "^$(esc "$NEXT")\$" | grep '⚑' | sed 's/^/   /'); echo "${prov:-   none}"
+  prov=$(section "$NEXT" | grep '⚑' | sed 's/^/   /'); echo "${prov:-   none}"
 fi
 echo
 echo "== front matter and index"
