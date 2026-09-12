@@ -80,7 +80,7 @@ waits, a guess from the clock until
 reads `sheep attach --json` and turns pi's tool-call entries into the
 inferred statuses the ACP path already produces.
 
-**Proof:** `packages/cli/test/rc.test.ts` gains the sheep harness against
+**Proof:** `packages/cli/test/rc-sheep.test.ts` (split out of `rc.test.ts` on 12 Sep) holds the sheep harness against
 a fake `sheep` on PATH that records its arguments and answers from a
 script: enrol, birth, summons, resume, the row's home and id, and a
 birth refused because the pasture's herd already holds a sheep. The scan's
@@ -160,7 +160,7 @@ first summons: a pass lives fifteen minutes and setup runs on the first
 command that rents a container, so a pass minted at an idle birth would
 expire unredeemed. (Built in phase 2.5.)
 
-**Proof:** `packages/cli/test/rc.test.ts`'s "withdrawal ends the sheep"
+**Proof:** `packages/cli/test/rc-sheep-withdrawal.test.ts`'s "withdrawal ends the sheep"
 cases, against the fake `sheep`, which now answers `rm` and `abort`, can
 make a turn or a birth take a while, and can answer `rm` the way a station
 deployed before sheep's end verb does. `rc remove` with no rc running
@@ -243,7 +243,7 @@ missing, the same pass goes to the pasture's `ISOCAN_PASS` secret, the
 phase 1 birth's credential, the one sheep minted is used, and one
 sentence says the home cannot keep a secret for one sheep.
 
-**Proof:** `packages/cli/test/rc.test.ts`'s "the birth without a turn"
+**Proof:** `packages/cli/test/rc-sheep.test.ts`'s "the birth without a turn"
 cases, against the fake `sheep`, which now reads `new --secret`'s values
 from stdin, keeps them per sheep and drops them with the sheep, lists
 the names in `ls --json`, mints with no transcript under `--detach` with

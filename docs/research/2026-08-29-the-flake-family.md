@@ -936,3 +936,41 @@ stop, that is the eight-second stall gone; if a witness still fails inside
 a 3 s budget with three attempts, it is a listener that would not answer
 three SYNs in a row, and that is a different animal from any in this note.
 
+---
+
+## One that wore the family's name and was not in it, 12 Sep
+
+`rc.test.ts` was read as the family's last surviving member for a week: the
+slowest file in the suite, failing on unrelated commits including docs-only
+PRs, which is the family's signature. It is not in the family. Two cases
+were **waiting for a line that is not the last line of a sequence** — the
+pasture line rather than the badge line that follows an HTTP round trip
+after it, and the rc's *"answering on …"* rather than the cursor claims that
+land several round trips later. Both reproduce character for character by
+forcing the window with a `setTimeout` in the product, which is the test
+this note's own hypotheses were held to, and both survive that forcing once
+the sentinel names the end of the sequence. No connect was slow; nothing
+waited on a SYN.
+
+The lesson for anything still called a flake here: **before reaching for the
+family, check whether the test's wait and its assertion are the same
+moment.** That is cheaper to rule out than a kernel, it is forceable from
+inside the product, and this family's reputation is what made two of them
+look unforceable for a week. lessons.md #53 states the shape.
+
+**And the family showed up in the same campaign, where the 3 Sep fix does
+not reach.** Fifteen runs of the repaired rc files under 12x CPU
+oversubscription on 14 cores: fourteen clean, and the fifteenth failed
+differently — *"Percy · turn FAILED — fetch failed (retrying in 60s)"*,
+**eight seconds** after the summons, which is this note's own 7.8 s
+signature. That fetch is not the suite's. It is a SPAWNED `isocan rc`
+calling its daemon over loopback, so it uses Node's global fetch and gets
+the kernel's SYN ladder, where `test/setup.ts` got a 1.2 s connect deadline
+on 3 Sep. The product survived it — the turn is retried in 60 s, which is
+the rc behaving correctly — and only the test's 20 s deadline did not, so
+this is not a reason to widen a test. It is the one open question in this
+note arriving in a new place: **the connect deadline was given to the
+suite's client, and every process the suite starts has its own.** Whether
+the CLI's client should carry one is a product decision and has not been
+made; it has never been seen on CI, where the load is a quarter of this.
+

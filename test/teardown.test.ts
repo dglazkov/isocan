@@ -45,23 +45,32 @@ import { describe, expect, it } from "vitest";
 const here = fileURLToPath(new URL(".", import.meta.url));
 const repo = path.resolve(here, "..");
 
-/** Every test file in the suite, the same set `vitest.config.ts` includes. */
+/**
+ * Every test file in the suite — the set `vitest.config.ts` includes, **and
+ * the helper modules beside them**, which vitest does not collect but which
+ * hold teardown all the same. `rc.test.ts` moved its `afterEach` into
+ * `rc-fixture.ts` on 12 Sep 2026 when the file was split, and this scan
+ * would have stopped reading the very `fs.rm` that lesson #42 is about: a
+ * guard that only sees `*.test.ts` is a guard you can step out from under by
+ * extracting a function.
+ */
 function testFiles(): string[] {
   const out: string[] = [];
-  const walk = (dir: string) => {
+  const walk = (dir: string, inTestDir: boolean) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
+      if (entry.isDirectory()) walk(full, inTestDir || entry.name === "test");
       // This file holds a deliberately-wrong call site as a fixture below, so
       // it is the one file the scan must not read. Skipped by name rather
       // than by a comment marker, because a marker is a second thing a future
       // fixture would have to remember.
-      else if (entry.name.endsWith(".test.ts") && entry.name !== "teardown.test.ts") out.push(full);
+      else if (entry.name === "teardown.test.ts") continue;
+      else if (entry.name.endsWith(".test.ts") || (inTestDir && entry.name.endsWith(".ts"))) out.push(full);
     }
   };
-  walk(path.join(repo, "test"));
-  walk(path.join(repo, "packages"));
+  walk(path.join(repo, "test"), true);
+  walk(path.join(repo, "packages"), false);
   return out;
 }
 
