@@ -498,14 +498,25 @@ export function noSandboxLine(scan: SandboxScan): string {
  *   whatever the argv names) has to be readable or nothing runs; that is the
  *   one carve-out, plus srt's own files (thing 6).
  */
-export function programPolicy(options: {
+export async function programPolicy(options: {
   /** The scratch directory: the program's only writable place. */
   dir: string;
+  /** The isocan home — read for `sandboxRead`/`sandboxWrite` only, never
+   *  allowed: the badge lives there. */
+  home: string;
   /** srt's own files, from the scan (thing 6). */
   sandboxRoot?: string | null;
   /** Extra readable roots — the interpreter's install, nothing else. */
   toolchain?: readonly string[];
-}): SandboxPolicy {
+}): Promise<SandboxPolicy> {
+  // The same escape hatch the adapter policy has, and for the same reason: a
+  // program that needs a sibling checkout, or a toolchain isocan cannot guess
+  // at, is a thing only the person whose machine it is can say. It WIDENS a
+  // canvas program's reach, which is exactly why it is a standing decision in
+  // a file they own rather than a flag on the verb.
+  const raw = await readConfigFile<SandboxConfig>(options.home);
+  const strings = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim().length > 0) : [];
   return {
     network: { allowedDomains: [], deniedDomains: [], allowLocalBinding: false },
     filesystem: {
@@ -514,8 +525,9 @@ export function programPolicy(options: {
         options.dir,
         ...(options.toolchain ?? []),
         ...(options.sandboxRoot ? [options.sandboxRoot] : []),
+        ...strings(raw.sandboxRead),
       ]),
-      allowWrite: dedupe([options.dir]),
+      allowWrite: dedupe([options.dir, ...strings(raw.sandboxWrite)]),
       denyWrite: [],
     },
   };
@@ -585,7 +597,7 @@ export async function runFenced(
   const settings = await writeSandboxSettings(
     home,
     request.key,
-    programPolicy({ dir: request.dir, sandboxRoot: scan.root, toolchain: request.toolchain ?? [] }),
+    await programPolicy({ dir: request.dir, home, sandboxRoot: scan.root, toolchain: request.toolchain ?? [] }),
   );
   const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = request.maxBytes ?? DEFAULT_MAX_BYTES;
@@ -597,10 +609,24 @@ export async function runFenced(
       [...scan.args, "--settings", settings, "--", request.command, ...request.args],
       {
         cwd: request.dir,
-        // The environment is a list, not an inheritance — layer 1's posture
-        // from the rc note, with a shorter list because nothing here needs a
-        // key. PATH is what lets the fence find the interpreter.
-        env: { PATH: env.PATH ?? "", HOME: request.dir, TMPDIR: request.dir },
+        /**
+         * The environment is a list, not an inheritance — layer 1's posture
+         * from the rc note, with a shorter list because nothing here needs a
+         * key. `PATH` is what lets the fence find the interpreter.
+         *
+         * **`HOME` is the real one, and that is not a hole.** The command
+         * being spawned is the FENCE, not the program: srt reads its own
+         * files from under `$HOME`, and the rc path hands it a real one
+         * (`wrapSpec` passes the adapter's env through). The program inside
+         * inherits the name and can do nothing with it — the policy denies
+         * reading `$HOME` and allows writing only the scratch. `TMPDIR` is
+         * the scratch, so a program's temp file lands in the one place it may
+         * write. *Unmeasured against real srt* — this machine has none — so
+         * if a fenced run ever fails for want of a path, `config.json`'s
+         * `sandboxRead`/`sandboxWrite` is the door, and widening the default
+         * is a decision with a sentence, not a patch.
+         */
+        env: { PATH: env.PATH ?? "", HOME: os.homedir(), TMPDIR: request.dir },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
