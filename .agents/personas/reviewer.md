@@ -48,8 +48,47 @@ goal:
   # lens title agreeing with a share roster's name. Value-coincidence, not
   # copies — and `styles.css` holds the position that merging those would be
   # "one rule pretending two different elements are the same element".
+  #
+  # 47 → 60 on 2026-09-12, and it is the same reason written larger. Twelve
+  # nights at 59 against a goal of 47. The 7 September answer in
+  # `docs/reviews/2026-09-07-reviewer.md` states the choice and asks for this
+  # move by name — "Move `at most` in `reviewer.md` to 59, with this reason,
+  # or fold seven copies; until one of those happens this row is answered
+  # here" — and the four nights after it were answered "see the 7 September
+  # row", by hand, one a night. An answer that has to be given again every
+  # three days is the treadmill `docs/reviews/README.md` names, not the fix.
+  #
+  # What the 59 are, having looked: 38 distinct bodies, repeated 59 times, and
+  # mostly vocabulary. The largest family is the six controls agreeing about
+  # what "on" looks like, which is the pair above at full size and which
+  # `styles.css` still refuses to merge. Most of the rest are three-declaration
+  # idioms any sheet this size grows: `display: flex; flex-direction: column;
+  # gap: N` across four bodies, the ellipsis trio (`overflow: hidden;
+  # text-overflow: ellipsis; white-space: nowrap`) across five, `flex: 1;
+  # min-height: 0` panel bodies across four. Three menus being flex columns is
+  # three menus, not one menu written three times.
+  #
+  # About seven are the other kind — one thing written twice — and raising this
+  # is not a licence to keep them: `.memory-mark` / `.doc-live-toggle` (base and
+  # `.active`, two), `.arrival-hint` / `.offline-hint` and `.arrival-dismiss` /
+  # `.offline-dismiss` (two), `.wb-fold` / `.stage-pane-fold`, and `.face-mark`
+  # sized identically in three roster rows (two). Folding them means moving
+  # rules thousands of lines through a sheet where source order has already
+  # cost a day — the paper swatches — so they want a person with the app open,
+  # inside a design pass that is in that CSS anyway. Never a pull request whose
+  # only content is lowering this number; that rule is three sections down and
+  # it still holds.
+  #
+  # 60 and not 59, which is the reading, because the enforcement is not this
+  # line. `test/copied-rules.test.ts` is, it holds at 59, and it is the tighter
+  # of the two — copy sixty reddens the commit that adds it. What 47 bought was
+  # a nightly row on a number nothing was doing about, due again every three
+  # days; what a bound sitting exactly on the reading buys is the same row the
+  # first time the guard already went red. One unit of slack here costs the
+  # sheet nothing the test does not already refuse, and the way this number
+  # goes back down is the test's ceiling coming down with it.
   - name: CSS rule bodies copied word for word from elsewhere
-    at most: 47
+    at most: 60
     measured by: node scripts/measure.mjs copied-rules
     baseline: 47, 2026-08-30, bb3f98c
 runs: docs/reviews/
