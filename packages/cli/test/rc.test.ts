@@ -329,6 +329,44 @@ describe("the enrolment record, in two halves", () => {
     expect(JSON.parse(after.stdout)[0].listens).toBe("everyone");
   });
 
+  it("`--until` writes how long as an entry beside the name (#272 phase 3)", async () => {
+    await isocan("--canvas", "prj_1", "rc", "add", "Percy");
+    const set = await isocan("rc", "listen", "Percy", "--to", "Dimitri", "--until", "7d");
+    expect(set.code).toBe(0);
+    expect(set.stdout).toContain("listens to you and Dimitri for 7d");
+
+    const agents = await snapshotAgents();
+    const row = Object.values(agents).find((a) => a.actor.name === "Percy") as
+      | { rules?: { listen?: unknown[] } }
+      | undefined;
+    // An entry, not a name with a date packed into it: a reader that has
+    // never heard of expiry keeps only strings in this list, so it drops
+    // this whole and admits nobody — the direction a gate must fail.
+    expect(row?.rules?.listen).toHaveLength(1);
+    expect(row?.rules?.listen?.[0]).toMatchObject({ id: dimitri.id });
+    expect((row?.rules?.listen?.[0] as { until: string }).until).toMatch(/^\d{4}-/);
+
+    // And it is readable — a timed grant nobody can see is the silent gate
+    // in slower motion.
+    const read = await isocan("--json", "rc", "listen", "Percy");
+    expect(JSON.parse(read.stdout)[0].until).toMatch(/Dimitri for 7d/);
+
+    // `--until` without a `--to` is not a gesture: it says how long a grant
+    // lasts, and there is no grant.
+    const alone = await isocan("rc", "listen", "Percy", "--until", "7d");
+    expect(alone.code).not.toBe(0);
+    expect(alone.stderr).toContain("wants a `--to` to grant");
+
+    // Without `--until`, a grant is the bare id it has always been — so a
+    // gate that gains no expiry never changes shape, and nothing stored
+    // before today is rewritten.
+    await isocan("rc", "listen", "Percy", "--to", "Dimitri");
+    const plain = Object.values(await snapshotAgents()).find((a) => a.actor.name === "Percy") as
+      | { rules?: { listen?: unknown[] } }
+      | undefined;
+    expect(plain?.rules?.listen).toEqual([dimitri.id]);
+  });
+
   it("a gate naming somebody nobody here answers to is refused, not written half-way", async () => {
     await isocan("--canvas", "prj_1", "rc", "add", "Percy");
     const run = await isocan("rc", "listen", "Percy", "--to", "Nobody");

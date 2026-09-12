@@ -21,6 +21,7 @@ import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
 import { ChatGlyph } from "./Glyphs.tsx";
 import { OnIt } from "./OnIt.tsx";
+import { GateGrant } from "./LazyGate.tsx";
 import { runLocalCommand } from "../lib/localcommands.ts";
 import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
@@ -527,6 +528,14 @@ function Panel({
                     <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} />
                   ))}
               </CommentFold>
+              {/* The refusal is the control (#272): the Chat reaches everyone,
+                  so a mention here is turned away exactly as one in a thread
+                  is, and the owner answers it in the same place. Mounted only
+                  for a comment that names somebody — it subscribes to the rc
+                  poll, and the Chat is the longest thread on the canvas. */}
+              {thread && comment.mentions && comment.mentions.length > 0 && (
+                <GateGrant canvasId={canvasId} viewer={actor} thread={thread} comment={comment} />
+              )}
             </div>
           ))}
           {thread && (
