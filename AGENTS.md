@@ -25,6 +25,18 @@ many doorways — please keep it that way rather than copying it into a new
 harness's directory, and keep it short: a skill sits in a directory for
 months, so anything it says about the CLI is a copy that ages.
 
+## The conductor
+
+`/conduct <project>` (`.claude/skills/conduct/SKILL.md`) is how a project's
+`phases.md` is walked: the session that runs it briefs a subagent on the next
+phase, verifies the named proof itself, writes the record, and commits the
+phase whole to `main`, then goes on to the next one until a step needs a
+person. `status.sh <project>` beside it prints where a project stands and
+lints the docs' own rules. It lives under `.claude/skills/` rather than
+`.agents/skills/` on purpose: it is this repo's own workflow, and
+`npx skills add dglazkov/isocan` must hand a stranger the collaboration skill
+and nothing else.
+
 ## Starting a project from scratch
 
 [`docs/new-project.md`](docs/new-project.md) is the bootstrap walk: empty
