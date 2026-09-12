@@ -207,9 +207,12 @@
  * **A barrel a module imports eagerly is not automatically a cost**; the
  * cost is what something eager actually references, and the way to know is
  * to grep the built chunk for a string only that code has.
- * **658,000 → 659,300 on 12 Sep, for seen-marks (#147, #134).** The
- * arithmetic, measured on a machine that reproduces the reading (657,915
- * before the change, one byte off the number above):
+ * **660,100 → 661,500 the same day, for seen-marks (#147, #134)** — and it
+ * stacks on the raise above rather than replacing it, because the two landed
+ * within an hour of each other on separate branches. The arithmetic, both
+ * ends measured on one machine so the delta is a subtraction and not a
+ * comparison of two people's laptops: **660,076 on `main` at `4b62212a`,
+ * 661,329 with this branch rebased onto it.**
  *
  *   1,367  gross: `lib/seen.ts` (the mark cache, `loadSeen`, `noteVisit`),
  *          `fetchSeen`/`putSeen` in `lib/api.ts`, the route spellings out of
@@ -229,10 +232,19 @@
  * WAS available was taken first rather than the ceiling being raised for the
  * gross.
  *
- * 659,168 measured, rounded to 659,300 so the margin is 132 bytes — a
+ * 661,329 measured, rounded to 661,500 so the margin is 171 bytes — a
  * comment's worth and not a feature's, which is the whole point of the
- * round-up: the next feature asks. The goal is 19,168 away, and the first
+ * round-up: the next feature asks. The goal is 21,329 away, and the first
  * place to look is still a `lazy()` boundary rather than a smaller feature.
+ *
+ * **The delta survived a rebase unchanged, which is the check worth naming.**
+ * This branch measured 1,253 bytes against `657,915` before modules phase 5
+ * landed, and 1,253 against `660,076` after. A feature whose cost moves when
+ * somebody else's lands is a feature sharing code with it by accident; this
+ * one does not, and re-measuring both ends after the rebase is how you know
+ * rather than assume. (This machine also reads ~76 bytes above the one that
+ * wrote 660,000 above, which is why the number here comes from subtracting
+ * two readings taken on the SAME machine.)
  *
  * Two late movements, both worth naming because they pull opposite ways. **+32
  * for lessons.md #54's fix** — the mark's write sequenced after its read so
@@ -246,7 +258,7 @@
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 660_100;
+export const CEILING = 661_500;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.
