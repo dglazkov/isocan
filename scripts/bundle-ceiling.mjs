@@ -207,6 +207,32 @@
  * **A barrel a module imports eagerly is not automatically a cost**; the
  * cost is what something eager actually references, and the way to know is
  * to grep the built chunk for a string only that code has.
+ * **658,000 → 659,300 on 12 Sep, for seen-marks (#147, #134).** The
+ * arithmetic, measured on a machine that reproduces the reading (657,915
+ * before the change, one byte off the number above):
+ *
+ *   1,379  gross: `lib/seen.ts` (the mark cache, `loadSeen`, `noteVisit`),
+ *          `fetchSeen`/`putSeen` in `lib/api.ts`, the route spellings out of
+ *          core, the visit effect on `CanvasPage`, and the switcher's
+ *          "lately" merge
+ *    −114  `latelyIds` and core's `latelyOrder` moved to `lib/lately.ts`,
+ *          which only `CommandPalette` imports — and the palette is already
+ *          behind `lazy()`. Small, and the right shape: the merge is read
+ *          when somebody opens ⌘O, not when a canvas loads.
+ *   1,265  NET
+ *
+ * **What is left is genuinely eager, and this is the sentence for it.**
+ * Opening a canvas IS the act that writes the mark, so the write cannot be
+ * deferred behind a boundary without either delaying it or paying a second
+ * chunk fetch on every canvas open — which is worse for the person than a
+ * kilobyte. The `arrow.ts` lesson three paragraphs up is why the split that
+ * WAS available was taken first rather than the ceiling being raised for the
+ * gross.
+ *
+ * 659,180 measured, rounded to 659,300 so the margin is 120 bytes — a
+ * comment's worth and not a feature's, which is the whole point of the
+ * round-up: the next feature asks. The goal is 19,180 away, and the first
+ * place to look is still a `lazy()` boundary rather than a smaller feature.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with

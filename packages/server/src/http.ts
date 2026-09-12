@@ -37,6 +37,9 @@ import type {
   RedeemPassResponse,
   Space,
   SpacesResponse,
+  SeenMarksResponse,
+  SeenResponse,
+  MarkSeenRequest,
   SpaceResponse,
   CreateSpaceRequest,
   SpaceCanvasRequest,
@@ -61,6 +64,9 @@ import {
   SPACE_NOT_FOUND,
   spaceNameRefusal,
   SPACES_ROUTE,
+  SEEN_ROUTE,
+  mergeSeen,
+  resolveActor,
   BAD_GROUP,
   claimsActor,
   GROUP_NAME_TAKEN,
@@ -2206,6 +2212,86 @@ export function registerRoutes(
       ...(written ? { bar: written } : {}),
       ...(stillAdmittedBy ? { stillAdmittedBy } : {}),
     } satisfies GrantResponse;
+  });
+
+  // ---- seen-marks: what one person has already looked at (#147, #134) ----
+  //
+  // `docs/research/2026-09-12-seen-marks.md`. Desk state, so a replica
+  // forwards both routes through `homeScoped()` for the space routes' reason
+  // — the row lives at the home, and the whole promise of the feature is that
+  // your other machine finds what this one saw.
+  //
+  // **Not canvas-scoped, deliberately, and this is the roles half of the
+  // design.** `PUT /api/seen/:canvasId` names a canvas but is not a write TO
+  // one: it asks no capability and meets no door, because a private note
+  // about your own attention is not an edit to anybody's canvas. A `read`-rung
+  // viewer is turned away from `POST /api/ops` by the capability check there,
+  // which is exactly why an op would have been the wrong shape — a viewer must
+  // never be refused their own marks.
+  //
+  // **Scoped to the actors this badge claims, with no way to ask for anybody
+  // else's.** That absence is the privacy guarantee (D5): there is no route
+  // here, and no wire shape anywhere, that returns another person's marks.
+
+  /** Your own marks, every canvas, one read — what the inbox and the
+   *  switcher's "lately" both start from. */
+  app.get(SEEN_ROUTE, async (req, reply) => {
+    const query = req.query as { actorId?: unknown };
+    const actorId = await actingActor(req, query.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.seen(await actorNamed(actorId));
+    // Every actor this badge claims, merged: a person who was two actors and
+    // folded them (`actor.join`) holds two ledgers of marks for one person,
+    // and a badge that claims both is precisely what the fold required of it.
+    // So the fold needs no migration — the read does the merging, with the
+    // same function the writes merge with.
+    const ids = actorId ? [actorId] : [...new Set(req.badge!.claims.map((c) => c.actorId))];
+    const ledgers = await Promise.all(ids.map((id) => desk.seenOf(id)));
+    void reply;
+    return { marks: mergeSeen(...ledgers) } satisfies SeenMarksResponse;
+  });
+
+  /**
+   * Move one mark to the head you had in front of you.
+   *
+   * **Only a visit calls this** — opening a canvas in the browser, or an
+   * agent saying `isocan seen --mark` after reading one. That one rule is
+   * what lets a single fact serve two readers: the mark then means both "I
+   * was here at `at`" and "everything up to `seq` was on my screen", so the
+   * inbox reads the second half and the switcher's "lately" reads the first.
+   * A background sweep calling this would fill somebody's "lately" with
+   * canvases they never went to.
+   *
+   * `at` is stamped HERE and never taken from the body: a wall clock a client
+   * supplies is a wall clock a client can be wrong with, and this one orders
+   * a person's whole list of canvases.
+   */
+  app.put(`${SEEN_ROUTE}/:canvasId`, async (req, reply) => {
+    const { canvasId } = req.params as { canvasId: string };
+    const body = (req.body ?? {}) as Partial<MarkSeenRequest>;
+    const seq = typeof body.seq === "number" && Number.isFinite(body.seq) ? Math.trunc(body.seq) : NaN;
+    if (!Number.isFinite(seq) || seq < 0) {
+      return reply
+        .status(400)
+        .send({ error: "`seq` is the canvas's oplog head you had in front of you", code: "bad-op" });
+    }
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.homeScoped() ?? null;
+    if (home) return home.markSeen(canvasId, seq, await actorNamed(actorId));
+    if (!actorId) {
+      return reply.status(400).send({
+        error:
+          "a mark belongs to somebody, and this badge did not say who — claim an actor first, " +
+          "or name one of this badge's actors as `actorId`",
+        code: "bad-op",
+      });
+    }
+    // Written under the id the person answers to NOW: a mark made as an actor
+    // that has since been folded into another belongs to the person, not to
+    // the id they have stopped using.
+    const mine = resolveActor(await engine.actorJoins(), actorId);
+    const mark = await desk.markSeen(mine, canvasId, { seq, at: new Date().toISOString() });
+    return { mark } satisfies SeenResponse;
   });
 
   // ---- the space: a named set of canvases access is set on once (roles phase 4) ----

@@ -100,6 +100,7 @@ import { SprintChip } from "../components/SprintChip.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
 import { recordVisit } from "../lib/recents.ts";
+import { loadSeen, noteVisit } from "../lib/seen.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { fitToContent } from "../lib/fititem.ts";
 import { useCanvasHome } from "../lib/homes.ts";
@@ -228,6 +229,25 @@ function CanvasSurface({
   useEffect(() => {
     if (canvasId && canvasTitle !== null) recordVisit({ id: canvasId, title: canvasTitle });
   }, [canvasId, canvasTitle]);
+  /**
+   * **And the durable half** (#147, #134): the seen-mark the home keeps, so
+   * the list above is the same on your other machine and the inbox can say
+   * what is new rather than listing everything.
+   *
+   * Once per arrival — the effect turns on `canvasId` and the person, not on
+   * the canvas's contents — and at the head this tab actually had in front of
+   * it. A write per op would be exactly the per-thread mistake the design
+   * refused: a glance costs at most one write.
+   */
+  const arrived = canvasTitle !== null;
+  useEffect(() => {
+    if (!canvasId || !arrived) return;
+    loadSeen(actor.id);
+    noteVisit(canvasId, useCanvasStore.getState().lastSeq, actor.id);
+    // `arrived` rather than the title itself: the head is only worth
+    // recording once the snapshot has landed, and a RENAME while you stand
+    // here is not a second visit.
+  }, [canvasId, actor.id, arrived]);
   const switching = useUiStore((s) => s.switching);
   const connection = useCanvasStore((s) => s.connection);
   const capability = useCanvasStore((s) => s.capability);

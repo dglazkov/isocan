@@ -50,6 +50,26 @@ goal:
   # Both are home-scoped and not undoable, exactly like `actor.setColor` next
   # to them, so this is the existing actor.* family growing rather than a new
   # kind of fact. The vocabulary genuinely needed to be bigger.
+  #
+  # HELD at 33 on 2026-09-12, and the holding is worth as much as a raise
+  # because it was pre-authorized. Dion decided on 11 Sep that seen-marks
+  # (#147 step 2, #134 step 4) could take a NEW OP if one was genuinely
+  # needed. None was, and the argument is
+  # `docs/research/2026-09-12-seen-marks.md` D4:
+  #
+  #   The invariant that holds for all 33 is that an op is appended to a log
+  #   AND its effect is visible to everyone who can see the thing it is
+  #   about. A seen-mark breaks both halves on purpose — nobody else may see
+  #   what you have read, and a log line per glance is attention replicating
+  #   — so an op would have needed exemptions from replication, from undo,
+  #   from the wire shapes and from the log. Four exceptions to the
+  #   definition of an op is not an op.
+  #
+  # It is desk state instead, written through the daemon API, which is the
+  # path the journey's rule 5 already names for grants, passes and spaces.
+  # The isomorphism is untouched: both surfaces call one route and merge with
+  # one function in `core/seen.ts`. If this bound ever rises for read state,
+  # that note is the thing to argue with.
   - name: operations in the vocabulary
     at most: 33
     measured by: node scripts/measure.mjs op-types

@@ -84,6 +84,7 @@ export * from "./timeline.ts";
 export * from "./opwords.ts";
 export * from "./canvassort.ts";
 export * from "./canvasswitch.ts";
+export * from "./seen.ts";
 export * from "./lens.ts";
 export * from "./export.ts";
 

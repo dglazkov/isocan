@@ -904,8 +904,27 @@ what already did. Read it when you come back to a machine, before you park
 again: something addressed to you on another canvas is invisible to a `wait`
 pinned to this one.
 
-**No read state**, deliberately — it is a list, not a count. Nothing marks
-anything as seen, so the same entries appear until they scroll past `--limit`.
+**What is new, and how the canvas knows.** `isocan inbox --new` narrows the
+list to what has arrived since you last looked, and the tally line ends with
+the same count. "Since you last looked" is a **seen-mark**: one row per person
+per canvas, `{ seq, at }`, kept by the home — so it is the same answer on every
+machine you work from, and a canvas you have never opened is entirely new
+rather than invisible.
+
+`isocan seen` prints those marks, most recent first — the canvases you have
+been on, with `moved since` on the ones that changed after you left.
+`isocan seen --mark` is the one thing that writes: it moves the mark for the
+bound canvas (or `--canvas <name>`) up to the head you just read. **Only call
+it after you have actually read the canvas.** The mark means both "I was here"
+and "I had seen everything up to here", and the app's switcher reads the first
+half to show you where you were lately — marking canvases you have not looked
+at fills somebody's list with places they never went.
+
+A mark never goes backwards: two machines racing converge, and an older client
+cannot pull yours back. It is **not** a read receipt — nobody else can see your
+marks, there is no route that would return them, and none should be added.
+Being seen is not the canvas's business, which is why a mark is not an
+operation and is not in the canvas's history.
 
 ## The roles you can take on
 
@@ -2186,6 +2205,7 @@ from a library rather than uploaded, because every shape is filled with each
 viewer's own colour and an image cannot be tinted. That picture is downloaded by everybody on the canvas on every cold load,
 so there is a size limit and the command says the weight it just added — ask
 on the thread before putting one on somebody else's canvas,
+`inbox [--mentions] [--new]`, `seen [--mark] [--canvas <name>]`,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `design [--css|--tokens] [set|check]`,
