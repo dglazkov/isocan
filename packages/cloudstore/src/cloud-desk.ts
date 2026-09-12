@@ -9,6 +9,7 @@ import type {
   GrantSubject,
   Group,
   OperatorAct,
+  PurgeCounts,
   SeenMark,
   SeenMarks,
   Space,
@@ -852,6 +853,18 @@ export class CloudDesk implements Desk {
     });
   }
 
+  /** A merge onto the row, as a lift is, and never a lift's inverse: a purged
+   * row stays purged. Silent on a missing row, for `liftTakedown`'s reason. */
+  async markPurged(
+    canvasId: string,
+    purged: { at: string; actId: string; counts: PurgeCounts },
+  ): Promise<void> {
+    const at = this.db.collection(TAKEDOWNS).doc(canvasId);
+    if (!(await at.get()).exists) return;
+    const patch = { purgedAt: purged.at, purgedActId: purged.actId, purged: purged.counts };
+    await at.set(jsonSafe(patch), { merge: true });
+  }
+
   async takedownFor(canvasId: string): Promise<CanvasTakedown | null> {
     const doc = await this.db.collection(TAKEDOWNS).doc(canvasId).get();
     return doc.exists ? asTakedown(doc.data()!) : null;
@@ -1040,6 +1053,11 @@ function asTakedown(data: DocumentData): CanvasTakedown {
     ...(typeof data["liftedAt"] === "string" ? { liftedAt: data["liftedAt"] } : {}),
     ...(typeof data["liftedBy"] === "string" ? { liftedBy: data["liftedBy"] } : {}),
     ...(typeof data["liftedActId"] === "string" ? { liftedActId: data["liftedActId"] } : {}),
+    ...(typeof data["purgedAt"] === "string" ? { purgedAt: data["purgedAt"] } : {}),
+    ...(typeof data["purgedActId"] === "string" ? { purgedActId: data["purgedActId"] } : {}),
+    ...(data["purged"] && typeof data["purged"] === "object"
+      ? { purged: data["purged"] as PurgeCounts }
+      : {}),
   };
 }
 

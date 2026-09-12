@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LogEntry } from "@isocan/core";
 import { storeConformance, collect, seed } from "../../../test/conformance/store-conformance.ts";
 import { CloudStore } from "../src/cloud-store.ts";
-import { archiveKey, canvasDoc, opsCollection, padSeq, snapshotKey } from "../src/naming.ts";
+import { archiveKey, blobMetaCollection, canvasDoc, opsCollection, padSeq, snapshotKey } from "../src/naming.ts";
 import { cloudGate, makeCloudStore, requireEmulator } from "./cloud-fixture.ts";
 import { MemoryObjects } from "./memory-objects.ts";
 
@@ -118,6 +118,52 @@ if (!gate.ok && requireEmulator()) {
           await second.store.close();
         }
       },
+    );
+
+    /**
+     * **Purge: the bytes, on the backing the phase's acceptance is about**
+     * (operator phase 3). The acceptance says: *after a purge on dev, the
+     * canvas's prefix lists nothing in the bucket, the subcollections are
+     * empty, `adopt` of the same id is refused*. The bucket half is asserted
+     * against the double — the prefix listing is the contract `GcsObjects`
+     * keeps — and the Firestore half against the emulator, by reading the raw
+     * subcollections and the tombstone document.
+     */
+    test(
+      "purge empties the canvas's prefix and both subcollections, and leaves the document as the tombstone",
+      withStore(async ({ store, objects, firestore }) => {
+        await seed(store);
+        await store.putBlob("prj_1", Buffer.from("evidence"), { mimeType: "text/plain", filename: "e.txt" });
+        const before = (await store.load("prj_1"))!;
+        await store.compactOplog("prj_1", before.entries.slice(1), before.entries.slice(0, 1));
+        // A neighbour whose id shares the prefix's letters, to prove the
+        // trailing slash does its job.
+        await objects.put("canvases/prj_10/snapshot.json", Buffer.from("{}"), { contentType: "application/json" });
+        expect(objects.keys().filter((key) => key.startsWith("canvases/prj_1/")).length).toBeGreaterThanOrEqual(3);
+
+        await store.setTakenDown("prj_1", "2026-09-12T10:00:00.000Z");
+        const report = await store.purgeCanvas("prj_1");
+        expect(report.files).toBe(1);
+        expect(report.bytes).toBe(8);
+        expect(report.ops, "every op document, compacted marks included").toBe(3);
+        expect(report.keeps.map((h) => h.kind)).toEqual(["bucket", "database", "exports"]);
+
+        // The prefix lists nothing…
+        expect(objects.keys().filter((key) => key.startsWith("canvases/prj_1/"))).toEqual([]);
+        expect(objects.keys(), "and the neighbour is untouched").toContain("canvases/prj_10/snapshot.json");
+        // …the subcollections are empty…
+        expect((await firestore.collection(opsCollection("prj_1")).listDocuments()).length).toBe(0);
+        expect((await firestore.collection(blobMetaCollection("prj_1")).listDocuments()).length).toBe(0);
+        // …and the document stays, as the tombstone, saying so.
+        const doc = await firestore.doc(canvasDoc("prj_1")).get();
+        expect(doc.exists).toBe(true);
+        expect(doc.data()!["deleted"]).toBe(false);
+        expect(typeof doc.data()!["purgedAt"]).toBe("string");
+        expect(doc.data()!["takenDownAt"]).toBe("2026-09-12T10:00:00.000Z");
+        expect((doc.data()!["project"] as { title: string }).title).toBe("P");
+        expect(await store.canvasExists("prj_1")).toBe(true);
+        expect(await store.tipSeq("prj_1"), "the tip of an erased log is zero, not null").toBe(0);
+      }),
     );
 
     test(
@@ -365,6 +411,10 @@ if (!gate.ok && requireEmulator()) {
           "deleteBlobs",
           "compactOplog",
           "readArchivedLog",
+          "takenDownAt",
+          "setTakenDown",
+          "purgeCanvas",
+          "purgedAt",
         ]) {
           expect(typeof (store as unknown as Record<string, unknown>)[method]).toBe("function");
         }

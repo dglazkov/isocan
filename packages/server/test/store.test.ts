@@ -89,6 +89,34 @@ describe("FileStore — what only a disk can be asked", () => {
     expect(await store.canvasExists("prj_1")).toBe(false);
   });
 
+  it("purges to a directory holding only the tombstone and the two marks — never deleted-projects/", async () => {
+    /**
+     * The file backing's prefix delete (operator phase 3). An owner's delete
+     * moves the directory aside, recoverable by hand; a purge is the act whose
+     * point is that nothing under the id is recoverable from this home. So
+     * what is left is `project.json` (the tombstone that keeps the id taken),
+     * `takendown.json` (the flag) and `purged.json` (the mark) — and NOT a
+     * copy parked under `deleted-projects/`.
+     */
+    await seed(store);
+    await store.putBlob("prj_1", Buffer.from("evidence"), { mimeType: "text/plain", filename: "e.txt" });
+    await store.setTakenDown("prj_1", "2026-09-12T10:00:00.000Z");
+    const report = await store.purgeCanvas("prj_1");
+    // canvas.json, trash.json, oplog.jsonl, blobs.json, and one blob file.
+    expect(report.objects).toBe(5);
+    expect(report.files).toBe(1);
+    expect(report.ops).toBe(3);
+    expect(report.keeps, "a disk keeps nothing behind it").toEqual([]);
+    expect((await fs.readdir(p.canvasDir(home, "prj_1"))).sort()).toEqual([
+      "project.json",
+      "purged.json",
+      "takendown.json",
+    ]);
+    expect(await fs.readdir(p.deletedCanvasesDir(home))).toEqual([]);
+    expect(await store.canvasExists("prj_1")).toBe(true);
+    expect(await store.tipSeq("prj_1"), "the tip of an erased log is zero, not null: the id is taken").toBe(0);
+  });
+
   it("compaction rewrites the live log and appends to the archive file", async () => {
     await seed(store);
     const loaded = await store.load("prj_1");

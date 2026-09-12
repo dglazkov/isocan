@@ -940,6 +940,42 @@ export function deskConformance(
         expect(await desk.takedownFor("prj_nothing")).toBeNull();
       }),
     );
+
+    /**
+     * **The purge mark: the same rewrite a lift is, in the direction that
+     * never reverses** (operator phase 3). The row keeps everything the
+     * takedown said and gains when, which act, and the counts — the record
+     * journey 6 step 3 says stays. And it is still IN FORCE: a purged canvas
+     * is down forever, so it must stay in the set the door reads at boot.
+     */
+    test(
+      "a purged row keeps the takedown, carries the counts, and stays in force",
+      withDesk(async ({ desk }) => {
+        const row: CanvasTakedown = {
+          canvasId: "prj_1",
+          at: ts(10),
+          reason: "illegal-content",
+          note: "kai, 12 Sep",
+          by: "email:olu@acme.test",
+          actId: "opr_1",
+        };
+        await desk.recordTakedown(row);
+        const counts = { files: 3, bytes: 4096, ops: 12, objects: 5 };
+        await desk.markPurged("prj_1", { at: ts(20), actId: "opr_9", counts });
+        const purged = await desk.takedownFor("prj_1");
+        expect(purged!.purgedAt).toBe(ts(20));
+        expect(purged!.purgedActId).toBe("opr_9");
+        expect(purged!.purged).toEqual(counts);
+        expect(purged!.reason).toBe("illegal-content");
+        expect(purged!.note).toBe("kai, 12 Sep");
+        expect(purged!.actId).toBe("opr_1");
+        expect((await desk.takedowns()).map((held) => held.canvasId), "still down").toEqual(["prj_1"]);
+
+        // Silent on a canvas that was never down, for the lift's reason.
+        await desk.markPurged("prj_nothing", { at: ts(21), actId: "opr_10", counts });
+        expect(await desk.takedownFor("prj_nothing")).toBeNull();
+      }),
+    );
   });
 }
 
