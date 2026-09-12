@@ -117,6 +117,18 @@ export interface Store {
     tipSeq(id: string): Promise<number | null>;
     /** project.delete is soft: the state is moved aside, recoverable by hand. */
     softDeleteCanvas(id: string): Promise<void>;
+    /** When this canvas was taken down, or null — the one question `load` asks
+     * before it answers. */
+    takenDownAt(id: string): Promise<string | null>;
+    /**
+     * Set the flag, or clear it with `null` — which is the whole of `--lift`.
+     *
+     * **Lifting is clearing a flag** because no op was ever appended: the log
+     * never recorded the takedown, so it replays exactly as it was and the
+     * canvas comes back the canvas it was (design, "Mechanism"). That is what
+     * makes "nothing is irreversible until purge" true rather than aspirational.
+     */
+    setTakenDown(id: string, at: string | null): Promise<void>;
     loadCommands(): Promise<SlashCommand[]>;
     saveCommand(name: string, text: string): Promise<void>;
     /** Removing a shadow gives the built-in back, which is why this says

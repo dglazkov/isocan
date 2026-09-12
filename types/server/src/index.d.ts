@@ -5,6 +5,14 @@ export type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, Store, } f
 export { FileStore } from "./file-store.js";
 export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.js";
 export { FileDesk } from "./file-desk.js";
+/**
+ * `liveAdmission` crosses the package boundary because the second desk backing
+ * has to ask it too (operator phase 2): "an admission that has run out is
+ * replaced, not kept" is one rule, and two backings that each had their own
+ * copy of it would be two rules.
+ */
+export { admissionIn, liveAdmission, rungOfAdmission } from "./grants.js";
+export { Takedowns, TakenDownError } from "./takedowns.js";
 export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.js";
 export { DocRefusal, clearGoogleToken, driveAccount, driveModifiedTime, fetchGoogleDoc, googleTokenFile, readGoogleToken, writeGoogleToken, type FetchedDoc, type GoogleToken, } from "./google.js";
 export type { HomeConfig } from "./config.js";

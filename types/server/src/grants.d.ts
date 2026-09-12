@@ -144,6 +144,31 @@ export declare function notOwnerMessage(owner: string): string;
  */
 export declare function rungOfAdmission(admission: Admission): Capability;
 /**
+ * **Is this admission still one — asked at the door, per request** (operator
+ * phase 2).
+ *
+ * Every admission in this system was live until somebody revoked it, and the
+ * door's whole test is `canvasId ∈ admissions` (`admit` in `http.ts`, and its
+ * second spelling in `ws.ts`). The operator's look is the first that ends on
+ * its own, so this is the first question that has to be asked about one — and
+ * it is asked HERE, beside `capabilityIn`, so that the two copies of the door
+ * ask the same one. Two spellings of a policy is two policies.
+ *
+ * A root with no expiry answers true forever, which is what every admission
+ * written before this meant and what every ordinary one still means.
+ *
+ * **An expired look is not a special refusal.** It falls out of the set, the
+ * door runs its ordinary test, finds no grant, and refuses exactly as it
+ * refuses a stranger — journey 2 step 3: *reloading the tab shows the refusal
+ * any stranger gets*. A dedicated "your look has ended" would be the home
+ * telling a person on the other side of the address that somebody had been
+ * looking.
+ */
+export declare function liveAdmission(admission: Admission, nowMs?: number): boolean;
+/** The admission this badge holds here and may still use, or undefined. One
+ * spelling of "look it up", so nothing finds an expired one by accident. */
+export declare function admissionIn(badge: BadgeRecord, canvasId: string, nowMs?: number): Admission | undefined;
+/**
  * **What this badge holds HERE, for a route that asks `own`** (roles design,
  * "Who holds what"): the admission's rung, raised to `own` if the badge
  * claims the creator.

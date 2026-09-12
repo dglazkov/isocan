@@ -528,6 +528,16 @@ export declare class HomeLink implements HomeConnection {
     handshakes(canvasId: string): HomeHandshakes;
     private healthOf;
     /**
+     * **Ask the home what it says about the canvas it just refused.**
+     *
+     * Best-effort and fire-and-forget: a home that cannot answer leaves `isocan
+     * status` saying what the close frame said, which is true and shorter. It is
+     * a public read — `/api/takedowns?canvas=…` answers anybody about one canvas
+     * — so it needs nothing this link does not already carry, and it is asked
+     * once per refusal rather than per poll, because the refusal drops the link.
+     */
+    private askTakedown;
+    /**
      * **The home said hello for this canvas**, which is the first moment it is
      * true that this link carries anything.
      *

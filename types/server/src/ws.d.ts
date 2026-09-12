@@ -4,6 +4,7 @@ import type { Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
 import { type RcHolds } from "./rc-holds.js";
 import type { SweepHub } from "./sweep.js";
+import type { Takedowns } from "./takedowns.js";
 /**
  * Per-canvas rooms. Server→client: snapshot on connect, op-applied per
  * mutation, presence rosters. Client→server (web only): presence updates —
@@ -58,6 +59,13 @@ interface WebSocketOptions {
      * number is simply not available rather than wrong.
      */
     census?: SocketCensus;
+    /**
+     * **What this home has stopped serving** (operator phase 2), read on every
+     * upgrade. Absent means nothing is down, which is the truth about every home
+     * that has no operator — and the truth a test that attaches sockets without
+     * a daemon should get.
+     */
+    takedowns?: Takedowns;
 }
 /**
  * **How many sockets are open on one canvas, at THIS instance.**
@@ -70,10 +78,38 @@ interface WebSocketOptions {
  */
 export declare class SocketCensus {
     private read;
+    private end;
     /** Registered once, by the socket layer, over its own room map. */
     servedBy(read: (canvasId: string) => number): void;
     /** Open sockets on that canvas, or 0 when no socket layer is attached. */
     open(canvasId: string): number;
+    /**
+     * **Registered beside `servedBy`, by the same socket layer** (operator phase
+     * 2). It is the second thing the routes may do to a room, and it is here
+     * rather than on a second seam because a second seam is a second thing
+     * `daemon.ts` has to wire and a second thing a caller can find unwired.
+     *
+     * A census that can only count was the right shape while the only reader was
+     * `isocan operator show`. A takedown is the first ACT a route performs on a
+     * room, and it cannot be done through `engine.onEvent` the way a delete is:
+     * a delete is an op and rides the log, and an operator act is deliberately
+     * neither (design, "Not an op").
+     */
+    closedBy(end: (canvasId: string, code: number, reason: string) => number): void;
+    /**
+     * **Close every socket on that canvas, and say how many** — the count the
+     * takedown verb prints as *two tabs closed* (journey 3 step 2).
+     *
+     * The reason travels, which is the whole point of this method existing
+     * rather than the room being closed the way a delete closes it: a delete
+     * closes with no code at all and tells the client through the
+     * `canvas-deleted` MESSAGE that arrived a line earlier, and that message
+     * means *forget your copy*. A linked daemon must not forget its copy, so a
+     * takedown must never reach a client as a delete — it reaches it as
+     * `WS_NOT_ADMITTED` with `taken-down`, the shape every client here already
+     * reads for `withdrawn`.
+     */
+    close(canvasId: string, code: number, reason: string): number;
 }
 export declare function attachWebSockets(server: Server, engine: Engine, desk: Desk, presence: PresenceHub, rc?: RcHolds, options?: WebSocketOptions): () => void;
 export {};

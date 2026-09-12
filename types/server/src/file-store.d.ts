@@ -11,6 +11,8 @@ export declare class FileStore implements Store {
     listCanvases(): Promise<Canvas[]>;
     createCanvasDir(id: string): Promise<void>;
     canvasExists(id: string): Promise<boolean>;
+    takenDownAt(id: string): Promise<string | null>;
+    setTakenDown(id: string, at: string | null): Promise<void>;
     load(id: string): Promise<LoadedCanvas | null>;
     /**
      * **Canvases whose metadata predates the stamp, repaired once.**

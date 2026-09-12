@@ -15,6 +15,7 @@ import type {
   ActorJoins,
   ActorNames,
   SlashCommand,
+  TakedownNotice,
 } from "@isocan/core";
 import {
   applyOperation,
@@ -24,10 +25,12 @@ import {
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
   WITHDRAWN,
+  TAKEN_DOWN,
 } from "@isocan/core";
 import {
   ApiError,
   CLIENT_ID,
+  fetchTakedown,
   getBacking,
   homeAnswered,
   knockOnDoor,
@@ -94,6 +97,21 @@ export type Connection =
    * was working a moment ago.
    */
   | "withdrawn"
+  /**
+   * **The operator of this home took the canvas down** (operator phase 2;
+   * journey 4 step 1).
+   *
+   * Its own state beside `gone` and `withdrawn`, and the two it is not are the
+   * whole reason it exists. It is not `gone`: nothing was deleted, this tab's
+   * replica is NOT forgotten, and a lift brings the canvas back exactly as it
+   * was. It is not `withdrawn`: nobody removed this person, and telling them
+   * their access was withdrawn would send them to an owner who did nothing.
+   * *It does not say* not found*, and it does not say* your access was
+   * withdrawn*, because neither is what happened.*
+   *
+   * The sentence is the HOME's and arrives with it — see `takenDown` below.
+   */
+  | "taken-down"
   /** There is no canvas at this address here. */
   | "absent";
 
@@ -146,6 +164,18 @@ interface CanvasStore {
   notice: string | null;
   lastSeq: number;
   connection: Connection;
+  /**
+   * **The home's own sentence about a canvas it took down** (operator phase
+   * 2), fetched when the refusal arrives and null at every other moment.
+   *
+   * From the home rather than composed here, and that is deliberate: the date,
+   * the reason category and the address to write to are facts about an act
+   * this tab did not witness, and a bundle from last month rendering its own
+   * version of them would be a second sentence to drift. The close frame
+   * carries only the word — a WebSocket close reason is capped at 123 bytes
+   * and throws rather than truncating — so the sentence is asked for.
+   */
+  takenDown: TakedownNotice | null;
   /** Remote presence sessions (own tab filtered out). Ephemeral plane. */
   sessions: PresenceSession[];
   /** Chosen identity colors (actor id → hex), from the daemon's actor
@@ -204,6 +234,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   notice: null,
   lastSeq: 0,
   connection: "connecting",
+  takenDown: null,
   sessions: [],
   actorColors: {},
   actorNames: {},
@@ -679,6 +710,10 @@ export function connectToCanvas(canvasId: string, actor: Actor | null): void {
     notice: null,
     lastSeq: 0,
     connection: "connecting",
+    // A takedown belongs to the canvas it happened to (operator phase 2);
+    // carrying one across would tell a person a canvas they just opened had
+    // been taken down.
+    takenDown: null,
     sessions: [],
     // Edit until THIS canvas's hello says otherwise: the flag is per
     // admission, and carrying a previous canvas's "view" across would dress
@@ -1173,9 +1208,40 @@ function openSocket(canvasId: string): void {
             : // The reason is the one word that says this badge was inside
               // and was put out, and it earns the other sentence.
               event.reason === WITHDRAWN
-              ? "withdrawn"
-              : "refused",
+                ? "withdrawn"
+                : // **And the one that says the HOME stopped serving it**
+                  // (operator phase 2). Note what is NOT done here: the
+                  // replica is not forgotten. `canvas-deleted` above calls
+                  // `forgetReplica`, because a delete means *forget your
+                  // copy*; a takedown means *this home has stopped serving
+                  // it*, and erasing the tab's replica on one would be the
+                  // operator reaching into somebody's browser.
+                  event.reason === TAKEN_DOWN
+                  ? "taken-down"
+                  : "refused",
       });
+      // The sentence, from the home. Fire-and-forget: a home that cannot
+      // answer leaves the page saying the short version, which is still true.
+      if (event.reason === TAKEN_DOWN) {
+        /**
+         * **The guard is the STORE's canvas, not `currentProjectId`** — and
+         * the difference is a bug this had, found by opening the page rather
+         * than by reading it.
+         *
+         * `disconnect()` two lines below nulls `currentProjectId`
+         * synchronously, so a guard on it was false by the time the fetch
+         * came back: the request was made, answered 200, and the sentence was
+         * dropped on the floor. The page rendered its fallback and looked
+         * perfectly reasonable, which is exactly the kind of wrong that a
+         * source-reading test cannot see. The store's `canvasId` is what the
+         * page is actually rendering, and it is what must still match.
+         */
+        void fetchTakedown(canvasId).then((takenDown) => {
+          if (takenDown && useCanvasStore.getState().canvasId === canvasId) {
+            useCanvasStore.setState({ takenDown });
+          }
+        });
+      }
       disconnect();
       return;
     }

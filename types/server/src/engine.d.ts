@@ -695,6 +695,22 @@ export declare class Engine {
      * to free anything.
      */
     adoptRemoteSnapshot(canvasId: string, snapshot: CanvasSnapshotResponse): Promise<void>;
+    /**
+     * **Forget the in-memory copy of a canvas, without touching the store.**
+     *
+     * A delete does this as its third step; a TAKEDOWN does only this (operator
+     * phase 2). The engine holds a canvas's state, its log tail and its undo
+     * stack in `canvases`, and a home that had stopped serving a canvas while
+     * still holding it in memory would go on answering `getSnapshot` from the
+     * cache — which is the one read the content origin makes on the serve path,
+     * so a signed URL minted a minute before would keep working. The phase's
+     * acceptance is precisely that it does not.
+     *
+     * Public and named, rather than the fourth bare `canvases.delete` in this
+     * file: the takedown route is outside the engine, and a caller reaching into
+     * a private map is how the three deletes above came to be three copies.
+     */
+    drop(canvasId: string): void;
     /** The home says this canvas is gone. Soft, like every delete here: the
      * directory is moved aside rather than removed, so a replica that was told
      * to forget a canvas can still be asked what it used to hold. */

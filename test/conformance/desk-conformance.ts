@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActorClaim, Grant, Group, OperatorAct, Space } from "@isocan/core";
+import type { ActorClaim, CanvasTakedown, Grant, Group, OperatorAct, Space } from "@isocan/core";
 import { groupSubject, LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
 import type { BadgeRecord, Desk, PassRecord } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
@@ -877,6 +877,67 @@ export function deskConformance(
         // Settling something that is not there changes nothing and says nothing.
         await desk.settleOperatorAct("opr_gone", "done");
         expect(await desk.operatorActs()).toHaveLength(2);
+      }),
+    );
+
+    /**
+     * **The takedown row: standing state, one per canvas, and a lift KEEPS
+     * it** (operator phase 2).
+     *
+     * The ledger above is append-only acts; this is the state those acts leave
+     * behind, and the two differ in exactly the way that matters here. A lift
+     * REWRITES this row rather than adding one, because "is this canvas down"
+     * is asked on a request path and must not be a question two rows could
+     * both answer. But the row itself survives the lift, because journey 5
+     * step 3 wants both halves readable afterwards — and because `show`'s
+     * "taken down, and lifted" is what the operator reads when Kai writes
+     * again.
+     *
+     * `takedowns()` is the set IN FORCE, which is what the door's registry is
+     * loaded from at boot: a lifted row must drop out of it or a lift would
+     * not be a lift.
+     */
+    test(
+      "a takedown row stands until it is lifted, and the lifted row is kept",
+      withDesk(async ({ desk }) => {
+        expect(await desk.takedowns(), "a fresh home has taken nothing down").toEqual([]);
+        expect(await desk.takedownFor("prj_1")).toBeNull();
+
+        const row: CanvasTakedown = {
+          canvasId: "prj_1",
+          at: ts(10),
+          reason: "stolen-content",
+          note: "reported by acme, 12 Sep",
+          by: "email:olu@acme.test",
+          actId: "opr_1",
+        };
+        await desk.recordTakedown(row);
+        expect(await desk.takedownFor("prj_1")).toEqual(row);
+        expect((await desk.takedowns()).map((held) => held.canvasId)).toEqual(["prj_1"]);
+
+        await desk.liftTakedown("prj_1", {
+          at: ts(11),
+          by: "email:olu@acme.test",
+          actId: "opr_2",
+        });
+        const lifted = await desk.takedownFor("prj_1");
+        expect(lifted!.liftedAt).toBe(ts(11));
+        expect(lifted!.liftedActId).toBe("opr_2");
+        // Everything the takedown said is still readable — including the note,
+        // which is the operator's record of why.
+        expect(lifted!.reason).toBe("stolen-content");
+        expect(lifted!.note).toBe("reported by acme, 12 Sep");
+        expect(lifted!.actId).toBe("opr_1");
+        expect(await desk.takedowns(), "a lifted row is not in force").toEqual([]);
+
+        // Lifting something that is not down is silent: the route has already
+        // refused it, and a throw here would turn a settled act into a failure.
+        await desk.liftTakedown("prj_nothing", {
+          at: ts(12),
+          by: "email:olu@acme.test",
+          actId: "opr_3",
+        });
+        expect(await desk.takedownFor("prj_nothing")).toBeNull();
       }),
     );
   });

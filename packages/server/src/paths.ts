@@ -20,6 +20,18 @@ export const canvasDir = (home: string, id: string) => path.join(canvasesDir(hom
 export const canvasMetaFile = (home: string, id: string) => path.join(canvasDir(home, id), "project.json");
 export const canvasFile = (home: string, id: string) => path.join(canvasDir(home, id), "canvas.json");
 export const trashFile = (home: string, id: string) => path.join(canvasDir(home, id), "trash.json");
+/**
+ * **The takedown flag** (operator phase 2) — its own file rather than a field
+ * in `project.json`.
+ *
+ * `project.json` holds the `Canvas` record, which is replicated state: every
+ * writer of that file writes the whole object, so a field smuggled into it
+ * would be erased by the next `saveCanvas` and, worse, would ride out to
+ * replicas on the snapshot. A takedown is the home's and must never travel.
+ * Present means taken down; the file's contents say when.
+ */
+export const takedownFile = (home: string, id: string) =>
+  path.join(canvasDir(home, id), "takendown.json");
 export const oplogFile = (home: string, id: string) => path.join(canvasDir(home, id), "oplog.jsonl");
 export const oplogArchiveFile = (home: string, id: string) =>
   path.join(canvasDir(home, id), "oplog-archive.jsonl");

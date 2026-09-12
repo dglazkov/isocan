@@ -57,6 +57,16 @@ import {
   NOT_ADMITTED,
   NOT_YOUR_BADGE,
   WITHDRAWN,
+  // operator phase 2: the look, the takedown, and the sentence every surface
+  // shows — rendered in core so the tab, the terminal and the list say one
+  // thing (`takedown.ts`).
+  TAKEDOWN_REASONS,
+  TAKEN_DOWN,
+  inForce,
+  operatorLookUrl,
+  takedownDateShort,
+  takedownReasonList,
+  takedownSentence,
   passExpired,
   grantSubjectOf,
   atLeast,
@@ -449,7 +459,7 @@ import type { CliHost } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
-import { proveInBrowser, summonedRefusal } from "./operator.ts";
+import { openInBrowser, proveInBrowser, summonedRefusal } from "./operator.ts";
 import { SHEEP_HARNESS, SheepAgent, describePlace, endSheep, homeAddressForCell, loopbackFromCell, noSheepLine, placeLine, sheepPlaceFor } from "./sheep.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, onPath, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
 import {
@@ -1472,6 +1482,24 @@ program
             ? { "upgrade refused": `${refusal.sha} — ${refusal.why}` }
             : {},
         )),
+        /**
+         * **A canvas this machine replicates whose HOME has taken it down**
+         * (operator phase 2; journey 4 step 4).
+         *
+         * Here, in the first place anybody looks, because the consequence is
+         * the kind that looks like a fault: a canvas that stopped syncing,
+         * whose tab at the home will not open, and whose daemon has stopped
+         * dialling. Without a line, that machine is indistinguishable from a
+         * broken one — and the sentence that makes the difference is the one
+         * thing this machine cannot work out for itself, so it asked the home
+         * for it when the refusal arrived.
+         *
+         * **And it says the second half out loud**: *your copy is on this
+         * machine*. The page Priya read before she signed up said the operator
+         * cannot reach her laptop, and this is the line where that promise is
+         * either kept in public or quietly not mentioned.
+         */
+        ...takenDownLines(record?.links ?? []),
       });
     }),
   );
@@ -1497,6 +1525,35 @@ interface HomeSummary {
   birth: string | null;
   /** Every canvas this daemon holds → its home, null for "here". */
   rows: Record<string, string | null>;
+}
+
+/**
+ * **Which of this machine's canvases their home has taken down**, one line
+ * each, for `printKeyValues` (operator phase 2).
+ *
+ * Keyed by canvas id rather than collapsed into a count, because there is
+ * nothing useful to say about "two canvases" — each one has its own sentence,
+ * its own date and its own address to write to, and the person reading this is
+ * about to go and read one of them.
+ *
+ * A canvas nobody has taken down produces nothing at all, which is every
+ * canvas on every machine in this repo: `status` gains no line for a state it
+ * is not in.
+ */
+function takenDownLines(
+  links: { canvases: CanvasLinkState[] }[],
+): Record<string, string> {
+  const lines: Record<string, string> = {};
+  for (const link of links) {
+    for (const canvas of link.canvases ?? []) {
+      if (!canvas.takenDown) continue;
+      lines[`taken down: ${canvas.canvasId}`] =
+        `taken down at its home on ${takedownDateShort(canvas.takenDown.at)} ` +
+        `(${TAKEDOWN_REASONS[canvas.takenDown.reason]}); your copy is on this machine. ` +
+        `Write to ${canvas.takenDown.by}.`;
+    }
+  }
+  return lines;
 }
 
 function roleLine(summary: HomeSummary, base: string): string {
@@ -3918,8 +3975,8 @@ operatorCommand
       const home = await operatorHome(ctx, canvasId, opts.home);
       const client = clientAt(ctx, home);
       const proof = await operatorProof(client, home, `show ${canvasId}`);
-      const { reach } = await client.operatorShow(canvasId, proof);
-      if (ctx.json) return printJson(reach);
+      const { reach, takedown } = await client.operatorShow(canvasId, proof);
+      if (ctx.json) return printJson({ reach, ...(takedown ? { takedown } : {}) });
       printKeyValues({
         canvas: `${reach.title} (${reach.canvasId})`,
         made: `${reach.madeBy.name || reach.madeBy.id} on ${reach.at.slice(0, 10)}`,
@@ -3930,10 +3987,144 @@ operatorCommand
         files: `${reach.files} — ${formatBytes(reach.bytes)}`,
         replicas: reach.replicas.length === 0 ? "none relaying now" : `${reach.replicas.length} relaying now`,
       });
+      /**
+       * **Whether this home is serving it, and why not** (operator phase 2,
+       * closing phase 1's open finding that `show` on a canvas that is not
+       * servable was a 404 with nothing to say).
+       *
+       * The note is printed here and nowhere else in this CLI: this is the one
+       * surface whose reader is the operator, and the note is the thing he
+       * wrote to his future self about a report.
+       */
+      if (takedown) {
+        console.log(
+          `\n${inForce(takedown) ? "TAKEN DOWN" : "taken down, and lifted"} — ` +
+            `the people on it read:\n  ${takedownSentence(takedown)}` +
+            (takedown.note ? `\nyour note: ${takedown.note}` : "") +
+            (takedown.liftedAt ? `\nlifted on ${takedown.liftedAt.slice(0, 10)}` : ""),
+        );
+      }
       console.log(
         "\nNothing was changed, and this look is in this home's ledger — `isocan operator log`.",
       );
     }),
+  );
+
+operatorCommand
+  .command("look <canvas>")
+  .description(
+    "Open that canvas read-only in a browser for an hour, to judge a report. Nobody on it is " +
+      "told; the ledger is",
+  )
+  .requiredOption("--reason <why>", "why you are looking — it goes in the ledger")
+  .option("--home <url>", "the home to prove at; by default, where that canvas lives")
+  .action(
+    run(async (canvasId: string, opts: { reason: string; home?: string }, cmd: Command) => {
+      refuseInSession();
+      const ctx = await ctxOf(cmd);
+      const home = await operatorHome(ctx, canvasId, opts.home);
+      const client = clientAt(ctx, home);
+      const proof = await operatorProof(client, home, `look at ${canvasId}`);
+      const { until, token, reach } = await client.operatorLook(canvasId, proof, {
+        reason: opts.reason,
+      });
+      const url = operatorLookUrl(home, canvasId, token);
+      if (ctx.json) return printJson({ until, url, reach });
+      /**
+       * **The reach first, then the address** — every operator verb prints its
+       * reach before acting, and here the acting is a person opening a page.
+       * A look is read-only and changes nothing, so the reach is what tells
+       * him whether this is the canvas the report was about before he spends
+       * an hour of admission on it.
+       */
+      printKeyValues({
+        canvas: `${reach.title} (${reach.canvasId})`,
+        made: `${reach.madeBy.name || reach.madeBy.id} on ${reach.at.slice(0, 10)}`,
+        link: reach.link ? `on, at ${reach.link}` : "off",
+        until: `${until.slice(11, 16)} — an hour from now`,
+      });
+      console.log(`\nopen this, once:\n  ${url}`);
+      console.log(
+        "\nRead-only, and nobody on the canvas is told you arrived: a view connection is not in\n" +
+          "presence, which is the rule for every viewer. The look is in this home's ledger with\n" +
+          "the reason you gave — `isocan operator log`. After an hour the tab shows the refusal\n" +
+          "any stranger gets.",
+      );
+      openInBrowser(url);
+    }),
+  );
+
+operatorCommand
+  .command("takedown <canvas>")
+  .description(
+    "Stop this home serving that canvas. Nothing is erased and every replica keeps its copy; " +
+      "--lift brings it back",
+  )
+  .option("--reason <category>", `why, from: ${takedownReasonList()}`)
+  .option("--note <text>", "your own note — recorded, and shown to nobody")
+  .option("--lift", "bring back a canvas that was taken down")
+  .option("--home <url>", "the home to prove at; by default, where that canvas lives")
+  .action(
+    run(
+      async (
+        canvasId: string,
+        opts: { reason?: string; note?: string; lift?: boolean; home?: string },
+        cmd: Command,
+      ) => {
+        refuseInSession();
+        const ctx = await ctxOf(cmd);
+        const home = await operatorHome(ctx, canvasId, opts.home);
+        const client = clientAt(ctx, home);
+        const lifting = opts.lift === true;
+        const proof = await operatorProof(
+          client,
+          home,
+          lifting ? `lift the takedown on ${canvasId}` : `take down ${canvasId}`,
+        );
+        const answer = await client.operatorTakedown(canvasId, proof, {
+          ...(opts.reason ? { reason: opts.reason } : {}),
+          ...(opts.note ? { note: opts.note } : {}),
+          ...(lifting ? { lift: true } : {}),
+        });
+        if (ctx.json) return printJson(answer);
+        if (lifting) {
+          console.log(`${canvasId} is served again. Nothing had been erased, so nothing is lost.`);
+          console.log(
+            "\nTabs reload into it. A replica that stopped dialling re-dials within ten seconds\n" +
+              "and syncs. Both rows are in the ledger — `isocan operator log --target " +
+              `${canvasId}\`.`,
+          );
+          return;
+        }
+        const { reach, takedown, cdn } = answer;
+        /**
+         * **What happened, as counts** — journey 3 step 2, written to be
+         * pasted into the reply to whoever reported it. Counts and not prose:
+         * *two tabs closed, one wait ended, one replica told* is a thing that
+         * can be checked, and "it has been handled" is not.
+         */
+        printKeyValues({
+          canvas: canvasId,
+          reason: takedown.reason,
+          "tabs and daemons closed": `${reach.sockets} here`,
+          "waits ended": String(reach.waits),
+          "agent parks ended": String(reach.holds),
+          "replicas relaying": `${reach.relays} — each keeps its copy`,
+          files: `${reach.files} — ${formatBytes(reach.bytes)}, refused at the content origin from now`,
+        });
+        console.log(`\nThe people on it read, from this home:\n  ${takedownSentence(takedown)}`);
+        if (cdn) {
+          console.log(
+            `\nOne thing this home cannot do for you: a copy at the edge may be served for up to\n` +
+              `${Math.round(cdn.horizonSeconds / 60)} more minutes. To clear it now, run:\n  ${cdn.command}`,
+          );
+        }
+        console.log(
+          "\nNothing has been erased. Every replica keeps its copy — the operator cannot reach a\n" +
+            `laptop — and \`isocan operator takedown ${canvasId} --lift\` brings it all back.`,
+        );
+      },
+    ),
   );
 
 operatorCommand
@@ -11529,6 +11720,33 @@ command or reply. No \`session start\` needed after a wake.`,
                     "this canvas again unless an owner lets you back in.",
                 );
                 if (ctx.json) printJson({ reason: WITHDRAWN, canvasId: p.id });
+                process.exitCode = 4;
+                return;
+              }
+              /**
+               * **The home took this canvas down** (operator phase 2; journey
+               * 4 step 2: *Sonia's `isocan wait` exits at once with the same
+               * sentence and a non-zero status, and she does not re-park*).
+               *
+               * The same shape as `withdrawn` above and the same exit code,
+               * and both of those are deliberate: the answer to "what now?" is
+               * the same one — this park is over, do not come back on your own
+               * — and an agent that branched on a new number would be an agent
+               * that had to be taught something to behave correctly.
+               *
+               * What is NOT the same is the message, and it is the home's
+               * rather than this file's: `err.message` is the sentence, with
+               * the date, the reason and the address to write to. Printing a
+               * sentence of our own here would be the CLI explaining, to a
+               * person it cannot see, an act it did not witness.
+               */
+              if (err.code === NOT_ADMITTED && err.reason === TAKEN_DOWN) {
+                if (upgraded) console.error(upgraded);
+                console.error(
+                  `wait: ${TAKEN_DOWN} — ${err.message} This park is over; nothing you wrote ` +
+                    "is lost, and do not park on this canvas again.",
+                );
+                if (ctx.json) printJson({ reason: TAKEN_DOWN, canvasId: p.id, error: err.message });
                 process.exitCode = 4;
                 return;
               }

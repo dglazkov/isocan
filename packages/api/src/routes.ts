@@ -51,7 +51,12 @@ import type {
   GroupResponse,
   GroupsResponse,
   OperatorLogResponse,
+  OperatorLookRequest,
+  OperatorLookResponse,
   OperatorShowResponse,
+  OperatorTakedownRequest,
+  OperatorTakedownResponse,
+  TakedownsResponse,
 } from "@isocan/core";
 import {
   encodeFilename,
@@ -61,6 +66,8 @@ import {
   GROUPS_ROUTE,
   OPERATOR_LOG_ROUTE,
   OPERATOR_PROOF_HEADER,
+  TAKEDOWNS_CANVAS_PARAM,
+  TAKEDOWNS_ROUTE,
   spaceActingRoute,
   spaceCanvasRoute,
   spaceGrantRevokeRoute,
@@ -981,6 +988,62 @@ export class DaemonRoutes {
       undefined,
       { [OPERATOR_PROOF_HEADER]: proof },
     );
+  }
+
+  // ---- operator phase 2: the look and the takedown ----
+  //
+  // The first operator methods that CHANGE anything, so they are POSTs, and
+  // they carry the proof in exactly the header the two reads above carry it
+  // in. Nothing here holds the token: a parameter, one request, dropped with
+  // the stack frame (decision D2).
+
+  /** Mint the look — a pass this home redeems into the operator's browser as
+   * an admission at `view` until `until`. The address to open is built by
+   * `operatorLookUrl` in core, from the home the caller proved at. */
+  async operatorLook(
+    canvasId: string,
+    proof: string,
+    request: OperatorLookRequest,
+  ): Promise<OperatorLookResponse> {
+    return this.request(
+      "POST",
+      `/api/operator/canvases/${encodeURIComponent(canvasId)}/look`,
+      request,
+      undefined,
+      { [OPERATOR_PROOF_HEADER]: proof },
+    );
+  }
+
+  /** Take it down, or lift it. One method and one route for both, because
+   * they are one act with a direction: the reach, the row and the refusals are
+   * the same shape either way, and a second verb would be a second place for
+   * the ledger's `act` to be spelled. */
+  async operatorTakedown(
+    canvasId: string,
+    proof: string,
+    request: OperatorTakedownRequest,
+  ): Promise<OperatorTakedownResponse> {
+    return this.request(
+      "POST",
+      `/api/operator/canvases/${encodeURIComponent(canvasId)}/takedown`,
+      request,
+      undefined,
+      { [OPERATOR_PROOF_HEADER]: proof },
+    );
+  }
+
+  /**
+   * **The sentence, for the people it happened to** — not an operator read.
+   *
+   * With a canvas id: that one, answered to anybody, because the door already
+   * says it in its refusal. Without: the ones in force among the canvases this
+   * badge may see, which is what a canvas list draws beside its rows.
+   */
+  async takedowns(canvasId?: string): Promise<TakedownsResponse> {
+    const suffix = canvasId
+      ? `?${TAKEDOWNS_CANVAS_PARAM}=${encodeURIComponent(canvasId)}`
+      : "";
+    return this.request("GET", `${TAKEDOWNS_ROUTE}${suffix}`);
   }
 
   async uploadBlob(

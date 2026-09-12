@@ -14,15 +14,17 @@ import {
   WS_NOT_ADMITTED,
   WS_STALE_CLIENT,
   WITHDRAWN,
+  TAKEN_DOWN,
 } from "@isocan/core";
 import { Engine, CanvasNotFoundError } from "./engine.ts";
 import type { Desk } from "./desk.ts";
-import { admittingGrant, heldCapability } from "./grants.ts";
+import { admissionIn, admittingGrant, heldCapability } from "./grants.ts";
 import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
 import { isContentRequest } from "./content.ts";
 import { PresenceHub } from "./presence.ts";
 import { type RcHolds, rcPoliciesOf } from "./rc-holds.ts";
 import type { SweepHub } from "./sweep.ts";
+import type { Takedowns } from "./takedowns.ts";
 
 /**
  * Per-canvas rooms. Server→client: snapshot on connect, op-applied per
@@ -78,6 +80,13 @@ interface WebSocketOptions {
    * number is simply not available rather than wrong.
    */
   census?: SocketCensus;
+  /**
+   * **What this home has stopped serving** (operator phase 2), read on every
+   * upgrade. Absent means nothing is down, which is the truth about every home
+   * that has no operator — and the truth a test that attaches sockets without
+   * a daemon should get.
+   */
+  takedowns?: Takedowns;
 }
 
 /**
@@ -91,6 +100,7 @@ interface WebSocketOptions {
  */
 export class SocketCensus {
   private read: ((canvasId: string) => number) | null = null;
+  private end: ((canvasId: string, code: number, reason: string) => number) | null = null;
 
   /** Registered once, by the socket layer, over its own room map. */
   servedBy(read: (canvasId: string) => number): void {
@@ -100,6 +110,39 @@ export class SocketCensus {
   /** Open sockets on that canvas, or 0 when no socket layer is attached. */
   open(canvasId: string): number {
     return this.read?.(canvasId) ?? 0;
+  }
+
+  /**
+   * **Registered beside `servedBy`, by the same socket layer** (operator phase
+   * 2). It is the second thing the routes may do to a room, and it is here
+   * rather than on a second seam because a second seam is a second thing
+   * `daemon.ts` has to wire and a second thing a caller can find unwired.
+   *
+   * A census that can only count was the right shape while the only reader was
+   * `isocan operator show`. A takedown is the first ACT a route performs on a
+   * room, and it cannot be done through `engine.onEvent` the way a delete is:
+   * a delete is an op and rides the log, and an operator act is deliberately
+   * neither (design, "Not an op").
+   */
+  closedBy(end: (canvasId: string, code: number, reason: string) => number): void {
+    this.end = end;
+  }
+
+  /**
+   * **Close every socket on that canvas, and say how many** — the count the
+   * takedown verb prints as *two tabs closed* (journey 3 step 2).
+   *
+   * The reason travels, which is the whole point of this method existing
+   * rather than the room being closed the way a delete closes it: a delete
+   * closes with no code at all and tells the client through the
+   * `canvas-deleted` MESSAGE that arrived a line earlier, and that message
+   * means *forget your copy*. A linked daemon must not forget its copy, so a
+   * takedown must never reach a client as a delete — it reaches it as
+   * `WS_NOT_ADMITTED` with `taken-down`, the shape every client here already
+   * reads for `withdrawn`.
+   */
+  close(canvasId: string, code: number, reason: string): number {
+    return this.end?.(canvasId, code, reason) ?? 0;
   }
 }
 
@@ -127,6 +170,24 @@ export function attachWebSockets(
   // The one reader of the room map from outside this closure, and it can only
   // count — see `SocketCensus`.
   options.census?.servedBy((canvasId) => rooms.get(canvasId)?.size ?? 0);
+  /**
+   * **And the one act: close a room, with a reason** (operator phase 2). The
+   * room is dropped as the delete path drops it, so a socket that arrives
+   * between this and the next dial builds a fresh one and meets the door —
+   * which now refuses it, because the canvas is taken down.
+   */
+  options.census?.closedBy((canvasId, code, reason) => {
+    const room = rooms.get(canvasId);
+    if (!room) return 0;
+    let closed = 0;
+    for (const socket of room.keys()) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      socket.close(code, reason);
+      closed += 1;
+    }
+    rooms.delete(canvasId);
+    return closed;
+  });
   const revision = options.revision !== undefined ? { revision: options.revision } : {};
 
   /**
@@ -431,8 +492,28 @@ export function attachWebSockets(
     const badge = await resolveBadge(desk, presented);
     if (!badge) return { code: WS_NO_BADGE, reason: "badge required" };
     await desk.touch(badge.badgeId, new Date().toISOString());
+    /**
+     * **Taken down: refused here, before the door, with its own reason**
+     * (operator phase 2).
+     *
+     * Before the door and not inside it, because a badge that IS admitted
+     * would otherwise short-circuit straight past and open a socket on a
+     * canvas this home has stopped serving — and the people this matters most
+     * for are the members, who are all admitted.
+     *
+     * `WS_NOT_ADMITTED` with `taken-down`, and **never a bare close**, which
+     * is what a delete does. The reason is what makes a linked daemon keep its
+     * copy: `home-link.ts` erases on `canvas-deleted` and keeps on a 4402, so
+     * the difference between a takedown and a delete reaching a laptop is this
+     * one string. The sentence does not fit in a close frame — 123 bytes,
+     * which throws rather than truncating — so the word travels here and the
+     * sentence is fetched by whoever wants to render it.
+     */
+    if (canvasId && options.takedowns?.has(canvasId)) {
+      return { code: WS_NOT_ADMITTED, reason: TAKEN_DOWN };
+    }
     let capability: Capability = "edit";
-    if (canvasId && !badge.admissions.some((a) => a.canvasId === canvasId)) {
+    if (canvasId && !admissionIn(badge, canvasId)) {
       // The snapshot first, for the creator's floor: a canvas that is not
       // here at all falls through to `handleConnection`, which closes 4404.
       // A replica dialling a canvas its home has deleted takes this path,

@@ -4,7 +4,15 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { decodeHandoff, PROVE_PATH_PREFIX, proveSegmentIn } from "@isocan/core";
+import { createSign, generateKeyPairSync } from "node:crypto";
+import {
+  DOOR_ROUTE,
+  decodeHandoff,
+  formatBadgeToken,
+  PROVE_PATH_PREFIX,
+  proveSegmentIn,
+  type DoorResponse,
+} from "@isocan/core";
 import { harnessVars } from "@isocan/api";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { proveInBrowser, summonedRefusal } from "../src/operator.ts";
@@ -247,6 +255,262 @@ describe("a real home with no operator, asked by the real verb", () => {
     expect(printed).toContain(`${PROVE_PATH_PREFIX}/`);
     expect(printed).toMatch(/open this to prove you run/);
   }, 25_000);
+});
+
+/**
+ * **The whole dance, through the real binary** — operator phase 2.
+ *
+ * The one thing phase 1's trajectory says about verbs: *a check nobody's
+ * surface can reach is not a check*. So the takedown is not asserted at the
+ * route here — `packages/server/test/takedown.test.ts` does that — it is
+ * asserted through `isocan operator takedown`, driven the way a person drives
+ * it, with a fake browser standing in for the one that would open.
+ *
+ * The fake browser is honest about what it stands in for: it reads the address
+ * the verb PRINTS (which is the whole reason the verb prints it — a machine
+ * with no browser session must be usable), pulls the handoff out of the path,
+ * and form-POSTs a signed token to the loopback. Everything after that is the
+ * production path, including the proof's verification.
+ *
+ * What still needs a person: the prove page itself, and a real sign-in.
+ */
+describe("the real verbs, driven end to end", () => {
+  let home: string;
+  let work: string;
+  let daemon: Daemon;
+  let port: number;
+  let canvasId: string;
+
+  const OLU = "olu@example.test";
+  const PROJECT = "isocan-io-dev";
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const keys = { kid_1: publicKey.export({ type: "spki", format: "pem" }) as string };
+
+  function idToken(email: string): string {
+    const now = Math.floor(Date.now() / 1000);
+    const head = b64({ alg: "RS256", kid: "kid_1", typ: "JWT" });
+    const body = b64({
+      iss: `https://securetoken.google.com/${PROJECT}`,
+      aud: PROJECT,
+      sub: `uid_${email}`,
+      iat: now - 60,
+      exp: now + 3600,
+      email,
+      email_verified: true,
+      auth_time: now,
+    });
+    const signer = createSign("RSA-SHA256");
+    signer.update(`${head}.${body}`);
+    return `${head}.${body}.${signer.sign(privateKey).toString("base64url")}`;
+  }
+  const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
+  beforeEach(async () => {
+    home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-op2-home-"));
+    work = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-op2-work-"));
+    daemon = await startDaemon({
+      port: 0,
+      home: work,
+      birthHome: null,
+      auth: { project: PROJECT, apiKey: "browser-key-not-a-secret" },
+      operators: [`email:${OLU}`],
+      signingKeys: async () => keys,
+    });
+    const address = daemon.app.server.address();
+    port = typeof address === "object" && address ? address.port : 0;
+    canvasId = "prj_reported1";
+    const door = await fetch(`http://127.0.0.1:${port}${DOOR_ROUTE}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ carrier: "bearer" }),
+    });
+    const badge = (await door.json()) as DoorResponse;
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${formatBadgeToken(badge.badgeId, badge.secret!)}`,
+    };
+    // The desk has to vouch for Priya before this badge may speak as her —
+    // mechanism 5, and the reason a seeded canvas is two calls rather than one.
+    const claimed = await fetch(`http://127.0.0.1:${port}/api/ops`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        canvasId: null,
+        op: { type: "actor.claim", sessionKey: "test:usr_priya", as: "usr_priya", name: "Priya" },
+      }),
+    });
+    if (!claimed.ok) throw new Error(`could not claim Priya: ${await claimed.text()}`);
+    const made = await fetch(`http://127.0.0.1:${port}/api/ops`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        canvasId: null,
+        actor: { id: "usr_priya", name: "Priya" },
+        op: { type: "project.create", canvasId, title: "Acme quarterly" },
+      }),
+    });
+    if (!made.ok) throw new Error(`could not make a canvas: ${await made.text()}`);
+  });
+
+  afterEach(async () => {
+    await daemon?.close();
+    daemon = undefined as unknown as Daemon;
+    for (const dir of [home, work]) {
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
+  /**
+   * Run a verb, and be the browser it opens.
+   *
+   * `ISOCAN_BROWSER_NOOP` is not a thing — the verb really does try to spawn
+   * `open`, and on a test machine that either fails silently or opens a page
+   * at a loopback port that answers a plain-text sentence. What matters is
+   * that this test reaches the loopback FIRST, with a token the home will
+   * verify, which is what makes the rest of the run the production path.
+   */
+  const drive = (args: string[]) => {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      ISOCAN_HOME: home,
+      ISOCAN_PORT: String(port),
+    };
+    for (const v of harnessVars) delete env[v];
+    env.CLAUDE_CODE_SESSION_ID = "s-olu";
+    const child = spawn(process.execPath, [cliBin, ...args], {
+      cwd: work,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let handed = false;
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      if (handed) return;
+      const found = /http:\/\/127\.0\.0\.1:\d+\/operator\/prove\/\S+/.exec(stdout);
+      if (!found) return;
+      handed = true;
+      const segment = proveSegmentIn(new URL(found[0]).pathname)!;
+      const handoff = decodeHandoff(segment)!;
+      void fetch(handoff.to, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ idToken: idToken(OLU), state: handoff.state }).toString(),
+      });
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
+      child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
+    );
+  };
+
+  it("takes a canvas down, prints the reach as counts, and says what is NOT true of it", async () => {
+    const out = await drive([
+      "operator",
+      "takedown",
+      canvasId,
+      "--reason",
+      "stolen-content",
+      "--note",
+      "kai, 12 Sep",
+    ]);
+    expect(out.code, out.stderr).toBe(0);
+    // Journey 3 step 2: counts, so the reply to whoever reported it is exact.
+    expect(out.stdout).toMatch(/tabs and daemons closed/);
+    expect(out.stdout).toMatch(/waits ended/);
+    expect(out.stdout).toMatch(/replicas relaying/);
+    // The sentence the affected people read, printed so it can be pasted.
+    expect(out.stdout).toMatch(/taken down by the operator of this home on/);
+    expect(out.stdout).toMatch(/stolen content/);
+    expect(out.stdout).toContain(OLU);
+    // Journey 3 step 3: *nothing about the canvas's contents has been erased.*
+    expect(out.stdout).toMatch(/Nothing has been erased/);
+    expect(out.stdout).toMatch(/--lift/);
+    // The note is the operator's and is not in a sentence anybody else reads.
+    expect(out.stdout).not.toMatch(/taken down by the operator[^\n]*kai, 12 Sep/);
+
+    // And the home actually stopped serving it.
+    expect(await daemon.store.takenDownAt(canvasId)).not.toBeNull();
+  }, 40_000);
+
+  it("refuses a reason that is not a category, and names the list", async () => {
+    const out = await drive(["operator", "takedown", canvasId, "--reason", "because I said so"]);
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain("stolen-content");
+    expect(await daemon.store.takenDownAt(canvasId)).toBeNull();
+  }, 40_000);
+
+  it("lifts it, and says so", async () => {
+    await drive(["operator", "takedown", canvasId, "--reason", "stolen-content"]);
+    const out = await drive(["operator", "takedown", canvasId, "--lift"]);
+    expect(out.code, out.stderr).toBe(0);
+    expect(out.stdout).toMatch(/is served again/);
+    expect(out.stdout).toMatch(/nothing is lost/);
+    expect(await daemon.store.takenDownAt(canvasId)).toBeNull();
+  }, 40_000);
+
+  it("`look` prints the reach and one address, and says nobody is told", async () => {
+    const out = await drive([
+      "operator",
+      "look",
+      canvasId,
+      "--reason",
+      "report from kai",
+    ]);
+    expect(out.code, out.stderr).toBe(0);
+    expect(out.stdout).toMatch(/Acme quarterly/);
+    expect(out.stdout).toMatch(new RegExp(`/p/${canvasId}/deck#`));
+    expect(out.stdout).toMatch(/nobody on the canvas is told you arrived/);
+    expect(out.stdout).toMatch(/an hour/);
+  }, 40_000);
+
+  it("`show` says a canvas is taken down, rather than 404ing on it", async () => {
+    // Phase 1's open finding, closed: `show` is what the operator reads when
+    // the reporter writes back, so a takedown is the state it must describe.
+    await drive([
+      "operator",
+      "takedown",
+      canvasId,
+      "--reason",
+      "stolen-content",
+      "--note",
+      "kai, 12 Sep",
+    ]);
+    const out = await drive(["operator", "show", canvasId]);
+    expect(out.code, out.stderr).toBe(0);
+    expect(out.stdout).toMatch(/TAKEN DOWN/);
+    expect(out.stdout).toMatch(/Acme quarterly/);
+    // The operator is the one reader the note was written for.
+    expect(out.stdout).toContain("kai, 12 Sep");
+  }, 40_000);
+
+  it("refuses both new verbs inside a summoned session, before a browser opens", async () => {
+    for (const args of [
+      ["operator", "takedown", canvasId, "--reason", "spam"],
+      ["operator", "look", canvasId, "--reason", "x"],
+    ]) {
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        ISOCAN_HOME: home,
+        ISOCAN_PORT: String(port),
+      };
+      for (const v of harnessVars) delete env[v];
+      env.ISOCAN_SESSION_ID = "Sonia";
+      const child = spawn(process.execPath, [cliBin, ...args], { cwd: work, env, stdio: ["ignore", "pipe", "pipe"] });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (c) => (stdout += c));
+      child.stderr.on("data", (c) => (stderr += c));
+      const code = await new Promise<number>((resolve) => child.on("close", (c) => resolve(c ?? 0)));
+      expect(code, args.join(" ")).toBe(1);
+      expect(stderr).toMatch(/operator acts need the person who runs this home/);
+      expect(stdout).not.toContain(PROVE_PATH_PREFIX);
+    }
+    expect(await daemon.store.takenDownAt(canvasId)).toBeNull();
+  }, 40_000);
 });
 
 describe("the loopback hand-over", () => {

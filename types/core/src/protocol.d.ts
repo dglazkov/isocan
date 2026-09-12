@@ -5,6 +5,7 @@ import type { Actor, Canvas, CanvasContents } from "./model.js";
 import type { ListenEntry } from "./inbox.js";
 import type { ModuleManifest } from "./modules.js";
 import type { NewsDay } from "./whatsnew.js";
+import type { TakedownNotice } from "./takedown.js";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.js";
 /** Default daemon port, localhost only. */
 export declare const DEFAULT_PORT = 4441;
@@ -1277,6 +1278,17 @@ export interface CanvasLinkState {
     /** How the last attempt ended: a close code, or the error that stopped it
      * before there was a socket at all. */
     lastFailure: string | null;
+    /**
+     * **The home has taken this canvas down** (operator phase 2), with the
+     * home's own sentence about it.
+     *
+     * Present only for that one refusal, and it is the field that makes the
+     * difference visible where it matters most: a replica whose home has taken a
+     * canvas down still HOLDS that canvas — the copy is the member's, the
+     * operator cannot reach a laptop — and every other reason a link is down is
+     * a reason to expect it back. `isocan status` reads this to say so.
+     */
+    takenDown?: TakedownNotice;
 }
 /** Every refusal, in one shape. The code is what a client branches on; the
  *  message is what a person reads. */

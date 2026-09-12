@@ -23,6 +23,8 @@ import type {
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
+  TakedownNotice,
+  TakedownsResponse,
   Operation,
   Persona,
   PostOpResponse,
@@ -80,6 +82,8 @@ import {
   passesRoute,
   canvasesRoute,
   SERVING_ROUTE,
+  TAKEDOWNS_CANVAS_PARAM,
+  TAKEDOWNS_ROUTE,
   SIGN_BLOBS_PARAM,
   SIGN_BLOBS_ROUTE,
 } from "@isocan/core";
@@ -394,6 +398,35 @@ export function fetchCommands(): Promise<SlashCommand[]> {
  */
 export function listCanvases(): Promise<Canvas[]> {
   return request("GET", canvasesRoute("here"));
+}
+
+/**
+ * **The home's sentence about a canvas it has taken down** (operator phase 2),
+ * or null when it has not.
+ *
+ * A second small read beside the list rather than a field on `Canvas`, and the
+ * reason is worth having here where somebody would be tempted: `Canvas` is the
+ * replicated canvas record. A takedown on it would travel to every replica,
+ * and a replica that read it would stop opening its own copy — which is the
+ * operator reaching a laptop, the one thing a takedown must never do. So the
+ * list keeps its shape, and this answers `[]` on every home that has taken
+ * nothing down, which is every home in this repo.
+ *
+ * With a canvas id it asks about one and is answered whoever asks, because the
+ * door already says the sentence in its refusal.
+ */
+export async function fetchTakedowns(canvasId?: string): Promise<TakedownNotice[]> {
+  const suffix = canvasId ? `?${TAKEDOWNS_CANVAS_PARAM}=${encodeURIComponent(canvasId)}` : "";
+  const answer = await request<TakedownsResponse>("GET", `${TAKEDOWNS_ROUTE}${suffix}`);
+  return answer.takedowns;
+}
+
+/** One canvas's notice, or null. Best-effort: a home too old for the route, or
+ * one that will not answer, leaves the surface saying the short version, which
+ * is still true. */
+export async function fetchTakedown(canvasId: string): Promise<TakedownNotice | null> {
+  const rows = await fetchTakedowns(canvasId).catch(() => []);
+  return rows.find((row) => row.canvasId === canvasId) ?? null;
 }
 
 /**

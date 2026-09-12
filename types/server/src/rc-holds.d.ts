@@ -106,6 +106,32 @@ export declare class RcHolds {
     mirror(originKey: unknown, canvasId: string, row: Mirror): void;
     /** The connection died — everything it relayed dies with it. */
     dropMirror(originKey: unknown): void;
+    /**
+     * **Every hold on this canvas ends, now** — operator phase 2, and the fourth
+     * way a hold can end.
+     *
+     * Until this, a hold ended on its timeout, on the request closing, or on an
+     * ask arriving (`finish`, above). All three are the rc's own business. A
+     * takedown is the first thing that happens TO a canvas that has to reach
+     * them: an rc parked for up to a minute on a canvas the home has stopped
+     * serving would sit there answering nobody, then re-park and be refused at
+     * the door — and in between, `answering()` would go on telling the canvas
+     * that somebody is there to summon.
+     *
+     * Ended with no asks, which is exactly what a timeout delivers, so every rc
+     * takes the path it already takes when a park expires: it goes round its
+     * loop and meets the door, which refuses it with the sentence. Nothing new
+     * had to be taught to the rc side, and that is the point of ending them this
+     * way rather than inventing a refusal to push at them.
+     *
+     * The queued asks and the flap state go too: an ask waiting out the gap for
+     * an rc that is never coming back is a message to a room that is closed.
+     * Mirrors are NOT touched — they are what OTHER daemons relayed, and those
+     * daemons are told by their own sockets closing.
+     *
+     * Returns how many it ended, for the count the verb prints.
+     */
+    endCanvas(canvasId: string): number;
     /** Who answers for this canvas right now, across local holds and mirrors. */
     answering(canvasId: string): RcAnswering;
     /** Local holds only — what a daemon relays up. Mirrors stay out: a relay

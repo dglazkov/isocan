@@ -11,6 +11,14 @@ export type {
 export { FileStore } from "./file-store.ts";
 export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.ts";
 export { FileDesk } from "./file-desk.ts";
+/**
+ * `liveAdmission` crosses the package boundary because the second desk backing
+ * has to ask it too (operator phase 2): "an admission that has run out is
+ * replaced, not kept" is one rule, and two backings that each had their own
+ * copy of it would be two rules.
+ */
+export { admissionIn, liveAdmission, rungOfAdmission } from "./grants.ts";
+export { Takedowns, TakenDownError } from "./takedowns.ts";
 export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
 export {
   DocRefusal,

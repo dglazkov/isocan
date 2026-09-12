@@ -25,6 +25,7 @@
  * authority. So nothing in this file touches `ops.ts`, and the op count stays
  * where the architect persona measures it.
  */
+import type { CanvasTakedown } from "./takedown.js";
 /**
  * **The one header the proof rides in.**
  *
@@ -211,6 +212,20 @@ export interface OperatorProofRecord {
  * would be a roster. */
 export interface OperatorShowResponse {
     reach: OperatorReach;
+    /**
+     * **The takedown row, when there is one** (operator phase 2), lifted or not.
+     *
+     * Phase 1 left an open finding here: `show` on a canvas that is not servable
+     * was a 404, and `OperatorReach` had nowhere to say otherwise — *this was
+     * removed, and here is who to ask* versus *there is nothing here* is
+     * precisely the distinction the design calls the whole message, and the
+     * operator's own read could not make it. This is where it comes from.
+     *
+     * The whole ROW rather than the notice, because the reader is the operator:
+     * he is the one person the note was written for, and the act id is how he
+     * gets from here to the proof in the ledger.
+     */
+    takedown?: CanvasTakedown;
 }
 /**
  * **What the home holds under that id** (journey 1 step 4).

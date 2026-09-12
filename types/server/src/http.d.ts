@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { Engine } from "./engine.js";
 import { type AuthConfig, type SigningKeys } from "./attest.js";
+import { Takedowns } from "./takedowns.js";
 import type { SocketCensus } from "./ws.js";
 import { SweepHub } from "./sweep.js";
 import type { Store } from "./store.js";
@@ -159,6 +160,16 @@ interface RouteOptions {
      * behavior the inline map gave it.
      */
     rc?: RcHolds;
+    /**
+     * **What this home has taken down** (operator phase 2), in memory, read at
+     * the door on every canvas-scoped request.
+     *
+     * Shared with the WS layer, which asks the same question on every upgrade,
+     * so the daemon supplies one instance. A caller that wires routes by hand
+     * gets a private, empty one — nothing is down, which is the truth about a
+     * home that has no operator to take anything down.
+     */
+    takedowns?: Takedowns;
 }
 export declare function registerRoutes(app: FastifyInstance, engine: Engine, store: Store, desk: Desk, presence: PresenceHub, options?: RouteOptions): void;
 /** The header a replica names its home in — a machine-readable copy of what

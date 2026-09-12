@@ -140,6 +140,35 @@ export interface Store {
   /** project.delete is soft: the state is moved aside, recoverable by hand. */
   softDeleteCanvas(id: string): Promise<void>;
 
+  // ---- taken down: the home stops serving it (operator phase 2) ----
+  //
+  // **A flag beside `deleted`, and emphatically not `deleted`.** A delete is
+  // the owner's and erases the copy on every linked daemon and tab; a takedown
+  // is the home's, it stops THIS home serving the canvas, and every replica's
+  // copy stays exactly where it is (design, "Take a canvas down"). So the flag
+  // lives here, on the backing, where `load` can refuse on it — and nowhere on
+  // the `Canvas` record, because that record IS the replicated state: a field
+  // on it would travel to every replica and stop each of them opening their
+  // own copy, which is the operator reaching a laptop by accident.
+  //
+  // The reason and the note are NOT here. They are a desk row, beside grants,
+  // because they are the home's private record of why and the loader has no
+  // business carrying a sentence about a person.
+
+  /** When this canvas was taken down, or null — the one question `load` asks
+   * before it answers. */
+  takenDownAt(id: string): Promise<string | null>;
+
+  /**
+   * Set the flag, or clear it with `null` — which is the whole of `--lift`.
+   *
+   * **Lifting is clearing a flag** because no op was ever appended: the log
+   * never recorded the takedown, so it replays exactly as it was and the
+   * canvas comes back the canvas it was (design, "Mechanism"). That is what
+   * makes "nothing is irreversible until purge" true rather than aspirational.
+   */
+  setTakenDown(id: string, at: string | null): Promise<void>;
+
   // ---- slash commands ----
 
   loadCommands(): Promise<SlashCommand[]>;

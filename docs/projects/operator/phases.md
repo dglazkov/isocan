@@ -16,13 +16,17 @@ after, because a takedown answers every one of those reports on its own,
 more bluntly. The words on `/terms` come first of all, because they are
 untrue today and fixing them costs nothing.
 
-**Where we are:** phase 1 is PART-DONE (12 Sep 2026) — the operator is proved
-per act, refused in words, and every act writes its ledger row before it
-answers; all of it green here, none of it walked on dev yet. Phase 0 still
-waits on Dion's call on the wording. Phase 1's walk waits on a person:
-`ISOCAN_OPERATORS` set on dev.isocan.io, a sign-in, and a second account —
-and on a decision about journey 1 step 3, which says Google where this app
-has only an emailed link. Phase 2 is next, and needs none of that.
+**Where we are:** phases 1 and 2 are PART-DONE (12 Sep 2026): the operator
+is proved per act and refused in words; a look admits for an hour and is not
+in presence; a takedown stops the home serving a canvas — every route refuses
+with the sentence, the tab, the wait and the list say it, replicas keep their
+copies — and lifts; every act writes its ledger row before it answers. All of
+it green here and walked by hand against a local daemon; none of it walked on
+dev. Phase 0 still waits on Dion's call on the wording. The dev walks for 1
+and 2 wait on a person: `ISOCAN_OPERATORS` on dev.isocan.io, a sign-in, a
+second account, a third browser — and a decision about journey 1 step 3,
+which says Google where this app has only an emailed link. Phase 3 (purge)
+is next, and needs none of that.
 
 **Sizes.** S is a day's work with its tests. M is two or three. L would be a
 week; nothing here is one.
@@ -110,7 +114,13 @@ in `log`. A local daemon with no attester says why it has no operator.
 
 ## Phase 2 — Look, and take it down (M)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE (2026-09-12).** Built, and everything provable against a
+real daemon is proved: the look that admits and is not in presence, the
+takedown that refuses every canvas route with the sentence and never a 404,
+the sockets closed `taken-down`, the parked wait woken and refused, the rc
+holds ended, the engine's copy dropped, the files left where they were, the
+lift, and the ledger. The walk on dev — a second account, a third browser, a
+replicating daemon, a frame from isocan.store — waits on a person.
 
 Closes journeys 2, 3, 4 and 5.
 
@@ -132,6 +142,31 @@ the wait exits non-zero with it; a signed URL minted a minute before is
 refused by the origin (read at the origin, not through the edge); the
 daemon stops redialling and still opens its copy; the owner's list shows
 it greyed with the reason. `--lift`, and all of it comes back.
+
+**Trajectory:**
+
+- **2026-09-12** — The takedown flag lives beside `deleted` on the STORE and
+  never on the `Canvas` record, because that record replicates: a field there
+  would reach every replica and stop each one opening its own copy — a
+  takedown that deletes.
+- **2026-09-12** — `/api/ops` carries its canvas in the body, so the door hook
+  cannot cover it; the first build answered the owner's delete with *canvas not
+  found*, the one sentence a takedown must never produce. Every canvas-wide
+  refusal needs its own line at that route.
+- **2026-09-12** — The look is the first admission that ends on its own, so
+  `desk.admit` replaces an expired row rather than keeping it; the old
+  *already in* test would have made a second look write nothing.
+- **2026-09-12** — A refusal is not a blip: `HomeLink.repair` re-dialled one
+  every two seconds forever, and `withdrawn` had the same storm. A lift needs
+  the slow retry, not a stop.
+- **2026-09-12** — Open: the walk — dev.isocan.io, a second account, a third
+  browser, a real replica, a frame from isocan.store, and `isocan status`'s
+  taken-down line, which needs two daemons. Waits on Dion.
+- **2026-09-12** — Open: whether the owner may delete a canvas that is taken
+  down. Today she is refused with the sentence; erasing before a purge is the
+  operator's problem. Operator phase 3's call.
+- **2026-09-12** — Open: `show` on a purged canvas — the tombstone survives on
+  the cloud backing and not on the file one. Operator phase 3 decides.
 
 ## Phase 3 — Purge (S)
 

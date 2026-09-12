@@ -32,6 +32,12 @@ export declare function mintPass(input: {
     mintedBy: string;
     actorId?: string;
     now?: string;
+    /** **The operator's look** (operator phase 2): this pass redeems into
+     * `{root: "operator", until}` at `view` rather than into the minter's rung.
+     * Minted only by the look route, and only after a proof. */
+    look?: {
+        until: string;
+    };
 }): MintedPass;
 /**
  * A pass would not be redeemed, and this is why.

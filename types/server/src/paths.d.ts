@@ -14,6 +14,17 @@ export declare const canvasDir: (home: string, id: string) => string;
 export declare const canvasMetaFile: (home: string, id: string) => string;
 export declare const canvasFile: (home: string, id: string) => string;
 export declare const trashFile: (home: string, id: string) => string;
+/**
+ * **The takedown flag** (operator phase 2) — its own file rather than a field
+ * in `project.json`.
+ *
+ * `project.json` holds the `Canvas` record, which is replicated state: every
+ * writer of that file writes the whole object, so a field smuggled into it
+ * would be erased by the next `saveCanvas` and, worse, would ride out to
+ * replicas on the snapshot. A takedown is the home's and must never travel.
+ * Present means taken down; the file's contents say when.
+ */
+export declare const takedownFile: (home: string, id: string) => string;
 export declare const oplogFile: (home: string, id: string) => string;
 export declare const oplogArchiveFile: (home: string, id: string) => string;
 export declare const blobsDir: (home: string, id: string) => string;

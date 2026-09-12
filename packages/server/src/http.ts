@@ -157,6 +157,26 @@ import {
   type OperatorLogResponse,
   type OperatorReach,
   type OperatorShowResponse,
+  // operator phase 2: the look, the takedown, and the sentence.
+  isTakedownReason,
+  noticeOf,
+  OPERATOR_LOOK_MS,
+  OPERATOR_LOOK_ROUTE,
+  OPERATOR_TAKEDOWN_ROUTE,
+  TAKEDOWNS_CANVAS_PARAM,
+  TAKEDOWNS_ROUTE,
+  TAKEN_DOWN,
+  takedownReasonList,
+  WS_NOT_ADMITTED,
+  type CanvasTakedown,
+  type CdnPurge,
+  type OperatorLookResponse,
+  type TakedownReach,
+  type TakedownReason,
+  type OperatorTakedownRequest,
+  type OperatorTakedownResponse,
+  type TakedownNotice,
+  type TakedownsResponse,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
@@ -172,7 +192,10 @@ import {
   type SigningKeys,
 } from "./attest.ts";
 import { gcCanvases } from "./gc.ts";
+import { contentTtl } from "./content-auth.ts";
+import { CDN_URL_MAP, Takedowns, TakenDownError } from "./takedowns.ts";
 import {
+  admissionIn,
   admittingGrant,
   capabilityIn,
   heldCapability,
@@ -527,6 +550,16 @@ interface RouteOptions {
    * behavior the inline map gave it.
    */
   rc?: RcHolds;
+  /**
+   * **What this home has taken down** (operator phase 2), in memory, read at
+   * the door on every canvas-scoped request.
+   *
+   * Shared with the WS layer, which asks the same question on every upgrade,
+   * so the daemon supplies one instance. A caller that wires routes by hand
+   * gets a private, empty one — nothing is down, which is the truth about a
+   * home that has no operator to take anything down.
+   */
+  takedowns?: Takedowns;
 }
 
 export function registerRoutes(
@@ -576,6 +609,81 @@ export function registerRoutes(
    * would invite somebody to make it a lookup that can fail halfway through
    * an act. */
   const operators = options.operators ?? [];
+  /** The takedowns in force, for the door and the list. Private and empty when
+   * the caller wired no registry, which is the honest answer for a home that
+   * has taken nothing down. */
+  const takedowns = options.takedowns ?? new Takedowns();
+
+  /**
+   * **Who is parked on `/api/oplog/watch` right now**, so a takedown can wake
+   * them (operator phase 2).
+   *
+   * A registry of live long polls, in this closure, for the length of each
+   * request. It exists because a takedown reaches a parked wait through no
+   * channel that already existed: `engine.onEvent` carries ops and a takedown
+   * is not one, and `SweepHub` carries expulsions and nobody was expelled.
+   *
+   * Kept deliberately small — a set of callbacks, no badges, no cursors — so
+   * it cannot become a second place where "who is watching what" is known. The
+   * only question it can answer is *wake the polls that named this canvas*,
+   * and `null` means a home-wide watch, which is woken too: it has to re-ask,
+   * because the canvas it would have reported has stopped being hearable.
+   */
+  const watchers = {
+    live: new Set<{ only: ReadonlySet<string> | null; wake: () => void }>(),
+    register(only: ReadonlySet<string> | null, wake: () => void): () => void {
+      const row = { only, wake };
+      this.live.add(row);
+      return () => this.live.delete(row);
+    },
+  };
+
+  /** Wake every parked watch that could be affected, and say how many. The
+   * count is journey 3 step 2's *one wait ended* — measured at the moment of
+   * acting rather than guessed at. */
+  const wakeWatchers = (canvasId: string): number => {
+    let woken = 0;
+    for (const row of watchers.live) {
+      if (row.only && !row.only.has(canvasId)) continue;
+      row.wake();
+      woken += 1;
+    }
+    return woken;
+  };
+
+  /**
+   * **The one line the home cannot do for itself** — journey 3 step 2.
+   *
+   * A verified content read goes out `public, max-age=<what is left>` through
+   * Cloud CDN and nothing in this tree invalidates the edge, so a frame
+   * already cached is served until it ages out. The daemon does not clear it
+   * and is not going to: doing so would mean the daemon's service account
+   * holding compute rights on the load balancer — a standing power, granted
+   * for a rare act (design, "What it reaches"). So the operator is handed the
+   * command and runs it as himself.
+   *
+   * Null on a home with no content origin, which is every local one: printing
+   * a `gcloud` line to somebody running a laptop would be noise dressed as an
+   * instruction, and on a local home the frames were never at an edge.
+   *
+   * The horizon is this home's own signing TTL rather than the five minutes
+   * the journey says, because `ISOCAN_CONTENT_TTL` can change it and a
+   * sentence that said five would be wrong at exactly the home that changed
+   * it.
+   */
+  const cdnPurgeFor = (canvasId: string): CdnPurge | null => {
+    // `contentHost` and NOT `contentBase`: a local daemon has a content BASE —
+    // its own second listener on the next port — and no edge in front of it at
+    // all. The host is the hosted origin, `isocan.store`, which is the only
+    // thing that is ever behind Cloud CDN.
+    if (!options.contentHost) return null;
+    return {
+      horizonSeconds: contentTtl(process.env["ISOCAN_CONTENT_TTL"]),
+      command:
+        `gcloud compute url-maps invalidate-cdn-cache ${CDN_URL_MAP} --global ` +
+        `--path "/api/projects/${canvasId}/blobs/*"`,
+    };
+  };
 
   /**
    * **The door's meter** (phase 13.7 — `innkeeper.md`: badges are free to
@@ -649,6 +757,19 @@ export function registerRoutes(
       return reply
         .status(403)
         .send({ error: err.message, code: err.code, ...(err.reason ? { reason: err.reason } : {}) });
+    }
+    /**
+     * **Taken down** (operator phase 2): the same 403 and the same
+     * `not-admitted` code, so every client that already reads a `reason` beside
+     * that code reads this one too, and a fresh badge is not attempted — and a
+     * DIFFERENT `error`, which is the sentence the home wrote. The words come
+     * from the home rather than from whichever surface is drawing them, and
+     * this is where they leave it.
+     */
+    if (err instanceof TakenDownError) {
+      return reply
+        .status(err.status)
+        .send({ error: err.message, code: err.code, reason: err.reason });
     }
     // 403 like `not-admitted`, one notch further in (#88): badged, admitted,
     // and the ledger says look-don't-touch. Its own code because the remedy is
@@ -889,6 +1010,31 @@ export function registerRoutes(
       const scoped = CANVAS_API_ROUTE.exec(pathname)?.[1];
       if (scoped) {
         const canvasId = decodeSegment(scoped);
+        /**
+         * **A canvas this home has taken down is refused here, with a
+         * sentence** (operator phase 2; design, "The record").
+         *
+         * In the hook, before the door, for two separate reasons:
+         *
+         * - *Coverage by default*, this hook's standing argument. A takedown
+         *   has to stop the canvas being served, and "served" is every
+         *   canvas-scoped route there is — the snapshot, the oplog, the blobs,
+         *   the grants, the passes, the rc. One line covers them and the ones
+         *   added next month.
+         * - *Before the door*, because the people this is for are MEMBERS, and
+         *   a member is admitted: the door's test short-circuits on an
+         *   existing admission and would let every one of them straight
+         *   through.
+         *
+         * And it is a refusal with WORDS rather than the 404 the store's flag
+         * would otherwise produce. *Never silence, never `not found` for
+         * something that was taken down* — the difference between *there is
+         * nothing here* and *this was removed, and here is who to ask* is the
+         * whole message, and this is the line that makes it so on the HTTP
+         * surface.
+         */
+        const down = takedowns.of(canvasId);
+        if (down) throw new TakenDownError(down);
         await admit(req, canvasId);
         /**
          * The capability check, method-keyed and in the SAME hook (#88): an
@@ -1047,7 +1193,12 @@ export function registerRoutes(
     // 9 closed that one, so the only callers left here already hold a badge
     // and this is the belt on `/api/ops`, whose canvas is in its body.
     if (!req.badge) return;
-    if (req.badge.admissions.some((a) => a.canvasId === canvasId)) {
+    // **Still one, and not merely present.** The operator's look ends by its
+    // own clock (operator phase 2), and this short-circuit is the whole of the
+    // door's test — an expired admission that sailed through it would be a
+    // look that never ended. `admissionIn` asks the question once, here and in
+    // `ws.ts`, so the two copies of the door cannot come to disagree.
+    if (admissionIn(req.badge, canvasId)) {
       // Already in — but an admission below `edit` re-asks the door, so
       // proving an email after entering by a view link lets the invitation
       // that names this person take effect (see `heldCapability`). Editors
@@ -1233,6 +1384,20 @@ export function registerRoutes(
      * a refusal at all.
      */
     if (body.canvasId) {
+      /**
+       * **And the takedown, at the one canvas route the hook cannot cover**
+       * (operator phase 2). `/api/ops` carries its canvas in the BODY, so
+       * `CANVAS_API_ROUTE` does not match it and the hook's refusal does not
+       * run — which is exactly the shape the capability check below was added
+       * for, and it is the same omission twice if this line is not here.
+       *
+       * Without it the engine refuses anyway, one layer down, as *canvas not
+       * found* — the **one sentence a takedown must never produce**. Found by
+       * opening the owner's canvas list in a browser and looking at the Delete
+       * button still sitting on the greyed card.
+       */
+      const down = takedowns.of(body.canvasId);
+      if (down) throw new TakenDownError(down);
       await admit(req, body.canvasId);
       // The capability check, at the one mutating route the hook cannot cover
       // (#88). BEFORE the submit for the door's own reason: a refusal that
@@ -3091,7 +3256,14 @@ export function registerRoutes(
   const proveAct = async (
     req: FastifyRequest,
     reply: FastifyReply,
-    what: { act: string; target: string | null },
+    /** The reason and the note ride into the row here, rather than being
+     * written onto it by the act afterwards, for the phase rule's sake: the
+     * row goes down BEFORE the act runs, and a row that gained its reason only
+     * on the way out would be a crash-time record of an act with no account of
+     * why. A refused act keeps them too — somebody asked this home to take a
+     * canvas down for a reason, and that it was refused does not make the
+     * reason uninteresting. */
+    what: { act: string; target: string | null; reason?: string; note?: string },
   ): Promise<OperatorAct | null> => {
     const header = req.headers[OPERATOR_PROOF_HEADER];
     const token = (Array.isArray(header) ? header[0] : header)?.trim() ?? "";
@@ -3106,6 +3278,8 @@ export function registerRoutes(
       id: newId("opr"),
       act: what.act,
       target: what.target,
+      ...(what.reason !== undefined ? { reason: what.reason } : {}),
+      ...(what.note !== undefined ? { note: what.note } : {}),
       proof: verdict.ok ? verdict.proof : verdict.proof!,
       badgeId: req.badge?.badgeId ?? null,
       at: new Date().toISOString(),
@@ -3134,7 +3308,31 @@ export function registerRoutes(
    * exercised by an act that cannot hurt anybody if any of them is wrong.
    */
   const reachOf = async (canvasId: string): Promise<OperatorReach> => {
-    const snapshot = await engine.getSnapshot(canvasId);
+    /**
+     * **The canvas record rather than the snapshot, when the snapshot cannot
+     * be loaded** — operator phase 2, closing phase 1's open finding that
+     * `show` on a canvas that is not servable is a 404.
+     *
+     * A taken-down canvas is exactly the one the operator most needs to be
+     * able to read the reach of: he took it down, Kai has written back, and
+     * `--lift` is the next decision. `load` refuses it — that is what a
+     * takedown IS — so `getSnapshot` throws, and everything `show` prints
+     * except the title and the maker comes from the desk and the blob index
+     * anyway. Those two come from `listCanvases`, which reads the canvas
+     * record and is untouched by a takedown.
+     *
+     * A soft-DELETED canvas is still a 404 here, and that is right: the file
+     * backing has moved the directory and there is no record left to read.
+     * Phase 3's purge is where the tombstone's own shape gets decided.
+     */
+    const project =
+      (await engine
+        .getSnapshot(canvasId)
+        .then((loaded) => loaded.project)
+        .catch(() => null)) ??
+      (await store.listCanvases()).find((canvas) => canvas.id === canvasId) ??
+      null;
+    if (!project) throw new CanvasNotFoundError(canvasId);
     const grants = liveGrants(await desk.grantsFor(canvasId));
     const link = grants.find((grant) => grant.subject === LINK);
     const blobs = await store.listBlobs(canvasId);
@@ -3160,12 +3358,12 @@ export function registerRoutes(
     );
     return {
       canvasId,
-      title: snapshot.project.title,
+      title: project.title,
       madeBy: {
-        id: snapshot.project.createdBy.id,
-        name: await ownerName(snapshot.project),
+        id: project.createdBy.id,
+        name: await ownerName(project),
       },
-      at: snapshot.project.createdAt,
+      at: project.createdAt,
       link: link ? capabilityOf(link) : null,
       grants: grants.length,
       badges: (await desk.badgesIn(canvasId)).length,
@@ -3190,20 +3388,27 @@ export function registerRoutes(
      * one on behalf of a home whose ledger never heard about it. The ledger
      * belongs to the home that acted, so the act has to be sent there.
      */
-    const elsewhere = options.homes?.homeOf(id) ?? null;
-    if (elsewhere) {
-      return reply.status(409).send({
-        error:
-          `this daemon is a replica of ${id}, not its home — an operator proof is made at one ` +
-          `home and honoured by that home only. Ask ${elsewhere}.`,
-        code: "not-this-home",
-      });
-    }
+    if (refuseIfReplica(id, reply)) return;
     const proven = await proveAct(req, reply, { act: "show", target: id });
     if (!proven) return;
     const reach = await reachOf(id);
+    /**
+     * **`show` answers for a canvas this home has taken down** (operator phase
+     * 2, closing phase 1's open finding that it 404s on one).
+     *
+     * It is the read the operator makes when Kai writes back, or before a
+     * `--lift`, so a takedown is precisely the state it must be able to
+     * describe. The row rides on the reach rather than being a second call,
+     * because "what does this home hold under that id" now has a second half
+     * that a reader would otherwise have to know to go and ask for.
+     */
+    const down = await desk.takedownFor(id);
+    const answer: OperatorShowResponse = {
+      reach,
+      ...(down ? { takedown: down } : {}),
+    };
     await desk.settleOperatorAct(proven.id, "done", reach);
-    return { reach } satisfies OperatorShowResponse;
+    return answer;
   });
 
   /**
@@ -3234,6 +3439,297 @@ export function registerRoutes(
     });
     await desk.settleOperatorAct(proven.id, "done", { rows: acts.length });
     return { acts } satisfies OperatorLogResponse;
+  });
+
+  /**
+   * **An operator act is never forwarded** — the phase-1 branch every phase-2
+   * verb needs, in one place rather than copied into each.
+   *
+   * A proof is made at ONE origin, against ONE attester project, and honoured
+   * by that home only. A daemon that passed one up would be asking another
+   * home to honour a credential minted against a different project — or, worse,
+   * would honour one on behalf of a home whose ledger never heard about it. So
+   * a replica answers 409 naming the home, and the act is sent there.
+   */
+  const refuseIfReplica = (canvasId: string, reply: FastifyReply): boolean => {
+    const elsewhere = options.homes?.homeOf(canvasId) ?? null;
+    if (!elsewhere) return false;
+    void reply.status(409).send({
+      error:
+        `this daemon is a replica of ${canvasId}, not its home — an operator proof is made at ` +
+        `one home and honoured by that home only. Ask ${elsewhere}.`,
+      code: "not-this-home",
+    });
+    return true;
+  };
+
+  /**
+   * **`isocan operator look` — the pass, minted after the proof** (operator
+   * phase 2; design, "The look").
+   *
+   * The operator must judge a report and the canvas may be closed to the
+   * address, so he needs a way in that is not *being let in by somebody*. What
+   * this mints is the ordinary pass every other hand-over in this system uses,
+   * with one field: `look: {until}`, which makes its redemption write `{root:
+   * "operator", until}` at `view` instead of the minter's rung.
+   *
+   * **Why a pass rather than an admission written straight onto a badge.** The
+   * proof is made in a TERMINAL, and the canvas has to open in a BROWSER — two
+   * surfaces, two badges, and the terminal cannot write on the browser's. A
+   * pass is exactly the shape this system already has for "hand a way in to a
+   * surface that is not this one": `<address>#<token>`, redeemed by whatever
+   * tab the link is opened in. Nothing new had to be invented, and nothing new
+   * can be got wrong.
+   *
+   * **The reason is required.** A look is unannounced — nobody in the room
+   * sees him arrive — and the ledger is the counterweight (design, "The
+   * look"). A look with no reason recorded would be exactly the thing the
+   * ledger exists to prevent.
+   */
+  app.post(OPERATOR_LOOK_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (refuseIfReplica(id, reply)) return;
+    const body = (req.body ?? {}) as { reason?: string };
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const proven = await proveAct(req, reply, {
+      act: "look",
+      target: id,
+      ...(reason ? { reason } : {}),
+    });
+    if (!proven) return;
+    if (!reason) {
+      await desk.settleOperatorAct(proven.id, "no-reason");
+      return reply.status(400).send({
+        error:
+          "a look needs a reason, because a look is unannounced: nobody on the canvas is told " +
+          "you arrived, and the ledger row is the only record that it happened. " +
+          "`--reason \"report from …\"`.",
+        code: "no-reason",
+      });
+    }
+    /**
+     * **The canvas has to be here**, and the refusal is the ordinary 404 the
+     * route would give anyway — asked BEFORE the pass is minted so that a
+     * mistyped id does not leave a redeemable pass for a canvas that does not
+     * exist. A canvas this home has TAKEN DOWN cannot be looked at either, and
+     * that is right rather than awkward: the operator took it down, `show`
+     * still answers for it, and looking at what is no longer served would be a
+     * door this act quietly re-opened.
+     */
+    const reach = await reachOf(id);
+    const at = new Date();
+    const until = new Date(at.getTime() + OPERATOR_LOOK_MS).toISOString();
+    const { record, token } = mintPass({
+      canvasId: id,
+      mintedBy: req.badge!.badgeId,
+      look: { until },
+    });
+    await desk.putPass(record);
+    /**
+     * The token and the window, and **not a URL**: the address to open is the
+     * home the CLI proved at, which it holds and this process can only guess
+     * at from behind a proxy. `operatorLookUrl` in core builds it, so the one
+     * caller that needs it spells it the same way the web app spells every
+     * other canvas address.
+     */
+    const answer: OperatorLookResponse = { until, token, reach };
+    await desk.settleOperatorAct(proven.id, "done", { until, canvasId: id });
+    return answer;
+  });
+
+  /**
+   * **`isocan operator takedown` and `--lift`** (operator phase 2; design,
+   * "Take a canvas down").
+   *
+   * **Taking down is not deleting, and the order of the writes is what makes
+   * that true under a crash.** A delete is the owner's: an op, into the log,
+   * broadcast as `canvas-deleted`, erasing the copy on every linked daemon and
+   * tab. This is the home's, and every step below is careful to leave every
+   * replica's copy exactly where it is.
+   *
+   * The order:
+   *
+   * 1. **The ledger row**, before anything (`proveAct`) — the project's one
+   *    rule for every phase.
+   * 2. **The desk row**, which holds the reason the surfaces show and the note
+   *    they do not. Before the flag, so a crash between them leaves a canvas
+   *    still being served with a row saying why it should not be — which is
+   *    recoverable by reading the row. The other order leaves a canvas refused
+   *    with nothing to say about it, which is the *not found* the design names
+   *    as the one thing a takedown must never look like.
+   * 3. **The store flag**, which is what actually stops it being served, on
+   *    both backings, where `load` refuses `deleted`.
+   * 4. **The registry**, so the door and the socket layer answer at once
+   *    rather than at the next boot.
+   * 5. **What is already open**: the engine's copy dropped, the sockets closed
+   *    with a reason that is NOT `canvas-deleted`, the parked rc holds ended.
+   *    The parked `isocan wait` needs nothing here — it re-collects when its
+   *    poll wakes, meets the door, and is refused with the sentence.
+   *
+   * A lift walks it backwards, and is the whole of "nothing is irreversible
+   * until purge": no op was ever appended, so the log replays as it was.
+   */
+  app.post(OPERATOR_TAKEDOWN_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (refuseIfReplica(id, reply)) return;
+    const body = (req.body ?? {}) as OperatorTakedownRequest;
+    const lifting = body.lift === true;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    const proven = await proveAct(req, reply, {
+      act: lifting ? "lift" : "takedown",
+      target: id,
+      ...(reason ? { reason } : {}),
+      ...(note ? { note } : {}),
+    });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+
+    const standing = takedowns.of(id);
+    if (lifting) {
+      if (!standing) {
+        return refuse(
+          "not-taken-down",
+          `${id} is not taken down at this home, so there is nothing to lift.`,
+          409,
+        );
+      }
+      const lifted = { at: new Date().toISOString(), by: proven.proof.attribute, actId: proven.id };
+      await desk.liftTakedown(id, lifted);
+      await store.setTakenDown(id, null);
+      // The engine's copy was dropped when it came down and there is nothing
+      // cached to correct; the next read loads it from the backing, which now
+      // answers. Replicas come back on their own — the home link re-dials a
+      // refused canvas at the slowest backoff, which is journey 5 step 2.
+      const row = (await desk.takedownFor(id))!;
+      takedowns.remember(row);
+      const answer: OperatorTakedownResponse = {
+        takedown: row,
+        reach: { sockets: 0, waits: 0, holds: 0, relays: 0, files: 0, bytes: 0 },
+        cdn: null,
+      };
+      await desk.settleOperatorAct(proven.id, "done", answer.reach);
+      return answer;
+    }
+
+    if (standing) {
+      return refuse(
+        "already-taken-down",
+        `${id} was already taken down at this home on ${standing.at.slice(0, 10)}: ` +
+          `${standing.reason}. \`--lift\` brings it back.`,
+        409,
+      );
+    }
+    if (!reason || !isTakedownReason(reason)) {
+      return refuse(
+        "no-reason",
+        `a takedown needs a reason from this list, because the reason is what the people on ` +
+          `that canvas are shown: ${takedownReasonList()}. The --note is yours and nobody ` +
+          "else's.",
+      );
+    }
+    /**
+     * The reach is read BEFORE the canvas stops being servable, because after
+     * it the snapshot cannot be loaded at all — and the counts are the answer
+     * to journey 3 step 2, which the operator pastes into a reply to Kai.
+     */
+    const reach = await reachOf(id);
+    /** Narrowed by `isTakedownReason` above, and NAMED here: the field the
+     * affected people are shown is a category from a closed list, never the
+     * string a terminal happened to send. */
+    const category: TakedownReason = reason;
+    const row: CanvasTakedown = {
+      canvasId: id,
+      at: new Date().toISOString(),
+      reason: category,
+      ...(note ? { note } : {}),
+      by: proven.proof.attribute,
+      actId: proven.id,
+    };
+    await desk.recordTakedown(row);
+    await store.setTakenDown(id, row.at);
+    takedowns.remember(row);
+    engine.drop(id);
+    const sockets = options.sockets?.close(id, WS_NOT_ADMITTED, TAKEN_DOWN) ?? 0;
+    const holds = options.rc?.endCanvas(id) ?? 0;
+    /**
+     * **The parked waits, woken.** A `/api/oplog/watch` is a long poll holding
+     * a promise, and nothing in `engine.onEvent` reaches it for a takedown —
+     * the watch subscriber filters to `op-applied`, and a takedown is
+     * deliberately not an op. So they are woken here, and what wakes them is a
+     * re-collection that goes through the door and meets the refusal with the
+     * sentence. The CLI exits non-zero and does not re-park.
+     */
+    const waits = wakeWatchers(id);
+    /** What it actually reached, counted at the moment of acting rather than
+     * estimated — journey 3 step 2's *two tabs closed, one wait ended, one
+     * replica told*, which the operator pastes into a reply. */
+    const reached: TakedownReach = {
+      sockets,
+      waits,
+      holds,
+      relays: reach.replicas.length,
+      files: reach.files,
+      bytes: reach.bytes,
+    };
+    const answer: OperatorTakedownResponse = {
+      takedown: row,
+      reach: reached,
+      cdn: cdnPurgeFor(id),
+    };
+    await desk.settleOperatorAct(proven.id, "done", answer.reach);
+    return answer;
+  });
+
+  /**
+   * **Where the affected people read the sentence** (design, "The record").
+   *
+   * Not an operator route, and the only route in this phase that is not: the
+   * operator reads the ledger, and everybody else reads one sentence about
+   * what happened to a canvas they were on.
+   *
+   * Two shapes, and the caller says which by naming a canvas or not.
+   * `?canvas=<id>` answers anybody — a member, a stranger with the address, a
+   * replica that has just been refused — because the door already tells them
+   * in the refusal, and a second read that refused to repeat it would make
+   * *this was removed, and here is who to ask* depend on which surface you
+   * were standing on. The listing is narrowed to what the badge may see,
+   * because a listing that was not would be a roster of this home's
+   * takedowns.
+   */
+  app.get(TAKEDOWNS_ROUTE, async (req) => {
+    const query = (req.query ?? {}) as Record<string, string | undefined>;
+    const one = query[TAKEDOWNS_CANVAS_PARAM];
+    if (one) {
+      const notice = takedowns.notice(one);
+      return { takedowns: notice ? [notice] : [] } satisfies TakedownsResponse;
+    }
+    const badge = req.badge;
+    if (!badge) return { takedowns: [] } satisfies TakedownsResponse;
+    const admitted = new Set(badge.admissions.map((a) => a.canvasId));
+    const mine: TakedownNotice[] = [];
+    for (const row of takedowns.all()) {
+      if (admitted.has(row.canvasId)) {
+        mine.push(noticeOf(row));
+        continue;
+      }
+      /**
+       * A member who has never opened it on this surface is still a member: the
+       * door's own test, asked against the canvas's grants, which a takedown
+       * leaves exactly where they were. The creator is read from the store's
+       * canvas record rather than from a snapshot, because a snapshot is what
+       * a taken-down canvas cannot produce.
+       */
+      const canvas = (await store.listCanvases()).find((c) => c.id === row.canvasId);
+      if (!canvas) continue;
+      if (await admittingGrant(desk, row.canvasId, badge, canvas.createdBy.id)) {
+        mine.push(noticeOf(row));
+      }
+    }
+    return { takedowns: mine } satisfies TakedownsResponse;
   });
 
   // ---- passes: what an admitted badge hands an unadmitted one (Scene 5) ----
@@ -3589,6 +4085,26 @@ export function registerRoutes(
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const judged = new Map<string, boolean>();
     const mayHear = async (canvas: Canvas): Promise<boolean> => {
+      /**
+       * **A canvas this home has taken down is not heard** (operator phase 2),
+       * and the two shapes of this route get the two different answers the
+       * `withdrawn` branch below already draws.
+       *
+       * Named by the caller — an `isocan wait` parked on that canvas — and it
+       * is REFUSED, with the sentence, so the CLI prints it, exits non-zero
+       * and does not re-park (journey 4 step 2). Not named — a home-wide watch
+       * — and it is simply skipped, because a home-wide watch is not ended by
+       * one room, which is the rule the line below keeps too.
+       *
+       * Asked before the door test rather than after it, for the door hook's
+       * reason: the people parked on a canvas are its members, and a member is
+       * admitted.
+       */
+      const down = takedowns.of(canvas.id);
+      if (down) {
+        if (only?.has(canvas.id)) throw new TakenDownError(down);
+        return false;
+      }
       const known = judged.get(canvas.id);
       if (known !== undefined) return known;
       const allowed =
@@ -3646,6 +4162,24 @@ export function registerRoutes(
     // And on this badge's own expulsion from a canvas it named: the parked
     // agent is told within the sweep, not at the end of its poll window.
     // The wake runs `collect`, which is where the refusal is raised.
+    /**
+     * **And on a takedown of a canvas this poll named** (operator phase 2).
+     *
+     * Nothing else reaches a parked watch for one. The engine subscriber above
+     * filters to `op-applied`, and a takedown is deliberately not an op — the
+     * vocabulary is closed, the log replicates and belongs to the members, and
+     * the log cannot carry authority (design, "Not an op"). The sweep hub does
+     * not see one either: nobody was expelled, and the difference matters —
+     * *your access was withdrawn* is not what happened.
+     *
+     * So the takedown route calls `wakeWatchers`, which calls this, which runs
+     * `collect` again — and the refusal is raised inside `mayHear`, where the
+     * withdrawn one is. One path to the refusal, woken two ways.
+     */
+    const unregisterWatch = watchers.register(only, () => {
+      landed = true;
+      wake?.();
+    });
     const unsubscribeSweeps = sweeps.on((canvasId, badgeId, outcome) => {
       if (badgeId !== badge.badgeId || outcome.outcome !== "expelled") return;
       if (!only?.has(canvasId)) return;
@@ -3677,6 +4211,7 @@ export function registerRoutes(
     } finally {
       unsubscribe();
       unsubscribeSweeps();
+      unregisterWatch();
     }
   });
 

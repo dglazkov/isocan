@@ -96,6 +96,27 @@ export interface Pass {
      * asked for, and "there is no such pass" is a different sentence. */
     redeemedAt?: string;
     redeemedBy?: string;
+    /**
+     * **This pass redeems into a LOOK, not an ordinary admission** (operator
+     * phase 2; design, "The look").
+     *
+     * Present only on a pass `isocan operator look` minted, after the proof. Its
+     * redemption writes `{root: "operator", until}` at `view` instead of
+     * `{root: "pass", badgeId}` at the minter's rung — so the door honours it
+     * until `until` and not a moment longer, the sweep leaves it alone, and it
+     * is not in presence, because no `view` connection is.
+     *
+     * **It is on the PASS rather than decided at redemption**, and that is the
+     * whole reason it is a field: a pass is a bearer token for fifteen minutes,
+     * and what it admits somebody to has to have been fixed at the moment the
+     * proof was made. A redeemer that could ask for a look would be a look
+     * anybody could take.
+     */
+    look?: {
+        /** When the admission stops being honoured, ISO. An hour from the mint
+         * (design, "the door honours it for an hour"). */
+        until: string;
+    };
 }
 /**
  * `<passId>.<secret>` — the badge's dot idiom, reused rather than re-invented.

@@ -31,6 +31,8 @@ import type {
   SpacesResponse,
   SeenMarksResponse,
   SeenResponse,
+  TakedownNotice,
+  TakedownsResponse,
   GroupResponse,
   GroupsResponse,
   UndoRedoRequest,
@@ -64,6 +66,8 @@ import {
   passesRoute,
   passRoute,
   canvasesRoute,
+  TAKEDOWNS_ROUTE,
+  TAKEN_DOWN,
   WS_BEHIND,
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
@@ -592,6 +596,28 @@ interface CanvasHealth {
   /** Has the failure above already been said out loud? Reset by an open, so a
    * link that comes back and fails again complains again. */
   complained: boolean;
+  /**
+   * **The home REFUSED this canvas** — `WS_NOT_ADMITTED`, withdrawn or taken
+   * down (operator phase 2) — as opposed to a socket that merely failed.
+   *
+   * A refusal is a decision at the other end, not a blip, so it is re-asked at
+   * the slowest rate this file has rather than at the poll's. Kept here rather
+   * than on the `CanvasLink` for this record's whole reason: the link is
+   * dropped by the refusal, so anything counted on it resets every two
+   * seconds — which is exactly the case worth slowing down.
+   */
+  refused?: boolean;
+  /**
+   * **The home's own sentence about a canvas it has taken down** (operator
+   * phase 2), asked for once when the refusal arrives.
+   *
+   * The close frame carries only the word — 123 bytes is not a sentence — and
+   * the date and the reason are what `isocan status` has to say. So they are
+   * ASKED FOR, at `/api/takedowns`, which answers anybody about one canvas for
+   * exactly this reason: the words come from the home, and a replica that
+   * rendered its own would be a second sentence to drift.
+   */
+  takenDown?: TakedownNotice;
 }
 
 export class HomeLink implements HomeConnection {
@@ -926,8 +952,11 @@ export class HomeLink implements HomeConnection {
        */
       const health = this.healthOf(canvasId);
       if (
-        health.opens === 0 &&
-        health.failures >= COMPLAIN_AFTER_FAILURES &&
+        // A canvas the home has REFUSED — withdrawn, or taken down — is asked
+        // again at the slowest rate rather than at the poll's, however many
+        // times it has been open before. See `refused` on `CanvasHealth`.
+        (health.refused ||
+          (health.opens === 0 && health.failures >= COMPLAIN_AFTER_FAILURES)) &&
         health.attemptedAt !== null &&
         Date.now() - health.attemptedAt < RECONNECT_MAX_MS
       ) {
@@ -1106,20 +1135,61 @@ export class HomeLink implements HomeConnection {
       // lists the canvas for this badge again, which is the home letting it
       // back in.
       if (code === WS_NOT_ADMITTED) {
-        const why =
-          String(reason) === WITHDRAWN
+        /**
+         * **`taken-down` keeps the copy and stops dialling** (operator phase
+         * 2; journey 4 step 4). It is a 4402 like `withdrawn`, and that is the
+         * whole reason a takedown reaches a replica correctly for free: the
+         * ONE thing this branch does not do, and `canvas-deleted` above does,
+         * is touch the store. Priya's daemon keeps its copy — the replica is
+         * hers — and the operator cannot reach a laptop, which is the
+         * innkeeper line the design is written on.
+         *
+         * The word is remembered, because `isocan status` has to be able to
+         * say *taken down at its home; your copy is on this machine* and the
+         * close frame is the only place this daemon is ever told.
+         */
+        const takenDown = String(reason) === TAKEN_DOWN;
+        const why = takenDown
+          ? `the home has taken ${link.canvasId} down (${WS_NOT_ADMITTED} ${TAKEN_DOWN}); ` +
+            "your copy is on this machine"
+          : String(reason) === WITHDRAWN
             ? `the home withdrew this machine's access to ${link.canvasId} (${WS_NOT_ADMITTED} ${WITHDRAWN})`
             : `the home does not admit this machine to ${link.canvasId} (${WS_NOT_ADMITTED})`;
         const health = this.healthOf(link.canvasId);
         health.failures += 1;
         health.attemptedAt = Date.now();
         health.lastFailure = why;
+        /**
+         * **Refused, and therefore not re-dialled at the poll rate** — the
+         * half of "this canvas is not redialled" that was written down and not
+         * built.
+         *
+         * The comment here has always said the link is not redialled, and
+         * dropping it from `links` was taken to be that. It is not: `repair`
+         * re-creates a missing link on the next poll, and its one guard asks
+         * `opens === 0` — true for a canvas the home never admitted, false for
+         * every canvas that WAS open and has just been refused. So a withdrawn
+         * canvas, and a taken-down one, were dialled every two seconds
+         * forever. Found while building the takedown; it is the same bug for
+         * `withdrawn`, so it is fixed for both.
+         *
+         * Not a hard stop, and that is journey 5: `--lift`, and *her daemon
+         * redials on its next attempt and syncs*. A refusal the home can undo
+         * has to be re-asked eventually or a lift would need a restart on
+         * every replica. So: the slowest backoff this file already has, rather
+         * than the poll's two seconds.
+         */
+        health.refused = true;
+        if (takenDown) void this.askTakedown(link.canvasId);
         if (!health.complained) {
           health.complained = true;
           console.error(
             `[isocan] ${this.homeUrl}: ${why} — this canvas is not redialled; ` +
-              "ops written here stay here until an owner lets this machine back in. " +
-              "`isocan home` shows this per canvas.",
+              (takenDown
+                ? "ops written here stay here, and nothing on this machine has been erased. " +
+                  "`isocan status` says so."
+                : "ops written here stay here until an owner lets this machine back in. " +
+                  "`isocan home` shows this per canvas."),
           );
         }
         link.closed = true;
@@ -1309,6 +1379,24 @@ export class HomeLink implements HomeConnection {
   }
 
   /**
+   * **Ask the home what it says about the canvas it just refused.**
+   *
+   * Best-effort and fire-and-forget: a home that cannot answer leaves `isocan
+   * status` saying what the close frame said, which is true and shorter. It is
+   * a public read — `/api/takedowns?canvas=…` answers anybody about one canvas
+   * — so it needs nothing this link does not already carry, and it is asked
+   * once per refusal rather than per poll, because the refusal drops the link.
+   */
+  private async askTakedown(canvasId: string): Promise<void> {
+    const answer = await this.api<TakedownsResponse>(
+      "GET",
+      `${TAKEDOWNS_ROUTE}?canvas=${encodeURIComponent(canvasId)}`,
+    ).catch(() => null);
+    const notice = answer?.takedowns.find((row) => row.canvasId === canvasId);
+    if (notice) this.healthOf(canvasId).takenDown = notice;
+  }
+
+  /**
    * **The home said hello for this canvas**, which is the first moment it is
    * true that this link carries anything.
    *
@@ -1329,6 +1417,11 @@ export class HomeLink implements HomeConnection {
     health.connectedAt = new Date().toISOString();
     health.failures = 0;
     health.lastFailure = null;
+    // The home is carrying it again, so whatever it refused for is over —
+    // which for a takedown is `--lift`, and is journey 5 step 2 happening
+    // without anybody restarting anything.
+    delete health.refused;
+    delete health.takenDown;
     if (health.complained) {
       health.complained = false;
       console.error(`[isocan] ${this.homeUrl} is carrying ${canvasId} again`);
@@ -1384,6 +1477,9 @@ export class HomeLink implements HomeConnection {
           facesRelayed: health.facesRelayed,
           failures: health.failures,
           lastFailure: health.lastFailure,
+          // Present only for a canvas the home has taken down, and carrying
+          // the home's own sentence — journey 4 step 4's `isocan status`.
+          ...(health.takenDown ? { takenDown: health.takenDown } : {}),
         };
       });
   }

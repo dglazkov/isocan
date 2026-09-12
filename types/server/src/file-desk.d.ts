@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, SeenMark, SeenMarks, Space, OperatorAct } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, SeenMark, SeenMarks, Space, OperatorAct } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
@@ -111,6 +111,17 @@ export declare class FileDesk implements Desk {
         target?: string | null;
         limit?: number;
     }): Promise<OperatorAct[]>;
+    recordTakedown(row: CanvasTakedown): Promise<void>;
+    liftTakedown(canvasId: string, lifted: {
+        at: string;
+        by: string;
+        actId: string;
+    }): Promise<void>;
+    takedownFor(canvasId: string): Promise<CanvasTakedown | null>;
+    /** In force only — a lifted row is history, and every caller of this wants
+     * the set the door and the canvas list act on. `takedownFor` is where the
+     * history is read. */
+    takedowns(): Promise<CanvasTakedown[]>;
     /**
      * The badge behind an id, **or nothing if it was killed** — the one lookup
      * every method here goes through, so "a killed badge is a badge nobody

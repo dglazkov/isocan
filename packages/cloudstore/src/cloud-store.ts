@@ -222,11 +222,42 @@ export class CloudStore implements Store {
     return (await this.db.doc(canvasDoc(id)).get()).exists;
   }
 
+  async takenDownAt(id: string): Promise<string | null> {
+    const canvas = await this.db.doc(canvasDoc(id)).get();
+    return (canvas.data()?.["takenDownAt"] as string | undefined) ?? null;
+  }
+
+  /**
+   * A merge onto the canvas document, beside `deleted` — and `null` to lift.
+   *
+   * `null` rather than `FieldValue.delete()` on purpose: the field's absence
+   * and its null both read as "not taken down" through `takenDownAt` above,
+   * and a stored null leaves the document saying, to anybody reading it in the
+   * console, that this canvas has a takedown history. The desk row is the
+   * record; this is only the flag, and a flag that has been lowered is worth
+   * seeing lowered.
+   *
+   * The pending snapshot is flushed first, as `softDeleteCanvas` does: a
+   * debounced write landing after the flag would be this home writing to a
+   * canvas it has just stopped serving.
+   */
+  async setTakenDown(id: string, at: string | null): Promise<void> {
+    await this.flushSnapshot(id);
+    this.pending.delete(id);
+    await this.db.doc(canvasDoc(id)).set({ takenDownAt: at }, { merge: true });
+  }
+
   async load(id: string): Promise<LoadedCanvas | null> {
     const canvas = await this.db.doc(canvasDoc(id)).get();
     if (!canvas.exists) return null;
     const data = canvas.data()!;
     if (data["deleted"] === true) return null;
+    // **Exactly where `deleted` refuses**, and the line above is the reason
+    // this one is beside it rather than anywhere else (operator phase 2). The
+    // ops, the blobs and the snapshot are all untouched; what stops is this
+    // home opening the canvas, which is what `--lift` restores by clearing a
+    // field.
+    if (typeof data["takenDownAt"] === "string") return null;
     const record = data["project"] as Canvas | undefined; // stored field name: holdout
     if (!record) return null;
     const compactedThrough = (data["compactedThrough"] as number | undefined) ?? 0;

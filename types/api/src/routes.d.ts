@@ -1,4 +1,4 @@
-import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupsResponse, OperatorLogResponse, OperatorShowResponse } from "../../core/src/index.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, TakedownsResponse } from "../../core/src/index.js";
 import type { UpgradeVerdict } from "../../core/src/index.js";
 import type { BuildStamp } from "../../server/src/index.js";
 /** The health route: who is holding the port, and which build they are. */
@@ -415,6 +415,23 @@ export declare class DaemonRoutes {
         target?: string | null;
         limit?: number;
     }): Promise<OperatorLogResponse>;
+    /** Mint the look — a pass this home redeems into the operator's browser as
+     * an admission at `view` until `until`. The address to open is built by
+     * `operatorLookUrl` in core, from the home the caller proved at. */
+    operatorLook(canvasId: string, proof: string, request: OperatorLookRequest): Promise<OperatorLookResponse>;
+    /** Take it down, or lift it. One method and one route for both, because
+     * they are one act with a direction: the reach, the row and the refusals are
+     * the same shape either way, and a second verb would be a second place for
+     * the ledger's `act` to be spelled. */
+    operatorTakedown(canvasId: string, proof: string, request: OperatorTakedownRequest): Promise<OperatorTakedownResponse>;
+    /**
+     * **The sentence, for the people it happened to** — not an operator read.
+     *
+     * With a canvas id: that one, answered to anybody, because the door already
+     * says it in its refusal. Without: the ones in force among the canvases this
+     * badge may see, which is what a canvas list draws beside its rows.
+     */
+    takedowns(canvasId?: string): Promise<TakedownsResponse>;
     uploadBlob(canvasId: string, data: Buffer, mimeType: string, filename: string): Promise<BlobUploadResponse>;
     downloadBlob(canvasId: string, blobHash: string): Promise<Buffer>;
 }

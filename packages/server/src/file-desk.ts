@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import type {
   ActorClaim,
   Attestation,
+  CanvasTakedown,
   Capability,
   Grant,
   GrantSubject,
@@ -15,6 +16,7 @@ import type {
 import {
   advanceSeen,
   groupSubject,
+  inForce,
   isGroupLive,
   isLive,
   isSpaceGrant,
@@ -26,6 +28,7 @@ import {
 } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
+import { liveAdmission } from "./grants.ts";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./desk.ts";
 
 /**
@@ -134,7 +137,18 @@ type DeskLogEntry =
    * accounted for, which is the Firestore hand edit the whole project exists
    * to replace.
    */
-  | { seq: number; type: "operator"; act: OperatorAct; at: string };
+  | { seq: number; type: "operator"; act: OperatorAct; at: string }
+  /**
+   * **A canvas this home stopped serving, and why** (operator phase 2).
+   *
+   * Logged rather than derived, for the ledger's reason one entry up and a
+   * second of its own: this row is what every affected person's sentence is
+   * rendered from, so a home that lost it would go on refusing the canvas —
+   * the STORE's flag is what refuses — while being unable to say why. A
+   * refusal with no sentence is exactly the *not found* the design calls the
+   * one thing a takedown must never look like.
+   */
+  | { seq: number; type: "takedown"; row: CanvasTakedown; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -174,6 +188,11 @@ interface DeskSnapshot {
    * written before it, and correctly EMPTY: a home whose ledger has no rows
    * has had no operator act, which is true of every home in this repo. */
   operator?: Record<string, OperatorAct>;
+  /** `takedowns/{canvasId}` (operator phase 2), keyed by canvas id and holding
+   * lifted rows too. Absent on every desk written before it, and correctly
+   * EMPTY: a home with no row has taken nothing down, which is true of every
+   * home in this repo. */
+  takedowns?: Record<string, CanvasTakedown>;
 }
 
 /** How stale `lastSeen` may get before a touch costs a snapshot rewrite. A
@@ -182,7 +201,7 @@ interface DeskSnapshot {
 const TOUCH_DEBOUNCE_MS = 60_000;
 
 export class FileDesk implements Desk {
-  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {}, spaces: {}, groups: {}, operator: {} };
+  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {}, spaces: {}, groups: {}, operator: {}, takedowns: {} };
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(readonly home: string) {}
@@ -217,6 +236,9 @@ export class FileDesk implements Desk {
       // operator act has ever been taken here, which is the truth about a
       // home that has none.
       operator: snapshot?.operator ?? {},
+      // Absent on every desk written before takedowns; empty means this home
+      // has taken nothing down, which is the truth about all of them.
+      takedowns: snapshot?.takedowns ?? {},
       // Absent until a hosted home first signs a content read. Undefined
       // means "none minted", never "sign with nothing".
       ...(snapshot?.contentKey ? { contentKey: snapshot.contentKey } : {}),
@@ -329,7 +351,21 @@ export class FileDesk implements Desk {
     capability?: Capability,
   ): Promise<void> {
     const badge = this.live(badgeId);
-    if (!badge || badge.admissions.some((a) => a.canvasId === canvasId)) return;
+    if (!badge) return;
+    /**
+     * **An admission that has RUN OUT is replaced, not kept** (operator phase
+     * 2).
+     *
+     * This used to be `some(a => a.canvasId === canvasId)`, which was exactly
+     * right while every admission was live until somebody revoked it. The
+     * operator's look is the first that ends on its own, and with the old line
+     * a second look at the same canvas from the same browser would be written
+     * nowhere and refused at the door — a verb that answered "done" and did
+     * nothing. Replacing is also what makes a re-entry by a GRANT possible
+     * after a look has expired.
+     */
+    const existing = badge.admissions.find((a) => a.canvasId === canvasId);
+    if (existing && liveAdmission(existing)) return;
     const admission: Admission = {
       canvasId,
       provenance,
@@ -339,7 +375,10 @@ export class FileDesk implements Desk {
       // both backings keep that reading.
       ...(narrowed(capability) ? { capability } : {}),
     };
-    badge.admissions = [...badge.admissions, admission];
+    badge.admissions = [
+      ...badge.admissions.filter((a) => a.canvasId !== canvasId),
+      admission,
+    ];
     await this.enqueue(() => this.writeSnapshot());
   }
 
@@ -728,6 +767,47 @@ export class FileDesk implements Desk {
       .map((act) => ({ ...act }));
   }
 
+  // ---- takedowns (operator phase 2) ----
+
+  async recordTakedown(row: CanvasTakedown): Promise<void> {
+    await this.enqueue(async () => {
+      (this.state.takedowns ??= {})[row.canvasId] = { ...row };
+      await this.append({ type: "takedown", row, at: row.at });
+    });
+  }
+
+  async liftTakedown(
+    canvasId: string,
+    lifted: { at: string; by: string; actId: string },
+  ): Promise<void> {
+    await this.enqueue(async () => {
+      const row = this.state.takedowns?.[canvasId];
+      if (!row) return;
+      const next: CanvasTakedown = {
+        ...row,
+        liftedAt: lifted.at,
+        liftedBy: lifted.by,
+        liftedActId: lifted.actId,
+      };
+      this.state.takedowns![canvasId] = next;
+      await this.append({ type: "takedown", row: next, at: lifted.at });
+    });
+  }
+
+  async takedownFor(canvasId: string): Promise<CanvasTakedown | null> {
+    const row = this.state.takedowns?.[canvasId];
+    return row ? { ...row } : null;
+  }
+
+  /** In force only — a lifted row is history, and every caller of this wants
+   * the set the door and the canvas list act on. `takedownFor` is where the
+   * history is read. */
+  async takedowns(): Promise<CanvasTakedown[]> {
+    return Object.values(this.state.takedowns ?? {})
+      .filter(inForce)
+      .map((row) => ({ ...row }));
+  }
+
   // ---- internals ----
 
   /**
@@ -857,6 +937,14 @@ export class FileDesk implements Desk {
         // settled outcome, and a replay that kept the first would recover
         // every completed act as `attempted`.
         (this.state.operator ??= {})[entry.act.id] = { ...entry.act };
+        return;
+      }
+      case "takedown": {
+        // A replacement, like `operator` above and for the same reason: a lift
+        // is a REWRITE of the one row, so a replay that kept the first would
+        // recover a lifted canvas as still down — the one direction this
+        // mistake must never go.
+        (this.state.takedowns ??= {})[entry.row.canvasId] = { ...entry.row };
         return;
       }
       case "contentkey": {
