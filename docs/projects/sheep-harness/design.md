@@ -87,15 +87,19 @@ adapter receive identical content; the difference is where the turn runs.
   and mint a sheep with `sheep new --detach` and no prompt, the pass on
   stdin as the sheep's own secret, narrating each step. The birth spends
   no model turn (phase 2.5). The sheep's id is the row's `sessionId`.
-- `prompt` is `sheep attach --wait <id> -- <summons>`. `--wait` queues
-  behind a turn already running at the cell; a first summons finds none,
-  because the birth runs no turn. The reply streams back as chunks; exit
-  is the stop. Before it, the transcript's last entry says how long the
-  cell has been quiet, and past the home's ten-minute idle period the rc
-  says setup is probably running; a sheep with no transcript has never
-  started a container, and the rc says setup runs first. During it, the transcript is read every three seconds and each tool call
-  becomes the same inferred status the ACP path produces, because
-  `sheep attach` streams only the reply's text.
+- `prompt` is `sheep attach --wait --json <id> -- <summons>`. `--wait`
+  queues behind a turn already running at the cell; a first summons finds
+  none, because the birth runs no turn. `--json` streams the turn's
+  entries as they land, one pi entry per line (sheep#7, from 12
+  September): each assistant entry's tool calls become the same inferred
+  status the ACP path produces, and its text is the reply; exit is the
+  stop. Nothing else is read while the turn runs. What sheep says on
+  stderr while it holds the turn is narrated as it comes: `queued`, and
+  `setup running (1m 40s)` every half minute from a home that reports its
+  setup (sheep#4), then `setup ok`. A home from before that says nothing
+  of setup, and the rc no longer guesses from the clock. A sheep found in
+  the herd whose row says no setup has ever run is said to have its first
+  container still to come.
 - `close` does nothing. Nothing runs between turns.
 
 ### A pasture per agent
@@ -137,11 +141,18 @@ isocan setup --direct --no-open --no-install "$ISOCAN_PASS"
 
 `--direct` means no daemon in the container; the CLI speaks to the home
 itself, which is the shape `ISOCAN_DIRECT` already proved in two suites.
-The redeemed badge and identity land in `~/.isocan`, which the script
-has symlinked to `/workspace/.isocan-home`, because the workspace is
-what the cell syncs and the container's disk is not
-([sheep#6](https://github.com/dglazkov/sheep/issues/6) asks for a home directory that survives). That is why the
-fourth turn's fresh container was still Shaun.
+The redeemed badge and identity land in `~/.isocan`. Since
+[sheep#6](https://github.com/dglazkov/sheep/issues/6) landed (12
+September) a sheep's `~` is `/home/sheep`, rows in its cell synced
+around every run the way the workspace is, so the badge outlives the
+container by the home's own rule. Before it the container's disk went
+with the container, and the script symlinked `~/.isocan` into
+`/workspace/.isocan-home`, because the workspace was the one thing the
+cell synced; that is why the fourth turn's fresh container was still
+Shaun. The script still makes that link on a home from before sheep#6,
+and for a sheep born before it, whose badge is in the workspace already.
+The pasture's tree is put again at every turn, not only at the birth, so
+a sheep from before runs the current script in its next container.
 
 A pass lives fifteen minutes and works once. It is minted at the birth,
 which a summons causes, and that summons goes to the idle sheep at once,
@@ -180,7 +191,14 @@ Recorded here as what a full build owes, not as trajectory.
 - **The install on every fresh container.** Two minutes per cold turn is
   the CLI installed from the release branch. The fix is on the sheep
   side: a way for a pasture's tools to be installed once, [sheep#2](https://github.com/dglazkov/sheep/issues/2). Until then the brief should say the first turn after a
-  quiet night is slow. *The brief says so from phase 2.*
+  quiet night is slow. *The brief says so from phase 2. sheep#2 landed
+  on 11 September as a pasture cache keyed by the hash of `setup.sh`,
+  put back before setup and kept after it, and it does not apply here: a
+  setup whose environment held a sheep's own secret never keeps what it
+  left, so that a value one sheep's setup wrote cannot reach a sibling's
+  container, and the pass is the sheep's own secret since phase 2.5. The
+  cache is put back when one exists, and no isocan sheep ever makes one.
+  The cold install stays; what would end it is an open door, below.*
 - **Withdrawal does not end the sheep.** `agent.withdraw` drops the
   enrolment and the rc row; the sheep stays in `sheep ls` with a
   workspace and a badge. Sheep has no verb that ends a session for good,
@@ -197,10 +215,16 @@ Recorded here as what a full build owes, not as trajectory.
   stream, so the summoned face shows "reading your comment…" and nothing
   else while the sheep works. `sheep log --json` carries pi's entries
   with tool calls, so this is the rc's to fix, not sheep's. *Answered in
-  phase 1 by reading the transcript during the turn.*
+  phase 1 by reading the transcript during the turn; the read went in
+  phase 2.7, when sheep#7 put the entries on `attach`'s stream.*
 - **Setup's output is invisible to the rc.** A pasture's setup writes to
   the cell's log and reaches the model only on failure. The rc narrated
   nothing for the two minutes the install took, [sheep#4](https://github.com/dglazkov/sheep/issues/4).
+  *Answered on the sheep side, 11 September: `sheep attach` says `setup
+  running (1m 40s)` on stderr while it holds the prompt, which the rc
+  narrates, and the row says whether a sheep has ever run setup. The
+  rc's guess from the clock went with it (phase 2.7). A home from before
+  says nothing.*
 - **Configuration is hand-written.** The `sheep` block in `config.json`
   names the command and the kennel. `isocan harness` should find `sheep`
   on PATH and a kennel above the directory, the way it finds the others.
@@ -263,6 +287,16 @@ Recorded here as what a full build owes, not as trajectory.
   one since phase 2.5, so the secret no longer ties the pasture to one
   agent. The brief, which names the agent, still does. Whether the
   pasture becomes the canvas's is not decided.
+- **The cold install, with the cache.** sheep#2's cache is never kept
+  from a setup that held a sheep's own secret, and the pass is one. Three
+  ways to have it, none taken: the pass as the pasture's secret again
+  (phase 1's shape, which phase 2.5 left so that a kept pasture holds
+  nothing); a secretless sheep born once per pasture to warm the cache,
+  which costs a turn and a script that installs without a pass; or a
+  sheep-side split of setup into a part that runs with no secret and is
+  kept and a part that runs with the sheep's own and is not, which would
+  be a journey filed there. Until one is chosen, the brief says a cold
+  turn is slow.
 - **The bill.** #210 asked for a number. The spike ran four turns on one
   agent; the station reports container minutes at `GET /home`, and phase
   3 reads them before and after a week.
