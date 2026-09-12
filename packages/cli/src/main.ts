@@ -8260,11 +8260,15 @@ persona
  * for the agent, moved so the person gets the identical answer rather than a
  * second one written later.
  *
- * **A list, not a count.** Read state lives in the browser's `localStorage`
- * per canvas per actor, so a count here would either be wrong or would need a
- * durable read marker — an operation, and one whose cheap form the research
- * recommends designing before anybody writes it. Until then this says what
- * exists and lets you decide what is new.
+ * **A list, and now a count you can trust on a second machine.** Read state
+ * used to be the browser's `localStorage` alone, so a count here would have
+ * been either wrong or a lie about somewhere else. `--new` reads the seen-mark
+ * the HOME keeps — one row per person per canvas, `docs/research/
+ * 2026-09-12-seen-marks.md` — and the tally line carries the same number.
+ *
+ * Best-effort, for the reason one unreachable canvas must not empty the list:
+ * a home that cannot answer leaves the marks empty and everything reads as
+ * new, which is honest, where going quiet would not be.
  */
 /**
  * **Where a document stands**, read out of its own front matter.
