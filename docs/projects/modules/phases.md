@@ -362,6 +362,22 @@ chose that harness and has run it themselves a hundred times; a canvas's
 program has no such history, so there is no flag, and a machine that cannot
 fence gets the rc's own refusal wording rather than a quiet unfenced run.
 
+**Two things review caught, both about consent rather than containment.**
+The fence first read the adapter's own `sandboxRead`/`sandboxWrite` for its
+escape hatch, which was honest in the doc and wrong in the design: a person
+widens those so the agent they ENROLLED — and can withdraw — can reach
+`~/projects`, and spending that on a program anyone with write access to a
+shared canvas could have authored is a consent given about somebody else.
+The program fence has its own keys now, **`programRead`/`programWrite`,
+empty by default**; measured, the agent's widening appears zero times in a
+program's policy. And **the run names its author before it runs** — `fib.mjs
+— v2, written by Dimitri, 2026-09-12 — \`node fib.mjs\`` — because executing
+somebody's code on your own machine is a choice that cannot be informed
+otherwise. Your own program runs on the verb alone; anybody else's refuses
+once, by name, until `--yes`. The ceremony sits at the trust boundary rather
+than on every run, because a confirmation for your own program is one that
+gets learned away in a week and takes the other one with it.
+
 **`packages/modules/sandbox`: no kind, no op, no mime, two properties.** A
 program is an ordinary item wearing `sandbox.run` (the argv); a transcript is
 an ordinary text item wearing `sandbox.of` (the program it belongs to). Four

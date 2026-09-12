@@ -155,6 +155,37 @@ describe("the module cannot start a process of its own", () => {
     expect(cli.match(/runFenced\(/g)?.length).toBe(1);
   });
 
+  /**
+   * **The consent a widening spends is the one it was given about.** The
+   * adapter fence's keys widen the reach of an agent the person enrolled and
+   * can withdraw; a program off a shared canvas was written by whoever can
+   * write to that canvas. Reusing one pair for both would spend a consent
+   * given about somebody else, silently — so the program fence has its own,
+   * empty by default, and this is the guard that keeps them apart.
+   */
+  it("never reaches the adapter fence's widening keys", () => {
+    const fence = readFileSync(
+      fileURLToPath(new URL("../../../cli/src/sandbox.ts", import.meta.url)),
+      "utf8",
+    );
+    const policy = fence.slice(fence.indexOf("export async function programPolicy"), fence.indexOf("export interface FencedRequest"));
+    expect(policy).toContain("raw.programRead");
+    expect(policy).toContain("raw.programWrite");
+    expect(policy).not.toContain("raw.sandboxRead");
+    expect(policy).not.toContain("raw.sandboxWrite");
+  });
+
+  it("names the author before it runs, and gates somebody else's program", () => {
+    const cli = source("cli.ts");
+    // The line a person reads, and the refusal that stands in front of code
+    // they did not write.
+    expect(cli).toContain("actorNameIn(snapshot.names, current.createdBy)");
+    expect(cli).toContain("current.createdBy.id === ctx.actor.id");
+    expect(cli).toMatch(/if \(!mine && !opts\.yes\)/);
+    // …and the gate is only there: your own program runs on the verb alone.
+    expect(cli.match(/opts\.yes/g)?.length).toBe(1);
+  });
+
   it("renders no frame and no canvas code in the browser", () => {
     // The shape the extension-actors gate still binds (phases.md, 12 Sep).
     for (const file of ["web.tsx", "page.tsx"]) {

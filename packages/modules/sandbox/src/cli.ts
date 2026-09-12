@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import type { Command } from "commander";
+import { actorNameIn } from "@isocan/core";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
 import {
   SANDBOX_OF_PROP,
@@ -124,8 +125,9 @@ function register(host: CliHost): void {
     .description("Run it on THIS machine, fenced, and post what it printed as a version")
     .option("--canvas <canvas>")
     .option("--timeout <seconds>", "give up after this long", "60")
+    .option("--yes", "run a program somebody else wrote")
     .action(
-      run(async (ref: string, opts: { timeout?: string }, cmd: Command) => {
+      run(async (ref: string, opts: { timeout?: string; yes?: boolean }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);
@@ -139,6 +141,37 @@ function register(host: CliHost): void {
         const argv = argvOf(line);
         const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
         if (!current) throw new Error(`"${item.title}" has no version to run`);
+
+        /**
+         * **Whose program this is, said before it runs** — and a `--yes` when
+         * the answer is *not you*.
+         *
+         * The canvas knows who wrote the version; running it is a person
+         * choosing to execute somebody's code on their own machine, and that
+         * choice cannot be informed if the line never says whose. Same
+         * instinct as `isocan tool add` printing capabilities before `--yes`.
+         *
+         * **The ceremony sits at the trust boundary, not on every run.**
+         * Asking `--yes` for a program you wrote yourself would be the kind of
+         * confirmation that gets learned away in a week — and it is the
+         * confirmation for somebody ELSE's code that then gets learned away
+         * with it. So your own program runs on the verb alone, and anybody
+         * else's refuses once, by name, until you say `--yes`. An agent
+         * carrying out `/run` meets the same fence: it must choose the flag
+         * deliberately, with the author in front of it.
+         */
+        const author = actorNameIn(snapshot.names, current.createdBy);
+        const mine = current.createdBy.id === ctx.actor.id;
+        const version = item.versions.indexOf(current) + 1;
+        const wrote = `v${version}, ${mine ? "yours" : `written by ${author}`}, ${current.createdAt.slice(0, 10)}`;
+        if (!mine && !opts.yes) {
+          throw new Error(
+            `"${item.title}" (${wrote}) runs \`${line}\` on THIS machine. ` +
+              `${author} wrote it, not you — pass --yes to run somebody else's program. ` +
+              `\`isocan show ${item.id}\` reads it first.`,
+          );
+        }
+        console.error(`${item.title} — ${wrote} — \`${line}\``);
 
         // The scratch is the program's whole world: it is unpacked here, it
         // is the cwd, it is the one writable path in the policy, and it is
@@ -202,6 +235,8 @@ function register(host: CliHost): void {
               itemId: item.id,
               transcriptId,
               argv,
+              author: { id: current.createdBy.id, name: author, mine },
+              programVersion: version,
               code: result.code,
               ms: result.ms,
               timedOut: result.timedOut,
@@ -210,7 +245,6 @@ function register(host: CliHost): void {
               stderr: result.stderr,
             });
           }
-          console.error(`$ ${argv.join(" ")}`);
           if (result.stdout) process.stdout.write(result.stdout.endsWith("\n") ? result.stdout : `${result.stdout}\n`);
           if (result.stderr) process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : `${result.stderr}\n`);
           console.error(`${status} → ${transcriptId} (${formatMs(result.ms)})`);

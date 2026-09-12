@@ -35,9 +35,26 @@ program the first time, versioned every time after. The version is stamped
 with **your** actor, because you are the one who ran it: `isocan activity`
 shows it as your work, and your undo is what takes it back.
 
-**Read the program before you run it.** It is a file on a canvas, so anybody
-on this canvas could have written it. The fence bounds what it can *reach*;
-it bounds nothing about whether running it was a good idea.
+**It names the author before it runs**, because running a program is choosing
+to execute somebody's code on your own machine:
+
+```
+fib.mjs — v2, written by Dimitri, 2026-09-12 — `node fib.mjs`
+```
+
+A program **you** wrote runs on the verb alone. A program **somebody else**
+wrote refuses once, by name, until you pass `--yes`:
+
+```
+"fib.mjs" (v2, written by Dimitri, 2026-09-12) runs `node fib.mjs` on THIS
+machine. Dimitri wrote it, not you — pass --yes to run somebody else's
+program. `isocan show itm_…` reads it first.
+```
+
+That refusal is for you as much as for a person. **Read the program before you
+pass `--yes`** — `isocan show <item>` prints it. The fence bounds what it can
+*reach*; it bounds nothing about whether running it was a good idea, and
+"somebody put it on the canvas" is not a reason.
 
 What the fence gives it, and it is the whole list:
 
@@ -51,9 +68,12 @@ What the fence gives it, and it is the whole list:
 - **A minute**, unless `--timeout <seconds>` says otherwise, and a program
   still running then is killed and the transcript says so.
 
-The only thing that widens any of that is `sandboxRead` / `sandboxWrite` in
+The only thing that widens any of that is `programRead` / `programWrite` in
 `~/.isocan/config.json` — the machine owner's standing decision, not yours to
-make on their behalf.
+make on their behalf. They are **not** the `sandboxRead` / `sandboxWrite` that
+widen the fence around an enrolled agent: somebody who opened `~/projects` to
+their own agent did not thereby open it to a program anyone on a shared canvas
+can write.
 
 **If this machine cannot build a fence, the verb refuses** and names what is
 missing (usually `srt` and `ripgrep`). That is deliberate and there is no

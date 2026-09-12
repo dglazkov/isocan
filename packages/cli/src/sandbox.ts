@@ -70,6 +70,20 @@ interface SandboxConfig {
   sandboxDomains?: string[];
   sandboxRead?: string[];
   sandboxWrite?: string[];
+  /**
+   * **The program fence's own keys, and they are deliberately not the
+   * adapter's** (12 Sep 2026, modules phase 5).
+   *
+   * `sandboxRead`/`sandboxWrite` above widen the fence around an agent the
+   * person ENROLLED and can withdraw — somebody adds `~/projects` so their
+   * own agent can work there. Reusing those keys for a program that arrived
+   * on a shared canvas would spend that consent on code its author never
+   * asked about: the person widened for their agent, not for whoever else
+   * can write to the canvas. Different trust, different keys, and these
+   * default to nothing at all.
+   */
+  programRead?: string[];
+  programWrite?: string[];
 }
 
 export interface SandboxPolicy {
@@ -509,11 +523,17 @@ export async function programPolicy(options: {
   /** Extra readable roots — the interpreter's install, nothing else. */
   toolchain?: readonly string[];
 }): Promise<SandboxPolicy> {
-  // The same escape hatch the adapter policy has, and for the same reason: a
-  // program that needs a sibling checkout, or a toolchain isocan cannot guess
-  // at, is a thing only the person whose machine it is can say. It WIDENS a
-  // canvas program's reach, which is exactly why it is a standing decision in
-  // a file they own rather than a flag on the verb.
+  /**
+   * An escape hatch shaped like the adapter policy's and **keyed
+   * separately** — `programRead`/`programWrite`, empty by default.
+   *
+   * The adapter's `sandboxRead`/`sandboxWrite` are deliberately NOT read
+   * here. A person widens those so the agent they enrolled can reach
+   * `~/projects`; a program on a shared canvas was written by whoever can
+   * write to that canvas, and handing it the same reach would spend a
+   * consent that was given about somebody else. Two trust levels, two keys,
+   * and the one for less-trusted code starts at nothing.
+   */
   const raw = await readConfigFile<SandboxConfig>(options.home);
   const strings = (value: unknown): string[] =>
     Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim().length > 0) : [];
@@ -525,9 +545,9 @@ export async function programPolicy(options: {
         options.dir,
         ...(options.toolchain ?? []),
         ...(options.sandboxRoot ? [options.sandboxRoot] : []),
-        ...strings(raw.sandboxRead),
+        ...strings(raw.programRead),
       ]),
-      allowWrite: dedupe([options.dir, ...strings(raw.sandboxWrite)]),
+      allowWrite: dedupe([options.dir, ...strings(raw.programWrite)]),
       denyWrite: [],
     },
   };
@@ -623,7 +643,7 @@ export async function runFenced(
          * the scratch, so a program's temp file lands in the one place it may
          * write. *Unmeasured against real srt* — this machine has none — so
          * if a fenced run ever fails for want of a path, `config.json`'s
-         * `sandboxRead`/`sandboxWrite` is the door, and widening the default
+         * `programRead`/`programWrite` is the door, and widening the default
          * is a decision with a sentence, not a patch.
          */
         env: { PATH: env.PATH ?? "", HOME: os.homedir(), TMPDIR: request.dir },

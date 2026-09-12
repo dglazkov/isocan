@@ -298,10 +298,34 @@ because a program that arrived on a canvas needs none of it:
 | readable | `$HOME` denied, harness config re-allowed | `$HOME` denied, **nothing carved back but `toolchain`** |
 | asked for? | opt-in (`--sandbox`) | **not a mode — there is no unfenced path** |
 
-The one thing that widens it is `config.json`'s `sandboxRead` / `sandboxWrite`
-— the same escape hatch the adapter fence has, for a sibling checkout or a
-toolchain isocan cannot guess at. It is a standing decision in a file the
-person owns, deliberately not a flag on your verb.
+The one thing that widens it is `config.json`'s **`programRead` /
+`programWrite`**, empty by default — a standing decision in a file the person
+owns, deliberately not a flag on your verb.
+
+**They are not the adapter fence's `sandboxRead` / `sandboxWrite`, and the
+separation is the point.** A person widens those so the agent they ENROLLED —
+and can withdraw — reaches `~/projects`. A program on a shared canvas was
+written by whoever can write to that canvas. Sharing one pair of keys would
+spend a consent that was given about somebody else, silently. Two trust
+levels, two keys, and the one for less-trusted code starts at nothing. **If
+you ever add a fence of your own kind, ask which consent it is spending
+before you reach for an existing key.**
+
+### Say whose code you are about to run
+
+A module that executes something a canvas carries must name its author first.
+The canvas knows: `version.createdBy`, resolved through core's `actorNameIn`
+against `snapshot.names`. The sandbox module prints
+
+```
+fib.mjs — v2, written by Dimitri, 2026-09-12 — `node fib.mjs`
+```
+
+and refuses a program the caller did not write until `--yes` is passed, naming
+the author in the refusal. **The ceremony belongs at the trust boundary, not
+on every run**: a confirmation for your own program is one that gets learned
+away in a week, and it takes the confirmation for somebody else's with it.
+Same instinct as `isocan tool add` printing capabilities before `--yes`.
 
 **On a machine that cannot fence, it throws**, naming what is missing
 (usually `srt` and `ripgrep`). Catch it to say it better if you like; do not
