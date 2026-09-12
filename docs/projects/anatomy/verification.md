@@ -153,3 +153,20 @@ attach, analyze and show --node; its guide documents each. The shared module
 core owns the neighborhood query, and shared operation helpers own imports and
 analysis requests. README and module authoring docs cover the new doors.
 Native gestures and pane size stay local UI state; they need no durable op.
+
+## 12 September — Sidebar consistency and usability review
+
+Module project entries now use the rail's ordinary icon-only button, preserving
+the accessible name and hover/focus tooltip. The browser measured View Anatomy
+at 38 × 38 pixels with only its glyph as visible content; clicking it opened
+the rich workspace. The More menu retains its label. This presentation fix
+changes no operations, CLI commands, agent guide, shared core logic or README
+feature description. No implementation-mirroring test was added.
+
+The broader [usability review](usability-review.md) records browser and synthetic
+reducer probes, the issues they established, and follow-on acceptance gates.
+It does not claim those proposed fixes are complete. The final full suite
+passed **4,161 tests, 70 skipped**, across 416 passing and five skipped files;
+typecheck and production build passed. The generated roadmap was refreshed to
+include phase 6, which its earlier committed note omitted. An unrelated agent
+teardown assertion failed on the first full run and passed on the full rerun.

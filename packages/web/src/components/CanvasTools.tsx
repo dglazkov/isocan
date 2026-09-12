@@ -310,6 +310,17 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           <HistoryGlyph size={17} />
         </button>
       )}
+      {projectViews.map((view) => (
+        <button
+          key={view.segment}
+          className="tool-btn"
+          data-tip={view.label}
+          aria-label={view.label}
+          onClick={() => navigate(modulePagePath(canvasId, view.segment))}
+        >
+          <span aria-hidden>{view.glyph}</span>
+        </button>
+      ))}
       {/* The canvas's OWN tools, below everything the app ships, because that
           is the boundary: above the line is isocan, below it is what this
           canvas brought. A tool wears its own label and never the app's — the
@@ -322,10 +333,6 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           follows is attributed and undoable per actor because it went through
           that door and not around it. */}
       {tools.length > 0 && <div className="tool-sep" />}
-      {projectViews.map((view) => <button
-        key={view.segment} className="tool-btn tool-ext" data-tip={view.label} aria-label={view.label}
-        onClick={() => navigate(modulePagePath(canvasId, view.segment))}
-      ><span aria-hidden>{view.glyph}</span><span className="tool-ext-label">{view.label}</span></button>)}
       {tools.map((t) => (
         <button
           key={t.itemId}

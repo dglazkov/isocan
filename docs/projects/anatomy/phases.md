@@ -7,6 +7,10 @@ Read [analysis.md](analysis.md), then [design.md](design.md).
 The plan below was completed before implementation; acceptance evidence is
 collected in [verification.md](verification.md).
 
+The [12 September usability review](usability-review.md) records remaining
+workflow gaps and proposes the next five phases. Those recommendations are
+not included in the built status above.
+
 ## 1. Built — File model and portable graph
 
 Build the module package, strict import/body validation, canonical field
