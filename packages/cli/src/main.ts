@@ -67,6 +67,7 @@ import {
   takedownDateShort,
   takedownReasonList,
   takedownSentence,
+  type PurgeCounts,
   passExpired,
   grantSubjectOf,
   atLeast,
@@ -4003,6 +4004,21 @@ operatorCommand
             (takedown.note ? `\nyour note: ${takedown.note}` : "") +
             (takedown.liftedAt ? `\nlifted on ${takedown.liftedAt.slice(0, 10)}` : ""),
         );
+        /**
+         * **And whether the bytes are gone** (operator phase 3). The tombstone
+         * still says who made it and when; this says what was erased and
+         * that nothing can come back — `show` after a purge is the read the
+         * operator makes when somebody asks what happened to that id, on
+         * either backing, and it must say something true on both.
+         */
+        if (takedown.purgedAt) {
+          const gone = takedown.purged;
+          console.log(
+            `PURGED on ${takedown.purgedAt.slice(0, 10)}` +
+              (gone ? ` — ${erasedLine(gone)} erased from this home` : "") +
+              ". The id stays taken; nothing can be adopted, teleported or created under it.",
+          );
+        }
       }
       console.log(
         "\nNothing was changed, and this look is in this home's ledger — `isocan operator log`.",
@@ -4125,6 +4141,72 @@ operatorCommand
         );
       },
     ),
+  );
+
+/** What a purge erased, in one line both `purge` and `show` print — the
+ * numbers the operator pastes into the reply, so they are spelled once. */
+function erasedLine(gone: PurgeCounts): string {
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  return (
+    `${n(gone.files, "file", "files")} (${formatBytes(gone.bytes)}), ` +
+    `${n(gone.ops, "log entry", "log entries")}, ` +
+    `${n(gone.objects, "stored object", "stored objects")}`
+  );
+}
+
+operatorCommand
+  .command("purge <canvas>")
+  .description(
+    "Erase what this home holds under a canvas it has taken down. Cannot be lifted; " +
+      "says what survives, and for how long",
+  )
+  .option("--force", "say that you mean it — a purge is refused without this")
+  .option("--home <url>", "the home to prove at; by default, where that canvas lives")
+  .action(
+    run(async (canvasId: string, opts: { force?: boolean; home?: string }, cmd: Command) => {
+      refuseInSession();
+      /**
+       * **Refused before a browser opens, and before a ledger row**: a person
+       * who has not said `--force` has not asked for an erasure yet, and a
+       * proof spent on a refusal would put a row in the ledger for an act
+       * nobody meant. The route asks for the same word, so a caller who
+       * reaches it by hand is refused there too — that refusal IS recorded,
+       * because it arrived with a proof.
+       */
+      if (!opts.force) {
+        throw new Error(
+          `a purge erases what the home holds under ${canvasId} and cannot be lifted. ` +
+            `\`isocan operator purge ${canvasId} --force\` says you mean it.`,
+        );
+      }
+      const ctx = await ctxOf(cmd);
+      const home = await operatorHome(ctx, canvasId, opts.home);
+      const client = clientAt(ctx, home);
+      const proof = await operatorProof(client, home, `purge ${canvasId} — erase it`);
+      const answer = await client.operatorPurge(canvasId, proof, { force: true });
+      if (ctx.json) return printJson(answer);
+      const { erased, survives, takedown } = answer;
+      /**
+       * **What is gone and what is not, in numbers** — journey 6 step 2,
+       * written to be pasted into the reply. The four horizons come from the
+       * home, in the words of the backing that knows them; this surface adds
+       * nothing to them and drops nothing from them.
+       */
+      printKeyValues({
+        canvas: canvasId,
+        "taken down": `${takedown.at.slice(0, 10)} — ${takedown.reason}`,
+        "erased from this home": erasedLine(erased),
+      });
+      console.log("\nWhat still exists, and for how long:");
+      for (const horizon of survives) {
+        console.log(`  - ${horizon.sentence}${horizon.days === null ? "" : ` (${horizon.days} days)`}`);
+      }
+      console.log(
+        `\nThe id stays taken: nothing can be adopted, teleported or created under ${canvasId}\n` +
+          "at this home again, and the people who were on it still read the sentence. The\n" +
+          `record stays — \`isocan operator log --target ${canvasId}\`. There is no --lift.`,
+      );
+    }),
   );
 
 operatorCommand

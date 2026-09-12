@@ -16,17 +16,19 @@ after, because a takedown answers every one of those reports on its own,
 more bluntly. The words on `/terms` come first of all, because they are
 untrue today and fixing them costs nothing.
 
-**Where we are:** phases 1 and 2 are PART-DONE (12 Sep 2026): the operator
-is proved per act and refused in words; a look admits for an hour and is not
-in presence; a takedown stops the home serving a canvas — every route refuses
-with the sentence, the tab, the wait and the list say it, replicas keep their
-copies — and lifts; every act writes its ledger row before it answers. All of
-it green here and walked by hand against a local daemon; none of it walked on
-dev. Phase 0 still waits on Dion's call on the wording. The dev walks for 1
-and 2 wait on a person: `ISOCAN_OPERATORS` on dev.isocan.io, a sign-in, a
-second account, a third browser — and a decision about journey 1 step 3,
-which says Google where this app has only an emailed link. Phase 3 (purge)
-is next, and needs none of that.
+**Where we are:** phases 1, 2 and 3 are PART-DONE (12 Sep 2026): the
+operator is proved per act and refused in words; a look admits for an hour
+and is not in presence; a takedown stops the home serving a canvas and lifts;
+a purge erases the bytes on both backings, keeps the record as the tombstone,
+refuses unless the canvas was taken down first, and says what survives and for
+how long; every act writes its ledger row before it answers. All of it green
+here — the cloud halves against the Firestore emulator — and walked by hand
+against local daemons; none of it walked on dev. Phase 0 still waits on
+Dion's call on the wording. The dev walks for 1–3 wait on a person:
+`ISOCAN_OPERATORS` on dev.isocan.io, a sign-in, a second account, a third
+browser, and a decision about journey 1 step 3, which says Google where this
+app has only an emailed link. Phase 4 (end a surface) is next, and its
+owner's-path half is a bug fix that needs nothing.
 
 **Sizes.** S is a day's work with its tests. M is two or three. L would be a
 week; nothing here is one.
@@ -170,7 +172,11 @@ it greyed with the reason. `--lift`, and all of it comes back.
 
 ## Phase 3 — Purge (S)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE (2026-09-12).** Built and proved on both backings here — the
+file backing end to end through the real binary, the cloud backing against the
+Firestore emulator (subcollections empty, the document kept as the tombstone)
+and an object-store double for the bucket. The walk on dev — the real bucket
+prefix, the real subcollections, `adopt` against dev — waits on a person.
 
 Closes journey 6.
 
@@ -183,6 +189,33 @@ the bucket, the subcollections are empty, `adopt` of the same id is
 refused, and the printed horizons match `infra/30-bucket.sh` and
 `infra/90-backup-export.sh` — asserted by a test that reads the scripts,
 so the day a horizon changes the sentence fails rather than lies.
+
+**Trajectory:**
+
+- **2026-09-12** — A purge is refused at the store, not only at the route:
+  both backings throw on a canvas that is not taken down, so no wiring above
+  the seam can make an erasure the first act on a canvas.
+- **2026-09-12** — The purge mark is its own flag beside the takedown's, and
+  `load` refuses on it whatever the takedown flag says; a lift after a purge
+  would otherwise serve an empty canvas under a taken name.
+- **2026-09-12** — The three cloud horizons live in `@isocan/cloudstore`, read
+  out of `infra/` by a test; the fourth, members' replicas, is core's and true
+  of every backing. A file home prints one line, not four.
+- **2026-09-12** — The owner stays refused after a purge: a delete that went
+  through would erase her members' replicas, the one reach a takedown withholds
+  from the operator. Answers operator phase 2's first Open entry.
+- **2026-09-12** — `show` on a purged canvas is true on both backings because
+  both keep the record as the tombstone; the file backing now does too. Answers
+  operator phase 2's second Open entry.
+- **2026-09-12** — The cloud suites had been green by skipping. The emulator
+  ran on this machine for the first time today and found a phase-2 bug in its
+  first minute: a Firestore merge onto a missing document creates it. Every
+  earlier "both conformance suites green" was the file half twice.
+- **2026-09-12** — Open: the walk on dev — the real bucket prefix listing
+  nothing, the real subcollections, `adopt` against dev, the horizons a hosted
+  home prints. Waits on Dion.
+- **2026-09-12** — Open: Dimitri's question 6 — ninety days in the exports as
+  the honest end, or purge the exports too. The verb says the number.
 
 ## Phase 4 — End a surface, and mean it (M)
 

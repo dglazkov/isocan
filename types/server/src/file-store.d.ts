@@ -1,6 +1,6 @@
 import type { Readable } from "node:stream";
 import type { ActorRegistry, LogEntry, Canvas, CanvasState, SlashCommand } from "../../core/src/index.js";
-import type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, Store } from "./store.js";
+import type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, PurgeReport, Store } from "./store.js";
 export declare class FileStore implements Store {
     readonly home: string;
     constructor(home: string);
@@ -13,6 +13,25 @@ export declare class FileStore implements Store {
     canvasExists(id: string): Promise<boolean>;
     takenDownAt(id: string): Promise<string | null>;
     setTakenDown(id: string, at: string | null): Promise<void>;
+    purgedAt(id: string): Promise<string | null>;
+    /**
+     * **Everything in the directory but the tombstone and the two marks.**
+     *
+     * A purge on this backing is the prefix delete a bucket does, spelled for a
+     * directory: every entry under `projects/<id>/` goes except `project.json`
+     * (the canvas record — the tombstone that keeps `canvasExists` true and the
+     * id taken), `takendown.json` (the flag that got us here) and `purged.json`
+     * (written first, so a crash mid-way leaves a directory that `load` already
+     * refuses rather than a half-erased canvas it would serve). Enumerated
+     * rather than named file by file, because a file added to the layout next
+     * year must be erased by a purge without somebody remembering this method.
+     *
+     * **Not `deleted-projects/`.** An owner's delete moves the directory aside,
+     * recoverable by hand; this is the act whose whole point is that nothing
+     * under the id is recoverable from this home. It counts what it removes on
+     * the way, because the counts are the reply to the reporter.
+     */
+    purgeCanvas(id: string): Promise<PurgeReport>;
     load(id: string): Promise<LoadedCanvas | null>;
     /**
      * **Canvases whose metadata predates the stamp, repaired once.**

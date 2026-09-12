@@ -487,10 +487,68 @@ describe("the real verbs, driven end to end", () => {
     expect(out.stdout).toContain("kai, 12 Sep");
   }, 40_000);
 
+  /**
+   * **Purge, through the verb** — operator phase 3, journey 6. The refusal
+   * that matters (not taken down) comes from the home and is in its ledger;
+   * the one that comes first (`--force` missing) is the verb's own and
+   * happens before a browser opens, because a person who has not said the
+   * word has not asked for an erasure yet.
+   */
+  it("`purge` without --force stops before a browser opens, and says what the word means", async () => {
+    const out = await drive(["operator", "purge", canvasId]);
+    expect(out.code).toBe(1);
+    expect(out.stderr).toMatch(/cannot be lifted/);
+    expect(out.stderr).toContain(`isocan operator purge ${canvasId} --force`);
+    expect(out.stdout).not.toContain(PROVE_PATH_PREFIX);
+    expect(await daemon.store.purgedAt(canvasId)).toBeNull();
+  }, 40_000);
+
+  it("`purge --force` on a canvas that is not down is refused with journey 6's sentence", async () => {
+    const out = await drive(["operator", "purge", canvasId, "--force"]);
+    expect(out.code).toBe(1);
+    expect(out.stderr).toMatch(/purge erases; take prj_reported1 down first/);
+    expect(out.stderr).toMatch(/second of two deliberate acts/);
+    expect(await daemon.store.purgedAt(canvasId)).toBeNull();
+    expect(await daemon.store.load(canvasId), "nothing was erased").not.toBeNull();
+  }, 40_000);
+
+  it("`purge --force` after a takedown says what is gone and what is not, in numbers, and `show` says PURGED", async () => {
+    await drive(["operator", "takedown", canvasId, "--reason", "illegal-content"]);
+    const out = await drive(["operator", "purge", canvasId, "--force"]);
+    expect(out.code, out.stderr).toBe(0);
+    // Journey 6 step 2: what is gone, counted…
+    expect(out.stdout).toMatch(/erased from this home/);
+    expect(out.stdout).toMatch(/0 files \(0 B\), 1 log entry, \d+ stored objects/);
+    // …and what is not, as horizons. A file home names the one every home
+    // has; the bucket, the rewind and the exports are the hosted backing's.
+    expect(out.stdout).toMatch(/What still exists, and for how long/);
+    expect(out.stdout).toMatch(/members' machines are theirs/);
+    // Journey 6 step 3: the id stays taken, the record stays, and there is
+    // no way back.
+    expect(out.stdout).toMatch(/The id stays taken/);
+    expect(out.stdout).toMatch(/There is no --lift/);
+    expect(out.stdout).toContain(`isocan operator log --target ${canvasId}`);
+    expect(await daemon.store.purgedAt(canvasId)).not.toBeNull();
+    expect(await daemon.store.load(canvasId)).toBeNull();
+    expect(await daemon.store.canvasExists(canvasId), "the tombstone").toBe(true);
+
+    const shown = await drive(["operator", "show", canvasId]);
+    expect(shown.code, shown.stderr).toBe(0);
+    expect(shown.stdout).toMatch(/Acme quarterly/);
+    expect(shown.stdout).toMatch(/TAKEN DOWN/);
+    expect(shown.stdout).toMatch(/PURGED on \d{4}-\d{2}-\d{2}/);
+    expect(shown.stdout).toMatch(/The id stays taken/);
+
+    const lifted = await drive(["operator", "takedown", canvasId, "--lift"]);
+    expect(lifted.code).toBe(1);
+    expect(lifted.stderr).toMatch(/nothing under the id to bring back/);
+  }, 60_000);
+
   it("refuses both new verbs inside a summoned session, before a browser opens", async () => {
     for (const args of [
       ["operator", "takedown", canvasId, "--reason", "spam"],
       ["operator", "look", canvasId, "--reason", "x"],
+      ["operator", "purge", canvasId, "--force"],
     ]) {
       const env: NodeJS.ProcessEnv = {
         ...process.env,

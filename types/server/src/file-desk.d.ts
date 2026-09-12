@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, SeenMark, SeenMarks, Space, OperatorAct } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
@@ -116,6 +116,11 @@ export declare class FileDesk implements Desk {
         at: string;
         by: string;
         actId: string;
+    }): Promise<void>;
+    markPurged(canvasId: string, purged: {
+        at: string;
+        actId: string;
+        counts: PurgeCounts;
     }): Promise<void>;
     takedownFor(canvasId: string): Promise<CanvasTakedown | null>;
     /** In force only — a lifted row is history, and every caller of this wants

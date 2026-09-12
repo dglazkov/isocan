@@ -70,6 +70,13 @@ export class GcsObjects implements ObjectStore {
     await this.bucket.file(key).delete({ ignoreNotFound: true });
   }
 
+  /** `getFiles` pages for us with `autoPaginate` on by default, so one call
+   * is the whole prefix however many blobs a canvas grew. */
+  async list(prefix: string): Promise<string[]> {
+    const [files] = await this.bucket.getFiles({ prefix });
+    return files.map((file) => file.name);
+  }
+
   /**
    * Append by COMPOSE, because GCS objects are immutable.
    *

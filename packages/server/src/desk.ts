@@ -9,6 +9,7 @@ import type {
   Group,
   OperatorAct,
   Pass,
+  PurgeCounts,
   SeenMark,
   SeenMarks,
   Space,
@@ -807,6 +808,21 @@ export interface Desk {
    * failure the operator reads as the lift not having happened.
    */
   liftTakedown(canvasId: string, lifted: { at: string; by: string; actId: string }): Promise<void>;
+
+  /**
+   * **Mark the row purged, keeping it** (operator phase 3). The same rewrite a
+   * lift is, in the other direction: a purged row is never lifted, and the
+   * counts ride on it because the record journey 6 step 3 says stays — *who
+   * made it, when it came down, why, and the counts* — is this row and the
+   * ledger's act, one lookup apart.
+   *
+   * Silent when there is no row, for `liftTakedown`'s reason: the route has
+   * already refused a purge on a canvas that is not down.
+   */
+  markPurged(
+    canvasId: string,
+    purged: { at: string; actId: string; counts: PurgeCounts },
+  ): Promise<void>;
 
   /** The row for one canvas, lifted or not — null when there has never been
    * one. Callers ask {@link inForce} about what comes back; a lifted row is

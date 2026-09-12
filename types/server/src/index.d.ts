@@ -1,7 +1,7 @@
 export { startDaemon, runDaemon, stopDaemons } from "./daemon.js";
 export type { Daemon, DaemonOptions, RunDaemonOptions } from "./daemon.js";
 export { Engine, CanvasNotFoundError, NothingToUndoError } from "./engine.js";
-export type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, Store, } from "./store.js";
+export type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, PurgeReport, Store, } from "./store.js";
 export { FileStore } from "./file-store.js";
 export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.js";
 export { FileDesk } from "./file-desk.js";

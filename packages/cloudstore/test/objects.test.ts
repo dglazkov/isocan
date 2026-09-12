@@ -51,6 +51,20 @@ describe("ObjectStore — the port's contract", () => {
     expect((await objects.readAll("ar/log.jsonl"))!.toString()).toBe("one\ntwo\n");
   });
 
+  it("lists exactly the keys under a prefix — a trailing slash keeps prj_1 out of prj_10", async () => {
+    // The one caller is a purge (operator phase 3), and the one thing it must
+    // not do is reach past its own canvas. `GcsObjects.list` is a prefix
+    // query on the bucket with the same semantics.
+    await objects.put("canvases/prj_1/snapshot.json", Buffer.from("{}"), { contentType: "application/json" });
+    await objects.put("canvases/prj_1/blobs/abc.png", Buffer.from("x"), { contentType: "image/png" });
+    await objects.put("canvases/prj_10/snapshot.json", Buffer.from("{}"), { contentType: "application/json" });
+    expect(await objects.list("canvases/prj_1/")).toEqual([
+      "canvases/prj_1/blobs/abc.png",
+      "canvases/prj_1/snapshot.json",
+    ]);
+    expect(await objects.list("canvases/prj_none/")).toEqual([]);
+  });
+
   it("delete is idempotent — deleting what is not there is not an error", async () => {
     await objects.put("d/gone", Buffer.from("x"), { contentType: "text/plain" });
     await objects.delete("d/gone");

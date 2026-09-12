@@ -53,6 +53,8 @@ import type {
   OperatorLogResponse,
   OperatorLookRequest,
   OperatorLookResponse,
+  OperatorPurgeRequest,
+  OperatorPurgeResponse,
   OperatorShowResponse,
   OperatorTakedownRequest,
   OperatorTakedownResponse,
@@ -1026,6 +1028,26 @@ export class DaemonRoutes {
     return this.request(
       "POST",
       `/api/operator/canvases/${encodeURIComponent(canvasId)}/takedown`,
+      request,
+      undefined,
+      { [OPERATOR_PROOF_HEADER]: proof },
+    );
+  }
+
+  /**
+   * **Erase the bytes** (operator phase 3) — the one operator act that cannot
+   * be lifted, and the one whose body is a single word. The route refuses
+   * without `force`, and refuses on a canvas that is not taken down whatever
+   * `force` says. Same header, same proof, same shape as the takedown.
+   */
+  async operatorPurge(
+    canvasId: string,
+    proof: string,
+    request: OperatorPurgeRequest,
+  ): Promise<OperatorPurgeResponse> {
+    return this.request(
+      "POST",
+      `/api/operator/canvases/${encodeURIComponent(canvasId)}/purge`,
       request,
       undefined,
       { [OPERATOR_PROOF_HEADER]: proof },

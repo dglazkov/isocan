@@ -3,6 +3,8 @@ import type {
   LogEntry,
   Canvas,
   CanvasState,
+  PurgeCounts,
+  PurgeHorizon,
   SlashCommand,
   UploadTicket,
 } from "@isocan/core";
@@ -34,6 +36,21 @@ export interface BlobUploadRequest {
   mimeType: string;
   filename: string;
   size: number;
+}
+
+/**
+ * **What a purge did, and what it could not do** — the answer to the one hard
+ * delete on the seam (operator phase 3).
+ *
+ * The counts are what the backing actually removed. `keeps` is the backing's
+ * own statement of where a copy still exists and for how long — a bucket's
+ * soft-delete window, a database's rewind, an export's age — and it is the
+ * backing's to state because only the backing knows what stands behind it. A
+ * file home has nothing behind it and says so with an empty list; the route
+ * adds the one horizon every home shares, the members' replicas.
+ */
+export interface PurgeReport extends PurgeCounts {
+  keeps: PurgeHorizon[];
 }
 
 export interface LoadedCanvas {
@@ -168,6 +185,33 @@ export interface Store {
    * makes "nothing is irreversible until purge" true rather than aspirational.
    */
   setTakenDown(id: string, at: string | null): Promise<void>;
+
+  // ---- purged: the bytes are gone, the id stays taken (operator phase 3) ----
+  //
+  // **The seam's first and only hard delete**, and it is shaped so that it
+  // cannot be the first act on a canvas. A purge erases everything the home
+  // holds under the id EXCEPT the canvas record, which stays as the tombstone:
+  // `canvasExists` goes on answering true, so the id can never be adopted,
+  // teleported into, or created again, and `listCanvases` goes on listing it,
+  // so the surfaces that carry the sentence keep carrying it. The purge mark
+  // is a second flag beside the takedown's, and `load` refuses on it whatever
+  // the takedown flag says — a lift after a purge must never serve an empty
+  // canvas under a taken name.
+
+  /**
+   * **Erase the bytes.** The blobs, the log (live and archived), the snapshot
+   * and the trash; on a bucket, everything under the canvas's prefix; on
+   * Firestore, the `ops` and `blobmeta` subcollections. **Refused unless the
+   * canvas is taken down** — the backing throws — so that nothing above the
+   * seam, however it is wired, can purge a canvas that was not first taken
+   * down. The route says the same thing with better words; this is the line
+   * that holds if the route is wrong.
+   */
+  purgeCanvas(id: string): Promise<PurgeReport>;
+
+  /** When it was purged, or null. Durable, so a restart and a lift both read
+   * the same answer. */
+  purgedAt(id: string): Promise<string | null>;
 
   // ---- slash commands ----
 

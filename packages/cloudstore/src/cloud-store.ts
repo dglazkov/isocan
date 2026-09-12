@@ -28,6 +28,7 @@ import type {
   BlobMeta,
   BlobUploadRequest,
   LoadedCanvas,
+  PurgeReport,
   Store,
 } from "@isocan/server";
 import type { ObjectStore } from "./objects.ts";
@@ -38,6 +39,7 @@ import {
   blobKey,
   blobMetaCollection,
   canvasDoc,
+  canvasPrefix,
   CANVASES,
   COMMANDS,
   opOverflowKey,
@@ -45,6 +47,7 @@ import {
   padSeq,
   snapshotKey,
 } from "./naming.ts";
+import { hostedPurgeHorizons } from "./purge-horizons.ts";
 
 /** gRPC `ALREADY_EXISTS`. What a create-only precondition refuses with, and
  * the single fact this whole backing's safety rests on. */
@@ -247,6 +250,77 @@ export class CloudStore implements Store {
     await this.db.doc(canvasDoc(id)).set({ takenDownAt: at }, { merge: true });
   }
 
+  async purgedAt(id: string): Promise<string | null> {
+    const canvas = await this.db.doc(canvasDoc(id)).get();
+    return (canvas.data()?.["purgedAt"] as string | undefined) ?? null;
+  }
+
+  /**
+   * **The one hard delete this backing has, and the one place a seq is ever
+   * freed** (operator phase 3; design, "Purge: the bytes").
+   *
+   * Everything under `canvases/{id}/` in the bucket — snapshot, blobs, archive,
+   * overflow ops, and any scratch part a crashed compose left — and the `ops`
+   * and `blobmeta` subcollections in Firestore. The `canvases/{id}` document
+   * STAYS, with `purgedAt` merged onto it: that is the tombstone, and it is
+   * what keeps `canvasExists` true so the id can never be adopted, teleported
+   * into or created again.
+   *
+   * **On the freed seqs.** `compactOplog` deletes nothing because a freed seq
+   * is one a stale writer's create-only precondition would pass on. Here the
+   * seqs ARE freed, and what stands in for the precondition is the tombstone:
+   * the engine drops its copy at the takedown and `load` refuses on both
+   * flags, so nothing at this home can produce an append for the id again.
+   * The residual is the same one the takedown already lives with — a second
+   * instance during a rollout that still holds the canvas in memory — and it
+   * is named in the design's own table rather than papered over here.
+   *
+   * The order: the mark first, so a crash mid-way leaves a canvas `load`
+   * already refuses and a second purge finishes; then bytes before records,
+   * as `deleteBlobs` does, so a crash leaves records naming nothing rather
+   * than bytes nothing can name.
+   */
+  async purgeCanvas(id: string): Promise<PurgeReport> {
+    if ((await this.takenDownAt(id)) === null) {
+      throw new Error(`${id} is not taken down; a purge is refused on a canvas this home still serves`);
+    }
+    await this.flushSnapshot(id);
+    this.pending.delete(id);
+    this.writtenCanvas.delete(id);
+    const ref = this.db.doc(canvasDoc(id));
+    if ((await this.purgedAt(id)) === null) {
+      await ref.set({ purgedAt: new Date().toISOString() }, { merge: true });
+    }
+
+    const blobs = await this.db.collection(blobMetaCollection(id)).get();
+    const files = blobs.size;
+    const bytes = blobs.docs.reduce(
+      (total, doc) => total + ((doc.data()["size"] as number | undefined) ?? 0),
+      0,
+    );
+
+    const keys = await this.objects.list(canvasPrefix(id));
+    for (const key of keys) await this.objects.delete(key);
+
+    const ops = await this.deleteCollection(this.db.collection(opsCollection(id)));
+    await this.deleteCollection(this.db.collection(blobMetaCollection(id)));
+
+    return { files, bytes, ops, objects: keys.length, keeps: hostedPurgeHorizons() };
+  }
+
+  /** Every document in a collection, in batches under Firestore's limit.
+   * `listDocuments` rather than `get`: the refs are all a delete needs, and
+   * a canvas with a long history should not be read whole to be erased. */
+  private async deleteCollection(collection: CollectionReference): Promise<number> {
+    const refs = await collection.listDocuments();
+    for (const chunk of chunks(refs, BATCH_LIMIT)) {
+      const batch = this.db.batch();
+      for (const ref of chunk) batch.delete(ref);
+      await batch.commit();
+    }
+    return refs.length;
+  }
+
   async load(id: string): Promise<LoadedCanvas | null> {
     const canvas = await this.db.doc(canvasDoc(id)).get();
     if (!canvas.exists) return null;
@@ -258,6 +332,10 @@ export class CloudStore implements Store {
     // home opening the canvas, which is what `--lift` restores by clearing a
     // field.
     if (typeof data["takenDownAt"] === "string") return null;
+    // And a purged one, whatever the takedown flag says (operator phase 3):
+    // a tombstone with no ops and no snapshot would otherwise load as an
+    // empty canvas under a taken name.
+    if (typeof data["purgedAt"] === "string") return null;
     const record = data["project"] as Canvas | undefined; // stored field name: holdout
     if (!record) return null;
     const compactedThrough = (data["compactedThrough"] as number | undefined) ?? 0;

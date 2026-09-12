@@ -25,6 +25,15 @@ export declare const trashFile: (home: string, id: string) => string;
  * Present means taken down; the file's contents say when.
  */
 export declare const takedownFile: (home: string, id: string) => string;
+/**
+ * **The purge mark** (operator phase 3) — its own file, beside the flag and
+ * not inside it, because `setTakenDown(null)` REMOVES `takendown.json` and a
+ * mark that lived there would go with it. This one is never removed: with
+ * `project.json` it is the whole of what a purge leaves in the directory, and
+ * `load` refuses on it whatever the flag says, so a lift cannot serve an empty
+ * canvas under a taken name.
+ */
+export declare const purgedFile: (home: string, id: string) => string;
 export declare const oplogFile: (home: string, id: string) => string;
 export declare const oplogArchiveFile: (home: string, id: string) => string;
 export declare const blobsDir: (home: string, id: string) => string;

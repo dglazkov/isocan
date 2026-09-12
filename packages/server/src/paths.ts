@@ -32,6 +32,16 @@ export const trashFile = (home: string, id: string) => path.join(canvasDir(home,
  */
 export const takedownFile = (home: string, id: string) =>
   path.join(canvasDir(home, id), "takendown.json");
+/**
+ * **The purge mark** (operator phase 3) — its own file, beside the flag and
+ * not inside it, because `setTakenDown(null)` REMOVES `takendown.json` and a
+ * mark that lived there would go with it. This one is never removed: with
+ * `project.json` it is the whole of what a purge leaves in the directory, and
+ * `load` refuses on it whatever the flag says, so a lift cannot serve an empty
+ * canvas under a taken name.
+ */
+export const purgedFile = (home: string, id: string) =>
+  path.join(canvasDir(home, id), "purged.json");
 export const oplogFile = (home: string, id: string) => path.join(canvasDir(home, id), "oplog.jsonl");
 export const oplogArchiveFile = (home: string, id: string) =>
   path.join(canvasDir(home, id), "oplog-archive.jsonl");

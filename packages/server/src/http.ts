@@ -177,6 +177,12 @@ import {
   type OperatorTakedownResponse,
   type TakedownNotice,
   type TakedownsResponse,
+  // operator phase 3: the purge.
+  OPERATOR_PURGE_ROUTE,
+  purgeNeedsTakedown,
+  replicasHorizon,
+  type OperatorPurgeRequest,
+  type OperatorPurgeResponse,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
@@ -3597,6 +3603,20 @@ export function registerRoutes(
           409,
         );
       }
+      /**
+       * **A purged canvas is never lifted** (operator phase 3). The store
+       * refuses to load it whatever the flag says, so a lift here could only
+       * clear a flag on a tombstone and tell the operator the canvas was
+       * served again when nothing is. The id stays taken; the sentence stays.
+       */
+      if (standing.purgedAt) {
+        return refuse(
+          "purged",
+          `${id} was purged at this home on ${standing.purgedAt.slice(0, 10)}: there is ` +
+            "nothing under the id to bring back, and the id stays taken.",
+          409,
+        );
+      }
       const lifted = { at: new Date().toISOString(), by: proven.proof.attribute, actId: proven.id };
       await desk.liftTakedown(id, lifted);
       await store.setTakenDown(id, null);
@@ -3681,6 +3701,84 @@ export function registerRoutes(
       cdn: cdnPurgeFor(id),
     };
     await desk.settleOperatorAct(proven.id, "done", answer.reach);
+    return answer;
+  });
+
+  /**
+   * **`isocan operator purge --force`** (operator phase 3; design, "Purge: the
+   * bytes"; journey 6).
+   *
+   * **The second of two deliberate acts, and the first irreversible one.**
+   * Refused unless the canvas is taken down — at this route with the
+   * journey's sentence, and again at the store, which throws on a canvas it
+   * still serves, so that no wiring above the seam can make an erasure the
+   * first act on a canvas. Everything before this lifts; this does not, and
+   * the honest thing it can do about that is say exactly what is gone and
+   * exactly what is not.
+   *
+   * The same proof, the same ledger row before anything, the same preflight
+   * and the same replica refusal as every other verb: a purge is not a
+   * different kind of act, it is the takedown's second half, and it does not
+   * get a second path.
+   *
+   * The order:
+   *
+   * 1. **The ledger row**, before anything (`proveAct`).
+   * 2. **The refusals** — no `force`, not taken down, already purged — each
+   *    settled onto the row, because somebody asked this home to erase
+   *    something and that is what a ledger is for.
+   * 3. **The reach**, read while the tombstone can still say who made it and
+   *    how many replicas were relaying — the fourth horizon's number.
+   * 4. **The store's purge**, which is the act. It marks the tombstone
+   *    FIRST, so a crash mid-way leaves a canvas `load` already refuses.
+   * 5. **The desk row**, marked purged with the counts — the record journey 6
+   *    step 3 says stays — and the registry, so a lift is refused at once.
+   *
+   * Nothing here reaches sockets, waits or holds: the takedown already did,
+   * and anything that arrived since met the door's refusal. The engine's copy
+   * is dropped again anyway, because a purge that trusted the takedown to have
+   * done it would be a purge that could serve bytes it just erased.
+   */
+  app.post(OPERATOR_PURGE_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (refuseIfReplica(id, reply)) return;
+    const body = (req.body ?? {}) as OperatorPurgeRequest;
+    const proven = await proveAct(req, reply, { act: "purge", target: id });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+    if (body.force !== true) {
+      return refuse(
+        "no-force",
+        `a purge erases what this home holds under ${id} and cannot be lifted. Say so: ` +
+          "`--force`.",
+      );
+    }
+    const standing = takedowns.of(id);
+    if (!standing) return refuse("not-taken-down", purgeNeedsTakedown(id), 409);
+    if (standing.purgedAt) {
+      return refuse(
+        "already-purged",
+        `${id} was already purged at this home on ${standing.purgedAt.slice(0, 10)}.`,
+        409,
+      );
+    }
+    const reach = await reachOf(id);
+    engine.drop(id);
+    const report = await store.purgeCanvas(id);
+    const { keeps, ...erased } = report;
+    const at = new Date().toISOString();
+    await desk.markPurged(id, { at, actId: proven.id, counts: erased });
+    const row = (await desk.takedownFor(id))!;
+    takedowns.remember(row);
+    const answer: OperatorPurgeResponse = {
+      takedown: row,
+      erased,
+      survives: [...keeps, replicasHorizon(reach.replicas.length)],
+    };
+    await desk.settleOperatorAct(proven.id, "done", { erased, survives: answer.survives });
     return answer;
   });
 

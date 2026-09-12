@@ -8,6 +8,7 @@ import type {
   Grant,
   GrantSubject,
   Group,
+  PurgeCounts,
   SeenMark,
   SeenMarks,
   Space,
@@ -791,6 +792,24 @@ export class FileDesk implements Desk {
       };
       this.state.takedowns![canvasId] = next;
       await this.append({ type: "takedown", row: next, at: lifted.at });
+    });
+  }
+
+  async markPurged(
+    canvasId: string,
+    purged: { at: string; actId: string; counts: PurgeCounts },
+  ): Promise<void> {
+    await this.enqueue(async () => {
+      const row = this.state.takedowns?.[canvasId];
+      if (!row) return;
+      const next: CanvasTakedown = {
+        ...row,
+        purgedAt: purged.at,
+        purgedActId: purged.actId,
+        purged: { ...purged.counts },
+      };
+      this.state.takedowns![canvasId] = next;
+      await this.append({ type: "takedown", row: next, at: purged.at });
     });
   }
 

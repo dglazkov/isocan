@@ -24,6 +24,7 @@
 
 import { deckUrl, urlWithPass } from "./address.ts";
 import type { OperatorReach } from "./operator.ts";
+import type { PurgeCounts } from "./purge.ts";
 
 /**
  * **The close reason, and the refusal code, for a canvas its home has stopped
@@ -123,9 +124,21 @@ export interface CanvasTakedown {
   liftedAt?: string;
   liftedBy?: string;
   liftedActId?: string;
+  /**
+   * **Set by a purge, and never cleared** (operator phase 3). A row with this
+   * set cannot be lifted: the home holds nothing under the id any more, and a
+   * lift would clear the flag on a tombstone and serve an empty canvas under
+   * a taken name. The counts ride here because journey 6 step 3 says the
+   * record stays — *who made it, when it came down, why, and the counts* —
+   * and this row is where the first three already live.
+   */
+  purgedAt?: string;
+  purgedActId?: string;
+  purged?: PurgeCounts;
 }
 
-/** Is this row in force — the one question every reader of a row asks. */
+/** Is this row in force — the one question every reader of a row asks. A
+ * purged canvas is down forever, so a purged row is always in force. */
 export function inForce(row: CanvasTakedown): boolean {
   return row.liftedAt === undefined;
 }

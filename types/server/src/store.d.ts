@@ -1,4 +1,4 @@
-import type { ActorRegistry, LogEntry, Canvas, CanvasState, SlashCommand, UploadTicket } from "../../core/src/index.js";
+import type { ActorRegistry, LogEntry, Canvas, CanvasState, PurgeCounts, PurgeHorizon, SlashCommand, UploadTicket } from "../../core/src/index.js";
 import type { Readable } from "node:stream";
 export interface BlobMeta {
     /** The name the bytes are filed under — `<sha256>.<ext>`. A path segment on
@@ -24,6 +24,20 @@ export interface BlobUploadRequest {
     mimeType: string;
     filename: string;
     size: number;
+}
+/**
+ * **What a purge did, and what it could not do** — the answer to the one hard
+ * delete on the seam (operator phase 3).
+ *
+ * The counts are what the backing actually removed. `keeps` is the backing's
+ * own statement of where a copy still exists and for how long — a bucket's
+ * soft-delete window, a database's rewind, an export's age — and it is the
+ * backing's to state because only the backing knows what stands behind it. A
+ * file home has nothing behind it and says so with an empty list; the route
+ * adds the one horizon every home shares, the members' replicas.
+ */
+export interface PurgeReport extends PurgeCounts {
+    keeps: PurgeHorizon[];
 }
 export interface LoadedCanvas {
     state: CanvasState;
@@ -129,6 +143,19 @@ export interface Store {
      * makes "nothing is irreversible until purge" true rather than aspirational.
      */
     setTakenDown(id: string, at: string | null): Promise<void>;
+    /**
+     * **Erase the bytes.** The blobs, the log (live and archived), the snapshot
+     * and the trash; on a bucket, everything under the canvas's prefix; on
+     * Firestore, the `ops` and `blobmeta` subcollections. **Refused unless the
+     * canvas is taken down** — the backing throws — so that nothing above the
+     * seam, however it is wired, can purge a canvas that was not first taken
+     * down. The route says the same thing with better words; this is the line
+     * that holds if the route is wrong.
+     */
+    purgeCanvas(id: string): Promise<PurgeReport>;
+    /** When it was purged, or null. Durable, so a restart and a lift both read
+     * the same answer. */
+    purgedAt(id: string): Promise<string | null>;
     loadCommands(): Promise<SlashCommand[]>;
     saveCommand(name: string, text: string): Promise<void>;
     /** Removing a shadow gives the built-in back, which is why this says

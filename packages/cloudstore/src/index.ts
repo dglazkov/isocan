@@ -10,6 +10,7 @@ export { CloudDesk } from "./cloud-desk.ts";
 export { GcsObjects } from "./gcs-objects.ts";
 export type { ObjectStat, ObjectStore } from "./objects.ts";
 export * as naming from "./naming.ts";
+export { PURGE_HORIZONS, hostedPurgeHorizons } from "./purge-horizons.ts";
 
 export interface CloudBackingOptions {
   bucket: string;

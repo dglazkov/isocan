@@ -265,6 +265,83 @@ export function storeConformance(
       }),
     );
 
+    /**
+     * **Purge: the bytes, asserted on both backings** (operator phase 3).
+     *
+     * Five properties, and each is the difference between an erasure and a
+     * hole:
+     *
+     * 1. **Refused unless taken down** — by the backing itself, so no wiring
+     *    above the seam can make an erasure the first act on a canvas.
+     * 2. **The bytes are gone**: no blobs, no log, no archive, and `load`
+     *    refuses.
+     * 3. **The tombstone stays**: `canvasExists` is still true, so the id can
+     *    never be adopted, teleported into or created again; `listCanvases`
+     *    still lists it, so the surfaces that carry the sentence keep it.
+     * 4. **`purgedAt` reads back**, and survives a restart.
+     * 5. **A lift cannot bring it back**: clearing the takedown flag on a
+     *    purged canvas leaves `load` refusing, because a directory or a
+     *    document holding only a tombstone would otherwise serve an EMPTY
+     *    canvas under a taken name.
+     */
+    test(
+      "purges a taken-down canvas: the bytes go, the tombstone stays, and nothing lifts it",
+      withStore(async (fixture) => {
+        const { store } = fixture;
+        await seed(store);
+        const blob = await store.putBlob("prj_1", Buffer.from("evidence"), {
+          mimeType: "text/plain",
+          filename: "e.txt",
+        });
+        // A compacted entry too, so the archive is part of what must go.
+        const before = (await store.load("prj_1"))!;
+        await store.compactOplog(
+          "prj_1",
+          before.entries.filter((e) => e.seq > 1),
+          before.entries.filter((e) => e.seq === 1),
+        );
+
+        await expect(store.purgeCanvas("prj_1"), "not taken down: refused by the seam").rejects.toThrow(
+          /not taken down/,
+        );
+        expect(await store.purgedAt("prj_1")).toBeNull();
+        expect(await store.listBlobs("prj_1")).toHaveLength(1);
+
+        await store.setTakenDown("prj_1", "2026-09-12T10:00:00.000Z");
+        const report = await store.purgeCanvas("prj_1");
+        expect(report.files).toBe(1);
+        expect(report.bytes).toBe(8);
+        expect(report.ops, "live and archived alike").toBe(3);
+        expect(report.objects).toBeGreaterThanOrEqual(1);
+
+        expect(await store.load("prj_1")).toBeNull();
+        expect(await store.listBlobs("prj_1")).toEqual([]);
+        expect(await store.blobMeta("prj_1", blob.blobHash)).toBeNull();
+        expect(await store.openBlob("prj_1", blob.blobHash)).toBeNull();
+        expect(await store.readArchivedLog("prj_1")).toEqual([]);
+        expect(await store.purgedAt("prj_1")).not.toBeNull();
+        // The tombstone: the id is taken, and the record still lists.
+        expect(await store.canvasExists("prj_1")).toBe(true);
+        expect((await store.listCanvases()).map((canvas) => canvas.id)).toEqual(["prj_1"]);
+        expect(await store.takenDownAt("prj_1")).toBe("2026-09-12T10:00:00.000Z");
+
+        // A second purge is a no-op with nothing to count, not an error.
+        const again = await store.purgeCanvas("prj_1");
+        expect(again.files + again.ops + again.objects).toBe(0);
+
+        // A lift after a purge must not serve an empty canvas under the name.
+        await store.setTakenDown("prj_1", null);
+        expect(await store.load("prj_1")).toBeNull();
+        expect(await store.purgedAt("prj_1")).not.toBeNull();
+
+        // And all of that is durable.
+        const reopened = await fixture.reopen();
+        expect(await reopened.load("prj_1")).toBeNull();
+        expect(await reopened.purgedAt("prj_1")).not.toBeNull();
+        expect(await reopened.canvasExists("prj_1")).toBe(true);
+      }),
+    );
+
     test(
       "returns null for unknown canvases",
       withStore(async ({ store }) => {

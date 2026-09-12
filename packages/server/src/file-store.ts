@@ -24,6 +24,7 @@ import type {
   BlobMeta,
   BlobUploadRequest,
   LoadedCanvas,
+  PurgeReport,
   Store,
 } from "./store.ts";
 
@@ -35,6 +36,8 @@ import type {
  *   oplog.jsonl   — append-only LogEntry per line; the source of truth
  *   blobs/        — content-addressed version content, <sha256>.<ext>
  *   blobs.json    — { [hash]: { file, mimeType, filename, size } }
+ *   takendown.json — present while the home has stopped serving it (operator phase 2)
+ *   purged.json   — present forever once the bytes are gone (operator phase 3)
  *
  * The oplog is appended (with fsync) BEFORE snapshots are rewritten, so a
  * crash between writes is always recoverable by replaying the oplog tail past
@@ -109,6 +112,57 @@ export class FileStore implements Store {
     await writeFileAtomic(p.takedownFile(this.home, id), pretty({ at }));
   }
 
+  async purgedAt(id: string): Promise<string | null> {
+    return (await readJson<{ at: string }>(p.purgedFile(this.home, id)))?.at ?? null;
+  }
+
+  /**
+   * **Everything in the directory but the tombstone and the two marks.**
+   *
+   * A purge on this backing is the prefix delete a bucket does, spelled for a
+   * directory: every entry under `projects/<id>/` goes except `project.json`
+   * (the canvas record — the tombstone that keeps `canvasExists` true and the
+   * id taken), `takendown.json` (the flag that got us here) and `purged.json`
+   * (written first, so a crash mid-way leaves a directory that `load` already
+   * refuses rather than a half-erased canvas it would serve). Enumerated
+   * rather than named file by file, because a file added to the layout next
+   * year must be erased by a purge without somebody remembering this method.
+   *
+   * **Not `deleted-projects/`.** An owner's delete moves the directory aside,
+   * recoverable by hand; this is the act whose whole point is that nothing
+   * under the id is recoverable from this home. It counts what it removes on
+   * the way, because the counts are the reply to the reporter.
+   */
+  async purgeCanvas(id: string): Promise<PurgeReport> {
+    if ((await this.takenDownAt(id)) === null) {
+      throw new Error(`${id} is not taken down; a purge is refused on a canvas this home still serves`);
+    }
+    const already = await this.purgedAt(id);
+    if (already !== null) return { files: 0, bytes: 0, ops: 0, objects: 0, keeps: [] };
+    const index = await this.readIndex(id);
+    const files = Object.keys(index).length;
+    const bytes = Object.values(index).reduce((total, meta) => total + meta.size, 0);
+    const ops =
+      (await readJsonLines<LogEntry>(p.oplogFile(this.home, id))).length +
+      (await readJsonLines<LogEntry>(p.oplogArchiveFile(this.home, id))).length;
+    await writeFileAtomic(p.purgedFile(this.home, id), pretty({ at: new Date().toISOString() }));
+    const keep = new Set(
+      [p.canvasMetaFile, p.takedownFile, p.purgedFile].map((file) => path.basename(file(this.home, id))),
+    );
+    let objects = 0;
+    for (const entry of await fs.readdir(p.canvasDir(this.home, id), { withFileTypes: true })) {
+      if (keep.has(entry.name)) continue;
+      const target = path.join(p.canvasDir(this.home, id), entry.name);
+      if (entry.isDirectory()) {
+        objects += (await fs.readdir(target)).length;
+      } else {
+        objects += 1;
+      }
+      await fs.rm(target, { recursive: true, force: true });
+    }
+    return { files, bytes, ops, objects, keeps: [] };
+  }
+
   async load(id: string): Promise<LoadedCanvas | null> {
     // **Exactly where `deleted` refuses on the other backing**, and before any
     // bytes are read: a canvas this home has stopped serving is not opened by
@@ -116,6 +170,10 @@ export class FileStore implements Store {
     // (operator phase 2). The DIRECTORY is untouched — that is the whole
     // difference from a delete, and it is what `--lift` walks back into.
     if ((await this.takenDownAt(id)) !== null) return null;
+    // And a purged one is refused whatever the flag says (operator phase 3):
+    // there is nothing under the id to serve, and a directory holding only a
+    // tombstone would otherwise load as an EMPTY canvas under a taken name.
+    if ((await this.purgedAt(id)) !== null) return null;
     const record = await readJson<Canvas>(p.canvasMetaFile(this.home, id));
     if (!record) return null;
     const snapshot = await readJson<CanvasSnapshotFile>(p.canvasFile(this.home, id));

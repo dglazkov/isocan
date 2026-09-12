@@ -6,6 +6,7 @@ export type {
   BlobMeta,
   BlobUploadRequest,
   LoadedCanvas,
+  PurgeReport,
   Store,
 } from "./store.ts";
 export { FileStore } from "./file-store.ts";
