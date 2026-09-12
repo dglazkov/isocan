@@ -6462,6 +6462,21 @@ button.mt-card:hover { border-color: var(--accent); }
 .docs-row a:hover { border-color: var(--accent); }
 .docs-row small { color: var(--ink-soft); font-size: 12px; }
 
+/* ---------- sandboxes (modules/sandbox) ---------- */
+/* The run line sits BESIDE the card rather than inside it: `.docs-row a` is
+   the card itself, so a second anchor nested in one came out looking like a
+   second card — found by building the page and looking at it, which is the
+   lesson the stickers tray cost a day to learn. */
+.sandbox-note { margin: 0 0 12px; }
+.sandbox-runs { margin: 4px 0 0 16px; font-size: 12px; color: var(--ink-soft); }
+/* `.docs-row a` matches any descendant, so this undoes the card for the one
+   link that is a link and not a row. */
+.sandbox-runs a {
+  display: inline; padding: 0; gap: 0;
+  background: none; border: none; border-radius: 0;
+  color: var(--ink); text-decoration: underline;
+}
+
 /* ---------- speaker notes (core/slides.ts) ---------- */
 /* On the canvas: the caption that says which slide a note speaks for, above
    the words, in world units like the words. */
