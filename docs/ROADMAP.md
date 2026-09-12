@@ -9,9 +9,9 @@ what it describes. Run `node scripts/roadmap.mjs` after changing one.
 The same board lives on a canvas, [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),
 open to anyone with the address — it should say what `main` says.
 
-**25 built · 47 still open** — of which 32 partly
+**25 built · 48 still open** — of which 32 partly
 built, 15 designed, 0 blocked, and
-**0 with no verdict recorded at all**, which is the number worth
+**1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
@@ -75,6 +75,12 @@ and the done column should not be flattered by either.
 | research | [Sheep as standing agents](research/2026-09-08-sheep-as-standing-agents.md) | 2026-09-08 | a standing agent's one structural weakness is that `isocan rc` is a process on a MACHINE, and a sheep is a session in a cell that is not. But the obvious join — the summons calling the cell's address — is a shape on-demand's design already withdrew on custody grounds, and the reconciliation is that custody is about who started it and whose credentials it uses, not which computer it is on. Start with personas as the cheap tier: no parking, no summons, no custody question, and a gap that is real today. · see standing-agents, on-demand, personas, agent-custody · [#210](https://github.com/dglazkov/isocan/issues/210) |
 | research | [Small personas: cheap agents, an idle trigger, and a registry of what to explore](research/2026-09-07-small-personas.md) | 2026-09-07 | the cheap tier #197 claims already exists does not — all nine personas are opus at xhigh. This is what a small persona would need: an idle trigger, a cost that is declared, permission to write where a guard already exists, and a registry of what to explore that is not the findings queue. · see personas, standing-agents, on-demand · [#205](https://github.com/dglazkov/isocan/issues/205) |
 | **project** | [webmcp-cobrowsing](projects/webmcp-cobrowsing/journey.md) | 2026-09-11 | roadmap defined — the WebMCP surface is designed against the verified API and the existing @isocan/mcp vocabulary; design and phases follow the census-informed design · see iso-api, embed |
+
+## No verdict recorded <sub>1</sub>
+
+| | What | Since | |
+| --- | --- | --- | --- |
+| research | [The umbrella: where isocan goes from here](research/2026-09-12-umbrella-project.md) | 2026-09-12 | a strategy, not a measurement — the umbrella project that isocan, the sandbox canvas, anatomy and the live canvas graduate into. The argument is commoditize-the-complement in Eclipse's exact shape; the discipline is GitHub-only, no Google infrastructure, so the complement is actually commoditized rather than captured. Name shortlist inside, Umbra recommended · see modules, extensions, standing-agents, sheep-harness, harnesses, on-demand |
 
 ## Built <sub>25</sub>
 
