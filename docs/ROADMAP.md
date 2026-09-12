@@ -80,7 +80,7 @@ and the done column should not be flattered by either.
 
 | | What | Since | |
 | --- | --- | --- | --- |
-| research | [The umbrella: where isocan goes from here](research/2026-09-12-umbrella-project.md) | 2026-09-12 | a strategy, not a measurement — the umbrella project that isocan, the sandbox canvas, anatomy and the live canvas graduate into. The argument is commoditize-the-complement in Eclipse's exact shape; the discipline is GitHub-only, no Google infrastructure, so the complement is actually commoditized rather than captured. Name shortlist inside, Umbra recommended · see modules, extensions, standing-agents, sheep-harness, harnesses, on-demand |
+| research | [Seam](research/2026-09-12-seam.md) | 2026-09-12 | a strategy, not a measurement — Seam, the open umbrella that isocan, the sandbox canvas, anatomy and the live canvas graduate into. Commoditize the foundation around AI creation in Eclipse's exact shape, so Stitch competes on taste and outcomes rather than on holding the workbench; built only on GitHub with Google services as optional integrations, so the foundation is actually commoditized rather than captured. Reference journey and first proof inside · see modules, extensions, standing-agents, sheep-harness, harnesses, on-demand, context |
 
 ## Built <sub>25</sub>
 
