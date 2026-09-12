@@ -298,6 +298,11 @@ because a program that arrived on a canvas needs none of it:
 | readable | `$HOME` denied, harness config re-allowed | `$HOME` denied, **nothing carved back but `toolchain`** |
 | asked for? | opt-in (`--sandbox`) | **not a mode — there is no unfenced path** |
 
+The one thing that widens it is `config.json`'s `sandboxRead` / `sandboxWrite`
+— the same escape hatch the adapter fence has, for a sibling checkout or a
+toolchain isocan cannot guess at. It is a standing decision in a file the
+person owns, deliberately not a flag on your verb.
+
 **On a machine that cannot fence, it throws**, naming what is missing
 (usually `srt` and `ripgrep`). Catch it to say it better if you like; do not
 catch it to run the program anyway. "Fence if you can, otherwise run" is not

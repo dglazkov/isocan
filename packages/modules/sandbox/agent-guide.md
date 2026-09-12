@@ -51,6 +51,10 @@ What the fence gives it, and it is the whole list:
 - **A minute**, unless `--timeout <seconds>` says otherwise, and a program
   still running then is killed and the transcript says so.
 
+The only thing that widens any of that is `sandboxRead` / `sandboxWrite` in
+`~/.isocan/config.json` — the machine owner's standing decision, not yours to
+make on their behalf.
+
 **If this machine cannot build a fence, the verb refuses** and names what is
 missing (usually `srt` and `ripgrep`). That is deliberate and there is no
 flag that overrides it: "fence if you can, otherwise run" is not a thing one
