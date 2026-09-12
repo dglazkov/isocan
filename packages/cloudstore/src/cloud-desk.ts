@@ -823,16 +823,33 @@ export class CloudDesk implements Desk {
     await at.set(jsonSafe({ liftedAt: null, ...row }));
   }
 
-  /** A merge, not a transaction — one operator, at a browser, one act at a
-   * time; the argument `settleOperatorAct` makes, and there is no second
-   * writer of this document either. */
+  /**
+   * **A transaction, and the read in it is the whole point** — not the
+   * atomicity. One operator, at a browser, one act at a time: there is no
+   * second writer of this document, which is `settleOperatorAct`'s argument
+   * for a bare merge. But `set(…, {merge: true})` on a document that is NOT
+   * THERE creates it — with three lift fields and no canvas, no reason, no
+   * `by` — and `takedownFor` then answers a row of `undefined`s for a canvas
+   * that was never taken down. The desk contract says a lift of nothing is
+   * silent (the file desk returns when it finds no row), and CI's emulator run
+   * was the first thing able to see the cloud half breaking it: this suite
+   * needs Java, and the worktree run skipped it.
+   *
+   * So: read, and merge only onto a row that exists. `tx.set` with the
+   * collection on the binding line, so `cloud-desk-writers.test.ts` resolves
+   * the write rather than reporting it as one it cannot vouch for.
+   */
   async liftTakedown(
     canvasId: string,
     lifted: { at: string; by: string; actId: string },
   ): Promise<void> {
-    const at = this.db.collection(TAKEDOWNS).doc(canvasId);
+    const ref = this.db.collection(TAKEDOWNS).doc(canvasId);
     const patch = { liftedAt: lifted.at, liftedBy: lifted.by, liftedActId: lifted.actId };
-    await at.set(jsonSafe(patch), { merge: true });
+    await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return;
+      tx.set(ref, jsonSafe(patch), { merge: true });
+    });
   }
 
   async takedownFor(canvasId: string): Promise<CanvasTakedown | null> {
