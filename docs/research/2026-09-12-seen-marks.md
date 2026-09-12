@@ -2,7 +2,7 @@
 status: built
 since: 2026-09-12
 issue: 147
-see: 2026-08-29-the-inbox.md, switcher, roles, multi-identity, memory
+see: switcher, roles, multi-identity, memory, context
 note: designed and built 12 Sep — one fact, `(person, canvas) → { seq, at }`, kept on the home's DESK rather than on any canvas's log. No new op: the vocabulary stays at 33. The inbox reads the mark as "what is new"; the switcher reads the same mark as "where I was lately". No read receipts, deliberately and by construction
 ---
 # Seen-marks: one fact, read two ways
