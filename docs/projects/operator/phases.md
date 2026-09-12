@@ -31,6 +31,8 @@ record does is the Firestore hand edit again.
 
 ## Phase 0 — Say what is true (S)
 
+**Status: NOT STARTED.**
+
 *No code. Dion's call.*
 
 The two edits to `packages/web/src/lib/terms.ts` proposed in
@@ -43,6 +45,8 @@ exist.
 unchanged, since both sections keep their sources in `innkeeper.md`.
 
 ## Phase 1 — The operator, proved (M)
+
+**Status: NOT STARTED.**
 
 Closes journeys 1, 10 and 11.
 
@@ -71,6 +75,8 @@ in `log`. A local daemon with no attester says why it has no operator.
 
 ## Phase 2 — Look, and take it down (M)
 
+**Status: NOT STARTED.**
+
 Closes journeys 2, 3, 4 and 5.
 
 - `look`: the operator pass, the `{root: "operator", until}` admission the
@@ -94,6 +100,8 @@ it greyed with the reason. `--lift`, and all of it comes back.
 
 ## Phase 3 — Purge (S)
 
+**Status: NOT STARTED.**
+
 Closes journey 6.
 
 - `Store.purgeCanvas` on both backings: the bucket prefix, the `ops` and
@@ -107,6 +115,8 @@ refused, and the printed horizons match `infra/30-bucket.sh` and
 so the day a horizon changes the sentence fails rather than lies.
 
 ## Phase 4 — End a surface, and mean it (M)
+
+**Status: NOT STARTED.**
 
 Closes journey 7. **The half that fixes the owner's path ships first and
 alone**, because it is a bug fix nobody needs a decision for.
@@ -127,6 +137,8 @@ steps 1 to 5.
 
 ## Phase 5 — Turn off a grant (S)
 
+**Status: NOT STARTED.**
+
 Closes journey 8.
 
 - `revoke` on a canvas or a space, any subject, `--bar`; `revokedVia:
@@ -137,6 +149,8 @@ on, and the ledger holding the operator's row but not the owner's — the
 owner's act is the owner's.
 
 ## Phase 6 — Refuse at the door (M)
+
+**Status: NOT STARTED.**
 
 Closes journey 9.
 
@@ -152,6 +166,8 @@ one that is not — with the refusal gone on its own at `--for 10m`.
 
 ## Phase 7 — The page says what is built (S)
 
+**Status: NOT STARTED.**
+
 - `/terms` rewritten to describe the built acts, and the purge's horizons —
   Dion's call again, drafted here.
 - `terms.test.ts` taught to cite this design beside `innkeeper.md`, since a
@@ -162,6 +178,8 @@ one that is not — with the refusal gone on its own at `--for 10m`.
 sentence leaves this design.
 
 ## Phase 8 — A home with no attester (S, later)
+
+**Status: NOT STARTED.**
 
 The case the proof cannot reach: a self-hosted home that borrows no
 attester. The candidate is a key in the desk directory, minted at first
