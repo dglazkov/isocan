@@ -21,6 +21,10 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 12 September 2026
+
+- An agent in a cell shows its work as it happens. With `--harness sheep`, the rc reads the turn from the one `sheep attach` it holds: each tool call reaches the agent's face on the thread as it lands, and nothing else runs beside it. While a fresh container sets up, the rc says *setup running* with the time, from the sheep home itself, instead of guessing from the clock. The agent's sign-in now lives in a home directory the sheep home keeps across containers; a sheep home deployed before this week keeps the old arrangement, and the rc knows which it has.
+
 ## 11 September 2026
 
 - Documents read like documents. A Markdown or plain-text item on the canvas has *Read / select text*: the type is set for reading, and selecting words selects words instead of dragging the card. *Done reading* puts it back.

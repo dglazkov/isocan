@@ -4,20 +4,14 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: THE PROJECT IS CLOSED (2026-09-11), at phase 2.5.
-Phase 3 was retired unstarted: a week of use is using the harness, not a
-phase. The steps below that wait on sheep-side journeys stay as they
-stand, and each is a small change when its journey lands.** Three steps below wait on the sheep side and
-are marked ⇢ with the journey filed there. Three more journeys are filed
-for findings phase 1 works around rather than waits on, and one for what
-phase 1 found:
-[sheep#4](https://github.com/dglazkov/sheep/issues/4) (setup visible to
-the dog), [sheep#5](https://github.com/dglazkov/sheep/issues/5) (a
-secret per sheep), [sheep#6](https://github.com/dglazkov/sheep/issues/6)
-(a home directory that survives the container) and
-[sheep#7](https://github.com/dglazkov/sheep/issues/7) (entries on
-`attach`'s stream). ⚑ marks a step that
-needs the shepherd's permission or account.
+**Where we are: THE PROJECT IS CLOSED (2026-09-11), at phase 2.5, and
+phase 2.7 took up the sheep side on 2026-09-12.** Phase 3 was retired
+unstarted: a week of use is using the harness, not a phase. Every
+journey filed on the sheep side has landed there: sheep#1, #3 and #5
+were taken up in phases 2 and 2.5, and sheep#2, #4, #6 and #7 in phase
+2.7, where sheep#2's cache turned out not to apply to a sheep with its
+own secret. Steps marked ⇢ waited on the sheep side. ⚑ marks a step
+that needs the shepherd's permission or account.
 
 ## Phase 0 — The spike
 
@@ -150,7 +144,8 @@ sheep has no verb to drop it, so it stays.
 
 ⇢ Installing once needs a sheep mechanism
 ([sheep#2](https://github.com/dglazkov/sheep/issues/2)). Until it lands,
-the brief says a cold turn is slow.
+the brief says a cold turn is slow. (It landed 11 September and does not
+apply to a sheep with its own secret; see phase 2.7.)
 
 ⇢ A birth without a spent turn needs `sheep new` to mint without a
 prompt ([sheep#3](https://github.com/dglazkov/sheep/issues/3)).
@@ -273,6 +268,54 @@ and putting back the pasture secret five.
   `/pasture/BRIEF.md` in the system prompt, and until now the opening
   prompt was what told the sheep to read the lowercase file. Pastures
   made before keep a `brief.md` that the rc no longer writes or reads.
+
+## Phase 2.7 — The sheep side lands
+
+**Status: CLOSED (2026-09-12).** The four journeys filed on the sheep
+side closed there on 11 and 12 September (sheep#2 and #6 as fold, #4 as
+bleat, #7 as bell), and this phase takes each up. Walked against the
+real `sheep` on a scripted local home: `sheep attach --wait --json`
+streamed the prompt entry and the assistant's as they landed, in the
+shape the rc reads, and `sheep ls --json` listed `setup: null` for a
+sheep never asked. The station sheep-2 was not redeployed: it predates
+bleat and fold, its rows carry no `setup`, and the rc's fallbacks for a
+home from before are the ones this phase keeps. ⚑ Redeploying it is the
+shepherd's.
+
+**Outcome:** `prompt` is `sheep attach --wait --json` and reads the
+turn's entries from the one client that holds it: tool beats and the
+reply, nothing running beside it, and no transcript read before or
+during a turn. Sheep's own stderr while it holds the turn — `queued`,
+`setup running (1m 40s)`, `setup ok` — is the narration, and the rc's
+guess from the clock is gone; a sheep found in the herd whose row says
+no setup has run is said to have its first container still to come. The
+setup script leaves the badge in `~/.isocan`, which the home now keeps
+with the sheep, and makes the workspace link only on a home from before
+or for a sheep whose badge is in the workspace already; the pasture's
+tree is put again at every turn, so a sheep from before runs the current
+script in its next container. sheep#2's cache does not apply: a setup
+that held a sheep's own secret never keeps what it left, and the pass is
+one, so the cold install stays and the brief still says so.
+
+**Proof:** `packages/cli/test/rc.test.ts`'s sheep cases against the fake
+`sheep`, which now streams a turn's entries under `attach --json`, lists
+`setup` on its rows, and marks a sheep's first turn as its setup: the
+tool beat and the reply come from the stream, no `sheep log` is ever
+run, the resumed sheep's tree is put again and its `setup.sh` names
+`/home/sheep`, and a herd-found sheep with `setup: null` is said to have
+never run setup. `sheep.test.ts` covers the reply's text from an
+assistant entry.
+
+**Trajectory:**
+
+- sheep#2 landed and does not end the cold install here. The cache is
+  refused for a setup whose environment held a sheep's own secret, which
+  phase 2.5's pass is. The choice — the pass back in the pasture, a
+  secretless warm-up sheep, or a sheep-side split of setup — is a door in
+  design.md, not made here.
+- The pasture's tree is put at every turn, not only at the birth. A
+  sheep born before the home kept `~` would otherwise run the old script
+  against a new home and lose its badge; three calls, under a second.
 
 ## Phase 3 — The walk, with the bill
 

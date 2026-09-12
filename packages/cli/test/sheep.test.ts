@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findKennel, homeAddressForCell, toolCalls, toolTitle } from "../src/sheep.ts";
+import { assistantText, findKennel, homeAddressForCell, toolCalls, toolTitle } from "../src/sheep.ts";
 
 /**
  * **The sheep harness's pure pieces** (sheep-harness phase 1). The kennel
@@ -63,5 +63,21 @@ describe("tool beats from a pi transcript", () => {
         { ...at, id: "4", type: "compaction" },
       ]),
     ).toEqual(["read a.md", "bash isocan whoami"]);
+  });
+});
+
+describe("the reply from the stream (sheep#7)", () => {
+  const at = { timestamp: 0, type: "message" };
+  it("an assistant entry's text parts, joined; nothing for any other entry", () => {
+    expect(
+      assistantText({
+        ...at,
+        id: "2",
+        message: { role: "assistant", content: [{ type: "text", text: "on " }, { type: "toolCall", name: "bash" }, { type: "text", text: "it" }] },
+      }),
+    ).toBe("on it");
+    expect(assistantText({ ...at, id: "1", message: { role: "user", content: "hello" } })).toBe("");
+    expect(assistantText({ ...at, id: "3", message: { role: "toolResult", content: [{ type: "text", text: "Percy" }] } })).toBe("");
+    expect(assistantText({ ...at, id: "4", type: "compaction" })).toBe("");
   });
 });

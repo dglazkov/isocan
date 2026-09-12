@@ -15,6 +15,10 @@
 // sheep does since sheep#5, keeps the values in `sheepSecrets` by sheep id
 // (never printed, and dropped by `rm`), and lists the names in `ls --json`'s
 // `secrets`. `new --detach` with no prompt only mints: no transcript entries.
+// A row carries `setup`, as sheep does since sheep#4: `null` until the
+// sheep's first turn, then `ok`. `attach --json` writes each of the turn's
+// entries as a line as it lands, as sheep does since sheep#7, the last
+// assistant entry last; without `--json` only the reply's text is written.
 //
 // Four switches live in the state file itself, so a test sets them before
 // anything runs: `attachMs` makes a turn take that long, with the sheep
@@ -124,7 +128,7 @@ if (verb === "ls") {
     delete state.minting;
   }
   const id = `s_${state.next++}`;
-  const row = { id, name: flag("--name") ?? null, pasture: flag("--pasture") ?? null, createdAt: Date.now(), state: "idle", task: null };
+  const row = { id, name: flag("--name") ?? null, pasture: flag("--pasture") ?? null, createdAt: Date.now(), state: "idle", task: null, setup: null };
   if (!state.noSheepSecrets) row.secrets = [...names].sort();
   state.sessions.unshift(row);
   if (names.length > 0) {
@@ -156,11 +160,17 @@ if (verb === "ls") {
     state = load();
     find(id).state = "idle";
   }
-  entry(id, "user", after() ?? "");
-  entry(id, "assistant", [{ type: "toolCall", id: "t1", name: "bash", arguments: { command: 'isocan comment reply th_1 "on it"' } }]);
-  entry(id, "assistant", [{ type: "text", text: "on it" }]);
+  const json = argv.includes("--json");
+  const land = (e) => {
+    if (json) process.stdout.write(`${JSON.stringify(e)}\n`);
+  };
+  // The first turn in a fresh sheep is where its pasture's setup runs.
+  if (find(id).setup === null) find(id).setup = { state: "ok", at: Date.now(), ms: 1 };
+  land(entry(id, "user", after() ?? ""));
+  land(entry(id, "assistant", [{ type: "toolCall", id: "t1", name: "bash", arguments: { command: 'isocan comment reply th_1 "on it"' } }]));
+  land(entry(id, "assistant", [{ type: "text", text: "on it" }]));
   save();
-  process.stdout.write("on it\n");
+  if (!json) process.stdout.write("on it\n");
 } else if (verb === "rm") {
   const id = target();
   const sheep = find(id);

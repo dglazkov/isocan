@@ -2,7 +2,7 @@
 status: built
 since: 2026-09-10
 see: sheep-harness, on-demand, standing-agents, agent-custody, harnesses
-note: phases 0–2.5 closed 10–11 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, tool beats on the face from the transcript; a birth mints the sheep with the pass as its own secret and spends no turn; withdrawal ends the sheep and the badge its cell redeemed, and keeps the pasture. Journeys 1, 2 and 4 walked on the deployed station and a local sheep home against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Closed at phase 2.5 on 11 Sep; phase 3 retired, since a week of use is use. The install on every cold turn stays until sheep#2 lands.
+note: phases 0–2.5 closed 10–11 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, tool beats on the face from the transcript; a birth mints the sheep with the pass as its own secret and spends no turn; withdrawal ends the sheep and the badge its cell redeemed, and keeps the pasture. Journeys 1, 2 and 4 walked on the deployed station and a local sheep home against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Closed at phase 2.5 on 11 Sep; phase 3 retired, since a week of use is use. The install on every cold turn stays until sheep#2 lands. Phase 2.7 (12 Sep) took up the sheep side as it landed: the face's beats come from `sheep attach`'s own stream and no `sheep log` runs beside it (sheep#7), the home says when setup is running and the rc's clock guess is gone (sheep#4), and the badge lives in a `~` the home keeps, with the workspace link made only for a home or a sheep from before (sheep#6). sheep#2's cache is never kept from a setup holding a sheep's own secret, so the cold install stays; the choice is a door in design.md.
 ---
 # The sheep harness — the journeys
 
@@ -34,18 +34,18 @@ laptop stops running it.*
    just watched, tool calls and all.
 5. Activity Monitor shows one process for the rc. While Percy's turn
    runs there is one more, `sheep attach`, a thin client waiting on the
-   cell, and every few seconds a `sheep log` that reads the transcript
-   for the face's tool beats and exits; when the reply lands they are
-   gone. No model and no agent runtime ever appear. The transcript read
-   goes when `sheep attach` streams entries
-   ([sheep#7](https://github.com/dglazkov/sheep/issues/7)).
+   cell, and the face's tool beats come from what it streams; when the
+   reply lands it is gone. No model and no agent runtime ever appear.
+   (Until 12 September a `sheep log` ran beside it every few seconds to
+   read the transcript, until
+   [sheep#7](https://github.com/dglazkov/sheep/issues/7) put the entries
+   on `attach`'s stream.)
 
 **Acceptance:** No new gesture beyond the harness's name. The summons
 Percy receives is the same text a local adapter would receive. The reply
-is by the enrolled actor, not by you and not by the rc. The only things
-of Percy's that run on the laptop are the client that carries a turn and
-the transcript reads beside it, for the length of that turn, and nothing
-after it.
+is by the enrolled actor, not by you and not by the rc. The only thing
+of Percy's that runs on the laptop is the client that carries a turn,
+for the length of that turn, and nothing after it.
 
 ## Journey 2 — The same Percy, a day later, in a fresh container
 
@@ -55,10 +55,12 @@ has been torn down.*
 1. The next afternoon, well past the home's idle period, comment again:
    `@Percy and the heading above it`.
 2. The rc narrates *session <id> resumed*. The turn is slower than
-   yesterday's, and the rc says while it waits that the cell has been
-   quiet long enough for its container to be fresh, so setup is
-   probably running. It is a guess from the clock, and the rc says so,
-   until the home can tell it.
+   yesterday's, and while it waits the rc narrates *setup running (40s)*
+   from the home, every half minute, then *setup ok (1m 52s)*. It is the
+   home's word: until 12 September the rc guessed from the clock and said
+   so, and a home from before
+   [sheep#4](https://github.com/dglazkov/sheep/issues/4) still says
+   nothing.
 3. Percy's reply refers to yesterday's comment without being told about
    it. `isocan history Percy` shows both replies by one actor.
 4. `isocan badges` on your machine lists the badge Percy's cell holds,

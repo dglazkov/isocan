@@ -26,9 +26,17 @@ import type { AdapterSpec } from "./harnesses.ts";
  * pass that puts a person's second machine on a canvas, minted for the
  * agent instead. The pass rides into the cell as the sheep's own secret,
  * given at its mint, so it is environment for the pasture's setup script
- * and never in a prompt or a transcript. The redeemed badge lives in the
- * synced workspace (`/workspace/.isocan-home`, symlinked from `~/.isocan`)
- * so it outlives the container, which the home rents per command.
+ * and never in a prompt or a transcript. The redeemed badge lives in
+ * `~/.isocan`, and the home keeps a sheep's `~` with the sheep across the
+ * containers it rents per command (sheep#6). A home from before that keeps
+ * `~` for one container, and there setup links `~/.isocan` into the synced
+ * workspace instead, as every sheep born before it already has.
+ *
+ * While a turn runs, `sheep attach --json` streams the turn's entries as
+ * they land (sheep#7), so the face's tool beats come from the one client
+ * that holds the turn, and what sheep says on stderr while it holds it —
+ * `queued`, and `setup running (1m 40s)` from a home that reports its
+ * setup (sheep#4) — is narrated as it comes.
  *
  * Nothing here is configured by hand. `sheep` is found on the PATH, and
  * which home its sessions live at is sheep's own rule — the kennel, a
@@ -155,12 +163,19 @@ export function noSheepLine(name: string): string {
 }
 
 /** What every fresh container of an isocan sheep runs: the CLI on PATH, the
- * home directory in the synced workspace, and the pass redeemed once. */
+ * isocan home where the sheep keeps it, and the pass redeemed once. */
 export const SETUP_SCRIPT = `#!/bin/sh
 set -e
-mkdir -p /workspace/.isocan-home
-rm -rf /root/.isocan
-ln -s /workspace/.isocan-home /root/.isocan
+# The badge lands in ~/.isocan. A sheep home keeps ~ (/home/sheep) with the
+# sheep across containers; a home from before that keeps ~ for one container
+# only, and a sheep born before it has its badge in the synced workspace
+# already. In either of those cases ~/.isocan is a link into the workspace.
+H="\${HOME:-/root}"
+if [ "$H" != /home/sheep ] || [ -d /workspace/.isocan-home ]; then
+  mkdir -p /workspace/.isocan-home
+  rm -rf "$H/.isocan"
+  ln -s /workspace/.isocan-home "$H/.isocan"
+fi
 if ! command -v isocan >/dev/null 2>&1; then
   echo "setup: installing isocan" >&2
   npm install -g ${INSTALL_SPEC} --no-audit --no-fund >/tmp/isocan-install.log 2>&1 || { tail -20 /tmp/isocan-install.log >&2; exit 1; }
@@ -195,14 +210,6 @@ answers, say on the thread that the cell could not start its container,
 and end your turn.
 `;
 
-/** The home's idle period: a cell quiet this long has had its container
- * released, so the next command rents a fresh one and setup runs first.
- * The station's default; the home does not say which it uses. */
-export const QUIET_MS = 10 * 60_000;
-
-/** How often a running turn's transcript is read for tool calls. */
-const TOOL_POLL_MS = 3_000;
-
 interface Narrate {
   (line: string): void;
 }
@@ -217,12 +224,16 @@ interface PiEntry {
 
 /** The part of `sheep ls --json`'s rows the rc reads. `secrets` is the
  * names the sheep was minted with; a home or a `sheep` from before
- * per-sheep secrets (sheep#5) lists none, or no field. */
+ * per-sheep secrets (sheep#5) lists none, or no field. `setup` is what the
+ * pasture's setup is doing in the sheep's container or how it last ended,
+ * `null` for a sheep no setup has ever run for (sheep#4); a home from
+ * before that has no field. */
 interface SheepRow {
   id: string;
   name: string | null;
   pasture: string | null;
   secrets?: string[];
+  setup?: { state: string } | null;
 }
 
 /**
@@ -238,6 +249,15 @@ export function toolTitle(name: string, args: unknown): string {
   return first ? `${name} ${first.split("\n")[0]!.trim()}` : name;
 }
 
+/** An assistant entry's text, the parts joined; empty for any other entry. */
+export function assistantText(entry: PiEntry): string {
+  if (entry.type !== "message" || entry.message?.role !== "assistant" || !Array.isArray(entry.message.content)) return "";
+  return (entry.message.content as Array<{ type?: string; text?: unknown }>)
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text as string)
+    .join("");
+}
+
 /** The tool calls in transcript entries, oldest first. */
 export function toolCalls(entries: PiEntry[]): string[] {
   const titles: string[] = [];
@@ -248,26 +268,6 @@ export function toolCalls(entries: PiEntry[]): string[] {
     }
   }
   return titles;
-}
-
-function parseLines<T>(stdout: string): T[] {
-  const out: T[] = [];
-  for (const line of stdout.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      out.push(JSON.parse(line) as T);
-    } catch {
-      /* not an entry */
-    }
-  }
-  return out;
-}
-
-function ago(ms: number): string {
-  const minutes = Math.round(ms / 60_000);
-  if (minutes < 60) return `${minutes} minutes`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours} hour${hours === 1 ? "" : "s"}` : `${Math.round(hours / 24)} days`;
 }
 
 async function runSheep(
@@ -338,10 +338,6 @@ export class SheepAgent {
    * null when `ensureSession` resumed one. The caller writes it to the row. */
   bornPass: string | null = null;
 
-  /** The sheep this process minted, whose birth line already said that its
-   * first container runs setup. */
-  private born: string | null = null;
-
   private constructor(
     private readonly command: string[],
     /** Where this agent's sheep live — the row's, or the directory's kennel
@@ -397,9 +393,9 @@ export class SheepAgent {
     return runSheep(this.command, this.place, args, { narrate: this.narrate, ...opts });
   }
 
-  /** A pasture per agent: the setup script, the brief and the skill. Made
-   * once; a second birth of the same name finds it. The pass is not here:
-   * it is the sheep's own secret, given at the mint. */
+  /** A pasture per agent, made once; a second birth of the same name finds
+   * it. The pass is not here: it is the sheep's own secret, given at the
+   * mint. */
   private async ensurePasture(): Promise<string> {
     const name = this.pasture;
     const listed = await this.sheep(["pasture", "ls"]);
@@ -413,8 +409,17 @@ export class SheepAgent {
       // one that exists is a re-enrolment or a retry, and the sheep is new.
       this.narrate(`pasture ${name} already exists; the sheep born into it is new and does not remember an earlier one`);
     }
-    // The tree is re-put every birth: cheap, and it keeps the script current.
     this.narrate(`putting setup.sh, BRIEF.md${this.birth.skill ? " and the collab skill" : ""} in pasture ${name}`);
+    await this.putTree(name);
+    return name;
+  }
+
+  /** The pasture's tree: the setup script, the brief and the skill. Put at
+   * every turn and not only at the birth — three calls, under a second —
+   * so a sheep born under an earlier script or brief runs the current one
+   * in its next container, which is how a sheep from before the home kept
+   * `~` keeps its badge once the home does. */
+  private async putTree(name: string): Promise<void> {
     const put = async (p: string, body: string) => {
       const r = await this.sheep(["pasture", "put", name, p], { stdin: body });
       if (r.code !== 0) throw new Error(`sheep pasture put ${p} failed: ${r.stderr.trim()}`);
@@ -425,7 +430,17 @@ export class SheepAgent {
     // learns who it is before its first summons.
     await put("BRIEF.md", BRIEF(this.name, this.birth.canvasTitle));
     if (this.birth.skill) await put("skills/isocan/SKILL.md", this.birth.skill);
-    return name;
+  }
+
+  /** The tree, refreshed for a resumed sheep. A refusal is said, not
+   * thrown: the sheep has a tree, and the turn is worth more than a
+   * current one. */
+  private async refreshTree(): Promise<void> {
+    try {
+      await this.putTree(this.pasture);
+    } catch (err) {
+      this.narrate(`pasture ${this.pasture} keeps its earlier setup.sh and brief: ${(err as Error).message}`);
+    }
   }
 
   private async sessions(): Promise<SheepRow[]> {
@@ -449,6 +464,7 @@ export class SheepAgent {
   async ensureSession(_cwd: string, previous: string | null): Promise<{ sessionId: string; resumed: boolean }> {
     const sessions = await this.sessions();
     if (previous && sessions.some((s) => s.id === previous)) {
+      await this.refreshTree();
       return { sessionId: previous, resumed: true };
     }
     const herd = sessions.filter((s) => s.pasture === this.pasture);
@@ -458,6 +474,15 @@ export class SheepAgent {
         `sheep ${found.id} is already in pasture ${this.pasture}` +
           `${previous ? ` (the row named ${previous}, which the home no longer has)` : ""} — resuming it rather than birthing a second`,
       );
+      // Minted and never asked: its first container is still to come. A
+      // home from before sheep#4 has no `setup` field and says nothing.
+      if (found.setup === null) {
+        this.narrate(
+          `sheep ${found.id} has never run setup, so its first container runs it before this summons ` +
+            "(installing isocan, about two minutes)",
+        );
+      }
+      await this.refreshTree();
       return { sessionId: found.id, resumed: true };
     }
     if (previous) this.narrate(`sheep ${previous} is gone from ${describePlace(this.place)} — a new one is born`);
@@ -476,7 +501,6 @@ export class SheepAgent {
     const id = born.stdout.split("\n")[0]?.trim();
     if (!id) throw new Error(`sheep new printed no id: ${born.stderr.trim()}`);
     this.bornPass = passId;
-    this.born = id;
     await this.passKept(id, pasture, address);
     this.narrate(
       `sheep ${id} minted — no turn spent; its first container runs setup before this summons ` +
@@ -512,75 +536,56 @@ export class SheepAgent {
     );
   }
 
-  /** The transcript from an entry on (or its last entry, with no `since`),
-   * or null when the home would not say. */
-  private async entries(sessionId: string, since?: string): Promise<PiEntry[] | null> {
-    const r = await this.sheep(["log", "--json", ...(since ? ["--since", since] : ["--last", "1"]), sessionId], {
-      narrate: () => {},
-    });
-    return r.code === 0 ? parseLines<PiEntry>(r.stdout) : null;
-  }
-
   /**
-   * One turn: the summons goes to the sheep, its reply streams back as
-   * chunks, and the exit is the stop. `--wait` queues behind a turn already
-   * running at the cell and streams when it starts.
-   *
-   * `sheep attach` streams only the reply's text, so the tool beats come
-   * from the transcript, read every few seconds while the turn runs and
-   * once more when it ends: each tool call becomes a "tool" event, the
-   * same beat the ACP path produces. Before the turn, the transcript's
-   * last entry says how long the cell has been quiet — past the home's
-   * idle period its container is gone and setup runs first, which the rc
-   * says as the guess it is. A sheep with no transcript has never run a
-   * command, so its first container is still to come; the birth says so for
-   * a sheep this process minted, and this says it for one found unasked.
+   * One turn: the summons goes to the sheep, and the exit is the stop.
+   * `--wait` queues behind a turn already running at the cell. `--json`
+   * streams the turn's entries as they land, one pi entry per line
+   * (sheep#7): each assistant entry's tool calls become "tool" events, the
+   * beat the ACP path produces, and its text a "chunk", so the reply is
+   * the assistant's text in the order it was said. Nothing else is read
+   * while the turn runs. What sheep says on stderr while it holds the turn
+   * — `queued`, and `setup running (1m 40s)` from a home that reports its
+   * setup (sheep#4) — reaches the narration as it comes; a home from before
+   * that says nothing of setup, and neither does the rc.
    */
   async prompt(
     sessionId: string,
     text: string,
     onEvent?: (event: TurnEvent) => void,
   ): Promise<{ stopReason: string; text: string }> {
-    const tail = await this.entries(sessionId);
-    const last = tail?.at(-1);
-    if (tail?.length === 0 && this.born !== sessionId) {
-      this.narrate(
-        `sheep ${sessionId} has no transcript yet, so its first container runs setup before this summons ` +
-          "(installing isocan, about two minutes)",
-      );
-    } else if (last && Date.now() - last.timestamp > QUIET_MS) {
-      this.narrate(
-        `the cell has been quiet for ${ago(Date.now() - last.timestamp)}, so its container is probably fresh and ` +
-          "setup is probably running first (installing isocan, about two minutes) — a guess from the clock; the home does not say",
-      );
-    }
-    let cursor = last?.id ?? new Date(Date.now() - 5_000).toISOString();
     const seen = new Set<string>();
-    const readTools = async () => {
-      const fresh = ((await this.entries(sessionId, cursor)) ?? []).filter((e) => !seen.has(e.id));
-      for (const e of fresh) seen.add(e.id);
-      if (fresh.length > 0) cursor = fresh.at(-1)!.id;
-      for (const title of toolCalls(fresh)) onEvent?.({ kind: "tool", detail: title });
+    const said: string[] = [];
+    const take = (line: string) => {
+      if (!line.trim()) return;
+      let entry: PiEntry;
+      try {
+        entry = JSON.parse(line) as PiEntry;
+      } catch {
+        return;
+      }
+      // Every entry is written at most once by id; the last assistant
+      // entry is written again at the end by a `sheep` from before the
+      // stream, and by no other.
+      if (typeof entry?.id !== "string" || seen.has(entry.id)) return;
+      seen.add(entry.id);
+      for (const title of toolCalls([entry])) onEvent?.({ kind: "tool", detail: title });
+      const spoken = assistantText(entry);
+      if (spoken) {
+        onEvent?.({ kind: "chunk", text: said.length === 0 ? spoken : `\n${spoken}` });
+        said.push(spoken);
+      }
     };
-    let stop = () => {};
-    const stopped = new Promise<false>((resolve) => (stop = () => resolve(false)));
-    const tick = () =>
-      new Promise<true>((resolve) => {
-        setTimeout(() => resolve(true), TOOL_POLL_MS).unref?.();
-      });
-    const poller = (async () => {
-      while (await Promise.race([stopped, tick()])) await readTools().catch(() => {});
-    })();
-    try {
-      const r = await this.sheep(["attach", "--wait", sessionId, "--", text], {
-        onStdout: (chunk) => onEvent?.({ kind: "chunk", text: chunk }),
-      });
-      return { stopReason: r.code === 0 ? "end_turn" : `sheep exit ${r.code}`, text: r.stdout };
-    } finally {
-      stop();
-      await poller;
-      await readTools().catch(() => {});
-    }
+    let pending = "";
+    const r = await this.sheep(["attach", "--wait", "--json", sessionId, "--", text], {
+      onStdout: (chunk) => {
+        pending += chunk;
+        const lines = pending.split("\n");
+        pending = lines.pop() ?? "";
+        for (const line of lines) take(line);
+      },
+    });
+    take(pending);
+    return { stopReason: r.code === 0 ? "end_turn" : `sheep exit ${r.code}`, text: said.join("\n") };
   }
 
   close(): void {

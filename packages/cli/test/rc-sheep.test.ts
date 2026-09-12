@@ -39,7 +39,8 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     expect(first.stderr).toContain("minting a pass for Percy — single-use, fifteen minutes, the sheep's own secret");
     expect(first.stderr).toContain("sheep s_1 minted — no turn spent; its first container runs setup before this summons");
     expect(first.stderr).toContain("session s_1 started");
-    // The tool beat: read from the transcript, not from attach's text.
+    // The tool beat: from the entries `sheep attach --json` streams, and the
+    // reply from the assistant's entry; nothing reads the transcript.
     expect(first.stderr).toContain('Percy · tool bash isocan comment reply th_1 "on it"');
     expect(first.stdout).toContain("on it");
 
@@ -54,6 +55,8 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     expect(pass).toContain("prj_1");
     const calls = await sheepCalls();
     expect(calls.every((c) => !c.argv.join(" ").includes(pass))).toBe(true);
+    expect(calls.some((c) => c.argv[0] === "log")).toBe(false);
+    expect(calls.find((c) => c.argv[0] === "attach")!.argv.slice(0, 3)).toEqual(["attach", "--wait", "--json"]);
     // Every call ran where the kennel is, so sheep's own walk finds it.
     expect(new Set(calls.map((c) => c.cwd))).toEqual(new Set([await fs.realpath(home)]));
 
@@ -65,6 +68,11 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     const after = await sheepCalls();
     expect(after.filter((c) => c.argv[0] === "new")).toHaveLength(1);
     expect(after.some((c) => c.argv[1] === "secret")).toBe(false);
+    // The tree is put again for the resumed sheep, so it runs the current
+    // setup script and brief in its next container.
+    const puts = after.filter((c) => c.argv[0] === "pasture" && c.argv[1] === "put").map((c) => c.argv[3]);
+    expect(puts.filter((f) => f === "setup.sh")).toHaveLength(2);
+    expect((await sheepState()).pastures["isocan-percy"].tree["setup.sh"]).toContain("/home/sheep");
     const summons = after.filter((c) => c.argv[0] === "attach").map((c) => c.argv.at(-1));
     expect(summons).toEqual(["the empty state", "and the heading"]);
     expect((await rcRows()).find((r) => r.name === "Percy")!.cellPass).toEqual(row.cellPass);
@@ -81,7 +89,7 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     await fs.writeFile(
       stateFile,
       JSON.stringify({
-        sessions: [{ id: "s_9", name: "Percy", pasture: "isocan-percy", createdAt: 0, state: "idle", task: null }],
+        sessions: [{ id: "s_9", name: "Percy", pasture: "isocan-percy", createdAt: 0, state: "idle", task: null, setup: null }],
         pastures: { "isocan-percy": { tree: {}, secrets: {} } },
         entries: {},
         next: 10,
@@ -93,7 +101,7 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
     expect(turn.stderr).toContain("sheep s_9 is already in pasture isocan-percy — resuming it rather than birthing a second");
     expect(turn.stderr).toContain("session s_9 resumed");
     // Minted and never asked, so nothing has run in it yet, and that is said.
-    expect(turn.stderr).toContain("sheep s_9 has no transcript yet, so its first container runs setup before this summons");
+    expect(turn.stderr).toContain("sheep s_9 has never run setup, so its first container runs it before this summons");
     expect(turn.stderr).not.toContain("minting a pass");
     const calls = await sheepCalls();
     expect(calls.some((c) => c.argv[0] === "new")).toBe(false);
@@ -197,7 +205,7 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
       await summon();
       await until(async () => out, (o) => o.includes("Percy · turn ended"), "the turn from the cell");
       expect(out).toContain("Percy · sheep s_1 minted — no turn spent; its first container runs setup before this summons");
-      expect(out).not.toContain("has no transcript yet");
+      expect(out).not.toContain("has never run setup");
 
       const calls = await sheepCalls();
       const pass = (await sheepPass())!;
