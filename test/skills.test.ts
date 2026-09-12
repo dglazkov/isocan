@@ -39,15 +39,32 @@ describe("agent skills are shared, not copied", () => {
   });
 
   it("no harness directory holds a rival SKILL.md", async () => {
+    /* A rival is a SECOND ORIGINAL of a skill that already has one: the fork
+       with a delay fuse this file exists to stop. A skill that belongs to one
+       harness and is deliberately not shared is a different thing — `conduct`
+       is this repo's own workflow, and `npx skills add dglazkov/isocan` must
+       hand a stranger the collaboration skill and nothing else (AGENTS.md,
+       "The conductor"). So a harness-only skill is admitted exactly when the
+       house rules name it, which keeps the exception from being silent. */
+    const houseRules = await fs.readFile(path.join(repo, "AGENTS.md"), "utf8");
     const strays: string[] = [];
     for (const dir of [".claude", ".codex", ".cursor", ".gemini", ".pi", ".opencode"]) {
       const skills = path.join(repo, dir, "skills");
       for (const entry of await fs.readdir(skills, { withFileTypes: true }).catch(() => [])) {
         if (!entry.isDirectory()) continue; // a symlink is a doorway, not a copy
         const rival = path.join(skills, entry.name, "SKILL.md");
-        if (await fs.stat(rival).then(() => true, () => false)) strays.push(rival);
+        if (!(await fs.stat(rival).then(() => true, () => false))) continue;
+        const twin = path.join(repo, ".agents/skills", entry.name);
+        const shared = await fs.stat(twin).then(() => true, () => false);
+        const recorded = houseRules.includes(`${dir}/skills/${entry.name}/`);
+        if (shared || !recorded) strays.push(rival);
       }
     }
     expect(strays).toEqual([]);
+  });
+
+  it("a harness-only skill is named in the house rules, so the exception is never silent", async () => {
+    const houseRules = await fs.readFile(path.join(repo, "AGENTS.md"), "utf8");
+    expect(houseRules).toContain(".claude/skills/conduct/");
   });
 });
