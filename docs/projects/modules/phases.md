@@ -401,6 +401,14 @@ inbox?"* — and both items were still there and still readable, `fib.mjs`
 (other) and `fib.mjs — output` (document), the orphaned `sandbox.of` key
 printed as an ordinary property. The oplog was untouched.
 
+**And the page had to be looked at, which is 4.5's lesson arriving on
+schedule.** `.docs-row a` matches any DESCENDANT anchor, so the transcript
+link inside a row rendered as a second card below the first, with the date
+orphaned on a line of its own. It passed the token, scale, dimmed, hooks and
+byte guards — exactly as the stickers tray passed 3,936 tests as an invisible
+1280×178 block. A slot's appearance is not a thing the suite can hold; the fix
+is one CSS block and the finding is that the looking is not optional.
+
 **A product bug the proof found, which nothing else would have.** Fastify
 parses `text/plain` as well as `application/json`, so the blob route's `*`
 parser never saw a transcript: `Buffer.isBuffer` said no and every upload was
