@@ -211,12 +211,30 @@
   background: var(--card);
   z-index: 2;
 }
-.anatomy-canvas-tools > span {
+.anatomy-breadcrumb {
   flex: 1;
-  overflow: hidden;
+  min-width: 70px;
+  overflow-x: auto;
   white-space: nowrap;
-  text-overflow: ellipsis;
   color: var(--ink-soft);
+}
+.anatomy-breadcrumb button {
+  border: 0;
+  padding: 4px;
+  background: transparent;
+}
+.anatomy-breadcrumb [aria-current] {
+  font-weight: 650;
+  color: var(--ink);
+}
+.anatomy-connection:focus {
+  outline: none;
+}
+.anatomy-connection:hover .anatomy-connection-line,
+.anatomy-connection:focus-visible .anatomy-connection-line {
+  stroke: var(--ink);
+  stroke-opacity: 1;
+  stroke-width: 3;
 }
 .anatomy-blueprint {
   flex: 1;
@@ -228,10 +246,18 @@
   grid-template-columns: 240px minmax(0, 1fr);
 }
 .anatomy-blueprint.has-inspector {
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) clamp(
+      220px,
+      var(--anatomy-inspector-width, 340px),
+      min(560px, 45vw)
+    );
 }
 .anatomy-blueprint.has-tree.has-inspector {
-  grid-template-columns: 240px minmax(0, 1fr) 340px;
+  grid-template-columns: 240px minmax(0, 1fr) clamp(
+      220px,
+      var(--anatomy-inspector-width, 340px),
+      min(560px, 45vw)
+    );
 }
 .anatomy-tree {
   padding: 14px 10px;
@@ -318,8 +344,9 @@
   min-height: 0;
 }
 .anatomy-inspector {
-  overflow: auto;
-  padding: 24px;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
   border-left: 1px solid var(--line);
   background: var(--card);
   z-index: 1;
@@ -610,6 +637,13 @@
   font-size: 11px;
   color: var(--ink-soft);
 }
+.anatomy-card-open {
+  display: inline-block;
+  pointer-events: auto;
+  font: 13px var(--font-ui, sans-serif);
+  color: var(--ink);
+  text-underline-offset: 3px;
+}
 .anatomy-card h2 {
   font:
     600 23px/1.2 Georgia,
@@ -645,12 +679,20 @@
     grid-template-columns: 200px minmax(0, 1fr);
   }
   .anatomy-blueprint.has-inspector {
-    grid-template-columns: minmax(0, 1fr) 290px;
+    grid-template-columns: minmax(0, 1fr) clamp(
+        220px,
+        var(--anatomy-inspector-width, 290px),
+        min(560px, 45vw)
+      );
   }
   .anatomy-blueprint.has-tree.has-inspector {
-    grid-template-columns: 200px minmax(0, 1fr) 290px;
+    grid-template-columns: 200px minmax(0, 1fr) clamp(
+        220px,
+        var(--anatomy-inspector-width, 290px),
+        min(560px, 45vw)
+      );
   }
-  .anatomy-inspector {
+  .anatomy-inspector-content {
     padding: 18px;
   }
 }
@@ -666,7 +708,11 @@
   }
   .anatomy-blueprint.has-inspector,
   .anatomy-blueprint.has-tree.has-inspector {
-    grid-template-rows: minmax(150px, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 1fr) clamp(
+        120px,
+        var(--anatomy-inspector-height, 280px),
+        calc(100% - 150px)
+      );
   }
   .anatomy-stage {
     grid-row: 1;
@@ -701,10 +747,12 @@
   .anatomy-tabs button {
     padding: 6px;
   }
-  .anatomy-canvas-tools > span {
-    display: none;
+  .anatomy-breadcrumb {
+    flex-basis: 100%;
+    order: 2;
   }
   .anatomy-canvas-tools {
+    flex-wrap: wrap;
     justify-content: space-between;
   }
   .anatomy-decisions {
@@ -747,4 +795,83 @@
   .anatomy-dialog {
     padding: 16px;
   }
+}
+
+.anatomy-inspector-content {
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.anatomy-inspector-resize {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+}
+.anatomy-inspector-resize span {
+  height: 36px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--ink-soft);
+  opacity: 0.5;
+}
+.anatomy-inspector-resize:hover,
+.anatomy-inspector-resize:focus-visible {
+  background: var(--chip-hover);
+  outline: 1px solid var(--ink-soft);
+  outline-offset: -1px;
+}
+@media (max-width: 760px) {
+  .anatomy-inspector-content {
+    padding: 18px;
+  }
+  .anatomy-inspector-resize {
+    right: 0;
+    bottom: auto;
+    width: auto;
+    height: 10px;
+    cursor: row-resize;
+  }
+  .anatomy-inspector-resize span {
+    width: 36px;
+    height: 3px;
+  }
+}
+
+.anatomy-repository {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  font-size: 12px;
+}
+.anatomy-repository details {
+  flex: 1;
+  min-width: 140px;
+  overflow-wrap: anywhere;
+}
+.anatomy-repository summary {
+  cursor: pointer;
+}
+.anatomy-repository form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+  align-items: end;
+}
+.anatomy-repository label {
+  display: grid;
+  gap: 4px;
+  flex: 1;
 }

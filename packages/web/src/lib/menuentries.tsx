@@ -547,6 +547,7 @@ export function chromeMenu(ctx: {
   /** Navigation belongs to the caller: this module builds entries and has no
    *  business holding a router. */
   toWorkbench: () => void;
+  projectViews?: Array<{ label: string; run: () => void }>;
 }): MenuEntry[] {
   const ui = () => useUiStore.getState();
   /* The same mark the surface itself wears, so the row and the thing it opens
@@ -584,6 +585,7 @@ export function chromeMenu(ctx: {
       shortcutFor: "Workbench — the agent room",
       run: () => ctx.toWorkbench(),
     },
+    ...(ctx.projectViews ?? []),
     { separator: "" },
     {
       /**

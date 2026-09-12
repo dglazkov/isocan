@@ -110,3 +110,46 @@ undo, not a server transaction or compare-and-swap. Large repository-scale
 performance and the hosted/cloud deployment were not measured in this local
 journey. The production entry remains above the standing 640 kB performance
 goal; the existing budget guard was not relaxed.
+
+## Follow-up acceptance: exploration and project-owned analysis
+
+The original live renderer selects on single tap and navigates on double tap
+(`SpatialStage.attachNodePointerEvents`); its refocus links call `setFocalNode`.
+The native port now preserves that distinction and frames the immediate graph
+neighborhood, keeping saved card geometry intact.
+
+Browser-driven checks on synthetic data:
+
+- Double-clicked the native Request workflow card; its breadcrumb and inspector
+  changed, and the camera framed it with its parent and child. Clicked the
+  rendered updates connection to Request record; the breadcrumb gained that
+  concept. Connection activation is also keyboard reachable.
+- Dragged the desktop inspector from 340 to 420 pixels; the native stage
+  contracted from 700 to 620. In a 650-by-850 viewport, dragged the bottom pane
+  from 280 to 350 pixels, then used ArrowDown to reduce it to 330. The stage
+  retained 232 pixels of height; viewport restored afterwards.
+- Removed the large Undo/Redo buttons. Control-Z from a workspace button undid
+  a repository association; CLI readback confirmed the property was absent.
+  Control-Shift-Z restored it. Meta-Z in a repository input undid a typed
+  character without undoing project state.
+- Attached an existing graph, associated a synthetic repository and clicked
+  Ask agent. Native Chat opened with `/anatomy`, the analysis item attachment,
+  and the honest nobody-listening state. More → View Anatomy and the right
+  rail's View Anatomy both returned to the workspace. A project card carries
+  an explicit link selecting that analysis.
+- Opened a fresh repository-associated canvas: its right rail offered Analyze
+  repository before any analysis existed.
+
+Final checks after the follow-up implementation: `npm test` **4,161 passed,
+70 skipped**, 416 passing files and five skipped; `npm run typecheck` passed;
+production build passed; hooks lint and module CLI/runtime tests passed.
+The entry bundle is about **660.4 KB**. It remains over the 640 KB goal but
+below the existing jump guard; the ceiling was not raised. Connections, card
+bodies and workspace UI load lazily. The prior performance debt remains.
+
+Both surfaces: existing `project.update` and thread operations own association
+and requests; no new operation or server endpoint. CLI adds repository,
+attach, analyze and show --node; its guide documents each. The shared module
+core owns the neighborhood query, and shared operation helpers own imports and
+analysis requests. README and module authoring docs cover the new doors.
+Native gestures and pane size stay local UI state; they need no durable op.

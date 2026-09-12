@@ -773,9 +773,15 @@ Its CLI and React views use the same graph adapter and operation builders.
 
 `WebModule.workspaces` composes chrome around the host's native viewport at
 an existing module route. `ModuleWorkspace` owns capability, selection,
-navigation, history controls, lazy/error boundaries and measured stage bounds.
+navigation, history shortcuts, lazy/error boundaries and measured stage bounds.
 A fixed viewport clipped to the measured slot keeps screen-coordinate drag
 math unchanged. `WorkspaceHost` promotes authenticated blob reads and native
 selection/focus/navigation; modules still import no web stores. The API and
 proposed declaration live in `core/modules.ts`; the full contract is in
 [the module authoring guide](projects/modules/authoring.md).
+
+A workspace can supply a project-specific menu and right-rail entry from the
+canvas record's properties. Anatomy uses `anatomy.analysis` and
+`anatomy.repository`; requesting a repository read posts an ordinary `/anatomy`
+Chat message for an agent. Workspace-scoped activation routes native card
+double-clicks and underlay links without putting module semantics in ItemView.

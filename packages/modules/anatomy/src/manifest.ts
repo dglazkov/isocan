@@ -16,6 +16,8 @@ export const PROP = {
   relation: "anatomy.parentRelation",
   edges: "anatomy.edges",
   source: "anatomy.source",
+  analysis: "anatomy.analysis",
+  repository: "anatomy.repository",
 } as const;
 export const NODE_SIZE = { width: 320, height: 210 };
 export const currentVersion = (item: Item) =>
@@ -109,6 +111,40 @@ export function convergence(nodes: readonly AnatomyNode[]): number {
       )
     : 0;
 }
+/** The focal concept, its parent/children and both ends of explicit connections.
+ * This is a local view of the graph, never a change to its saved layout. */
+export function projectNeighborhood(
+  project: Pick<AnatomyProject, "nodes" | "edges">,
+  nodeId: string,
+) {
+  const byId = new Map(project.nodes.map((node) => [node.id, node]));
+  const focus = byId.get(nodeId);
+  if (!focus) throw new Error(`Unknown concept: ${nodeId}`);
+  const ids = new Set([nodeId]);
+  if (focus.parentId && byId.has(focus.parentId)) ids.add(focus.parentId);
+  for (const node of project.nodes)
+    if (node.parentId === nodeId) ids.add(node.id);
+  for (const edge of project.edges) {
+    if (edge.from === nodeId && byId.has(edge.to)) ids.add(edge.to);
+    if (edge.to === nodeId && byId.has(edge.from)) ids.add(edge.from);
+  }
+  const ancestors: AnatomyNode[] = [];
+  const seen = new Set([nodeId]);
+  let parent = byId.get(focus.parentId ?? "");
+  while (parent && !seen.has(parent.id)) {
+    ancestors.unshift(parent);
+    seen.add(parent.id);
+    parent = byId.get(parent.parentId ?? "");
+  }
+  return {
+    focus,
+    ancestors,
+    nodes: project.nodes.filter((node) => ids.has(node.id)),
+    edges: project.edges.filter(
+      (edge) => ids.has(edge.from) && ids.has(edge.to),
+    ),
+  };
+}
 export function decisions(project: AnatomyProject): AnatomyNode[] {
   const order = { conflict: 0, risk: 1, missing: 2, settled: 3 };
   return project.nodes
@@ -149,6 +185,20 @@ export function layoutProject(canvas: CanvasContents, projectId: string) {
 export const anatomyModule: CoreModule = {
   name: "@isocan/anatomy",
   propertyKeys: Object.values(PROP),
+  commands: [
+    {
+      name: "anatomy",
+      usage: "[repository path or URL]",
+      source: "module",
+      description:
+        "Analyze this project's repository as concepts, decisions and evidence",
+      body: `Read the requested repository using your existing access. If no repository is supplied, read the canvas's anatomy.repository property with isocan canvas show. Do not claim an analysis is running unless you are doing it.
+
+Read the repository's instructions, README, architecture, relevant implementations and tests. Infer its goal from those sources. Model cross-functional goals, workflows, data/state boundaries and rules, not a directory inventory or implementation tickets. Distinguish implemented behavior from proposals. Give every concept a summary; give every risk/conflict/missing concept a clear reason, conflictAxis and source citations. Consider product, experience, engineering and security; leave unreviewed lenses unassessed. Never invent evidence or runtime checks.
+
+Use isocan anatomy ls/show to find an existing analysis (the anatomy.analysis canvas property names the attached project item). Update that project's concepts with anatomy node and relationships with anatomy edge; use anatomy sample for the JSON shape. For a first analysis, build a validated portable Anatomy JSON file and anatomy import it onto this canvas. Import attaches the new analysis to the canvas. Record repoPath and the reviewed revision in the overview. Keep original concept IDs stable on subsequent runs, preserve comments and unrelated canvas content, and save an anatomy checkpoint baseline after the read. Publish a concise receipt with findings and limitations in Chat. Analysis is work you carry out through the ordinary CLI, comments, presence and operations.`,
+    },
+  ],
   kinds: [
     {
       id: "anatomy-project",

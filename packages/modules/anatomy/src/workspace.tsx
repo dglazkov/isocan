@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type CSSProperties,
+} from "react";
+import { InspectorPane } from "./inspector-pane.tsx";
 import ReactMarkdown from "react-markdown";
 import type { CanvasContents, Item, WorkspaceFacts } from "@isocan/core";
 import { newId } from "@isocan/core";
@@ -16,6 +24,7 @@ import {
   readProject,
   convergence,
   decisions,
+  projectNeighborhood,
   type AnatomyNode,
   type AnatomyProject,
   type Checkpoint,
@@ -33,6 +42,7 @@ import {
   saveEdge,
   saveNode,
   saveProject,
+  requestAnalysis,
   type AnatomyIO,
 } from "./operations.ts";
 import "./style.css";
@@ -54,15 +64,24 @@ const status = (value: string) => (
 
 export default function Workspace({
   canvas,
+  project: canvasRecord,
   host,
   selection,
   canEdit,
   canvasView,
 }: WorkspaceFacts<ReactNode>) {
   const projects = projectsOn(canvas);
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("project"),
+  );
   const selectedProject =
-    projects.find((p) => p.id === projectId) ?? projects[0];
+    projects.find((p) => p.id === projectId) ??
+    projects.find((p) => p.id === canvasRecord.properties[PROP.analysis]) ??
+    projects[0];
+  const repository =
+    canvasRecord.properties[PROP.repository] ??
+    canvasRecord.properties.repository ??
+    "";
   const [loaded, setLoaded] = useState<{
     itemId: string;
     project: AnatomyProject;
@@ -71,9 +90,17 @@ export default function Workspace({
   const project =
     loaded?.itemId === selectedProject?.id ? (loaded?.project ?? null) : null;
   const [lens, setLens] = useState<Lens>("blueprint");
+  const [focal, setFocal] = useState<{
+    projectId: string;
+    nodeId: string;
+  } | null>(null);
   const [search, setSearch] = useState("");
   const [leftOpen, setLeftOpen] = useState(() => window.innerWidth > 760);
   const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 760);
+  const [inspectorSize, setInspectorSize] = useState({
+    width: 340,
+    height: 280,
+  });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -155,9 +182,50 @@ export default function Workspace({
     if (focus) requestAnimationFrame(() => host.focus([item.id]));
   };
   const jump = (nodeId: string) => {
+    if (!project || !selectedProject) return;
+    const neighborhood = projectNeighborhood(project, nodeId);
     setLens("blueprint");
-    choose(nodeId);
+    setFocal({ projectId: selectedProject.id, nodeId });
+    choose(nodeId, false);
+    requestAnimationFrame(() =>
+      host.focus(
+        neighborhood.nodes.flatMap((n) => {
+          const item = findNative(n.id);
+          return item ? [item.id] : [];
+        }),
+      ),
+    );
   };
+  const fitGraph = () => {
+    if (!selectedProject) return;
+    setFocal(null);
+    host.select([]);
+    requestAnimationFrame(() =>
+      host.focus([selectedProject.id, ...nativeNodes.map((i) => i.id)]),
+    );
+  };
+  const focalNode =
+    focal?.projectId === selectedProject?.id
+      ? project?.nodes.find((n) => n.id === focal?.nodeId)
+      : undefined;
+  const neighborhood =
+    project && focalNode ? projectNeighborhood(project, focalNode.id) : null;
+  // The host owns gestures; the module supplies their navigation meaning only
+  // while its Blueprint is mounted. Other files retain the native viewer.
+  useEffect(() =>
+    host.onActivateItem((id) => {
+      if (lens !== "blueprint" || !project) return false;
+      if (id === selectedProject?.id) {
+        fitGraph();
+        return true;
+      }
+      const item = nativeNodes.find((n) => n.id === id);
+      if (!item) return false;
+      if (!project.nodes.some((n) => n.id === originId(item))) return true;
+      jump(originId(item));
+      return true;
+    }),
+  );
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setMessage("");
@@ -304,6 +372,81 @@ export default function Workspace({
           )}
         </div>
       </header>
+      <div className="anatomy-repository">
+        <details>
+          <summary>
+            {repository
+              ? `Repository: ${repository}`
+              : "Associate a repository"}
+          </summary>
+          <form
+            key={repository}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = String(
+                new FormData(event.currentTarget).get("repository") ?? "",
+              ).trim();
+              void run(() =>
+                host.send([
+                  {
+                    type: "project.update",
+                    patch: { properties: { [PROP.repository]: value } },
+                  },
+                ]),
+              );
+            }}
+          >
+            <label>
+              Repository path or URL{" "}
+              <input
+                name="repository"
+                defaultValue={repository}
+                disabled={!canEdit}
+              />
+            </label>
+            {canEdit && <button disabled={busy}>Save repository</button>}
+          </form>
+        </details>
+        {canEdit &&
+          selectedProject &&
+          canvasRecord.properties[PROP.analysis] !== selectedProject.id && (
+            <button
+              disabled={busy}
+              onClick={() =>
+                void run(() =>
+                  host.send([
+                    {
+                      type: "project.update",
+                      patch: {
+                        properties: { [PROP.analysis]: selectedProject.id },
+                      },
+                    },
+                  ]),
+                )
+              }
+            >
+              Attach to this project
+            </button>
+          )}
+        {canEdit && (
+          <button
+            disabled={busy || !repository}
+            onClick={() =>
+              void run(async () => {
+                await requestAnalysis(io, repository, selectedProject?.id);
+                host.openChat();
+                setMessage(
+                  "Analysis requested in Chat. An agent with repository access can pick it up.",
+                );
+              })
+            }
+          >
+            {selectedProject
+              ? "Ask agent to update analysis"
+              : "Ask agent to analyze"}
+          </button>
+        )}
+      </div>
       {message && (
         <div className="anatomy-notice" role="alert">
           {message}
@@ -411,21 +554,33 @@ export default function Workspace({
                 >
                   Concepts
                 </button>
-                <span>
-                  {selected
-                    ? AXIS_LABELS[selected.category] + " / " + selected.title
-                    : "System overview"}
-                </span>
-                <button
-                  onClick={() =>
-                    host.focus([
-                      selectedProject.id,
-                      ...nativeNodes.map((i) => i.id),
-                    ])
-                  }
+                <nav
+                  className="anatomy-breadcrumb"
+                  aria-label="Exploration path"
                 >
-                  Fit graph
-                </button>
+                  <button onClick={fitGraph}>All concepts</button>
+                  {neighborhood &&
+                    [...neighborhood.ancestors, neighborhood.focus].map((n) => (
+                      <span key={n.id}>
+                        {" "}
+                        /{" "}
+                        <button
+                          aria-current={
+                            n.id === focalNode?.id ? "location" : undefined
+                          }
+                          onClick={() => jump(n.id)}
+                        >
+                          {n.title}
+                        </button>
+                      </span>
+                    ))}
+                </nav>
+                {selected && (
+                  <button onClick={() => jump(selected.id)}>
+                    Explore connections
+                  </button>
+                )}
+                <button onClick={fitGraph}>Fit graph</button>
                 {canEdit && (
                   <button
                     disabled={busy}
@@ -452,6 +607,12 @@ export default function Workspace({
               </div>
               <div
                 className={`anatomy-blueprint${leftOpen ? " has-tree" : ""}${rightOpen ? " has-inspector" : ""}`}
+                style={
+                  {
+                    "--anatomy-inspector-width": `${inspectorSize.width}px`,
+                    "--anatomy-inspector-height": `${inspectorSize.height}px`,
+                  } as CSSProperties
+                }
               >
                 {leftOpen && (
                   <aside
@@ -469,6 +630,15 @@ export default function Workspace({
                       selected={selected?.id ?? null}
                       search={search}
                       choose={choose}
+                      explore={jump}
+                      ancestors={
+                        selected
+                          ? projectNeighborhood(
+                              project,
+                              selected.id,
+                            ).ancestors.map((n) => n.id)
+                          : []
+                      }
                     />
                     {canEdit && (
                       <button className="anatomy-add" onClick={newNode}>
@@ -479,9 +649,11 @@ export default function Workspace({
                 )}
                 <div className="anatomy-stage">{canvasView}</div>
                 {rightOpen && (
-                  <aside
-                    className="anatomy-inspector"
-                    aria-label="Concept inspector"
+                  <InspectorPane
+                    {...inspectorSize}
+                    resize={(axis, value) =>
+                      setInspectorSize((size) => ({ ...size, [axis]: value }))
+                    }
                   >
                     {selected && selectedItem ? (
                       <Inspector
@@ -538,7 +710,7 @@ export default function Workspace({
                         )}
                       </div>
                     )}
-                  </aside>
+                  </InspectorPane>
                 )}
               </div>
             </>
@@ -786,11 +958,15 @@ function Tree({
   selected,
   search,
   choose,
+  explore,
+  ancestors,
 }: {
   nodes: AnatomyNode[];
   selected: string | null;
   search: string;
   choose: (id: string) => void;
+  explore: (id: string) => void;
+  ancestors: string[];
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const nodeIds = new Set(nodes.map((n) => n.id));
@@ -798,7 +974,7 @@ function Tree({
     if (seen.has(node.id)) return null;
     const next = new Set(seen).add(node.id),
       children = nodes.filter((n) => n.parentId === node.id);
-    const open = !collapsed.has(node.id);
+    const open = !collapsed.has(node.id) || ancestors.includes(node.id);
     return (
       <div key={node.id}>
         <div
@@ -826,7 +1002,8 @@ function Tree({
           <button
             aria-pressed={selected === node.id}
             onClick={() => choose(node.id)}
-            title={node.title}
+            onDoubleClick={() => explore(node.id)}
+            title={`${node.title}. Double-click to explore its connections.`}
           >
             <span className={`anatomy-axis anatomy-axis-${node.category}`}>
               {node.category[0]?.toUpperCase()}
@@ -860,6 +1037,7 @@ function Tree({
               className="anatomy-search-result"
               key={n.id}
               onClick={() => choose(n.id)}
+              onDoubleClick={() => explore(n.id)}
             >
               {n.title}
             </button>

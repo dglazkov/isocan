@@ -87,6 +87,28 @@ describe("Anatomy through the real CLI and daemon", () => {
     const show = () =>
       json<AnatomyProject>("anatomy", "show", itemId, "--canvas", canvasId);
     expect(await show()).toEqual(sample);
+    const neighborhood = await json<{
+      focus: { id: string };
+      nodes: Array<{ id: string }>;
+      ancestors: Array<{ id: string }>;
+    }>("anatomy", "show", itemId, "--node", "state", "--canvas", canvasId);
+    expect(neighborhood.focus.id).toBe("state");
+    expect(neighborhood.nodes.map((n) => n.id)).toEqual(["workflow", "state"]);
+    expect(neighborhood.ancestors.map((n) => n.id)).toEqual([
+      "goal",
+      "workflow",
+    ]);
+    const record = await json<{ properties: Record<string, string> }>(
+      "canvas",
+      "show",
+      canvasId,
+    );
+    expect(record.properties["anatomy.analysis"]).toBe(itemId);
+    await inCanvas("anatomy", "repository", "/example/acme-current");
+    await inCanvas("anatomy", "analyze");
+    const chat = await inCanvas("comment", "list", "--json");
+    expect(chat).toContain("/anatomy /example/acme-current");
+    await inCanvas("anatomy", "attach", itemId);
     const rows = await json<Array<{ id: string; concepts: number }>>(
       "anatomy",
       "ls",

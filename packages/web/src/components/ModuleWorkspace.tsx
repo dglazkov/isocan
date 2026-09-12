@@ -23,7 +23,8 @@ import { useCanEdit } from "../lib/capability.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { undo, redo } from "../lib/api.ts";
 import { openPanel } from "../lib/panels.ts";
-import { crossesCover } from "../lib/keys.ts";
+import { crossesCover, isTyping } from "../lib/keys.ts";
+import { CanvasActivation } from "../lib/canvasActivation.ts";
 
 class WorkspaceBoundary extends Component<
   { children: ReactNode },
@@ -107,6 +108,7 @@ export function ModuleWorkspaceView({
   const [historyError, setHistoryError] = useState("");
   const [historyBusy, setHistoryBusy] = useState(false);
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
+  const project = useCanvasStore((s) => s.project);
   const selection = useUiStore((s) => s.selectedItemIds);
   const canEdit = useCanEdit();
   const chatOpen = useUiStore((s) => s.mainPanelOpen);
@@ -114,6 +116,23 @@ export function ModuleWorkspaceView({
   const inPast = useCanvasStore((s) => s.past !== null);
   useUiStore((s) => s.modulesGeneration);
   const workspace = moduleWorkspace(segment);
+  const activation = useMemo(() => {
+    const handlers = new Set<(itemId: string) => boolean>();
+    return {
+      subscribe(handler: (itemId: string) => boolean) {
+        handlers.add(handler);
+        return () => {
+          handlers.delete(handler);
+        };
+      },
+      activate(itemId: string) {
+        for (const handler of handlers) if (handler(itemId)) return true;
+        return false;
+      },
+    };
+    // A route change must dispose the previous workspace's subscriptions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasId, segment]);
   const host = useMemo<WorkspaceHost>(
     () => ({
       ...webHostFor(canvasId, actor),
@@ -145,8 +164,10 @@ export function ModuleWorkspaceView({
         });
       },
       openItem: (id) => navigate(itemPath(canvasId, id)),
+      onActivateItem: activation.subscribe,
+      openChat: () => openPanel(canvasId, "main", false),
     }),
-    [canvasId, actor, navigate],
+    [canvasId, actor, navigate, activation],
   );
   const Body = workspace?.component;
   async function history(action: typeof undo) {
@@ -162,72 +183,77 @@ export function ModuleWorkspaceView({
     }
   }
   return (
-    <div
-      className="module-workspace"
-      onKeyDown={(event) => {
-        // The module owns its chrome's keys. A button or input must not operate
-        // on selected cards behind a report; the global launcher still crosses.
-        if (
-          !(event.target as Element).closest("[data-module-stage]") &&
-          !crossesCover(event)
-        )
-          event.stopPropagation();
-      }}
-    >
-      <div className="module-page-bar">
-        <button
-          className="deck-back"
-          onClick={() => navigate(canvasPath(canvasId))}
-        >
-          ← Canvas
-        </button>
-        <b>{workspace?.label ?? segment}</b>
-        <span className="module-page-hint">{workspace?.hint}</span>
-        <span className="module-workspace-history">
+    <CanvasActivation.Provider value={activation.activate}>
+      <div
+        className="module-workspace"
+        onKeyDown={(event) => {
+          const inStage = (event.target as Element).closest(
+            "[data-module-stage]",
+          );
+          if (
+            !inStage &&
+            (event.metaKey || event.ctrlKey) &&
+            event.key.toLowerCase() === "z" &&
+            !isTyping(event.target)
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            void history(event.shiftKey ? redo : undo);
+            return;
+          }
+          // The module owns its chrome's keys. A button or input must not operate
+          // on selected cards behind a report; the global launcher still crosses.
+          if (!inStage && !crossesCover(event)) event.stopPropagation();
+        }}
+      >
+        <div className="module-page-bar">
           <button
-            aria-pressed={chatOpen}
-            onClick={() => openPanel(canvasId, chatOpen ? null : "main", false)}
+            className="deck-back"
+            onClick={() => navigate(canvasPath(canvasId))}
           >
-            Chat
+            ← Canvas
           </button>
-          <button
-            aria-pressed={agentsOpen}
-            onClick={() =>
-              openPanel(canvasId, agentsOpen ? null : "agents", false)
-            }
+          <b>{workspace?.label ?? segment}</b>
+          <span className="module-page-hint">{workspace?.hint}</span>
+          <span className="module-workspace-history">
+            <button
+              aria-pressed={chatOpen}
+              onClick={() =>
+                openPanel(canvasId, chatOpen ? null : "main", false)
+              }
+            >
+              Chat
+            </button>
+            <button
+              aria-pressed={agentsOpen}
+              onClick={() =>
+                openPanel(canvasId, agentsOpen ? null : "agents", false)
+              }
+            >
+              Agents
+            </button>
+          </span>
+          {!canEdit && <span>Read only</span>}
+        </div>
+        {historyError && <p role="alert">{historyError}</p>}
+        <WorkspaceBoundary key={`${canvasId}:${segment}`}>
+          <Suspense
+            fallback={<p className="module-page-missing">Opening workspace…</p>}
           >
-            Agents
-          </button>
-          {canEdit && !inPast && (
-            <>
-              <button disabled={historyBusy} onClick={() => void history(undo)}>
-                Undo
-              </button>
-              <button disabled={historyBusy} onClick={() => void history(redo)}>
-                Redo
-              </button>
-            </>
-          )}
-        </span>
-        {!canEdit && <span>Read only</span>}
+            {Body && canvas && project && (
+              <Body
+                canvasId={canvasId}
+                canvas={canvas}
+                project={project}
+                host={host}
+                selection={selection}
+                canEdit={canEdit && !inPast}
+                canvasView={<NativeCanvasSlot>{canvasView}</NativeCanvasSlot>}
+              />
+            )}
+          </Suspense>
+        </WorkspaceBoundary>
       </div>
-      {historyError && <p role="alert">{historyError}</p>}
-      <WorkspaceBoundary key={`${canvasId}:${segment}`}>
-        <Suspense
-          fallback={<p className="module-page-missing">Opening workspace…</p>}
-        >
-          {Body && canvas && (
-            <Body
-              canvasId={canvasId}
-              canvas={canvas}
-              host={host}
-              selection={selection}
-              canEdit={canEdit && !inPast}
-              canvasView={<NativeCanvasSlot>{canvasView}</NativeCanvasSlot>}
-            />
-          )}
-        </Suspense>
-      </WorkspaceBoundary>
-    </div>
+    </CanvasActivation.Provider>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { RendererFacts } from "@isocan/core";
+import { modulePagePath } from "@isocan/core";
 import { NODE_MIME, PROJECT_MIME } from "./manifest.ts";
 import {
   AXIS_LABELS,
@@ -9,7 +10,12 @@ import {
 } from "./schema.ts";
 import "./style.css";
 
-export default function Card({ readText, mimeType, item }: RendererFacts) {
+export default function Card({
+  readText,
+  mimeType,
+  item,
+  canvasId,
+}: RendererFacts) {
   const [content, setContent] = useState<{
     label: string;
     text: string;
@@ -72,6 +78,16 @@ export default function Card({ readText, mimeType, item }: RendererFacts) {
           ? `Unable to read this file: ${error}`
           : (content?.text ?? "Loading…")}
       </p>
+      {mimeType === PROJECT_MIME && item && (
+        <a
+          className="anatomy-card-open"
+          href={`${modulePagePath(canvasId, "anatomy")}?project=${encodeURIComponent(item.id)}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          Open Anatomy →
+        </a>
+      )}
     </article>
   );
 }

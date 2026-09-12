@@ -12,6 +12,8 @@ import {
   projectsOn,
   nodesOn,
   readProject,
+  projectNeighborhood,
+  PROP,
 } from "./core.ts";
 import {
   attachSource,
@@ -19,6 +21,7 @@ import {
   importProject,
   layoutProject,
   loadProject,
+  requestAnalysis,
   promoteMock,
   restoreCheckpoint,
   saveCheckpoint,
@@ -51,6 +54,66 @@ function register(host: CliHost): void {
   }
   const command = (name: string, description: string) =>
     family.command(name).description(description).option("--canvas <canvas>");
+  command(
+    "repository <path-or-url>",
+    "Associate a repository with this canvas for Anatomy analysis",
+  ).action(
+    host.run(async (repository: string, _opts: unknown, cmd: Command) => {
+      const { io } = await context(cmd);
+      if (!repository.trim())
+        throw new Error("Provide a repository path or URL");
+      await io.send([
+        {
+          type: "project.update",
+          patch: { properties: { [PROP.repository]: repository.trim() } },
+        },
+      ]);
+    }),
+  );
+  command(
+    "attach <project>",
+    "Make an Anatomy analysis this canvas's View Anatomy destination",
+  ).action(
+    host.run(async (ref: string, _opts: unknown, cmd: Command) => {
+      const { io } = await context(cmd);
+      const { item } = await loadProject(io, ref);
+      await io.send([
+        {
+          type: "project.update",
+          patch: { properties: { [PROP.analysis]: item.id } },
+        },
+      ]);
+    }),
+  );
+  command(
+    "analyze [repository]",
+    "Ask an agent in Chat to analyze the associated repository",
+  ).action(
+    host.run(
+      async (repository: string | undefined, _opts: unknown, cmd: Command) => {
+        const { io, ctx } = await context(cmd);
+        const record = (
+          await ctx.client.snapshot(
+            await host.resolveCanvas(ctx).then((c) => c.id),
+          )
+        ).project;
+        const linked = record.properties[PROP.analysis];
+        const canvas = await io.snapshot();
+        const analysis = projectsOn(canvas).find((p) => p.id === linked);
+        await requestAnalysis(
+          io,
+          repository ??
+            record.properties[PROP.repository] ??
+            record.properties.repository ??
+            "",
+          analysis?.id,
+        );
+        console.log(
+          "Analysis requested in Chat; an agent with repository access can pick it up.",
+        );
+      },
+    ),
+  );
   command(
     "new <title>",
     "Create an empty Anatomy project on this canvas",
@@ -91,20 +154,31 @@ function register(host: CliHost): void {
           console.log(`${row.id}  ${row.title}  ${row.concepts} concepts`);
     }),
   );
-  command("show <project>", "Read a project and its full concept graph").action(
-    host.run(async (ref: string, _opts: unknown, cmd: Command) => {
-      const { io, ctx } = await context(cmd);
-      const { project } = await loadProject(io, ref);
-      if (ctx.json) host.printJson(project);
-      else {
-        console.log(
-          `${project.projectName}: ${convergence(project.nodes)}% settled\n${project.goalStatement}`,
-        );
-        for (const n of project.nodes)
-          console.log(`${n.id}  ${n.category}  ${n.status}  ${n.title}`);
-      }
-    }),
-  );
+  command(
+    "show <project>",
+    "Read a project or a concept's immediate neighborhood",
+  )
+    .option(
+      "--node <id>",
+      "Focus a concept by its original ID, including parent, children and connections",
+    )
+    .action(
+      host.run(async (ref: string, opts: { node?: string }, cmd: Command) => {
+        const { io, ctx } = await context(cmd);
+        const { project } = await loadProject(io, ref);
+        const view = opts.node
+          ? projectNeighborhood(project, opts.node)
+          : project;
+        if (ctx.json) host.printJson(view);
+        else {
+          console.log(
+            `${project.projectName}: ${convergence(project.nodes)}% settled\n${project.goalStatement}`,
+          );
+          for (const n of view.nodes)
+            console.log(`${n.id}  ${n.category}  ${n.status}  ${n.title}`);
+        }
+      }),
+    );
   command(
     "export <project> <file>",
     "Export portable Anatomy JSON, including source citations and checkpoints",

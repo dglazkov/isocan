@@ -2,7 +2,7 @@
 status: built
 since: 2026-09-11
 see: anatomy, modules, atlas
-note: phases 1–5 built and verified on branch anatomy; native file graph, proposed workspace API, four lenses, CLI parity, evidence, native discussion, checkpoints and mock promotion; full suite, typecheck, production/runtime builds and desktop/phone browser journey passed
+note: phases 1–6 built and verified on branch anatomy; native file graph, proposed workspace API, four lenses, CLI parity, evidence, native discussion, checkpoints and mock promotion; full suite, typecheck, production/runtime builds and desktop/phone browser journey passed
 ---
 # Anatomy on an isocan canvas
 
@@ -88,7 +88,7 @@ host measures the actual visible rectangle for focus, zoom and radar.
 
 `WorkspaceFacts.canEdit` reports the effective capability; it is false in history.
 
-The shell owns the route, Back action, native Chat/Agents access, Undo/Redo controls, loading/error boundary, stage
+The shell owns the route, Back action, native Chat/Agents access, Undo/Redo shortcuts, loading/error boundary, stage
 measurement, selection subscription and read-only gate. Module inputs do not
 reach hidden canvas shortcuts. Native comments remain reachable through the
 module's inspector using the same operations and via the ordinary canvas.
@@ -98,8 +98,8 @@ Renderer facts gain an optional `item` so a structured file renderer can
 display its native title and metadata without a private store import. Existing
 renderers keep working. Workspace capabilities are additive and proposed;
 raise the API patch version, and ship `isocan.proposed` through the module
-builder so runtime installs enforce the declaration. No global sidebar
-registry, server hooks, arbitrary filesystem access, or new framework.
+builder so runtime installs enforce the declaration. Project-specific menu and rail entries use the workspace contribution; no
+server hooks, arbitrary filesystem access, or new framework.
 
 ## Module boundary and UI
 
@@ -148,3 +148,32 @@ The graph will use native cards and explicit layout, rather than copying
 Pixi's depth shrinking and physics. The aim is the exploration workflow with
 native canvas affordances. Pixi, Three.js, and their alternate cameras are
 deliberately excluded.
+
+## Neighborhood navigation and project attachment
+
+Native concept double-clicks are routed through a workspace-scoped activation
+subscription. Single clicks select; double-clicks and connection links focus
+the concept, immediate parent/children, and incoming/outgoing dependencies.
+The breadcrumb offers its ancestor chain and All concepts. Positions remain
+native, durable and unchanged. This preserves the prototype's navigation
+intent without importing its fisheye renderer or resizing every card.
+`anatomy show --node` uses the same pure graph query. Other files and the plain
+canvas keep native activation. The inspector resizes by pointer or keyboard,
+with a vertical handle on desktop and a horizontal handle in the bottom pane.
+Cmd-Z/Cmd-Shift-Z work from chrome and the stage; editor text keeps native undo.
+
+The native canvas record owns `anatomy.analysis` (the attached project item id)
+and `anatomy.repository` (the path or URL to ask an agent to read). The analysis
+body's `repoPath` describes what was actually analyzed. Import/new attaches the
+new analysis in the same undo group. `anatomy attach` or the workspace switches
+that association. Existing analyses are discoverable even before attachment;
+a stale link cannot hide the remaining graphs. Explicit project-card links
+select their analysis via the URL's `project` parameter.
+
+`projectEntry` supplies View Anatomy to the project's More menu and right rail;
+a repository without an analysis instead offers Analyze repository. Both lead
+to the module workspace. Repository association is editable there and through
+`anatomy repository`. `anatomy analyze` and Ask agent post an ordinary `/anatomy`
+Chat request, with native item attachments and grouped metadata. The command
+ships the analysis instructions to agents. No click pretends a model is running:
+an agent with repository access must receive the request and do the work.

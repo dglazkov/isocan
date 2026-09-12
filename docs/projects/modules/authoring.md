@@ -210,12 +210,26 @@ There is one replica and one socket. Never instantiate a second viewport.
 | `select(ids)` | Replace native item selection; ignore missing ids. |
 | `focus(ids)` | Frame the items in the visible native stage. Call after the canvas slot mounts. |
 | `openItem(id)` | Navigate to the ordinary host item viewer. |
+| `openChat()` | Show the native Chat, for example after a module posts an agent request. |
+| `onActivateItem(handler)` | Subscribe to native double-clicks and underlay links; return true to consume, false for normal viewing. Returns cleanup. |
 
 `canEdit` is false for a reader or a past-state view. Hide mutation controls;
 `host.send` still enforces the host's capability gate. The shell supplies Back,
-Undo/Redo, lazy loading and an error boundary. Module chrome owns its keyboard
+Undo/Redo shortcuts, lazy loading and an error boundary. Module chrome owns its keyboard
 events, while native canvas gestures and the global launcher retain their
 normal behavior. A report's invisible selection cannot receive Delete.
+
+`WorkspaceFacts.project` carries the native canvas record, including its properties.
+An optional `workspace.projectEntry({project, canvas})` returns `{label, glyph}`
+for the project menu and right tool rail, or null when there is no relevant
+work. The shell owns navigation to the workspace; the module owns whether its
+project metadata warrants a door. Runtime modules use the same contribution.
+
+`UnderlayFacts.activateItem` is supplied inside a workspace. It routes a
+connection link to that workspace's activation subscribers; it is absent on
+the plain canvas. Use narrow hit targets so empty canvas remains pannable.
+Subscribers must clean up on unmount. Activation and camera framing are local
+UI state; they never move or rewrite items.
 
 `RendererFacts.item` is optional native metadata, useful when a structured
 file's title belongs to the item. It does not change the blob requested by

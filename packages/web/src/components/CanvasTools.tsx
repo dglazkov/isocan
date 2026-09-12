@@ -15,6 +15,9 @@ import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
 import { ToolGlyph, toolHint, useCanvasTools } from "../lib/tools.tsx";
 import { postToMain } from "../lib/mainthread.ts";
+import { useNavigate } from "react-router-dom";
+import { modulePagePath } from "@isocan/core";
+import { moduleProjectViews } from "../modules.ts";
 
 /**
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
@@ -149,6 +152,11 @@ const TOOLS: ToolDef[] = [
 ];
 
 export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const navigate = useNavigate();
+  const project = useCanvasStore((s) => s.project);
+  const contents = useCanvasStore((s) => s.canvas);
+  useUiStore((s) => s.modulesGeneration);
+  const projectViews = project && contents ? moduleProjectViews(project, contents) : [];
   const colors = useActorColors();
   const activeTool = useUiStore((s) => s.activeTool);
   const setActiveTool = useUiStore((s) => s.setActiveTool);
@@ -314,6 +322,10 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           follows is attributed and undoable per actor because it went through
           that door and not around it. */}
       {tools.length > 0 && <div className="tool-sep" />}
+      {projectViews.map((view) => <button
+        key={view.segment} className="tool-btn tool-ext" data-tip={view.label} aria-label={view.label}
+        onClick={() => navigate(modulePagePath(canvasId, view.segment))}
+      ><span aria-hidden>{view.glyph}</span><span className="tool-ext-label">{view.label}</span></button>)}
       {tools.map((t) => (
         <button
           key={t.itemId}
@@ -348,4 +360,3 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
     </div>
   );
 }
-

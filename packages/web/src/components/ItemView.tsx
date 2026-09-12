@@ -1,4 +1,5 @@
-import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
 import {
@@ -119,6 +120,7 @@ function ItemViewInner({
   settling?: boolean;
 }) {
   const navigate = useNavigate();
+  const activateItem = useContext(CanvasActivation);
   /**
    * **A live item is only live while it is somewhere near the window** (the
    * 6 September freeze, second half).
@@ -691,6 +693,7 @@ function ItemViewInner({
     // The pointer capture above hands us the label's double-click too; naming
     // a thing is not the same as stepping inside it.
     if (ui.renamingItemId === item.id) return;
+    if (activateItem?.(item.id)) return;
     // A canvas is a place you go, not a thing you step inside of: the same
     // gesture opens it in a tab. Never in place — a canvas inside a canvas
     // inside a canvas is a maze, and a tab is where a place belongs.

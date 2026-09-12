@@ -3,7 +3,7 @@
 Plan completed 11 September 2026 before implementation, on branch `anatomy`.
 Read [analysis.md](analysis.md), then [design.md](design.md).
 
-**Where we are:** phases 1–5 built and verified, 11 September 2026, on branch `anatomy`.
+**Where we are:** phases 1–6 built and verified, 11 September 2026, on branch `anatomy`.
 The plan below was completed before implementation; acceptance evidence is
 collected in [verification.md](verification.md).
 
@@ -65,3 +65,18 @@ Update README, module authoring docs, project index and the day's changelog.
 
 Gate: report the commands and browser interactions actually verified; leave a
 reviewable branch and working preview, with limitations stated precisely.
+
+## 6. Built and verified — Navigation and a project's own analysis
+
+Port the prototype's selection-versus-neighborhood navigation, clickable links
+and hierarchy breadcrumbs. Make the inspector resizable in both orientations,
+replace oversized history buttons with standard shortcuts, and add a project
+card door back to the workspace. Attach analyses and repository references to
+native project properties. Add generic workspace menu/rail entries and a
+native Chat `/anatomy` request, with matching CLI verbs and shared helpers.
+
+Gate: browser double-click/connection/breadcrumb navigation, pointer and
+keyboard resize, text-versus-canvas undo, card/menu/rail return paths, empty
+repository analysis request, and persisted native project association. Run the
+full suite and typecheck; analyze the actual repository only into a separate
+local canvas, keeping fixtures synthetic.

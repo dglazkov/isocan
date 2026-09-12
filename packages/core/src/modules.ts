@@ -1,5 +1,5 @@
 import type { ContextPiece } from "./context.ts";
-import type { CanvasContents, Item } from "./model.ts";
+import type { Canvas, CanvasContents, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import type { SlashCommand } from "./commands.ts";
 
@@ -189,6 +189,8 @@ export interface WebHost {
  */
 export interface UnderlayFacts {
   canvas: CanvasContents;
+  /** Workspace-scoped activation, e.g. following a graph connection. */
+  activateItem?: ((itemId: string) => boolean) | undefined;
   /** The live drag, so a line can ride the gesture before the replica moves. */
   drag: { itemIds: readonly string[]; dx: number; dy: number } | null;
 }
@@ -288,11 +290,16 @@ export interface WorkspaceHost extends WebHost {
   select: (itemIds: readonly string[]) => void;
   focus: (itemIds: readonly string[]) => void;
   openItem: (itemId: string) => void;
+  openChat: () => void;
+  /** Handle native item double-clicks and underlay links. Return true to consume
+   * the activation; false preserves the normal viewer. Unsubscribe on cleanup. */
+  onActivateItem: (handler: (itemId: string) => boolean) => () => void;
 }
 
 /** Reactive facts plus one host-created viewport, mounted wherever the module needs it. */
 export interface WorkspaceFacts<Surface> {
   canvasId: string;
+  project: Canvas;
   canvas: CanvasContents;
   selection: readonly string[];
   canEdit: boolean;
@@ -309,6 +316,9 @@ export interface ModuleWorkspace<W> {
   /** The terminal question this workspace answers. */
   cli: string;
   component: W;
+  /** A project-specific door, shared by its More menu and right tool rail.
+   * Returning null hides it when this module has no work on that project. */
+  projectEntry?: (facts: { project: Canvas; canvas: CanvasContents }) => { label: string; glyph: string } | null;
 }
 
 /**

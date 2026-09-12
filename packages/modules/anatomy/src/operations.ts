@@ -6,6 +6,7 @@ import {
   newCommentId,
   newThreadId,
   anchorOffset,
+  mainThread,
   type CanvasContents,
   type Item,
   type NewVersion,
@@ -199,6 +200,15 @@ export async function importProject(
       await checkpointOp(io, projectId, checkpoint, x, -330 - index * 280),
     );
   }
+  ops.push({
+    type: "project.update",
+    patch: {
+      properties: {
+        [PROP.analysis]: projectId,
+        ...(project.repoPath ? { [PROP.repository]: project.repoPath } : {}),
+      },
+    },
+  });
   await io.send(ops, newGroupId());
   return projectId;
 }
@@ -584,6 +594,69 @@ export function commentOp(
         anchorItemId: item.id,
         comment,
       };
+}
+
+/** Asking for analysis is a normal Chat message that parked agents can hear.
+ * A birth race retries against the winning main thread, keeping one channel. */
+export async function requestAnalysis(
+  io: AnatomyIO,
+  repository: string,
+  projectId?: string,
+) {
+  const repo = repository.trim();
+  if (!repo) throw new Error("Associate a repository path or URL first");
+  const group = newGroupId();
+  const body = `/anatomy ${repo}${projectId ? `\nUpdate the attached analysis #${projectId}.` : "\nCreate an analysis and attach it to this project."}`;
+  await io.send(
+    [
+      {
+        type: "project.update",
+        patch: {
+          properties: {
+            [PROP.repository]: repo,
+            ...(projectId ? { [PROP.analysis]: projectId } : {}),
+          },
+        },
+      },
+    ],
+    group,
+  );
+  const comment = {
+    id: newCommentId(),
+    body,
+    ...(projectId ? { items: [projectId] } : {}),
+  };
+  const existing = mainThread(await io.snapshot());
+  if (existing) {
+    await io.send(
+      [{ type: "thread.reply", threadId: existing.id, comment }],
+      group,
+    );
+  } else {
+    try {
+      await io.send(
+        [
+          {
+            type: "thread.create",
+            threadId: newThreadId(),
+            x: 0,
+            y: 0,
+            main: true,
+            anchorItemId: null,
+            comment,
+          },
+        ],
+        group,
+      );
+    } catch (error) {
+      const winner = mainThread(await io.snapshot());
+      if (!winner) throw error;
+      await io.send(
+        [{ type: "thread.reply", threadId: winner.id, comment }],
+        group,
+      );
+    }
+  }
 }
 
 export async function loadProject(io: AnatomyIO, ref: string) {

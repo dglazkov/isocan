@@ -20,6 +20,7 @@ import {
   layoutProject,
   convergence,
   parseProject,
+  projectNeighborhood,
 } from "../src/core.ts";
 import {
   commentOp,
@@ -30,6 +31,7 @@ import {
   saveEdge,
   saveNode,
   saveProject,
+  requestAnalysis,
   type AnatomyIO,
 } from "../src/operations.ts";
 import { sampleProject } from "./fixture.ts";
@@ -82,6 +84,7 @@ function memory() {
     batches,
     blobs,
     canvas: () => state!.canvas,
+    project: () => state!.project,
     undo: () => {
       for (const op of undo.pop() ?? []) apply(op);
     },
@@ -89,6 +92,59 @@ function memory() {
 }
 
 describe("Anatomy as native files and operations", () => {
+  it("attaches an imported analysis to its canvas and undoes the association", async () => {
+    const m = memory();
+    const first = await importProject(m.io, sampleProject());
+    expect(m.project().properties[PROP.analysis]).toBe(first);
+    expect(m.project().properties[PROP.repository]).toBe("/example/acme");
+    const second = await importProject(m.io, sampleProject());
+    expect(m.project().properties[PROP.analysis]).toBe(second);
+    m.undo();
+    expect(m.project().properties[PROP.analysis]).toBe(first);
+    expect(m.canvas().items[second]).toBeUndefined();
+  });
+  it("requests repository analysis through one reusable native Chat", async () => {
+    const m = memory();
+    await expect(requestAnalysis(m.io, "  ")).rejects.toThrow(
+      "Associate a repository",
+    );
+    expect(m.batches).toHaveLength(0);
+    await requestAnalysis(m.io, "/example/acme");
+    await requestAnalysis(m.io, "/example/acme");
+    const threads = Object.values(m.canvas().threads);
+    expect(threads).toHaveLength(1);
+    expect(threads[0]!.main).toBe(true);
+    expect(threads[0]!.comments).toHaveLength(2);
+    expect(threads[0]!.comments[0]!.body).toContain("/anatomy /example/acme");
+    expect(m.project().properties[PROP.repository]).toBe("/example/acme");
+  });
+  it("explores one hop including hierarchy and incoming/outgoing connections", () => {
+    const p = sampleProject();
+    p.edges.push({ id: "policy_state", from: "policy", to: "state" });
+    const view = projectNeighborhood(p, "state");
+    expect(view.focus.id).toBe("state");
+    expect(view.ancestors.map((n) => n.id)).toEqual(["goal", "workflow"]);
+    expect(view.nodes.map((n) => n.id)).toEqual([
+      "workflow",
+      "state",
+      "policy",
+    ]);
+    expect(projectNeighborhood(p, "goal").nodes.map((n) => n.id)).toEqual([
+      "goal",
+      "workflow",
+      "policy",
+    ]);
+    expect(view.edges).toHaveLength(2);
+    expect(() => projectNeighborhood(p, "absent")).toThrow("Unknown concept");
+  });
+  it("bounds ancestry after native metadata edits introduce a cycle", () => {
+    const p = sampleProject();
+    p.nodes[0]!.parentId = "state";
+    expect(projectNeighborhood(p, "state").ancestors.map((n) => n.id)).toEqual([
+      "goal",
+      "workflow",
+    ]);
+  });
   it("round-trips optional evidence, assessments, historical discussion and checkpoints", async () => {
     const m = memory(),
       p = sampleProject();

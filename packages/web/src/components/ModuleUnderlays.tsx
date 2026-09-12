@@ -1,4 +1,6 @@
 import { modules } from "../modules.ts";
+import { useContext } from "react";
+import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
@@ -13,12 +15,13 @@ import { useUiStore } from "../stores/uiStore.ts";
  * never sees a store, which is what keeps the dependency pointing one way.
  */
 export function ModuleUnderlays() {
+  const activateItem = useContext(CanvasActivation);
   const canvas = useCanvasStore((s) => s.canvas);
   const drag = useUiStore((s) => s.drag);
   // A runtime module that arrived after first paint is a new underlay.
   useUiStore((s) => s.modulesGeneration);
   if (!canvas) return null;
-  const facts = { canvas, drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null };
+  const facts = { canvas, activateItem, drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null };
   return (
     <>
       {modules().flatMap((m) =>
