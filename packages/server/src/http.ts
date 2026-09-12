@@ -2235,7 +2235,7 @@ export function registerRoutes(
 
   /** Your own marks, every canvas, one read — what the inbox and the
    *  switcher's "lately" both start from. */
-  app.get(SEEN_ROUTE, async (req, reply) => {
+  app.get(SEEN_ROUTE, async (req) => {
     const query = req.query as { actorId?: unknown };
     const actorId = await actingActor(req, query.actorId);
     const home = options.homes?.homeScoped() ?? null;
@@ -2247,7 +2247,6 @@ export function registerRoutes(
     // same function the writes merge with.
     const ids = actorId ? [actorId] : [...new Set(req.badge!.claims.map((c) => c.actorId))];
     const ledgers = await Promise.all(ids.map((id) => desk.seenOf(id)));
-    void reply;
     return { marks: mergeSeen(...ledgers) } satisfies SeenMarksResponse;
   });
 
