@@ -200,7 +200,9 @@ export declare class DaemonRoutes {
     /** **One gesture, one undo** — see `LogEntry.group`. Ops sent under one
      *  id are undone together, so `isocan copy` writing eight items is one
      *  ⌘Z on the screen watching it. */
-    group?: string, originGroupMode?: "legacy" | "groups"): Promise<PostOpResponse>;
+    group?: string, originGroupMode?: "legacy" | "groups", 
+    /** A canvas's birth space at its home; only valid with project.create. */
+    spaceId?: string): Promise<PostOpResponse>;
     /** Semantic group request; canonical resolved patches belong to the
      * authoritative writer. Pass a stable opId when retrying one intent. */
     changeGroup(canvasId: string, actor: Actor, action: Exclude<GroupAction, {

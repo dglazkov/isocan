@@ -33,6 +33,18 @@ export interface DaemonOptions {
      */
     host?: string;
     /**
+     * **A home that serves the world, said outright — tests only.** Production
+     * derives this from `host` just below, and that is the only thing that sets
+     * it in a running daemon.
+     *
+     * It exists because the behaviour it gates (`GET /api/projects` showing a
+     * local caller everything this machine holds) is the difference between a
+     * laptop and isocan.io, and a test cannot bind `0.0.0.0` to stand on the
+     * other side of it: binding wide from a test opens a port to the network,
+     * and `127.0.0.2` is not an address every machine has.
+     */
+    servesWorld?: boolean;
+    /**
      * The content listener's port: a number pins it, `0` asks for an ephemeral
      * one, `"off"` disables it. Absent, `ISOCAN_CONTENT_PORT` is read, and
      * unset means the default plan — the main port's neighbour, then ephemeral

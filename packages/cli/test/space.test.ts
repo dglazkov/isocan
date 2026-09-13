@@ -128,6 +128,33 @@ const enter = async (badge: { headers: Record<string, string> }, canvasId: strin
   (await fetch(`${homeBase}/api/projects/${canvasId}/canvas`, { headers: badge.headers })).status;
 
 describe("isocan space", () => {
+  it("canvas create --space is born at the home with inherited access and no link grant", async () => {
+    await bornCanvas();
+    const space = await cli("space", "new", "Design");
+    expect(space.code, space.stderr).toBe(0);
+    const id = space.stdout.match(/\((spc_\S+)\)/)![1]!;
+    const invited = await cli("share", "--space", "Design", "jordan@acme.test", "--as", "read");
+    expect(invited.code, invited.stderr).toBe(0);
+    for (const ref of ["Design", id]) {
+      const made = await cli("canvas", "create", `Acme ${ref}`, "--space", ref, "--json");
+      expect(made.code, made.stderr).toBe(0);
+      const answer = JSON.parse(made.stdout) as { canvasId: string; spaceId: string };
+      expect(answer.spaceId).toBe(id);
+      expect((await homeDaemon.desk.space(id))!.canvasIds).toContain(answer.canvasId);
+      expect(await homeDaemon.desk.grantsFor(answer.canvasId)).toEqual([]);
+      expect(await strangerCanRead(answer.canvasId)).toBe(403);
+      expect(await enter(await holderOf("jordan@acme.test"), answer.canvasId)).toBe(200);
+    }
+    const unknown = await cli("canvas", "create", "Acme missing", "--space", "Missing");
+    expect(unknown.code).toBe(1);
+    expect(unknown.stderr).toContain("no space called Missing");
+    const empty = await cli("canvas", "create", "Acme empty space", "--space", "");
+    expect(empty.code).toBe(1);
+    expect(empty.stderr).toContain("no space called");
+    const ordinary = await anotherCanvas("Acme ordinary");
+    expect((await homeDaemon.desk.grantsFor(ordinary)).some((g) => g.subject === "link")).toBe(true);
+    expect(await strangerCanRead(ordinary)).toBe(200);
+  }, 90_000);
   it("makes a space at the home, lists it, and puts canvases in and out of it", async () => {
     const a = await bornCanvas();
     const b = await anotherCanvas("Acme Roadmap");
@@ -291,6 +318,23 @@ describe("isocan space", () => {
     const byId = await cli("space", "add", jordansSpace.id, a);
     expect(byId.code, byId.stderr).toBe(0);
     expect((await homeDaemon.desk.space(jordansSpace.id))!.canvasIds).toEqual([a]);
+    const birthAmbiguous = await cli("canvas", "create", "Acme ambiguous", "--space", "Design");
+    expect(birthAmbiguous.code).toBe(1);
+    expect(birthAmbiguous.stderr).toContain("2 spaces are called Design");
+    const grantedBirth = await cli("canvas", "create", "Acme granted owner", "--space", jordansSpace.id, "--json");
+    expect(grantedBirth.code, grantedBirth.stderr).toBe(0);
+    const newborn = JSON.parse(grantedBirth.stdout).canvasId as string;
+    expect((await homeDaemon.desk.space(jordansSpace.id))!.canvasIds).toContain(newborn);
+    expect(await homeDaemon.desk.grantsFor(newborn)).toEqual([]);
+    const demoted = await fetch(`${homeBase}${spaceGrantsRoute(jordansSpace.id)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...jordanBadge.headers },
+      body: JSON.stringify({ subject: "email:priya@acme.test", capability: "edit" }),
+    });
+    expect(demoted.status).toBe(200);
+    const refused = await cli("canvas", "create", "Acme editor cannot create", "--space", jordansSpace.id);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/own|owner/);
   }, 90_000);
 
   it("delete keeps every canvas, and the space stops being listed", async () => {

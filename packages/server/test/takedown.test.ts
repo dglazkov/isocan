@@ -80,6 +80,7 @@ async function boot() {
     port: 0,
     home,
     birthHome: null,
+    servesWorld: true,
     auth,
     operators: [`email:${OLU}`],
     signingKeys: async () => keys,
@@ -511,6 +512,15 @@ describe("taking down is not deleting", () => {
     expect(notices.takedowns[0]!.sentence).toBe(takedownSentence(row));
     // The note is the operator's and reaches no surface.
     expect(JSON.stringify(notices)).not.toContain("kai, 12 Sep");
+  });
+
+  it("does not list a hosted takedown through a live link, but repeats it for a known address", async () => {
+    const { takedown: row } = await takedown();
+    const stranger = await mintTestBadge(base);
+    const listing = await fetch(`${base}${TAKEDOWNS_ROUTE}`, { headers: stranger.headers });
+    expect(await listing.json()).toEqual({ takedowns: [] });
+    const named = await fetch(`${base}${TAKEDOWNS_ROUTE}?canvas=${canvasId}`, { headers: stranger.headers });
+    expect(((await named.json()) as TakedownsResponse).takedowns[0]!.sentence).toBe(takedownSentence(row));
   });
 
   it("answers one canvas to anybody, because the door already says it", async () => {

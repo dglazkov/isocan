@@ -16,20 +16,16 @@ after, because a takedown answers every one of those reports on its own,
 more bluntly. The words on `/terms` come first of all, because they are
 untrue today and fixing them costs nothing.
 
-**Where we are:** phases 1 to 6 are PART-DONE (12–13 Sep 2026) — every
-act the page promised exists: the operator proved per act; a look; a
-takedown that lifts; a purge that does not; ending a badge that reaches what
-it held; turning off a grant the owner can turn back on; refusing an address
-or a network at the door for a stated time, which also closes phase 4's
-reclaim gap at the engine. Every act writes its ledger row before it answers.
-All of it green here with the cloud halves against the Firestore emulator,
-walked by hand against local daemons; none of it walked on dev. What stops
-the walk is one sitting of Dion's: `ISOCAN_OPERATORS` on dev.isocan.io, a
-sign-in, a second account, a third browser, a phone, two networks — and a
-decision about journey 1 step 3, which says Google where this app has only
-an emailed link. Phase 0's wording and phase 7's are Dion's call, drafted;
-phase 8 waits for a self-hosted home to ask. Nothing left here needs no
-person.
+**Where we are:** operator phases 1–6 remain PART-DONE. All six acts are
+implemented, with prior local and emulator proof; the 13 September readiness
+pass independently reran 202 focused tests successfully. Hosted walks remain
+open. [acceptance.md](acceptance.md) is the runbook and
+[terms-proposal.md](terms-proposal.md) is the unpublished final wording.
+Dion approved the existing emailed-link flow; the dev operator address,
+real sign-in, second account and device/network proofs remain to be supplied.
+Operator phase 0 is the next unstarted phase, an obsolete interim proposal
+awaiting replacement by phase 7's approved words. Phase 8 remains deferred
+until a self-hosted home asks. No live operator configuration or terms changed.
 
 **Sizes.** S is a day's work with its tests. M is two or three. L would be a
 week; nothing here is one.
@@ -107,9 +103,9 @@ in `log`. A local daemon with no attester says why it has no operator.
   phase-2 verb needs the branch.
 - **2026-09-12** — Open: the walk — `ISOCAN_OPERATORS` on dev.isocan.io, a
   sign-in, a second account. Waits on Dion; the list is Dimitri's.
-- **2026-09-12** — Open: journey 1 says *signs in with Google*; `signin.ts`
-  offers only an emailed link. Either the walk is that link, or the button
-  comes first.
+- **2026-09-13** — Dion approved the existing emailed-link sign-in for the
+  acceptance walk. Journey 1 now names that flow; no Google OAuth work is
+  needed to prove the implemented operator path.
 - **2026-09-12** — Open: `show` on a soft-deleted canvas is a 404 and
   `OperatorReach` has no `deleted`. Takedown is where it comes from.
 - **2026-09-12** — Open: the reach says *N relaying now*, never *linked* — no
@@ -404,3 +400,23 @@ bet; `operator` in everyone's `--help`.
 **#77's questions** are answered in [design.md](design.md#dimitris-questions-answered),
 each against the phase that builds the answer: the proof in 1, the path in
 1, the record in 1 and the words in 2, the refusal in 6, the terms in 0.
+
+## Acceptance preparation, 13 September 2026
+
+The conductor independently reran 202 focused tests across 19 files, all
+passing. The existing implementation required no operator code change.
+Hosted acceptance remains open; [acceptance.md](acceptance.md) is the concrete
+runbook, and [terms-proposal.md](terms-proposal.md) is the unpublished wording
+for review. Neither document claims deployment or a real sign-in.
+
+Dev has no separate content domain by design. Its walk proves app-origin
+behavior; the split-origin `isocan.store` checks require a separately prepared
+production canvas after promotion. Every CLI invocation signs in afresh, so a
+second invocation after eleven minutes does not by itself prove server token
+expiry. The runbook distinguishes those proofs and uses the existing `spam`
+reason for the synthetic flood case.
+
+Phase 0's interim proposal is obsolete against the implemented source. Keep it
+as the historical proposal until phase 7's reviewed wording replaces it; do
+not publish an assertion that refusal is unbuilt. The live terms, operator
+configuration and storage settings have not been changed by this preparation.

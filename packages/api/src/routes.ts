@@ -475,6 +475,8 @@ export class DaemonRoutes {
      *  ⌘Z on the screen watching it. */
     group?: string,
     originGroupMode?: "legacy" | "groups",
+    /** A canvas's birth space at its home; only valid with project.create. */
+    spaceId?: string,
   ): Promise<PostOpResponse> {
     const origin = originGroupMode ?? (canvasId ? this.observedGroupModes.get(canvasId) : undefined);
     return this.request("POST", "/api/ops", {
@@ -483,6 +485,7 @@ export class DaemonRoutes {
       op,
       ...(clientId !== undefined ? { clientId } : {}),
       ...(home !== undefined ? { home } : {}),
+      ...(spaceId !== undefined ? { spaceId } : {}),
       ...(group !== undefined ? { group } : {}),
       ...(origin !== undefined ? { originGroupMode: origin } : {}),
     });

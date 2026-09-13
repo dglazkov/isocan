@@ -208,6 +208,9 @@ export async function admittingGrant(
   badge: BadgeRecord,
   creator: string | null = null,
   via: DoorLookup = desk,
+  /** Discovery has no presented address, so a link cannot answer it. Bars,
+   * named grants and creator floors are still judged by the same door. */
+  scope: "entry" | "discovery" = "entry",
 ): Promise<DoorAnswer | null> {
   /**
    * **Both scopes** (roles design, "Who holds what"): the canvas's rows and
@@ -246,7 +249,7 @@ export async function admittingGrant(
   if (!barred) {
     const rung = (grant: Grant) => RUNGS.indexOf(capabilityOf(grant));
     const rows = live
-      .filter((grant) => !isBar(grant))
+      .filter((grant) => !isBar(grant) && (scope === "entry" || grant.subject !== LINK))
       .sort((a, b) => rung(b) - rung(a) || a.at.localeCompare(b.at));
     for (const grant of rows) {
       if (await subjectAdmits(grant.subject, attestations, groupOf)) {

@@ -2,6 +2,7 @@ import type { Actor, CanvasContents, Item } from "./model.ts";
 import type { LogEntry } from "./ops.ts";
 import type { PresenceWhere } from "./protocol.ts";
 import { itemKind } from "./kinds.ts";
+import { activityOpType } from "./opwords.ts";
 
 /**
  * **What one actor has made, across every canvas — a lens, not a canvas.**
@@ -246,7 +247,7 @@ export interface LensAct {
   canvasTitle: string;
   /** The actor's name as the log recorded it. */
   actor: string;
-  /** The operation type — a caller phrases it with `opWords`. */
+  /** The semantic act type — a caller phrases it with `opWords`. */
   op: string;
 }
 
@@ -297,7 +298,7 @@ export function lensActs(
         canvasId: log.canvasId,
         canvasTitle: log.canvasTitle,
         actor: naming ? naming(actor) : actor.name,
-        op: entry.envelope.op.type,
+        op: activityOpType(entry.envelope.op),
       });
     }
   }

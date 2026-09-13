@@ -337,6 +337,7 @@ export function postOp(
   opId: string,
   group?: string,
   originGroupMode?: "legacy" | "groups",
+  spaceId?: string,
 ): Promise<PostOpResponse> {
   return request("POST", "/api/ops", {
     canvasId,
@@ -346,6 +347,7 @@ export function postOp(
     op,
     ...(group !== undefined ? { group } : {}),
     ...(originGroupMode ? { originGroupMode } : {}),
+    ...(spaceId !== undefined ? { spaceId } : {}),
   });
 }
 
@@ -413,11 +415,13 @@ export async function sendOp(
    *  the same id for every op it writes. */
   group?: string,
   capturedOrigin?: "legacy" | "groups",
+  /** Birth metadata; project.create is never placed in the offline queue. */
+  spaceId?: string,
 ): Promise<PostOpResponse | null> {
   const opId = newOpId();
   const originGroupMode = capturedOrigin ?? writeOrigin?.(canvasId);
   try {
-    return await postOp(canvasId, actor, op, opId, group, originGroupMode);
+    return await postOp(canvasId, actor, op, opId, group, originGroupMode, spaceId);
   } catch (err) {
     const upgradeRequired = err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED;
     if (homeAnswered(err) && !upgradeRequired) throw err;

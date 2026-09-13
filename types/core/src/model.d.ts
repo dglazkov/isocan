@@ -57,7 +57,9 @@ export interface Canvas {
     updatedAt: string;
     updatedBy: Actor;
     /**
-     * The type of that last operation — `item.add`, `thread.create`, and so on.
+     * The semantic type of that last act — `item.add`, `thread.create`, and so
+     * on. An atomic group insertion still describes the item it added; its
+     * canonical log entry remains `group.change`.
      *
      * Stored rather than derived because the alternative is reading every
      * canvas's log to draw a list of canvases: one metadata file per canvas is

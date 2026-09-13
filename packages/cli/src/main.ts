@@ -787,7 +787,7 @@ function itemCenter(item: Item): { x: number; y: number } {
   return { x: item.x + item.width / 2, y: item.y + item.height / 2 };
 }
 
-async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation, group?: string) {
+async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation, group?: string, spaceId?: string) {
   op = insertionOperation(op);
   // Ops bound to an active session move its cursor to the op's locus
   // (presence piggyback) — the daemon matches clientId to the session.
@@ -833,7 +833,7 @@ async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation, group?: 
     return ctx.client.sendOp(canvasId, ctx.actor, cleanOp, clientId, undefined, effectiveGroup);
   }
 
-  return ctx.client.sendOp(canvasId, ctx.actor, op, clientId, undefined, group);
+  return ctx.client.sendOp(canvasId, ctx.actor, op, clientId, undefined, group, undefined, spaceId);
 }
 
 /** Resolve an item by exact id, id prefix, or title prefix. */
@@ -5726,12 +5726,14 @@ canvas
 canvas
   .command("create <title>")
   .description("Create a canvas with groups (the writer's default)")
+  .option("--space <name-or-id>", "create in this space, inheriting its access with no birth link grant; requires an owner")
   .option("-d, --description <text>")
   .option("--legacy", "create a deliberate compatibility canvas; group writes require migration")
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
   .action(
-    run(async (title: string, opts: { description?: string; prop: Record<string, string>; legacy?: boolean }, cmd: Command) => {
+    run(async (title: string, opts: { description?: string; prop: Record<string, string>; legacy?: boolean; space?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
+      const space = opts.space === undefined ? null : await resolveSpace(ctx, opts.space);
       const canvasId = newCanvasId();
       await sendOp(ctx, null, {
         type: "project.create",
@@ -5740,9 +5742,9 @@ canvas
         ...(opts.legacy ? { groupMode: "legacy" as const } : {}),
         ...(opts.description !== undefined ? { description: opts.description } : {}),
         ...(Object.keys(opts.prop).length > 0 ? { properties: opts.prop } : {}),
-      });
-      if (ctx.json) return printJson({ canvasId });
-      console.log(`created canvas ${canvasId} — "${title}"`);
+      }, undefined, space?.id);
+      if (ctx.json) return printJson({ canvasId, ...(space ? { spaceId: space.id } : {}) });
+      console.log(`created canvas ${canvasId} — "${title}"${space ? ` in ${space.name}; access comes from the space` : ""}`);
       const config = await readConfig(ctx.home);
       if (!config.defaultProjectId) {
         await writeConfig(ctx.home, { ...config, defaultProjectId: canvasId });

@@ -20,7 +20,7 @@ inside C, and A is what C falls back to on a host that does not speak it.
 
 ## Where we are
 
-**Phase 1 is closed. Phase 2's read half is built; its write half waits on addressability, and `read_context` and MCP resources are what the read half still owes.**
+**Phase 1 is closed. Phase 2 has eight read tools, including current and frozen item context; layered Context summaries, MCP resources and addressable writes remain.** The 13 September continuation is specified in [context-and-sessions.md](context-and-sessions.md). Existing `read_context` and `read_context_content` keep their request-manifest meanings.
 
 ---
 
@@ -171,11 +171,12 @@ anything per-conversation to hang it on automatically (`clientInfo` on
 ### What the read half still owes
 
 The reading surface the [context](../context/design.md) project's stage 3
-actually specified is `isocan context` — the design system, the bound
-directory, the recap, the Chat, pinned items, the guide's version — and this
-phase shipped the canvas's own reads instead. They overlap and are not the
-same list; `read_context` is the tool that closes stage 3, and it is the next
-one to add.
+specified is the layered summary shown by `isocan context`. Canvas-groups
+subsequently added `read_context` and `read_context_content` for current item
+manifests and frozen request content. Those names are no longer missing, and
+must not be reused for a different response. The continuation adds the
+summary separately, as [context-and-sessions.md](context-and-sessions.md)
+specifies.
 
 MCP **resources** are also unbuilt. Tools are what every host supports, so
 they came first; a canvas exposed as a resource is what lets a host attach it

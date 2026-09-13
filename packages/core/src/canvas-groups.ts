@@ -7,6 +7,7 @@ import { PLACEMENT_GAP, PLACEMENT_CLEARANCE, nearestFreeSpot, overlaps, resolveP
 import { reduceOperation } from "./reducer.ts";
 import { formatMoves } from "./format.ts";
 import type { Operation } from "./ops.ts";
+import { activityOpType } from "./opwords.ts";
 
 const GROUP_KIND = "group";
 const GROUP_LIMIT = 10000;
@@ -749,7 +750,7 @@ export function applyGroupChange(state: CanvasState, change: GroupChange, actor:
       Object.defineProperty(cohorts, id, { value: structuredClone(cohort), enumerable: true, configurable: true, writable: true });
     }
   }
-  const next: CanvasState = { project: { ...state.project, updatedBy: actor, updatedAt: ts, lastOp: "group.change" }, canvas: { ...state.canvas, items, trash: [...trash.values()], ...(Object.keys(cohorts).length ? { groupCohorts: cohorts } : {}) } };
+  const next: CanvasState = { project: { ...state.project, updatedBy: actor, updatedAt: ts, lastOp: activityOpType({ type: "group.change", action: { kind: "apply", change } }) }, canvas: { ...state.canvas, items, trash: [...trash.values()], ...(Object.keys(cohorts).length ? { groupCohorts: cohorts } : {}) } };
   if (change.migration) {
     next.project.groupMode = change.migration.mode;
     if (change.migration.boundary) next.project.groupMigration = structuredClone(change.migration.boundary);

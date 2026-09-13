@@ -77,6 +77,18 @@ interface RouteOptions {
      */
     modulesHome?: string;
     /**
+     * **Does this daemon serve the world?** What the bind says, stated rather
+     * than sniffed: `daemon.ts` derives it from the address it was told to listen
+     * on, and absent it the socket is read (`loopbackBound`).
+     *
+     * It decides whether discovery uses the machine's local trust or the
+     * hosted boundary, and exists as an option because a test cannot bind
+     * `0.0.0.0` to find out. Binding wide from a test opens a port to the
+     * network, and with `SO_REUSEADDR` it can be handed a port another suite
+     * already holds on `127.0.0.1`, after which the two daemons trade requests.
+     */
+    servesWorld?: boolean;
+    /**
      * The content origin's base URL, or null/absent when none exists — which
      * is every daemon at stage 1 of the content-origin plan. The daemon sets
      * this from the content listener it actually started (stage 2), never from

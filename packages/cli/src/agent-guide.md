@@ -1168,6 +1168,10 @@ Full native export/import preserves mode, boundary and history.
 
 `canvas create <title>` uses the writer's group default. `--legacy` is for
 intentional compatibility fixtures; it does not opt out of migration rules.
+`canvas create <title> --space <name-or-id>` is born in that space with no link
+grant; access comes from the space. The acting person must own the space.
+Omitting `--space` keeps the usual canvas birth. `space list` shows the names
+and ids, and an ambiguous name must be given by id.
 Top-level `group` continues to manage people and sharing; an undo-group label
 continues to join log entries for undo. Neither establishes canvas membership.
 

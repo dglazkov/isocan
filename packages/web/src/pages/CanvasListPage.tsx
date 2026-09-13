@@ -105,6 +105,7 @@ export function CanvasListPage({
    * but the headings.
    */
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [birthSpaceId, setBirthSpaceId] = useState("");
   /**
    * **Which of these this home has stopped serving, and what it says about
    * them** (operator phase 2), by canvas id.
@@ -443,6 +444,27 @@ export function CanvasListPage({
     return () => clearTimeout(t);
   }, [justMade]);
 
+  const birthSpacePicker = spaces.length > 0 || birthSpaceId ? (
+    <>
+      <label htmlFor="birth-space">Space</label>
+      <select
+        id="birth-space"
+        className="text-input"
+        value={birthSpaceId}
+        disabled={creating}
+        onChange={(e) => setBirthSpaceId(e.target.value)}
+        aria-describedby={birthSpaceId ? "birth-space-note" : undefined}
+      >
+        <option value="">No space</option>
+        {birthSpaceId && !spaces.some((space) => space.id === birthSpaceId) && (
+          <option value={birthSpaceId}>Selected space unavailable</option>
+        )}
+        {spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}
+      </select>
+      {birthSpaceId && <p className="create-note" id="birth-space-note">A space owner can create here. Access comes from this space.</p>}
+    </>
+  ) : null;
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = title.trim();
@@ -451,7 +473,7 @@ export function CanvasListPage({
     setCreateNote(null);
     const canvasId = newCanvasId();
     try {
-      await sendOp(null, actor, { type: "project.create", canvasId, title: trimmed });
+      await sendOp(null, actor, { type: "project.create", canvasId, title: trimmed }, undefined, undefined, birthSpaceId || undefined);
     } catch (err) {
       /**
        * **It threw into nothing before.** `create` was an async submit handler
@@ -959,6 +981,7 @@ export function CanvasListPage({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {birthSpacePicker}
           <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
             {creating ? "Creating…" : "Create"}
           </button>
@@ -991,6 +1014,7 @@ export function CanvasListPage({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {birthSpacePicker}
           <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
             {creating ? "Creating…" : "Create"}
           </button>

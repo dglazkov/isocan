@@ -120,7 +120,10 @@ interface DoorLookup {
      * group row per door test, memoized by the test itself. */
     group(groupId: string): Promise<Group | null>;
 }
-export declare function admittingGrant(desk: Desk, canvasId: string, badge: BadgeRecord, creator?: string | null, via?: DoorLookup): Promise<DoorAnswer | null>;
+export declare function admittingGrant(desk: Desk, canvasId: string, badge: BadgeRecord, creator?: string | null, via?: DoorLookup, 
+/** Discovery has no presented address, so a link cannot answer it. Bars,
+ * named grants and creator floors are still judged by the same door. */
+scope?: "entry" | "discovery"): Promise<DoorAnswer | null>;
 /** The refusal when somebody below `own` tries to change who may enter a
  *  canvas — inviting, revoking, the link, its rung. Its own code, so a client
  *  can say the useful sentence rather than "no". */

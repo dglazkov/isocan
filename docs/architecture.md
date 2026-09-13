@@ -212,19 +212,20 @@ because the loser's copy is overwritten with nothing anywhere saying so.
 A log line and not a throw — the other canvases at that home are
 innocent.
 
-The listing route still answers the WIDE question by default, because a
-browser asks a different question on the same route — "what can I open
-from here", which on a solo home includes the canvas a CLI just made
-under a badge the tab has never carried — and the caller states which,
-never the route sniffing who called. Phase 10.3 added a third question to
-the same route for the same reason: `?reach=here`, the canvases this
-daemon is the home of, which is what the web app's canvas list asks,
-because its links are client-side navigations that never reach the
-per-canvas page guard and the local origin would otherwise render a
-replica of a canvas that lives at dev. Enumerate-and-mirror was the
-easiest thing that worked while a home had one member; it is how a
-stranger's canvas landed on a laptop the moment a link grant was on. An
-arrival that
+Hosted discovery now includes admissions, named canvas/group/space grants
+and creator floors. Link grants answer a known address and never supply a
+hosted directory, including explicit `?reach=admissible` requests. The same
+boundary governs homes, presence whereabouts, takedown lists and unscoped
+oplog watches. Named watch targets retain the entry door. Link candidates
+are excluded before choosing a discovery grant, so a stronger link cannot
+hide a valid named invitation.
+
+A loopback-bound daemon retains its local shelf: a local browser sees what
+its own machine holds, including a canvas the CLI created under a different
+badge. `?reach=admitted` remains narrow for replicas. `?reach=here` additionally
+limits the answer to canvases this daemon is the home of; the web list needs
+that limit because its client-side links would otherwise open stale local
+replicas. An arrival that
 holds only an ADDRESS — a cloned `.isocan/project.json`, a pass-less
 `isocan setup` — asks for that one canvas by name (`POST
 /api/home/join`), and the home runs the same door test it would have run

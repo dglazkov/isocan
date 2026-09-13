@@ -160,7 +160,7 @@ export interface LensAct {
     canvasTitle: string;
     /** The actor's name as the log recorded it. */
     actor: string;
-    /** The operation type — a caller phrases it with `opWords`. */
+    /** The semantic act type — a caller phrases it with `opWords`. */
     op: string;
 }
 export interface LensLog {

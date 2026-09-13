@@ -512,6 +512,18 @@ interface RouteOptions {
    */
   modulesHome?: string;
   /**
+   * **Does this daemon serve the world?** What the bind says, stated rather
+   * than sniffed: `daemon.ts` derives it from the address it was told to listen
+   * on, and absent it the socket is read (`loopbackBound`).
+   *
+   * It decides whether discovery uses the machine's local trust or the
+   * hosted boundary, and exists as an option because a test cannot bind
+   * `0.0.0.0` to find out. Binding wide from a test opens a port to the
+   * network, and with `SO_REUSEADDR` it can be handed a port another suite
+   * already holds on `127.0.0.1`, after which the two daemons trade requests.
+   */
+  servesWorld?: boolean;
+  /**
    * The content origin's base URL, or null/absent when none exists — which
    * is every daemon at stage 1 of the content-origin plan. The daemon sets
    * this from the content listener it actually started (stage 2), never from
@@ -1813,67 +1825,24 @@ export function registerRoutes(
   });
 
   /**
-   * The canvases this badge may see — phase 6's inherited debt, and phase 8
-   * stage 4 paying the rest of it.
-   *
-   * Phase 6 found this route home-wide and named the consequence: "the moment
-   * a home has two members a replica pulls down canvases it was never
-   * admitted to", because `HomeLink.sweep` polls exactly this list and dials
-   * everything in it. Phase 7 narrowed it to the DOOR'S OWN TEST, asked per
-   * canvas — a badge sees what it is admitted to, plus what a grant would
-   * admit it to — and recorded why it could not go further: a fresh replica's
-   * badge has no admissions, so narrowing to admissions alone left it
-   * discovering nothing at all. That was measured, not reasoned.
-   *
-   * **What changed:** the pass. Redeeming one writes an admission onto the
-   * redeeming badge (`passes.ts`), so a replica can now be TOLD what it holds
-   * instead of being SHOWN what exists. The narrowing that broke replicas in
-   * phase 7 is the right answer for a replica in phase 8.
-   *
-   * **But it is still the wrong answer for a browser**, which is why this
-   * route did not simply narrow. See {@link CanvasesReach}: two callers ask
-   * two questions here, the caller states which, and the wide answer stays
-   * the default so that a person opening `/` on their own home still sees the
-   * canvas their CLI just made under a different badge. A route that guessed
-   * from the carrier would be sniffing, which this codebase refuses.
-   *
-   * **What the narrow answer closes.** A replica asking `?reach=admitted`
-   * mirrors what it was let into and nothing else: a canvas whose link grant
-   * is merely ON no longer lands on a machine nobody handed it, which is the
-   * last gap phase 7 left open and could not close. The wide answer still
-   * lists a link-granted canvas to anyone, and that is not a bug in it — a
-   * link grant says "anyone presenting the address may enter", so for a
-   * person browsing their own home "the ones you may enter" IS the home.
-   *
-   * The cost of the wide answer is one grant query per canvas the badge has
-   * not been in; the narrow answer costs none at all, because admissions are
-   * on the badge record the request already resolved.
+   * Discovery is admissions plus named grants and creator floors. A link is
+   * proof only when an address is presented; no hosted directory may supply
+   * that proof itself. All public lists ask this question, including homes,
+   * presence, unscoped watches and takedowns. A loopback daemon keeps its
+   * existing local trust: its canvas/home shelves show everything it holds.
    */
-  app.get("/api/projects", async (req) => {
+  const onLocalShelf = (req: FastifyRequest): boolean => {
+    const from = req.ip;
+    const answersOnlyThisMachine =
+      options.servesWorld === undefined ? loopbackBound(app) : !options.servesWorld;
+    return answersOnlyThisMachine &&
+      (from === "127.0.0.1" || from === "::1" || from === "::ffff:127.0.0.1");
+  };
+
+  const canvasDiscovery = (req: FastifyRequest, { admittedOnly = false, shelf = false } = {}) => {
     const badge = req.badge!;
-    const query = req.query as Record<string, string | undefined>;
-    // Anything other than the one narrowing word means the default. A typo
-    // must not silently hand a replica the wide list under a name that reads
-    // like the narrow one — it is spelled in exactly one place
-    // (`canvasesRoute`) so that a caller cannot arrive here with a near-miss.
-    const reach = query[CANVASES_REACH_PARAM];
-    const narrow = reach === "admitted";
-    /**
-     * `?reach=here` — of the ones this badge may see, the canvases **this
-     * daemon is the home of** (phase 10.3). What the web app's canvas list
-     * asks, because its links are client-side navigations that never reach the
-     * per-canvas page guard: without this the local origin would render a replica of
-     * a canvas that lives at dev, giving that canvas two doors, two cookies,
-     * two service workers and two browser replicas.
-     *
-     * It stacks ON the admissible answer rather than replacing it — being the
-     * home of a canvas does not admit anybody to it, and a route that answered
-     * "here" without the door's test would be a page server handing out a
-     * roster of the machine.
-     */
-    const hereOnly = reach === "here";
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
-    const visible: Canvas[] = [];
+    const local = onLocalShelf(req);
     /**
      * **The door's space reads, memoized for the wide list** (roles design,
      * "The door reads both"). One `spacesFor(badge)` — the bounded queries —
@@ -1917,12 +1886,21 @@ export function registerRoutes(
         return found;
       },
     };
+    return async (canvas: Canvas): Promise<boolean> => {
+      if (admitted.has(canvas.id) || (!admittedOnly && shelf && local)) return true;
+      if (admittedOnly) return false;
+      return (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id, via, local ? "entry" : "discovery")) !== null;
+    };
+  };
+
+  app.get("/api/projects", async (req) => {
+    const query = (req.query ?? {}) as Record<string, string | undefined>;
+    const reach = query[CANVASES_REACH_PARAM];
+    const mayDiscover = canvasDiscovery(req, { admittedOnly: reach === "admitted", shelf: true });
+    const visible: Canvas[] = [];
     for (const canvas of await engine.listCanvases()) {
-      if (hereOnly && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
-      if (admitted.has(canvas.id)) visible.push(canvas);
-      else if (!narrow && (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id, via))) {
-        visible.push(canvas);
-      }
+      if (reach === "here" && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
+      if (await mayDiscover(canvas)) visible.push(canvas);
     }
     return visible;
   });
@@ -1983,16 +1961,14 @@ export function registerRoutes(
   });
 
   app.get(PRESENCE_WHERE_ROUTE, async (req) => {
-    const badge = req.badge!;
-    const admitted = new Set(badge.admissions.map((a) => a.canvasId));
+    const mayDiscover = canvasDiscovery(req);
+    const canvases = new Map((await engine.listCanvases()).map((canvas) => [canvas.id, canvas]));
     const seen = new Map<string, boolean>();
     const maySee = async (canvasId: string): Promise<boolean> => {
       const known = seen.get(canvasId);
       if (known !== undefined) return known;
-      // One grant query per ROOM, not per face: a canvas with nine agents on
-      // it asked nine times before this cache.
-      const allowed =
-        admitted.has(canvasId) || Boolean(await admittingGrant(desk, canvasId, badge));
+      const canvas = canvases.get(canvasId);
+      const allowed = canvas !== undefined && await mayDiscover(canvas);
       seen.set(canvasId, allowed);
       return allowed;
     };
@@ -2012,7 +1988,7 @@ export function registerRoutes(
     return { where } satisfies PresenceWhereResponse;
   });
 
-  app.get(HOMES_ROUTE, async () => {
+  app.get(HOMES_ROUTE, async (req) => {
     /**
      * **Every canvas this daemon HOLDS, not every row it has written down.**
      *
@@ -2032,8 +2008,9 @@ export function registerRoutes(
      */
     const rows = options.homes?.assignments() ?? {};
     const canvases: Record<string, string | null> = {};
+    const mayDiscover = canvasDiscovery(req, { shelf: true });
     for (const canvas of await store.listCanvases()) {
-      canvases[canvas.id] = rows[canvas.id] ?? null;
+      if (await mayDiscover(canvas)) canvases[canvas.id] = rows[canvas.id] ?? null;
     }
     return {
       birth: options.birthHome ?? null,
@@ -2049,7 +2026,7 @@ export function registerRoutes(
       links: (options.homes?.links() ?? []).map((link) => ({
         url: link.homeUrl,
         reachable: link.answering,
-        canvases: link.canvasStates(),
+        canvases: link.canvasStates().filter((canvas) => onLocalShelf(req) || canvas.canvasId in canvases),
       })),
     } satisfies HomesResponse;
   });
@@ -4506,6 +4483,7 @@ export function registerRoutes(
     if (!badge) return { takedowns: [] } satisfies TakedownsResponse;
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const mine: TakedownNotice[] = [];
+    const mayDiscover = canvasDiscovery(req);
     for (const row of refusals.all()) {
       if (admitted.has(row.canvasId)) {
         mine.push(noticeOf(row));
@@ -4520,7 +4498,7 @@ export function registerRoutes(
        */
       const canvas = (await store.listCanvases()).find((c) => c.id === row.canvasId);
       if (!canvas) continue;
-      if (await admittingGrant(desk, row.canvasId, badge, canvas.createdBy.id)) {
+      if (await mayDiscover(canvas)) {
         mine.push(noticeOf(row));
       }
     }
@@ -4859,22 +4837,10 @@ export function registerRoutes(
   });
 
   /**
-   * The whole home's oplog, one cursor per canvas — what `isocan wait`
-   * listens on. An on-call agent hears canvases it has never opened, so the
-   * long poll must be woken by ANY canvas's op, and a canvas born while it
-   * waits is streamed from its first entry.
-   *
-   * **Home-wide, and no longer a leak** (roles phase 1). "Canvases it has
-   * never opened" is still the feature — a parked agent must hear a canvas
-   * it was summoned to — and at a multi-tenant home that sentence used to
-   * read as "hears everybody's": this route checked no admission at all, so
-   * any badge on the home could read any canvas's oplog. It now runs the
-   * same per-canvas door test as the listing above, per canvas in its list:
-   * a canvas the badge is admitted to, or that a live row would admit it to,
-   * is reported; any other is simply not in the answer. A summoned agent on
-   * a canvas whose link is on still hears it, because the link is the row
-   * that admits it. Nothing is written — hearing about a room is not
-   * entering it, the same rule the listing keeps.
+   * The home's oplog, one cursor per canvas. An unscoped watch discovers the
+   * same rooms the badge may list. `only` explicitly presents known addresses
+   * and may therefore use their link grants. Neither read writes admissions.
+   * A canvas shared by name while the watcher waits is heard from its birth.
    */
   app.post("/api/oplog/watch", async (req) => {
     const body = (req.body ?? {}) as import("@isocan/core").WatchLogRequest;
@@ -4883,6 +4849,7 @@ export function registerRoutes(
     const badge = req.badge!;
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const judged = new Map<string, boolean>();
+    const mayDiscover = canvasDiscovery(req);
     const mayHear = async (canvas: Canvas): Promise<boolean> => {
       /**
        * **A canvas this home has taken down is not heard** (operator phase 2),
@@ -4906,9 +4873,11 @@ export function registerRoutes(
       }
       const known = judged.get(canvas.id);
       if (known !== undefined) return known;
-      const allowed =
-        admitted.has(canvas.id) ||
-        Boolean(await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id));
+      // Naming an address is entry; an unscoped watch is discovery. Cursors
+      // are positions, not a request to widen discovery to every link.
+      const allowed = only?.has(canvas.id)
+        ? admitted.has(canvas.id) || Boolean(await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id))
+        : await mayDiscover(canvas);
       judged.set(canvas.id, allowed);
       /**
        * **An expelled badge's next poll is refused, and told why** (roles
@@ -5389,13 +5358,10 @@ export function registerRoutes(
    * anybody at the door, and there does not need to be: the home's own timer
    * collects the rest, from inside the process, where no badge is involved.
    *
-   * **Admissions, not `admittingGrant`** — the narrow answer, where `GET
-   * /api/projects` takes the wide one. The wide answer is right for a LISTING
-   * because listing is not acting: telling a person that a link-granted canvas
-   * exists costs nothing. This route deletes bytes and rewrites oplogs, and
-   * "every canvas I could have entered" is not a set anybody meant to hand a
-   * chore. An admission is written the moment its holder actually enters, so
-   * the sweep follows where someone has been rather than where they might go.
+   * **Admissions only.** Discovery can also include named invitations and a
+   * local shelf; this route deletes bytes and rewrites oplogs, so a canvas
+   * merely offered in a list is not one it may collect. An admission is
+   * written when its holder enters, and the sweep follows those entries.
    *
    * The intersection with the held list is not belt-and-braces: an admission
    * outlives the canvas it names (a delete does not walk every badge), and

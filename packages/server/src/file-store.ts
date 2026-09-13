@@ -8,6 +8,7 @@ import {
   applyActorJoin,
   applyActorMark,
   applyOperation,
+  activityOpType,
   bindName,
   COMMAND_NAME,
   emptyCanvas,
@@ -240,7 +241,7 @@ export class FileStore implements Store {
         ...canvas,
         updatedAt: last.envelope.ts,
         updatedBy: last.envelope.actor,
-        lastOp: last.envelope.op.type,
+        lastOp: activityOpType(last.envelope.op),
       });
       fixed += 1;
     }

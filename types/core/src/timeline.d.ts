@@ -7,7 +7,7 @@ export interface Major {
     ts: string;
     /** Who did it — a track is read as a story and a story has people in it. */
     actor: string;
-    /** The op type, for a surface that wants to draw by kind. */
+    /** The semantic act type, for a surface that wants to draw by kind. */
     kind: string;
     weight: number;
     /**

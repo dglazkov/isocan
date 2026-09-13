@@ -145,18 +145,18 @@ async function rig() {
    * built on it cannot tell "this works" from "this is there but nobody can
    * press it", which is a whole class of interface bug.
    *
-   * So: find the control, take its centre, check the browser agrees that
-   * point belongs to it, and press THERE. When it does not agree, the thing
+   * So: find the control, take its centre (or the requested point), check the
+   * browser agrees that point belongs to it, and press THERE. When it does not agree, the thing
    * on top is named in the failure, because "the button did not respond" and
    * "something is sitting over the button" are different bugs.
    */
-  const rigClick = async (selector, what = selector) => {
+  const rigClick = async (selector, what = selector, point = { x: 0.5, y: 0.5 }) => {
     const box = await b.ev(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return null;
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return { zero: true };
-      const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+      const x = Math.round(r.left + r.width * ${point.x}), y = Math.round(r.top + r.height * ${point.y});
       const top = document.elementFromPoint(x, y);
       /* Containment one way only: the point may land on a CHILD of the
          target, and a button's inner glyph is not an obstruction.
@@ -603,32 +603,39 @@ export const JOURNEYS = [
       await makeCanvas(rig, "Delete journey");
       await addText(rig, "about to be deleted");
       await until(rig.b, `document.querySelectorAll(".item").length === 1`, "one item to delete");
+      /* The small note's centre belongs to its Read / select text button.
+         Press its exposed lower-left frame instead: selecting and entering
+         are different gestures. The old centre click entered the note and
+         failed before it ever tested deletion (13 Sep 2026). */
+      await rig.type("v");
+      await until(rig.b, `!!document.querySelector('.tool-btn.active[aria-label="Select"]')`, "the Select tool");
+      await rig.click(".item", "the item's lower-left frame", { x: 0.03, y: 0.9 });
+      await until(rig.b, `document.querySelectorAll(".item.selected").length === 1`, "a selection");
       // Hold the op POST for longer than anybody would wait.
       await rig.b.ev(`(() => {
         const real = window.fetch;
         window.__realFetch = real;
+        window.__heldOpPosts = 0;
         window.fetch = async (...a) => {
           const url = typeof a[0] === "string" ? a[0] : a[0]?.url;
           if (String(url).endsWith("/api/ops") && a[1]?.method === "POST") {
+            window.__heldOpPosts++;
             await new Promise(r => setTimeout(r, 9000));
+            window.__heldOpPosts--;
           }
           return real(...a);
         };
         return true;
       })()`);
-      /* V rather than clicking the rail: the Select tool is where a presence
-         face can overlap the button, which is a separate question from
-         whether delete is immediate. */
-      await rig.type("v");
-      await sleep(300);
-      await rig.click(".item", "the item");
-      await until(rig.b, `document.querySelectorAll(".item.selected").length === 1`, "a selection");
-      await rig.press("Delete");
-      await sleep(400);
-      const left = await rig.b.ev(`document.querySelectorAll(".item").length`);
-      await rig.b.ev(`(() => { window.fetch = window.__realFetch; return true; })()`);
-      if (left !== 0) {
-        throw new Error("the item is still on screen 400ms after Delete — the write has no echo");
+      try {
+        await rig.press("Delete");
+        await until(rig.b, `window.__heldOpPosts > 0`, "the delete POST to stall", 1500);
+        const left = await rig.b.ev(`document.querySelectorAll(".item").length`);
+        if (left !== 0) {
+          throw new Error("the item is still on screen after Delete while its POST is stalled — the write has no echo");
+        }
+      } finally {
+        await rig.b.ev(`(() => { window.fetch = window.__realFetch; return true; })()`);
       }
     },
   },

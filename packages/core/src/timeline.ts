@@ -1,5 +1,5 @@
 import type { LogEntry, Operation } from "./ops.ts";
-import { opWords } from "./opwords.ts";
+import { activityOpType, opWords } from "./opwords.ts";
 import type { CanvasState } from "./model.ts";
 import { applyOperation } from "./reducer.ts";
 import { groupChangeItemIds } from "./canvas-groups.ts";
@@ -74,7 +74,7 @@ export interface Major {
   ts: string;
   /** Who did it — a track is read as a story and a story has people in it. */
   actor: string;
-  /** The op type, for a surface that wants to draw by kind. */
+  /** The semantic act type, for a surface that wants to draw by kind. */
   kind: string;
   weight: number;
   /**
@@ -159,7 +159,7 @@ export function majors(entries: readonly LogEntry[], minWeight = 4): Major[] {
       seq: entry.seq,
       ts: entry.envelope.ts,
       actor: entry.envelope.actor.name,
-      kind: entry.envelope.op.type,
+      kind: activityOpType(entry.envelope.op),
       weight,
       itemId: typeof op.itemId === "string" ? op.itemId : null,
       about: aboutOf(entry.envelope.op),

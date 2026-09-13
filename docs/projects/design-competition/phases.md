@@ -8,6 +8,12 @@ not, the picker is a costume shop. Then the platform changes that are useful
 without the competition, then the module on the terminal, then the picker.
 
 **Where we are:** designed 11 Sep 2026. Nothing built. Phase 0 is next.
+PR #264 contains an unmerged implementation. Its integration into main must
+follow [groups-integration.md](groups-integration.md), recorded 13 Sep: new
+arenas use explicit groups and one bounded creation, while legacy canvases
+retain their historical behavior. Phase 0's human measurement remains owed;
+technical integration can proceed while that session is arranged.
+
 Decided the same day: principle-first names (*Less but Better*, after Dieter
 Rams), exhibition as the default bout, and shipping on isocan.io — which is
 phase 5.5 below.

@@ -242,3 +242,10 @@ scope and has no box of its own: the switcher is one row away.
    Recent stays a flat list of canvases because that is what you go to. The
    address already reads right for it: `/p/<project>` was named for the
    project and can grow a canvas segment without moving.
+
+## Steps 2–3 continuation — 13 September 2026
+
+The [inbox continuation](../inbox/design.md#navigation-everywhere) specifies
+one lazy navigation host for home, lens and canvas, with Recent followed by
+space headings. It retains existing search ranking and archive behavior; the
+new inbox API independently supplies authoritative cross-home feedback.

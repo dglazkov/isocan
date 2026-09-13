@@ -1110,11 +1110,14 @@ export function healthPath(base: string): string {
  *
  * - A **browser** asks "what can I open from here?" That is a person looking
  *   at their own home's front page, and the honest answer includes a canvas
- *   they have never been in but could walk into by clicking it — which on a
- *   solo home is most of them, because a canvas created from the CLI is
- *   admitted to the CLI's BEARER badge while the tab carries a COOKIE badge
- *   that has never been in it. Narrow this and the person opens `/` and
- *   cannot see the canvas their own agent just made.
+ *   they have never been in — a canvas created from the CLI is admitted to the
+ *   CLI's BEARER badge while the tab carries a COOKIE badge that has never
+ *   been in it. That answer used to be "anything a door would open", which on
+ *   a solo home is most of them and on a shared home is everybody's; it is now
+ *   the **shelf**: on a daemon bound to loopback, asked from that machine, the
+ *   list is everything the daemon holds — a laptop's list is exactly what it
+ *   always was. A home serving the world (`ISOCAN_BIND=0.0.0.0`) answers
+ *   admissions and named rows, and nothing else.
  * - A **replica** asks "what am I supposed to be carrying?" A replica that
  *   answers that with "everything a door would let me through" mirrors a
  *   stranger's canvas onto a laptop because a link grant happened to be on —
@@ -1132,16 +1135,15 @@ export function healthPath(base: string): string {
  * engine), because it is the same distinction: what a badge has been let
  * into, versus what the door would let it into if it knocked.
  *
- * - `"admissible"` — admitted ∪ what a grant would admit. **The default**,
- *   which is what makes this change backwards compatible in the direction
- *   that matters: an OLD replica polling a new home sends no parameter and
- *   gets exactly the answer it always got. A NEW replica polling an old home
- *   sends one that home ignores, and over-replicates the way it does today —
- *   a known, pre-existing behaviour rather than a new failure.
- * - `"admitted"` — admissions and nothing else. What a replica asks.
- * - `"here"` — of the admissible ones, the canvases **this daemon is the home
- *   of** (phase 10.3). A third question rather than a narrowing of the other
- *   two, and it exists because of a real hole: the web app's canvas list
+ * - `"admissible"` — the default discovery answer: admissions and named
+ *   grants on a hosted home, the local shelf on a loopback daemon. Kept for
+ *   existing callers; it cannot widen a hosted list to link-only canvases.
+ * - `"admitted"` — admissions and nothing else, and never the shelf. What a
+ *   replica asks: it must mirror what it was told it holds, not what the
+ *   machine it runs on happens to have.
+ * - `"here"` — of the ones this badge may see, the canvases **this daemon is
+ *   the home of** (phase 10.3). A third question rather than a narrowing of the
+ *   other two, and it exists because of a real hole: the web app's canvas list
  *   links to a canvas with a react-router `<Link>`, which is a client-side
  *   navigation that never touches the server, so the per-canvas page guard on
  *   `GET /p/<id>` is simply bypassed for anything in that list. A local origin

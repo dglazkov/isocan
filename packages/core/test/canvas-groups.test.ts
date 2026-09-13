@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyOperation, applyGroupChange, blobsNamedBy, buildRecap, harvestPreferences, captureGroupExpectations, GroupConflictError, groupArrangeAction, groupCellBox, groupDropPolicy, groupDropTarget, groupFitAction, groupGridNeedsRoom, groupPreviewBoxes, groupAncestors, groupChildren, groupContentBox, groupDescendants, groupFitBox, groupRemoveAction, groupResizeBox, groupScopedRoot, groupScopeRoots, groupSelectionRoots, groupTransform, groupTransformClosure, groupWrapAction, invertOperation, itemsTouchedBy, majors, resolveCanvasGroupRequest, resolveGroupOperation, validateGroupForest, weightOf } from "../src/index.ts";
 import type { CanvasState, GroupAction, GroupBox, GroupChange, GroupOperation, LogEntry, Operation } from "../src/index.ts";
+import { activityOpType, lensActs, opWords } from "../src/index.ts";
 
 const actor = { id: "usr_test", name: "Test" };
 const other = { id: "usr_other", name: "Other" };
@@ -307,6 +308,22 @@ describe("atomic records, inverses and deletion cohorts", () => {
 });
 
 describe("atomic group insertion and content repair", () => {
+  it("describes an inserted item consistently without renaming explicit group acts or their log entries", () => {
+    const grouped = wrap(card(), "g", ["a"]);
+    expect(opWords(grouped.state.project.lastOp)).toBe("changed a canvas group");
+    const inserted = change(grouped.state, { kind: "insert", item: { type: "item.add", itemId: "note", title: "Acme note", version: version("note"), width: 200, height: 100, placement: { x: 100, y: 200 }, containerId: "g" } });
+    expect(inserted.op.type).toBe("group.change");
+    expect(inserted.op.action).toMatchObject({ kind: "apply", change: { intent: "insert" } });
+    expect(opWords(inserted.state.project.lastOp)).toBe("added something");
+    const entry: LogEntry = { seq: 1, envelope: { id: "op_insert", canvasId: "can_test", actor, ts, op: inserted.op }, inverse: inserted.inverse };
+    expect(majors([entry])[0]).toMatchObject({ kind: "item.add", about: "Acme note" });
+    expect(lensActs([{ canvasId: "can_test", canvasTitle: "Acme", entries: [entry] }], actor.id)[0]?.op).toBe("item.add");
+    // Inverse records retain intent: "insert", but delete rather than create.
+    expect(activityOpType(inserted.inverse)).toBe("group.change");
+    expect(opWords(undo(inserted.state, inserted.inverse).project.lastOp)).not.toBe("added something");
+    expect(opWords(activityOpType(grouped.op))).toBe("changed a canvas group");
+  });
+
   it("places a card in its named cell without borrowing its old coordinates, then undoes creation and frame effects", () => {
     const state = change(empty(), { kind: "create", group: { id: "g", title: "Acme grid", version: version("g"), box: { x: 0, y: 0, width: 1200, height: 1200 }, layout: { rows: ["A", "B"], columns: ["One", "Two"], rowCount: 2, columnCount: 2 } } }).state;
     const inserted = change(state, { kind: "insert", item: { type: "item.add", itemId: "card", version: version("card"), width: 400, height: 400, placement: { x: -800, y: -700 }, containerId: "g", cell: { row: 2, column: 2 } } });

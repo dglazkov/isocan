@@ -434,6 +434,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the space's rows first, greyed, as *from the space*. `isocan space
   new|list|add|remove|delete` and `isocan share --space <name>` are the same
   routes from a terminal, and `isocan canvas list` groups by space.
+  Choose **Space** while creating a canvas, or use `isocan canvas create
+  "Acme board" --space Design`, to inherit the space's access from birth with
+  no link grant. A space owner can create there; refusal keeps the form's
+  title and chosen space. Hosted lists show admissions and named invitations,
+  while a link-only canvas is reached by its shared address.
 - **Groups**: a named set of people access is given to once. **Groups…** on
   the canvas list makes one and edits who is in it; the Share dialog's invite
   field takes a group from a picker or as `group:<name>`, and a group row

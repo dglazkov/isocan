@@ -394,19 +394,52 @@ describe("the grant API", () => {
 });
 
 describe("what a badge may see", () => {
-  it("stops listing a canvas whose link is off, and goes on listing it to those inside", async () => {
+  /**
+   * **These are the HOSTED shape**, and saying so is the whole point of the
+   * rule under test (13 Sep). A daemon bound to loopback is somebody's laptop,
+   * and it goes on showing that machine everything it holds — so a suite that
+   * only ever booted one would assert the laptop's answer and call it the
+   * home's. `boot()` says nothing, so it is a laptop; this restarts saying it
+   * serves the world. The badges minted against the old port stay valid,
+   * because the desk they are written on is the home directory and that does
+   * not move.
+   *
+   * Said rather than bound, for the reason `servesWorld` carries: binding
+   * `0.0.0.0` from a test opens a port to the network and can collide with
+   * another suite's loopback daemon.
+   */
+  beforeEach(async () => {
+    await daemon.close();
+    daemon = await startDaemon({ port: 0, home, auth, servesWorld: true });
+    const address = daemon.app.server.address();
+    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  });
+
+  it("does not list a canvas to a badge nobody let in, however open its link", async () => {
     await makeCanvas();
     const jordan = await stranger();
-    const before = (await (await get(jordan, "/api/projects")).json()) as Canvas[];
-    expect(before.map((canvas) => canvas.id)).toEqual([CANVAS]);
-    // Listing is not entering, and it does not admit: what a badge "could get
-    // into" is a different question from where it has been, and answering the
-    // first by writing the second would hand every browsing badge an
-    // admission to everything — which is the very scope mechanism 10 narrows
-    // the name check to, and which phase 9's sweep would then have to expel.
-    expect((await daemon.desk.badge(jordan.badgeId))!.admissions).toEqual([]);
-    // So Jordan ENTERS, the way Scene 3 has her enter: by opening the canvas.
+    /**
+     * **The link is on, and she still sees nothing** (13 Sep). A link row says
+     * "whoever holds the address may enter" — it names nobody, so it answers a
+     * knock and is not a reason to put the address in a list. Measured on
+     * isocan.io under the old rule: a window admitted to ONE canvas listed 35,
+     * belonging to 22 different people.
+     */
+    expect(await (await get(jordan, "/api/projects")).json()).toEqual([]);
+    // The door itself is unchanged — this is a listing rule, not a refusal.
     expect((await get(jordan, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
+    // Entering wrote the admission, so now it is hers to see, which is the
+    // whole shape: you are shown what you were let into, not what would let
+    // you in.
+    const after = (await (await get(jordan, "/api/projects")).json()) as Canvas[];
+    expect(after.map((canvas) => canvas.id)).toEqual([CANVAS]);
+    // And a badge that only ever LOOKED holds no admission: listing is not
+    // entering, and answering "what could I get into" by writing "where I have
+    // been" would hand every browsing badge an admission to everything —
+    // which phase 9's sweep would then have to expel.
+    const looker = await stranger();
+    expect(await (await get(looker, "/api/projects")).json()).toEqual([]);
+    expect((await daemon.desk.badge(looker.badgeId))!.admissions).toEqual([]);
 
     await revokeLink(owner);
     const outsider = await stranger();
@@ -426,58 +459,151 @@ describe("what a badge may see", () => {
     ).toEqual([CANVAS]);
   });
 
-  /**
-   * **Two callers, two questions, one route** — phase 8 stage 4. See
-   * `CanvasesReach`.
-   *
-   * The listing has always answered one question: "what could this badge walk
-   * into?" A replica polls it to decide what to MIRROR, and those are not the
-   * same question — a canvas whose link is merely on is one a person may open
-   * and one a laptop has no business carrying. The caller states which, and
-   * the wide answer stays the default, because narrowing it wholesale is the
-   * worse bug: on a solo home a canvas created from the CLI is admitted to the
-   * CLI's bearer badge while the person's tab carries a cookie badge that has
-   * never been in it, so a narrowed listing would hide a person's own canvas
-   * from their own front page.
-   */
-  it("narrows to admissions when the caller asks that question, and only then", async () => {
+  it("never lists a hosted link-only canvas, including an explicit admissible reach", async () => {
     await makeCanvas();
     const laptop = await stranger();
+    for (const route of ["/api/projects", ...["admitted", "admissible", "here"].map((reach) => `/api/projects?reach=${reach}`)]) {
+      expect(await (await get(laptop, route)).json(), route).toEqual([]);
+    }
 
-    // The default: the link would admit this badge, so the canvas is listed.
-    // A person's front page, and what every client that says nothing gets —
-    // including a replica built before this parameter existed.
-    expect(
-      (((await (await get(laptop, "/api/projects")).json()) as Canvas[])).map((pr) => pr.id),
-    ).toEqual([CANVAS]);
-
-    // The replica's question. Same badge, same instant, same canvas, same live
-    // link grant — and nothing, because nobody has let this machine in.
-    expect(await (await get(laptop, canvasesRoute("admitted"))).json()).toEqual([]);
-
-    // Asking did not admit it either: a listing is not an entering, and the
-    // narrow answer must not quietly become true by having been asked for.
+    // Asking did not admit it either: a listing is not an entering, and no
+    // answer here may quietly become true by having been asked for.
     expect((await daemon.desk.badge(laptop.badgeId))!.admissions).toEqual([]);
 
     // Now let it in — the pass is the mechanism, and an admission is an
-    // admission however it was written. The narrow answer changes; the wide
-    // one does not, because it already said yes.
+    // admission however it was written.
     await daemon.desk.admit(laptop.badgeId, CANVAS, { root: "created" });
     expect(
       (((await (await get(laptop, canvasesRoute("admitted"))).json()) as Canvas[])).map((pr) => pr.id),
     ).toEqual([CANVAS]);
 
-    // A word that is not the narrowing word is the DEFAULT, not a silent
-    // narrowing and not an error. There is exactly one spelling of the
+    // A word that is not one of the three is the DEFAULT, not an error — and
+    // the default is now the narrow side. There is exactly one spelling of the
     // parameter (`canvasesRoute`), so a near-miss can only come from somebody
-    // hand-building the URL — and the safe way to be wrong about a listing is
-    // to show a person too much of their own home rather than too little.
+    // hand-building the URL, and the safe way to be wrong about a listing on a
+    // home with strangers in it is to show too little.
     const nobody = await stranger();
+    expect(await (await get(nobody, "/api/projects?reach=admissable")).json()).toEqual([]);
+  });
+
+  /**
+   * **The report this rule came from** (13 Sep): "I don't want to use it with
+   * one person as they see too many canvases when they join." Measured on
+   * isocan.io before the change — a window admitted to one canvas listed 35,
+   * belonging to 22 people — and nothing pinned the combination, which is why
+   * it survived: `here` was tested for its homing half and the door was tested
+   * for its own, never the two together with a stranger's badge.
+   */
+  it("finds a named invitation even when an older, stronger link would win entry", async () => {
+    await makeCanvas();
+    const invited = await stranger();
+    await daemon.desk.attest(invited.badgeId, { attribute: "email:jordan@acme.test", verifiedVia: "magic-link", at: new Date().toISOString() });
+    await daemon.desk.putGrant({ id: "gnt_named_read", canvasId: CANVAS, subject: "email:jordan@acme.test", capability: "read", grantedBy: owner.badgeId, at: new Date().toISOString() });
+    for (const reach of [undefined, "admissible", "here"] as const) {
+      expect(((await (await get(invited, canvasesRoute(reach))).json()) as Canvas[]).map((c) => c.id)).toEqual([CANVAS]);
+    }
+    expect((await daemon.desk.badge(invited.badgeId))!.admissions).toEqual([]);
+    const teammate = await stranger();
+    await daemon.desk.attest(teammate.badgeId, { attribute: "email:sam@acme.test", verifiedVia: "magic-link", at: new Date().toISOString() });
+    await daemon.desk.putGroup({ id: "ppl_design", name: "Acme design", createdBy: priya.id, members: ["email:sam@acme.test"], at: new Date().toISOString() });
+    await daemon.desk.putGrant({ id: "gnt_team_read", canvasId: CANVAS, subject: "group:ppl_design", capability: "read", grantedBy: owner.badgeId, at: new Date().toISOString() });
+    expect(((await (await get(teammate, "/api/projects")).json()) as Canvas[]).map((c) => c.id)).toEqual([CANVAS]);
+    // The creator's fresh badge sees the floor even when the link would win.
+    const creator = await stranger();
+    await creator.speakAs(priya);
+    expect(((await (await get(creator, "/api/projects")).json()) as Canvas[]).map((c) => c.id)).toEqual([CANVAS]);
+    // A bar still wins over the invitation and link, before any entry.
+    await daemon.desk.putGrant({ id: "gnt_named_bar", canvasId: CANVAS, subject: "email:jordan@acme.test", bars: true, grantedBy: owner.badgeId, at: new Date().toISOString() });
+    expect(await (await get(invited, "/api/projects")).json()).toEqual([]);
+  });
+
+  it("does not disclose link-only addresses through homes, presence or unscoped watch", async () => {
+    await makeCanvas();
+    const parked = await fetch(`${base}/api/projects/${CANVAS}/sessions`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...owner.headers }, body: JSON.stringify({ actor: priya, kind: "cli" }),
+    });
+    expect(parked.status).toBe(200);
+    const watcher = await stranger();
+    const watch = (body: unknown) => fetch(`${base}/api/oplog/watch`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...watcher.headers }, body: JSON.stringify(body),
+    });
+    expect(await (await get(watcher, "/api/homes")).json()).toMatchObject({ canvases: {} });
+    expect(await (await get(watcher, PRESENCE_WHERE_ROUTE)).json()).toEqual({ where: [] });
+    expect(await (await watch({})).json()).toEqual({ entries: [], cursors: {} });
+    expect(await (await watch({ cursors: {} })).json()).toEqual({ entries: [], cursors: {} });
+    expect(await (await watch({ cursors: { [CANVAS]: 0 } })).json()).toEqual({ entries: [], cursors: {} });
+    // Presenting the known address still reads its log. A watch is not entry.
+    expect(await (await watch({ cursors: {}, only: [CANVAS] })).json()).toMatchObject({ cursors: { [CANVAS]: 1 } });
+    expect((await daemon.desk.badge(watcher.badgeId))!.admissions).toEqual([]);
+    expect((await get(watcher, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
+    expect(await (await get(watcher, "/api/homes")).json()).toMatchObject({ canvases: { [CANVAS]: null } });
+    expect(((await (await get(watcher, PRESENCE_WHERE_ROUTE)).json()) as PresenceWhereResponse).where.map((w) => w.canvasId)).toEqual([CANVAS]);
+    expect(await (await watch({})).json()).toMatchObject({ cursors: { [CANVAS]: 1 } });
+  });
+
+  it("shows a joiner admitted to one canvas exactly that one, at a home holding others", async () => {
+    await makeCanvas();
+    for (const id of ["prj_two", "prj_three"]) {
+      await op(owner, { canvasId: null, actor: priya, op: { type: "project.create", canvasId: id, title: id } });
+    }
+    const joiner = await stranger();
+    await daemon.desk.admit(joiner.badgeId, CANVAS, { root: "pass", badgeId: owner.badgeId });
+
+    // Every one of the three carries a live link row, born with it.
+    for (const id of [CANVAS, "prj_two", "prj_three"]) {
+      const { grants } = await grantsOf(owner, id);
+      expect(grants.filter((g) => g.subject === "link" && g.revokedAt === undefined)).toHaveLength(1);
+    }
+
+    // What the web's canvas list asks, and what the bare route answers.
     expect(
-      (((await (await get(nobody, "/api/projects?reach=admited")).json()) as Canvas[])).map(
-        (pr) => pr.id,
-      ),
+      ((await (await get(joiner, canvasesRoute("here"))).json()) as Canvas[]).map((pr) => pr.id),
     ).toEqual([CANVAS]);
+    expect(
+      ((await (await get(joiner, "/api/projects")).json()) as Canvas[]).map((pr) => pr.id),
+    ).toEqual([CANVAS]);
+  });
+});
+
+/**
+ * **The shelf** — the other half of the same rule, and the half that keeps a
+ * laptop's list exactly as it was.
+ *
+ * An admission is written when a badge ENTERS, so a canvas an agent made on
+ * your own machine, or one your CLI made under its own bearer badge, is a
+ * canvas your browser has never been in. Narrowing without this would have
+ * hidden your own work from your own front page. The test that matters is the
+ * pair: the same badge, the same canvases, one daemon answering only its own
+ * machine and one serving the world.
+ */
+describe("a daemon that answers only its own machine", () => {
+  it("shows a local badge everything it holds — and the same badge nothing, once it is serving the world", async () => {
+    const sonia = { id: "usr_sonia", name: "Sonia" };
+    const agent = await stranger();
+    await agent.speakAs(sonia);
+    // What an agent made on this machine: Priya never created it, has never
+    // been in it, and its only row is the link it was born with.
+    const made = await op(agent, {
+      canvasId: null,
+      actor: sonia,
+      op: { type: "project.create", canvasId: "prj_agent", title: "What the agent made" },
+    });
+    expect(made.ok).toBe(true);
+
+    // `boot()` bound loopback, which is what a laptop is.
+    const laptop = await stranger();
+    expect(
+      ((await (await get(laptop, "/api/projects")).json()) as Canvas[]).map((pr) => pr.id),
+    ).toEqual(["prj_agent"]);
+
+    // The same home, the same desk, the same badges — now a daemon that serves
+    // the world, which is what the hosted image is. Nobody let this badge in
+    // anywhere, and now it is told so.
+    await daemon.close();
+    daemon = await startDaemon({ port: 0, home, auth, servesWorld: true });
+    const address = daemon.app.server.address();
+    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+    expect(await (await get(laptop, "/api/projects")).json()).toEqual([]);
   });
 });
 
