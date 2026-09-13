@@ -126,6 +126,8 @@ Extend bounded canonical effects for item insertion and atomic brief/header
 changes; require canvas-groups-v2 for this richer replay schema while retaining
 v1 historical replay. Verify literal v1-only client refusal, including the
 existing subscription and forwarded-caller gates.
+Retain replay of dense v1 grids: only their rendered inter-cell gaps may
+compress, with a visible needs-room state; new requests enforce full clearance.
 
 **Ownership:** packages/web/src and test, packages/cli/src and test,
 packages/core/src and test placement/area/group/layout helpers,
