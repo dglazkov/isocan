@@ -1020,6 +1020,43 @@ interface HealthResponse {
 const LOOPBACK = /^(\[::1\]|::1|localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
 
 /**
+ * **Is this address on this machine?** — the one question two different
+ * decisions both turn on, asked in one place so they cannot drift apart.
+ *
+ * `healthPath` below asks it to choose a door to knock on. The CLI's client
+ * asks it to decide whether a connect may be given a deadline: a loopback
+ * handshake is the kernel's own, a millisecond even against a process whose
+ * event loop is blocked for five seconds, so a connect that takes longer is
+ * a lost SYN and nothing else. Over a network it is an ordinary RTT away and
+ * on a bad link it is seconds, so the same deadline there would refuse a slow
+ * link that was working. See `boundedFetch` in `@isocan/api`'s `client.ts`,
+ * and `docs/research/2026-08-29-the-flake-family.md`.
+ *
+ * Anything unparseable is remote, for the reason `healthPath` gives: that is
+ * the safe way to be wrong, because the remote answer is the one that changes
+ * nothing.
+ */
+export function isLoopbackBase(base: string): boolean {
+  return LOOPBACK.test(hostOf(base) ?? "");
+}
+
+/** The hostname of an address somebody meant, scheme or no scheme; null when
+ * it cannot be read as one at all. */
+function hostOf(base: string): string | null {
+  try {
+    return new URL(base).hostname;
+  } catch {
+    try {
+      // A bare `127.0.0.1:4441` or `dev.isocan.io` — no scheme, still an
+      // address somebody meant. Parsing it is cheaper than refusing it.
+      return new URL(`http://${base}`).hostname;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
  * WHICH health path to ask a daemon at this address for.
  *
  * The daemon answers `/healthz` and `/api/healthz` from one handler with one
@@ -1058,19 +1095,7 @@ const LOOPBACK = /^(\[::1\]|::1|localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
  * the exact failure this function exists to prevent.
  */
 export function healthPath(base: string): string {
-  let host: string;
-  try {
-    host = new URL(base).hostname;
-  } catch {
-    try {
-      // A bare `127.0.0.1:4441` or `dev.isocan.io` — no scheme, still an
-      // address somebody meant. Parsing it is cheaper than refusing it.
-      host = new URL(`http://${base}`).hostname;
-    } catch {
-      return "/api/healthz";
-    }
-  }
-  return LOOPBACK.test(host) ? "/healthz" : "/api/healthz";
+  return isLoopbackBase(base) ? "/healthz" : "/api/healthz";
 }
 
 // ---- the canvas listing: two callers, two questions, one route ----

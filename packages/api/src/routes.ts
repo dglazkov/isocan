@@ -169,6 +169,12 @@ export class ApiError extends Error {
   }
 }
 
+/** The platform's own fetch, named so that the Node half can fall back to it
+ * by name — an instance field is not on the prototype, so `super.fetcher`
+ * would be `undefined`, and one exported constant is clearer than that
+ * lesson repeated in a comment. */
+export const platformFetch: typeof fetch = (input, init) => fetch(input, init);
+
 /**
  * **The typed route surface** — every request the daemon answers, typed, and
  * nothing about how a daemon comes to exist.
@@ -209,6 +215,23 @@ export class DaemonRoutes {
   ) {}
 
   /**
+   * **The fetch this surface makes its requests with**, so that the half of
+   * the client which is allowed to know about Node can bound them.
+   *
+   * It is a field rather than an import for the reason the whole class exists
+   * (`boundary.test.ts`): a connect deadline is `undici`, `undici` is Node,
+   * and the moment this file imports it the browser build of the transport
+   * kernel stops being possible. So the mechanism lives in `client.ts` —
+   * `DaemonClient` replaces this with a connect-bounded, bounded-retry fetch
+   * when the base is loopback — and what is written here is only that the
+   * requests go through something replaceable.
+   *
+   * The default is the platform's own fetch, which is what every surface
+   * without a Node half keeps: one attempt, no deadline, exactly today.
+   */
+  protected fetcher: typeof fetch = platformFetch;
+
+  /**
    * Every request carries the badge, and a refused one heals itself and comes
    * straight back. This is what makes neither the door nor the membership
    * check a breaking change: a CLI that has never seen a badge, whose home was
@@ -235,7 +258,7 @@ export class DaemonRoutes {
     const send = async () => {
       const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extra };
       if (body !== undefined) headers["Content-Type"] = "application/json";
-      return fetch(`${this.base}${url}`, {
+      return this.fetcher(`${this.base}${url}`, {
         method,
         ...(signal !== undefined ? { signal } : {}),
         ...(Object.keys(headers).length > 0 ? { headers } : {}),
@@ -389,6 +412,12 @@ export class DaemonRoutes {
    * dead. See `healthPath`. */
   async healthz(timeoutMs = 300): Promise<Health | null> {
     try {
+      // Deliberately NOT `this.fetcher`: this is the probe, and it already
+      // carries the tighter bound. A connect deadline under a 300ms abort
+      // could never fire, and a retry under it would only make `isocan
+      // status` slower at answering the question it answers correctly now —
+      // "nothing is there yet". The deadline is for the calls whose failure
+      // reaches a person as an error.
       const res = await fetch(`${this.base}${healthPath(this.base)}`, {
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -1210,7 +1239,7 @@ export class DaemonRoutes {
     // the recovery retry spelled out — easy to miss, and a 401 on an upload
     // would read as a broken drop.
     const send = async () =>
-      fetch(`${this.base}/api/projects/${canvasId}/blobs`, {
+      this.fetcher(`${this.base}/api/projects/${canvasId}/blobs`, {
         method: "POST",
         headers: {
           ...(await this.authHeader()),
@@ -1228,7 +1257,7 @@ export class DaemonRoutes {
 
   async downloadBlob(canvasId: string, blobHash: string): Promise<Buffer> {
     const send = async () =>
-      fetch(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
+      this.fetcher(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
         headers: await this.authHeader(),
       });
     let res = await send();

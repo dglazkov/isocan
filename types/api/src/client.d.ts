@@ -9,6 +9,13 @@ import { DaemonRoutes } from "./routes.js";
  */
 export declare class DaemonClient extends DaemonRoutes {
     /**
+     * The Node half's one addition to how a request is MADE, rather than to
+     * what is in it: on this machine, a bounded connect and a bounded retry;
+     * anywhere else, the surface's own default and today's behaviour. See
+     * `boundedFetch` above for why the split is by address.
+     */
+    protected fetcher: typeof fetch;
+    /**
      * **Which copy a daemon started from here should run** (auto-upgrade phase
      * 4). Normally this one — the process asking for a daemon is the obvious
      * candidate to provide it. On a MANAGED install it is `current` instead,

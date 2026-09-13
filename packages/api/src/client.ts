@@ -3,8 +3,118 @@ import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Agent, fetch as undiciFetch } from "undici";
+import { isLoopbackBase } from "@isocan/core";
 import { paths } from "@isocan/server";
-import { DaemonRoutes } from "./routes.ts";
+import { DaemonRoutes, platformFetch } from "./routes.ts";
+
+/**
+ * **A SYN that goes nowhere costs a second, not eight** — the product half of
+ * the flake family's 3 Sep fix (`docs/research/2026-08-29-the-flake-family.md`).
+ *
+ * A loopback connect is the kernel's own work: measured at 1ms even against a
+ * daemon whose event loop is blocked for five seconds, because the kernel
+ * completes the handshake and the process only accepts afterwards. So on this
+ * machine a connect that takes longer than a moment is not a slow daemon, it
+ * is a SYN that was dropped or parked — and the kernel's retransmit ladder
+ * then holds it for ~7.8s, measured, past every budget the product has.
+ * Nothing recovers it, because `request` makes one attempt: what a person
+ * types gets `error: fetch failed` after eight seconds from a daemon that was
+ * alive the whole time.
+ *
+ * **Why a retry here is safe when an abort would not be.** The rule is
+ * `test/setup.ts`'s and it is the reason that fix was possible at all: a
+ * retry is allowed only when nothing reached the server, and an `AbortError`
+ * carries no syscall — it cannot tell a connect that never completed from a
+ * POST already on the wire, so retrying on it would let an op land twice.
+ * `Agent({ connect: { timeout } })` bounds the TCP connect ALONE and fails it
+ * with `UND_ERR_CONNECT_TIMEOUT`, which by construction means no request was
+ * ever written. That is the whole licence, and it is why the deadline is on
+ * the connect and not on the request.
+ *
+ * **Why only loopback.** Over a network the same connect is an RTT away —
+ * 34-45ms to the hosted homes, measured — and on a bad link it is seconds.
+ * A deadline that is generous on this machine would refuse a slow link that
+ * was working, and a remote base has no 7.8s ladder to escape in the first
+ * place, so it keeps today's behaviour exactly: the platform's fetch, one
+ * attempt, no deadline. `isLoopbackBase` is the same question `healthPath`
+ * asks, asked once.
+ *
+ * **The numbers, and what they really are.** 1.2s per attempt inside a 3s
+ * budget, the pair the suite proved. undici's connect deadline runs on its
+ * own ~500ms timer wheel (`setupConnectTimeout` calls `setFastTimeout`, which
+ * never takes the native path), so the deadline is quantized: 1.2s fires at
+ * about 1.5s, and asking for less than a second buys nothing. Two or three
+ * attempts fit the budget, and a connect that lands on the second returns in
+ * ~1.6s where today it is a hard failure at 7.8s.
+ */
+const CONNECT_BUDGET_MS = 3000;
+const CONNECT_ATTEMPT_MS = 1200;
+
+const connectBounded = new Agent({ connect: { timeout: CONNECT_ATTEMPT_MS } });
+
+/**
+ * **A connect that TIMED OUT, and nothing else** — undici's own word for the
+ * deadline above, plus the kernel's for the ladder it replaces. Both mean, by
+ * construction, that no byte was written, which is what makes replaying the
+ * request safe.
+ *
+ * `ECONNREFUSED` is deliberately NOT here, though `test/setup.ts` retries on
+ * it. It is equally provable and equally safe — and it is also the answer for
+ * a daemon that simply is not running, which is instant today and would
+ * become three seconds of hopeful sleeping before the same failure. The suite
+ * wants that (its daemons are always coming back); a person at a terminal
+ * does not. The thing being bought here is the 7.8s ladder, so the predicate
+ * is exactly the ladder.
+ */
+function neverLeftThisMachine(err: unknown): boolean {
+  const cause = (err as { cause?: { syscall?: string; code?: string } }).cause;
+  return (
+    cause?.code === "UND_ERR_CONNECT_TIMEOUT" ||
+    (cause?.syscall === "connect" && cause.code === "ETIMEDOUT")
+  );
+}
+
+/**
+ * The loopback fetch: connect-bounded, retried inside a clock budget, and —
+ * when it does give up — carrying the sentence a person can act on.
+ *
+ * `TypeError: fetch failed` names no address, no syscall and no duration;
+ * the flake family spent a week undifferentiated on that message alone, and
+ * `error: fetch failed` is what the CLI prints today for every one of these.
+ * What replaces it says which daemon, what happened to the connection, and
+ * that it was tried more than once — so the next occurrence in somebody's
+ * terminal is evidence rather than another sighting.
+ */
+function boundedFetch(base: string): typeof fetch {
+  return async (input, init) => {
+    const started = Date.now();
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return (await undiciFetch(input as Parameters<typeof undiciFetch>[0], {
+          ...(init as Parameters<typeof undiciFetch>[1]),
+          dispatcher: connectBounded,
+        })) as unknown as Response;
+      } catch (err) {
+        const spent = Date.now() - started;
+        if (!neverLeftThisMachine(err) || spent >= CONNECT_BUDGET_MS) {
+          if (neverLeftThisMachine(err)) {
+            const cause = (err as { cause?: { code?: string } }).cause;
+            (err as Error).message =
+              `could not reach the daemon at ${base} — the connection was never made ` +
+              `(${cause?.code ?? "?"}, ${attempt + 1} attempt${attempt === 0 ? "" : "s"} in ` +
+              `${(spent / 1000).toFixed(1)}s). Nothing was sent, so nothing landed twice; ` +
+              `"isocan status" says whether a daemon is there.`;
+          }
+          throw err;
+        }
+        // Lengthen the pause the way the suite's does: a machine that could
+        // not answer a SYN now is likely to be busy a millisecond from now.
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+      }
+    }
+  };
+}
 
 /**
  * **The Node-only half of the client** — how a daemon comes to exist on this
@@ -15,6 +125,16 @@ import { DaemonRoutes } from "./routes.ts";
  * and nothing in `DaemonRoutes` may.
  */
 export class DaemonClient extends DaemonRoutes {
+  /**
+   * The Node half's one addition to how a request is MADE, rather than to
+   * what is in it: on this machine, a bounded connect and a bounded retry;
+   * anywhere else, the surface's own default and today's behaviour. See
+   * `boundedFetch` above for why the split is by address.
+   */
+  protected override fetcher: typeof fetch = isLoopbackBase(this.base)
+    ? boundedFetch(this.base)
+    : platformFetch;
+
   /**
    * **Which copy a daemon started from here should run** (auto-upgrade phase
    * 4). Normally this one — the process asking for a daemon is the obvious

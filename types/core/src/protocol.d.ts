@@ -905,6 +905,24 @@ export interface UpgradeVerdict {
     why: string;
 }
 /**
+ * **Is this address on this machine?** — the one question two different
+ * decisions both turn on, asked in one place so they cannot drift apart.
+ *
+ * `healthPath` below asks it to choose a door to knock on. The CLI's client
+ * asks it to decide whether a connect may be given a deadline: a loopback
+ * handshake is the kernel's own, a millisecond even against a process whose
+ * event loop is blocked for five seconds, so a connect that takes longer is
+ * a lost SYN and nothing else. Over a network it is an ordinary RTT away and
+ * on a bad link it is seconds, so the same deadline there would refuse a slow
+ * link that was working. See `boundedFetch` in `@isocan/api`'s `client.ts`,
+ * and `docs/research/2026-08-29-the-flake-family.md`.
+ *
+ * Anything unparseable is remote, for the reason `healthPath` gives: that is
+ * the safe way to be wrong, because the remote answer is the one that changes
+ * nothing.
+ */
+export declare function isLoopbackBase(base: string): boolean;
+/**
  * WHICH health path to ask a daemon at this address for.
  *
  * The daemon answers `/healthz` and `/api/healthz` from one handler with one

@@ -49,6 +49,11 @@ export declare class ApiError extends Error {
      * `not-admitted` from a badge that had been inside. */
     reason?: string | undefined);
 }
+/** The platform's own fetch, named so that the Node half can fall back to it
+ * by name — an instance field is not on the prototype, so `super.fetcher`
+ * would be `undefined`, and one exported constant is clearer than that
+ * lesson repeated in a comment. */
+export declare const platformFetch: typeof fetch;
 /**
  * **The typed route surface** — every request the daemon answers, typed, and
  * nothing about how a daemon comes to exist.
@@ -84,6 +89,22 @@ export declare class DaemonRoutes {
     private reclaim;
     private reclaiming;
     constructor(base: string, home: string);
+    /**
+     * **The fetch this surface makes its requests with**, so that the half of
+     * the client which is allowed to know about Node can bound them.
+     *
+     * It is a field rather than an import for the reason the whole class exists
+     * (`boundary.test.ts`): a connect deadline is `undici`, `undici` is Node,
+     * and the moment this file imports it the browser build of the transport
+     * kernel stops being possible. So the mechanism lives in `client.ts` —
+     * `DaemonClient` replaces this with a connect-bounded, bounded-retry fetch
+     * when the base is loopback — and what is written here is only that the
+     * requests go through something replaceable.
+     *
+     * The default is the platform's own fetch, which is what every surface
+     * without a Node half keeps: one attempt, no deadline, exactly today.
+     */
+    protected fetcher: typeof fetch;
     /**
      * Every request carries the badge, and a refused one heals itself and comes
      * straight back. This is what makes neither the door nor the membership
