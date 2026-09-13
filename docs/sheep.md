@@ -27,9 +27,9 @@ The first two are one sitting each and never asked for again.
   idle cell costs nothing. Pricing: <https://developers.cloudflare.com/containers/pricing/>
 - **An Anthropic API key**, made at <https://console.anthropic.com/settings/keys>.
   Your sheep call the model with it, at Anthropic's rates. Sheep adds nothing.
-- **A canvas at a home with an address.** This one matters and is easy to miss
-  — see [the canvas has to be reachable](#the-canvas-has-to-be-reachable)
-  below. If you let isocan's setup pick the default, you are already fine.
+- **A canvas at isocan.io**, which is what isocan's setup picks for you. (If
+  you deliberately keep canvases on your own laptop's daemon, read
+  [canvases on your own machine](#canvases-on-your-own-machine) first.)
 
 ## 1. Set up sheep and Cloudflare
 
@@ -141,21 +141,18 @@ The two minutes is a known cost, not a fault: a fresh container installs the
 isocan CLI from scratch every time. Tell people the first turn after a quiet
 night is slow.
 
-## The canvas has to be reachable
+## Canvases on your own machine
 
 A sheep home deployed on Cloudflare is on the internet; your laptop's daemon is
-not. So a **station cannot reach a canvas that lives on your own machine**, and
-the `rc` refuses at the summons rather than mint a pass nobody can redeem:
+not. So a station cannot reach a canvas that lives on your own machine, and the
+`rc` refuses at the summons rather than mint a pass nobody can redeem — it
+names the canvas, the daemon it is on, and both ways out.
 
-> Percy's sheep live at `<your home>`, a station, which cannot reach "Scratch"
-> on this machine's daemon (`http://127.0.0.1:4441`) — move the canvas to a
-> home with an address, or make the sheep home a local one.
-
-Two ways out: work on a canvas that lives at a home with an address (isocan.io,
-or your own hosted home), or run a **local sheep home** instead, with
-`sheep home local` in the directory whose kennel you are using — that one talks
-to your laptop's daemon through Docker and is the right choice for trying
-things out offline.
+Canvases born at isocan.io are unaffected, which is the usual case and the one
+setup arranges. If you do want an agent on a canvas that lives on your laptop,
+run a **local sheep home** instead of a station: `sheep home local`, in the
+directory whose kennel you are using. That one reaches your daemon through
+Docker.
 
 ## What it costs
 
@@ -175,7 +172,7 @@ readable rather than guessed at.
 | `Percy names sheep, and this machine has no sheep on its PATH` | install it: `npm install -g github:dglazkov/sheep#release`, then `sheep setup` for a home (the refusal's own wording still names `sheep home join`, which is withdrawn — `sheep setup` is the verb now) |
 | `Percy's sheep have no home: the kennel at … names none` | the directory found a kennel with no home in it. `sheep setup` (a station), or `sheep home local` (Docker, on this machine) |
 | `Percy's sheep live at X, and the kennel at … now names Y` | the kennel was re-pointed after the sheep was born. Point it back, or withdraw and re-enrol Percy to start over at the new home |
-| `… a station, which cannot reach "…" on this machine's daemon` | [see above](#the-canvas-has-to-be-reachable) |
+| `… a station, which cannot reach "…" on this machine's daemon` | the canvas lives on your laptop and the sheep home is a station — see [canvases on your own machine](#canvases-on-your-own-machine) |
 | the agent simply never replies | a cell that cannot rent a container can end its turn silently. Check `sheep status <id>` and `sheep log <id>`; the next summons usually works |
 | a line on stderr about the home's build and the command's differing | `npm install -g github:dglazkov/sheep#release` to update the command, `sheep home deploy` to bring the home up to it (every session and pasture is kept) |
 
