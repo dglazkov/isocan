@@ -18,7 +18,8 @@ const cli = read("../../cli/src/main.ts");
  */
 describe("the Context panel reads in layers", () => {
   it("renders through core's contextLayers with a heading per source and a from chip per borrowed piece", () => {
-    expect(panel).toContain("const layers = contextLayers(canvas, linked);");
+    expect(panel).toContain("readLayeredContext(contextIO");
+    expect(panel).toContain("key={contextLayerKey(layer)}");
     expect(panel).toContain('className="ctx-heading"');
     expect(panel).toContain('{piece.from && <span className="ctx-from">from {piece.from.title}</span>}');
     expect(css).toContain(".ctx-heading {");
@@ -32,9 +33,9 @@ describe("the Context panel reads in layers", () => {
   });
 
   it("pulls linked canvases with the card's refusals in words — not admitted, or lives elsewhere", () => {
-    expect(panel).toContain("const snapshot = await getSnapshot(id);");
-    expect(panel).toContain("You are not admitted to this canvas — open it to ask at its door.");
-    expect(panel).toContain("not read from here");
+    expect(panel).toContain("sourceSnapshot, designText: readBlobText");
+    expect(panel).toContain("controller.abort()");
+    expect(panel).toContain("personal: { actorId: actor.id }");
     // A heading stands even when nothing could be read under it.
     expect(panel).toContain("{layer.refused && <div className=\"ctx-why\">{layer.refused}</div>}");
   });
@@ -78,6 +79,8 @@ describe("the link is one property on the card, set where the card is placed", (
     expect(cli).toContain('inheritVerb("inherit", "inherit"');
     expect(cli).toContain('inheritVerb("uninherit", null');
     expect(cli).toContain("layersReport(layers, (pieces) => contextReport(pieces))");
-    expect(cli).toContain("governingDesign(snapshot.canvas, await linkedCanvasesOf(ctx, p.id, snapshot))");
+    // With an area's scope as the third argument since scoped design systems
+    // (11 Sep): area, then this canvas, then the linked one.
+    expect(cli).toMatch(/governingDesign\(\s*snapshot\.canvas,\s*await linkedCanvasesOf\(ctx, p\.id, snapshot\),\s*designScope\(snapshot, opts\.in\),?\s*\)/);
   });
 });

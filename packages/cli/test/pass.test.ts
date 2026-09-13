@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
 import os from "node:os";
@@ -8,6 +8,7 @@ import { canvasUrl, INSTALL_SPEC } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { markerFile } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
+import { readBadge, writeBadge, type StoredBadge } from "../../server/src/badge-store.ts";
 import { reservePort } from "../../../test/ports.ts";
 
 /**
@@ -45,6 +46,7 @@ let fakeBrowser: string;
 let homeDaemon: Daemon;
 let homePort: number;
 let awayPort: number;
+let identityHook: ((message: unknown, release: () => void) => void) | undefined;
 
 /**
  * A stand-in for `open`/`xdg-open` on the PATH, recording what the CLI handed
@@ -71,6 +73,7 @@ beforeEach(async () => {
   homeWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-home-work-"));
   awayDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-away-"));
   awayWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-away-work-"));
+  identityHook = undefined;
   fakeBrowser = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-browser-"));
   // The human whose second machine this scene is about. Written rather than
   // claimed through the CLI so that the test is about the pass and not about
@@ -123,15 +126,17 @@ function cli(
   delete env.ISOCAN_HOME_URL;
   for (const v of harnessVars) delete env[v];
   Object.assign(env, extra);
-  const child = spawn(process.execPath, [cliBin, ...args], {
+  const hook = identityHook ? ["--import", fileURLToPath(new URL("../../../node_modules/tsx/dist/loader.mjs", import.meta.url)), "--import", fileURLToPath(new URL("./setup-identity-hook.mjs", import.meta.url))] : [];
+  const child = spawn(process.execPath, [...hook, cliBin, ...args], {
     cwd,
     env,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: identityHook ? ["ignore", "pipe", "pipe", "ipc"] : ["ignore", "pipe", "pipe"],
   });
+  child.on("message", (message) => identityHook?.(message, () => child.send({ type: "continue" })));
   let stdout = "";
   let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
+  child.stdout!.on("data", (c) => (stdout += c));
+  child.stderr!.on("data", (c) => (stderr += c));
   return new Promise((resolve) =>
     child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
   );
@@ -261,6 +266,17 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
     );
     expect(authors).toContain("Priya");
   }, 120_000);
+
+  it("keeps a different held person default and reports the daemon's adoption refusal", async () => {
+    await acmeCanvas();
+    const { address } = JSON.parse((await atHome("pass", "--json")).stdout) as { address: string };
+    const person = { id: "usr_jordan", name: "Jordan", privatePreference: "acme" };
+    await fs.writeFile(path.join(awayDir, "identity.json"), JSON.stringify(person));
+    const done = await away("setup", "--no-install", "--no-open", "--json", address);
+    expect(done.code, done.stderr).toBe(0);
+    expect(JSON.parse(done.stdout).identity).toContain("already answers to Jordan (usr_jordan)");
+    expect(JSON.parse(await fs.readFile(path.join(awayDir, "identity.json"), "utf8"))).toMatchObject(person);
+  }, 60_000);
 
   it("a pass is single-use: the same command on a third machine is refused, and says why", async () => {
     const canvasId = await acmeCanvas();
@@ -446,6 +462,82 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
 });
 
 describe("minting from a replica", () => {
+  it("setup preserves badge persistence overlapping adoption, then restarts and mints at the home", async () => {
+    const canvasId = await acmeCanvas();
+    const enrol = JSON.parse((await atHome("pass", "--json")).stdout) as { address: string };
+    const origin = `http://127.0.0.1:${homePort}`;
+    let replica = await startDaemon({ port: awayPort, home: awayDir, birthHome: origin });
+    const file = path.join(awayDir, "identity.json");
+    const read = fs.readFile.bind(fs);
+    let pendingBadge: StoredBadge | null = null;
+    let persistence: Promise<void> | undefined;
+    let daemonAdoptionRead = false;
+    let exercised = false;
+    const persist = () => {
+      exercised = true;
+      persistence = writeBadge(awayDir, origin, pendingBadge!);
+      return persistence;
+    };
+    // Hold the credential as a pending write after redemption has proved it.
+    // This creates the exact stale-read window, without a timing delay or a
+    // fake credential. Neither the badge nor its secret crosses IPC/logs.
+    const endow = replica.engine.endowClaim.bind(replica.engine);
+    const endowSpy = vi.spyOn(replica.engine, "endowClaim").mockImplementation(async (...args) => {
+      const result = await endow(...args);
+      pendingBadge = await readBadge(awayDir, origin);
+      expect(pendingBadge).not.toBeNull();
+      const saved = JSON.parse(await read(file, "utf8"));
+      delete saved.auth[origin];
+      await fs.writeFile(file, JSON.stringify(saved));
+      daemonAdoptionRead = true;
+      return result;
+    });
+    const readSpy = vi.spyOn(fs, "readFile").mockImplementation((async (...args: Parameters<typeof fs.readFile>) => {
+      const raw = await read(...args);
+      if (daemonAdoptionRead && String(args[0]) === file) {
+        daemonAdoptionRead = false;
+        // This call occurs INSIDE adoption's queued read: the pending badge
+        // must serialize after it, retaining the returned actor's fields.
+        void persist();
+      }
+      return raw;
+    }) as typeof fs.readFile);
+    identityHook = (message, release) => {
+      if ((message as { type?: string }).type !== "adoption-read") return;
+      // On the former writer arrangement this read is in the CLI. Let the
+      // daemon persist first, then release that stale CLI read to overwrite
+      // it. The very same test deterministically loses the real badge.
+      daemonAdoptionRead = false;
+      void persist().then(release);
+    };
+    try {
+      const joined = await away("setup", "--no-install", "--no-open", "--json", enrol.address);
+      expect(joined.code, joined.stderr).toBe(0);
+      expect(exercised).toBe(true);
+      await persistence;
+      identityHook = undefined;
+      readSpy.mockRestore();
+      endowSpy.mockRestore();
+      await replica.close();
+      replica = await startDaemon({ port: awayPort, home: awayDir, birthHome: origin });
+      const minted = await away("pass", "--json");
+      expect(minted.code, minted.stderr).toBe(0);
+      const out = JSON.parse(minted.stdout) as { address: string; actor: { id: string } };
+      expect(out.actor.id).toBe(priya.id);
+      expect(out.address.startsWith(canvasUrl(origin, canvasId))).toBe(true);
+      const passId = out.address.split("#")[1]!.split(".")[0]!;
+      expect(await homeDaemon.desk.pass(passId)).not.toBeNull();
+      const saved = JSON.parse(await read(file, "utf8"));
+      expect(saved.id).toBe(priya.id);
+      expect((await readBadge(awayDir, origin))?.badgeId).toBe(pendingBadge!.badgeId);
+    } finally {
+      identityHook = undefined;
+      readSpy.mockRestore();
+      endowSpy.mockRestore();
+      await replica.close();
+    }
+  }, 60_000);
+
   it("mints at the HOME — the row lives where the door is", async () => {
     /**
      * Verified rather than trusted, because the failure would be invisible and

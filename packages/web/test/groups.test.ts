@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { groupMemberRoute, groupRoute, GROUPS_ROUTE } from "@isocan/core";
+import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, groupMemberRoute, groupRoute, GROUPS_ROUTE } from "@isocan/core";
 import {
   addGroupMember,
   createGroup,
@@ -67,7 +67,9 @@ describe("the group calls, on the wire", () => {
     ]);
     expect(JSON.parse(seen[1]!.body!)).toEqual({ name: "Design team", actorId: "usr_priya" });
     expect(seen[3]!.body).toBeUndefined();
-    expect(seen[3]!.headers).toBeUndefined();
+    const headers = new Headers(seen[3]!.headers);
+    expect(headers.get("content-type")).toBeNull();
+    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CANVAS_GROUPS_FEATURE);
   });
 
   it("adds a member with PUT on the encoded member route, and removes with a bodiless DELETE", async () => {
@@ -149,8 +151,10 @@ describe("the Share dialog", () => {
     expect(source).toMatch(/readGroup\(id\)/);
     expect(source).toContain("· group of ${view.size}");
     // Every row's subject goes through the one label: the space's rows on
-    // a canvas, the invitations, the bars, and the space's own rows.
-    expect(source.match(/<b>\{subjectLabel\(grant\.subject, views\)\}<\/b>/g)).toHaveLength(5);
+    // a canvas, the invitations, the bars, the space's own rows — and the
+    // rows the operator turned off (operator phase 5), which are one list
+    // rendered for both scopes.
+    expect(source.match(/<b>\{subjectLabel\(grant\.subject, views\)\}<\/b>/g)).toHaveLength(6);
     expect(source).not.toMatch(/<b>\{grant\.subject\.replace/);
   });
 });

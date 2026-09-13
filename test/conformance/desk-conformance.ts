@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActorClaim, Grant, Group, Space } from "@isocan/core";
+import type { ActorClaim, CanvasTakedown, Grant, Group, HomeRefusal, OperatorAct, Space } from "@isocan/core";
 import { groupSubject, LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
 import type { BadgeRecord, Desk, PassRecord } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
@@ -44,6 +44,62 @@ export function deskConformance(
         await fixture.done();
       }
     };
+
+    test("personal reservation is stable under concurrent requests and canonical joins preserve datasets", withDesk(async ({ desk }) => {
+      const at = "2026-09-13T00:00:00Z";
+      const rows = await Promise.all(Array.from({ length: 6 }, (_, i) => desk.reservePersonal({ ownerId: "usr_person", aliases: [], canvasId: `prj_candidate_${i}`, birthOpId: `op_birth_${i}`, at })));
+      expect(new Set(rows.map((row) => row.source.canvasId)).size).toBe(1);
+      const original = rows[0]!.source;
+      await desk.finishPersonalBirth(original.canvasId, original.birthOpId);
+      const alias = await desk.reservePersonal({ ownerId: "usr_alias", aliases: [], canvasId: "prj_alias", birthOpId: "op_alias", at });
+      const joined = await desk.reservePersonal({ ownerId: "usr_person", aliases: ["usr_alias"], canvasId: "prj_never", birthOpId: "op_never", at });
+      expect(await desk.personalBinding(["usr_person", "usr_alias"])).toEqual(joined);
+      expect(joined.source.canvasId).toBe(original.canvasId);
+      expect(joined.preserved.map((row) => row.canvasId)).toEqual([alias.source.canvasId]);
+      expect(await desk.personalSource("prj_never")).toBeNull();
+      expect((await desk.personalSource(original.canvasId))!.birth).toBe("created");
+      expect((await desk.personalSource(alias.source.canvasId))!.ownerId).toBe("usr_alias");
+    }));
+
+    test("private replica classification is immutable and grants no owner binding", withDesk(async ({ desk }) => {
+      expect(await desk.personalReplica("prj_remote")).toBeNull();
+      await desk.recordPersonalReplica("prj_remote", "https://home.acme.test");
+      await desk.recordPersonalReplica("prj_remote", "https://home.acme.test");
+      expect(await desk.personalReplica("prj_remote")).toBe("https://home.acme.test");
+      expect(await desk.personalSource("prj_remote")).toBeNull();
+      expect(await desk.personalBinding(["usr_person"])).toBeNull();
+      await expect(desk.recordPersonalReplica("prj_remote", "https://another.acme.test")).rejects.toThrow("authority changed");
+      expect(await desk.personalReplica("prj_remote")).toBe("https://home.acme.test");
+    }));
+
+    test("personal consent retries keep concrete identities and delegation stays on its source", withDesk(async ({ desk }) => {
+      const at = "2026-09-13T00:00:00Z";
+      await desk.reservePersonal({ ownerId: "usr_person", aliases: [], canvasId: "prj_personal", birthOpId: "op_birth", at });
+      const intent = { ownerId: "usr_person", sourceCanvasId: "prj_personal", destinationCanvasId: "prj_shared", itemId: "itm_card", groupId: "itm_group", opId: "op_link", requestId: "gesture-one", createdAt: at };
+      await desk.reservePersonalLink(intent);
+      expect(await desk.reservePersonalLink({ ...intent, itemId: "itm_retry", opId: "op_retry" })).toEqual(intent);
+      await expect(desk.reservePersonalLink({ ...intent, sourceCanvasId: "prj_other" })).rejects.toThrow();
+      expect(await desk.personalLinkForItem("prj_copy", "itm_card")).toBeNull();
+      expect(await desk.personalLinkForItem("prj_shared", "itm_copy")).toBeNull();
+      await desk.setPersonalDelegation("prj_personal", { agentId: "usr_agent", allowed: true, at, byOwnerId: "usr_person" });
+      await desk.setPersonalDelegation("prj_personal", { agentId: "usr_agent", allowed: false, at, byOwnerId: "usr_person" });
+      expect(await desk.personalDelegations("prj_personal")).toEqual([{ agentId: "usr_agent", allowed: false, at, byOwnerId: "usr_person" }]);
+      expect(await desk.personalDelegations("prj_other")).toEqual([]);
+      expect((await desk.personalLinksFor("prj_shared"))[0]!.itemId).toBe("itm_card");
+    }));
+
+    test("personal consent keys preserve the complete destination and item tuple", withDesk(async ({ desk }) => {
+      const at = "2026-09-13T00:00:00Z";
+      await desk.reservePersonal({ ownerId: "usr_person", aliases: [], canvasId: "prj_personal", birthOpId: "op_birth", at });
+      const base = { ownerId: "usr_person", sourceCanvasId: "prj_personal", groupId: "itm_group", createdAt: at };
+      const first = { ...base, destinationCanvasId: "prj_a_itm_b", itemId: "itm_c", requestId: "gesture-one", opId: "op_one" };
+      const second = { ...base, destinationCanvasId: "prj_a", itemId: "itm_b_itm_c", requestId: "gesture-two", opId: "op_two" };
+      await desk.reservePersonalLink(first); await desk.reservePersonalLink(second);
+      expect(await desk.personalLinkForItem(first.destinationCanvasId, first.itemId)).toEqual(first);
+      expect(await desk.personalLinkForItem(second.destinationCanvasId, second.itemId)).toEqual(second);
+      expect(await desk.personalLinksFor(first.destinationCanvasId)).toEqual([first]);
+      expect(await desk.personalLinksFor(second.destinationCanvasId)).toEqual([second]);
+    }));
 
     test(
       "init is idempotent, and close can be called twice",
@@ -194,6 +250,42 @@ export function deskConformance(
     );
 
     test(
+      "a stronger pass raises an existing admission without weakening standing or an operator look",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_pass_reader"));
+        const reader = { root: "grant" as const, grantId: "gnt_read" };
+        await desk.admit("bdg_pass_reader", "prj_a", reader, "read");
+        await desk.admit("bdg_pass_reader", "prj_a", { root: "grant", grantId: "gnt_edit" }, "edit");
+        expect((await desk.badge("bdg_pass_reader"))!.admissions[0]!.capability).toBe("read");
+        const pass = { root: "pass" as const, badgeId: "bdg_owner" };
+        await desk.admit("bdg_pass_reader", "prj_a", pass, "own");
+        const elevated = (await desk.badge("bdg_pass_reader"))!.admissions[0]!;
+        expect(elevated).toMatchObject({ provenance: pass, capability: "own" });
+        await desk.admit("bdg_pass_reader", "prj_a", { root: "pass", badgeId: "bdg_equal" }, "own");
+        await desk.admit("bdg_pass_reader", "prj_a", { root: "pass", badgeId: "bdg_weaker" }, "edit");
+        expect((await desk.badge("bdg_pass_reader"))!.admissions[0]).toEqual(elevated);
+        await desk.put(mint("bdg_look"));
+        const look = { root: "operator" as const, until: new Date(Date.now() + 60_000).toISOString() };
+        await desk.admit("bdg_look", "prj_a", look, "view");
+        await desk.admit("bdg_look", "prj_a", pass, "own");
+        expect((await desk.badge("bdg_look"))!.admissions[0]).toMatchObject({ provenance: look, capability: "view" });
+      }),
+    );
+
+    test(
+      "concurrent higher passes cannot overwrite the stronger accepted standing",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_pass_race"));
+        await desk.admit("bdg_pass_race", "prj_a", { root: "grant", grantId: "gnt_read" }, "read");
+        await Promise.all([
+          desk.admit("bdg_pass_race", "prj_a", { root: "pass", badgeId: "bdg_editor" }, "edit"),
+          desk.admit("bdg_pass_race", "prj_a", { root: "pass", badgeId: "bdg_owner" }, "own"),
+        ]);
+        expect((await desk.badge("bdg_pass_race"))!.admissions[0]).toMatchObject({ provenance: { root: "pass", badgeId: "bdg_owner" }, capability: "own" });
+      }),
+    );
+
+    test(
       "every rung that is not edit round-trips on an admission (roles phase 1)",
       withDesk(async ({ desk }) => {
         // The rule is "written whenever it is not edit", not "written when it
@@ -292,6 +384,85 @@ export function deskConformance(
         expect(again).toMatchObject({ revokedAt: at, revokedBy: "bdg_2" });
         // A grant this desk does not know is null, not a throw.
         expect(await desk.revokeGrant("gnt_nope", at, "bdg_1")).toBeNull();
+      }),
+    );
+
+    test("listing decisions round-trip and unlisting leaves the link live", withDesk(async ({ desk }) => {
+      const row: Grant = { ...grant("gnt_public", "prj_public", "bdg_owner"), capability: "read" };
+      await desk.putGrant(row);
+      expect(await desk.listedGrants()).toEqual([]);
+      const at = "2026-09-13T01:00:00Z";
+      const listed = await desk.setPublicListing("prj_public", row.id, true, at, "bdg_owner");
+      expect(listed?.listing).toEqual({ listed: true, at, by: "bdg_owner" });
+      expect((await desk.listedGrants()).map((g) => g.id)).toEqual([row.id]);
+      listed!.listing!.listed = false; // a returned record must not mutate storage
+      expect((await desk.grantsFor("prj_public"))[0]!.listing!.listed).toBe(true);
+      const off = await desk.setPublicListing("prj_public", row.id, false, "2026-09-13T02:00:00Z", "bdg_other_owner");
+      expect(off).toMatchObject({ capability: "read", listing: { listed: false, by: "bdg_other_owner" } });
+      expect(off!.revokedAt).toBeUndefined();
+      expect(await desk.listedGrants()).toEqual([]);
+    }));
+
+    test("listing refuses stale, wrong-canvas and ineligible grant ids without changing them", withDesk(async ({ desk }) => {
+      const base = grant("gnt_public", "prj_public", "bdg_owner");
+      const variants: Grant[] = [base, { ...base, id: "own", capability: "own" }, { ...base, id: "space", spaceId: "spc_one", capability: "read" },
+        { ...base, id: "email", subject: "email:acme@example.test", capability: "read" }, { ...base, id: "bar", capability: "read", bars: true },
+        { ...base, id: "revoked", capability: "read", revokedAt: "2026-09-13T00:00:00Z" }];
+      for (const row of variants) {
+        await desk.putGrant(row);
+        expect(await desk.setPublicListing("prj_public", row.id, true, "2026-09-13T01:00:00Z", "bdg_owner")).toBeNull();
+      }
+      const eligible: Grant = { ...base, id: "eligible", capability: "view" };
+      await desk.putGrant(eligible);
+      expect(await desk.setPublicListing("prj_wrong", eligible.id, true, "2026-09-13T01:00:00Z", "bdg_owner")).toBeNull();
+      expect(await desk.setPublicListing("prj_public", "missing", true, "2026-09-13T01:00:00Z", "bdg_owner")).toBeNull();
+      expect(await desk.listedGrants()).toEqual([]);
+      expect((await desk.grantsFor("prj_public")).every((g) => g.listing === undefined)).toBe(true);
+    }));
+
+    test("revocation clears consent atomically even against a concurrent publication", withDesk(async ({ desk }) => {
+      for (let i = 0; i < 6; i++) {
+        const row: Grant = { ...grant(`gnt_race_${i}`, "prj_race", "bdg_owner"), capability: "read" };
+        await desk.putGrant(row);
+        await Promise.all([
+          desk.setPublicListing("prj_race", row.id, true, "2026-09-13T01:00:00Z", "bdg_owner"),
+          desk.revokeGrant(row.id, "2026-09-13T02:00:00Z", "bdg_revoker"),
+        ]);
+        const stored = (await desk.grantsFor("prj_race")).find((g) => g.id === row.id)!;
+        expect(stored.revokedAt).toBe("2026-09-13T02:00:00Z");
+        expect(stored.listing?.listed ?? false).toBe(false);
+        expect(await desk.setPublicListing("prj_race", row.id, true, "2026-09-13T03:00:00Z", "bdg_stale")).toBeNull();
+      }
+      await desk.putGrant({ ...grant("gnt_replacement", "prj_race", "bdg_owner"), capability: "read" });
+      expect(await desk.listedGrants()).toEqual([]);
+    }));
+
+    // ---- operator phase 5: the operator's revoke keeps its half on the tombstone ----
+
+    test(
+      "the operator's revoke carries revokedVia and the operator's half; the owner's carries neither",
+      withDesk(async ({ desk }) => {
+        await desk.putGrant(grant("gnt_op", "prj_a", "bdg_1"));
+        await desk.putGrant({ ...grant("gnt_own", "prj_a", "bdg_1"), subject: "email:jordan@acme.test" });
+        const at = "2026-09-12T12:00:00.000Z";
+        const via = { reason: "spam" as const, by: "email:olu@example.test", actId: "opr_1" };
+        const revoked = await desk.revokeGrant("gnt_op", at, "bdg_desk", via);
+        // The row says the home turned it off, and the account of why is on it
+        // — reason, address, ledger act — in the same write as the stamp, so
+        // no reader meets a row that is off with nobody to say why.
+        expect(revoked).toMatchObject({ revokedAt: at, revokedBy: "bdg_desk", revokedVia: "operator", revocation: via });
+        // It reads back the same, on both backings: a rebuild that dropped it
+        // would turn "turned off by the operator" into an owner's own revoke.
+        const rows = await desk.grantsFor("prj_a");
+        expect(rows.find((row) => row.id === "gnt_op")).toMatchObject({ revokedVia: "operator", revocation: via });
+        // The owner's act is the owner's: no `via`, no field.
+        const owners = await desk.revokeGrant("gnt_own", at, "bdg_priya");
+        expect(owners!.revokedVia).toBeUndefined();
+        expect(owners!.revocation).toBeUndefined();
+        // Idempotent, the operator's half included: a second stamp — an
+        // owner's, arriving late — does not overwrite whose act it was.
+        const again = await desk.revokeGrant("gnt_op", "2026-09-12T13:00:00.000Z", "bdg_priya");
+        expect(again).toMatchObject({ revokedAt: at, revokedBy: "bdg_desk", revokedVia: "operator" });
       }),
     );
 
@@ -755,6 +926,69 @@ export function deskConformance(
     );
 
     /**
+     * **The tombstone is readable** (operator phase 4). `badge()` refuses a
+     * killed badge and every query drops it — that is the rule — but the
+     * record was written for a reason, and until this read the 401 a dead
+     * badge met could not say when or by whom, and a pass a dead badge had
+     * minted was judged without asking whether its minter lived.
+     */
+    test(
+      "endedBadge answers the tombstone, whole, and nothing for a badge that lives or never was",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        await desk.setClaims("bdg_1", [claim("usr_ada", "cli:ada")]);
+        await desk.admit("bdg_1", "prj_a", { root: "created" });
+        expect(await desk.endedBadge("bdg_1"), "alive").toBeNull();
+        expect(await desk.endedBadge("bdg_nope"), "never was").toBeNull();
+
+        await desk.killBadge("bdg_1", "2026-02-01T00:00:00.000Z", "bdg_2");
+        const gone = await desk.endedBadge("bdg_1");
+        expect(gone).toMatchObject({
+          badgeId: "bdg_1",
+          secretHash: "hash_bdg_1",
+          killedAt: "2026-02-01T00:00:00.000Z",
+          killedBy: "bdg_2",
+        });
+        // The record as it was, claims and admissions intact: what the
+        // operator reads about what a compromised badge had been.
+        expect(gone!.claims.map((c) => c.actorId)).toEqual(["usr_ada"]);
+        expect(gone!.admissions.map((a) => a.canvasId)).toEqual(["prj_a"]);
+        // And still nobody holds it.
+        expect(await desk.badge("bdg_1")).toBeNull();
+      }),
+    );
+
+    /**
+     * **The operator's half of the tombstone** (operator phase 4): written in
+     * the same write as the stamp, read back whole, and absent — not empty —
+     * on an end by the holder, because the sentence and the CLI's re-badge
+     * both branch on that absence.
+     */
+    test(
+      "killBadge keeps the operator's end on the tombstone, and passesMintedBy finds what a badge left",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        await desk.put(mint("bdg_2"));
+        await desk.putPass(pass("pss_1", "prj_a", "bdg_1"));
+        await desk.putPass(pass("pss_2", "prj_b", "bdg_1", "usr_jordan"));
+        await desk.putPass(pass("pss_3", "prj_a", "bdg_2"));
+        expect((await desk.passesMintedBy("bdg_1")).map((p) => p.id).sort()).toEqual(["pss_1", "pss_2"]);
+        expect((await desk.passesMintedBy("bdg_2")).map((p) => p.id)).toEqual(["pss_3"]);
+        expect(await desk.passesMintedBy("bdg_nope")).toEqual([]);
+
+        const end = { reason: "harassment" as const, by: "email:olu@example.test", actId: "opr_1" };
+        await desk.killBadge("bdg_1", "2026-02-01T00:00:00.000Z", "bdg_opr", end);
+        expect((await desk.endedBadge("bdg_1"))!.end).toEqual(end);
+        // The holder's own end carries no operator half.
+        await desk.killBadge("bdg_2", "2026-02-01T00:00:00.000Z", "bdg_2");
+        expect((await desk.endedBadge("bdg_2"))!.end).toBeUndefined();
+        // The first stamp stands: a second kill, even an operator's, writes nothing.
+        await desk.killBadge("bdg_2", "2026-03-01T00:00:00.000Z", "bdg_opr", end);
+        expect((await desk.endedBadge("bdg_2"))!.end).toBeUndefined();
+      }),
+    );
+
+    /**
      * **The content-signing key** (`content-read-auth.md`, option A): minted
      * on first ask and the same one ever after.
      *
@@ -782,7 +1016,298 @@ export function deskConformance(
         expect(new Set(racing)).toEqual(new Set([first]));
       }),
     );
+
+    /**
+     * **Seen-marks** (#147, #134) — the desk's sixth ledger, and the first row
+     * that is private for a PERSON rather than to the innkeeper.
+     *
+     * The property both backings must have is the one `redeemPass` has, for
+     * the same reason and by different means: a read-modify-write that
+     * interleaves loses an update, and a lost update is the only way a mark
+     * can go backwards. A serialized chain on one, a transaction on the other.
+     * The merge itself is order-independent, so the racing case below is
+     * deterministic about its ANSWER while being deliberately nondeterministic
+     * about the order.
+     */
+    test(
+      "a seen-mark merges monotonically, concurrent writers included",
+      withDesk(async ({ desk }) => {
+        expect(await desk.seenOf("usr_a"), "nobody has looked at anything yet").toEqual({});
+
+        const first = await desk.markSeen("usr_a", "prj_1", { seq: 4, at: ts(10) });
+        expect(first).toEqual({ seq: 4, at: ts(10) });
+
+        // A stale client cannot pull it back, and the revisit still counts.
+        expect(await desk.markSeen("usr_a", "prj_1", { seq: 2, at: ts(11) })).toEqual({
+          seq: 4,
+          at: ts(11),
+        });
+
+        // Three at once, in whatever order they land: the answer is the
+        // furthest seq and the latest instant, and no write is lost.
+        await Promise.all([
+          desk.markSeen("usr_a", "prj_1", { seq: 9, at: ts(12) }),
+          desk.markSeen("usr_a", "prj_1", { seq: 7, at: ts(14) }),
+          desk.markSeen("usr_a", "prj_1", { seq: 8, at: ts(13) }),
+        ]);
+        expect(await desk.seenOf("usr_a")).toEqual({ prj_1: { seq: 9, at: ts(14) } });
+
+        // One ledger per person, and a canvas is a key inside it.
+        await desk.markSeen("usr_a", "prj_2", { seq: 1, at: ts(9) });
+        await desk.markSeen("usr_b", "prj_1", { seq: 99, at: ts(20) });
+        expect(Object.keys(await desk.seenOf("usr_a")).sort()).toEqual(["prj_1", "prj_2"]);
+        expect(await desk.seenOf("usr_b"), "nobody else's marks leak in").toEqual({
+          prj_1: { seq: 99, at: ts(20) },
+        });
+      }),
+    );
+
+    /**
+     * **The operator's ledger** (operator phase 1) — the desk's seventh row,
+     * and the first that records a POWER rather than an access.
+     *
+     * The property both backings must have is the project's one rule for every
+     * phase: *every act writes its ledger row before it answers*. So the shape
+     * under test is two writes for one act — the row, then its outcome — and
+     * what must be true afterwards is that the second found the first rather
+     * than making a second row. A backing that appended twice would turn every
+     * completed act into a completed act beside an eternally attempted one,
+     * and `isocan operator log` would read as a home that crashes constantly.
+     *
+     * A settle for an act that is not there is silent rather than an error, and
+     * that is asserted too: it runs on the way OUT of an act, and a throw there
+     * would turn a successful act into a refusal the operator reads as failure.
+     */
+    test(
+      "an operator act is written before it answers, and settled onto the same row",
+      withDesk(async ({ desk }) => {
+        expect(await desk.operatorActs(), "no act has been taken at a fresh home").toEqual([]);
+
+        await desk.recordOperatorAct(operatorAct("opr_1", "show", "prj_1", ts(10)));
+        const attempted = await desk.operatorActs();
+        expect(attempted).toHaveLength(1);
+        expect(attempted[0]!.outcome, "the row goes down before the act runs").toBe("attempted");
+        expect(attempted[0]!.proof.attribute).toBe("email:olu@acme.test");
+
+        await desk.settleOperatorAct("opr_1", "done", { badges: 3 });
+        const settled = await desk.operatorActs();
+        expect(settled, "settling is not a second row").toHaveLength(1);
+        expect(settled[0]!.outcome).toBe("done");
+        expect(settled[0]!.reach).toEqual({ badges: 3 });
+
+        // Append-only across ACTS: a later act is a new row, never an edit.
+        await desk.recordOperatorAct(operatorAct("opr_2", "show", "prj_2", ts(11)));
+        await desk.settleOperatorAct("opr_2", "not-operator");
+        const both = await desk.operatorActs();
+        expect(both.map((row) => row.id), "newest first").toEqual(["opr_2", "opr_1"]);
+
+        // One target, which is how a report is answered.
+        expect((await desk.operatorActs({ target: "prj_1" })).map((row) => row.id)).toEqual([
+          "opr_1",
+        ]);
+        expect(await desk.operatorActs({ target: "prj_nothing" })).toEqual([]);
+        expect(await desk.operatorActs({ limit: 1 })).toHaveLength(1);
+
+        // Settling something that is not there changes nothing and says nothing.
+        await desk.settleOperatorAct("opr_gone", "done");
+        expect(await desk.operatorActs()).toHaveLength(2);
+      }),
+    );
+
+    /**
+     * **The takedown row: standing state, one per canvas, and a lift KEEPS
+     * it** (operator phase 2).
+     *
+     * The ledger above is append-only acts; this is the state those acts leave
+     * behind, and the two differ in exactly the way that matters here. A lift
+     * REWRITES this row rather than adding one, because "is this canvas down"
+     * is asked on a request path and must not be a question two rows could
+     * both answer. But the row itself survives the lift, because journey 5
+     * step 3 wants both halves readable afterwards — and because `show`'s
+     * "taken down, and lifted" is what the operator reads when Kai writes
+     * again.
+     *
+     * `takedowns()` is the set IN FORCE, which is what the door's registry is
+     * loaded from at boot: a lifted row must drop out of it or a lift would
+     * not be a lift.
+     */
+    test(
+      "a takedown row stands until it is lifted, and the lifted row is kept",
+      withDesk(async ({ desk }) => {
+        expect(await desk.takedowns(), "a fresh home has taken nothing down").toEqual([]);
+        expect(await desk.takedownFor("prj_1")).toBeNull();
+
+        const row: CanvasTakedown = {
+          canvasId: "prj_1",
+          at: ts(10),
+          reason: "stolen-content",
+          note: "reported by acme, 12 Sep",
+          by: "email:olu@acme.test",
+          actId: "opr_1",
+        };
+        await desk.recordTakedown(row);
+        expect(await desk.takedownFor("prj_1")).toEqual(row);
+        expect((await desk.takedowns()).map((held) => held.canvasId)).toEqual(["prj_1"]);
+
+        await desk.liftTakedown("prj_1", {
+          at: ts(11),
+          by: "email:olu@acme.test",
+          actId: "opr_2",
+        });
+        const lifted = await desk.takedownFor("prj_1");
+        expect(lifted!.liftedAt).toBe(ts(11));
+        expect(lifted!.liftedActId).toBe("opr_2");
+        // Everything the takedown said is still readable — including the note,
+        // which is the operator's record of why.
+        expect(lifted!.reason).toBe("stolen-content");
+        expect(lifted!.note).toBe("reported by acme, 12 Sep");
+        expect(lifted!.actId).toBe("opr_1");
+        expect(await desk.takedowns(), "a lifted row is not in force").toEqual([]);
+
+        // Lifting something that is not down is silent: the route has already
+        // refused it, and a throw here would turn a settled act into a failure.
+        await desk.liftTakedown("prj_nothing", {
+          at: ts(12),
+          by: "email:olu@acme.test",
+          actId: "opr_3",
+        });
+        expect(await desk.takedownFor("prj_nothing")).toBeNull();
+      }),
+    );
+
+    /**
+     * **The purge mark: the same rewrite a lift is, in the direction that
+     * never reverses** (operator phase 3). The row keeps everything the
+     * takedown said and gains when, which act, and the counts — the record
+     * journey 6 step 3 says stays. And it is still IN FORCE: a purged canvas
+     * is down forever, so it must stay in the set the door reads at boot.
+     */
+    test(
+      "a purged row keeps the takedown, carries the counts, and stays in force",
+      withDesk(async ({ desk }) => {
+        const row: CanvasTakedown = {
+          canvasId: "prj_1",
+          at: ts(10),
+          reason: "illegal-content",
+          note: "kai, 12 Sep",
+          by: "email:olu@acme.test",
+          actId: "opr_1",
+        };
+        await desk.recordTakedown(row);
+        const counts = { files: 3, bytes: 4096, ops: 12, objects: 5 };
+        await desk.markPurged("prj_1", { at: ts(20), actId: "opr_9", counts });
+        const purged = await desk.takedownFor("prj_1");
+        expect(purged!.purgedAt).toBe(ts(20));
+        expect(purged!.purgedActId).toBe("opr_9");
+        expect(purged!.purged).toEqual(counts);
+        expect(purged!.reason).toBe("illegal-content");
+        expect(purged!.note).toBe("kai, 12 Sep");
+        expect(purged!.actId).toBe("opr_1");
+        expect((await desk.takedowns()).map((held) => held.canvasId), "still down").toEqual(["prj_1"]);
+
+        // Silent on a canvas that was never down, for the lift's reason.
+        await desk.markPurged("prj_nothing", { at: ts(21), actId: "opr_10", counts });
+        expect(await desk.takedownFor("prj_nothing")).toBeNull();
+      }),
+    );
+
+    /**
+     * **The refusal row: one per subject, a lift keeps it, and the desk
+     * keeps no clock** (operator phase 6).
+     *
+     * The takedown row's shape at home scope. What is different, and tested
+     * here on purpose: a `net:` subject carries a slash, which a Firestore
+     * document id may not — so the cloud backing escapes the id and the row
+     * must come back whole under the subject it was written with. And an
+     * expired row is STILL answered by `refusals()`: the desk has no clock,
+     * and the registry judges `expiresAt` against the one it is handed.
+     */
+    test(
+      "a refusal row stands until it is lifted, a lift keeps it, and a network's slash survives",
+      withDesk(async ({ desk }) => {
+        expect(await desk.refusals(), "a fresh home refuses nobody").toEqual([]);
+        expect(await desk.refusalFor("email:sam@example.test")).toBeNull();
+
+        const sam: HomeRefusal = {
+          subject: "email:sam@example.test",
+          kind: "email",
+          at: ts(10),
+          reason: "harassment",
+          note: "kai's report, 12 Sep",
+          by: "email:olu@acme.test",
+          actId: "opr_1",
+        };
+        const net: HomeRefusal = {
+          subject: "net:203.0.113.0/24",
+          kind: "net",
+          at: ts(10),
+          reason: "spam",
+          by: "email:olu@acme.test",
+          actId: "opr_2",
+          // Long past. Still a row, and still answered: expiry is the
+          // registry's judgement, not the desk's.
+          expiresAt: ts(11),
+        };
+        await desk.recordRefusal(sam);
+        await desk.recordRefusal(net);
+        expect(await desk.refusalFor("email:sam@example.test")).toEqual(sam);
+        expect(await desk.refusalFor("net:203.0.113.0/24")).toEqual(net);
+        expect((await desk.refusals()).map((row) => row.subject).sort()).toEqual([
+          "email:sam@example.test",
+          "net:203.0.113.0/24",
+        ]);
+
+        await desk.liftRefusal("email:sam@example.test", {
+          at: ts(12),
+          by: "email:olu@acme.test",
+          actId: "opr_3",
+        });
+        const lifted = await desk.refusalFor("email:sam@example.test");
+        expect(lifted!.liftedAt).toBe(ts(12));
+        expect(lifted!.liftedActId).toBe("opr_3");
+        // Everything the refusal said is still readable, the note included.
+        expect(lifted!.reason).toBe("harassment");
+        expect(lifted!.note).toBe("kai's report, 12 Sep");
+        expect(lifted!.actId).toBe("opr_1");
+        expect((await desk.refusals()).map((row) => row.subject), "a lifted row is not answered").toEqual([
+          "net:203.0.113.0/24",
+        ]);
+
+        // Refusing again after a lift rewrites the one row, in force again.
+        await desk.recordRefusal({ ...sam, at: ts(13), actId: "opr_4" });
+        const again = await desk.refusalFor("email:sam@example.test");
+        expect(again!.liftedAt).toBeUndefined();
+        expect(again!.actId).toBe("opr_4");
+
+        // Lifting something that is not refused is silent, for the takedown
+        // lift's reason — and creates nothing.
+        await desk.liftRefusal("actor:usr_nobody", { at: ts(14), by: "email:olu@acme.test", actId: "opr_5" });
+        expect(await desk.refusalFor("actor:usr_nobody")).toBeNull();
+      }),
+    );
   });
+}
+
+/** One operator act, as the desk holds it — the row written before the act
+ * answers. The token hash stands in for a real one: hashing is the route's job
+ * (`server/operator.ts`), and what the desk owes is that the row survives and
+ * that its outcome settles onto it rather than beside it. */
+export function operatorAct(id: string, act: string, target: string, at: string): OperatorAct {
+  return {
+    id,
+    act,
+    target,
+    proof: { attribute: "email:olu@acme.test", authTime: at, tokenHash: `hash_${id}` },
+    badgeId: "bdg_desk",
+    at,
+    outcome: "attempted",
+  };
+}
+
+/** An instant, for the seen-marks case: readable, ordered, and the same on
+ *  both backings. */
+function ts(hour: number): string {
+  return new Date(Date.UTC(2026, 8, 12, hour)).toISOString();
 }
 
 // ---- fixtures ----

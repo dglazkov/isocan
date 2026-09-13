@@ -100,6 +100,27 @@ export interface Pass {
    * asked for, and "there is no such pass" is a different sentence. */
   redeemedAt?: string;
   redeemedBy?: string;
+  /**
+   * **This pass redeems into a LOOK, not an ordinary admission** (operator
+   * phase 2; design, "The look").
+   *
+   * Present only on a pass `isocan operator look` minted, after the proof. Its
+   * redemption writes `{root: "operator", until}` at `view` instead of
+   * `{root: "pass", badgeId}` at the minter's rung — so the door honours it
+   * until `until` and not a moment longer, the sweep leaves it alone, and it
+   * is not in presence, because no `view` connection is.
+   *
+   * **It is on the PASS rather than decided at redemption**, and that is the
+   * whole reason it is a field: a pass is a bearer token for fifteen minutes,
+   * and what it admits somebody to has to have been fixed at the moment the
+   * proof was made. A redeemer that could ask for a look would be a look
+   * anybody could take.
+   */
+  look?: {
+    /** When the admission stops being honoured, ISO. An hour from the mint
+     * (design, "the door honours it for an hour"). */
+    until: string;
+  };
 }
 
 // ---- the token on the wire ----
@@ -154,6 +175,26 @@ export const passesRoute = (canvasId: string): string =>
   `/api/projects/${encodeURIComponent(canvasId)}/passes`;
 
 /**
+ * Read one back: `GET /api/projects/:id/passes/:passId` (sheep-harness
+ * phase 2).
+ *
+ * **Only for the badge that minted it**, and the row without its secret. What
+ * the minter learns is what it already half knows: that the pass it handed
+ * over was spent, when, and by which badge — `redeemedBy`. That last field is
+ * the exact name of the surface the pass made, which is what an rc needs to
+ * end the badge a sheep's cell redeemed when the agent is withdrawn, without
+ * guessing it from a list of surfaces that share an actor.
+ *
+ * Canvas-scoped for the mint route's reasons: the door has already run, and
+ * on a replica the read forwards to the home whose desk holds the row, where
+ * the minter is this daemon's badge there. A pass minted by another badge, on
+ * another canvas, or never minted at all answers `unknown-pass` alike, so the
+ * route is no oracle over other people's passes.
+ */
+export const passRoute = (canvasId: string, passId: string): string =>
+  `${passesRoute(canvasId)}/${encodeURIComponent(passId)}`;
+
+/**
  * Redeem one: `POST /api/passes/redeem` — flat, and it has to be.
  *
  * The redeemer is BY DEFINITION not admitted to the canvas yet; that is what
@@ -184,12 +225,18 @@ export interface MintPassRequest {
 export interface MintPassResponse {
   pass: Pass;
   /**
-   * `<passId>.<secret>`, handed over **once and never again** — there is no
-   * route that reads a pass back out, and the desk holds only the hash. A
-   * caller that loses it mints another; that is cheaper than any mechanism
-   * for showing it twice, and it is the same posture as the door's.
+   * `<passId>.<secret>`, handed over **once and never again** — no route
+   * reads a token back out (`passRoute` returns the row, never the secret),
+   * and the desk holds only the hash. A caller that loses it mints another;
+   * that is cheaper than any mechanism for showing it twice, and it is the
+   * same posture as the door's.
    */
   token: string;
+}
+
+/** One pass read back by its minter (`passRoute`): the row, no secret. */
+export interface PassResponse {
+  pass: Pass;
 }
 
 export interface RedeemPassRequest {
@@ -214,6 +261,9 @@ export interface RedeemPassRequest {
    * dialled itself would be its own replica.
    */
   home?: string;
+  /** Setup on a local daemon also saves the pass-returned actor as its
+   * machine's person. Never forwarded; refused on a hosted/non-local door. */
+  adoptIdentity?: boolean;
 }
 
 export interface RedeemPassResponse {
@@ -224,6 +274,9 @@ export interface RedeemPassResponse {
    * redemption rather than frozen at mint, so a person who renamed herself in
    * between is handed the name she goes by now. */
   actor?: Actor;
+  /** The local machine's default after requested adoption; a different held
+   * person remains default. Absent when no adoption or identity was requested. */
+  identity?: { actor: Actor; adopted: boolean };
 }
 
 // ---- refusal ----
@@ -241,7 +294,27 @@ export interface RedeemPassResponse {
  * the button again. One collapsed refusal would send all three to the same
  * useless place.
  */
-export type PassRefusal = typeof PASS_UNKNOWN | typeof PASS_SPENT | typeof PASS_EXPIRED;
+export type PassRefusal =
+  | typeof PASS_UNKNOWN
+  | typeof PASS_SPENT
+  | typeof PASS_EXPIRED
+  | typeof PASS_MINTER_ENDED;
+
+/**
+ * **The surface that minted it has since been ended** (operator phase 4).
+ *
+ * A pass is the minter's standing, handed on: redemption writes `{root:
+ * "pass", badgeId: minter}` at the minter's rung. A minter that is dead has no
+ * standing to hand on, and the sweep would unstand the admission at the next
+ * pass anyway — but *would be expelled later* is not *was refused*, and the
+ * hour between is exactly the window a stolen laptop's outstanding pass was
+ * good for. So it is refused at the gate, with the tombstone's sentence, and
+ * the pass is left unspent: there is nothing to spend it on.
+ *
+ * 410 like `pass-expired`: it existed and is gone, and the remedy is the same
+ * shape — ask a surface that is still recognised for another.
+ */
+export const PASS_MINTER_ENDED = "pass-minter-ended";
 
 /**
  * No such pass — or the secret does not match one that exists.

@@ -1,5 +1,6 @@
 import type { LogEntry } from "./ops.ts";
 import type { CanvasContents } from "./model.ts";
+import { itemsTouchedBy } from "./touches.ts";
 
 /**
  * The canvas's history at decaying resolution.
@@ -61,6 +62,7 @@ interface RecapOptions {
 
 /** Item ids an operation touches, however the op spells them. */
 function touchedItems(entry: LogEntry): string[] {
+  if (entry.envelope.op.type === "group.change") return itemsTouchedBy(entry.envelope.op);
   const op = entry.envelope.op as {
     itemId?: string;
     itemIds?: string[];

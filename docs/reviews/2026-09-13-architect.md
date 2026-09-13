@@ -1,0 +1,24 @@
+# architect — 2026-09-13
+
+Run by `scripts/persona-run.mjs` at `7e15edc`. **Nothing was changed.**
+
+| Goal | Target | Now | Verdict |
+| --- | --- | --- | --- |
+| runtime dependencies of @isocan/core | at most 1 | 6 (was 1 on 2026-08-29) | **MISSED** |
+| operations a person can send and an agent cannot | at most 0 | 0 | held |
+| operations in the vocabulary | at most 34 | 34 (was 33 on 2026-09-01) | held |
+
+## Findings
+
+| Finding | Outcome |
+| --- | --- |
+| runtime dependencies of @isocan/core is 6, past 1 | unanswered |
+
+`unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
+an unanswered row fails `npm test`** — the queue can fail, so a correct report
+cannot be quietly ignored the way six nights of them were (#197).
+
+---
+
+Read `docs/reviews/README.md` before the next run: a finding that keeps
+reappearing is a finding that needs a guard, not a third mention.

@@ -1,3 +1,5 @@
+import { validateTextAnchor } from "./text-anchor.ts";
+import { validateContextManifest } from "./canvas-group-context.ts";
 import type {
   Actor,
   Canvas,
@@ -11,6 +13,7 @@ import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
 import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
+import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
 
 /**
  * The shared pure reducer. The daemon runs it authoritatively; the web client
@@ -26,6 +29,23 @@ export function applyOperation(
   state: CanvasState | null,
   envelope: OpEnvelope,
 ): CanvasState | null {
+  const op = envelope.op;
+  const contexts = op.type === "thread.create" || op.type === "thread.reply" || op.type === "comment.restore" ? [op.comment.context]
+    : op.type === "comment.update" ? [op.context]
+    : op.type === "thread.restore" ? op.thread.comments.map((comment) => comment.context) : [];
+  for (const context of contexts) if (context) {
+    if (!state || state.project.groupMode !== "groups") throw new OpValidationError("bad-op", "frozen context requires a group-mode canvas");
+    validateContextManifest(context, state.project.id);
+  }
+  const next = reduceOperation(state, envelope);
+  // Historical area canvases keep their original reduction. Explicit group
+  // state is validated after EVERY operation, including ordinary inverses.
+  if (next?.project.groupMode === "groups") validateGroupForest(next);
+  return next;
+}
+
+/** Primitive existing effects also compile a bounded content write before group-frame repair. */
+export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
   const { op, actor, ts } = envelope;
 
   if (op.type === "project.create") {
@@ -37,6 +57,7 @@ export function applyOperation(
       title: op.title,
       description: op.description ?? "",
       properties: { ...op.properties },
+      ...(op.groupMode !== undefined ? { groupMode: op.groupMode } : {}),
       createdAt: ts,
       createdBy: actor,
       updatedAt: ts,
@@ -92,6 +113,11 @@ export function applyOperation(
   };
 
   switch (op.type) {
+    case "group.change": {
+      const resolved = op.action.kind === "apply" ? op : resolveGroupOperation(state, op, { actor, ts, opId: envelope.id });
+      if (resolved.action.kind !== "apply") throw new OpValidationError("bad-op", "unresolved group operation");
+      return applyGroupChange(state, resolved.action.change, actor, ts);
+    }
     case "actor.claim":
     case "actor.setColor":
     case "actor.setMark":
@@ -336,8 +362,12 @@ export function applyOperation(
       });
     }
 
-    case "trash.empty":
-      return withCanvas({ ...canvas, trash: [] });
+    case "trash.empty": {
+      // The capture describes restorable trash, never a second archive after
+      // the person has explicitly emptied it. Historical area shapes stay put.
+      const { groupCohorts: _dropCohorts, ...remaining } = canvas;
+      return withCanvas({ ...remaining, trash: [] });
+    }
 
     case "thread.create": {
       if (canvas.threads[op.threadId]) {
@@ -346,6 +376,7 @@ export function applyOperation(
       requireBody(op.comment.body);
       requireFinite({ x: op.x, y: op.y }, "thread.create");
       if (op.anchorItemId !== null) getItem(op.anchorItemId);
+      const textAnchor = validateTextAnchor(op.textAnchor, op.anchorItemId ? canvas.items[op.anchorItemId] : undefined);
       // Strict, not takeover: a race between two clients birthing a main
       // thread must not leave one silently demoted — the loser errors and
       // replies to the winner's thread instead. Keeps undo exact, too.
@@ -357,6 +388,7 @@ export function applyOperation(
         x: op.x,
         y: op.y,
         anchorItemId: op.anchorItemId,
+        ...(textAnchor ? { textAnchor } : {}),
         comments: [toComment(op.comment, actor, ts)],
         ...(op.main ? { main: true } : {}),
         createdAt: ts,
@@ -401,7 +433,10 @@ export function applyOperation(
       ) {
         throw new OpValidationError("unknown-item", `unknown item: ${op.anchorItemId}`);
       }
+      const anchorItem = op.anchorItemId ? canvas.items[op.anchorItemId] ?? canvas.trash.find(t => t.item.id === op.anchorItemId)?.item : undefined;
+      const textAnchor = validateTextAnchor(op.textAnchor, anchorItem);
       const next = { ...thread, anchorItemId: op.anchorItemId, x: op.x, y: op.y };
+      if (textAnchor) next.textAnchor = textAnchor; else delete next.textAnchor;
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
     }
 
@@ -429,6 +464,11 @@ export function applyOperation(
         ...(op.items ? { items: op.items } : {}),
         editedAt: ts,
       };
+      if (op.context === null) delete edited.context;
+      else if (op.context !== undefined) {
+        validateContextManifest(op.context, state.project.id);
+        edited.context = structuredClone(op.context);
+      }
       const next = {
         ...thread,
         comments: thread.comments.map((c) => (c.id === op.commentId ? edited : c)),
@@ -480,9 +520,14 @@ export function applyOperation(
 
     case "agent.enroll": {
       // Re-enrolling updates the record in place: the standing was already
-      // there, the rules (or the name) changed. `rules` is stored verbatim
-      // and interpreted by nobody until phase 4 defines the vocabulary.
-      const row = { actor: op.agent, ...(op.rules !== undefined ? { rules: op.rules } : {}) };
+      // there, the rules (or the name) changed. `rules` is stored verbatim;
+      // `writtenBy` is the envelope's author, so the rc can tell its owner's
+      // gate from anybody else's (`EnrolledAgent.writtenBy`).
+      const row = {
+        actor: op.agent,
+        ...(op.rules !== undefined ? { rules: op.rules } : {}),
+        writtenBy: actor,
+      };
       return withCanvas({
         ...canvas,
         agents: { ...(canvas.agents ?? {}), [op.agent.id]: row },
@@ -524,6 +569,10 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
   const comment: Comment = { id: c.id, author: actor, body: c.body, createdAt: ts };
   if (c.mentions && c.mentions.length > 0) comment.mentions = [...c.mentions];
   if (c.items && c.items.length > 0) comment.items = [...c.items];
+  if (c.context) {
+    validateContextManifest(c.context, c.context.canvasId);
+    comment.context = structuredClone(c.context);
+  }
   return comment;
 }
 

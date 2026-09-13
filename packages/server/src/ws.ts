@@ -1,7 +1,10 @@
+import { textAttention } from "@isocan/core";
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { Capability, ClientMessage, PresenceSession, ServerMessage } from "@isocan/core";
+import type { Actor, Capability, ClientMessage, PresenceSession, RcPolicy, ServerMessage } from "@isocan/core";
 import {
+  CLIENT_FEATURES_PARAM,
+  supportsCanvasGroups,
   atLeast,
   narrowed,
   newId,
@@ -13,15 +16,26 @@ import {
   WS_NOT_ADMITTED,
   WS_STALE_CLIENT,
   WITHDRAWN,
+  TAKEN_DOWN,
+  ENDED,
+  REFUSED,
 } from "@isocan/core";
 import { Engine, CanvasNotFoundError } from "./engine.ts";
+import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import type { Desk } from "./desk.ts";
-import { admittingGrant, heldCapability } from "./grants.ts";
-import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
+import { admissionIn, admittingGrant, heldCapability } from "./grants.ts";
+import {
+  isSecureRequest,
+  originAllowed,
+  presentedBadge,
+  resolveBadge,
+  resolveEnded,
+} from "./badges.ts";
 import { isContentRequest } from "./content.ts";
 import { PresenceHub } from "./presence.ts";
-import type { RcHolds } from "./rc-holds.ts";
+import { type RcHolds, rcPoliciesOf } from "./rc-holds.ts";
 import type { SweepHub } from "./sweep.ts";
+import type { Refusals } from "./takedowns.ts";
 
 /**
  * Per-canvas rooms. Server→client: snapshot on connect, op-applied per
@@ -61,6 +75,89 @@ interface WebSocketOptions {
    * not of the routed half.
    */
   contentHost?: string | null;
+  /**
+   * **Where the room map lets itself be counted** (operator phase 1).
+   *
+   * `isocan operator show` prints how many sockets are open on a canvas right
+   * now, and the rooms below are the only place that is known: presence
+   * undercounts, because a socket below `read` never registers a face
+   * (`atLeast(capability, "read")` further down), and a viewer watching a
+   * canvas is exactly the kind of connection an abuse report is about.
+   *
+   * A census handed IN rather than a count handed out, because
+   * `attachWebSockets` returns its closer and nothing else — one seam instead
+   * of a second return value every existing caller would have to unpack.
+   * Absent in every test that attaches sockets without a daemon, and then the
+   * number is simply not available rather than wrong.
+   */
+  census?: SocketCensus;
+  /**
+   * **What this home refuses at the door** — takedowns (operator phase 2) and
+   * home-scope refusals (operator phase 6), one registry read on every
+   * upgrade. A socket on a canvas this home took down is closed `taken-down`,
+   * and one from a badge that proved a refused address `refused`, both before
+   * the door's admission check — a member is admitted and would short-circuit
+   * past it. Absent in a test that attaches sockets without a daemon, and then
+   * nothing is down and nobody is refused, which is that test's truth.
+   */
+  refusals?: Refusals;
+}
+
+/**
+ * **How many sockets are open on one canvas, at THIS instance.**
+ *
+ * The bound is stated rather than hidden: the hub is in-process, so a home
+ * running two revisions during a rollout counts only the half that answered
+ * the request — the same bound the sweep lives with (design, "What it
+ * reaches"). A number that quietly meant "some of them" would be worse than
+ * one the verb labels honestly, which is why the CLI prints it as *open here*.
+ */
+export class SocketCensus {
+  private read: ((canvasId: string) => number) | null = null;
+  private end: ((canvasId: string, code: number, reason: string) => number) | null = null;
+
+  /** Registered once, by the socket layer, over its own room map. */
+  servedBy(read: (canvasId: string) => number): void {
+    this.read = read;
+  }
+
+  /** Open sockets on that canvas, or 0 when no socket layer is attached. */
+  open(canvasId: string): number {
+    return this.read?.(canvasId) ?? 0;
+  }
+
+  /**
+   * **Registered beside `servedBy`, by the same socket layer** (operator phase
+   * 2). It is the second thing the routes may do to a room, and it is here
+   * rather than on a second seam because a second seam is a second thing
+   * `daemon.ts` has to wire and a second thing a caller can find unwired.
+   *
+   * A census that can only count was the right shape while the only reader was
+   * `isocan operator show`. A takedown is the first ACT a route performs on a
+   * room, and it cannot be done through `engine.onEvent` the way a delete is:
+   * a delete is an op and rides the log, and an operator act is deliberately
+   * neither (design, "Not an op").
+   */
+  closedBy(end: (canvasId: string, code: number, reason: string) => number): void {
+    this.end = end;
+  }
+
+  /**
+   * **Close every socket on that canvas, and say how many** — the count the
+   * takedown verb prints as *two tabs closed* (journey 3 step 2).
+   *
+   * The reason travels, which is the whole point of this method existing
+   * rather than the room being closed the way a delete closes it: a delete
+   * closes with no code at all and tells the client through the
+   * `canvas-deleted` MESSAGE that arrived a line earlier, and that message
+   * means *forget your copy*. A linked daemon must not forget its copy, so a
+   * takedown must never reach a client as a delete — it reaches it as
+   * `WS_NOT_ADMITTED` with `taken-down`, the shape every client here already
+   * reads for `withdrawn`.
+   */
+  close(canvasId: string, code: number, reason: string): number {
+    return this.end?.(canvasId, code, reason) ?? 0;
+  }
 }
 
 /**
@@ -69,6 +166,7 @@ interface WebSocketOptions {
  * that is the whole index a rung change needs to find its person.
  */
 interface Member {
+  groupCapable: boolean;
   badgeId: string;
   /** Tell this connection its rung changed. */
   standing: (capability: Capability) => void;
@@ -84,6 +182,27 @@ export function attachWebSockets(
 ): () => void {
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, Map<WebSocket, Member>>();
+  // The one reader of the room map from outside this closure, and it can only
+  // count — see `SocketCensus`.
+  options.census?.servedBy((canvasId) => rooms.get(canvasId)?.size ?? 0);
+  /**
+   * **And the one act: close a room, with a reason** (operator phase 2). The
+   * room is dropped as the delete path drops it, so a socket that arrives
+   * between this and the next dial builds a fresh one and meets the door —
+   * which now refuses it, because the canvas is taken down.
+   */
+  options.census?.closedBy((canvasId, code, reason) => {
+    const room = rooms.get(canvasId);
+    if (!room) return 0;
+    let closed = 0;
+    for (const socket of room.keys()) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      socket.close(code, reason);
+      closed += 1;
+    }
+    rooms.delete(canvasId);
+    return closed;
+  });
   const revision = options.revision !== undefined ? { revision: options.revision } : {};
 
   /**
@@ -183,8 +302,15 @@ export function attachWebSockets(
     const room = rooms.get(canvasId);
     if (!room) return;
     const payload = JSON.stringify(message);
-    for (const socket of room.keys()) {
-      if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+    for (const [socket, member] of room) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      // Cutover also reaches clients which connected before the feature
+      // existed. Never send the first unknown operation before closing.
+      if (!member.groupCapable && message.type === "op-applied" && groupOperation(message.entry.envelope.op)) {
+        socket.close(WS_STALE_CLIENT, "Canvas groups require an updated isocan client");
+        continue;
+      }
+      socket.send(payload);
     }
   }
 
@@ -208,6 +334,31 @@ export function attachWebSockets(
         member.standing(outcome.capability);
       }
     }
+  });
+
+  /**
+   * **The dead badge's own sockets, in every room** (operator phase 4; design,
+   * "End a badge": *a kill is an outcome the sweep hub reports, so `ws.ts`
+   * closes the dead badge's sockets with a reason*).
+   *
+   * The sweep above never reaches them: it reports the badges `badgesIn`
+   * still returns, and a killed badge is out of every query by construction.
+   * So until this listener a stolen laptop's tab stayed open and kept
+   * receiving every broadcast after the phone had ended it. Closed with
+   * `ended` — not `withdrawn`, because nobody removed this person from a
+   * canvas, and the tab reads the difference — and counted, for the verb.
+   */
+  options.sweeps?.onEnded((badgeId) => {
+    let sockets = 0;
+    for (const room of rooms.values()) {
+      for (const [socket, member] of room) {
+        if (member.badgeId !== badgeId) continue;
+        if (socket.readyState !== WebSocket.OPEN) continue;
+        socket.close(WS_NOT_ADMITTED, ENDED);
+        sockets += 1;
+      }
+    }
+    return { sockets };
   });
 
   /**
@@ -337,7 +488,7 @@ export function attachWebSockets(
           ws.close(badge.code, badge.reason);
           return;
         }
-        void handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer, badge.capability);
+        void handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer, badge.capability, url.searchParams.get(CLIENT_FEATURES_PARAM));
       });
     })();
   });
@@ -386,10 +537,51 @@ export function attachWebSockets(
       }
     }
     const badge = await resolveBadge(desk, presented);
-    if (!badge) return { code: WS_NO_BADGE, reason: "badge required" };
+    if (!badge) {
+      /**
+       * **A dead badge dialling again is told so** (operator phase 4), not sent
+       * to the door. `WS_NO_BADGE` means *get one*, and a tab hearing it knocks
+       * and redials at once — which for an ended badge would quietly reopen
+       * the canvas as a stranger under a page that a second ago said whose
+       * surface this was. The same word the room closed it with, so the tab
+       * that redialled reads the same sentence the tab that was closed does.
+       */
+      if (await resolveEnded(desk, presented)) return { code: WS_NOT_ADMITTED, reason: ENDED };
+      return { code: WS_NO_BADGE, reason: "badge required" };
+    }
     await desk.touch(badge.badgeId, new Date().toISOString());
+    /**
+     * **Taken down: refused here, before the door, with its own reason**
+     * (operator phase 2).
+     *
+     * Before the door and not inside it, because a badge that IS admitted
+     * would otherwise short-circuit straight past and open a socket on a
+     * canvas this home has stopped serving — and the people this matters most
+     * for are the members, who are all admitted.
+     *
+     * `WS_NOT_ADMITTED` with `taken-down`, and **never a bare close**, which
+     * is what a delete does. The reason is what makes a linked daemon keep its
+     * copy: `home-link.ts` erases on `canvas-deleted` and keeps on a 4402, so
+     * the difference between a takedown and a delete reaching a laptop is this
+     * one string. The sentence does not fit in a close frame — 123 bytes,
+     * which throws rather than truncating — so the word travels here and the
+     * sentence is fetched by whoever wants to render it.
+     */
+    if (canvasId && options.refusals?.has(canvasId)) {
+      return { code: WS_NOT_ADMITTED, reason: TAKEN_DOWN };
+    }
+    /**
+     * **A badge that proved a refused address is turned away here** (operator
+     * phase 6), with `refused` and before the door — a refused member is
+     * admitted, and the whole point is that this home will not admit them.
+     * The word travels on the close; the sentence is read off the 403 the
+     * next HTTP request gets, the same way `taken-down` and `ended` are.
+     */
+    if (options.refusals?.refusingAttestation(badge.attestations ?? [])) {
+      return { code: WS_NOT_ADMITTED, reason: REFUSED };
+    }
     let capability: Capability = "edit";
-    if (canvasId && !badge.admissions.some((a) => a.canvasId === canvasId)) {
+    if (canvasId && !admissionIn(badge, canvasId)) {
       // The snapshot first, for the creator's floor: a canvas that is not
       // here at all falls through to `handleConnection`, which closes 4404.
       // A replica dialling a canvas its home has deleted takes this path,
@@ -427,6 +619,7 @@ export function attachWebSockets(
     since: number,
     bearer: boolean,
     admittedAt: Capability,
+    features: string | null,
   ): Promise<void> {
     /**
      * What this connection may do. Set by the admission on the way in and
@@ -445,6 +638,7 @@ export function attachWebSockets(
     }
     try {
       const snapshot = await engine.getSnapshot(canvasId);
+      requireGroupClient(features, snapshot.project);
       /**
        * "I have through N" — the lid-close beat, and the reason this is worth
        * a branch at all: a tab (and, from phase 6, a local daemon's home
@@ -460,6 +654,7 @@ export function attachWebSockets(
        * the room has broadcast since".
        */
       const tail = since > 0 ? await engine.getLog(canvasId, since) : [];
+      requireGroupClient(features, snapshot.project, tail);
       /**
        * Four ways this is not servable, all of them ordinary rather than
        * exceptional:
@@ -530,12 +725,14 @@ export function attachWebSockets(
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
-      ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
+      if (err instanceof CanvasGroupsClientError) ws.close(WS_STALE_CLIENT, "Canvas groups require an updated isocan client");
+      else ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
       return;
     }
     // This connection's presence session, created lazily on its first
     // presence message and torn down with the socket.
     let sessionId: string | null = null;
+    let presenceRevision = 0;
 
     let room = rooms.get(canvasId);
     if (!room) {
@@ -543,6 +740,7 @@ export function attachWebSockets(
       rooms.set(canvasId, room);
     }
     room.set(ws, {
+      groupCapable: supportsCanvasGroups(features),
       badgeId,
       standing: (next) => {
         if (next === capability) return;
@@ -666,15 +864,48 @@ export function attachWebSockets(
             }
             allowed.add(actorId);
           }
+          // Owners are checked like faces (owner-only summons): a policy is
+          // a statement in its owner's name. Each policy is then re-made
+          // with the vouched owner, for relayed agents only.
+          const owners: Actor[] = [];
+          for (const owner of Array.isArray(message.owners) ? message.owners : []) {
+            if (!owner?.id || typeof owner.name !== "string") continue;
+            if (!vouched.has(owner.id)) {
+              const ok = await engine.requireActor(badgeId, owner.id).then(
+                () => true,
+                () => false,
+              );
+              if (!ok) continue;
+              vouched.add(owner.id);
+            }
+            owners.push({ id: owner.id, name: owner.name });
+          }
+          const policies: Record<string, RcPolicy> = {};
+          for (const [actorId, policy] of Object.entries(message.policies ?? {})) {
+            const owner = owners.find((o) => o.id === policy?.owner?.id);
+            if (!owner) continue;
+            const made = rcPoliciesOf({ [actorId]: policy }, allowed, owner);
+            if (made?.[actorId]) policies[actorId] = made[actorId];
+          }
           rc.mirror(relayOrigin, canvasId!, {
             parked,
             actorIds: allowed,
+            owners,
+            policies,
             // The return path for an ask: down this socket, to become a local
             // ask at the daemon whose rc is actually parked.
             sendAsk: (ask) => {
               if (ws.readyState !== WebSocket.OPEN) return false;
               ws.send(
-                JSON.stringify({ type: "rc-ask", askId: ask.askId, name: ask.name, from: ask.from }),
+                JSON.stringify({
+                  type: "rc-ask",
+                  askId: ask.askId,
+                  name: ask.name,
+                  from: ask.from,
+                  // The template half, already read by `askTemplate` at the door.
+                  ...(ask.template ? { template: ask.template } : {}),
+                  ...(ask.args ? { args: ask.args } : {}),
+                }),
               );
               return true;
             },
@@ -684,7 +915,11 @@ export function attachWebSockets(
       }
       if (message.type !== "presence" || !message.sessionId || !message.actor?.id) return;
       const actor = message.actor;
-      const beat = () => {
+      const revision = ++presenceRevision;
+      const beat = async () => {
+        const selectedText = message.textSelection
+          ? textAttention(message.textSelection, Date.now(), (await engine.getSnapshot(canvasId!)).canvas) : null;
+        if (revision !== presenceRevision || ws.readyState !== WebSocket.OPEN) return;
         if (sessionId === null) {
           sessionId = message.sessionId;
           // The rung rides the session from the admission, never from the
@@ -697,14 +932,15 @@ export function attachWebSockets(
           actor,
           cursor: message.cursor,
           selection: Array.isArray(message.selection) ? message.selection : [],
+          textSelection: selectedText,
         });
       };
-      if (vouched.has(actor.id)) return beat();
+      if (vouched.has(actor.id)) { void beat().catch(() => {}); return; }
       void engine
         .requireActor(badgeId, actor.id)
         .then(() => {
           vouched.add(actor.id);
-          beat();
+          return beat();
         })
         // A beat naming an actor this badge does not claim is DROPPED, not a
         // closed socket: the tab is mid-claim, or its badge was replaced and

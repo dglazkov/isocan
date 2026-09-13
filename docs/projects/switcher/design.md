@@ -1,9 +1,9 @@
 ---
 status: partial
-since: 2026-09-06
+since: 2026-09-13
 issue: 134
 see: ui-refresh, roles, standing-agents, 2026-09-06-project-and-canvas.md
-note: phase 1 built 6 Sep — ⌘O, ⌘K → Switch canvas…, and the caret beside the name open one window that leads with the canvases this browser was on lately, finds one from a few letters, and moves you there; recents on the home screen and in the lens, spaces as headings, a shared "lately", and the project › canvas row are open
+note: steps 1–4 built. The palette now works on home, lens and canvas, with Recent first and visible spaces as headings before search; queries retain one ranked list. The conductor independently walked home Mod+O and lens Mod+K, filtering and Enter, on 13 Sep. Shared lately uses the home's private seen-marks. Step 5, the project › canvas row, remains future work
 ---
 # The switcher
 
@@ -76,6 +76,11 @@ the launcher because it is the same gesture, and a second modal over the
 first would have had to answer which of two Escapes closes what. Backspace on
 an empty field steps back to the commands.
 
+*(The caret below was removed the same evening — 920b61fd, Dion's call: the
+canvas name beside it opens rename, so the caret was a second button labelled
+only by its shape. Its door is a "Switch canvas…" row in the bar's `···`
+menu, which carries the word and ⌘O.)*
+
 **Three doors, no clutter.** ⌘O (which crosses a cover like ⌘K, since leaving
 is the one act that makes sense whatever is covering the canvas and it acts
 on nothing here); the "Switch canvas…" row in ⌘K, which flips the window
@@ -94,6 +99,14 @@ back to — so it lives in `localStorage` (`isocan.canvases.recent`, twenty
 rows, title riding along). The title is what lets the list paint before
 `listCanvases()` answers, and instead of it: offline, the recents are the
 whole list, and every one opens from the replica.
+
+*(Half of that held and half of it did not. **"A visit is a fact only the
+browser knows" was true of the daemon as it stood and false as a
+commitment** — step 4 made the visit a fact the HOME knows, because the
+person on two machines is one person. The browser's list is still written on
+every visit and still leads when the daemon cannot answer; what changed is
+that it is no longer the only answer. 12 Sep 2026,
+[seen-marks](../../research/2026-09-12-seen-marks.md).)*
 
 **Fuzzy here, and only here.** `fuzzyMatch` in `core/canvasswitch.ts` takes
 the letters in order from anywhere and scores letters together, word starts
@@ -121,6 +134,53 @@ where it stands. A viewport gesture gets no verb (AGENTS.md, "done on both
 surfaces", line 2). The ranking is in core anyway, so the terminal could show
 the same order the day it wants to.
 
+*(It wanted to on 12 Sep, and the verb is `isocan seen` rather than a switch:
+the ANSWER to "where was I lately" is a durable fact worth reading in a
+terminal, and it is the same fact the inbox reads. Switching is still not a
+verb.)*
+
+## The shelf's scope (11 Sep 2026, #194)
+
+Archive (#194) shipped into this window on 7 Sep without the control the
+issue asked for: with an empty field archived canvases were out, and with
+anything typed they were all offered, under every live match, marked. The
+argument was that the reach-in is found by typing rather than by learning a
+control. Dion asked for the issue's version instead, and it is built.
+
+**A scope, and the default is not everything.** `rankCanvases` takes the
+`ShelfScope` that the home screen's `Archived` and `canvas list
+--archived / --with-archived` already pass to core's `inScope`. The window
+starts at `"live"` — out of the list AND the search — and an **Include
+archived** checkbox under the field widens it to `"all"`, which is
+`--with-archived` in the app's words. One comparison on three surfaces, and a
+core test holds that each scope offers exactly the set `inScope` hands the
+terminal.
+
+**Once asked for, an archived canvas ranks on its match.** The 7 Sep rule
+sank them below every live match, which was right while nobody had asked for
+them. Somebody who ticked the box is most likely looking for one, so it takes
+its place like any other row — one order with a mark, the way
+`--with-archived` prints one table with a column.
+
+**Reachable without a pointer.** A native checkbox, so it is one Tab from the
+field and Space flips it, and ⌥A from inside the field — by `code`, since
+⌥A types "å" on a Mac, and only while something is archived, so an å can
+still be typed on a home with no shelf. The chord is VS Code's shape for its
+search toggles; the key is in `SHORTCUTS`, so the `?` panel and the checkbox
+print the same thing.
+
+**Not remembered.** Every opening starts at the list. A widening that stuck
+would un-archive the whole shelf from this window after one search, which is
+Archive changing one list and not the other again; the home screen's
+`Archived` resets for the same reason, and a CLI flag lasts one invocation.
+It holds across the two faces of one opening.
+
+**The default never reads as "no such canvas".** When the live scope is
+hiding matches, a line under the rows says how many and is itself the toggle
+— counted by the same ranking under `"shelved"`, so the number is the rows
+the box would add. The commands face's "Switch to" group follows the same
+scope and has no box of its own: the switcher is one row away.
+
 ## Open questions, honestly
 
 - **⌘O in a real browser window.** The journey presses ⌘O through the
@@ -136,12 +196,15 @@ the same order the day it wants to.
   it qualifies, and somebody who hides the zoom cluster's arrows will expect
   to be able to hide this too. Recorded on that project's issue (#151) rather
   than done here, because the registry is its author's to grow.
-- **Recents are per browser.** A person on two machines has two histories,
-  and the person the identity desk lets resume across browsers (multi-identity)
-  does not carry their "lately" with them. Whether that should be desk state
-  — a per-actor visit high-water mark, the shape the inbox research proposed
-  for seen-marks — is the same deferred decision, and it should be decided
-  once for both.
+- ~~**Recents are per browser.**~~ *Answered 12 Sep 2026: they are desk
+  state, the shape the inbox research proposed, decided once for both — see
+  [seen-marks](../../research/2026-09-12-seen-marks.md). The home keeps one
+  mark per person per canvas, `{ seq, at }`, written when you open one; the
+  switcher orders by `at` and the inbox reads `seq` and `at` for "what is
+  new". Not an op: a fact that cannot be undone, must not be visible to
+  everyone and degrades harmlessly offline is not canvas state. This
+  browser's own recents stay underneath it, and are the whole list when the
+  daemon cannot answer.*
 - **The word.** The switcher says "canvas" everywhere, which is right today
   and stays right when a project holds several canvases — you still switch
   canvases; the row grows a project above it. See
@@ -153,23 +216,37 @@ the same order the day it wants to.
    2026.* `core/canvasswitch.ts`, `web/lib/recents.ts`,
    `web/lib/canvasswitch.ts`, the palette's second face, ⌘O, the caret, the
    `?` panel row, the `switcher` journey.
-2. **Everywhere a person stands.** The palette is mounted on `CanvasPage`
-   only, so ⌘K and ⌘O do nothing on the home screen and on the lens. The
-   home screen's filter is a field already; the lens is a list of canvases
-   already. Mount the same window on both — the commands face has three
-   actions that mean something off a canvas, and the switcher means the
-   same thing everywhere.
-3. **Spaces as headings.** Roles phase 4 gave a home spaces (`Space`,
-   `listSpaces()`), and the home screen draws a heading per space. With no
-   query the switcher should too, under Recent: a person who works in a
-   space thinks in it. With a query, one ranked list, as now.
-4. **A shared "lately".** Decide, once, with the inbox's seen-marks: either
-   visits stay a browser's business (and the lens's per-actor rows are the
-   cross-device answer) or a per-actor visit mark becomes desk state at the
-   home. Not before multi-identity's resume is something people actually use,
-   because that is the first time two browsers would disagree.
+2. **Everywhere a person stands.** *Built 13 Sep 2026.* One lazy authenticated
+   navigation host owns the palette and keyboard binding on home, lens and
+   canvas. A route still loading, refused or showing a viewer does not offer
+   hidden canvas mutations. The conductor drove actual home ⌘O and lens ⌘K
+   through filtering and Enter to the intended canvas.
+3. **Spaces as headings.** *Built 13 Sep 2026.* Empty search shows Recent,
+   then remaining canvases under visible space headings without duplicates.
+   Search returns the existing ranked flat list. The actual browser exposed
+   a repeated-initial failure in a full title: matching the complete query
+   contiguously now precedes the existing word-start abbreviation fallback.
+4. **A shared "lately".** *Built 12 Sep 2026.* A per-actor visit mark IS
+   desk state at the home, decided once for both features in
+   [seen-marks](../../research/2026-09-12-seen-marks.md) — and it is the same
+   row the inbox reads, because the mark written when you open a canvas means
+   both *I was here at `at`* and *everything up to `seq` was in front of me*.
+   The switcher reads the first half, the inbox the second. **The rule that
+   keeps one fact honest for two readers: only a visit writes a mark** — a
+   sweep or a "mark all read" would fill this list with canvases nobody went
+   to. `web/lib/seen.ts` (the mark), `web/lib/lately.ts` (the merge, behind
+   the palette's existing `lazy()`), `core/seen.ts` (`latelyOrder`), and
+   `isocan seen` in the terminal. No new op: the vocabulary stayed at 33.
 5. **The project › canvas row.** When a project holds more than one canvas,
    a row is `Project › Canvas`, the fuzzy match runs over both names, and
    Recent stays a flat list of canvases because that is what you go to. The
    address already reads right for it: `/p/<project>` was named for the
    project and can grow a canvas segment without moving.
+
+## Steps 2–3 continuation — 13 September 2026
+
+The [inbox continuation](../inbox/design.md#navigation-everywhere) owns the
+shared navigation host and independently supplies cross-home feedback. The
+browser proof used two synthetic homes and two profiles; it verified the
+headings, exact title search and actual keyboard navigation, with no browser
+exceptions. These navigation steps do not claim step 5's project hierarchy.

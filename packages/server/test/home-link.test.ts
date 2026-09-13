@@ -20,7 +20,6 @@ import {
   passesRoute,
   canvasesRoute,
   HOMES_ROUTE,
-  WS_NO_CANVAS,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { bearerHeader, readBadge } from "../src/badge-store.ts";
@@ -717,8 +716,9 @@ describe("presence, carried both ways and written nowhere", () => {
     // — journey rule, and the one thing presence must never do.
     expect((await oplog(H)).map((entry) => entry.envelope.op.type)).toEqual([
       "project.create",
-      "item.add",
+      "group.change",
     ]);
+    expect((await oplog(H))[1]!.envelope.op).toMatchObject({ action: { kind: "apply", change: { intent: "insert" } } });
     expect(await fs.readFile(p.oplogFile(homeDir, CANVAS), "utf8")).not.toContain(
       session.sessionId,
     );
@@ -765,16 +765,61 @@ describe("the rc's liveness and the web's ask, carried across the link", () => {
     get<{ parked: boolean; actorIds: string[] }>(node, `/api/projects/${CANVAS}/rc`);
 
   /** An rc's hold at A, as the CLI makes it: held open, released by abort. */
-  function holdAtA(actorIds: string[], waitMs = 8_000) {
+  function holdAtA(actorIds: string[], waitMs = 8_000, says: Record<string, unknown> = {}) {
     const aborter = new AbortController();
     const done = fetch(`${A.base}/api/rc/hold`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...A.badge.headers },
-      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs }),
+      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs, ...says }),
       signal: aborter.signal,
     });
     return { done, aborter };
   }
+
+  it("owner-only summons: whose rc it is and whose word it takes reach H, and H routes asks by it", async () => {
+    await birthAtA();
+    const sian = { id: "agt_sian", name: "Sian" };
+    await A.badge.speakAs(sian);
+    await op(A, priya, { type: "agent.enroll", agent: sian });
+
+    // Priya's rc says it is hers, and that Sian takes her word alone — the
+    // policy the rc applies at dispatch, announced so the web can say it.
+    const hold = holdAtA([sian.id], 12_000, {
+      owner: priya,
+      policies: { [sian.id]: { owner: priya, listen: [] } },
+    });
+    type Answering = { parked: boolean; actorIds: string[]; owners?: unknown[]; policies?: Record<string, unknown> };
+    const at = await until(
+      () => get<Answering>(H, `/api/projects/${CANVAS}/rc`),
+      (r) => r.policies?.[sian.id] !== undefined,
+      "Sian's policy to relay up",
+    );
+    expect(at.owners).toEqual([priya]);
+    expect(at.policies).toEqual({ [sian.id]: { owner: priya, listen: [] } });
+
+    // Somebody else's ask to add an agent is refused AT THE DOOR, in words
+    // that name whose rc it is — never sent down to spend nothing silently.
+    const asked = await post(H, `/api/projects/${CANVAS}/agents/ask`, {
+      name: "Percy",
+      from: { id: "usr_home", name: "Home" },
+    });
+    expect(asked.status).toBe(403);
+    const refusal = (await asked.json()) as { code: string; error: string };
+    expect(refusal.code).toBe("not-your-rc");
+    expect(refusal.error).toContain("Priya's");
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
+
+  it("an owner the holding badge cannot speak as is not believed", async () => {
+    await birthAtA();
+    const hold = holdAtA([], 8_000, { owner: isaac });
+    await until(() => get<{ parked: boolean }>(H, `/api/projects/${CANVAS}/rc`), (r) => r.parked, "the hold to relay up");
+    const at = await get<{ owners?: unknown[] }>(A, `/api/projects/${CANVAS}/rc`);
+    expect(at.owners).toEqual([]);
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
 
   it("a hold at A is `parked` at H, and stops being when the hold ends", async () => {
     await birthAtA();
@@ -968,8 +1013,8 @@ describe("the link a canvas actually has to its home", () => {
 
   /**
    * A canvas this machine has a row for and the home has never heard of: the
-   * 4404 close. The link is dropped and the next sweep makes a new one, which
-   * is correct and was completely silent — a fresh `CanvasLink` counts from
+   * source classification now refuses before any socket can open. Repeated
+   * failures used to be completely silent — a fresh `CanvasLink` counted from
    * zero, so an endless two-second retry looked like a first attempt forever.
    * The count outlives the link precisely so this can be reported.
    */
@@ -981,6 +1026,6 @@ describe("the link a canvas actually has to its home", () => {
       "A to report repeated failures",
     );
     expect(state).toMatchObject({ connected: false, opens: 0, relayedAt: null });
-    expect(state!.lastFailure).toContain(String(WS_NO_CANVAS));
+    expect(state!.lastFailure).toContain("source classification is unavailable");
   }, 20_000);
 });

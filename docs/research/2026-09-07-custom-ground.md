@@ -1,15 +1,20 @@
 ---
 status: partial
-since: 2026-09-07
+since: 2026-09-08
 issue: 204
 see: ui-refresh
-note: a custom tile is a blob named by a canvas property, and the garbage collector does not know properties name blobs — it would sweep the background within the hour. The cursor half is the interesting one and the answer is probably to choose rather than upload.
+note: phases 1–3 built 7–8 Sep — the blocker first (gc now knows a property names a blob, 83d626fb), then your own picture as the ground, pinned and under a scrim (`isocan canvas background --picture`, Background › A picture of yours…), then a library of cursors to choose from rather than upload (`--cursor <name>`). Only phase 4 is open — a world-anchored ground that actually repeats, as a tile.
 ---
 
 # A ground of your own: custom tiles, and what a custom cursor can be
 
 **7 September 2026.** Research. **Phase 1 is built** — the gc fix below,
 which had to come first; the rest is designed and unstarted.
+
+**Where this stands, 11 Sep 2026: phases 1–3 built** (7–8 Sep) — the gc fix
+(83d626fb), a picture of your own as the ground, and the cursor library; see
+the phases below. Only phase 4 — a world-anchored ground that repeats, as a
+tile — is open.
 
 > "For the background feature… there should be a 'custom' setting where the
 > user can set a tile and cursor and then it takes on its own?"

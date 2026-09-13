@@ -14,9 +14,10 @@ import {
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { askTheDoor } from "../src/badge-store.ts";
+import { badgeCookie, framedRequest } from "../src/badges.ts";
 import { MINT_BURST, TOO_MANY_BADGES } from "../src/meter.ts";
 import * as p from "../src/paths.ts";
-import { mintTestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge } from "./badge.ts";
 
 /**
  * The door (identity desk, mechanism 1): mint, carry, refuse, migrate.
@@ -196,7 +197,7 @@ describe("both carriers are one badge", () => {
     });
     const wsBase = base.replace("http", "ws");
 
-    const badged = new WebSocket(`${wsBase}/ws?canvasId=prj_1`, {
+    const badged = new WebSocket(currentSocketUrl(`${wsBase}/ws?canvasId=prj_1`), {
       headers: badge.headers,
     });
     const hello = await new Promise<string>((resolve, reject) => {
@@ -209,7 +210,7 @@ describe("both carriers are one badge", () => {
     // A browser cannot set headers on a handshake, so the cookie is the other
     // carrier; with neither, the socket is closed with a code the client can
     // act on rather than a silent hang.
-    const bare = new WebSocket(`${wsBase}/ws?canvasId=prj_1`);
+    const bare = new WebSocket(currentSocketUrl(`${wsBase}/ws?canvasId=prj_1`));
     bare.on("error", () => {});
     const code = await new Promise<number>((resolve) =>
       bare.on("close", resolve),
@@ -217,7 +218,7 @@ describe("both carriers are one badge", () => {
     expect(code).toBe(WS_NO_BADGE);
 
     const cookieBadge = await door({ carrier: "cookie" });
-    const viaCookie = new WebSocket(`${wsBase}/ws?canvasId=prj_1`, {
+    const viaCookie = new WebSocket(currentSocketUrl(`${wsBase}/ws?canvasId=prj_1`), {
       headers: { cookie: cookieBadge.setCookie!.split(";")[0]! },
     });
     const cookieHello = await new Promise<string>((resolve, reject) => {
@@ -355,6 +356,113 @@ describe("the badge-less are refused, actionably", () => {
   });
 });
 
+// ---- somebody else's window: the framed cookie (#220, phase 1) ----
+
+/**
+ * A canvas opened in an agent manager's pane is a cross-site frame, and a
+ * cross-site frame's cookies live in a jar keyed on the top-level site. What
+ * these hold is the rule that decides which jar we write to — and, just as
+ * much, the three cases that must keep the cookie they have always had. The
+ * regression this guards is not "the pane is broken": it is a partitioned
+ * cookie leaking onto the ordinary top-level load, which would give every
+ * person on isocan.io a second badge and lose their admissions.
+ */
+describe("the framed cookie", () => {
+  it("partitions for a cross-site frame over TLS", () => {
+    const cookie = badgeCookie("bdg_x.secret", true, true);
+    // All three are one decision: `Partitioned` requires `Secure`, and a
+    // partitioned cookie the browser will send cross-site requires `None`.
+    expect(cookie).toContain("SameSite=None");
+    expect(cookie).toContain("Secure");
+    expect(cookie).toContain("Partitioned");
+    expect(cookie).not.toContain("SameSite=Lax");
+  });
+
+  it("leaves an unframed cookie exactly as it was", () => {
+    // The load-bearing half. Every existing client is on this path.
+    expect(badgeCookie("bdg_x.secret", true, false)).toBe(
+      "isocan_badge=bdg_x.secret; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000; Secure",
+    );
+  });
+
+  it("refuses to write None without Secure, and keeps Lax instead", () => {
+    // `None` without `Secure` is not a weaker cookie, it is NO cookie — the
+    // browser drops it. A framed local daemon over plain HTTP therefore keeps
+    // the behaviour it has today, which is the documented limit rather than
+    // an oversight; the pass is the way out.
+    const cookie = badgeCookie("bdg_x.secret", false, true);
+    expect(cookie).toContain("SameSite=Lax");
+    expect(cookie).not.toContain("Partitioned");
+    expect(cookie).not.toContain("Secure");
+  });
+
+  describe("reading the frame off a page request", () => {
+    const dest = (d: string, site: string) => ({ "sec-fetch-dest": d, "sec-fetch-site": site });
+
+    it("says yes only for a nested document from another site", () => {
+      expect(framedRequest(dest("iframe", "cross-site"))).toBe(true);
+      expect(framedRequest(dest("frame", "cross-site"))).toBe(true);
+    });
+
+    it("says no for the top-level navigation Lax was written for", () => {
+      expect(framedRequest(dest("document", "cross-site"))).toBe(false);
+    });
+
+    it("says no when isocan frames its own pages", () => {
+      // `ItemView`'s sandboxed blob is the case that matters: it shares the
+      // top-level site, so it shares the jar, and partitioning it would hand
+      // the canvas's own frames a second badge for nothing.
+      expect(framedRequest(dest("iframe", "same-origin"))).toBe(false);
+      expect(framedRequest(dest("iframe", "same-site"))).toBe(false);
+    });
+
+    it("says no when nothing said", () => {
+      // Too old to tell, or not a browser. An unpartitioned cookie is what
+      // every such client has always been handed.
+      expect(framedRequest({})).toBe(false);
+    });
+  });
+
+  it("reads the frame off a real page load, and badges it either way", async () => {
+    // The path a pane actually arrives on: the page load is where the badge
+    // is minted, and the only request that can still see it is a frame. This
+    // daemon is plain HTTP, so what the pane gets here is `Lax` — the local
+    // daemon's documented limit — but the badge must still be MINTED, or an
+    // embedded local canvas would be a stranger on every load, which is the
+    // whole failure this phase exists to close.
+    const framed = await fetch(`${base}/`, {
+      headers: {
+        Accept: "text/html",
+        "sec-fetch-dest": "iframe",
+        "sec-fetch-site": "cross-site",
+      },
+    });
+    expect(framed.status).toBe(200);
+    expect(framed.headers.get("set-cookie")).toContain(BADGE_COOKIE);
+
+    // And the ordinary top-level load is untouched — the regression that
+    // would matter most is a partitioned cookie leaking onto this path.
+    const plain = await fetch(`${base}/`, {
+      headers: { Accept: "text/html", "sec-fetch-dest": "document", "sec-fetch-site": "none" },
+    });
+    expect(plain.headers.get("set-cookie")).toContain("SameSite=Lax");
+    expect(plain.headers.get("set-cookie")).not.toContain("Partitioned");
+  });
+
+  it("takes the app's word for it at the door", async () => {
+    // Sniffing is not available on this route — the app `fetch`es it, and a
+    // fetch reports `Sec-Fetch-Dest: empty` framed or not. So the page states
+    // it, the way `carrier` is stated. This daemon is not over TLS, so what
+    // is asserted is that the flag ARRIVES and is acted on: `Partitioned`
+    // cannot apply, and the request is not refused for saying so.
+    const { status, setCookie } = await door({ carrier: "cookie", framed: true });
+    expect(status).toBe(200);
+    expect(setCookie).toContain(BADGE_COOKIE);
+    expect(setCookie).toContain("SameSite=Lax");
+    expect(setCookie).not.toContain("Partitioned");
+  });
+});
+
 // ---- SameSite's belt: the Origin check ----
 
 describe("the Origin check", () => {
@@ -422,8 +530,7 @@ describe("the Origin check", () => {
     process.env.ISOCAN_ALLOWED_ORIGINS = `http://127.0.0.1:${port}`;
     try {
       const cookieBadge = await door({ carrier: "cookie" });
-      const ws = new WebSocket(
-        `${base.replace("http", "ws")}/ws?canvasId=prj_1`,
+      const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`),
         {
           headers: {
             cookie: cookieBadge.setCookie!.split(";")[0]!,

@@ -58,6 +58,15 @@ function statusOf(file) {
 
 const ORDER = ["journey.md", "design.md", "plan.md", "phases.md"];
 
+/**
+ * The link a row carries must resolve from WHERE THE LINK LIVES — this page is
+ * `docs/ROADMAP.md`, so `docs/research/x.md` is the one path that cannot work:
+ * it sends the reader to `docs/docs/research/x.md`. Every other doc in this
+ * directory (`architecture.md`, `decisions.md`) already writes `research/…` and
+ * `projects/…`, which is the same file this reads, one directory up.
+ */
+const href = (rel) => rel.replace(/^docs\//, "");
+
 function collect() {
   const docs = [];
   const rdir = path.join(repo, "docs/research");
@@ -111,6 +120,9 @@ const lines = [
   "status of a thing lives in that thing's front matter, so it cannot drift from",
   "what it describes. Run `node scripts/roadmap.mjs` after changing one.",
   "",
+  "The same board lives on a canvas, [\\[isocan\\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),",
+  "open to anyone with the address — it should say what `main` says.",
+  "",
   `**${count("built")} built · ${left} still open** — of which ${count("partial")} partly`,
   `built, ${count("designed")} designed, ${count("blocked")} blocked, and`,
   `**${count("open")} with no verdict recorded at all**, which is the number worth`,
@@ -135,7 +147,7 @@ for (const state of ["blocked", "partial", "designed", "open", "built", "noted",
     // roadmap is one click from where the work actually moves.
     const issue = d.issue ? ` · [#${d.issue}](https://github.com/dglazkov/isocan/issues/${d.issue})` : "";
     lines.push(
-      `| ${d.kind === "project" ? "**project**" : "research"} | [${d.title}](${d.rel}) | ${d.since ?? "—"} | ${why}${see}${issue} |`,
+      `| ${d.kind === "project" ? "**project**" : "research"} | [${d.title}](${href(d.rel)}) | ${d.since ?? "—"} | ${why}${see}${issue} |`,
     );
   }
   lines.push("");

@@ -43,6 +43,7 @@ async function place(canvasId: string, actor: Actor, strokes: InkStroke[]): Prom
         )
       : null;
   const itemId = await addDrawing(canvasId, actor, strokes, target);
+  if (useCanvasStore.getState().canvasId !== canvasId) return itemId;
   // Only drop what we placed: a stroke drawn while the upload was in flight
   // stays wet and becomes the next drawing.
   const { sketch, clearSketch, beginStroke, select } = useUiStore.getState();

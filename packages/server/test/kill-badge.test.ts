@@ -158,11 +158,13 @@ describe("ending one", () => {
     const { killed } = (await res.json()) as KillBadgeResponse;
     expect(killed.badgeId).toBe(laptop.badgeId);
 
-    // `bad-badge` and not `not-admitted`: the credential itself is finished,
-    // and the honest instruction is "throw away what you stored".
+    // A 401 and not `not-admitted`: the credential itself is finished. Since
+    // operator phase 4 the code is `badge-ended` rather than `bad-badge` —
+    // this home KNOWS that badge and has a record of ending it, and the
+    // record is the message (`ended.test.ts` reads it whole).
     const after = await get(laptop, `/api/projects/${CANVAS}`);
     expect(after.status).toBe(401);
-    expect(((await after.json()) as { code: string }).code).toBe("bad-badge");
+    expect(((await after.json()) as { code: string }).code).toBe("badge-ended");
 
     // And it cannot speak as her anywhere — the property that matters for a
     // stolen machine. (`/api/ops` is the one route whose canvas is in its

@@ -35,6 +35,8 @@ interface JsonCanvasNode {
   url?: string;
   /** `text`: inline markdown. */
   text?: string;
+  /** A group's visible name; explicit isocan ownership is reported as a projection loss. */
+  label?: string;
 }
 
 interface JsonCanvasEdge {
@@ -59,6 +61,9 @@ interface ExportLosses {
   threads: number;
   properties: number;
   reactions: number;
+  groupMemberships?: number;
+  groupLayouts?: number;
+  contextRequests?: number;
 }
 
 const current = (item: Item) =>
@@ -97,6 +102,10 @@ export function toJsonCanvas(
       width: Math.round(item.width),
       height: Math.round(item.height),
     };
+    if (item.properties?.kind === "group") {
+      nodes.push({ ...base, type: "group", label: item.title });
+      continue;
+    }
     /**
      * A site item is a `text/uri-list` blob, which IS the format's `link` node
      * — the one place the two vocabularies already agree on a thing rather
@@ -132,6 +141,9 @@ export function toJsonCanvas(
   }));
 
   const items = Object.values(canvas.items);
+  const groupMemberships = items.filter((item) => item.containerId).length;
+  const groupLayouts = items.filter((item) => item.properties?.kind === "group").length;
+  const contextRequests = Object.values(canvas.threads ?? {}).reduce((count, thread) => count + thread.comments.filter((comment) => comment.context).length, 0);
   return {
     file: { nodes, edges },
     lost: {
@@ -140,6 +152,9 @@ export function toJsonCanvas(
       threads: Object.keys(canvas.threads ?? {}).length,
       properties: items.reduce((n, i) => n + Object.keys(i.properties ?? {}).length, 0),
       reactions: items.reduce((n, i) => n + Object.keys(i.reactions ?? {}).length, 0),
+      ...(groupMemberships ? { groupMemberships } : {}),
+      ...(groupLayouts ? { groupLayouts } : {}),
+      ...(contextRequests ? { contextRequests } : {}),
     },
   };
 }
@@ -151,5 +166,8 @@ export function describeLosses(lost: ExportLosses): string[] {
   if (lost.threads) out.push(`${lost.threads} comment thread${lost.threads === 1 ? "" : "s"}`);
   if (lost.properties) out.push(`${lost.properties} propert${lost.properties === 1 ? "y" : "ies"}`);
   if (lost.reactions) out.push(`${lost.reactions} reaction${lost.reactions === 1 ? "" : "s"}`);
+  if (lost.groupMemberships) out.push(`${lost.groupMemberships} explicit group membership${lost.groupMemberships === 1 ? "" : "s"} (frames become geometric groups)`);
+  if (lost.groupLayouts) out.push(`${lost.groupLayouts} group layout${lost.groupLayouts === 1 ? "" : "s"} and brief reservation${lost.groupLayouts === 1 ? "" : "s"}`);
+  if (lost.contextRequests) out.push(`${lost.contextRequests} frozen request context${lost.contextRequests === 1 ? "" : "s"}`);
   return out;
 }

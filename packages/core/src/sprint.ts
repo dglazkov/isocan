@@ -1,3 +1,4 @@
+import { groupChildren, isGroupItem } from "./canvas-groups.ts";
 import type { CanvasContents, Item } from "./model.ts";
 import { mainThread } from "./model.ts";
 import type { PresenceSession } from "./protocol.ts";
@@ -218,7 +219,7 @@ export function boardLayout(origin: { x: number; y: number }): (BoardArea & { x:
 export function boardAreaFor(canvas: CanvasContents, key: BoardKey): Item | null {
   return (
     Object.values(canvas.items).find(
-      (item) => item.properties.kind === AREA_KIND && item.properties[BOARD_PROP] === key,
+      (item) => (item.properties.kind === AREA_KIND || isGroupItem(item)) && item.properties[BOARD_PROP] === key,
     ) ?? null
   );
 }
@@ -534,7 +535,7 @@ export function wallFor(canvas: CanvasContents, state: SprintState): Item[] {
   const items = Object.values(canvas.items);
   const vote = boardAreaFor(canvas, "vote");
   if (vote) {
-    const onSheet = items.filter((item) => inArea(vote, item));
+    const onSheet = isGroupItem(vote) ? groupChildren(canvas, vote.id) : items.filter((item) => inArea(vote, item));
     if (onSheet.length > 0) return onSheet;
   }
   if (!chat) return items;

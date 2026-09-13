@@ -576,7 +576,7 @@
         <ul>
           <li><b>Presence</b> — cursors, sessions, "what I'm doing right now," expiring on a timeout so a crashed client doesn't haunt the canvas</li>
           <li><b>Viewport</b> — where each surface is looking, at what zoom</li>
-          <li><b>Read state</b> — what <em>you</em> have seen, kept by you</li>
+          <li><b>Read state</b> — what <em>you</em> have seen, kept by you. Which <em>threads</em> you have read stays in the browser; a coarser mark — the canvas, the point you had reached, and when — is kept durably by the home so it follows you between machines. Still never anyone else's to read: there are no read receipts here, and adding them would take a route that does not exist.</li>
           <li><b>Undo scope</b> — shared state, but each actor's undo walks only their own changes</li>
         </ul>
       </div>
@@ -596,7 +596,7 @@
     <ul class="checklist">
       <li><b>Completeness becomes mechanical.</b> "Is the CLI finished?" is a judgment call. "Does every change have a command?" is a test — one you can actually run in CI.</li>
       <li><b>New surfaces arrive complete.</b> A mobile client, a tool server, a bot inherits the full capability set by speaking the same words. Nobody re-derives what "move an item" means, or gets it subtly wrong.</li>
-      <li><b>The vocabulary routes feature work.</b> If a feature needs a new entry, it is durable and every surface gets it. If it can be built without one, it belongs to the ephemeral plane by definition. The question answers itself.</li>
+      <li><b>The vocabulary routes feature work.</b> If a feature needs a new entry, it is durable and every surface gets it. If it can be built without one, it belongs to the ephemeral plane by definition. The question answers itself — with one refinement learned since: a fact can be durable and still not belong in the vocabulary, if it is <em>one person's</em>. An entry is a line in a log whose effect everyone who can see the thing can see, so state that must stay private is written through the API instead. The test is three questions: can it be undone, can everyone see it, does it work with the network off. Something that answers no to all three is not the record.</li>
       <li><b>The cost, stated plainly.</b> Nobody extends the set unilaterally, and every addition owes a way to undo it. That coordination is the price — and it is the <em>only</em> place coordination is required, which is the whole trade.</li>
     </ul>
   </div>

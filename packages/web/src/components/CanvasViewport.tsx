@@ -1,3 +1,5 @@
+import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
@@ -8,7 +10,7 @@ import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints } from "../lib/viewport.ts";
 import { moduleDropFor } from "../modules.ts";
-import { webHostFor } from "../lib/modulehost.ts";
+import { creationDestination, selectCreatedItems } from "../lib/groupplacement.ts";
 import { newGroupId } from "@isocan/core";
 import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
@@ -17,6 +19,7 @@ import { placeSketch } from "../lib/sketch.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
+import { longPress } from "../lib/longpress.ts";
 import { isTyping } from "../lib/keys.ts";
 import { TextComposer } from "./TextComposer.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
@@ -82,7 +85,7 @@ const INK_WIDTH = 3;
 const INK_MIN_STEP = 2;
 
 
-export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { canvasId: string; actor: Actor; onPlanItem?: (id: string) => void; currentNode?: string | undefined }) {
   /**
    * **The past wins when there is one.** The scrubber folds a moment with
    * core's `at` and parks it beside the live replica (`canvasStore.past`);
@@ -120,7 +123,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const navigate = useNavigate();
   const fannedItemId = useUiStore((s) => s.fannedItemId);
   const ref = useRef<HTMLDivElement>(null);
+  const planPress = useRef<{ id: string; x: number; y: number } | null>(null);
   const [dropping, setDropping] = useState(false);
+  const [dropMessage, setDropMessage] = useState("Drop to add to the canvas");
   /**
    * The drop overlay dies of silence, never of bookkeeping.
    *
@@ -139,7 +144,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const dragAlive = () => {
     setDropping(true);
     if (droppingTimer.current) clearTimeout(droppingTimer.current);
-    droppingTimer.current = setTimeout(() => setDropping(false), 700);
+    droppingTimer.current = setTimeout(() => { setDropping(false); useUiStore.getState().setGroupDropTarget(null); }, 700);
   };
   // Mirrored into the store as well as kept locally: lane-follow stops
   // measuring while the canvas is moving, and only the store crosses
@@ -367,7 +372,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         holdTool.current = { code: e.code, prev: ui.activeTool, downAt: Date.now() };
         ui.setActiveTool(wants);
       }
-      if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey) {
+      // `!e.repeat`: a region zoom hands the tool to Select while Z is still
+      // down. The next autorepeated keydown found "not zoom", re-armed the
+      // tool with a fresh timestamp, and the release landed inside the tap
+      // window — so a hold that had already done its job latched Zoom on.
+      if (e.code === "KeyZ" && !e.metaKey && !e.ctrlKey && !e.repeat) {
         const ui = useUiStore.getState();
         if (ui.activeTool !== "zoom") {
           zoomPrevTool.current = ui.activeTool;
@@ -489,13 +498,19 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * means the five you had.
    */
   function onContextMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    // Native touch menus bypass the motion/second-finger cancellation below.
+    if ((e.nativeEvent as PointerEvent).pointerType === "touch") return;
+    showContextMenu(e.target, e.clientX, e.clientY);
+  }
+
+  function showContextMenu(origin: EventTarget | null, x: number, y: number, current = () => true) {
     const ui = useUiStore.getState();
     const canvas = useCanvasStore.getState().canvas;
     if (!canvas) return;
-    const target = (e.target as HTMLElement).closest?.("[data-item-id]");
-    const itemId = target?.getAttribute("data-item-id") ?? null;
-    e.preventDefault();
-
+    const target = (origin as HTMLElement)?.closest?.("[data-item-id]");
+    const rawItemId = target?.getAttribute("data-item-id") ?? null;
+    const itemId = rawItemId ? scopedHit(rawItemId) : null;
     if (itemId) {
       const within = ui.selectedItemIds.includes(itemId);
       const ids = within && ui.selectedItemIds.length > 1 ? ui.selectedItemIds : [itemId];
@@ -504,17 +519,17 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         .map((id) => canvas.items[id])
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
       if (items.length === 0) return;
-      const at = { x: e.clientX, y: e.clientY };
-      const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+      const at = { x: x, y: y };
+      const world = screenToWorld(ui.viewport, x, y);
       void menus().then(({ itemMenu }) =>
-        openContextMenu(at, itemMenu(items, { canvasId, actor, world, navigate })),
+        current() && openContextMenu(at, itemMenu(items, { canvasId, actor, world, navigate })),
       );
       return;
     }
-    const at = { x: e.clientX, y: e.clientY };
-    const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    const at = { x: x, y: y };
+    const world = screenToWorld(ui.viewport, x, y);
     void menus().then(({ canvasMenu }) =>
-      openContextMenu(at, canvasMenu({ canvasId, actor, world, navigate })),
+      current() && openContextMenu(at, canvasMenu({ canvasId, actor, world, navigate })),
     );
   }
 
@@ -538,6 +553,16 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * pointer is treated as an addition.
    */
   const abandonGesture = useRef<(() => void) | null>(null);
+  const menuAction = useRef(showContextMenu);
+  menuAction.current = showContextMenu;
+  const hold = useRef<ReturnType<typeof longPress> | null>(null);
+  if (!hold.current) hold.current = longPress((point, current) => {
+    abandonGesture.current?.();
+    planPress.current = null;
+    menuAction.current(point.target, point.x, point.y, current);
+  });
+  useEffect(() => () => hold.current?.dispose(), []);
+
 
   /** The two fingers a pinch is about, oldest first so the pair is stable
    *  across a move — a third finger is ignored rather than joining. */
@@ -558,7 +583,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   }
 
   function onPointerDown(e: React.PointerEvent) {
-    const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
+    const isBackground = Boolean(onPlanItem) || e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
     // through activeTool too.) The Hand tool pans from anywhere — an item
     // yields its pointer when it is active — so it is not gated on background.
@@ -585,6 +610,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       if (fingers.current.size > 2) return;
     }
 
+    if (onPlanItem && (activeTool === "select" || activeTool === "hand")) { startPan(e); return; }
     const wantsPan = e.button === 1 || (activeTool === "hand" && e.button === 0);
 
     if (activeTool === "zoom" && e.button === 0) {
@@ -853,7 +879,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       // A press that never moved is a TAP, and on a coarse pointer this
       // gesture replaced the marquee — so it owes the marquee's answer to
       // "I pressed nothing".
-      if (!moved && opts.tapClears) clearBackgroundFocus();
+      if (!moved && opts.tapClears && ev.type !== "pointercancel") {
+        leaveGroupAtPoint(screenToWorld(useUiStore.getState().viewport, ev.clientX, ev.clientY));
+        clearBackgroundFocus();
+      }
       const v = moved ? flickVelocity(samples, performance.now()) : null;
       if (v) startCoast(v);
     }
@@ -919,8 +948,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     el.setPointerCapture(e.pointerId);
     const ui = useUiStore.getState();
     const additive = e.shiftKey;
-    const baseSelection = additive ? ui.selectedItemIds : [];
     const startWorld = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    leaveGroupAtPoint(startWorld);
+    // Leaving scope clears its child selection before Shift captures a base.
+    const baseSelection = additive ? useUiStore.getState().selectedItemIds : [];
+
     let moved = false;
 
     function onMove(ev: PointerEvent) {
@@ -934,8 +966,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       const maxX = Math.max(startWorld.x, current.x);
       const minY = Math.min(startWorld.y, current.y);
       const maxY = Math.max(startWorld.y, current.y);
-      const items = useCanvasStore.getState().canvas?.items ?? {};
-      const hit = Object.values(items)
+      const currentCanvas = useCanvasStore.getState().canvas;
+      const eligible = currentCanvas && groupsEnabled() ? groupScopeRoots(currentCanvas, state.activeGroupId) : Object.values(currentCanvas?.items ?? {});
+      const hit = eligible
         .filter(
           (item) =>
             item.x < maxX && item.x + item.width > minX && item.y < maxY && item.y + item.height > minY,
@@ -966,6 +999,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     const files = Array.from(e.dataTransfer.files);
     const ui = useUiStore.getState();
     const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    const target = !e.altKey && canvas && groupsEnabled() ? groupDropTarget(canvas, world, []) : null;
+    const destination = { ...creationDestination(target?.id ?? ui.activeGroupId), ...(target ? { groupPlacement: groupDropPolicy(target, world) } : {}) };
+    ui.setGroupDropTarget(null);
 
     /**
      * **A module's claim on a dragged mime, before the built-ins** (#156).
@@ -985,9 +1021,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       if (claim) {
         const data = e.dataTransfer.getData(claim.mimeType);
         try {
-          const host = webHostFor(canvasId, actor);
+          const couldEdit = canEditNow();
+          const { webHostFor } = await import("../lib/modulehost.ts");
+          const host = webHostFor(canvasId, actor, destination, couldEdit);
           const ops = await claim.run({
             canvasId,
+            ...destination,
             data,
             mimeType: claim.mimeType,
             at: { x: Math.round(world.x), y: Math.round(world.y) },
@@ -1013,7 +1052,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         if (!/^https?:\/\//i.test(link)) return;
         const { addBrowserItem } = await import("../lib/upload.ts");
         try {
-          ui.select(await addBrowserItem(canvasId, actor, link, world));
+          selectCreatedItems(canvasId, [await addBrowserItem(canvasId, actor, link, world, destination)]);
         } catch (err) {
           setNotice(err instanceof Error && err.message ? err.message : "That site could not be added.");
         }
@@ -1022,11 +1061,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
 
     // Dropping a single file onto an existing item = new version of that item.
-    const targetItem = (e.target as HTMLElement).closest?.("[data-item-id]");
-    if (targetItem && files.length === 1) {
+    const versionTarget = reachableVersionTarget(e.target as HTMLElement);
+    if (versionTarget && files.length === 1) {
       const { addVersionFromFile } = await import("../lib/upload.ts");
       try {
-        await addVersionFromFile(canvasId, actor, targetItem.getAttribute("data-item-id")!, files[0]!);
+        await addVersionFromFile(canvasId, actor, versionTarget.id, files[0]!, destination.originGroupMode);
       } catch (err) {
         setNotice(
           `${files[0]!.name}: ${err instanceof Error && err.message ? err.message : "could not be added as a version"}`,
@@ -1039,7 +1078,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     // `uploadBlob` throws with the sentence that explains why.
     // Dropped AT the pointer: chosen, so the files stay where they were let
     // go rather than being tidied clear (`Placement.chosen`).
-    const ids = await addFiles(canvasId, actor, files, { ...world, chosen: true }).catch((err: unknown) => {
+    const ids = await addFiles(canvasId, actor, files, { ...world, chosen: true }, destination).catch((err: unknown) => {
       // "2 of 5 added — <why>", and the two are selected below (#51).
       const { landed, notice } = addFailure(err, files.length, "Those files could not be added.");
       setNotice(notice);
@@ -1047,8 +1086,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     });
     // The whole drop is selected, not just the last file — you dropped five
     // things and five things are what arrived.
-    if (ids.length > 0) {
-      useUiStore.getState().setSelection(ids);
+    if (ids.length > 0 && selectCreatedItems(canvasId, ids)) {
       const canvas = useCanvasStore.getState().canvas;
       const landed = canvas ? ids.map((id) => canvas.items[id]).filter(Boolean) : [];
       revealIfOffscreen(
@@ -1060,16 +1098,24 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
   }
 
+  function reachableVersionTarget(element: HTMLElement) {
+    const id = element.closest?.("[data-item-id]")?.getAttribute("data-item-id");
+    const item = id ? canvas?.items[id] : undefined;
+    if (!item || isGroupItem(item)) return null;
+    return !groupsEnabled() || (canvas && groupScopedRoot(canvas, item.id, useUiStore.getState().activeGroupId) === item.id) ? item : null;
+  }
+
   // Areas first, so everything placed on a sheet paints over it: items are
   // siblings at one z-index, and DOM order is the only order there is. A
   // stable sort keeps the rest as they were.
   const items = canvas
-    ? Object.values(canvas.items).sort((a, b) => Number(isArea(b)) - Number(isArea(a)))
+    ? Object.values(canvas.items).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
     : [];
 
   return (
     <div
       ref={ref}
+      data-current-node={currentNode}
       className={`canvas-viewport${isPlace ? " themed" : ""}${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
         activeTool === "select" && !commentMode ? " own-cursor-on" : ""
       }`}
@@ -1077,6 +1123,25 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
       }}
+      onPointerDownCapture={(e) => {
+        if (onPlanItem) {
+          hold.current?.down(e);
+          const id = (e.target as HTMLElement).closest("[data-item-id]")?.getAttribute("data-item-id");
+          if (fingers.current.size) planPress.current = null;
+          else planPress.current = id ? { id, x: e.clientX, y: e.clientY } : null;
+          e.stopPropagation(); onPointerDown(e); return;
+        }
+        hold.current?.down(e);
+        if ((e.target as HTMLElement).closest("a, button, input, textarea, select, [contenteditable=true]")) hold.current?.cancel();
+      }}
+      onPointerMoveCapture={(e) => hold.current?.move(e)}
+      onPointerUpCapture={(e) => {
+        hold.current?.up(e.pointerId);
+        const pressed = planPress.current; planPress.current = null;
+        if (pressed && Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < 8) onPlanItem?.(pressed.id);
+      }}
+      onPointerCancelCapture={(e) => { planPress.current = null; hold.current?.up(e.pointerId); }}
+      onClickCapture={(e) => { if (hold.current?.consumeClick()) { e.preventDefault(); e.stopPropagation(); } }}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
       onPointerMove={(e) => {
@@ -1103,6 +1168,13 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       onDragOver={(e) => {
         e.preventDefault();
         dragAlive();
+        const ui = useUiStore.getState();
+        const target = !e.altKey && canvas && groupsEnabled() ? groupDropTarget(canvas, screenToWorld(ui.viewport, e.clientX, e.clientY), []) : null;
+        const fileCount = e.dataTransfer.files.length || Array.from(e.dataTransfer.items ?? []).filter((item) => item.kind === "file").length;
+        const version = fileCount === 1 ? reachableVersionTarget(e.target as HTMLElement) : null;
+        const destination = target ?? (ui.activeGroupId ? canvas?.items[ui.activeGroupId] : null);
+        ui.setGroupDropTarget(version ? null : destination?.id ?? null);
+        setDropMessage(version ? `Drop to add a version of ${version.title}` : destination ? `Drop to add to ${destination.title}` : "Drop to add to the canvas");
       }}
       onDrop={onDrop}
     >
@@ -1131,6 +1203,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
             map node is chromeless text, and a line over it strikes through
             the words. */}
         <ModuleUnderlays />
+        {currentNode && canvas?.items[currentNode] && <div className="phone-current-node" aria-label="Current node" style={{ left: canvas.items[currentNode]!.x, top: canvas.items[currentNode]!.y, width: canvas.items[currentNode]!.width, height: canvas.items[currentNode]!.height }} />}
+
         {items.map((item) => (
           <ItemView
             key={item.id}
@@ -1154,7 +1228,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       <GuideLines />
       <EdgeRadar canvasId={canvasId} />
       <SketchBar canvasId={canvasId} actor={actor} />
-      {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
+      {dropping && <div className="drop-overlay">{dropMessage}</div>}
       {menu && (
         <ContextMenu
           at={menu.at}
@@ -1243,4 +1317,3 @@ function MarqueeRect() {
     />
   );
 }
-

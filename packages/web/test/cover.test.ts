@@ -78,7 +78,7 @@ describe("the handler is wired through the rule", () => {
     expect(source).toMatch(/import \{[^}]*\bcrossesCover\b[^}]*\} from "\.\.\/lib\/keys\.ts"/);
   });
 
-  it("gates on the cover route before anything else — ⌘K's branch included", () => {
+  it("gates canvas actions before dispatch; navigation is owned above the canvas", () => {
     // BOTH covers: full screen's itemId and the workbench. The workbench
     // shipped second, and the design doc's instruction was to extend this
     // gate rather than grow a second policy in the handler — so the guard
@@ -90,7 +90,7 @@ describe("the handler is wired through the rule", () => {
     // FIRST, not merely present: a gate that lets one dispatch run before it
     // is half a gate. The rule itself decides what crosses, so nothing in the
     // handler may be consulted earlier.
-    for (const later of ['"k"', "isTyping(", "deleteItems(", "NUDGES[", '"F2"', "setFanned("]) {
+    for (const later of [ "isTyping(", "deleteItems(", "NUDGES[", '"F2"', "setFanned("]) {
       const at = effect.indexOf(later);
       expect(at, `${later} missing from the handler`).toBeGreaterThan(-1);
       expect(gate, `gate must come before ${later}`).toBeLessThan(at);
@@ -102,6 +102,6 @@ describe("the handler is wired through the rule", () => {
     // dependency array, the listener registered on the canvas route keeps a
     // stale undefined forever — and the gate never turns on.
     // onWorkbench rides the same array for the same reason itemId does.
-    expect(effect).toMatch(/\}, \[canvasId, actor, itemId, onWorkbench\]\);$/);
+    expect(effect).toMatch(/\}, \[canvasId, actor, itemId, phone, onWorkbench\]\);$/);
   });
 });

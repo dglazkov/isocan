@@ -180,4 +180,5 @@ Open, to be settled by the work:
   `connect()` does when it finds no session in the environment: refuse,
   or mint-and-warn. The CLI refuses today (`--session` is explicit);
   the API should probably match, and the door stays open until a real
-  consumer says otherwise.
+  consumer says otherwise. *Settled 9 Sep 2026 by embed's MCP server: the
+  person by default — see phases.md.*

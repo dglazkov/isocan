@@ -6,7 +6,7 @@ import { WebSocket } from "ws";
 import type { PresenceSession, ServerMessage } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { PresenceHub, opLocus } from "../src/presence.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 import { emptyCanvas } from "@isocan/core";
 
 const alice = { id: "usr_alice", name: "Alice" };
@@ -278,9 +278,37 @@ describe("presence over the daemon", () => {
     expect(created.status).toBe(404);
   });
 
+  it("shares saved text ranges over WS and HTTP, rejects other versions, and writes no ops", async () => {
+    const before = (await daemon.engine.getSnapshot("prj_1")).lastSeq;
+    expect(before).toBeGreaterThan(0);
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`), { headers: badge.headers });
+    const messages: ServerMessage[] = [];
+    ws.on("message", data => messages.push(JSON.parse(String(data))));
+    try {
+      await new Promise((resolve, reject) => { ws.once("open", resolve); ws.once("error", reject); });
+      await until(() => messages.some(m => m.type === "snapshot"));
+      const range = { itemId: "itm_1", versionId: "v1", blobHash: "h", textSpace: "markdown-hast-v1",
+        flavor: "document", start: 1, end: 4, expiresAt: Date.now() + 15000 };
+      const beat = (textSelection: unknown) => ws.send(JSON.stringify({ type: "presence", sessionId: "text_tab", actor: alice,
+        cursor: null, selection: [], textSelection }));
+      beat(range);
+      await until(() => messages.some(m => m.type === "presence-roster" && m.sessions.some(s => s.textSelection?.versionId === "v1")));
+      const created = await post("/api/projects/prj_1/sessions", { actor: kenny });
+      const url = `${base}/api/projects/prj_1/sessions/${created.json.sessionId}`;
+      const put = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json", ...badge.headers }, body: JSON.stringify({ textSelection: range }) });
+      expect(put.status).toBe(200);
+      await until(() => daemon.presence.roster("prj_1").filter(s => s.textSelection).length === 2);
+      beat({ ...range, versionId: "does-not-exist" });
+      await until(() => daemon.presence.roster("prj_1").find(s => s.sessionId === "text_tab")?.textSelection === null);
+      await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json", ...badge.headers }, body: JSON.stringify({ textSelection: null }) });
+      expect(daemon.presence.roster("prj_1").every(s => !s.textSelection)).toBe(true);
+      expect((await daemon.engine.getSnapshot("prj_1")).lastSeq).toBe(before);
+    } finally { ws.close(); }
+  });
+
   it("web presence flows to the roster and other clients", async () => {
     const messages: ServerMessage[] = [];
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=prj_1`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`), {
       headers: badge.headers,
     });
     ws.on("message", (data) => messages.push(JSON.parse(String(data))));

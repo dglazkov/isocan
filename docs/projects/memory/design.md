@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents
-note: designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Phases 0–1 built 4 Sep — the Context view and `isocan context` in layers with a heading per source, and `memory=inherit` on a canvas card bringing the linked canvas's design system, pins and size in read-only with provenance and the override rule; `design check` reads the governing one. Phase 3 the same day — the Context sheet a first link lays and lands on, and the memory mark on the card as the switch. Phases 2 and 4 not built
+note: phases 0–4 are verified on CLI, browser and real MCP transport. Phase 5 next adds bounded inherited recap heads under inherited-recap.md; pin-from-source remains the following engineering contract
 ---
 # Memory, in layers you can see
 
@@ -70,24 +70,31 @@ designs — an ordinary item pointing at another canvas — wearing one more
 property: `memory=inherit`. A linked canvas contributes its *context pieces*
 here, read-only: its design system (if this canvas has none of its own, the
 linked one governs; if both, this canvas's wins and the panel says so), its
-pinned items, its recap's head. Not its Chat and not its items wholesale —
-context is what somebody decided matters, and the link inherits exactly that
-decision. Several links compose in the order they sit on the canvas, top to
+pinned items, and its bounded recap head under
+[inherited-recap.md](inherited-recap.md), the next build in memory phase 5. The
+link contributes neither Chat nor items wholesale: context is what somebody
+decided matters, and the link inherits exactly that decision. Several links compose in the order they sit on the canvas, top to
 bottom, left to right, because that is the order the room reads.
 
-**3. The person's own canvas — personal memory.** Every actor gets a canvas
-born at first sign-in, titled `~<name>`, private by construction: link grant
-off, the actor's own badge the one admitted, the way a sprint desk is born.
-It is the person's home directory — the notes they keep, the preferences an
-agent should know, the things they pin for themselves. **Linking it** to a
-canvas places a canvas item for it there with `memory=personal` — visible to
-everyone on that canvas as *Maya's canvas is linked*, its pieces read only by
-agents acting **as Maya** and only while she is on the canvas. Unlinking is
-deleting the item, one undo. The link is a canvas fact — everyone can see
-that it exists — while the contents stay behind the home canvas's own door,
-which is the only way the second test (can everyone see it) and privacy both
-hold: what can be seen is *that* Maya brought her memory, not *what* it says,
-unless she shares the home canvas itself.
+**3. The person's own canvas — personal memory.** One canonical person has
+one private personal canvas per authoritative home, created idempotently on
+first explicit use of Your canvas. Its initial title is `~<name>`; rename and
+identity joins never silently create, merge or delete a memory dataset. Birth
+has no link grant or inherited space.
+
+An owner-enabled personal card brings that source to one project. Its presence
+is visible; its contents are read only by the owner and explicitly delegated
+agents through an authoritative read. Consent is bound to the source,
+destination and concrete item id, rather than inferred from editable
+`memory=personal`. Deleting the card unlinks it; undo restores the same edge.
+Closing a browser does not unlink it. Plain or inherited copies of its address
+are also redacted before any automatic source fetch.
+
+[personal-memory.md](personal-memory.md) is the bounded mechanism and
+[journey.md](journey.md) is the acceptance suite. They revise the sketch's
+'every actor', sprint-desk birth and literal browser-presence assumptions:
+agents are actors, a private birth cannot first open a link, and standing
+agents must not depend on a browser heartbeat.
 
 Layer three answers a question the context project deliberately left: where
 does a preference about a *person* live? Here — on a canvas the person owns,
@@ -102,7 +109,8 @@ Then one per linked canvas, each with the canvas's title, a small picture of
 it (the inception card, drawn live) and its contributed pieces — design
 system, pinned items, recap — each piece wearing a *from Design System* chip
 in the linked canvas's colour. Then *Your canvas*, with a switch: linked
-here or not. A piece the same canvas would have contributed twice is shown
+here or not, explicit agent access controls, and a redacted personal card.
+A piece the same canvas would have contributed twice is shown
 once with two chips. A design system that is overridden by a local one is
 shown struck, with *this canvas's wins* beside it. Stale reasons apply across
 layers: a linked design system older than the screens here says so.
@@ -115,8 +123,8 @@ one, so every canvas has a corner where its inheritance sits and a newcomer
 reads it first.
 
 **For the agent**, `isocan context` prints the same three headings with the
-same provenance, and `isocan context pin --from <canvas>` pins a linked
-canvas's item into this canvas's context without copying it. An agent that
+same provenance. The separate proposed `isocan context pin --from <canvas>`
+remains unbuilt; it is not implied by the personal-memory continuation. An agent that
 starts work reads one list and knows where every piece came from, which is
 the whole point of the context project restated with more sources.
 
@@ -160,56 +168,41 @@ everything an agent gets, no more, and writes back only through the ops
 anyone else would — a note on the canvas, a pin. Nothing imported, nothing
 shipped, no vendor named in core.
 
-## Journey, in four scenes
+## The acceptance suite
 
-**1 — Inherit the design system.** Theo's team keeps *Design System* as a
-canvas. On *Onboarding v2* he places it with the inception popup and ticks
-*inherit memory*. The Context panel gains a heading, *from Design System*,
-with the system and its two pinned rationale notes; `isocan design check`
-on this canvas now checks against it; an agent building a screen here reads
-it first without being told.
-*Acceptance:* one link, and `isocan context` on the second canvas names the
-first canvas's design system as governing here, with provenance.
-
-**2 — Bring yourself.** Maya opens a client's canvas she has never seen.
-Her `~maya` exists already. She flips *Your canvas: linked* in the Context
-panel; a small card appears in the Context sheet saying *Maya's canvas is
-linked*. Her agent, acting as her, now reads her standing preferences —
-*I review on a phone; keep screens at 390 first* — and nobody else's agent
-can. She unlinks when the engagement ends; ⌘Z would relink.
-*Acceptance:* the link is visible to all, the contents to her and her
-agents only; unlink is one undo.
-
-**3 — Put it in the repo.** The team exports *Design System* into the
-product repo with `isocan export --git`, reviews the diff of a token change
-in a pull request, and a CI runner imports it to grade screens against it.
-*Acceptance:* the memory a canvas inherits is the same bytes a repository
-holds, round-tripped by `export`/`import`.
-
-**4 — A newcomer reads the corner.** Ravi joins *Onboarding v2* and the
-first thing at the origin is the *Context* sheet: two linked canvases and
-their cards, and the panel says what governs here and why.
-*Acceptance:* a canvas's inheritance is on the canvas, at the origin, not in
-a settings page.
+[journey.md](journey.md) holds the verified personal-memory scenes and the
+next recent-work scene: inherit a shared system, bring a private source,
+export deliberately, read the visible corner, and catch up on its shared source.
+The personal scene uses explicit consent and delegation on one authoritative
+home. [phases.md](phases.md) records the build and independently verified proof.
 
 ## Phases, in dependency order
 
 0. **Context, with headings.** The panel and `isocan context` group by
    source canvas even when there is one — the seam the rest lands in.
 1. **Inherited memory** (needs inception phase 0): `memory=inherit` on a
-   canvas item; the linked canvas's design system, pins and recap head join
-   the context read-only, with provenance and the override rule.
-2. **The person's canvas**: `~<name>` born at first sign-in, private; a
-   *Your canvas* switch that places or deletes the link item; pieces read
-   only by the person's own actors while present.
+   canvas item; its design system and pins join Context read-only, with
+   provenance and the override rule. Phase 5 completes recap-head contribution.
+2. **The person's canvas**: idempotent private birth on first personal use;
+   a *Your canvas* link/unlink switch; source-bound consent and explicit
+   agent delegation, with current authorized pieces on both clients.
 3. **The Context sheet** convention, laid on first link; the memory mark on
    the card.
-4. **MCP read surface** over the three layers, the context project's unbuilt
-   stage, so any index can index this.
+4. **MCP read surface** over the three layers, so any index can index this.
+   *Built 13 Sep through [embed phase 2](../embed/phases.md) and memory phase 4:
+   `read_context_summary` exposes the authorized layers, ambient resources omit
+   personal sources, and `read_personal_context` reads current private pieces
+   for an explicitly claimed owner or delegated session. Real stdio acceptance
+   verifies the three layers without changing frozen request semantics.*
+5. **Inherited recap head:** bounded recent-work metadata from a coherent
+   authoritative record, on existing Context surfaces. The mechanism and
+   refusal boundary are in inherited-recap.md; Journey 5 is its acceptance.
 
-**Zero new op types** again: two property values on an item kind another
-project defines, and a canvas born the way desks are born. **Both surfaces**
-by the tests that hold every verb. **The record is never hidden**: every link
+**Zero new op types** again: visible links use the existing canvas operation
+vocabulary. Personal birth, consent and delegation use the private Desk and
+the writer's trusted no-link birth path. Reservation, consent and delegation
+are private records; birth still uses the existing project.create operation.
+**Both surfaces** are covered by the tests that hold every verb. **The record is never hidden**: every link
 is an item anyone can see, and every piece of memory is a file anyone
 admitted can read.
 
@@ -255,3 +248,26 @@ on the card's strip, *memory*, lit when the other canvas's context is read
 here — and it is the switch, writing the same patch `isocan context inherit
 | uninherit` writes, so a card already on the canvas becomes a link from
 the strip. Not built: phase 2 and phase 4, as above.
+
+
+**Phase 2, 13 September 2026.** The personal contract is built on both clients.
+Private Desk bindings reserve birth before any link or space can exist;
+concrete consent and explicit delegation authorize only current contributed
+pieces. Automatic previews and ambient MCP calls exclude personal sources
+before content reads. Replica classification and immutable per-request actor
+ceilings keep that boundary through adoption, retries and forwarding.
+
+Independent CLI, browser, real stdio and required File/Cloud proofs passed.
+The retained browser journey includes a real response held during an in-place
+identity change, private export isolation and camera profile destruction.
+The dedicated MCP text tool remains memory phase 4; recap-head and pin-from-source
+remain separate unfinished work. See phases.md for exact verification.
+
+
+**Phase 4, 13 September 2026.** The dedicated personal MCP read is built.
+It requires a claimed session and a concrete destination card, then adapts
+the same authoritative route, cancellation, provenance and pagination that
+the other clients use. Real stdio calls prove all three layers, independent
+callers, current versions, zero private reads on refusal and unchanged saved
+requests. The four journeys are verified; recap-head and pin-from-source are
+the next engineering phases.

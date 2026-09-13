@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { LogEntry, OpEnvelope, Operation, CanvasState, ActorRegistry } from "@isocan/core";
 import { applyOperation, emptyActorRegistry, invertOperation } from "@isocan/core";
 import type { Store } from "@isocan/server";
@@ -78,6 +78,80 @@ export function storeConformance(
         expect(loaded!.entries).toHaveLength(3);
       }),
     );
+
+    test("reads only current live canvas metadata for catalogue candidates", withStore(async ({ store }) => {
+      expect(await store.canvasRecord("prj_missing")).toBeNull();
+      const state = await seed(store);
+      expect(await store.canvasRecord("prj_1")).toEqual(state.project);
+      await store.saveCanvas({ ...state.project, title: "Acme published title" });
+      expect((await store.canvasRecord("prj_1"))?.title).toBe("Acme published title");
+      await store.setTakenDown("prj_1", "2026-09-13T01:00:00Z");
+      expect(await store.canvasRecord("prj_1")).toBeNull();
+      await store.setTakenDown("prj_1", null);
+      expect(await store.canvasRecord("prj_1")).not.toBeNull();
+      await store.setTakenDown("prj_1", "2026-09-13T02:00:00Z");
+      await store.purgeCanvas("prj_1");
+      await store.setTakenDown("prj_1", null);
+      expect(await store.canvasRecord("prj_1")).toBeNull();
+    }));
+
+    test("classifies lifecycle without loading source state, and purge survives lift and restart", withStore(async (fixture) => {
+      let store = fixture.store;
+      const loads = vi.spyOn(store, "load");
+      const blobs = vi.spyOn(store, "openBlob");
+      const births = vi.spyOn(store, "readBirthLog");
+      expect(await store.canvasLifecycle("prj_missing")).toBe("absent");
+      await seed(store);
+      expect(await store.canvasLifecycle("prj_1")).toBe("live");
+      await store.setTakenDown("prj_1", "2026-09-13T01:00:00Z");
+      expect(await store.canvasLifecycle("prj_1")).toBe("taken-down");
+      await store.setTakenDown("prj_1", null);
+      expect(await store.canvasLifecycle("prj_1")).toBe("live");
+      await store.setTakenDown("prj_1", "2026-09-13T02:00:00Z");
+      await store.purgeCanvas("prj_1");
+      expect(await store.canvasLifecycle("prj_1")).toBe("purged");
+      await store.setTakenDown("prj_1", null);
+      expect(await store.canvasLifecycle("prj_1")).toBe("purged");
+      expect(loads).not.toHaveBeenCalled(); expect(blobs).not.toHaveBeenCalled(); expect(births).not.toHaveBeenCalled();
+      store = await fixture.reopen();
+      expect(await store.canvasLifecycle("prj_1")).toBe("purged");
+    }));
+
+    test("a deleted source stays deleted across a backing restart", withStore(async (fixture) => {
+      let store = fixture.store;
+      await seed(store); await store.softDeleteCanvas("prj_1");
+      expect(await store.canvasLifecycle("prj_1")).toBe("deleted");
+      store = await fixture.reopen();
+      expect(await store.canvasLifecycle("prj_1")).toBe("deleted");
+    }));
+
+    test("recovers the exact reserved birth log before any canvas metadata exists", withStore(async (fixture) => {
+      let store = fixture.store;
+      expect(await store.readBirthLog("prj_1")).toEqual([]);
+      const birth = envelope({ type: "project.create", canvasId: "prj_1", title: "Acme private source" });
+      const first: LogEntry = { seq: 1, envelope: birth, inverse: null };
+      const initial = applyOperation(null, birth)!;
+      const update = envelope({ type: "project.update", patch: { description: "Durable tail" } });
+      const second: LogEntry = { seq: 2, envelope: update, inverse: invertOperation(initial, update.op) };
+      await store.createCanvasDir("prj_1");
+      await store.appendLog("prj_1", first); await store.appendLog("prj_1", second);
+      expect(await store.canvasLifecycle("prj_1")).toBe("incomplete");
+      expect(await store.canvasRecord("prj_1")).toBeNull();
+      expect(await store.readBirthLog("prj_1")).toEqual([first, second]);
+      store = await fixture.reopen();
+      expect(await store.canvasLifecycle("prj_1")).toBe("incomplete");
+      expect(await store.readBirthLog("prj_1")).toEqual([first, second]);
+      await store.saveSnapshot("prj_1", applyOperation(initial, update)!, 2);
+      expect(await store.canvasLifecycle("prj_1")).toBe("live");
+      expect(await store.readBirthLog("prj_1")).toEqual([first, second]);
+      expect(await store.tipSeq("prj_1")).toBe(2);
+    }));
+
+    test("a soft-deleted canvas is not live catalogue metadata", withStore(async ({ store }) => {
+      await seed(store);
+      await store.softDeleteCanvas("prj_1");
+      expect(await store.canvasRecord("prj_1")).toBeNull();
+    }));
 
     test(
       "survives a restart: what close() flushed, a fresh store reads back",
@@ -217,6 +291,128 @@ export function storeConformance(
         // claimed forever because its ops are still there and a freed seq is
         // the one thing that backing must never produce. Each says so in its
         // own file.
+      }),
+    );
+
+    /**
+     * **Taking down is not deleting, asserted on both backings** (operator
+     * phase 2).
+     *
+     * Four properties, and each is a way the two acts must stay distinguishable
+     * to anything that reads this store:
+     *
+     * 1. `load` refuses — the home stops serving it — exactly where it refuses
+     *    a delete.
+     * 2. **It is still in `listCanvases`.** The canvas list carries the
+     *    sentence rather than hiding the row (journey 4 step 3), so a backing
+     *    that filtered it out would take the surface's only chance to say what
+     *    happened. This is the one assertion where a takedown behaves
+     *    OPPOSITELY to a delete, and it is the load-bearing one.
+     * 3. `takenDownAt` reads back what was written, so a surface can say WHEN.
+     * 4. **`null` lifts it, and everything comes back** — the log was never
+     *    touched, so it replays as it was. "Nothing is irreversible until
+     *    purge", as a test rather than as a sentence in a design.
+     */
+    test(
+      "takes a canvas down: refused by load, still in the list, and lifted by clearing the flag",
+      withStore(async ({ store }) => {
+        await seed(store);
+        const before = await store.load("prj_1");
+        expect(before).not.toBeNull();
+        expect(await store.takenDownAt("prj_1")).toBeNull();
+
+        const at = "2026-09-12T10:00:00.000Z";
+        await store.setTakenDown("prj_1", at);
+        expect(await store.takenDownAt("prj_1")).toBe(at);
+        expect(await store.load("prj_1")).toBeNull();
+        // NOT hidden from the list: this is the whole difference from a delete
+        // on the read every canvas list is drawn from.
+        expect((await store.listCanvases()).map((canvas) => canvas.id)).toEqual(["prj_1"]);
+        expect(await store.canvasExists("prj_1")).toBe(true);
+
+        await store.setTakenDown("prj_1", null);
+        expect(await store.takenDownAt("prj_1")).toBeNull();
+        const after = await store.load("prj_1");
+        expect(after).not.toBeNull();
+        expect(after!.lastSeq).toBe(before!.lastSeq);
+        expect(after!.state.project.title).toBe(before!.state.project.title);
+      }),
+    );
+
+    /**
+     * **Purge: the bytes, asserted on both backings** (operator phase 3).
+     *
+     * Five properties, and each is the difference between an erasure and a
+     * hole:
+     *
+     * 1. **Refused unless taken down** — by the backing itself, so no wiring
+     *    above the seam can make an erasure the first act on a canvas.
+     * 2. **The bytes are gone**: no blobs, no log, no archive, and `load`
+     *    refuses.
+     * 3. **The tombstone stays**: `canvasExists` is still true, so the id can
+     *    never be adopted, teleported into or created again; `listCanvases`
+     *    still lists it, so the surfaces that carry the sentence keep it.
+     * 4. **`purgedAt` reads back**, and survives a restart.
+     * 5. **A lift cannot bring it back**: clearing the takedown flag on a
+     *    purged canvas leaves `load` refusing, because a directory or a
+     *    document holding only a tombstone would otherwise serve an EMPTY
+     *    canvas under a taken name.
+     */
+    test(
+      "purges a taken-down canvas: the bytes go, the tombstone stays, and nothing lifts it",
+      withStore(async (fixture) => {
+        const { store } = fixture;
+        await seed(store);
+        const blob = await store.putBlob("prj_1", Buffer.from("evidence"), {
+          mimeType: "text/plain",
+          filename: "e.txt",
+        });
+        // A compacted entry too, so the archive is part of what must go.
+        const before = (await store.load("prj_1"))!;
+        await store.compactOplog(
+          "prj_1",
+          before.entries.filter((e) => e.seq > 1),
+          before.entries.filter((e) => e.seq === 1),
+        );
+
+        await expect(store.purgeCanvas("prj_1"), "not taken down: refused by the seam").rejects.toThrow(
+          /not taken down/,
+        );
+        expect(await store.purgedAt("prj_1")).toBeNull();
+        expect(await store.listBlobs("prj_1")).toHaveLength(1);
+
+        await store.setTakenDown("prj_1", "2026-09-12T10:00:00.000Z");
+        const report = await store.purgeCanvas("prj_1");
+        expect(report.files).toBe(1);
+        expect(report.bytes).toBe(8);
+        expect(report.ops, "live and archived alike").toBe(3);
+        expect(report.objects).toBeGreaterThanOrEqual(1);
+
+        expect(await store.load("prj_1")).toBeNull();
+        expect(await store.listBlobs("prj_1")).toEqual([]);
+        expect(await store.blobMeta("prj_1", blob.blobHash)).toBeNull();
+        expect(await store.openBlob("prj_1", blob.blobHash)).toBeNull();
+        expect(await store.readArchivedLog("prj_1")).toEqual([]);
+        expect(await store.purgedAt("prj_1")).not.toBeNull();
+        // The tombstone: the id is taken, and the record still lists.
+        expect(await store.canvasExists("prj_1")).toBe(true);
+        expect((await store.listCanvases()).map((canvas) => canvas.id)).toEqual(["prj_1"]);
+        expect(await store.takenDownAt("prj_1")).toBe("2026-09-12T10:00:00.000Z");
+
+        // A second purge is a no-op with nothing to count, not an error.
+        const again = await store.purgeCanvas("prj_1");
+        expect(again.files + again.ops + again.objects).toBe(0);
+
+        // A lift after a purge must not serve an empty canvas under the name.
+        await store.setTakenDown("prj_1", null);
+        expect(await store.load("prj_1")).toBeNull();
+        expect(await store.purgedAt("prj_1")).not.toBeNull();
+
+        // And all of that is durable.
+        const reopened = await fixture.reopen();
+        expect(await reopened.load("prj_1")).toBeNull();
+        expect(await reopened.purgedAt("prj_1")).not.toBeNull();
+        expect(await reopened.canvasExists("prj_1")).toBe(true);
       }),
     );
 

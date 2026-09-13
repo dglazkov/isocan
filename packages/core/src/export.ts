@@ -149,8 +149,20 @@ export function parseExportTarget(raw: string): ExportTarget | null {
  */
 export function blobsNamedBy(
   entries: readonly LogEntry[],
+  state?: import("./model.ts").CanvasState,
 ): Map<string, { mimeType: string; filename: string; size: number }> {
   const found = new Map<string, { mimeType: string; filename: string; size: number }>();
+  const explicit = new Map<string, { filename: boolean; size: boolean }>();
+  const remember = (hash: string, meta: { mimeType: string; filename: string; size: number }, fields: { filename: boolean; size: boolean }): void => {
+    const previous = found.get(hash);
+    const priorFields = explicit.get(hash);
+    if (!previous || !priorFields) { found.set(hash, meta); explicit.set(hash, fields); return; }
+    // A later frozen request may know a distinct visual face's real name and
+    // size. Replace inherited guesses, while retaining the first explicit value.
+    if (fields.filename && !priorFields.filename) previous.filename = meta.filename;
+    if (fields.size && !priorFields.size) previous.size = meta.size;
+    priorFields.filename ||= fields.filename; priorFields.size ||= fields.size;
+  };
   const visit = (value: unknown): void => {
     if (value === null || typeof value !== "object") return;
     if (Array.isArray(value)) {
@@ -163,12 +175,20 @@ export function blobsNamedBy(
       typeof record.mimeType === "string" &&
       typeof record.filename === "string"
     ) {
-      if (!found.has(record.blobHash)) {
-        found.set(record.blobHash, {
-          mimeType: record.mimeType,
-          filename: record.filename,
-          size: typeof record.size === "number" ? record.size : 0,
-        });
+      remember(record.blobHash, {
+        mimeType: record.mimeType,
+        filename: record.filename,
+        size: typeof record.size === "number" ? record.size : 0,
+      }, { filename: true, size: typeof record.size === "number" });
+      // Visual faces may omit filename/size and inherit the source metadata.
+      // Resolve that inheritance while the containing version is still here,
+      // including versions embedded in an atomic canvas-group creation.
+      const visual = record.visual;
+      if (visual !== null && typeof visual === "object" && !Array.isArray(visual)) {
+        const face = visual as Record<string, unknown>;
+        if (typeof face.blobHash === "string" && typeof face.mimeType === "string") {
+          remember(face.blobHash, { mimeType: face.mimeType, filename: typeof face.filename === "string" ? face.filename : record.filename, size: typeof face.size === "number" ? face.size : typeof record.size === "number" ? record.size : 0 }, { filename: typeof face.filename === "string", size: typeof face.size === "number" });
+        }
       }
     }
     for (const v of Object.values(record)) visit(v);
@@ -177,6 +197,8 @@ export function blobsNamedBy(
     visit(entry.envelope.op);
     visit(entry.inverse);
   }
+  // Saved request versions survive the originating operations' live-log horizon.
+  if (state) visit(state);
   return found;
 }
 

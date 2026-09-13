@@ -81,9 +81,10 @@ describe("the version fan hands over the same facts as the canvas", () => {
   });
 
   it("tells it about a canvas card too, for the same reason", () => {
-    // Otherwise a canvas item's earlier versions are its ADDRESS as text
-    // rather than the place drawn small.
-    expect(fan).toContain("canvasOf={canvasIdOf(item)}");
+    // Raw declarations must survive a changed kind: otherwise an earlier
+    // image version can skip the source classifier and show a private picture.
+    expect(fan).toContain("canvasOf={item.properties.canvas ?? null}");
+    expect(fan).not.toContain("canvasOf={canvasIdOf(item)}");
     expect(fan).toContain("canvasSource={sourceOf(item)}");
   });
 

@@ -17,6 +17,12 @@
  * the CLI, which consumes the same resolution and adds argv.
  */
 export * from "./connect.ts";
+export * from "./context-summary.ts";
+export * from "./feedback.ts";
+export * from "./canvas-groups.ts";
+export type { ContextReadOptions, CommentContextOptions, ContextPageOptions, ContextBytesOptions, ContextItemContent } from "./canvas-context.ts";
+export type { CanvasGroupCopyOptions } from "./canvas-groups.ts";
+export * from "./operation-receipt.ts";
 export * from "./routes.ts";
 export * from "./client.ts";
 export * from "./ctx.ts";

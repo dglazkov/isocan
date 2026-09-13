@@ -19,3 +19,8 @@ The app has a tray on the left edge you drag them out of, which is the same
 act. It is behind **Settings → Experiments → Stickers**, because the module
 API it is built on — overlays, drops, and the host a component writes through
 — is still changing.
+
+Use `sticker drop fire --in <group> --cell 1,2` for a group grid cell.
+Insertion and required frame growth are one act; `--json` reports the accepted
+item ID and final box. Dropping from the browser tray uses the highlighted
+group captured at drop time.

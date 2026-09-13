@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "../src/model.ts";
-import { FILE_PROP, backingOf, cleanFilePath, fileOf } from "../src/backing.ts";
+import { FILE_PROP, VISUAL_FILE_PROP, backingOf, cleanFilePath, fileOf, visualFileOf } from "../src/backing.ts";
 
 const actor = { id: "usr_a", name: "A" };
 
@@ -143,3 +143,48 @@ describe("what a canvas may name", () => {
     expect(cleanFilePath("/")).toBe(null);
   });
 });
+
+describe("visual file backing", () => {
+  it("extracts visualFile from properties", () => {
+    expect(visualFileOf(item({ [VISUAL_FILE_PROP]: "visual.html" }))).toBe("visual.html");
+    expect(visualFileOf(item({}))).toBe(null);
+  });
+
+  it("checks both source and visual file states", () => {
+    const dualItem: Item = {
+      ...item({ [FILE_PROP]: "design.md", [VISUAL_FILE_PROP]: "design-system.html" }),
+      versions: [
+        {
+          id: "ver_1",
+          blobHash: "src_hash",
+          mimeType: "text/markdown",
+          filename: "design.md",
+          size: 10,
+          visual: {
+            blobHash: "vis_hash",
+            mimeType: "text/html",
+            filename: "design-system.html",
+            size: 20,
+          },
+          createdAt: "",
+          createdBy: actor,
+        },
+      ],
+      currentVersionId: "ver_1",
+    };
+
+    const b = backingOf(dualItem, true, (p) => {
+      if (p === "design.md") return "src_hash";
+      if (p === "design-system.html") return "vis_hash";
+      return null;
+    });
+
+    expect(b).toEqual({
+      path: "design.md",
+      state: "written",
+      visualPath: "design-system.html",
+      visualState: "written",
+    });
+  });
+});
+

@@ -4,13 +4,14 @@ import {
   newId,
   parsePassToken,
   PASS_EXPIRED,
+  PASS_MINTER_ENDED,
   PASS_SPENT,
   PASS_TTL_MS,
   PASS_UNKNOWN,
   passExpired,
   type PassRefusal,
 } from "@isocan/core";
-import { sha256, secretMatches } from "./badges.ts";
+import { endOf, sha256, secretMatches } from "./badges.ts";
 import { rungOfAdmission } from "./grants.ts";
 import type { BadgeRecord, Desk, PassRecord } from "./desk.ts";
 
@@ -48,6 +49,10 @@ export function mintPass(input: {
   mintedBy: string;
   actorId?: string;
   now?: string;
+  /** **The operator's look** (operator phase 2): this pass redeems into
+   * `{root: "operator", until}` at `view` rather than into the minter's rung.
+   * Minted only by the look route, and only after a proof. */
+  look?: { until: string };
 }): MintedPass {
   const createdAt = input.now ?? new Date().toISOString();
   const passId = newId("pss");
@@ -58,6 +63,7 @@ export function mintPass(input: {
       canvasId: input.canvasId,
       mintedBy: input.mintedBy,
       ...(input.actorId !== undefined ? { actorId: input.actorId } : {}),
+      ...(input.look !== undefined ? { look: input.look } : {}),
       secretHash: sha256(secret),
       createdAt,
       expiresAt: new Date(Date.parse(createdAt) + PASS_TTL_MS).toISOString(),
@@ -92,7 +98,8 @@ export class PassRefusedError extends Error {
   ) {
     super(message);
     this.name = "PassRefusedError";
-    this.status = code === PASS_SPENT ? 409 : code === PASS_EXPIRED ? 410 : 404;
+    this.status =
+      code === PASS_SPENT ? 409 : code === PASS_EXPIRED || code === PASS_MINTER_ENDED ? 410 : 404;
   }
 }
 
@@ -158,6 +165,26 @@ export async function redeemPass(
       )} minutes. Ask the surface that minted it for another`,
     );
   }
+  /**
+   * **A dead minter's pass is refused, unspent** (operator phase 4; design,
+   * "End a badge": *`redeemPass` refuses a pass whose minter is dead*).
+   *
+   * Before the spend, with the cheap read-only questions, because there is
+   * nothing to spend it on: the admission this would write names the minter
+   * as its root, and a root that no longer stands is what the sweep expels.
+   * Refusing here rather than letting the sweep catch up is the difference
+   * between an hour and never — the hour being exactly how long a stolen
+   * laptop's outstanding pass was good for. The tombstone's own sentence
+   * travels, so the stranger holding the pass reads who ended it and when.
+   */
+  const ended = await desk.endedBadge(held.mintedBy);
+  if (ended) {
+    throw new PassRefusedError(
+      PASS_MINTER_ENDED,
+      `the surface that minted this pass has been ended, so the pass hands on nothing. ` +
+        `${endOf(ended).sentence} Ask a surface that is still recognised for another`,
+    );
+  }
   const outcome = await desk.redeemPass(held.id, now, redeemer.badgeId);
   // Null here means the row vanished between the read above and this call,
   // which on a desk that never deletes a pass means a home that was wiped mid
@@ -194,6 +221,28 @@ export async function redeemPass(
    * next sweep of the canvas resolves the chain the way it resolves any root
    * that does not stand.
    */
+  /**
+   * **A look is redeemed into its own root** (operator phase 2), and the
+   * branch is here rather than at the route because redemption is where an
+   * admission is written and this is the ONE admission that is not the
+   * minter's standing handed on.
+   *
+   * `view`, explicitly, and `{root: "operator", until}` — the door honours it
+   * until then, the sweep leaves it alone, and it is not in presence because
+   * no `view` connection is. The minter's rung is deliberately not consulted:
+   * the minter is the operator's own terminal badge, which was never admitted
+   * to this canvas at all, and consulting it would make the look's rung depend
+   * on an accident.
+   */
+  if (held.look) {
+    await desk.admit(
+      redeemer.badgeId,
+      held.canvasId,
+      { root: "operator", until: held.look.until },
+      "view",
+    );
+    return outcome.pass;
+  }
   const minter = await desk.badge(held.mintedBy);
   const minted = minter?.admissions.find((a) => a.canvasId === held.canvasId);
   await desk.admit(

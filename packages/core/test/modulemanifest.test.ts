@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ISOCAN_VERSION, enginesSatisfied, manifestRecord, moduleSlug, moduleWebPath } from "../src/modules.ts";
+import {
+  MODULE_API_VERSION,
+  PROPOSED,
+  enginesSatisfied,
+  manifestRecord,
+  moduleSlug,
+  moduleWebPath,
+  unknownProposals,
+} from "../src/modules.ts";
 
 /**
  * **A runtime module's manifest, judged** (`docs/projects/modules/design.md`,
@@ -18,7 +26,7 @@ describe("the engines check", () => {
   it("reads >= as at least, and says both versions when it refuses", () => {
     expect(enginesSatisfied(">=0.1.0", "0.1.0")).toEqual({ ok: true });
     expect(enginesSatisfied(">=0.1.0", "1.4.0")).toEqual({ ok: true });
-    expect(enginesSatisfied(">=9.0.0", "0.1.0")).toEqual({ ok: false, why: "needs isocan >=9.0.0, and this is 0.1.0" });
+    expect(enginesSatisfied(">=9.0.0", "0.1.0")).toEqual({ ok: false, why: "needs module API >=9.0.0, and this build is 0.1.0" });
   });
 
   it("reads ^ the way npm does — the same line, and the same minor while the major is 0", () => {
@@ -35,9 +43,44 @@ describe("the engines check", () => {
     if (!verdict.ok) expect(verdict.why).toContain('cannot read the engines range "latest"');
   });
 
-  it("judges against the version the root manifest declares", () => {
+  it("judges against the module API's own version, not the app's", () => {
+    /**
+     * **This asserted the opposite until 9 Sep 2026**, and that is why the
+     * check had never refused anything: it pinned the number to the root
+     * package's version, which is 0.1.0 and has never moved, so every range
+     * was satisfied by a constant.
+     *
+     * VS Code can judge `engines.vscode` against the app version because their
+     * stable API has not broken since 1.0. Ours is pre-1.0 and changes weekly,
+     * so the two numbers answer different questions and must be free to move
+     * apart. This holds them apart rather than together.
+     */
     const pkg = JSON.parse(readFileSync(fileURLToPath(new URL("../../../package.json", import.meta.url)), "utf8"));
-    expect(ISOCAN_VERSION).toBe(pkg.version);
+    expect(MODULE_API_VERSION).not.toBe(pkg.version);
+    expect(MODULE_API_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it("refuses a module built against the API before the host landed", () => {
+    /* The break that earned the bump: `InspectorFacts` gained a required
+       `host`, so a module compiled against 0.1 cannot run here. `^0.1.0` is
+       how such a module pins itself, and this is the first refusal the check
+       has ever produced. */
+    const verdict = enginesSatisfied("^0.1.0");
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.why).toContain("needs module API ^0.1.0");
+    expect(enginesSatisfied("^0.2.0").ok).toBe(true);
+    expect(enginesSatisfied(">=0.2.0").ok).toBe(true);
+    expect(enginesSatisfied("*").ok).toBe(true);
+  });
+
+  it("names the parts of the API it intends to change", () => {
+    /* A module using one of these must say so, and a home must say yes — the
+       bargain that lets the slots keep moving. A proposal this build does not
+       know is a refusal with a name rather than a silent partial load. */
+    expect(PROPOSED).toContain("host");
+    expect(unknownProposals(["overlays", "drops"])).toEqual([]);
+    expect(unknownProposals(["overlays", "telepathy"])).toEqual(["telepathy"]);
+    expect(unknownProposals(undefined)).toEqual([]);
   });
 });
 

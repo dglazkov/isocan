@@ -16,6 +16,8 @@
  * now PRODUCES something the home can recognize later.
  */
 
+import type { EndReach } from "./ended.ts";
+
 // ---- carriers ----
 
 /** The browser's carrier: one HTTP-only cookie at the one origin.
@@ -117,6 +119,23 @@ export function parseBadgeToken(raw: string | undefined | null): BadgeToken | nu
 export interface DoorRequest {
   /** Default `bearer`. */
   carrier?: BadgeCarrier;
+  /**
+   * **Is the page asking from inside somebody else's window?** (#220, phase 1.)
+   *
+   * STATED rather than sniffed, for the same reason `carrier` is: the door's
+   * one honest signal about a caller is what the caller says about itself.
+   * And here it is the only signal available at all — this route is reached
+   * by `fetch` from the app, whose `Sec-Fetch-Dest` is `empty` whether the
+   * page is framed or not. The page knows (`window.self !== window.top`) and
+   * nothing downstream of it does.
+   *
+   * A cross-site frame's cookies live in a jar keyed on the TOP-LEVEL site,
+   * so an unpartitioned cookie set here is written to a jar the frame cannot
+   * read back. `badgeCookie` is what acts on this; see its comment for the
+   * whole of the rule and for what a framed daemon over plain HTTP does not
+   * get.
+   */
+  framed?: boolean;
 }
 
 export interface DoorResponse {
@@ -322,6 +341,15 @@ export const badgeRoute = (badgeId: string): string =>
 export interface KillBadgeResponse {
   killed: BadgeSummary;
   swept: SweepReport;
+  /**
+   * **What the end reached at the moment it happened** (operator phase 4):
+   * the dead badge's own sockets closed with `ended`, and the waits it held
+   * woken. Before this, a kill ended recognition and reached nothing the
+   * badge was holding — the sweep reports only the badges `badgesIn` still
+   * returns, and a dead one is not among them. Optional, so a client reading
+   * an older home gets `undefined` rather than a crash.
+   */
+  reached?: EndReach;
 }
 
 /**

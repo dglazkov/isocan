@@ -85,4 +85,20 @@ describe("tool keys are handled in one place, with one shape", () => {
     // nothing, which is why it never bounced and needs no hold.
     expect(page).toContain('ui.setActiveTool("select"); // V is Select');
   });
+
+  it("does not let a held Z re-arm itself after a region zoom", () => {
+    /**
+     * Dion, 10 Sep: *"When I held down Z and selected an area it zoomed in
+     * (expected) but when I released Z it stayed selected."*
+     *
+     * Z had a hold and a tap, and no repeat guard — it didn't need one while
+     * the tool stayed Zoom for the whole hold, because the branch checked
+     * `activeTool !== "zoom"` and did nothing. A region zoom breaks that:
+     * it hands the tool to Select while the key is still down, so the next
+     * autorepeat sees "not zoom", re-arms with a fresh `zoomDownAt`, and the
+     * release a few ms later reads as a tap. The guard is the same one H and
+     * T carry; only the first keydown of a press may reach for the tool.
+     */
+    expect(viewport).toContain('e.code === "KeyZ" && !e.metaKey && !e.ctrlKey && !e.repeat');
+  });
 });

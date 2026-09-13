@@ -67,6 +67,8 @@ export function isFormatMode(value: unknown): value is FormatMode {
 }
 
 interface FormatOptions {
+  /** Shared group tidy may request a uniform gutter around complete footprints. */
+  gap?: number;
   /** Which tidy. Defaults to `grid` — see `FormatMode`. */
   mode?: FormatMode;
   /** Where the top-left of the arrangement goes. Defaults to where the
@@ -168,11 +170,11 @@ function gridMoves(canvas: CanvasContents, options: FormatOptions): Move[] {
   for (let i = 0; i < ordered.length; i += perRow) {
     const row = ordered.slice(i, i + perRow);
     row.forEach((item, col) => {
-      const x = Math.round(origin.x + col * (column + FORMAT_GAP_X));
+      const x = Math.round(origin.x + col * (column + (options.gap ?? FORMAT_GAP_X)));
       const y = Math.round(rowTop);
       if (item.x !== x || item.y !== y) moves.push({ itemId: item.id, x, y });
     });
-    rowTop += Math.max(...row.map((item) => item.height)) + FORMAT_GAP_Y;
+    rowTop += Math.max(...row.map((item) => item.height)) + (options.gap ?? FORMAT_GAP_Y);
   }
   return moves;
 }
@@ -229,7 +231,7 @@ export function formatMoves(canvas: CanvasContents, options: FormatOptions = {})
   let deepest = origin.y;
   for (const root of roots) {
     const column = placeColumn(root, cursorX, origin.y, seen);
-    cursorX += column.width + FORMAT_GAP_X;
+    cursorX += column.width + (options.gap ?? FORMAT_GAP_X);
     deepest = Math.max(deepest, column.bottom);
   }
 
@@ -244,9 +246,9 @@ export function formatMoves(canvas: CanvasContents, options: FormatOptions = {})
       let x = origin.x;
       for (const item of row) {
         placed.set(item.id, { x, y: rowTop });
-        x += item.width + FORMAT_GAP_X;
+        x += item.width + (options.gap ?? FORMAT_GAP_X);
       }
-      rowTop += Math.max(...row.map((item) => item.height)) + FORMAT_GAP_Y;
+      rowTop += Math.max(...row.map((item) => item.height)) + (options.gap ?? FORMAT_GAP_Y);
     }
   }
 

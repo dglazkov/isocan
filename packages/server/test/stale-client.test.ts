@@ -14,7 +14,7 @@ import {
   WS_STALE_CLIENT,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **The break, saying what it is** (phase 13.5).
@@ -155,7 +155,7 @@ describe("a client older than this home is told so", () => {
 
   it("closes a pre-rename socket with 4426 and the same sentence, shortened", async () => {
     await seedCanvas();
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?projectId=prj_acme`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?projectId=prj_acme`), {
       headers: badge.headers,
     });
     ws.on("error", () => {});
@@ -202,7 +202,7 @@ describe("and everybody else is answered as they always were", () => {
     expect(emptyJoin.body!.error).toContain("canvasId is required");
     expect(emptyJoin.body!.error).not.toContain(INSTALL_SPEC);
 
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws`, { headers: badge.headers });
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws`), { headers: badge.headers });
     ws.on("error", () => {});
     const code = await new Promise<number>((resolve) => ws.on("close", resolve));
     expect(code).toBe(4400);
@@ -223,7 +223,7 @@ describe("and everybody else is answered as they always were", () => {
     expect(join.status).toBe(409);
     expect(join.body!.code).toBe("not-a-replica");
 
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=${canvasId}`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=${canvasId}`), {
       headers: badge.headers,
     });
     const hello = await new Promise<string>((resolve, reject) => {

@@ -1,5 +1,6 @@
+import { selectCreatedItems } from "./groupplacement.ts";
 import type { Actor, CanvasCursor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
-import { CURSORS, cursorLabel, contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
+import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -15,7 +16,8 @@ import {
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
-import { alignItems, tidyItems } from "./actions.ts";
+import { captureClipboard } from "./clipboard.ts";
+import { alignItems, distributeGroupItems, tidyItems } from "./actions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -24,6 +26,8 @@ import { glideToBox, revealItem } from "./zoomactions.ts";
 import { addSpeakerNote, noteStarter } from "./notes.ts";
 import { handIn, handable } from "./sprint.ts";
 import { canEditNow } from "./capability.ts";
+import { canvasGroupEntries, groupDeleteLabel } from "./canvasgroupmenus.ts";
+import { openGroupCreation, groupTask, groupsEnabled } from "./canvasgroups.ts";
 
 /**
  * **What the right-click menu offers, and why each thing is on it.**
@@ -73,12 +77,14 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
   const version = one?.versions.find((v) => v.id === one.currentVersionId) ?? null;
 
   return offered([
+    ...canvasGroupEntries(items, ctx),
     {
       label: many ? `Copy ${items.length} items` : "Copy",
       shortcutFor: "Copy the selection",
       run: () => {
-        useUiStore.getState().setClipboard({ canvasId: ctx.canvasId, items });
-        flashNotice(`Copied ${items.length} item${items.length === 1 ? "" : "s"}`);
+        const copied = captureClipboard(ctx.canvasId, ids);
+        useUiStore.getState().setClipboard(copied);
+        flashNotice(`Copied ${copied.items.length} item${copied.items.length === 1 ? "" : "s"}`);
       },
     },
     {
@@ -92,7 +98,9 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       run: () => {
         // The clipboard is not disturbed: duplicating something should not
         // cost you what you had copied a minute ago.
-        void pasteInto({ canvasId: ctx.canvasId, items }, ctx.canvasId, ctx.actor);
+        void pasteInto(captureClipboard(ctx.canvasId, ids), ctx.canvasId, ctx.actor).then((made) => {
+          if (made.length) selectCreatedItems(ctx.canvasId, made);
+        });
       },
     },
     /**
@@ -126,13 +134,13 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       label: many ? `Tidy ${items.length} items` : "Tidy",
       writes: true,
       disabled: !many,
-      run: () => void tidyItems(ctx.canvasId, ctx.actor, ids, "grid"),
+      run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "grid")),
     },
     {
       label: "Tidy — smart",
       writes: true,
       disabled: !many,
-      run: () => void tidyItems(ctx.canvasId, ctx.actor, ids, "smart"),
+      run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "smart")),
     },
     {
       /**
@@ -155,16 +163,20 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       submenu: ALIGN_EDGES.map((edge) => ({
         label: alignLabel(edge),
         writes: true,
-        run: () => void alignItems(ctx.canvasId, ctx.actor, ids, edge),
+        run: () => groupTask(() => alignItems(ctx.canvasId, ctx.actor, ids, edge)),
       })),
     },
+    ...(groupsEnabled() ? [
+      { label: "Distribute horizontally", writes: true, disabled: ids.length < 3, run: () => groupTask(() => distributeGroupItems(ctx.canvasId, ctx.actor, ids, "h")) },
+      { label: "Distribute vertically", writes: true, disabled: ids.length < 3, run: () => groupTask(() => distributeGroupItems(ctx.canvasId, ctx.actor, ids, "v")) },
+    ] : []),
     { separator: "" },
-    {
+    ...(!one || !isGroupItem(one) ? [{
       label: "Open full screen",
       shortcutFor: "Open the selection full screen",
       disabled: !one,
       run: () => one && ctx.navigate(itemPath(ctx.canvasId, one.id)),
-    },
+    }] : []),
     {
       label: "Open in the workbench",
       disabled: !one,
@@ -347,7 +359,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
                   writes: true,
                   run: async () => {
                     const id = await addSpeakerNote(ctx.canvasId, ctx.actor, slide, noteStarter(slide));
-                    useUiStore.getState().select(id);
+                    if (!selectCreatedItems(ctx.canvasId, [id])) return;
                     revealItem(id);
                     flashNotice(`Notes for "${slide.title}" — under the slide; N shows them in full screen`);
                   },
@@ -362,7 +374,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
     ...sprintHandIn(items, ctx),
     { separator: "" },
     {
-      label: many ? `Delete ${items.length} items` : "Delete",
+      label: groupDeleteLabel(items) ?? (many ? `Delete ${items.length} items` : "Delete"),
       shortcutFor: "Move the selection to the trash",
       danger: true,
       writes: true,
@@ -419,6 +431,7 @@ function sprintHandIn(items: readonly Item[], ctx: MenuContext): MenuEntry[] {
 export function canvasMenu(ctx: MenuContext): MenuEntry[] {
   const held = useUiStore.getState().clipboard;
   return offered([
+    { label: "New group", writes: true, disabled: !groupsEnabled(), ...(!groupsEnabled() ? { value: "Not enabled on this canvas" } : {}), run: () => openGroupCreation([], ctx.world) },
     {
       label: held ? `Paste ${held.items.length} item${held.items.length === 1 ? "" : "s"}` : "Paste",
       shortcutFor: "Paste",
@@ -427,7 +440,7 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
       run: () => {
         if (!held) return;
         void pasteInto(held, ctx.canvasId, ctx.actor, ctx.world).then((made) => {
-          if (made.length > 0) useUiStore.getState().setSelection(made);
+          if (made.length > 0) selectCreatedItems(ctx.canvasId, made);
         });
       },
     },

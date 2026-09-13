@@ -8,24 +8,33 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
  * **The two halves of one rule, on the two sides that have to agree.**
  *
  * Every write to grants is an owner's (roles phase 2): inviting, revoking,
- * the link and its rung. The daemon is what ENFORCES that — a client-side
+ * the link and its rung, and publication in the home's catalogue. The daemon
+ * is what ENFORCES that — a client-side
  * check is a habit — but the app must not offer a control that is going to
  * refuse, and it must say whose canvas it is, or "why can I not press this"
  * has no answer on screen.
  */
-describe("only an owner may change who may enter", () => {
+describe("only an owner may change sharing or publication", () => {
   const dialog = read("../src/components/ShareDialog.tsx");
   const http = read("../../server/src/http.ts");
+  const ownerCheck = /atLeast\(await heldRung\(desk, snapshot\.project, req\.badge!, actorId \?\? null, await engine\.actorJoins\(\)\), "own"\)/g;
 
   it("is refused by the daemon, not merely hidden by the app", () => {
     // Both writes — the POST that invites or sets the link, and the DELETE
     // that revokes — ask the same question of the same function; and, since
     // roles phase 4, so does putting a canvas into a space (`own` on both).
-    const asks = http.match(
-      /atLeast\(await heldRung\(desk, snapshot\.project, req\.badge!, actorId \?\? null, await engine\.actorJoins\(\)\), "own"\)/g,
-    );
-    expect(asks).toHaveLength(3);
+    // Public adds the fourth: an explicit publication decision on a link.
+    const asks = http.match(ownerCheck);
+    expect(asks).toHaveLength(4);
     expect(http).toContain("code: NOT_OWNER");
+  });
+
+  it("checks ownership on the concrete publication PUT before changing its desk row", () => {
+    const publication = http.match(/app\.put\("\/api\/projects\/:id\/grants\/:grantId\/listing",[\s\S]*?^  \}\);/m)?.[0];
+    expect(publication, "the owner-only publication route must exist").toBeDefined();
+    expect(publication!.match(ownerCheck)).toHaveLength(1);
+    expect(publication).toContain('reply.status(403).send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER })');
+    expect(publication!.indexOf("code: NOT_OWNER")).toBeLessThan(publication!.indexOf("await desk.setPublicListing("));
   });
 
   it("names the owner in the refusal, resolved through the registry", () => {

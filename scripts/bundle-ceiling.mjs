@@ -78,14 +78,267 @@
  * feature, somebody read the sentence, and it came back down further than it
  * went up.
  *
+ * **637,400 → 641,100 on 9 Sep, for the module API's own weight.** #156's
+ * report turned into a host a module can write through, an overlays slot, a
+ * drop registry and the experiments gate — all shell code, all in the first
+ * paint because the shell is.
+ *
+ * **The module behind the experiment is NOT in it, and that was measured
+ * rather than assumed.** Built as a plain import gated at render, stickers put
+ * 6,227 bytes into the entry chunk for everybody including the people who
+ * never switch it on — gating the drawing and not the download. It arrives
+ * through `addModule` now, the way a runtime module does, and the entry chunk
+ * carries none of it: 6,227 became 3,695, and the rest is API.
+ *
+ * Worth keeping as the rule rather than the number: **"merged but off" has to
+ * mean off**, and an experiment costing everybody bytes is not off. The gate
+ * asked, this is the sentence, and the half of the raise that was avoidable
+ * was avoided before it was written down.
+ *
+ * **641,100 → 653,500 on 11 Sep, and this one arrived the way the soft gate
+ * was built to let things arrive: as a question, answered late.** The
+ * performance persona asked on 8 Sep ("bytes past the last size somebody
+ * agreed to") and four nights running; nobody answered, and the queue was one
+ * day from reddening `main` over it. Dion's call: raise it, with the reason.
+ *
+ * Measured at `1e846a1f`: **653,406**. Rebuilt commit by commit on a machine
+ * whose build reproduces the nightly's own readings exactly (645,806 at
+ * `86cc4cb`, 646,899 at `a2deb19`), the 12,306 bytes are:
+ *
+ *   1,305  already there at 4caba2f2, the commit that wrote 641,100
+ *   2,263  whose word wakes an agent — the gate in core's routing, and its
+ *          words in the agent tray (#221)
+ *   1,053  an artifact's two faces, visual and source (#215)
+ *     888  a Site address that stays editable and says why it is not one yet
+ *          (#231, and the follow-up)
+ *     798  reading Markdown together — shared text selections
+ *   1,303  the guide canvases, listed in the Help panel
+ *   3,373  durable quoted comments — a thread anchored to a passage of text
+ *   1,033  the switcher's scope toggle, and the minimap folding below 460px
+ *          (#265 — it landed while this was being measured, which is the
+ *          creep in miniature)
+ *     290  smaller: the embed badge (#222), rail tooltips (#234), a held Z
+ *          (#233), the sheep's withdrawal badge, the overlay slot
+ *
+ * Every one is a feature somebody asked for, in core or in the canvas shell,
+ * and the largest single step is 3,373 bytes — a sixth of `JUMP`, so none of
+ * this is the eager-import accident the hard gate exists for. Accepted for
+ * that reason. The margin is 94 bytes, the round-up to the hundred every
+ * ceiling here has used: a comment's worth, not a feature's, so the next
+ * feature asks.
+ *
+ * **What it did not buy, written down so it is not forgotten:** the goal is
+ * now 13,406 bytes away, the furthest since the namespace import came out on
+ * 8 Sep. The first place to look is the Help panel — `CanvasPage` imports it
+ * statically and renders it on every visit, so the guide catalog's 1,303
+ * bytes are paid by everyone before anyone presses `?`; that is the `lazy()`
+ * shape the 6 Sep list took seventy-nine kilobytes out with.
+ *
  * The second gate only works because the queue reaches `main` now and an
  * answer covers the nights that repeat it. Before 7 Sep it would have been a
  * warning into a void.
+ *
+ * **653,500 → 658,000 the same evening, and almost all of it is a debt from
+ * earlier in the day.** Two creeps, one raise, both said out loud:
+ *
+ *   3,943  owner-only summons (#238/#269, the same afternoon), which measured
+ *          itself at 657,446 and deliberately did NOT raise the ceiling —
+ *          "it moves in the answer to the performance persona's finding, and
+ *          this is the sentence that answer can quote." Quoted, and paid: a
+ *          second unremarked creep stacked on the first is exactly the shape
+ *          this file exists to stop, and it is a worse shape than a raise.
+ *     473  granting an agent access from the UI (#272) — the grant control
+ *          under a refusal, the tray's who-panel, and the timed gate. NET,
+ *          and the two lines below are why the gross was 5,914.
+ *  −2,702  the Help panel, behind `lazy()`. Named in this file's own "what it
+ *          did not buy" three paragraphs up: `CanvasPage` imported it
+ *          statically and rendered it on every visit, so the shortcut tables
+ *          and the command registry were paid by everybody before anybody
+ *          pressed `?`. That is the whole point of writing the next place to
+ *          look down — the next feature read it and took it.
+ *  −2,739  #272's own two controls, behind the same boundary. Both are
+ *          owner-only and occasional — a grant appears under a message an
+ *          agent turned away, the who-panel when its owner opens a tray row
+ *          — but all three of their hosts (the comment popover, the Chat,
+ *          the tray) are eager, so the controls were too. Behind `lazy()`
+ *          they take `withListener`, `listenUntil`, `listenGrants` and
+ *          `readsAsTurnedAway` with them, since no eager reader wants those:
+ *          two chunks of 1,804 and 1,589 bytes, fetched by the people who
+ *          actually grant something. What stays eager is what a first visit
+ *          genuinely reads — the words on a tray row and under a comment.
+ *
+ * 657,916 measured, and the margin is 84 bytes. The goal is 17,916 away,
+ * and the shape is the one worth copying rather than the number: a feature
+ * that measured 5,914 bytes cost 473, because the parts of it a first visit
+ * never reaches were put where a first visit does not go.
+ *
+ * **658,000 → 660,100 on 12 Sep, for a whole module's registry weight.**
+ * Modules phase 5 added `@isocan/sandbox` — a program that lives on the
+ * canvas as a file and runs fenced on the machine that typed the verb. The
+ * margin was 84 bytes, so it could not have been anything but a raise; this
+ * is the sentence, written with the feature rather than left for the fourth
+ * night of a persona finding, which is the mistake the paragraph above this
+ * one is an apology for.
+ *
+ * Measured: **660,000**, up 2,084. All of it is the module's CORE record,
+ * because that is the half of a module a first visit registers:
+ *
+ *   ~900  the `/run` command's body, which is the skill an agent reads in
+ *         the composer's menu — the one place a browser-side agent learns
+ *         that running a canvas's program spends its own machine, and that
+ *         a refused fence is not to be worked around. The obvious trim, and
+ *         refused: the CLI surface has `--agent-help` to say this and the
+ *         web has only the body.
+ *   ~700  the record, the context row and the page route's wiring
+ *   ~480  the lazy boundary and the module's entry in the shell's list
+ *
+ * **What it did not cost, which is the part worth copying.** The page
+ * component is behind `lazy()`, so the list, the dates and the links are a
+ * chunk nobody fetches until they open Sandboxes. And the whole terminal
+ * half — the argv split, the transcript writer, the fence request — is
+ * `cli.ts`, which the web never imports.
+ *
+ * The one measurement worth writing down because it was wrong: the CLI-only
+ * readers in `core.ts` (`argvOf`, `transcriptOf`, `statusLine`) were split
+ * into a `run.ts` on the theory they were riding into the entry chunk on the
+ * web half's eager import of the record. Measured, the split changed the
+ * chunk's content hash not at all — vite had already shaken them out, since
+ * nothing in `web.tsx` or `page.tsx` names them. The split was reverted.
+ * **A barrel a module imports eagerly is not automatically a cost**; the
+ * cost is what something eager actually references, and the way to know is
+ * to grep the built chunk for a string only that code has.
+ * **660,100 → 661,500 the same day, for seen-marks (#147, #134)** — and it
+ * stacks on the raise above rather than replacing it, because the two landed
+ * within an hour of each other on separate branches. The arithmetic, both
+ * ends measured on one machine so the delta is a subtraction and not a
+ * comparison of two people's laptops: **660,076 on `main` at `4b62212a`,
+ * 661,329 with this branch rebased onto it.**
+ *
+ *   1,367  gross: `lib/seen.ts` (the mark cache, `loadSeen`, `noteVisit`),
+ *          `fetchSeen`/`putSeen` in `lib/api.ts`, the route spellings out of
+ *          core, the visit effect on `CanvasPage`, and the switcher's
+ *          "lately" merge
+ *    −114  `latelyIds` and core's `latelyOrder` moved to `lib/lately.ts`,
+ *          which only `CommandPalette` imports — and the palette is already
+ *          behind `lazy()`. Small, and the right shape: the merge is read
+ *          when somebody opens ⌘O, not when a canvas loads.
+ *   1,253  NET
+ *
+ * **What is left is genuinely eager, and this is the sentence for it.**
+ * Opening a canvas IS the act that writes the mark, so the write cannot be
+ * deferred behind a boundary without either delaying it or paying a second
+ * chunk fetch on every canvas open — which is worse for the person than a
+ * kilobyte. The `arrow.ts` lesson three paragraphs up is why the split that
+ * WAS available was taken first rather than the ceiling being raised for the
+ * gross.
+ *
+ * 661,329 measured, rounded to 661,500 so the margin is 171 bytes — a
+ * comment's worth and not a feature's, which is the whole point of the
+ * round-up: the next feature asks. The goal is 21,329 away, and the first
+ * place to look is still a `lazy()` boundary rather than a smaller feature.
+ *
+ * **The delta survived a rebase unchanged, which is the check worth naming.**
+ * This branch measured 1,253 bytes against `657,915` before modules phase 5
+ * landed, and 1,253 against `660,076` after. A feature whose cost moves when
+ * somebody else's lands is a feature sharing code with it by accident; this
+ * one does not, and re-measuring both ends after the rebase is how you know
+ * rather than assume. (This machine also reads ~76 bytes above the one that
+ * wrote 660,000 above, which is why the number here comes from subtracting
+ * two readings taken on the SAME machine.)
+ *
+ * Two late movements, both worth naming because they pull opposite ways. **+32
+ * for lessons.md #54's fix** — the mark's write sequenced after its read so
+ * the two cannot race the claim recovery; a bug a real browser found and three
+ * green test files did not, paid for in a sentence of bytes. **−44 for
+ * deleting `hasNew` from core**, an export whose only caller was its own test:
+ * the clock-free "has anything happened" comparison belongs to #147 step 3's
+ * panel, and a function shipped ahead of its caller is bytes every first visit
+ * downloads to reach nothing.
+ *
+ * **661,500 → 702,400 on 12 Sep, after measuring both canvas-group phases.**
+ * The jump stopped the suite and prompted a dependency investigation before
+ * this number moved. Same-machine Vite builds, kept in memory so the active
+ * browser walkthrough's dist stayed untouched, separated three costs:
+ *
+ *   6,192  already above the agreed ceiling before groups: the phase-1 parent
+ *          69211254 builds to 667,692 bytes, including intervening operator work
+ *  23,617  phase 1's shared group reducer, geometry, structural validation and
+ *          protocol: dec07903 builds to 691,309 bytes
+ *  10,712  phase 2's membership/navigation surfaces and helpers, after the
+ *          menu deferral below: the measured entry is 702,021 bytes
+ *
+ * No new third-party module entered the entry chunk. The large core step is
+ * shared synchronous behavior: queued public intents need the same resolver
+ * for optimistic rendering that the writer uses, and replay must validate the
+ * canonical effects. Removing that dependency would change offline recovery
+ * and optimism, not merely postpone an unused page. That measured cost was
+ * accepted explicitly after the investigation, rather than hidden by a test
+ * skip or a larger JUMP.
+ *
+ * **What was avoidable was deferred first.** Toolbar eagerly imported every
+ * group-menu row for a button whose handler runs only on click. It now loads
+ * those rows on that click, matching the existing lazy item-menu boundary.
+ * Building the same captured source tree with that import eager and lazy
+ * measured 703,746 → 702,021: **1,725 bytes removed from first paint**, with a
+ * 2,090-byte menu chunk fetched on demand. The group dialog was already lazy.
+ *
+ * The final keyboard walkthrough added 328 bytes to focus a submenu after
+ * React commits its contents; focusing before commit left keyboard navigation
+ * behind the visible menu. The conductor's fresh entry is 702,349 bytes.
+ * This final fix is separate from the captured 1,725-byte deferral comparison
+ * above, and makes phase 2's net contribution 11,040 bytes.
+ *
+ * Rounded to the next hundred, the margin is 51 bytes. GOAL remains 640,000;
+ * JUMP remains 20,000. The next change still has to account for its own bytes.
+ *
+ * **702,400 → 719,900 on 12 Sep, after measuring and trimming group phase 3.**
+ * Captured source initially added 24,374 bytes, chiefly the v2 bounded effects,
+ * shared placement/replay, and gesture previews. No new third-party eager
+ * dependency was added. The same-source comparison deferred AddPopover until
+ * Add opens and content fitting until Shift+F: together they removed 11,474
+ * entry bytes. Final nudge timer ownership and cross-canvas upload correctness
+ * add 683 bytes to the preceding 718,468-byte build. Final queue ownership,
+ * preview and idle-clock gates add 724 more. The conductor's fresh
+ * 719,875-byte entry is a net 17,526 over phase 2. This explicitly reviewed
+ * cost leaves 25 bytes of margin; GOAL 640,000 and JUMP 20,000 stay unchanged.
+ *
+ * **719,900 → 721,200 on 13 Sep, after measuring the upstream operator merge.**
+ * The original phase-3 entry was 719,875 bytes. Upstream refusal handling added
+ * 5,367 and preserving terminal decisions during delayed writes added 125.
+ * Moving the shared REFUSED constant to the eager errors leaf, while keeping
+ * its public re-export, deferred the operator's CIDR and refusal helpers and
+ * removed 4,195 entry bytes. The measured result is 721,172: a net 1,297 over
+ * the original build, with no new eager dependency. The approved ceiling has
+ * 28 bytes of margin; GOAL 640,000 and JUMP 20,000 remain unchanged.
+ *
+ * **721,200 → 734,200 on 13 Sep, for canvas groups phase 4 after deferral.**
+ * The fresh production entry is 734,159 bytes, a net 12,987 over 721,172.
+ * Lazy context and Trash panels, plus separating writer-only context
+ * resolution from shared validation, removed 11,339 bytes from the initial
+ * 745,498-byte entry. The remaining cost serves synchronous context validation
+ * and ambient membership, atomic copy resolution, and operation-owned form
+ * completion. No new eager dependency was added. The reviewed ceiling leaves
+ * 41 bytes of margin; GOAL 640,000 and JUMP 20,000 remain unchanged.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 637_400;
+export const CEILING = 734_200;
+
+/**
+ * **Run as a program it prints that number**, so the performance persona's
+ * `against:` can name it (`.agents/personas/performance.md`) and every nightly
+ * finding can say which ceiling it is 0-past.
+ *
+ * A command rather than a copy: the debt goal's bound is 0 by construction, so
+ * the only thing that distinguishes one night's overshoot from another's is
+ * the number it was measured against, and a second spelling of that number
+ * anywhere is the drift `docs/reviews/lessons.md` #5 is about. This file owns
+ * it; this is the file saying it out loud.
+ */
+if (process.argv[1] && process.argv[1].endsWith("bundle-ceiling.mjs")) {
+  console.log(CEILING);
+}
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

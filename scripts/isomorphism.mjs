@@ -38,16 +38,55 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const argv = process.argv.slice(2);
 const JSON_OUT = argv.includes("--json");
 const CHECK = argv.includes("--check");
 
+/**
+ * **The members of `export type Operation`, and of nothing else in the file.**
+ *
+ * One `type` string per member, in declaration order — `null` for a member
+ * with no string `type`, which the reducer could not dispatch and which is
+ * therefore worth seeing rather than skipping.
+ *
+ * Read with TypeScript's own parser, because both text readings this replaced
+ * were fooled by the same file. `op-types` counted every line shaped like
+ * `  | {`, and on 9 Sep 2026 `c8213d70` reformatted `Placement` — a type an
+ * operation *carries*, not an operation — into a multi-line union whose first
+ * member opens with exactly that line. The vocabulary read 35 for two nights
+ * while `Operation` held 33, and the architect filed "operations in the
+ * vocabulary is 35, past 33" against a change that added no operation. The
+ * other reading, `type: "x.y"` anywhere in `ops.ts`, would count a nested
+ * object's `type` the same way. A reading of the declaration cannot confuse
+ * the declaration with its neighbours, and a formatter cannot move it.
+ *
+ * Throws when there is no such declaration: a vocabulary of zero is a broken
+ * instrument, and an instrument that reads healthy while broken is the one
+ * shape `measure.mjs` exists to refuse.
+ */
+export function operationMembers(src) {
+  const file = ts.createSourceFile("ops.ts", src, ts.ScriptTarget.Latest, true);
+  const decl = file.statements.find(
+    (s) => ts.isTypeAliasDeclaration(s) && s.name.text === "Operation",
+  );
+  if (!decl) throw new Error("no `type Operation` in the source — the vocabulary moved, and this reading did not");
+  const members = ts.isUnionTypeNode(decl.type) ? decl.type.types : [decl.type];
+  return members.map((member) => {
+    if (!ts.isTypeLiteralNode(member)) return null;
+    const tag = member.members.find(
+      (m) => ts.isPropertySignature(m) && m.name && ts.isIdentifier(m.name) && m.name.text === "type",
+    );
+    const lit = tag?.type && ts.isLiteralTypeNode(tag.type) ? tag.type.literal : null;
+    return lit && ts.isStringLiteral(lit) ? lit.text : null;
+  });
+}
+
 /** The vocabulary, from the one place it is declared. */
 export function operations(file = path.join(repo, "packages/core/src/ops.ts")) {
-  const src = readFileSync(file, "utf8");
-  return [...new Set([...src.matchAll(/type:\s*"([a-z]+\.[a-zA-Z]+)"/g)].map((m) => m[1]))].sort();
+  return [...new Set(operationMembers(readFileSync(file, "utf8")).filter((t) => t !== null))].sort();
 }
 
 /** Every operation name mentioned anywhere under a surface's own source. */

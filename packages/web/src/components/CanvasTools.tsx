@@ -1,11 +1,14 @@
-import { useRef, useState, type ReactNode } from "react";
+import "./touch-controls.css";
+import { selectCreatedItems } from "../lib/groupplacement.ts";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { addFailure, addFiles } from "../lib/upload.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
-import { AddPopover } from "./AddPopover.tsx";
+// Address search and remote-document import are needed only after Add opens.
+const AddPopover = lazy(() => import("./AddPopover.tsx").then((module) => ({ default: module.AddPopover })));
 import { hideMenu, showMenu, useChromeHidden } from "../lib/chromemenu.tsx";
 import { openContextMenu } from "./ContextMenu.tsx";
 import { textToolMenu } from "../lib/textmenu.ts";
@@ -37,8 +40,18 @@ import { postToMain } from "../lib/mainthread.ts";
 interface ToolDef {
   tool: Tool;
   label: string;
+  /** The tip's first line: the name and its key. */
   hint: string;
+  /** The tip's second line, when the key alone does not say how the tool
+   *  behaves — a hold, a latch, where the ink goes. */
+  more?: string;
   icon: ReactNode;
+}
+
+/** One string for `data-tip`: the CSS draws it `pre-line`, so a newline is a
+ *  line, and a tip with nothing more to say stays one line. */
+function tipText(hint: string, more?: string): string {
+  return more ? `${hint}\n${more}` : hint;
 }
 
 const CURSOR = (
@@ -125,16 +138,24 @@ const TEXT = (
 
 const TOOLS: ToolDef[] = [
   { tool: "select", label: "Select", hint: "Select — V", icon: CURSOR },
-  { tool: "hand", label: "Hand", hint: "Hand — H (or hold Space)", icon: HAND },
-  { tool: "zoom", label: "Zoom", hint: "Zoom — Z (tap to latch, hold to zoom a region)", icon: ZOOM },
-  { tool: "pen", label: "Pen", hint: "Pen — P (draw in your color; ink lands as an item a moment after you lift)", icon: PEN },
-  { tool: "text", label: "Text", hint: "Text — T (click the canvas and type)", icon: TEXT },
+  { tool: "hand", label: "Hand", hint: "Hand — H", more: "or hold Space", icon: HAND },
+  { tool: "zoom", label: "Zoom", hint: "Zoom — Z", more: "tap to latch, hold to zoom a region", icon: ZOOM },
+  {
+    tool: "pen",
+    label: "Pen",
+    hint: "Pen — P",
+    more: "draw in your color; ink lands as an item a moment after you lift",
+    icon: PEN,
+  },
+  { tool: "text", label: "Text", hint: "Text — T", more: "click the canvas and type", icon: TEXT },
   { tool: "comment", label: "Comment", hint: "Comment — C", icon: COMMENT },
 ];
 
 export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const [more, setMore] = useState(false);
   const colors = useActorColors();
   const activeTool = useUiStore((s) => s.activeTool);
+  const adding = useUiStore((s) => s.adding);
   const setActiveTool = useUiStore((s) => s.setActiveTool);
   const inkColor = useUiStore((s) => s.inkColor);
   const marksOpen = useUiStore((s) => s.marksOpen);
@@ -149,6 +170,12 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       : false;
   });
   const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // Keep native file picking independent of the address popover's download.
+    if (adding !== "file") return;
+    fileInput.current?.click();
+    useUiStore.getState().setAdding(null);
+  }, [adding]);
   const mine = actorColorIn(colors, actor.id);
   const ink = inkColor ?? mine;
 
@@ -177,8 +204,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       setNotice(notice);
       return landed;
     });
-    if (ids.length > 0) {
-      useUiStore.getState().setSelection(ids);
+    if (ids.length > 0 && selectCreatedItems(canvasId, ids)) {
       const canvas = useCanvasStore.getState().canvas;
       const landed = canvas ? ids.map((id) => canvas.items[id]).filter(Boolean) : [];
       revealIfOffscreen(
@@ -192,7 +218,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
 
   return (
     <div
-      className="tool-rail"
+      className={`tool-rail${more ? " tools-expanded" : ""}`}
       role="toolbar"
       aria-label="Canvas tools"
       aria-orientation="vertical"
@@ -201,10 +227,18 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       onContextMenu={(e) => showMenu(e, "the rail")}
     >
       {TOOLS.map((t) => (
-        <div key={t.tool} className="tool-slot">
+        <div key={t.tool} className="tool-slot" data-tool={t.tool}>
           <button
             className={`tool-btn${activeTool === t.tool ? " active" : ""}`}
-            title={t.hint}
+            /* Drawn beside the button (`.tool-btn[data-tip]` in styles.css)
+               rather than handed to `title`: the native tip waits about a
+               second, lands at the pointer, and covers the buttons below the
+               one it names. `aria-label` still carries the name for anyone
+               not hovering.
+
+               No tip while the ink well is open beside the Pen: it would land
+               on the very thing the button opened. */
+            data-tip={t.tool === "pen" && activeTool === "pen" ? undefined : tipText(t.hint, t.more)}
             aria-label={t.label}
             aria-pressed={activeTool === t.tool}
             onClick={() => setActiveTool(t.tool)}
@@ -251,10 +285,11 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           )}
         </div>
       ))}
+      <button className="tool-btn tool-more" data-tip="More tools" aria-label="More tools" aria-expanded={more} onClick={() => setMore(!more)}>⋯</button>
       <div className="tool-sep" />
       <button
         className={`tool-btn${marksOpen ? " active" : ""}`}
-        title={hasMarks ? "Reactions — the canvas by its marks" : "Reactions — nothing marked yet"}
+        data-tip={hasMarks ? "Reactions — the canvas by its marks" : "Reactions — nothing marked yet"}
         aria-label="Reactions"
         aria-pressed={marksOpen}
         onClick={() => openReactionBar(canvasId, !marksOpen)}
@@ -269,7 +304,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       {!historyHidden && (
         <button
           className={`tool-btn${historyOpen ? " active" : ""}`}
-          title="History — the canvas as it was"
+          data-tip="History — the canvas as it was"
           aria-label="History"
           aria-pressed={historyOpen}
           onClick={() => onHistory(!historyOpen)}
@@ -294,7 +329,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
         <button
           key={t.itemId}
           className="tool-btn tool-ext"
-          title={toolHint(t)}
+          data-tip={toolHint(t)}
           aria-label={t.tool ? t.tool.label : `${t.title} — unavailable`}
           disabled={!t.tool}
           onClick={() => {
@@ -312,7 +347,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           here — files, a site, a Google Doc, a canvas. It was three buttons
           and a hidden fourth; the popover reads what it is given and says
           what it would do, so one field is enough. See AddPopover. */}
-      <AddPopover canvasId={canvasId} actor={actor} onFiles={() => fileInput.current?.click()} />
+      {adding && adding !== "file" && <Suspense fallback={null}><AddPopover canvasId={canvasId} actor={actor} onFiles={() => fileInput.current?.click()} /></Suspense>}
       <input
         ref={fileInput}
         type="file"
@@ -324,4 +359,3 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
     </div>
   );
 }
-

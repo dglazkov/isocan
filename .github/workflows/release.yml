@@ -41,7 +41,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Run 34774118776 passed tests and typecheck, then hit 15m during metric
+    # selftests. Keep room for the full gate and publish, with PR's 20m budget.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:

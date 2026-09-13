@@ -150,6 +150,8 @@ export function itemKind(item: Item): ItemKind {
  * the moment either grows a transition.
  */
 export function isFramedItem(item: Item): boolean {
+  const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
+  if (current?.visual && current.visual.mimeType === "text/html") return true;
   const kind = itemKind(item);
   return kind === "screen" || kind === "site";
 }

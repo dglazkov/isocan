@@ -58,6 +58,7 @@ rather than queued here:
   already puts somebody else's agent on somebody else's laptop. `--pin` and
   `off` are the recovery paths; the boundary itself is still on the
   Deliberately-open list, where it should be read before the day it matters.
+  *Still open on 11 Sep 2026 — Dion is still weighing it.*
 
 This project is not gated on the multiuser project, and nothing there is gated
 on this. Multiuser phase 14 closed with next steps being a choice, not a

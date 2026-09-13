@@ -1,3 +1,4 @@
+import type { TextAttention } from "@isocan/core";
 import { create } from "zustand";
 import type {
   Actor,
@@ -14,19 +15,32 @@ import type {
   ActorJoins,
   ActorNames,
   SlashCommand,
+  TakedownNotice,
+  BadgeEnd,
+  RefusalNotice,
 } from "@isocan/core";
 import {
+  CANVAS_GROUPS_FEATURE,
+  CANVAS_GROUPS_REQUIRED,
+  CLIENT_FEATURES_PARAM,
   applyOperation,
   newOpId,
   WS_BEHIND,
   WS_NO_BADGE,
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
+  WS_STALE_CLIENT,
   WITHDRAWN,
+  TAKEN_DOWN,
+  ENDED,
+  REFUSED,
 } from "@isocan/core";
 import {
   ApiError,
   CLIENT_ID,
+  fetchEnded,
+  fetchRefused,
+  fetchTakedown,
   getBacking,
   homeAnswered,
   knockOnDoor,
@@ -80,6 +94,8 @@ export type Connection =
    * network, a home that is down, and a tunnel.
    */
   | "offline"
+  /** The home needs a reducer newer than this tab; retries cannot upgrade it. */
+  | "upgrade-required"
   /** The canvas was deleted while this tab was on it. */
   | "gone"
   /** The door said no: a good badge, a canvas that will not have it. */
@@ -93,6 +109,38 @@ export type Connection =
    * was working a moment ago.
    */
   | "withdrawn"
+  /**
+   * **The operator of this home took the canvas down** (operator phase 2;
+   * journey 4 step 1).
+   *
+   * Its own state beside `gone` and `withdrawn`, and the two it is not are the
+   * whole reason it exists. It is not `gone`: nothing was deleted, this tab's
+   * replica is NOT forgotten, and a lift brings the canvas back exactly as it
+   * was. It is not `withdrawn`: nobody removed this person, and telling them
+   * their access was withdrawn would send them to an owner who did nothing.
+   * *It does not say* not found*, and it does not say* your access was
+   * withdrawn*, because neither is what happened.*
+   *
+   * The sentence is the HOME's and arrives with it — see `takenDown` below.
+   */
+  | "taken-down"
+  /**
+   * **This badge was ended** (operator phase 4; journey 7 step 3: *Sam's open
+   * tab closes with a sentence naming the operator and the address to write
+   * to*). Its own state beside `withdrawn`, because nobody removed this
+   * person from a canvas — the surface itself was ended, everywhere at once,
+   * by its own holder from another surface or by the operator of the home.
+   * The sentence is the HOME's and is read off the 401 — see `ended` below.
+   */
+  | "ended"
+  /**
+   * **This badge proved an address the operator refuses** (operator phase 6;
+   * journey 9 step 2). Its own state beside `refused` (a link that is off) and
+   * `ended` (a surface that was ended): the badge is fine and was never
+   * inside, but this home will not admit the address it proved. The sentence
+   * is the HOME's and is read off the 403 — see `refused` below.
+   */
+  | "refused-here"
   /** There is no canvas at this address here. */
   | "absent";
 
@@ -145,6 +193,26 @@ interface CanvasStore {
   notice: string | null;
   lastSeq: number;
   connection: Connection;
+  /**
+   * **The home's own sentence about a canvas it took down** (operator phase
+   * 2), fetched when the refusal arrives and null at every other moment.
+   *
+   * From the home rather than composed here, and that is deliberate: the date,
+   * the reason category and the address to write to are facts about an act
+   * this tab did not witness, and a bundle from last month rendering its own
+   * version of them would be a second sentence to drift. The close frame
+   * carries only the word — a WebSocket close reason is capped at 123 bytes
+   * and throws rather than truncating — so the sentence is asked for.
+   */
+  takenDown: TakedownNotice | null;
+  /** The tombstone's notice, when this badge was ended (operator phase 4) —
+   * the date, and for an end by the operator the reason and the address. */
+  ended: BadgeEnd | null;
+  /** The refusal's notice, when this badge proved an address this home refuses
+   * (operator phase 6) — the home's sentence, off the 403, so the door reads
+   * *This home will not admit …* rather than the bare *will not have you*.
+   * Named apart from the refused-writes queue above. */
+  refusedHere: RefusalNotice | null;
   /** Remote presence sessions (own tab filtered out). Ephemeral plane. */
   sessions: PresenceSession[];
   /** Chosen identity colors (actor id → hex), from the daemon's actor
@@ -203,6 +271,9 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   notice: null,
   lastSeq: 0,
   connection: "connecting",
+  takenDown: null,
+  ended: null,
+  refusedHere: null,
   sessions: [],
   actorColors: {},
   actorNames: {},
@@ -223,8 +294,10 @@ export const useCanvasStore = create<CanvasStore>(() => ({
  * one place where "the truth advanced" and "the view was rebuilt" happen
  * together, and no path that can do one without the other.
  */
-function confirm(state: CanvasState, lastSeq: number): void {
-  const queue = retire(useCanvasStore.getState().queue, lastSeq);
+function confirm(state: CanvasState, lastSeq: number, observed?: OpEnvelope): void {
+  // An ordered echo proves this write landed even if its HTTP receipt has
+  // not supplied a seq yet. Never fold its public intent over its own effect.
+  const queue = retire(useCanvasStore.getState().queue, lastSeq).filter((write) => write.opId !== observed?.id);
   const view = foldQueue(state, queue);
   useCanvasStore.setState({
     confirmed: state,
@@ -234,6 +307,19 @@ function confirm(state: CanvasState, lastSeq: number): void {
     canvas: view?.canvas ?? state.canvas,
   });
   persist();
+  if (observed) settleWrite(state.project.id, observed.id, { status: "accepted", envelope: observed });
+}
+
+type WriteOutcome = { status: "accepted" | "refused"; message?: string; code?: string; envelope?: OpEnvelope };
+type WriteReceipt = { status: "accepted" | "refused" | "queued"; message?: string; code?: string; envelope?: OpEnvelope; completion?: Promise<WriteOutcome> };
+// Only live requests are retained. An exact authoritative receipt resolves the
+// waiter and removes it; queue disappearance alone never means acceptance.
+const writeWaiters = new Map<string, (outcome: WriteOutcome) => void>();
+function settleWrite(canvasId: string, opId: string, outcome: WriteOutcome): void {
+  const key = `${canvasId}:${opId}`;
+  const resolve = writeWaiters.get(key);
+  writeWaiters.delete(key);
+  resolve?.(outcome);
 }
 
 /** Re-fold the queue over the confirmed state — after a write is queued,
@@ -250,24 +336,28 @@ function render(): void {
 
 /** Write the replica down. Immediate when there is work in the queue: a
  * queued op is the only copy of a person's gesture in the world. */
-function persist(): void {
-  const { canvasId, confirmed, lastSeq, queue } = useCanvasStore.getState();
+function persist(immediate = false): void {
+  const { canvasId, confirmed, lastSeq, queue, refused } = useCanvasStore.getState();
   if (!canvasId || !confirmed) return;
   const record: StoredReplica = {
     canvasId,
     project: confirmed.project,
     canvas: confirmed.canvas,
     lastSeq,
-    queue: queue.map(({ opId, actor, op, at, seq }) => ({
+    migrationRefusals: refused.filter((write) => write.code === "migration-boundary" && write.op),
+    queue: queue.map(({ opId, actor, op, at, seq, group, accepted, originGroupMode }) => ({
       opId,
       actor,
       op,
       at,
       ...(seq !== undefined ? { seq } : {}),
+      ...(group !== undefined ? { group } : {}),
+      ...(accepted ? { accepted } : {}),
+      ...(originGroupMode ? { originGroupMode } : {}),
     })),
     savedAt: new Date().toISOString(),
   };
-  saveReplica(record, queue.length > 0);
+  saveReplica(record, immediate || queue.length > 0 || Boolean(record.migrationRefusals?.length));
 }
 
 /**
@@ -283,18 +373,43 @@ export function queueOfflineWrite(
   actor: Actor,
   op: Operation,
   opId: string,
+  originGroupMode?: "legacy" | "groups",
+  upgradeRequired = false,
 ): boolean {
   const { canvasId: open, confirmed, queue } = useCanvasStore.getState();
   if (!queueable(canvasId, open) || !confirmed) return false;
   useCanvasStore.setState({
-    queue: [...queue, newWrite(opId, actor, op)],
+    queue: [...queue, newWrite(opId, actor, op, undefined, originGroupMode)],
     // The socket may still think it is alive — a POST discovers the truth
     // first, because it is the thing that actually asked.
-    connection: "offline",
+    connection: afterQueueFailure(useCanvasStore.getState().connection),
   });
   render();
   persist();
+  if (upgradeRequired) requireClientUpgrade(canvasId!);
   return true;
+}
+
+function requireClientUpgrade(canvasId: string): void {
+  if (useCanvasStore.getState().canvasId !== canvasId) return;
+  stopWatchdog();
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  const doomed = socket;
+  socket = null;
+  doomed?.close();
+  useCanvasStore.setState({ connection: "upgrade-required" });
+}
+
+/** Direct API sends capture this before awaiting transport, not after a failure. */
+export function queuedWriteOrigin(canvasId: string | null): "legacy" | "groups" | undefined {
+  const state = useCanvasStore.getState();
+  return canvasId && state.canvasId === canvasId && state.confirmed?.project.id === canvasId ? state.confirmed.project.groupMode ?? "legacy" : undefined;
+}
+
+/** A delayed POST cannot replace the home's terminal refusal with a network status. */
+function afterQueueFailure(connection: Connection): Connection {
+  return connection === "connecting" || connection === "live" || connection === "reconnecting" ? "offline" : connection;
 }
 
 /**
@@ -339,19 +454,35 @@ async function drainQueue(): Promise<boolean> {
     if (!canvasId) return true;
     const next = pendingWrites(queue)[0];
     if (!next) return true;
+    if (!next.originGroupMode && useCanvasStore.getState().confirmed?.project.groupMigration) {
+      refuse(next, new ApiError(409, "This queued change has no recorded originating canvas mode. Review it after conversion and make a new change explicitly.", "migration-boundary"));
+      continue;
+    }
     try {
-      const answer = await postOp(canvasId, next.actor, next.op, next.opId, next.group);
+      const answer = await postOp(canvasId, next.actor, next.op, next.opId, next.group, next.originGroupMode);
+      settleWrite(canvasId, next.opId, { status: "accepted", envelope: answer.envelope });
+      // Navigation shares this flush promise. Ignore the old canvas's answer
+      // and drain the current queue before its caller is allowed to dial.
+      if (useCanvasStore.getState().canvasId !== canvasId || useCanvasStore.getState().confirmed?.project.id !== canvasId) continue;
       // Not removed — marked. It retires when the tail reaches its seq, so the
       // view never rewinds between the answer and the history that carries it.
       useCanvasStore.setState({
-        queue: useCanvasStore
+        queue: retire(useCanvasStore
           .getState()
           .queue.map((write) =>
-            write.opId === next.opId ? { ...write, seq: answer.seq } : write,
-          ),
+            write.opId === next.opId ? { ...write, seq: answer.seq, accepted: answer.envelope } : write,
+          ), useCanvasStore.getState().lastSeq),
       });
+      render();
       persist();
     } catch (err) {
+      if (err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED) {
+        if (useCanvasStore.getState().canvasId !== canvasId) continue;
+        requireClientUpgrade(canvasId);
+        return false;
+      }
+      if (err instanceof ApiError && homeAnswered(err)) settleWrite(canvasId, next.opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
+      if (useCanvasStore.getState().canvasId !== canvasId || useCanvasStore.getState().confirmed?.project.id !== canvasId) continue;
       if (!(err instanceof ApiError)) return false; // the home never answered
       refuse(next, err);
     }
@@ -360,6 +491,8 @@ async function drainQueue(): Promise<boolean> {
 
 /** The home said no to something a person already saw happen. */
 function refuse(write: QueuedWrite, err: ApiError): void {
+  const canvasId = useCanvasStore.getState().canvasId;
+  if (canvasId) settleWrite(canvasId, write.opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
   const { queue, refused } = useCanvasStore.getState();
   useCanvasStore.setState({
     queue: queue.filter((other) => other.opId !== write.opId),
@@ -371,6 +504,7 @@ function refuse(write: QueuedWrite, err: ApiError): void {
         message: err.message,
         ...(err.code !== undefined ? { code: err.code } : {}),
         at: Date.now(),
+        ...(err.code === "migration-boundary" ? { op: write.op, ...(write.originGroupMode ? { originGroupMode: write.originGroupMode } : {}) } : {}),
       },
     ],
   });
@@ -387,6 +521,7 @@ export function unsynced(): number {
  * canvas — this only clears the notice. */
 export function dismissRefusals(): void {
   useCanvasStore.setState({ refused: [] });
+  persist(true);
 }
 
 /** Say something that could not be done, once. */
@@ -431,6 +566,8 @@ export function flashNotice(notice: string, ms = 2500): void {
 // ---- presence publishing (throttled, trailing-edge) ----
 
 let presenceActor: Actor | null = null;
+let selectedText: TextAttention | null = null;
+let selectedTextOwner: string | null = null;
 let lastCursor: { x: number; y: number } | null = null;
 let presenceTimer: ReturnType<typeof setTimeout> | null = null;
 let lastFlush = 0;
@@ -455,6 +592,15 @@ export function setPresenceActor(actor: Actor): void {
   flushPresence();
 }
 
+/** Publish saved-document attention without changing the canvas or its undo history. */
+export function publishTextSelection(selection: TextAttention | null, owner: string): void {
+  // A canvas preview leaving Read must not clear a newer stage selection.
+  if (selection === null && selectedTextOwner !== owner) return;
+  selectedTextOwner = selection === null ? null : owner;
+  selectedText = selection;
+  flushPresence();
+}
+
 export function publishSelection(): void {
   schedulePresenceFlush();
 }
@@ -475,6 +621,7 @@ function flushPresence(): void {
     actor: presenceActor,
     cursor: lastCursor,
     selection: useUiStore.getState().selectedItemIds,
+    textSelection: selectedText,
   };
   socket.send(JSON.stringify(message));
 }
@@ -506,13 +653,20 @@ function flushPresence(): void {
  * at once — folded like every other write, invisible to the unsynced count,
  * never re-posted by a flush, retired by `seq` like the rest.
  */
-export async function sendEchoed(
+export async function sendEchoed(canvasId: string, actor: Actor, op: Operation, group?: string, originGroupMode?: "legacy" | "groups"): Promise<void> {
+  await sendEchoedResult(canvasId, actor, op, group, originGroupMode);
+}
+
+/** Forms need the home’s receipt before announcing completion; ordinary gestures keep their existing void contract. */
+export async function sendEchoedResult(
   canvasId: string,
   actor: Actor,
   op: Operation,
   /** One gesture, one undo — carried so a flush re-sends the same grouping. */
   group?: string,
-): Promise<void> {
+  /** Uploads capture this before preparing bytes; a cutover cannot refresh their meaning. */
+  capturedOrigin?: "legacy" | "groups",
+): Promise<WriteReceipt> {
   /**
    * **The past does not take writes.** The scrubber is a way of looking, not a
    * branch: there is no operation that means "and from here it went
@@ -521,38 +675,69 @@ export async function sendEchoed(
    * the difference between a rule and a habit — every path that changes this
    * canvas comes through here, including the ones that have no button.
    */
-  if (useCanvasStore.getState().past) {
+  const current = useCanvasStore.getState();
+  const viewedCanvasId = current.canvasId ?? current.confirmed?.project.id;
+  if (current.past && (!viewedCanvasId || viewedCanvasId === canvasId)) {
     flashNotice("this is the canvas as it was — return to now to change it");
-    return;
+    return { status: "refused", message: "Return to now before changing this canvas." };
   }
-  const { confirmed } = useCanvasStore.getState();
-  // No confirmed state means no queue to join — nothing has been folded yet.
-  if (!confirmed) {
-    await sendOp(canvasId, actor, op, group);
-    return;
+  const { confirmed } = current;
+  const ownsCanvas = () => useCanvasStore.getState().canvasId === canvasId && useCanvasStore.getState().confirmed?.project.id === canvasId;
+  // An upload may finish after navigation. Its original canvas still owns
+  // the operation; another canvas's queue and optimistic view cannot hold it.
+  if (!confirmed || !ownsCanvas()) {
+    const answer = await sendOp(canvasId, actor, op, group, capturedOrigin);
+    return answer ? { status: "accepted", envelope: answer.envelope } : { status: "queued" };
   }
   const opId = newOpId();
-  const write: QueuedWrite = { ...newWrite(opId, actor, op, group), inflight: true };
+  const originGroupMode = capturedOrigin ?? confirmed.project.groupMode ?? "legacy";
+  let outcome: WriteOutcome | undefined;
+  const completion = new Promise<WriteOutcome>((resolve) => {
+    writeWaiters.set(`${canvasId}:${opId}`, (answer) => { outcome = answer; resolve(answer); });
+  });
+  const write: QueuedWrite = { ...newWrite(opId, actor, op, group, originGroupMode), inflight: true };
   useCanvasStore.setState({ queue: [...useCanvasStore.getState().queue, write] });
   render();
   persist();
   try {
-    const answer = await postOp(canvasId, actor, op, opId, group);
+    const answer = await postOp(canvasId, actor, op, opId, group, originGroupMode);
+    settleWrite(canvasId, opId, { status: "accepted", envelope: answer.envelope });
+    if (!ownsCanvas()) return { status: "accepted", envelope: answer.envelope };
     // Marked, not removed — it retires when the tail reaches its seq, so the
     // view never rewinds between the answer and the history that carries it.
     useCanvasStore.setState({
-      queue: useCanvasStore
+      queue: retire(useCanvasStore
         .getState()
-        .queue.map((other) => (other.opId === opId ? { ...other, seq: answer.seq } : other)),
+        .queue.map((other) => (other.opId === opId ? { ...other, seq: answer.seq, accepted: answer.envelope } : other)), useCanvasStore.getState().lastSeq),
     });
+    render();
     persist();
+    return { status: "accepted", envelope: answer.envelope };
   } catch (err) {
+    // An ordered echo can beat a failed HTTP response. It already proves
+    // acceptance, including the writer's canonical operation.
+    if (outcome) return outcome;
+    if (err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED) {
+      if (ownsCanvas()) {
+        useCanvasStore.setState({ queue: useCanvasStore.getState().queue.map((other) => other.opId === opId ? { ...other, inflight: false } : other) });
+        requireClientUpgrade(canvasId);
+        persist();
+      }
+      return { status: "queued", completion };
+    }
+    if (err instanceof ApiError && homeAnswered(err)) settleWrite(canvasId, opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
+    if (!ownsCanvas()) {
+      if (err instanceof ApiError && homeAnswered(err)) return { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) };
+      // The original queue was persisted before navigation. Its stable opId
+      // can retry there; never mark the newly opened canvas offline for it.
+      return { status: "queued", completion };
+    }
     if (err instanceof ApiError && homeAnswered(err)) {
       // The home said no to something the person already saw happen.
       refuse(write, err);
       render();
       persist();
-      return;
+      return { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) };
     }
     // The home never answered. It stops being in-flight and starts being
     // work this tab is holding — which is the moment "not synced" is true.
@@ -560,10 +745,11 @@ export async function sendEchoed(
       queue: useCanvasStore
         .getState()
         .queue.map((other) => (other.opId === opId ? { ...other, inflight: false } : other)),
-      connection: "offline",
+      connection: afterQueueFailure(useCanvasStore.getState().connection),
     });
     render();
     persist();
+    return { status: "queued", completion };
   }
 }
 
@@ -666,6 +852,12 @@ export function connectToCanvas(canvasId: string, actor: Actor | null): void {
     notice: null,
     lastSeq: 0,
     connection: "connecting",
+    // A takedown belongs to the canvas it happened to (operator phase 2);
+    // carrying one across would tell a person a canvas they just opened had
+    // been taken down.
+    takenDown: null,
+    ended: null,
+    refusedHere: null,
     sessions: [],
     // Edit until THIS canvas's hello says otherwise: the flag is per
     // admission, and carrying a previous canvas's "view" across would dress
@@ -695,11 +887,12 @@ async function restoreThenOpen(canvasId: string): Promise<void> {
     // `adopt`: a stored write cannot still be this tab's in-flight post — the
     // tab that posted it is gone. They become ordinary pending work and go up
     // again, which the idempotency key makes free if they already landed.
-    const queue = adopt(stored.queue as QueuedWrite[]);
+    const queue = adopt(stored.queue as QueuedWrite[]).map((write) => write.originGroupMode || stored.project.groupMigration ? write : { ...write, originGroupMode: stored.project.groupMode ?? "legacy" as const });
     const view = foldQueue(confirmed, queue);
     useCanvasStore.setState({
       confirmed,
       queue,
+      refused: (stored.migrationRefusals ?? []).filter((write) => write.code === "migration-boundary" && write.op),
       lastSeq: stored.lastSeq,
       project: view?.project ?? confirmed.project,
       canvas: view?.canvas ?? confirmed.canvas,
@@ -726,6 +919,8 @@ export function leavePast(): void {
 }
 
 export function disconnect(): void {
+  selectedText = null;
+  selectedTextOwner = null;
   currentProjectId = null;
   stopWatchdog();
   if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -759,7 +954,7 @@ function wsUrl(canvasId: string, since: number): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   // `since=0` is "no cursor" on the wire and the daemon reads it as such, so
   // a fresh connect says the same thing whether it says it or stays silent.
-  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}`;
+  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`;
 }
 
 /**
@@ -944,9 +1139,10 @@ const OFFLINE_AFTER_FAILED_DIALS = 2;
  * and try the whole gesture again after the backoff.
  */
 async function open(canvasId: string): Promise<void> {
-  if (currentProjectId !== canvasId || socket) return;
+  if (currentProjectId !== canvasId || socket || useCanvasStore.getState().connection === "upgrade-required") return;
   if (!(await flushQueue())) {
     if (currentProjectId !== canvasId) return;
+    if (useCanvasStore.getState().connection === "upgrade-required") return;
     useCanvasStore.setState({ connection: "offline" });
     return retryLater(canvasId);
   }
@@ -1111,7 +1307,7 @@ function openSocket(canvasId: string): void {
         return;
       }
       if (next === null) return; // project.delete arrives as canvas-deleted too
-      confirm(next, message.entry.seq);
+      confirm(next, message.entry.seq, message.entry.envelope);
       if (message.entry.seq > replayThrough) announceComment(message.entry.envelope);
     } else if (message.type === "standing") {
       // This connection's rung moved under it (roles journey 2 step 1): the
@@ -1130,6 +1326,10 @@ function openSocket(canvasId: string): void {
   ws.onclose = (event) => {
     if (stale()) return; // superseded or deliberately disconnected
     socket = null;
+    if (event.code === WS_STALE_CLIENT) {
+      requireClientUpgrade(canvasId);
+      return;
+    }
     // "Reconnecting" is what a blip is; "offline" is what a tab that has work
     // to keep is. The queue decides, not `navigator.onLine` — which is true
     // behind a captive portal and true when the home itself is down, and this
@@ -1158,9 +1358,77 @@ function openSocket(canvasId: string): void {
             : // The reason is the one word that says this badge was inside
               // and was put out, and it earns the other sentence.
               event.reason === WITHDRAWN
-              ? "withdrawn"
-              : "refused",
+                ? "withdrawn"
+                : // **And the one that says the HOME stopped serving it**
+                  // (operator phase 2). Note what is NOT done here: the
+                  // replica is not forgotten. `canvas-deleted` above calls
+                  // `forgetReplica`, because a delete means *forget your
+                  // copy*; a takedown means *this home has stopped serving
+                  // it*, and erasing the tab's replica on one would be the
+                  // operator reaching into somebody's browser.
+                  event.reason === TAKEN_DOWN
+                  ? "taken-down"
+                  : // **And the one that says THIS BADGE was ended** (operator
+                    // phase 4). Not `withdrawn`: nobody removed this person
+                    // from a canvas. The sentence is asked for below.
+                    event.reason === ENDED
+                    ? "ended"
+                    : // **And the one that says the OPERATOR refuses the address
+                      // this badge proved** (operator phase 6). Its own state,
+                      // not `refused` (a link that is off): the badge was never
+                      // inside, and the home's sentence names the address and
+                      // who to write to. Asked for below.
+                      event.reason === REFUSED
+                      ? "refused-here"
+                      : "refused",
       });
+      /**
+       * **The tombstone's sentence, off the 401** (operator phase 4). Asked
+       * for FIRST, before `disconnect()` and before anything else on this page
+       * can make a request through `request` — which would knock on the door
+       * on that 401 and replace the cookie, after which the home has nothing
+       * to say about the badge that was ended. The same store-canvas guard
+       * as the takedown's, for the same measured reason.
+       */
+      if (event.reason === ENDED) {
+        void fetchEnded().then((ended) => {
+          if (ended && useCanvasStore.getState().canvasId === canvasId) {
+            useCanvasStore.setState({ ended });
+          }
+        });
+      }
+      // The sentence, from the home. Fire-and-forget: a home that cannot
+      // answer leaves the page saying the short version, which is still true.
+      if (event.reason === TAKEN_DOWN) {
+        /**
+         * **The guard is the STORE's canvas, not `currentProjectId`** — and
+         * the difference is a bug this had, found by opening the page rather
+         * than by reading it.
+         *
+         * `disconnect()` two lines below nulls `currentProjectId`
+         * synchronously, so a guard on it was false by the time the fetch
+         * came back: the request was made, answered 200, and the sentence was
+         * dropped on the floor. The page rendered its fallback and looked
+         * perfectly reasonable, which is exactly the kind of wrong that a
+         * source-reading test cannot see. The store's `canvasId` is what the
+         * page is actually rendering, and it is what must still match.
+         */
+        void fetchTakedown(canvasId).then((takenDown) => {
+          if (takenDown && useCanvasStore.getState().canvasId === canvasId) {
+            useCanvasStore.setState({ takenDown });
+          }
+        });
+      }
+      // The refusal's sentence, off the 403 (operator phase 6). Fire-and-forget
+      // with the store-canvas guard, exactly as the takedown's — a home that
+      // will not answer leaves the door saying the short version.
+      if (event.reason === REFUSED) {
+        void fetchRefused(canvasId).then((refusedHere) => {
+          if (refusedHere && useCanvasStore.getState().canvasId === canvasId) {
+            useCanvasStore.setState({ refusedHere });
+          }
+        });
+      }
       disconnect();
       return;
     }

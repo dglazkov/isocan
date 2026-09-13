@@ -131,7 +131,7 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
           <button
             className="sprint-action primary"
             title={`Copy ${chosen.length === 1 ? "this" : chosen.length} onto the sprint${away.area ? `'s ${away.area.title} sheet` : ""} and hand ${chosen.length === 1 ? "it" : "them"} in`}
-            onClick={() => void handInFromDesk(canvasId, deskOf, sprintCanvas, actor, chosen, away)}
+            onClick={() => void handInFromDesk(canvasId, deskOf, sprintCanvas, actor, chosen, away, remote.originGroupMode!)}
           >
             Hand in{chosen.length > 1 ? ` ${chosen.length}` : ""}
           </button>

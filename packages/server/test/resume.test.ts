@@ -5,7 +5,7 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import type { Operation, ServerMessage } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * "I have through N" — the lid-close beat (journey, Scene 4, beat 7).
@@ -80,7 +80,7 @@ async function anEvening(): Promise<void> {
 
 function connect(query: string): Promise<{ ws: WebSocket; messages: ServerMessage[] }> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?${query}`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?${query}`), {
       headers: badge.headers,
     });
     const messages: ServerMessage[] = [];

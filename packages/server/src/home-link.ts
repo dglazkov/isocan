@@ -1,7 +1,10 @@
+import { SOURCE_POLICY_HEADER, sourcePolicyHeader, sourceClassificationRoute, type SourceClassificationResponse, type SourceRequestContext } from "@isocan/core";
+import { inboxRoute, type InboxResponse } from "@isocan/core";
 import { Readable } from "node:stream";
 import { WebSocket } from "ws";
 import type {
   Actor,
+  RcPolicy,
   AttestOffer,
   AttestRequest,
   AttestResponse,
@@ -16,6 +19,7 @@ import type {
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
+  PassResponse,
   PostOpRequest,
   PostOpResponse,
   PresenceSession,
@@ -27,12 +31,20 @@ import type {
   SpaceLinkResponse,
   SpaceResponse,
   SpacesResponse,
+  SeenMarksResponse,
+  SeenResponse,
+  TakedownNotice,
+  TakedownsResponse,
   GroupResponse,
   GroupsResponse,
   UndoRedoRequest,
 } from "@isocan/core";
 import {
+  CANVAS_GROUPS_FEATURE,
+  CLIENT_FEATURES_HEADER,
+  CLIENT_FEATURES_PARAM,
   ATTEST_ROUTE,
+  askTemplate,
   narrowed,
   groupActingRoute,
   groupMemberRoute,
@@ -45,6 +57,8 @@ import {
   spaceLinkRoute,
   spaceRoute,
   SPACES_ROUTE,
+  seenMarksRoute,
+  seenRoute,
   BADGES_ROUTE,
   badgeRoute,
   encodeFilename,
@@ -52,11 +66,15 @@ import {
   FREE_NAME_ROUTE,
   grantRevokeRoute,
   grantsRoute,
+  publicListingRoute,
   healthPath,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
   passesRoute,
+  passRoute,
   canvasesRoute,
+  TAKEDOWNS_ROUTE,
+  TAKEN_DOWN,
   WS_BEHIND,
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
@@ -214,9 +232,14 @@ export class HomeRefusedError extends Error {
  * engine learns "there is somewhere else to send this", never how a socket
  * works. */
 export interface HomeConnection {
+  /** Authoritative private routes retain per-call policy and cancellation without local fallback. */
+  personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext): Promise<T>;
+  /** Raw forwarding keeps source policy off this long-lived connection's mutable state. */
+  sourceRequest(method: string, path: string, body: unknown, headers: Record<string, string>, actor: Actor | undefined, context: SourceRequestContext): Promise<Response>;
   readonly homeUrl: string;
   /** `POST /api/ops` at the home, with this daemon's badge. */
   submitOp(body: PostOpRequest): Promise<PostOpResponse>;
+  groupMigrationPreview(canvasId: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview>;
   undo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
   redo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
   /** Make this daemon's badge at the home vouch for an actor (and, when the
@@ -246,6 +269,7 @@ export interface HomeConnection {
    * one — after the claim goes up, as it does before a forwarded op.
    */
   grants(canvasId: string): Promise<GrantsResponse>;
+  setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse>;
   createGrant(
     canvasId: string,
     subject: GrantSubject,
@@ -283,6 +307,18 @@ export interface HomeConnection {
    * actor acting, as a grant write does, so the home asks `own` of the person
    * and not of the machine.
    */
+  /**
+   * The seen routes, forwarded (#147, #134) — for the space routes' reason
+   * and one more of their own. A seen-mark is desk state at the home, so a
+   * replica holds no row for it; and the whole point of the feature is that
+   * your OTHER machine finds what this one saw, which it can only do if both
+   * write to the same desk. A replica that answered from its own ledger would
+   * hand back this laptop's marks, which is short, plausible and exactly the
+   * per-browser answer seen-marks exist to replace.
+   */
+  inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse>;
+  seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse>;
+  markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
   spaces(): Promise<SpacesResponse>;
   createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
   deleteSpace(spaceId: string, actor?: Actor): Promise<SpaceCanvasResponse>;
@@ -336,6 +372,9 @@ export interface HomeConnection {
    * from elsewhere needs its name.
    */
   mintPass(canvasId: string, actor?: Actor): Promise<MintPassResponse>;
+  /** One pass read back by its minter — which, for a pass this daemon minted
+   * at the home, is this daemon's badge there (sheep-harness phase 2). */
+  pass(canvasId: string, passId: string): Promise<PassResponse>;
   redeemPass(token: string): Promise<RedeemPassResponse>;
   /**
    * Ask the home for ONE canvas by name, so this replica starts carrying it.
@@ -345,7 +384,7 @@ export interface HomeConnection {
    * ADDRESS gets let in. See `HOME_JOIN_ROUTE` for which arrivals those are
    * and why they are not a new privilege.
    */
-  join(canvasId: string): Promise<Canvas>;
+  join(canvasId: string, actor?: Actor, context?: SourceRequestContext): Promise<Canvas>;
   /** Blob bytes go where the ops that name them go. */
   putBlob(
     canvasId: string,
@@ -426,6 +465,8 @@ export interface HomeDirectory {
    * canvas under the "this id has no row, so it must be mine" rule.
    */
   bind(canvasId: string, homeUrl: string | null): Promise<HomeConnection | null>;
+  /** Private birth explicitly stays here, regardless of the configured birth default. */
+  bindLocal(canvasId: string): Promise<void>;
   /** That canvas is gone; drop its row, or a re-created id inherits a dead
    * routing. */
   release(canvasId: string): Promise<void>;
@@ -571,6 +612,28 @@ interface CanvasHealth {
   /** Has the failure above already been said out loud? Reset by an open, so a
    * link that comes back and fails again complains again. */
   complained: boolean;
+  /**
+   * **The home REFUSED this canvas** — `WS_NOT_ADMITTED`, withdrawn or taken
+   * down (operator phase 2) — as opposed to a socket that merely failed.
+   *
+   * A refusal is a decision at the other end, not a blip, so it is re-asked at
+   * the slowest rate this file has rather than at the poll's. Kept here rather
+   * than on the `CanvasLink` for this record's whole reason: the link is
+   * dropped by the refusal, so anything counted on it resets every two
+   * seconds — which is exactly the case worth slowing down.
+   */
+  refused?: boolean;
+  /**
+   * **The home's own sentence about a canvas it has taken down** (operator
+   * phase 2), asked for once when the refusal arrives.
+   *
+   * The close frame carries only the word — 123 bytes is not a sentence — and
+   * the date and the reason are what `isocan status` has to say. So they are
+   * ASKED FOR, at `/api/takedowns`, which answers anybody about one canvas for
+   * exactly this reason: the words come from the home, and a replica that
+   * rendered its own would be a second sentence to drift.
+   */
+  takenDown?: TakedownNotice;
 }
 
 export class HomeLink implements HomeConnection {
@@ -643,6 +706,16 @@ export class HomeLink implements HomeConnection {
    * measurement: presence beats arrive by the hundred under one unchanging
    * actor, and a desk round trip per beat is a desk round trip per mouse move.
    */
+  // Classification is immutable from before birth; an ordinary answer may be cached.
+  private classifiedReplicas = new Set<string>();
+  private async classifyReplica(canvasId: string): Promise<void> {
+    if (this.classifiedReplicas.has(canvasId)) return;
+    const answer = await this.api<SourceClassificationResponse>("GET", sourceClassificationRoute({ canvasId, expectedHome: this.homeUrl }));
+    if (answer.kind !== "ordinary" && answer.kind !== "personal") throw new HomeRefusedError(403, "source classification is unavailable", "personal-source-unavailable");
+    if (answer.kind === "personal") await this.engine.recordPersonalReplica(canvasId, this.homeUrl);
+    this.classifiedReplicas.add(canvasId);
+  }
+
   private claimed = new Set<string>();
   private claiming = new Map<string, Promise<void>>();
 
@@ -905,8 +978,11 @@ export class HomeLink implements HomeConnection {
        */
       const health = this.healthOf(canvasId);
       if (
-        health.opens === 0 &&
-        health.failures >= COMPLAIN_AFTER_FAILURES &&
+        // A canvas the home has REFUSED — withdrawn, or taken down — is asked
+        // again at the slowest rate rather than at the poll's, however many
+        // times it has been open before. See `refused` on `CanvasHealth`.
+        (health.refused ||
+          (health.opens === 0 && health.failures >= COMPLAIN_AFTER_FAILURES)) &&
         health.attemptedAt !== null &&
         Date.now() - health.attemptedAt < RECONNECT_MAX_MS
       ) {
@@ -1013,10 +1089,11 @@ export class HomeLink implements HomeConnection {
     if (!badge) {
       return gaveUp("the door did not answer, so there is no badge to dial with");
     }
+    try { await this.classifyReplica(link.canvasId); } catch (error) { return gaveUp((error as Error).message); }
     const since = await this.localSeq(link.canvasId);
     if (link.dialSeq !== attempt) return;
     const wsBase = this.homeUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-    const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}`;
+    const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`;
     let socket: WebSocket;
     try {
       socket = new WebSocket(url, { headers: bearerHeader(badge) });
@@ -1085,20 +1162,61 @@ export class HomeLink implements HomeConnection {
       // lists the canvas for this badge again, which is the home letting it
       // back in.
       if (code === WS_NOT_ADMITTED) {
-        const why =
-          String(reason) === WITHDRAWN
+        /**
+         * **`taken-down` keeps the copy and stops dialling** (operator phase
+         * 2; journey 4 step 4). It is a 4402 like `withdrawn`, and that is the
+         * whole reason a takedown reaches a replica correctly for free: the
+         * ONE thing this branch does not do, and `canvas-deleted` above does,
+         * is touch the store. Priya's daemon keeps its copy — the replica is
+         * hers — and the operator cannot reach a laptop, which is the
+         * innkeeper line the design is written on.
+         *
+         * The word is remembered, because `isocan status` has to be able to
+         * say *taken down at its home; your copy is on this machine* and the
+         * close frame is the only place this daemon is ever told.
+         */
+        const takenDown = String(reason) === TAKEN_DOWN;
+        const why = takenDown
+          ? `the home has taken ${link.canvasId} down (${WS_NOT_ADMITTED} ${TAKEN_DOWN}); ` +
+            "your copy is on this machine"
+          : String(reason) === WITHDRAWN
             ? `the home withdrew this machine's access to ${link.canvasId} (${WS_NOT_ADMITTED} ${WITHDRAWN})`
             : `the home does not admit this machine to ${link.canvasId} (${WS_NOT_ADMITTED})`;
         const health = this.healthOf(link.canvasId);
         health.failures += 1;
         health.attemptedAt = Date.now();
         health.lastFailure = why;
+        /**
+         * **Refused, and therefore not re-dialled at the poll rate** — the
+         * half of "this canvas is not redialled" that was written down and not
+         * built.
+         *
+         * The comment here has always said the link is not redialled, and
+         * dropping it from `links` was taken to be that. It is not: `repair`
+         * re-creates a missing link on the next poll, and its one guard asks
+         * `opens === 0` — true for a canvas the home never admitted, false for
+         * every canvas that WAS open and has just been refused. So a withdrawn
+         * canvas, and a taken-down one, were dialled every two seconds
+         * forever. Found while building the takedown; it is the same bug for
+         * `withdrawn`, so it is fixed for both.
+         *
+         * Not a hard stop, and that is journey 5: `--lift`, and *her daemon
+         * redials on its next attempt and syncs*. A refusal the home can undo
+         * has to be re-asked eventually or a lift would need a restart on
+         * every replica. So: the slowest backoff this file already has, rather
+         * than the poll's two seconds.
+         */
+        health.refused = true;
+        if (takenDown) void this.askTakedown(link.canvasId);
         if (!health.complained) {
           health.complained = true;
           console.error(
             `[isocan] ${this.homeUrl}: ${why} — this canvas is not redialled; ` +
-              "ops written here stay here until an owner lets this machine back in. " +
-              "`isocan home` shows this per canvas.",
+              (takenDown
+                ? "ops written here stay here, and nothing on this machine has been erased. " +
+                  "`isocan status` says so."
+                : "ops written here stay here until an owner lets this machine back in. " +
+                  "`isocan home` shows this per canvas."),
           );
         }
         link.closed = true;
@@ -1219,6 +1337,11 @@ export class HomeLink implements HomeConnection {
             askId: message.askId,
             name: message.name,
             from: message.from,
+            // Re-read, not trusted: the home that relayed it read it once too.
+            ...(() => {
+              const t = askTemplate(message);
+              return "error" in t ? {} : t;
+            })(),
           });
         }
         return;
@@ -1288,6 +1411,24 @@ export class HomeLink implements HomeConnection {
   }
 
   /**
+   * **Ask the home what it says about the canvas it just refused.**
+   *
+   * Best-effort and fire-and-forget: a home that cannot answer leaves `isocan
+   * status` saying what the close frame said, which is true and shorter. It is
+   * a public read — `/api/takedowns?canvas=…` answers anybody about one canvas
+   * — so it needs nothing this link does not already carry, and it is asked
+   * once per refusal rather than per poll, because the refusal drops the link.
+   */
+  private async askTakedown(canvasId: string): Promise<void> {
+    const answer = await this.api<TakedownsResponse>(
+      "GET",
+      `${TAKEDOWNS_ROUTE}?canvas=${encodeURIComponent(canvasId)}`,
+    ).catch(() => null);
+    const notice = answer?.takedowns.find((row) => row.canvasId === canvasId);
+    if (notice) this.healthOf(canvasId).takenDown = notice;
+  }
+
+  /**
    * **The home said hello for this canvas**, which is the first moment it is
    * true that this link carries anything.
    *
@@ -1308,6 +1449,11 @@ export class HomeLink implements HomeConnection {
     health.connectedAt = new Date().toISOString();
     health.failures = 0;
     health.lastFailure = null;
+    // The home is carrying it again, so whatever it refused for is over —
+    // which for a takedown is `--lift`, and is journey 5 step 2 happening
+    // without anybody restarting anything.
+    delete health.refused;
+    delete health.takenDown;
     if (health.complained) {
       health.complained = false;
       console.error(`[isocan] ${this.homeUrl} is carrying ${canvasId} again`);
@@ -1363,6 +1509,9 @@ export class HomeLink implements HomeConnection {
           facesRelayed: health.facesRelayed,
           failures: health.failures,
           lastFailure: health.lastFailure,
+          // Present only for a canvas the home has taken down, and carrying
+          // the home's own sentence — journey 4 step 4's `isocan status`.
+          ...(health.takenDown ? { takenDown: health.takenDown } : {}),
         };
       });
   }
@@ -1476,9 +1625,40 @@ export class HomeLink implements HomeConnection {
         this.unvouched.delete(key);
         answerable.push(actorId);
       }
+      // **Whose, and whose word** (owner-only summons): the owners of the rcs
+      // parked here, vouched the same way the faces are — a policy says
+      // "listens only to Nico" in Nico's name — and the policy of each agent
+      // that made it through above. An owner the home will not vouch for
+      // takes its policies with it; the home then reads those agents the way
+      // it reads an older rc's, and the refusal is said once, like a face's.
+      const owners: Actor[] = [];
+      for (const owner of local.owners) {
+        const key = `${link.canvasId} owner ${owner.id}`;
+        const ok = await this.ensureClaim(owner).then(
+          () => true,
+          (err: unknown) => {
+            if (!this.unvouched.has(key)) {
+              this.unvouched.add(key);
+              console.error(
+                `[isocan] ${this.homeUrl} will not vouch for ${owner.name} (${owner.id}): ` +
+                  `${(err as Error).message} — whose word their rc takes goes unsaid at the home until it does`,
+              );
+            }
+            return false;
+          },
+        );
+        if (!ok) continue;
+        this.unvouched.delete(key);
+        owners.push(owner);
+      }
+      const policies: Record<string, RcPolicy> = {};
+      for (const actorId of answerable) {
+        const policy = local.policies[actorId];
+        if (policy && owners.some((o) => o.id === policy.owner.id)) policies[actorId] = policy;
+      }
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(
-          JSON.stringify({ type: "rc-relay", parked: local.parked, actorIds: answerable }),
+          JSON.stringify({ type: "rc-relay", parked: local.parked, actorIds: answerable, owners, policies }),
         );
       }
     }
@@ -1636,6 +1816,32 @@ export class HomeLink implements HomeConnection {
     return work;
   }
 
+  async personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext): Promise<T> {
+    if (actor) await abortable(this.ensureClaim(actor), context?.signal);
+    return this.api<T>(method, path, body, context?.signal, context);
+  }
+
+  async sourceRequest(method: string, path: string, body: unknown, headers: Record<string, string>, actor: Actor | undefined, context: SourceRequestContext): Promise<Response> {
+    context.signal?.throwIfAborted();
+    if (actor) await abortable(this.ensureClaim(actor), context.signal);
+    const badge = await abortable(this.ensureBadge(), context.signal);
+    if (!badge) throw new HomeUnreachableError(this.homeUrl, "the door did not answer");
+    const send = (held: StoredBadge) => this.fetchHome(path, {
+      method, ...(context.signal ? { signal: context.signal } : {}),
+      headers: { ...headers, [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...bearerHeader(held), [SOURCE_POLICY_HEADER]: sourcePolicyHeader(context) },
+      ...(body === undefined ? {} : { body: Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body) }),
+    });
+    let response = await send(badge);
+    if (response.status === 401) {
+      const refusal = await response.clone().json().catch(() => null) as { reason?: string } | null;
+      if (refusal?.reason !== "operator") {
+        const fresh = await abortable(this.reBadge(), context.signal);
+        if (fresh) response = await send(fresh);
+      }
+    }
+    return response;
+  }
+
   // ---- HomeConnection: writes, forwarded ----
 
   async submitOp(body: PostOpRequest): Promise<PostOpResponse> {
@@ -1643,10 +1849,21 @@ export class HomeLink implements HomeConnection {
     return this.api<PostOpResponse>("POST", "/api/ops", body);
   }
 
+  groupMigrationPreview(canvasId: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview> {
+    return this.api("GET", `/api/projects/${encodeURIComponent(canvasId)}/groups/migration`);
+  }
+
   /** Who may enter this canvas, as the HOME has it. No claim goes up first:
    * a grant is about badges, never about actors. */
   grants(canvasId: string): Promise<GrantsResponse> {
     return this.api<GrantsResponse>("GET", grantsRoute(canvasId));
+  }
+
+  async setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<GrantResponse>("PUT", publicListingRoute(canvasId, grantId), {
+      listed, ...(actor ? { actorId: actor.id } : {}),
+    });
   }
 
   async createGrant(
@@ -1701,6 +1918,36 @@ export class HomeLink implements HomeConnection {
 
   killBadge(badgeId: string): Promise<KillBadgeResponse> {
     return this.api<KillBadgeResponse>("DELETE", badgeRoute(badgeId));
+  }
+
+  // ---- the seen routes, forwarded (#147, #134) ----
+  //
+  // The claim goes up before either call, read included, and that is the one
+  // place these differ from the space routes: a read of somebody's own marks
+  // is scoped to the actors the home's copy of this badge claims, so a badge
+  // that has never introduced this person up there would be handed an empty
+  // ledger rather than theirs.
+
+  async inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse> {
+    signal?.throwIfAborted();
+    await abortable(this.ensureClaim(actor), signal);
+    signal?.throwIfAborted();
+    return abortable(this.api<InboxResponse>("GET", inboxRoute(actor.id, { canvasId, ...(label !== undefined ? { label } : {}) }), undefined, signal), signal);
+  }
+
+  async seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse> {
+    signal?.throwIfAborted();
+    if (actor) await abortable(this.ensureClaim(actor), signal);
+    signal?.throwIfAborted();
+    return abortable(this.api<SeenMarksResponse>("GET", seenMarksRoute(actor?.id, canvasId), undefined, signal), signal);
+  }
+
+  async markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<SeenResponse>("PUT", seenRoute(canvasId), {
+      seq,
+      ...(actor ? { actorId: actor.id } : {}),
+    });
   }
 
   // ---- the space routes, forwarded (roles phase 4) ----
@@ -1844,6 +2091,11 @@ export class HomeLink implements HomeConnection {
     );
   }
 
+  /** Read one back at the home, on the badge that minted it there. */
+  pass(canvasId: string, passId: string): Promise<PassResponse> {
+    return this.api<PassResponse>("GET", passRoute(canvasId, passId));
+  }
+
   /**
    * Redeem one at the home, on this daemon's badge — the enrolling half of
    * Scene 5, from the new machine's end.
@@ -1903,10 +2155,11 @@ export class HomeLink implements HomeConnection {
    * below (for `redeemPass`'s reason: somebody just typed the command) opens
    * the socket.
    */
-  async join(canvasId: string): Promise<Canvas> {
-    const canvas = await this.api<Canvas>(
+  async join(canvasId: string, actor?: Actor, context?: SourceRequestContext): Promise<Canvas> {
+    await this.classifyReplica(canvasId);
+    const canvas = await this.personalRequest<Canvas>(
       "GET",
-      `/api/projects/${encodeURIComponent(canvasId)}`,
+      `/api/projects/${encodeURIComponent(canvasId)}`, undefined, actor, context,
     );
     void this.sync().catch(() => {});
     return canvas;
@@ -1971,7 +2224,7 @@ export class HomeLink implements HomeConnection {
     const send = async (held: StoredBadge) =>
       this.fetchHome(`/api/projects/${canvasId}/adopt`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...bearerHeader(held) },
+        headers: { "Content-Type": "application/json", [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...bearerHeader(held) },
         body: JSON.stringify({ entries }),
       });
     let res = await send(badge);
@@ -2043,13 +2296,18 @@ export class HomeLink implements HomeConnection {
    * answers to "which credential is in that file" on one machine is the
    * divergence house rule 4 forbids.
    */
-  private async api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async api<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, context?: SourceRequestContext): Promise<T> {
+    signal = context?.signal ? AbortSignal.any([context.signal, ...(signal ? [signal] : [])]) : signal;
+    signal?.throwIfAborted();
     const badge = await this.ensureBadge();
     if (!badge) throw new HomeUnreachableError(this.homeUrl, "the door did not answer");
     const send = async (held: StoredBadge) =>
       this.fetchHome(path, {
         method,
+        ...(signal ? { signal } : {}),
         headers: {
+          [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE,
+          ...(context ? { [SOURCE_POLICY_HEADER]: sourcePolicyHeader(context) } : {}),
           ...bearerHeader(held),
           ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
         },
@@ -2082,7 +2340,7 @@ export class HomeLink implements HomeConnection {
     try {
       return await fetch(`${this.homeUrl}${path}`, {
         ...init,
-        signal: AbortSignal.any([this.aborter.signal, AbortSignal.timeout(30_000)]),
+        signal: AbortSignal.any([this.aborter.signal, AbortSignal.timeout(30_000), ...(init.signal ? [init.signal] : [])]),
       });
     } catch (err) {
       throw new HomeUnreachableError(this.homeUrl, (err as Error).message);
@@ -2154,4 +2412,15 @@ export class HomeLink implements HomeConnection {
       return false;
     }
   }
+}
+
+/** Let a caller leave shared badge/claim preparation without cancelling other callers. */
+function abortable<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return work;
+  return new Promise((resolve, reject) => {
+    const cancel = () => reject(signal.reason);
+    if (signal.aborted) cancel();
+    else signal.addEventListener("abort", cancel, { once: true });
+    work.then(resolve, reject).finally(() => signal.removeEventListener("abort", cancel));
+  });
 }

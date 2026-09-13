@@ -48,6 +48,13 @@ deliberately instead of improvising mid-task:
   environment names no session: refuse (the CLI's rule — `--session` is
   explicit) or mint-and-warn. Phase 2 ships the refusal; the door stays
   open until a real consumer's friction argues otherwise.
+  *Settled 9 Sep 2026 by the first consumer that was not a script of ours —
+  [embed](../embed/phases.md)'s `@isocan/mcp`: **the person by default**,
+  never a mint. With no harness session in the environment, `connect()`'s
+  ambient walk is the machine's person, exactly as the CLI behaves with no
+  session; it refuses, with the remedy, only on a machine that has no person
+  yet; and a script or client that means to be its own actor says so
+  explicitly.*
 - **The npm registry.** The release branch is the answer until somebody
   outside this repo's orbit hits a wall only a registry solves. A second
   release surface is a standing cost; it needs a demonstrated consumer,

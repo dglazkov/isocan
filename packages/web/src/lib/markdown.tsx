@@ -1,3 +1,4 @@
+import type { AttentionDocument } from "./TextAttentionView.tsx";
 import { lazy, Suspense } from "react";
 import type { PluggableList } from "unified";
 
@@ -42,8 +43,12 @@ export function Markdown({
   children,
   breaks = false,
   rehypePlugins,
+  attention,
+  plain = false,
 }: {
   children: string;
+  attention?: AttentionDocument | undefined;
+  plain?: boolean | undefined;
   breaks?: boolean | undefined;
   rehypePlugins?: PluggableList | undefined;
 }) {
@@ -59,7 +64,7 @@ export function Markdown({
         </div>
       }
     >
-      <MarkdownBody breaks={breaks} {...(rehypePlugins ? { rehypePlugins } : {})}>
+      <MarkdownBody attention={attention} plain={plain} breaks={breaks} {...(rehypePlugins ? { rehypePlugins } : {})}>
         {children}
       </MarkdownBody>
     </Suspense>

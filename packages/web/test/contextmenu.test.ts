@@ -180,3 +180,14 @@ describe("Download has a key, and every surface knows it", () => {
 function read(rel: string): string {
   return readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), "utf8");
 }
+
+it("hands keyboard focus to submenu children only after their React commit", () => {
+  const menu = read("components/ContextMenu.tsx");
+  const submenu = menu.slice(menu.indexOf("function Submenu"));
+  expect(menu).toContain('focused.dataset.menuIntent = "keyboard-open"');
+  expect(submenu).toMatch(/useLayoutEffect\(\(\) => \{\s*if \(!open \|\| !focusChildren\) return;/);
+  expect(submenu).toContain('first?.focus()');
+  expect(submenu).toContain('onPointerEnter={() => setOpen(true)}');
+  expect(menu).toContain('parent.dataset.menuIntent = "close"');
+  expect(menu).not.toContain('queueMicrotask');
+});

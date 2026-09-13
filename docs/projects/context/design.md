@@ -1,8 +1,8 @@
 ---
 status: partial
-since: 2026-08-30
+since: 2026-09-09
 see: context
-note: stages 1 and 2 built; the MCP surface is not
+note: stages 1–3 built; embed phase 2 completed the MCP reading surface 13 Sep with read_context_summary and current canvas/Context resources. Item manifests and frozen request content retain their existing read_context meanings. Stage 4, an external memory index, remains deliberately deferred
 ---
 # Context and memory — the canvas is the record, never the index
 
@@ -43,7 +43,13 @@ system would ask you to give up:
 3. **It is shared by construction.** One record, one reading, for the person
    and every agent. Not a per-agent recollection that may differ.
 
-## What it does not remember, honestly
+## The gaps when this design began, 28 August
+
+Linked-canvas Context subsequently landed in the
+[memory project](../memory/design.md), phases 0, 1 and 3, on 4 September.
+The first gap below is the historical motivation, no longer a claim about
+the current implementation. The MCP continuation exposes those existing
+layers; it does not add semantic retrieval or personal modelling.
 
 - **Anything across canvases.** There is no cross-canvas memory at all, and no
   code that reaches for one. What was decided on another canvas is not
@@ -105,7 +111,8 @@ from a font request, and self-hosting is the only version that clears it.
 **Therefore: MCP, not a dependency.** Hindsight already speaks it; agents on
 this canvas run in harnesses that speak it. An agent that wants long memory
 can be given it without isocan importing anything, shipping anything, or
-knowing the vendor's name. isocan has no MCP surface today, and the useful
+knowing the vendor's name. isocan had no MCP surface when this was written
+(it has one since 9 Sep — stage 3 below), and the useful
 thing it could offer over MCP is not a memory store — it is the canvas: read
 the recap, read the design system, read the threads. Let somebody else's
 memory index that.
@@ -169,6 +176,10 @@ system passes none of them.
 3. **An MCP surface that exposes the canvas for reading.** This is the piece
    that makes external memory possible without adopting any of it: point
    Hindsight at the canvas and let it index the record it does not own.
+   *Completed 13 Sep by [embed](../embed/phases.md) phase 2 —
+   `read_context_summary` supplies this stage's layered list, and current
+   canvas/Context JSON resources attach it to a host. `read_context` retains
+   the item-manifest meaning canvas-groups gave it; saved content stays frozen.*
 4. **Only then**, and only if the four gaps still hurt: a self-hosted index
    behind the three tests. Cross-canvas and semantic recall are the two worth
    paying for. Person-level psychological modelling is the one to leave alone

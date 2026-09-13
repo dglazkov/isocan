@@ -4,7 +4,12 @@ Each phase ends with something a person can remove and watch disappear.
 Ordered by what settles the most with the least: the registries before any
 loader, because a loader with nothing to load into is a loader.
 
-**Where we are:** phases 1–4 built 4–5 September 2026. Phase 5 waits on three named gates.
+**Where we are:** phases 1–4.5 built 4–9 September 2026. Phase 5's three gates
+were read on 12 September: two clear, the third clear for the agent-side
+sandbox and still shut for the browser-frame one. The
+[agent-side half is built](#phase-5--sandboxes-the-agent-side-half); the frame
+half stays gated behind extensions stages 3–4 and a CSP line. See
+[the gate check](#the-gate-check-12-september-2026).
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
@@ -150,6 +155,75 @@ card that names the module a file came from when the module is absent —
 the mime does not carry the name, and inventing a registry of departed
 modules is a second copy of a fact.
 
+## Phase 4.5 — writing from a component, and saying how early this is ✅
+
+*Built 9 Sep 2026, from [#156's field report](https://github.com/dglazkov/isocan/issues/156#issuecomment-5603055567).*
+
+@romannurik built a sticker item type against the real API and listed five
+things he had to change in core to do it. Followed back to their causes they
+were two, and one of the five needed no API change at all.
+
+**The API could read from five places and write from one.**
+`ModuleAction.run` returning `readonly Operation[]` was the only occurrence of
+that type in the whole module API — underlays, renderers, inspectors and pages
+were read-only by construction, and four of those five are components a person
+interacts with. That was invisible while the modules were a mind map, a
+renderer and an outline, none of which changes anything from inside a
+component; it stopped being invisible the moment somebody built a tray you
+drag things out of. It also contradicted this design's own rule that **module
+state is an item, visible and versioned** — most of the places a module could
+put UI could not write an item.
+
+**And no operation carries bytes.** `item.add` and `item.addVersion` both name
+a `blobHash`, minted through a channel that is not an op, so a module could
+express every canvas change except the ones needing new content. One cause,
+two symptoms, which is why the report asked for both a `dropFile` and an
+`addVersion`.
+
+`WebHost` is the answer and the web twin of `CliHost`, which has existed since
+modules did — the asymmetry was the bug. Two members: `send`, the door the
+palette already used, and `putBlob`. Handed to overlays, inspectors and pages;
+underlays and renderers draw and are not, and the day one needs it that is a
+review question rather than a private import.
+
+**Deliberately not the helpers that were asked for.** `dropFile` and
+`addVersion` each bundle mint-place-send, so a module cannot set its own title,
+group two writes into one undo, or want a version instead of an item without a
+second helper — which is how a per-slot helper list starts. The stickers
+rewrite is the evidence: it names its items ("Fire", not "fire.sticker"), drops
+in one undo, and changes a sticker in place with an op that already existed.
+
+**Two new slots and one that was not a slot at all.** `overlays` is screen
+space against a named EDGE — the shell owns where that edge is, because two
+modules positioning themselves is how a canvas ends up with two trays on top of
+each other. `drops` lets a module claim a dragged mime, the way it already
+claims mimes for kinds; native OS file drops stay the shell's. The canvas
+inspector needed no API change — `moduleInspectorsFor` and `InspectorFacts`
+already carried everything, and only `Workbench.tsx` mounted it.
+
+**Versioning, because runtime modules make this real.** `MODULE_API_VERSION`
+is decoupled from the app's and bumped 0.1.0 → 0.2.0, which is the first
+refusal the engines check has ever produced: it was pinned to the root
+package's 0.1.0, so the number it compared against was a constant. `PROPOSED`
+names `overlays`, `drops` and `host`; a manifest using one is refused unless
+the person adding it passes `--proposed`, and an unknown proposal is refused by
+name. VS Code's two-surface bargain in the shape this can afford. See
+[`design.md`](design.md#versioning-two-surfaces-one-of-them-frozen).
+
+**`@isocan/stickers` ships behind Settings → Experiments**, off, fetched only
+when switched on — five emoji, a tray, an inspector, `isocan sticker drop`. It
+is deliberately not a useful feature: it is the smallest real module that needs
+all three proposed slots, and it is how we will notice when one of them is
+wrong.
+
+**Two bugs the work found in itself.** The experiment gate was a plain import
+gated at render, which gates the drawing and not the download — measured, it
+cost every first visit 6,227 bytes including everybody who never switched it
+on. And the overlay slot shipped with no CSS at all: the tray was in the DOM,
+in its region, `position: static`, a 1280×178 block nobody could see, past
+lint, typecheck, 3,936 tests and two byte checks. Neither was findable without
+building the built thing and looking at it.
+
 ## Phase 5 — sandboxes
 
 Gated, and the gates are named: the content origin, extension actors, and the
@@ -165,3 +239,206 @@ attribute is the person who pressed it, and the thing that would need one is a
 panel that acts on its own (extensions stage 3). **Compute consent** is
 untouched. So the gate that moved is one of three, and the one behind it moved
 its own dependency into view rather than closer.
+
+**Compute consent, 11 Sep 2026 — no longer untouched, not yet cleared.** It
+has two halves, and both moved the same day
+([what the rc hands over](../../research/2026-09-10-what-the-rc-hands-over.md)).
+*What a turn can reach*: `isocan rc --sandbox` fences every adapter in a
+sandbox whose policy is derived from the enrolment, and permissions are
+answered by kind rather than auto-allowed — built, and opt-in rather than the
+default (decided 11 Sep). *Who may start a turn*: owner-only summons by default
+was decided 11 Sep and is being built separately. Neither is a module sandbox
+— this gate asks whose machine runs a module's compute and on whose say-so,
+and the rc work answers that for an agent's turn — but it is the same question
+one layer over, and the answer this gate will want is now visible.
+
+### The gate check, 12 September 2026
+
+Read against what the gates were actually written to mean, rather than against
+their names. **Two of the three are clear, the third is clear for one of
+phase 5's two shapes and genuinely shut for the other** — so phase 5 starts,
+on the half the gate does not bind, and the other half re-queues where it
+belongs.
+
+**The content origin — CLEAR.** Unchanged since 6 Sep: live on prod, short-
+lived signed reads over `(canvasId, blobHash, expiry)` from a second
+registrable domain holding no cookie, badge or API. It is a prerequisite of
+the browser-frame shape only; nothing on the agent-side shape touches it.
+
+**Compute consent — CLEAR, and narrower than its name.** The gate is not a
+principle, it is a *named question in a named document*: the
+[research note's §7](../../research/2026-09-04-modules.md) says "the
+compute-consent question
+[agent-custody](../agent-custody/design.md) left open", and
+[`docs/projects/README.md`](../README.md) glosses which question that is, in
+those words: agent-custody's *"whose ask a parked rc honors (compute
+consent)"*. That question is answered.
+[agent-custody's Open section](../agent-custody/design.md) now strikes it
+through: **answered 11 Sep 2026 — its owner's.** Owner-only summons was
+decided (D2) and built the same day; only the owner's word widens it
+(`writtenBy` on the enrolment), the refusal carries the owner's own buttons
+(#272), and the rc announces its policy with its hold. The reach half, which
+the gate did not name but which a sandbox plainly wants, is `isocan rc
+--sandbox` — and it brought the posture phase 5 should copy verbatim:
+*asked for and not buildable is a refusal, never a quiet unfenced run.*
+
+The paragraph above this one read the gate wider — "whose machine runs a
+**module's** compute and on whose say-so" — and that reading has an answer
+too, in this phase's own shape rather than in a decision still owed. A module
+runs no compute of its own: `isocan sandbox run` is a verb a person or an
+agent types, on the machine they typed it on, and the typing is the consent.
+The one place that argument does not reach is a **hosted** home running
+modules on somebody else's behalf, and that is already a separate open
+question in [`design.md`](design.md) ("who runs modules on isocan.io", the
+same decision as running `release` unattended) — not a gate this phase can
+close, and not one it opens either, because the hosted home loads no runtime
+module.
+
+**Extension actors — SHUT for the frame, CLEAR for the verb.** The gate's
+own gloss in the research note is *"who stamps a sandbox's writes"*, and
+phase 5 has two shapes with two different answers:
+
+- **The sandbox node in a frame** — HTML and JavaScript running in the
+  viewer's browser on the content origin. That is extensions **tier 3**, it
+  acts on its own, and it is somebody else's code: it needs a subject, and
+  the gate holds. It is shut twice over, because tier 3 is unbuilt and
+  [extensions stage 4](../extensions/design.md) says its own real predecessor
+  is a panel that ACTS (stage 3), also unbuilt. The
+  [workbench exfiltration finding](../../research/2026-09-04-modules.md) rides
+  with it: the served CSP must say `connect-src <content-origin>` before the
+  first frame renders.
+- **The sandbox an agent runs where the agent is** — `isocan sandbox run`,
+  the way `isocan edit` opens `$EDITOR` on the agent's machine. Nothing acts
+  on its own here. A person or an agent typed a verb; the version it posts is
+  stamped with the actor who typed it — an actor that already exists, is
+  already attributed, already undoable per actor and already revocable. This
+  is stage 4's own finding applied without changing a word: *a tier-1 tool
+  does not act, it asks*, and giving the asker a second actor would make the
+  log say the button asked for something when a person did.
+
+So the gate was a dependency on the **declarative and hosted panel work**, not
+on sandboxes as a category. Named precisely: it binds the shape whose writer
+is code somebody else wrote, and does not bind the shape whose writer is
+whoever typed the verb.
+
+**The verdict.** Phase 5 walks its agent-side half now. The browser-frame half
+is **not** built around: it stays gated, behind extensions stages 3 and 4 and
+the CSP line, and the module built here deliberately has no frame, no
+`postMessage` surface and no route.
+
+## Phase 5 — sandboxes, the agent-side half ✅
+
+*Built 12 Sep 2026, after the gate check above.*
+
+**The sentence.** *A sandbox is a program that lives on the canvas as a file
+and runs on the machine that typed the verb, fenced, with what it printed
+posted back as a version.* isocan still never runs compute — the
+[architecture](../../architecture.md)'s given — and this does not change that:
+the home orders the ops, and the program runs where a person already trusts
+their own shell.
+
+**The trust line this must not blur, stated where it can be checked.** A
+**module** is trusted like the CLI you installed; an **extension** — and
+anything that arrives *on a canvas* — is trusted like a collaborator. A
+sandbox module sits exactly on that seam, because the module is ours and the
+bytes it runs are a collaborator's. So: the module is loaded as the app, and
+**the program is never**. The fence is not the module's to build, weaken or
+skip — it asks the CLI's host for it, gets the app's own fence or a refusal,
+and has no other way to start a process.
+
+**`CliHost.runFenced`, the first helper promotion the design predicted.**
+`design.md` has said since 4 Sep that a module wanting a helper is *"a review
+question, not a private import"*; this is the first time the answer was yes.
+It is the fence `isocan rc --sandbox` already builds
+(`@anthropic-ai/sandbox-runtime`) with every optional allowance taken out,
+because an adapter needs its vendor's API, its config directory and the
+daemon, and a program off a canvas needs none of them: **no network at all,
+one writable scratch directory, `$HOME` denied with nothing carved back but
+the interpreter's install.** An argv, not `sh -c` — a program with no network
+needs no proxy and should get no shell.
+
+It is **not a mode**. `--sandbox` is opt-in for an adapter because the person
+chose that harness and has run it themselves a hundred times; a canvas's
+program has no such history, so there is no flag, and a machine that cannot
+fence gets the rc's own refusal wording rather than a quiet unfenced run.
+
+**Two things review caught, both about consent rather than containment.**
+The fence first read the adapter's own `sandboxRead`/`sandboxWrite` for its
+escape hatch, which was honest in the doc and wrong in the design: a person
+widens those so the agent they ENROLLED — and can withdraw — can reach
+`~/projects`, and spending that on a program anyone with write access to a
+shared canvas could have authored is a consent given about somebody else.
+The program fence has its own keys now, **`programRead`/`programWrite`,
+empty by default**; measured, the agent's widening appears zero times in a
+program's policy. And **the run names its author before it runs** — `fib.mjs
+— v2, written by Dimitri, 2026-09-12 — \`node fib.mjs\`` — because executing
+somebody's code on your own machine is a choice that cannot be informed
+otherwise. Your own program runs on the verb alone; anybody else's refuses
+once, by name, until `--yes`. The ceremony sits at the trust boundary rather
+than on every run, because a confirmation for your own program is one that
+gets learned away in a week and takes the other one with it.
+
+**`packages/modules/sandbox`: no kind, no op, no mime, two properties.** A
+program is an ordinary item wearing `sandbox.run` (the argv); a transcript is
+an ordinary text item wearing `sandbox.of` (the program it belongs to). Four
+verbs — `sandbox ls / set / clear / run` — a context row, a `/run` command,
+and one page. `set` and `clear` are `item.update` patches; `run` is a fenced
+spawn plus an `item.add` the first time and an `item.addVersion` every time
+after, so a program's runs are a version history with a diff between them.
+**The op vocabulary is unchanged at 33.**
+
+**The transcript is a file rather than a record only we can read.** Its first
+line is the command, its last is `exit 0 · 43 ms · fenced by <engine>`. The
+exit code could have been an item description — two ops and a fact only the
+app understands — and instead `isocan show`, the stage, a canvas export and a
+person with no isocan at all can all read it.
+
+**The web half reads, and there is no Run button.** A Sandboxes page lists
+every program, its argv and its runs, and says in one line that a program runs
+on the machine that types its verb. A button that posted *"somebody please run
+this"* would be a summons wearing a different word, and summons have an owner
+rule of their own. The page component is behind `lazy()`; only the core record
+is eager, and `scripts/bundle-ceiling.mjs` carries the arithmetic for the
+2,084 bytes it cost.
+
+**Proved the way phase 3 was proved — by running it, not only by testing it.**
+On a scratch home: `sandbox set` made a `.mjs` a program, `sandbox ls` and
+`isocan context` both saw it, and `sandbox run` **refused** — *"this program
+came from a canvas, so it only runs fenced — and the fence cannot be built
+here: srt needs rg on the PATH"* — which is the posture working, since this
+machine has neither srt nor ripgrep. Through a declared jail
+(`config.json`'s `sandboxCommand`, the bring-your-own path the scan already
+supports) the walk completed: the program ran, the policy handed to the fence
+was exactly the four lines above, and the transcript landed as an item. A
+second run made **version 2 of the same item**, not a second item. Then both
+list entries came out: `--help` lost the family, `--agent-help` lost the
+section, `isocan context` lost the row, `sandbox ls` became *"did you mean
+inbox?"* — and both items were still there and still readable, `fib.mjs`
+(other) and `fib.mjs — output` (document), the orphaned `sandbox.of` key
+printed as an ordinary property. The oplog was untouched.
+
+**And the page had to be looked at, which is 4.5's lesson arriving on
+schedule.** `.docs-row a` matches any DESCENDANT anchor, so the transcript
+link inside a row rendered as a second card below the first, with the date
+orphaned on a line of its own. It passed the token, scale, dimmed, hooks and
+byte guards — exactly as the stickers tray passed 3,936 tests as an invisible
+1280×178 block. A slot's appearance is not a thing the suite can hold; the fix
+is one CSS block and the finding is that the looking is not optional.
+
+**A product bug the proof found, which nothing else would have.** Fastify
+parses `text/plain` as well as `application/json`, so the blob route's `*`
+parser never saw a transcript: `Buffer.isBuffer` said no and every upload was
+refused **`empty blob body`** — a message about a body that was neither empty
+nor wrong. This is the second instance of a bug fixed on 6 Sep, whose note
+predicted exactly this recurrence; the scoped parser now lists both types and
+`blobs.test.ts` holds them. Found by the first code to post a `text/plain`
+blob deliberately, which is how the JSON one was found too.
+
+**What remains of phase 5**, and it is the half the gate still binds: the
+**browser sandbox node** — HTML and JavaScript in a frame on the content
+origin, the extensions design's tier 3 — which needs a panel that acts
+(extensions stage 3), an extension actor to stamp its writes (stage 4), and
+`connect-src <content-origin>` in the served CSP before the first frame
+renders. Also unbuilt and smaller: a Sandboxes *section* in the workbench
+(logs, a terminal), which the research note calls "a page plus a hosted
+panel" and which therefore waits on the same gate.

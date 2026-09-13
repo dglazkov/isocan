@@ -1,7 +1,29 @@
+import { selectPersonalBinding, assertPersonalIntent, type PersonalSourceRecord, type PersonalOwnerRecord, type PersonalConsent, type PersonalLinkIntent, type ReservePersonalRequest, type PersonalReservation } from "@isocan/server";
+import type { PersonalDelegate } from "@isocan/core";
 import { randomBytes } from "node:crypto";
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
-import type { ActorClaim, Attestation, Capability, Grant, GrantSubject, Group, Space } from "@isocan/core";
+import type {
+  ActorClaim,
+  Attestation,
+  CanvasTakedown,
+  Capability,
+  Grant,
+  GrantSubject,
+  Group,
+  HomeRefusal,
+  OperatorAct,
+  OperatorEnd,
+  OperatorRevocation,
+  PurgeCounts,
+  SeenMark,
+  SeenMarks,
+  Space,
+} from "@isocan/core";
 import {
+  advanceSeen,
+  canListGrant,
+  isListedGrant,
+  isGrantListingDecision,
   groupSubject,
   isCapability,
   isGroupLive,
@@ -11,6 +33,7 @@ import {
   SHELF,
   upsertAttestation,
 } from "@isocan/core";
+import { keepsAdmission } from "@isocan/server";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
@@ -55,6 +78,81 @@ export const SPACES = "spaces";
  * collection: it reads one document per `group:` row, by id.
  */
 export const GROUPS = "groups";
+/**
+ * `seen/{actorId}` — the desk's sixth row (#147, #134): what one person has
+ * already looked at, `{ marks: { <canvasId>: { seq, at } } }`.
+ *
+ * **One document per PERSON rather than per (person, canvas)**, and the
+ * reason is the read it exists for: the inbox and the switcher both want
+ * every mark this person holds, in one go, before they can say anything at
+ * all. A row per pair would make that a collection query on every home
+ * screen; a document per person is one `get`, and the number of canvases one
+ * person visits is small and bounded by their own attention.
+ *
+ * **Never queried** — only read and written by actor id — so there is no
+ * index here and no denormalized array, and there is deliberately no way to
+ * ask this collection who has seen a canvas. That absence is the privacy
+ * guarantee (D5): the shape of the ledger is what makes read receipts
+ * something somebody would have to go and build rather than something they
+ * could accidentally expose.
+ */
+export const SEEN = "seen";
+/**
+ * `operator/{id}` — the desk's seventh row, and the first one that records a
+ * POWER rather than an access (operator phase 1).
+ *
+ * A collection for the grants' reason and a sharper one: it is append-only by
+ * intent — a lift is a new row naming the one it lifts — so it only ever
+ * grows, and a ledger that grew inside an array on some other document would
+ * eventually stop being writable at all. Queried two ways, both single-field
+ * and served by the automatic indexes with nothing in
+ * `firestore.indexes.json`: `orderBy("at", "desc")` for the log, and
+ * `target == <id>` for one canvas's or one badge's history. See
+ * `operatorActs` for why those two are deliberately never combined.
+ *
+ * Innkeeper-private like every other ledger here, and more so: the operator
+ * reads it over the wire and nobody else does.
+ */
+export const OPERATOR = "operator";
+
+/**
+ * `takedowns/{canvasId}` (operator phase 2) — **keyed by the canvas**, which
+ * is the one difference from the ledger beside it.
+ *
+ * The ledger is acts and only grows; this is standing state and there is
+ * exactly one answer per canvas, so the document id IS the question. A lift
+ * merges onto the same document rather than adding a row: two rows would make
+ * "is this canvas down" a query that could return both, and the door asks it
+ * on a request path.
+ *
+ * One query, single-field and served by the automatic index — `liftedAt ==
+ * null` for the ones in force. `liftedAt` is therefore written explicitly as
+ * `null` rather than omitted, because Firestore cannot query for a field's
+ * absence.
+ */
+export const TAKEDOWNS = "takedowns";
+
+/**
+ * `refusals/{subject}` (operator phase 6) — keyed by the subject, for the
+ * takedown row's reason: standing state with exactly one answer per subject,
+ * so the document id IS the question, and a lift merges onto it.
+ *
+ * The id is the subject with its one forbidden character escaped: a document
+ * id may not contain `/`, and `net:203.0.113.0/24` does. `%2F` is what
+ * {@link refusalDocId} writes and nothing reads back — the row carries the
+ * subject whole, so the escape is an address and never a spelling.
+ *
+ * `liftedAt: null` is written explicitly, for `TAKEDOWNS`' reason: the one
+ * query, `liftedAt == null`, needs no composite index and no in-memory
+ * filter. Expiry is NOT queried here — the desk keeps no clock, and the
+ * registry judges `expiresAt` against the one it is handed (see `Desk`).
+ */
+export const REFUSALS = "refusals";
+
+/** The subject as a document id. */
+export function refusalDocId(subject: string): string {
+  return subject.replace(/\//g, "%2F");
+}
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -160,6 +258,107 @@ export class CloudDesk implements Desk {
 
   async close(): Promise<void> {
     await this.shutdown?.();
+  }
+
+  async personalReplica(canvasId: string): Promise<string | null> {
+    const doc = await this.db.collection("personalReplicas").doc(canvasId).get();
+    return doc.exists ? doc.data()!["home"] as string : null;
+  }
+
+  async recordPersonalReplica(canvasId: string, home: string): Promise<void> {
+    const ref = this.db.collection("personalReplicas").doc(canvasId);
+    await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (doc.exists) { if (doc.data()!["home"] !== home) throw new Error("personal replica authority changed"); return; }
+      tx.create(ref, { canvasId, home });
+    });
+  }
+
+  async personalSource(canvasId: string): Promise<PersonalSourceRecord | null> {
+    const doc = await this.db.collection("personalSources").doc(canvasId).get();
+    return doc.exists ? doc.data() as PersonalSourceRecord : null;
+  }
+
+  async personalBinding(ownerIds: string[]): Promise<PersonalReservation | null> {
+    const owners = await Promise.all([...new Set(ownerIds)].map(async (id) => {
+      const doc = await this.db.collection("personalOwners").doc(id).get();
+      return doc.exists ? doc.data() as PersonalOwnerRecord : null;
+    }));
+    const rows = owners.filter((row): row is PersonalOwnerRecord => !!row);
+    const sources = await Promise.all(rows.map((row) => this.personalSource(row.sourceCanvasId)));
+    return selectPersonalBinding(ownerIds, rows, sources.filter((row): row is PersonalSourceRecord => !!row));
+  }
+
+  async reservePersonal(request: ReservePersonalRequest): Promise<PersonalReservation> {
+    return this.db.runTransaction(async (tx) => {
+      const ids = [...new Set([request.ownerId, ...request.aliases])];
+      const ownerDocs = await Promise.all(ids.map((id) => tx.get(this.db.collection("personalOwners").doc(id))));
+      const owners = ownerDocs.filter((doc) => doc.exists).map((doc) => doc.data() as PersonalOwnerRecord);
+      const sourceIds = [...new Set([request.canvasId, ...owners.map((row) => row.sourceCanvasId)])];
+      const sourceDocs = await Promise.all(sourceIds.map((id) => tx.get(this.db.collection("personalSources").doc(id))));
+      const sources = sourceDocs.filter((doc) => doc.exists).map((doc) => doc.data() as PersonalSourceRecord);
+      const existing = selectPersonalBinding(ids, owners, sources);
+      if (existing) {
+        if (!owners.some((row) => row.ownerId === request.ownerId)) tx.create(this.db.collection("personalOwners").doc(request.ownerId), { ownerId: request.ownerId, sourceCanvasId: existing.source.canvasId, enrolledAt: request.at });
+        return existing;
+      }
+      if (sources.length) throw new Error("personal source id is already reserved");
+      const source: PersonalSourceRecord = { canvasId: request.canvasId, ownerId: request.ownerId, birthOpId: request.birthOpId, createdAt: request.at, birth: "reserved" };
+      tx.create(this.db.collection("personalSources").doc(request.canvasId), source);
+      tx.create(this.db.collection("personalOwners").doc(request.ownerId), { ownerId: request.ownerId, sourceCanvasId: request.canvasId, enrolledAt: request.at });
+      return { source, preserved: [] };
+    });
+  }
+
+  async finishPersonalBirth(canvasId: string, birthOpId: string): Promise<void> {
+    const ref = this.db.collection("personalSources").doc(canvasId);
+    await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      const source = doc.data() as PersonalSourceRecord | undefined;
+      if (!source || source.birthOpId !== birthOpId) throw new Error("personal birth reservation does not match");
+      if (source.birth !== "created") tx.update(ref, { birth: "created" });
+    });
+  }
+
+  async reservePersonalLink(intent: PersonalLinkIntent): Promise<PersonalLinkIntent> {
+    const key = Buffer.from(JSON.stringify([intent.destinationCanvasId, intent.ownerId, intent.requestId])).toString("base64url");
+    const ref = this.db.collection("personalIntents").doc(key);
+    const card = this.db.collection("personalCards").doc(Buffer.from(JSON.stringify([intent.destinationCanvasId, intent.itemId])).toString("base64url"));
+    return this.db.runTransaction(async (tx) => {
+      const [doc, source, previousCard] = await Promise.all([tx.get(ref), tx.get(this.db.collection("personalSources").doc(intent.sourceCanvasId)), tx.get(card)]);
+      if (doc.exists) { const previous = doc.data() as PersonalLinkIntent; assertPersonalIntent(previous, intent); return previous; }
+      if (!source.exists) throw new Error("personal source is not reserved");
+      if (previousCard.exists) throw new Error("personal card id is already reserved");
+      tx.create(ref, intent);
+      tx.create(card, intent);
+      return intent;
+    });
+  }
+
+  async personalLinksFor(destinationCanvasId: string): Promise<PersonalConsent[]> {
+    const rows = await this.db.collection("personalCards").where("destinationCanvasId", "==", destinationCanvasId).get();
+    return rows.docs.map((doc) => doc.data() as PersonalConsent).filter((row) => row.destinationCanvasId === destinationCanvasId);
+  }
+
+  async personalLinkForItem(destinationCanvasId: string, itemId: string): Promise<PersonalConsent | null> {
+    const doc = await this.db.collection("personalCards").doc(Buffer.from(JSON.stringify([destinationCanvasId, itemId])).toString("base64url")).get();
+    const row = doc.exists ? doc.data() as PersonalConsent : null;
+    return row?.destinationCanvasId === destinationCanvasId && row.itemId === itemId ? row : null;
+  }
+
+  async personalDelegations(sourceCanvasId: string): Promise<PersonalDelegate[]> {
+    const rows = await this.db.collection("personalSources").doc(sourceCanvasId).collection("delegates").get();
+    return rows.docs.map((doc) => doc.data() as PersonalDelegate);
+  }
+
+  async setPersonalDelegation(sourceCanvasId: string, delegation: PersonalDelegate): Promise<PersonalDelegate> {
+    const source = this.db.collection("personalSources").doc(sourceCanvasId);
+    const delegate = source.collection("delegates").doc(delegation.agentId);
+    await this.db.runTransaction(async (tx) => {
+      if (!(await tx.get(source)).exists) throw new Error("personal source is not reserved");
+      tx.set(delegate, delegation);
+    });
+    return delegation;
   }
 
   async put(badge: BadgeRecord): Promise<void> {
@@ -275,7 +474,11 @@ export class CloudDesk implements Desk {
     capability?: Capability,
   ): Promise<void> {
     await this.mutate(badgeId, (badge) => {
-      if (badge.admissions.some((a) => a.canvasId === canvasId)) return null;
+      // An admission that has RUN OUT is replaced, not kept — the file desk's
+      // comment says why, and the two backings must answer this identically or
+      // a look behaves differently on a laptop and on the hosted home.
+      const existing = badge.admissions.find((a) => a.canvasId === canvasId);
+      if (keepsAdmission(existing, provenance, capability)) return null;
       // Spread-in whenever it is not edit (`narrowed`): absent means edit
       // everywhere, and Firestore refuses an explicit `undefined` besides.
       const admission: Admission = {
@@ -284,7 +487,10 @@ export class CloudDesk implements Desk {
         at: new Date().toISOString(),
         ...(narrowed(capability) ? { capability } : {}),
       };
-      return { ...badge, admissions: [...badge.admissions, admission] };
+      return {
+        ...badge,
+        admissions: [...badge.admissions.filter((a) => a.canvasId !== canvasId), admission],
+      };
     });
   }
 
@@ -352,18 +558,36 @@ export class CloudDesk implements Desk {
    * It cannot go through `mutate`, which refuses to touch a killed badge —
    * this is the one write that reads the tombstone rather than obeying it.
    */
-  async killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null> {
+  async killBadge(
+    badgeId: string,
+    at: string,
+    by: string,
+    end?: OperatorEnd,
+  ): Promise<BadgeRecord | null> {
     const ref = this.db.collection(BADGES).doc(badgeId);
     return this.db.runTransaction(async (tx) => {
       const doc = await tx.get(ref);
       if (!doc.exists) return null;
       const badge = toRecord(doc.data()!);
       if (badge.killedAt !== undefined) return null;
-      tx.set(ref, denormalize({ ...badge, killedAt: at, killedBy: by }));
+      tx.set(ref, denormalize({ ...badge, killedAt: at, killedBy: by, ...(end ? { end } : {}) }));
       // The record as it was ALIVE: the caller sweeps these admissions and
       // names these actors. Ending the badge is not forgetting where it was.
       return badge;
     });
+  }
+
+  /**
+   * The tombstone, read straight off the document — the second of the two
+   * reads that want it (`killBadge` is the other). `badge()` above answers
+   * null for exactly this record, and `mutate` refuses to touch it; this is
+   * the read that turns *nobody holds it* into *here is when and by whom*.
+   */
+  async endedBadge(badgeId: string): Promise<BadgeRecord | null> {
+    const doc = await this.db.collection(BADGES).doc(badgeId).get();
+    if (!doc.exists) return null;
+    const record = toRecord(doc.data()!);
+    return record.killedAt === undefined ? null : record;
   }
 
   async attest(badgeId: string, attestation: Attestation): Promise<void> {
@@ -416,6 +640,24 @@ export class CloudDesk implements Desk {
   async grantsForSpace(spaceId: string): Promise<Grant[]> {
     const found = await this.db.collection(GRANTS).where("spaceId", "==", spaceId).get();
     return found.docs.map((doc) => toGrant(doc.data()));
+  }
+
+  async listedGrants(): Promise<Grant[]> {
+    const found = await this.db.collection(GRANTS).where("listing.listed", "==", true).get();
+    return found.docs.map((doc) => toGrant(doc.data())).filter(isListedGrant);
+  }
+
+  async setPublicListing(canvasId: string, grantId: string, listed: boolean, at: string, by: string): Promise<Grant | null> {
+    const ref = this.db.collection(GRANTS).doc(grantId);
+    return this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return null;
+      const grant = toGrant(doc.data()!);
+      if (!canListGrant(grant) || grant.canvasId !== canvasId) return null;
+      const changed: Grant = { ...grant, listing: { listed, at, by } };
+      tx.set(ref, jsonSafe(changed));
+      return changed;
+    });
   }
 
   async putGrant(grant: Grant): Promise<void> {
@@ -546,14 +788,23 @@ export class CloudDesk implements Desk {
    * first stamp must stand — the same read-modify-write discipline `mutate`
    * gives a badge, on a document that answers the door.
    */
-  async revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null> {
+  async revokeGrant(grantId: string, at: string, by: string, via?: OperatorRevocation): Promise<Grant | null> {
     const ref = this.db.collection(GRANTS).doc(grantId);
     return this.db.runTransaction(async (tx) => {
       const doc = await tx.get(ref);
       if (!doc.exists) return null;
       const grant = toGrant(doc.data()!);
       if (grant.revokedAt !== undefined) return grant;
-      const revoked: Grant = { ...grant, revokedAt: at, revokedBy: by };
+      // The operator's half goes in the same write as the stamp (operator
+      // phase 5), so no reader can meet a row that is off with nobody to
+      // say why.
+      const revoked: Grant = {
+        ...grant,
+        revokedAt: at,
+        revokedBy: by,
+        ...(grant.listing !== undefined ? { listing: { listed: false, at, by } } : {}),
+        ...(via ? { revokedVia: "operator" as const, revocation: { ...via } } : {}),
+      };
       tx.set(ref, jsonSafe(revoked));
       return revoked;
     });
@@ -568,6 +819,13 @@ export class CloudDesk implements Desk {
   async pass(passId: string): Promise<PassRecord | null> {
     const doc = await this.db.collection(PASSES).doc(passId).get();
     return doc.exists ? toPass(doc.data()!) : null;
+  }
+
+  /** `where("mintedBy", "==", badgeId)` — single-field, so the automatic
+   * index serves it and `firestore.indexes.json` needs nothing. */
+  async passesMintedBy(badgeId: string): Promise<PassRecord[]> {
+    const found = await this.db.collection(PASSES).where("mintedBy", "==", badgeId).get();
+    return found.docs.map((doc) => toPass(doc.data()));
   }
 
   /**
@@ -656,6 +914,182 @@ export class CloudDesk implements Desk {
     });
     this.cachedContentKey = key;
     return key;
+  }
+
+  // ---- seen-marks (#147, #134) ----
+
+  async seenOf(actorId: string): Promise<SeenMarks> {
+    const doc = await this.db.collection(SEEN).doc(actorId).get();
+    const marks = doc.data()?.["marks"];
+    return (marks ?? {}) as SeenMarks;
+  }
+
+  /**
+   * A transaction, for `redeemPass`'s reason rather than its own: the merge
+   * itself is order-independent (`advanceSeen` is a join on each half), but a
+   * read-modify-write that interleaves with another loses one of the two
+   * updates entirely, and a lost update is the one way a mark can go
+   * backwards.
+   */
+  async markSeen(actorId: string, canvasId: string, mark: SeenMark): Promise<SeenMark> {
+    const ref = this.db.collection(SEEN).doc(actorId);
+    return this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      const marks = (doc.data()?.["marks"] ?? {}) as SeenMarks;
+      const merged = advanceSeen(marks[canvasId], mark);
+      tx.set(ref, { marks: { ...marks, [canvasId]: merged } });
+      return merged;
+    });
+  }
+
+  // ---- the operator's ledger (operator phase 1) ----
+
+  async recordOperatorAct(act: OperatorAct): Promise<void> {
+    await this.db.collection(OPERATOR).doc(act.id).set(jsonSafe(act));
+  }
+
+  /**
+   * A merge onto the row already there, and NOT a transaction.
+   *
+   * The two writes of one act are strictly ordered by one request in one
+   * process — the row goes down, the act runs, the outcome is merged — so
+   * there is no second writer to race. That is the difference between this and
+   * `markSeen` beside it, which merges two machines' opinions of one number.
+   * `{merge: true}` rather than `set`, so a field a later phase adds between
+   * the two writes is not erased by the settle.
+   */
+  async settleOperatorAct(id: string, outcome: string, reach?: unknown): Promise<void> {
+    const patch = { outcome, ...(reach !== undefined ? { reach } : {}) };
+    // One line, with the collection on it, so `cloud-desk-writers.test.ts` can
+    // resolve this write rather than reporting it as one it cannot vouch for.
+    await this.db.collection(OPERATOR).doc(id).set(jsonSafe(patch), { merge: true });
+  }
+
+  /**
+   * Newest first, paged by Firestore rather than in memory.
+   *
+   * **Two shapes, and neither needs a composite index** — which is the whole
+   * care here, because a query that needs one fails in production and nowhere
+   * else. Unfiltered is `orderBy("at", "desc")`, a single field. Filtered is
+   * `where("target", "==", …)` with the ordering done in memory, because
+   * `where` plus `orderBy` on two different fields is exactly the pair
+   * Firestore asks for an index for. The filtered list is one target's acts,
+   * which is small; `firestore.indexes.json` stays a file this repo does not
+   * have.
+   */
+  async operatorActs(options: { target?: string | null; limit?: number } = {}): Promise<OperatorAct[]> {
+    const limit = options.limit ?? 100;
+    const target = options.target ?? null;
+    if (target !== null) {
+      const found = await this.db.collection(OPERATOR).where("target", "==", target).get();
+      return found.docs
+        .map((doc) => doc.data() as OperatorAct)
+        .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id))
+        .slice(0, limit);
+    }
+    const found = await this.db.collection(OPERATOR).orderBy("at", "desc").limit(limit).get();
+    return found.docs.map((doc) => doc.data() as OperatorAct);
+  }
+
+  // ---- takedowns (operator phase 2) ----
+
+  /**
+   * `liftedAt: null` is written explicitly, and it is the whole reason
+   * `takedowns()` below needs no composite index and no in-memory filter:
+   * Firestore has no "field is absent" operator, so a row that expressed "in
+   * force" by omission could only be found by reading every row.
+   */
+  async recordTakedown(row: CanvasTakedown): Promise<void> {
+    // One line, with the collection on it, so `cloud-desk-writers.test.ts` can
+    // resolve this write rather than reporting it as one it cannot vouch for —
+    // the same care `settleOperatorAct` takes, and the same reason.
+    const at = this.db.collection(TAKEDOWNS).doc(row.canvasId);
+    await at.set(jsonSafe({ liftedAt: null, ...row }));
+  }
+
+  /**
+   * **A transaction, and the read in it is the whole point** — not the
+   * atomicity. One operator, at a browser, one act at a time: there is no
+   * second writer of this document, which is `settleOperatorAct`'s argument
+   * for a bare merge. But `set(…, {merge: true})` on a document that is NOT
+   * THERE creates it — with three lift fields and no canvas, no reason, no
+   * `by` — and `takedownFor` then answers a row of `undefined`s for a canvas
+   * that was never taken down. The desk contract says a lift of nothing is
+   * silent (the file desk returns when it finds no row), and CI's emulator run
+   * was the first thing able to see the cloud half breaking it: this suite
+   * needs Java, and the worktree run skipped it.
+   *
+   * So: read, and merge only onto a row that exists. `tx.set` with the
+   * collection on the binding line, so `cloud-desk-writers.test.ts` resolves
+   * the write rather than reporting it as one it cannot vouch for.
+   */
+  async liftTakedown(
+    canvasId: string,
+    lifted: { at: string; by: string; actId: string },
+  ): Promise<void> {
+    const ref = this.db.collection(TAKEDOWNS).doc(canvasId);
+    const patch = { liftedAt: lifted.at, liftedBy: lifted.by, liftedActId: lifted.actId };
+    await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return;
+      tx.set(ref, jsonSafe(patch), { merge: true });
+    });
+  }
+
+  /** A merge onto the row, as a lift is, and never a lift's inverse: a purged
+   * row stays purged. Silent on a missing row, for `liftTakedown`'s reason. */
+  async markPurged(
+    canvasId: string,
+    purged: { at: string; actId: string; counts: PurgeCounts },
+  ): Promise<void> {
+    const at = this.db.collection(TAKEDOWNS).doc(canvasId);
+    if (!(await at.get()).exists) return;
+    const patch = { purgedAt: purged.at, purgedActId: purged.actId, purged: purged.counts };
+    await at.set(jsonSafe(patch), { merge: true });
+  }
+
+  async takedownFor(canvasId: string): Promise<CanvasTakedown | null> {
+    const doc = await this.db.collection(TAKEDOWNS).doc(canvasId).get();
+    return doc.exists ? asTakedown(doc.data()!) : null;
+  }
+
+  async takedowns(): Promise<CanvasTakedown[]> {
+    const found = await this.db.collection(TAKEDOWNS).where("liftedAt", "==", null).get();
+    return found.docs.map((doc) => asTakedown(doc.data()));
+  }
+
+  // ---- refusals (operator phase 6) ----
+
+  /** `liftedAt: null` explicitly, for `recordTakedown`'s reason. One line
+   * with the collection on it, so `cloud-desk-writers.test.ts` resolves the
+   * write. */
+  async recordRefusal(row: HomeRefusal): Promise<void> {
+    const at = this.db.collection(REFUSALS).doc(refusalDocId(row.subject));
+    await at.set(jsonSafe({ liftedAt: null, ...row }));
+  }
+
+  /** A transaction, for `liftTakedown`'s reason: a merge onto a document that
+   * is not there would CREATE it, and a row of lift fields with no subject
+   * would then be answered as a refusal of nothing. Read, and merge only onto
+   * a row that exists. */
+  async liftRefusal(subject: string, lifted: { at: string; by: string; actId: string }): Promise<void> {
+    const ref = this.db.collection(REFUSALS).doc(refusalDocId(subject));
+    const patch = { liftedAt: lifted.at, liftedBy: lifted.by, liftedActId: lifted.actId };
+    await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return;
+      tx.set(ref, jsonSafe(patch), { merge: true });
+    });
+  }
+
+  async refusalFor(subject: string): Promise<HomeRefusal | null> {
+    const doc = await this.db.collection(REFUSALS).doc(refusalDocId(subject)).get();
+    return doc.exists ? asRefusal(doc.data()!) : null;
+  }
+
+  async refusals(): Promise<HomeRefusal[]> {
+    const found = await this.db.collection(REFUSALS).where("liftedAt", "==", null).get();
+    return found.docs.map((doc) => asRefusal(doc.data()));
   }
 
   // ---- internals ----
@@ -762,6 +1196,11 @@ function toRecord(data: DocumentData): BadgeRecord {
       : {}),
     ...(typeof data["killedAt"] === "string" ? { killedAt: data["killedAt"] } : {}),
     ...(typeof data["killedBy"] === "string" ? { killedBy: data["killedBy"] } : {}),
+    // The operator's half of a tombstone (operator phase 4). It MUST come
+    // back, for `capability`'s reason below: a field the write kept and every
+    // read dropped would turn an end by the operator into one by the holder
+    // — the sentence without the address, and a CLI that quietly re-badged.
+    ...(data["end"] && typeof data["end"] === "object" ? { end: data["end"] as OperatorEnd } : {}),
   };
 }
 
@@ -780,9 +1219,17 @@ function toGrant(data: DocumentData): Grant {
       : { canvasId: data["canvasId"] as string }),
     subject: data["subject"] as Grant["subject"],
     grantedBy: data["grantedBy"] as string,
+    ...(isGrantListingDecision(data["listing"]) ? { listing: { ...data["listing"] } } : {}),
     at: data["at"] as string,
     ...(typeof data["revokedAt"] === "string" ? { revokedAt: data["revokedAt"] } : {}),
     ...(typeof data["revokedBy"] === "string" ? { revokedBy: data["revokedBy"] } : {}),
+    // The operator's half (operator phase 5): the same field-picking trap
+    // as `capability` and `bars` below. A rebuild that dropped it would turn
+    // "turned off by the operator" into a row the Share dialog shows as an
+    // owner's own revoke — the sentence gone, the ledger row orphaned.
+    ...(data["revokedVia"] === "operator" && isRevocation(data["revocation"])
+      ? { revokedVia: "operator" as const, revocation: { ...data["revocation"] } }
+      : {}),
     // Written whenever it is not edit (#88, `narrowed`), and it MUST come
     // back: this field-picking rebuild is exactly where a stored `view`
     // silently became `edit` on the hosted home — the write kept it, every
@@ -800,6 +1247,14 @@ function toGrant(data: DocumentData): Grant {
   };
 }
 
+/** The operator's half of a grant tombstone, whole or not at all: three
+ * strings, and the reason is checked at the route before it is written. */
+function isRevocation(value: unknown): value is OperatorRevocation {
+  if (!value || typeof value !== "object") return false;
+  const { reason, by, actId } = value as Record<string, unknown>;
+  return typeof reason === "string" && typeof by === "string" && typeof actId === "string";
+}
+
 /** A pass document, back as a record. Nothing is derived here either: a pass
  * is only ever fetched by id, because it is presented rather than listed. */
 function toPass(data: DocumentData): PassRecord {
@@ -813,6 +1268,52 @@ function toPass(data: DocumentData): PassRecord {
     ...(typeof data["actorId"] === "string" ? { actorId: data["actorId"] } : {}),
     ...(typeof data["redeemedAt"] === "string" ? { redeemedAt: data["redeemedAt"] } : {}),
     ...(typeof data["redeemedBy"] === "string" ? { redeemedBy: data["redeemedBy"] } : {}),
+  };
+}
+
+/**
+ * A takedown document, back as a row — and the `null`s dropped.
+ *
+ * `liftedAt: null` is a storage detail this query needs (see {@link
+ * TAKEDOWNS}); a row handed back with it set would fail `inForce`, which asks
+ * whether the field is `undefined`. Field by field rather than a cast, so a
+ * `null` that arrives in any of the three lift fields cannot reach a caller
+ * that will compare it to a string.
+ */
+function asTakedown(data: DocumentData): CanvasTakedown {
+  return {
+    canvasId: data["canvasId"] as string,
+    at: data["at"] as string,
+    reason: data["reason"] as CanvasTakedown["reason"],
+    by: data["by"] as string,
+    actId: data["actId"] as string,
+    ...(typeof data["note"] === "string" ? { note: data["note"] } : {}),
+    ...(typeof data["liftedAt"] === "string" ? { liftedAt: data["liftedAt"] } : {}),
+    ...(typeof data["liftedBy"] === "string" ? { liftedBy: data["liftedBy"] } : {}),
+    ...(typeof data["liftedActId"] === "string" ? { liftedActId: data["liftedActId"] } : {}),
+    ...(typeof data["purgedAt"] === "string" ? { purgedAt: data["purgedAt"] } : {}),
+    ...(typeof data["purgedActId"] === "string" ? { purgedActId: data["purgedActId"] } : {}),
+    ...(data["purged"] && typeof data["purged"] === "object"
+      ? { purged: data["purged"] as PurgeCounts }
+      : {}),
+  };
+}
+
+/** A refusal row from its document, field by field for `asTakedown`'s
+ * reason: the explicit `liftedAt: null` must come back as absence. */
+function asRefusal(data: DocumentData): HomeRefusal {
+  return {
+    subject: data["subject"] as string,
+    kind: data["kind"] as HomeRefusal["kind"],
+    at: data["at"] as string,
+    reason: data["reason"] as HomeRefusal["reason"],
+    by: data["by"] as string,
+    actId: data["actId"] as string,
+    ...(typeof data["note"] === "string" ? { note: data["note"] } : {}),
+    ...(typeof data["expiresAt"] === "string" ? { expiresAt: data["expiresAt"] } : {}),
+    ...(typeof data["liftedAt"] === "string" ? { liftedAt: data["liftedAt"] } : {}),
+    ...(typeof data["liftedBy"] === "string" ? { liftedBy: data["liftedBy"] } : {}),
+    ...(typeof data["liftedActId"] === "string" ? { liftedActId: data["liftedActId"] } : {}),
   };
 }
 

@@ -6,7 +6,7 @@ note: phases 1-6, all acceptances closed
 ---
 # The UI refresh — the walk
 
-**28 August 2026.** The canvas `prj_trml8m4Zfh` holds the design: seven
+**28 August 2026.** The canvas [\[isocan\] UI](https://isocan.io/p/prj_trml8m4Zfh) (`prj_trml8m4Zfh`) holds the design: seven
 screens, a rationale (`The thinking`), and an implementation spec for two of
 them. This is the order to build it in, and what each step has to be true
 before the next one starts.

@@ -21,7 +21,7 @@ const viewport = readFileSync(
  */
 describe("the drop overlay", () => {
   it("is kept alive by dragover and expires by timeout", () => {
-    expect(viewport).toMatch(/setTimeout\(\(\) => setDropping\(false\), 700\)/);
+    expect(viewport).toMatch(/setTimeout\(\(\) => \{ setDropping\(false\); useUiStore\.getState\(\)\.setGroupDropTarget\(null\); \}, 700\)/);
     expect(viewport).toMatch(/onDragOver=\{[^}]*dragAlive/s);
   });
 
@@ -41,7 +41,7 @@ describe("the drop overlay", () => {
     // The spec's stationary-hover repeat is ~350ms; a timeout under it would
     // make the overlay flicker DURING a legitimate hover. Bracketed, per the
     // house rule for tuning constants.
-    const ms = Number(viewport.match(/setDropping\(false\), (\d+)\)/)?.[1]);
+    const ms = Number(viewport.match(/setTimeout\(\(\) => \{ setDropping\(false\);[^}]+\}, (\d+)\)/)?.[1]);
     expect(ms).toBeGreaterThanOrEqual(500);
     expect(ms).toBeLessThanOrEqual(1500);
   });

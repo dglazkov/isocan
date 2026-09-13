@@ -145,18 +145,18 @@ async function rig() {
    * built on it cannot tell "this works" from "this is there but nobody can
    * press it", which is a whole class of interface bug.
    *
-   * So: find the control, take its centre, check the browser agrees that
-   * point belongs to it, and press THERE. When it does not agree, the thing
+   * So: find the control, take its centre (or the requested point), check the
+   * browser agrees that point belongs to it, and press THERE. When it does not agree, the thing
    * on top is named in the failure, because "the button did not respond" and
    * "something is sitting over the button" are different bugs.
    */
-  const rigClick = async (selector, what = selector) => {
+  const rigClick = async (selector, what = selector, point = { x: 0.5, y: 0.5 }) => {
     const box = await b.ev(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return null;
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return { zero: true };
-      const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+      const x = Math.round(r.left + r.width * ${point.x}), y = Math.round(r.top + r.height * ${point.y});
       const top = document.elementFromPoint(x, y);
       /* Containment one way only: the point may land on a CHILD of the
          target, and a button's inner glyph is not an obstruction.
@@ -244,6 +244,22 @@ async function rig() {
       await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: mods, ...k });
       await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: mods, ...k });
       await sleep(600);
+    },
+    /**
+     * A key held DOWN, with the release handed back — the gesture a tap is
+     * not. T and H are tap-to-latch, hold-to-borrow, and since 4a758df6 a held
+     * T that placed something keeps itself, so the hold has to be a real one:
+     * down, something else happens, then up. `rawKeyDown` carries no text, so
+     * nothing is typed while the key is down.
+     */
+    hold: async (key) => {
+      const codes = { t: { windowsVirtualKeyCode: 84, key: "t", code: "KeyT" } };
+      const k = codes[key];
+      if (!k) throw new Error(`journeys cannot hold ${key} yet`);
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...k });
+      return async () => {
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", ...k });
+      };
     },
     /**
      * A press, some moves and a release, through Chrome's own input pipeline.
@@ -440,19 +456,64 @@ export const JOURNEYS = [
   },
   {
     name: "text-tool",
-    /** The bug: ⌘Enter appeared to add nothing, because the write had no
-     *  local echo and the socket was dead. */
-    what: "typing text and pressing ⌘Enter puts it on the canvas",
+    /**
+     * The bug: ⌘Enter appeared to add nothing, because the write had no
+     * local echo and the socket was dead.
+     *
+     * And the tool's two endings, which this journey got wrong for three
+     * nights. `4a758df6` (8 Sep 2026) gave T's two gestures two endings on
+     * purpose — "when you click away it switches to the select tool UNLESS
+     * the user was holding down the T key": a CLICKED T puts one node down and
+     * hands itself back to Select, a HELD T means "several" and stays. The
+     * journey still asserted the old ending, so it failed 9, 10 and 11 Sep
+     * with "the Text tool did not stay selected" — reporting the requested
+     * behaviour as a bug, under a workflow that stayed green. Both endings
+     * are asserted now, each with a real gesture.
+     */
+    what: "⌘Enter puts typed text on the canvas; a clicked T places one, a held T keeps going",
     async run(rig) {
       await makeCanvas(rig, "Text journey");
-      const before = await rig.b.ev(`document.querySelectorAll(".item").length`);
+      const items = () => rig.b.ev(`document.querySelectorAll(".item").length`);
+      const armed = (label) =>
+        rig.b.ev(
+          `[...document.querySelectorAll(".tool-btn")].some(b => b.getAttribute("aria-label") === ${JSON.stringify(label)} && /active|on/.test(b.className))`,
+        );
+
+      // Clicked: one note, then the tool hands itself back.
+      const before = await items();
       await addText(rig, "a typed note");
-      const after = await rig.b.ev(`document.querySelectorAll(".item").length`);
-      if (after <= before) throw new Error("⌘Enter added nothing to the canvas");
-      const stillText = await rig.b.ev(
-        `[...document.querySelectorAll(".tool-btn")].some(b => b.getAttribute("aria-label") === "Text" && /active|on/.test(b.className))`,
+      if ((await items()) <= before) throw new Error("⌘Enter added nothing to the canvas");
+      if (await armed("Text")) throw new Error("a clicked Text tool stayed selected after placing one note");
+      if (!(await armed("Select"))) throw new Error("a clicked Text tool did not hand back to Select");
+
+      // Held: T down, a real press on empty canvas, T up — the intent is read
+      // at the press, so the release can come before the typing, as it does
+      // for a person (nobody types with T held down).
+      const release = await rig.hold("t");
+      try {
+        await until(
+          rig.b,
+          `/active|on/.test(document.querySelector('.tool-btn[aria-label="Text"]')?.className ?? "")`,
+          "holding T to arm the Text tool",
+          4000,
+        );
+        await sleep(400); // past HOLD_MS (250), so the release reads as a hold
+        await rig.stroke([[460, 380]]);
+        await until(rig.b, `!!document.querySelector(".text-composer textarea")`, "the composer, opened with T held");
+      } finally {
+        await release();
+      }
+      const mid = await items();
+      await rig.type("and another");
+      await until(
+        rig.b,
+        `document.querySelector(".text-composer textarea")?.value === "and another"`,
+        "the typed words to reach the composer",
       );
-      if (!stillText) throw new Error("the Text tool did not stay selected");
+      await rig.press("Enter", { meta: true });
+      await sleep(900);
+      if ((await items()) <= mid) throw new Error("⌘Enter with T held added nothing to the canvas");
+      if (!(await armed("Text"))) throw new Error("a held Text tool did not stay selected after placing a note");
     },
   },
   {
@@ -542,32 +603,39 @@ export const JOURNEYS = [
       await makeCanvas(rig, "Delete journey");
       await addText(rig, "about to be deleted");
       await until(rig.b, `document.querySelectorAll(".item").length === 1`, "one item to delete");
+      /* The small note's centre belongs to its Read / select text button.
+         Press its exposed lower-left frame instead: selecting and entering
+         are different gestures. The old centre click entered the note and
+         failed before it ever tested deletion (13 Sep 2026). */
+      await rig.type("v");
+      await until(rig.b, `!!document.querySelector('.tool-btn.active[aria-label="Select"]')`, "the Select tool");
+      await rig.click(".item", "the item's lower-left frame", { x: 0.03, y: 0.9 });
+      await until(rig.b, `document.querySelectorAll(".item.selected").length === 1`, "a selection");
       // Hold the op POST for longer than anybody would wait.
       await rig.b.ev(`(() => {
         const real = window.fetch;
         window.__realFetch = real;
+        window.__heldOpPosts = 0;
         window.fetch = async (...a) => {
           const url = typeof a[0] === "string" ? a[0] : a[0]?.url;
           if (String(url).endsWith("/api/ops") && a[1]?.method === "POST") {
+            window.__heldOpPosts++;
             await new Promise(r => setTimeout(r, 9000));
+            window.__heldOpPosts--;
           }
           return real(...a);
         };
         return true;
       })()`);
-      /* V rather than clicking the rail: the Select tool is where a presence
-         face can overlap the button, which is a separate question from
-         whether delete is immediate. */
-      await rig.type("v");
-      await sleep(300);
-      await rig.click(".item", "the item");
-      await until(rig.b, `document.querySelectorAll(".item.selected").length === 1`, "a selection");
-      await rig.press("Delete");
-      await sleep(400);
-      const left = await rig.b.ev(`document.querySelectorAll(".item").length`);
-      await rig.b.ev(`(() => { window.fetch = window.__realFetch; return true; })()`);
-      if (left !== 0) {
-        throw new Error("the item is still on screen 400ms after Delete — the write has no echo");
+      try {
+        await rig.press("Delete");
+        await until(rig.b, `window.__heldOpPosts > 0`, "the delete POST to stall", 1500);
+        const left = await rig.b.ev(`document.querySelectorAll(".item").length`);
+        if (left !== 0) {
+          throw new Error("the item is still on screen after Delete while its POST is stalled — the write has no echo");
+        }
+      } finally {
+        await rig.b.ev(`(() => { window.fetch = window.__realFetch; return true; })()`);
       }
     },
   },

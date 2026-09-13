@@ -3,7 +3,10 @@
 From nothing to working with an agent on a canvas. Five minutes.
 
 *Just want it running?* [`start.md`](start.md) is the first two steps below
-and nothing else.
+and nothing else. *Want to see one first?* The
+[\[isocan\] Getting Started](https://isocan.io/p/prj_6nodKBn0oA) canvas is this page as a
+deck, and [\[isocan\] Demo](https://isocan.io/p/prj_sN8FgZuimi) is the story of the
+thing on the thing — both open to anyone with the address.
 
 ## 1. Give your agent the skill
 

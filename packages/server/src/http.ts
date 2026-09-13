@@ -1,4 +1,14 @@
-import { createReadStream, existsSync, promises as fs } from "node:fs";
+import { Readable } from "node:stream";
+import { PersonalService, PersonalError } from "./personal.ts";
+import { SOURCE_POLICY_HEADER, parseSourcePolicyHeader, SOURCE_ACCESS_ROUTE, personalRoute, type SourceRequestContext, type SourceAccessRequest, type PersonalLinkRequest, type PersonalUnlinkRequest, type PersonalReadRequest } from "@isocan/core";
+import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type SetPublicListingRequest } from "@isocan/core";
+import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
+import { collectInbox, sequenceInbox } from "./inbox.ts";
+import { textAttention } from "@isocan/core";
+import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
+import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
+import { registerCanvasGroupContext } from "./canvas-group-context.ts";
+import { createReadStream, existsSync, statSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -27,6 +37,7 @@ import type {
   MintPassRequest,
   MintPassResponse,
   Pass,
+  PassResponse,
   PostOpRequest,
   Canvas,
   RcAskRequest,
@@ -35,6 +46,9 @@ import type {
   RedeemPassResponse,
   Space,
   SpacesResponse,
+  SeenMarksResponse,
+  SeenResponse,
+  MarkSeenRequest,
   SpaceResponse,
   CreateSpaceRequest,
   SpaceCanvasRequest,
@@ -59,6 +73,9 @@ import {
   SPACE_NOT_FOUND,
   spaceNameRefusal,
   SPACES_ROUTE,
+  SEEN_ROUTE,
+  mergeSeen,
+  resolveActor,
   BAD_GROUP,
   claimsActor,
   GROUP_NAME_TAKEN,
@@ -81,6 +98,7 @@ import {
   DOOR_ROUTE,
   FILENAME_HEADER,
   fileOf,
+  visualFileOf,
   FREE_NAME_ROUTE,
   actorNameIn,
   attestationSatisfying,
@@ -104,6 +122,9 @@ import {
   normalizeSubject,
   NO_ATTESTER,
   NO_RC_CODE,
+  NOT_YOUR_RC_CODE,
+  sameActor,
+  askTemplate,
   NOT_YOUR_BADGE,
   OplogFencedError,
   OpValidationError,
@@ -118,6 +139,7 @@ import {
   narrowed,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
+  PASS_UNKNOWN,
   RUNGS,
   SERVING_ROUTE,
   SIGN_BLOBS_LIMIT,
@@ -135,6 +157,75 @@ import {
   normalizeSiteUrl,
   bindVerdict,
   takenSentence,
+  NO_OPERATOR,
+  NO_OPERATOR_PROOF,
+  OPERATOR_API_PREFIX,
+  OPERATOR_LOG_ROUTE,
+  OPERATOR_PROOF_HEADER,
+  OPERATOR_SHOW_ROUTE,
+  type OperatorAct,
+  type OperatorLogResponse,
+  type OperatorReach,
+  type OperatorShowResponse,
+  // operator phase 2: the look, the takedown, and the sentence.
+  isTakedownReason,
+  noticeOf,
+  OPERATOR_LOOK_MS,
+  OPERATOR_LOOK_ROUTE,
+  OPERATOR_TAKEDOWN_ROUTE,
+  TAKEDOWNS_CANVAS_PARAM,
+  TAKEDOWNS_ROUTE,
+  TAKEN_DOWN,
+  takedownReasonList,
+  WS_NOT_ADMITTED,
+  BADGE_ENDED,
+  type BadgeEnd,
+  type CanvasTakedown,
+  type CdnPurge,
+  type OperatorLookResponse,
+  type TakedownReach,
+  type TakedownReason,
+  type OperatorTakedownRequest,
+  type OperatorTakedownResponse,
+  type TakedownNotice,
+  type TakedownsResponse,
+  // operator phase 3: the purge.
+  OPERATOR_PURGE_ROUTE,
+  // operator phase 4: the operator's end, by badge, actor or address.
+  OPERATOR_END_ROUTE,
+  actorAliases,
+  passExpired,
+  type EndedSurface,
+  type OperatorEnd,
+  type OperatorEndReach,
+  type OperatorEndRequest,
+  type OperatorEndResponse,
+  purgeNeedsTakedown,
+  replicasHorizon,
+  type OperatorPurgeRequest,
+  type OperatorPurgeResponse,
+  // operator phase 5: the operator's revoke, and the tombstone both surfaces read.
+  OPERATOR_REVOKE_ROUTE,
+  operatorTurnedOff,
+  revokedSentence,
+  type OperatorRevocation,
+  type OperatorRevokeRequest,
+  type OperatorRevokeResponse,
+  // operator phase 6: refuse at the door.
+  OPERATOR_REFUSE_ROUTE,
+  NOT_ADMITTED,
+  REFUSED,
+  NET_REFUSAL_DEFAULT_MS,
+  parseRefusalDuration,
+  refusalNoticeOf,
+  refusalSentence,
+  refusalSubjectOf,
+  refusalSubjectRefusal,
+  type HomeRefusal,
+  type OperatorRefuseRequest,
+  type OperatorRefuseResponse,
+  type RefusalKind,
+  type RefusalReach,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
@@ -150,7 +241,10 @@ import {
   type SigningKeys,
 } from "./attest.ts";
 import { gcCanvases } from "./gc.ts";
+import { contentTtl } from "./content-auth.ts";
+import { CDN_URL_MAP, Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
 import {
+  admissionIn,
   admittingGrant,
   capabilityIn,
   heldCapability,
@@ -168,17 +262,23 @@ import {
   TOO_MANY_BADGES,
   type MintRefusal,
 } from "./meter.ts";
+import { NO_PROOF_PRESENTED, operatorAbsence, proveOperator } from "./operator.ts";
+import type { SocketCensus } from "./ws.ts";
 import { killAndSweep, sweepCanvas, sweepCanvases, sweepSpace, SweepHub } from "./sweep.ts";
 import { mintPass, PassRefusedError, redeemPass } from "./passes.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
 import {
   badgeCookie,
+  BadgeEndedError,
+  endOf,
+  framedRequest,
   isSecureRequest,
   mintBadge,
   originAllowed,
   presentedBadge,
   resolveBadge,
+  resolveEnded,
 } from "./badges.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildRoot, buildStamp } from "./build.ts";
@@ -186,7 +286,7 @@ import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 import type { HomeLinks } from "./home-links.ts";
 import type { ParkCursors } from "./park.ts";
 import { DocRefusal, fetchGoogleDoc, type GoogleToken } from "./google.ts";
-import { RcHolds } from "./rc-holds.ts";
+import { RcHolds, rcPoliciesOf } from "./rc-holds.ts";
 import { isContentPath, isContentRequest, registerContentRoutes, type ContentSigning } from "./content.ts";
 import { signedBlobPath } from "./content-auth.ts";
 import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
@@ -266,6 +366,11 @@ export const STATIC_TYPES: Record<string, string> = {
   ".js": "text/javascript",
   ".css": "text/css",
   ".svg": "image/svg+xml",
+  // A module's assets (proposed: `assets`, 11 Sep 2026): its DESIGN.md files
+  // and its data were served as octet-stream and fetched by type-blind code;
+  // naming them costs nothing and lets a browser show one if you open it.
+  ".md": "text/markdown; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".webp": "image/webp",
   // The painted grounds (#195's art, 8 Sep 2026). Four tiles under
@@ -384,10 +489,14 @@ function isOpen(method: string, pathname: string): boolean {
   // Release notes. Nothing here is not already public, and a "what's new"
   // that needs a badge is one nobody reads on the day they most want to.
   if (method === "GET" && pathname === NEWS_ROUTE) return true;
+  if ((method === "GET" || method === "HEAD") && pathname === PUBLIC_CANVASES_ROUTE) return true;
   return false;
 }
 
 interface RouteOptions {
+  /** Local setup persists its pass-returned person in the same process as
+   * home badge writes. The route guards local custody before spending a pass. */
+  adoptIdentity?: (actor: Actor) => Promise<{ actor: Actor; adopted: boolean }>;
   /**
    * Where a sweep's per-badge outcomes go (roles design, "Reaching an open
    * socket"): the daemon hands the same hub to `ws.ts`, which tells the
@@ -418,6 +527,18 @@ interface RouteOptions {
    * needs no restart. Absent on a daemon that should serve none.
    */
   modulesHome?: string;
+  /**
+   * **Does this daemon serve the world?** What the bind says, stated rather
+   * than sniffed: `daemon.ts` derives it from the address it was told to listen
+   * on, and absent it the socket is read (`loopbackBound`).
+   *
+   * It decides whether discovery uses the machine's local trust or the
+   * hosted boundary, and exists as an option because a test cannot bind
+   * `0.0.0.0` to find out. Binding wide from a test opens a port to the
+   * network, and with `SO_REUSEADDR` it can be handed a port another suite
+   * already holds on `127.0.0.1`, after which the two daemons trade requests.
+   */
+  servesWorld?: boolean;
   /**
    * The content origin's base URL, or null/absent when none exists — which
    * is every daemon at stage 1 of the content-origin plan. The daemon sets
@@ -465,6 +586,23 @@ interface RouteOptions {
    */
   auth?: AuthConfig | null;
   /**
+   * **The addresses this home calls its operator** (operator phase 1), or
+   * absent/empty for none — which is every daemon in this repo.
+   *
+   * Configuration reaching the routes the way `auth` does, and inseparable
+   * from it: a list with no attester cannot be proved, and an attester with no
+   * list recognises nobody. `operatorAbsence` in `operator.ts` is the one
+   * reader that holds both and says which is missing.
+   */
+  operators?: readonly string[];
+  /**
+   * **How many sockets are open on a canvas right now**, for the reach
+   * `isocan operator show` prints. Absent in a caller that wired the routes
+   * without a socket layer, and then the number is simply absent rather than
+   * a confident zero — see `SocketCensus`.
+   */
+  sockets?: SocketCensus;
+  /**
    * Where the public keys a presented token is checked against come from.
    * Defaults to Google's published endpoint; see `SigningKeys` in `attest.ts`
    * for why this is configuration and what it buys.
@@ -485,6 +623,18 @@ interface RouteOptions {
    * behavior the inline map gave it.
    */
   rc?: RcHolds;
+  /**
+   * **What this home refuses at the door** — takedowns (operator phase 2) and
+   * home-scope refusals (operator phase 6), in one registry read on every
+   * canvas-scoped request, every upgrade, and every mint.
+   *
+   * Shared with the WS layer and the mint meter, so the daemon supplies one
+   * instance and three readers of one list cannot come to three answers. A
+   * caller that wires routes by hand gets a private, empty one — nothing is
+   * down and nobody is refused, which is the truth about a home that has no
+   * operator.
+   */
+  refusals?: Refusals;
 }
 
 export function registerRoutes(
@@ -529,6 +679,86 @@ export function registerRoutes(
   const auth = options.auth ?? null;
   const attesters = attestersOf(auth);
   const signingKeys = options.signingKeys ?? googleSigningKeys;
+  /** Who this home calls its operator, derived once for `auth`'s reason: it
+   * cannot change while the process is up, and a list recomputed per call
+   * would invite somebody to make it a lookup that can fail halfway through
+   * an act. */
+  const operators = options.operators ?? [];
+  /** The one door registry — takedowns and refusals both (operator phases 2
+   * and 6). Private and empty when the caller wired none, the honest answer
+   * for a home that has taken nothing down and refused nobody. */
+  const refusals = options.refusals ?? new Refusals();
+
+  /**
+   * **Who is parked on `/api/oplog/watch` right now**, so a takedown can wake
+   * them (operator phase 2).
+   *
+   * A registry of live long polls, in this closure, for the length of each
+   * request. It exists because a takedown reaches a parked wait through no
+   * channel that already existed: `engine.onEvent` carries ops and a takedown
+   * is not one, and `SweepHub` carries expulsions and nobody was expelled.
+   *
+   * Kept deliberately small — a set of callbacks, no badges, no cursors — so
+   * it cannot become a second place where "who is watching what" is known. The
+   * only question it can answer is *wake the polls that named this canvas*,
+   * and `null` means a home-wide watch, which is woken too: it has to re-ask,
+   * because the canvas it would have reported has stopped being hearable.
+   */
+  const watchers = {
+    live: new Set<{ only: ReadonlySet<string> | null; wake: () => void }>(),
+    register(only: ReadonlySet<string> | null, wake: () => void): () => void {
+      const row = { only, wake };
+      this.live.add(row);
+      return () => this.live.delete(row);
+    },
+  };
+
+  /** Wake every parked watch that could be affected, and say how many. The
+   * count is journey 3 step 2's *one wait ended* — measured at the moment of
+   * acting rather than guessed at. */
+  const wakeWatchers = (canvasId: string): number => {
+    let woken = 0;
+    for (const row of watchers.live) {
+      if (row.only && !row.only.has(canvasId)) continue;
+      row.wake();
+      woken += 1;
+    }
+    return woken;
+  };
+
+  /**
+   * **The one line the home cannot do for itself** — journey 3 step 2.
+   *
+   * A verified content read goes out `public, max-age=<what is left>` through
+   * Cloud CDN and nothing in this tree invalidates the edge, so a frame
+   * already cached is served until it ages out. The daemon does not clear it
+   * and is not going to: doing so would mean the daemon's service account
+   * holding compute rights on the load balancer — a standing power, granted
+   * for a rare act (design, "What it reaches"). So the operator is handed the
+   * command and runs it as himself.
+   *
+   * Null on a home with no content origin, which is every local one: printing
+   * a `gcloud` line to somebody running a laptop would be noise dressed as an
+   * instruction, and on a local home the frames were never at an edge.
+   *
+   * The horizon is this home's own signing TTL rather than the five minutes
+   * the journey says, because `ISOCAN_CONTENT_TTL` can change it and a
+   * sentence that said five would be wrong at exactly the home that changed
+   * it.
+   */
+  const cdnPurgeFor = (canvasId: string): CdnPurge | null => {
+    // `contentHost` and NOT `contentBase`: a local daemon has a content BASE —
+    // its own second listener on the next port — and no edge in front of it at
+    // all. The host is the hosted origin, `isocan.store`, which is the only
+    // thing that is ever behind Cloud CDN.
+    if (!options.contentHost) return null;
+    return {
+      horizonSeconds: contentTtl(process.env["ISOCAN_CONTENT_TTL"]),
+      command:
+        `gcloud compute url-maps invalidate-cdn-cache ${CDN_URL_MAP} --global ` +
+        `--path "/api/projects/${canvasId}/blobs/*"`,
+    };
+  };
 
   /**
    * **The door's meter** (phase 13.7 — `innkeeper.md`: badges are free to
@@ -550,6 +780,18 @@ export function registerRoutes(
   const mintMeter = new TokenBuckets();
   const mayMint = (req: FastifyRequest): MintRefusal | null =>
     mintMeter.take(clientAddress(req.headers, req.ip, { loopback: loopbackBound(app) }));
+
+  /**
+   * **The network this knock came from, when the operator refused it**
+   * (operator phase 6) — the mint meter's home-scope refusal, read on the
+   * same key the meter buckets on so the two agree about whose address this
+   * is. `net:` refuses MINTING a badge, which is exactly what both mint paths
+   * are about to do; a caller that already holds a badge never reaches either,
+   * so a refusal never touches somebody already inside. Shared with the page
+   * fallback, which withholds the badge on it as it does on a metered knock.
+   */
+  const refusedNet = (req: FastifyRequest): HomeRefusal | null =>
+    refusals.refusingNet(clientAddress(req.headers, req.ip, { loopback: loopbackBound(app) }));
 
   /**
    * What a refused mint is written down as, for the reader who is neither the
@@ -576,6 +818,12 @@ export function registerRoutes(
   };
 
   app.setErrorHandler((err, _req, reply) => {
+    if (err instanceof CanvasGroupsClientError) {
+      return reply.status(426).send({ error: err.message, code: err.code });
+    }
+    if (err instanceof GroupConflictError || err instanceof MigrationBoundaryError) {
+      return reply.status(409).send({ error: err.message, code: err.code });
+    }
     if (err instanceof OpValidationError) {
       return reply.status(400).send({ error: err.message, code: err.code });
     }
@@ -602,6 +850,42 @@ export function registerRoutes(
       return reply
         .status(403)
         .send({ error: err.message, code: err.code, ...(err.reason ? { reason: err.reason } : {}) });
+    }
+    /**
+     * **Taken down** (operator phase 2): the same 403 and the same
+     * `not-admitted` code, so every client that already reads a `reason` beside
+     * that code reads this one too, and a fresh badge is not attempted — and a
+     * DIFFERENT `error`, which is the sentence the home wrote. The words come
+     * from the home rather than from whichever surface is drawing them, and
+     * this is where they leave it.
+     */
+    if (err instanceof TakenDownError) {
+      return reply
+        .status(err.status)
+        .send({ error: err.message, code: err.code, reason: err.reason });
+    }
+    /**
+     * **Refused at the door** (operator phase 6): a badge that proved an
+     * address this home refuses. The same 403 and `not-admitted` as the two
+     * above — every client that reads a `reason` reads this one, and a fresh
+     * badge is not attempted — with the reason `refused` and the sentence the
+     * home wrote, carrying the date, the category and the address to write to.
+     */
+    if (err instanceof RefusedError) {
+      return reply
+        .status(err.status)
+        .send({ error: err.message, code: err.code, reason: err.reason, refusal: err.notice });
+    }
+    /**
+     * **A parked wait whose badge was ended** (operator phase 4): the same
+     * 403 and `not-admitted` as the two above, with the reason `ended` and the
+     * tombstone's sentence — see `BadgeEndedError` for why a park is refused
+     * this way when every other request from a dead badge meets a 401.
+     */
+    if (err instanceof BadgeEndedError) {
+      return reply
+        .status(err.status)
+        .send({ error: err.message, code: err.code, reason: err.reason, ended: err.end });
     }
     // 403 like `not-admitted`, one notch further in (#88): badged, admitted,
     // and the ledger says look-don't-touch. Its own code because the remedy is
@@ -769,8 +1053,64 @@ export function registerRoutes(
     return new ViewOnlyError(canvasId, snapshot ? await ownerName(snapshot.project) : undefined);
   };
 
+  const personal = new PersonalService(engine, store, desk, (id) => !!options.homes?.for(id));
+  const sourceContexts = new WeakMap<FastifyRequest, SourceRequestContext>();
+  const sourceCaps = new WeakMap<FastifyRequest, Capability>();
+  const localOrigin = (req: FastifyRequest): string => new URL(`${isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted)) ? "https" : "http"}://${req.headers.host}`).origin;
+  const sourceIntent = (method: string, pathname: string): "read" | "edit" | "own" => {
+    if (method === "GET" || method === "HEAD" || pathname === "/api/oplog/watch" || pathname.startsWith("/api/park/") || /\/personal\/read$/.test(pathname)) return "read";
+    return /\/(?:grants|passes|space)(?:\/|$)/.test(pathname) || /^\/api\/spaces\/[^/]+\/canvases\/[^/]+$/.test(pathname) ? "own" : "edit";
+  };
+  const checkSource = async (canvasId: string, badgeId: string, context: SourceRequestContext, intent: "read" | "edit" | "own", actorId?: string, lookup: "entry" | "discovery" = "entry"): Promise<Capability | null> => {
+    context.signal?.throwIfAborted();
+    const badge = await desk.badge(badgeId);
+    const refused = refusals.refusingAttestation(badge?.attestations ?? []);
+    if (refused) throw new RefusedError(refused);
+    const down = refusals.of(canvasId); if (down) throw new TakenDownError(down);
+    const home = options.homes?.for(canvasId);
+    if (home) {
+      if (context.expectedHome && normalizeHomeUrl(context.expectedHome) !== normalizeHomeUrl(home.homeUrl)) throw new PersonalError("the selected source home does not match its recorded authority");
+      const policy = context.policy;
+      if (policy.mode === "direct") await engine.requireActor(badgeId, policy.actorId);
+      const answer = await home.personalRequest<{ kind: string; capability: Capability }>("POST", SOURCE_ACCESS_ROUTE,
+        { canvasId, expectedHome: home.homeUrl, lookup, policy }, policy.mode === "direct" ? await actorNamed(policy.actorId) : undefined, context);
+      if (policy.mode === "direct" && !atLeast(policy.intent, intent)) throw new PersonalError("this request exceeds its selected source intent", "personal-intent-exceeded");
+      return answer.kind === "personal" ? answer.capability : null;
+    }
+    return personal.direct(canvasId, badgeId, context, intent, lookup, actorId);
+  };
+  engine.setSourceGuard(async (id, badge, context, intent, actor) => {
+    if (options.homes?.for(id)) throw new PersonalError("source authority changed while this write waited; retry at its home");
+    await checkSource(id, badge, context, intent, actor);
+  });
+
+  // Raw content handlers normally set immutable caching after onRequest.
+  // A scoped source decision must reach the authority on every read.
+  app.addHook("onSend", async (req, reply, payload) => {
+    if (sourceContexts.has(req)) reply.header("Cache-Control", "no-store");
+    return payload;
+  });
+
   app.addHook("onRequest", async (req, reply) => {
     const pathname = (req.url ?? "/").split("?")[0]!;
+    const sourceHeader = req.headers[SOURCE_POLICY_HEADER.toLowerCase()];
+    if (sourceHeader !== undefined) {
+      if (typeof sourceHeader !== "string") throw new PersonalError("invalid source policy", "bad-source-policy");
+      let decoded: Omit<SourceRequestContext, "signal">;
+      try { decoded = parseSourcePolicyHeader(sourceHeader); } catch { throw new PersonalError("invalid source policy", "bad-source-policy"); }
+      const controller = new AbortController();
+      req.raw.once("aborted", () => controller.abort());
+      reply.raw.once("close", () => { if (!reply.raw.writableFinished) controller.abort(); });
+      sourceContexts.set(req, Object.freeze({ ...decoded, signal: controller.signal }));
+      reply.header("Cache-Control", "no-store");
+    }
+    if (pathname.includes("/personal") || pathname === "/api/source-classification" || pathname === SOURCE_ACCESS_ROUTE) reply.header("Cache-Control", "no-store");
+    if (pathname === PUBLIC_CANVASES_ROUTE || pathname === "/public" || pathname === "/public/") {
+      reply.header("X-Robots-Tag", "noindex, nofollow");
+      reply.header("Cache-Control", "no-store");
+    } else if (canvasIdIn(pathname) !== null) {
+      reply.header("X-Robots-Tag", "noindex");
+    }
 
     /**
      * **The content origin's door, which is that it has none** — stage 4b of
@@ -817,6 +1157,24 @@ export function registerRoutes(
 
     if (req.badge) {
       await desk.touch(req.badge.badgeId, new Date().toISOString());
+      /**
+       * **A home with no operator says so, for the whole prefix** (operator
+       * journey 11 step 2).
+       *
+       * Here rather than in each handler for this hook's standing reason:
+       * coverage by DEFAULT. Phase 2 adds `takedown`, `purge`, `end`,
+       * `revoke` and `refuse` under the same prefix, and a home that answered
+       * five of the six honestly would be worse than one that answered none.
+       *
+       * After the badge and not before it, so the order of the two facts is
+       * the order they matter in: a caller with no badge is told about the
+       * badge, which is what it must fix before this answer is even
+       * reachable.
+       */
+      if (pathname.startsWith(OPERATOR_API_PREFIX)) {
+        const absence = operatorAbsence(auth, operators);
+        if (absence) return reply.status(400).send({ error: absence, code: NO_OPERATOR });
+      }
       // The door's test, re-asked. One hook rather than a call in each
       // handler, for the same reason the badge check is one hook: a
       // canvas-scoped route added later is covered by DEFAULT instead of by
@@ -824,7 +1182,57 @@ export function registerRoutes(
       const scoped = CANVAS_API_ROUTE.exec(pathname)?.[1];
       if (scoped) {
         const canvasId = decodeSegment(scoped);
+        /**
+         * **A canvas this home has taken down is refused here, with a
+         * sentence** (operator phase 2; design, "The record").
+         *
+         * In the hook, before the door, for two separate reasons:
+         *
+         * - *Coverage by default*, this hook's standing argument. A takedown
+         *   has to stop the canvas being served, and "served" is every
+         *   canvas-scoped route there is — the snapshot, the oplog, the blobs,
+         *   the grants, the passes, the rc. One line covers them and the ones
+         *   added next month.
+         * - *Before the door*, because the people this is for are MEMBERS, and
+         *   a member is admitted: the door's test short-circuits on an
+         *   existing admission and would let every one of them straight
+         *   through.
+         *
+         * And it is a refusal with WORDS rather than the 404 the store's flag
+         * would otherwise produce. *Never silence, never `not found` for
+         * something that was taken down* — the difference between *there is
+         * nothing here* and *this was removed, and here is who to ask* is the
+         * whole message, and this is the line that makes it so on the HTTP
+         * surface.
+         */
+        const down = refusals.of(canvasId);
+        if (down) throw new TakenDownError(down);
+        /**
+         * **A badge that proved a refused address is turned away from every
+         * canvas** (operator phase 6; design's table: *every canvas and every
+         * create, for any badge that proved it*). In the hook, before the
+         * door, for the takedown's second reason: a refused person is often a
+         * member, and a member short-circuits the admission check — so this
+         * has to run before it, with the home's sentence rather than the door's
+         * bare *not admitted*.
+         */
+        const refused = refusals.refusingAttestation(req.badge?.attestations ?? []);
+        if (refused) throw new RefusedError(refused);
+        const sourceContext = sourceContexts.get(req);
+        if (sourceContext) {
+          if (!options.homes?.for(canvasId) && sourceContext.expectedHome && normalizeHomeUrl(sourceContext.expectedHome) !== normalizeHomeUrl(localOrigin(req))) throw new PersonalError("the selected source home does not match this authority");
+          const cap = await checkSource(canvasId, req.badge.badgeId, sourceContext, sourceIntent(req.method, pathname));
+          if (cap) sourceCaps.set(req, cap);
+          // The actual authoritative response is forwarded after parsing the body.
+          if (options.homes?.for(canvasId)) return;
+        }
         await admit(req, canvasId);
+        // Blob renderers do not carry reducer state. Every other canvas
+        // route is gated, including newly added mutation routes.
+        if (!pathname.includes("/blobs") && !supportsCanvasGroups(req.headers[CLIENT_FEATURES_HEADER])) {
+          const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
+          if (snapshot) requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.project);
+        }
         /**
          * The capability check, method-keyed and in the SAME hook (#88): an
          * admission below `edit` (`view`, `read`) reads everything and
@@ -839,6 +1247,7 @@ export function registerRoutes(
         if (
           req.method !== "GET" &&
           req.method !== "HEAD" &&
+          !/\/personal\/read$/.test(pathname) &&
           !atLeast(capabilityIn(req.badge, canvasId) ?? "edit", "edit")
         ) {
           throw await viewOnly(canvasId);
@@ -846,14 +1255,38 @@ export function registerRoutes(
       }
       return;
     }
-    if (isOpen(req.method, pathname)) return;
-    return presented
-      ? reply
-          .status(401)
-          .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" })
-      : reply
-          .status(401)
-          .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+    // Public browsing needs no identity, but a supplied ended credential
+    // still receives its own refusal instead of silently becoming anonymous.
+    if (isOpen(req.method, pathname) && !(pathname === PUBLIC_CANVASES_ROUTE && presented)) return;
+    if (!presented) {
+      return reply
+        .status(401)
+        .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+    }
+    /**
+     * **The 401 carries the tombstone's reason** (operator phase 4; design,
+     * "End a badge"). `bad-badge` is what a wiped home says, and it is the
+     * right thing to say to a credential from nowhere: throw it away and
+     * knock. A badge this home ENDED is one it has a record about, and the
+     * record is the whole message — *this surface was ended, on this date,
+     * by this hand*. Still a 401, because the credential is finished; a
+     * different code and a `reason` of `holder` or `operator`, because the
+     * client's one recovery per request branches on it: an end by the holder
+     * keeps the quiet re-badge that lost-badge recovery is made of, and an end
+     * by the operator prints the sentence and stops. The secret was checked
+     * against the tombstone, so a caller that can only spell the id reads
+     * `bad-badge` as before.
+     */
+    const gone = await resolveEnded(desk, presented);
+    if (gone) {
+      const ended = endOf(gone);
+      return reply
+        .status(401)
+        .send({ error: ended.sentence, code: BADGE_ENDED, reason: ended.by, ended });
+    }
+    return reply
+      .status(401)
+      .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" });
   });
 
   /**
@@ -877,6 +1310,35 @@ export function registerRoutes(
    * be reachable.
    */
   app.addHook("preValidation", async (req, reply) => {
+    const context = sourceContexts.get(req);
+    if (context && req.badge) {
+      const pathname = req.url.split("?")[0]!;
+      const body = req.body as { canvasId?: string; actor?: Actor; actorId?: string; op?: { type?: string; canvasId?: string } } | undefined;
+      const scoped = CANVAS_API_ROUTE.exec(pathname)?.[1] ?? /^\/api\/spaces\/[^/]+\/canvases\/([^/]+)$/.exec(pathname)?.[1];
+      const canvasId = scoped ? decodeSegment(scoped) : (pathname === "/api/ops" || pathname.startsWith("/api/park/")) ? body?.canvasId ?? (body?.op?.type === "project.create" ? body.op.canvasId : undefined) : undefined;
+      if (canvasId) {
+        if (!options.homes?.for(canvasId) && context.expectedHome && normalizeHomeUrl(context.expectedHome) !== normalizeHomeUrl(localOrigin(req))) throw new PersonalError("the selected source home does not match this authority");
+        const intent = body?.op?.type === "project.create" ? "own" : sourceIntent(req.method, pathname);
+        const actors = [body?.actor?.id, body?.actorId, (req.query as { actorId?: string }).actorId].filter((id) => id !== undefined);
+        const cap = await checkSource(canvasId, req.badge.badgeId, context, intent);
+        if (cap) for (const actor of actors) {
+          if (typeof actor !== "string" || !actor) throw new PersonalError("a source actor must be a nonempty actor id");
+          await checkSource(canvasId, req.badge.badgeId, context, intent, actor);
+        }
+        if (cap) sourceCaps.set(req, cap);
+        const home = options.homes?.for(canvasId);
+        if (home) {
+          const headers: Record<string, string> = {};
+          for (const name of ["content-type", "range", "x-isocan-filename"]) if (typeof req.headers[name] === "string") headers[name] = req.headers[name] as string;
+          const actor = context.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
+          const response = await home.sourceRequest(req.method, req.url, req.body, headers, actor, context);
+          reply.status(response.status);
+          for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "content-security-policy", "x-content-type-options", "content-disposition"]) { const value = response.headers.get(name); if (value) reply.header(name, value); }
+          reply.header("Cache-Control", "no-store");
+          return reply.send(response.body ? Readable.fromWeb(response.body as import("node:stream/web").ReadableStream) : undefined);
+        }
+      }
+    }
     const body = req.body as { op?: unknown } | undefined;
     // The nested `op` too: `project.create` is the one op that carries the
     // canvas's id INSIDE the operation, so a pre-rename create is stale in two
@@ -909,6 +1371,20 @@ export function registerRoutes(
    */
   app.post(DOOR_ROUTE, async (req, reply) => {
     if (req.badge) return { badgeId: req.badge.badgeId } satisfies DoorResponse;
+    /**
+     * **A knock from a refused network is turned away with the sentence**
+     * (operator phase 6; journey 9 step 3). Before the meter, because this is
+     * a standing refusal rather than a rate — a flood the operator named does
+     * not get to spend its twenty first — and 403 rather than 429, because a
+     * refused network is not told to wait: the refusal ends on its own when
+     * `--for` expires, not sooner. The words are the home's.
+     */
+    const netRefused = refusedNet(req);
+    if (netRefused) {
+      return reply
+        .status(403)
+        .send({ error: refusalSentence(netRefused), code: NOT_ADMITTED, reason: REFUSED, refusal: refusalNoticeOf(netRefused) });
+    }
     const refusal = mayMint(req);
     if (refusal) {
       logRefusal(req, "the door refused a mint: metered", refusal);
@@ -935,7 +1411,11 @@ export function registerRoutes(
       // value of HttpOnly is that page JavaScript cannot read the credential,
       // and returning it in JSON hands it straight back.
       const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
-      reply.header("Set-Cookie", badgeCookie(token, secure));
+      // Framed is STATED here and sniffed on the page path, for the reason
+      // `carrier` is stated: this route is `fetch`ed by the app, whose
+      // `Sec-Fetch-Dest` is `empty` either way. Only the page knows.
+      const framed = ((req.body ?? {}) as DoorRequest).framed === true;
+      reply.header("Set-Cookie", badgeCookie(token, secure, framed));
       return { badgeId: record.badgeId } satisfies DoorResponse;
     }
     return { badgeId: record.badgeId, secret: token.slice(record.badgeId.length + 1) } satisfies DoorResponse;
@@ -978,7 +1458,12 @@ export function registerRoutes(
     // 9 closed that one, so the only callers left here already hold a badge
     // and this is the belt on `/api/ops`, whose canvas is in its body.
     if (!req.badge) return;
-    if (req.badge.admissions.some((a) => a.canvasId === canvasId)) {
+    // **Still one, and not merely present.** The operator's look ends by its
+    // own clock (operator phase 2), and this short-circuit is the whole of the
+    // door's test — an expired admission that sailed through it would be a
+    // look that never ended. `admissionIn` asks the question once, here and in
+    // `ws.ts`, so the two copies of the door cannot come to disagree.
+    if (admissionIn(req.badge, canvasId)) {
       // Already in — but an admission below `edit` re-asks the door, so
       // proving an email after entering by a view link lets the invitation
       // that names this person take effect (see `heldCapability`). Editors
@@ -1049,8 +1534,146 @@ export function registerRoutes(
     ];
   };
 
+  const sourceMutation = async (req: FastifyRequest, canvasId: string) => {
+    const context = sourceContexts.get(req);
+    if (context) await checkSource(canvasId, req.badge!.badgeId, context, "own");
+  };
+  const personalCaller = async (req: FastifyRequest, actorId: unknown): Promise<string> => {
+    const refused = refusedNet(req) ?? refusals.refusingAttestation(req.badge?.attestations ?? []);
+    if (refused) throw new RefusedError(refused);
+    if (typeof actorId !== "string" || !actorId) throw new PersonalError("select an explicit claimed actor", "personal-actor-required");
+    await engine.requireActor(req.badge!.badgeId, actorId);
+    const context = sourceContexts.get(req);
+    if (context) {
+      if (context.policy.mode === "exclude") throw new PersonalError("ambient calls cannot use personal memory", "personal-source-excluded");
+      const joined = await engine.actorJoins();
+      if (resolveActor(joined, context.policy.actorId) !== resolveActor(joined, actorId)) throw new PersonalError("the personal caller differs from the selected source actor");
+      const pathname = req.url.split("?")[0]!;
+      const intent = pathname.includes("/delegates") && req.method !== "GET" ? "own" : sourceIntent(req.method, pathname);
+      if (!atLeast(context.policy.intent, intent)) throw new PersonalError("this request exceeds its selected source intent", "personal-intent-exceeded");
+    }
+    return actorId;
+  };
+  const personalContext = (req: FastifyRequest): SourceRequestContext | undefined => sourceContexts.get(req);
+  const homeForPersonal = async (req: FastifyRequest, canvasId: unknown) => {
+    if (canvasId === undefined) return null;
+    if (typeof canvasId !== "string" || !canvasId) throw new PersonalError("a destination canvas id is required");
+    const down = refusals.of(canvasId); if (down) throw new TakenDownError(down);
+    await admit(req, canvasId);
+    return options.homes?.for(canvasId) ?? null;
+  };
+  app.get("/api/source-classification", async (req) => {
+    const refused = refusedNet(req) ?? refusals.refusingAttestation(req.badge?.attestations ?? []);
+    if (refused) throw new RefusedError(refused);
+    const query = req.query as { canvasId?: string; expectedHome?: string };
+    if (!query.canvasId || !query.expectedHome) throw new PersonalError("classification requires a source id and expected home");
+    const home = options.homes?.for(query.canvasId);
+    const expected = normalizeHomeUrl(query.expectedHome);
+    if (expected !== normalizeHomeUrl(home?.homeUrl ?? localOrigin(req))) return { kind: "unavailable" };
+    if (home) {
+      const answer = await home.personalRequest<import("@isocan/core").SourceClassificationResponse>("GET", req.url, undefined, undefined, personalContext(req));
+      if (answer.kind === "personal") await desk.recordPersonalReplica(query.canvasId, home.homeUrl);
+      return answer;
+    }
+    if (await desk.personalReplica(query.canvasId)) return { kind: "unavailable" };
+    if (await desk.personalSource(query.canvasId)) return { kind: "personal" };
+    return { kind: await store.canvasLifecycle(query.canvasId) === "live" ? "ordinary" : "unavailable" };
+  });
+  app.post(SOURCE_ACCESS_ROUTE, async (req) => {
+    const body = req.body as SourceAccessRequest;
+    if (!body?.canvasId || !body.expectedHome || (body.lookup !== "entry" && body.lookup !== "discovery")) throw new PersonalError("source access requires its address and lookup intent");
+    let context: SourceRequestContext;
+    try { context = { ...parseSourcePolicyHeader(JSON.stringify({ policy: body.policy, expectedHome: body.expectedHome })), ...(personalContext(req)?.signal ? { signal: personalContext(req)!.signal } : {}) }; }
+    catch { throw new PersonalError("invalid source policy"); }
+    const home = options.homes?.for(body.canvasId);
+    if (normalizeHomeUrl(body.expectedHome) !== normalizeHomeUrl(home?.homeUrl ?? localOrigin(req))) throw new PersonalError("the selected source home does not match its recorded authority");
+    const cap = await checkSource(body.canvasId, req.badge!.badgeId, context, context.policy.mode === "direct" ? context.policy.intent : "read", undefined, body.lookup);
+    return { kind: cap ? "personal" : "ordinary", capability: cap ?? capabilityIn(req.badge!, body.canvasId) ?? "edit" };
+  });
+  const rememberPersonalStatus = async <T extends import("@isocan/core").PersonalStatusResponse>(home: import("./home-link.ts").HomeConnection, answer: T): Promise<T> => {
+    if (normalizeHomeUrl(answer.home) !== normalizeHomeUrl(home.homeUrl)) throw new PersonalError("personal status came from a different home");
+    for (const source of [...(answer.source ? [answer.source] : []), ...answer.preserved]) {
+      if (!await options.homes!.mayDial(source.canvasId, home.homeUrl)) throw new PersonalError("personal source has a conflicting home assignment");
+      await desk.recordPersonalReplica(source.canvasId, home.homeUrl);
+    }
+    return answer;
+  };
+  app.get("/api/personal", async (req) => {
+    const query = req.query as { actorId?: string; destinationCanvasId?: string };
+    const actorId = await personalCaller(req, query.actorId);
+    const home = await homeForPersonal(req, query.destinationCanvasId);
+    if (home) return rememberPersonalStatus(home, await home.personalRequest<import("@isocan/core").PersonalStatusResponse>("GET", req.url, undefined, await actorNamed(actorId), personalContext(req)));
+    return personal.status(req.badge!.badgeId, actorId, localOrigin(req));
+  });
+  app.post("/api/personal/ensure", async (req) => {
+    const body = req.body as { actorId?: string; destinationCanvasId?: string };
+    const actorId = await personalCaller(req, body?.actorId);
+    const home = await homeForPersonal(req, body.destinationCanvasId);
+    if (home) return rememberPersonalStatus(home, await home.personalRequest<import("@isocan/core").PersonalEnsureResponse>("POST", req.url, body, await actorNamed(actorId), personalContext(req)));
+    return personal.ensure(req.badge!.badgeId, actorId, localOrigin(req));
+  });
+  app.get("/api/projects/:id/personal", async (req) => {
+    const { id } = req.params as { id: string };
+    const actorId = await personalCaller(req, (req.query as { actorId?: string }).actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, await actorNamed(actorId), personalContext(req));
+    return { links: await personal.links(req.badge!.badgeId, actorId, id, localOrigin(req)) };
+  });
+  app.post("/api/projects/:id/personal/link", async (req) => {
+    const { id } = req.params as { id: string }; const body = req.body as PersonalLinkRequest;
+    const actorId = await personalCaller(req, body?.actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
+    return personal.link(req.badge!.badgeId, id, body, localOrigin(req));
+  });
+  app.post("/api/projects/:id/personal/unlink", async (req) => {
+    const { id } = req.params as { id: string }; const body = req.body as PersonalUnlinkRequest;
+    const actorId = await personalCaller(req, body?.actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
+    return personal.unlink(req.badge!.badgeId, id, body);
+  });
+  app.post("/api/projects/:id/personal/read", async (req) => {
+    const { id } = req.params as { id: string }; const body = req.body as PersonalReadRequest;
+    const actorId = await personalCaller(req, body?.actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
+    return personal.read(req.badge!.badgeId, id, body, localOrigin(req), sourceContexts.get(req));
+  });
+  app.get("/api/personal/sources/:id/delegates", async (req) => {
+    const { id } = req.params as { id: string };
+    const actorId = await personalCaller(req, (req.query as { actorId?: string }).actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, await actorNamed(actorId), personalContext(req));
+    return { sourceCanvasId: id, delegates: await personal.delegates(req.badge!.badgeId, actorId, id) };
+  });
+  app.put("/api/personal/sources/:id/delegates/:agentId", async (req) => {
+    const { id, agentId } = req.params as { id: string; agentId: string };
+    const body = req.body as { actorId?: string; allowed?: boolean };
+    const actorId = await personalCaller(req, body?.actorId);
+    if (typeof body.allowed !== "boolean") throw new PersonalError("allowed must be true or false");
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("PUT", req.url, body, await actorNamed(actorId), personalContext(req));
+    return { delegation: await personal.delegate(req.badge!.badgeId, actorId, id, agentId, body.allowed) };
+  });
+
+  registerCanvasGroupContext(app, engine, store);
+
+  app.get("/api/projects/:id/groups/migration", async (req) => {
+    if (!supportsCanvasGroups(String(req.headers[CLIENT_FEATURES_HEADER] ?? ""))) throw new CanvasGroupsClientError();
+    return engine.groupMigrationPreview((req.params as { id: string }).id, sourceContexts.get(req), req.badge!.badgeId);
+  });
+
   app.post("/api/ops", async (req, reply) => {
     const body = req.body as PostOpRequest;
+    const clientFeatures = body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? "");
+    if (body.originGroupMode !== undefined && body.originGroupMode !== "legacy" && body.originGroupMode !== "groups") throw new OpValidationError("bad-op", "originGroupMode must be legacy or groups");
+    if (body.op?.type === "project.create" && body.op.groupMode !== "legacy" && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
+    if (body.op && groupOperation(body.op) && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
+    if (body.canvasId && !supportsCanvasGroups(clientFeatures)) {
+      const snapshot = await engine.getSnapshot(body.canvasId).catch(() => null);
+      if (snapshot) requireGroupClient(clientFeatures, snapshot.project);
+    }
     /**
      * The idempotency key, shape-checked before it can reach the oplog
      * (phase 10). A caller that sends one gets exactly-once for this op; a
@@ -1164,6 +1787,26 @@ export function registerRoutes(
      * a refusal at all.
      */
     if (body.canvasId) {
+      /**
+       * **And the takedown, at the one canvas route the hook cannot cover**
+       * (operator phase 2). `/api/ops` carries its canvas in the BODY, so
+       * `CANVAS_API_ROUTE` does not match it and the hook's refusal does not
+       * run — which is exactly the shape the capability check below was added
+       * for, and it is the same omission twice if this line is not here.
+       *
+       * Without it the engine refuses anyway, one layer down, as *canvas not
+       * found* — the **one sentence a takedown must never produce**. Found by
+       * opening the owner's canvas list in a browser and looking at the Delete
+       * button still sitting on the greyed card.
+       */
+      const down = refusals.of(body.canvasId);
+      if (down) throw new TakenDownError(down);
+      // And a refused badge, at the one route the hook cannot cover — a
+      // create (`project.create`) or any op carries its canvas in the BODY,
+      // and *every create* is what the design's table refuses (operator phase
+      // 6). The same omission twice if this line is not here.
+      const refusedOp = refusals.refusingAttestation(req.badge?.attestations ?? []);
+      if (refusedOp) throw new RefusedError(refusedOp);
       await admit(req, body.canvasId);
       // The capability check, at the one mutating route the hook cannot cover
       // (#88). BEFORE the submit for the door's own reason: a refusal that
@@ -1195,7 +1838,9 @@ export function registerRoutes(
     }
     const entry = await engine.submit({
       ...(body as PostOpRequest & { actor: Actor }),
+      clientFeatures,
       badgeId: req.badge!.badgeId,
+      ...(sourceContexts.has(req) ? { sourceContext: sourceContexts.get(req)! } : {}),
       ...(bornInto ? { withoutLinkGrant: true } : {}),
     });
     if (body.op?.type === "project.create") {
@@ -1416,67 +2061,24 @@ export function registerRoutes(
   });
 
   /**
-   * The canvases this badge may see — phase 6's inherited debt, and phase 8
-   * stage 4 paying the rest of it.
-   *
-   * Phase 6 found this route home-wide and named the consequence: "the moment
-   * a home has two members a replica pulls down canvases it was never
-   * admitted to", because `HomeLink.sweep` polls exactly this list and dials
-   * everything in it. Phase 7 narrowed it to the DOOR'S OWN TEST, asked per
-   * canvas — a badge sees what it is admitted to, plus what a grant would
-   * admit it to — and recorded why it could not go further: a fresh replica's
-   * badge has no admissions, so narrowing to admissions alone left it
-   * discovering nothing at all. That was measured, not reasoned.
-   *
-   * **What changed:** the pass. Redeeming one writes an admission onto the
-   * redeeming badge (`passes.ts`), so a replica can now be TOLD what it holds
-   * instead of being SHOWN what exists. The narrowing that broke replicas in
-   * phase 7 is the right answer for a replica in phase 8.
-   *
-   * **But it is still the wrong answer for a browser**, which is why this
-   * route did not simply narrow. See {@link CanvasesReach}: two callers ask
-   * two questions here, the caller states which, and the wide answer stays
-   * the default so that a person opening `/` on their own home still sees the
-   * canvas their CLI just made under a different badge. A route that guessed
-   * from the carrier would be sniffing, which this codebase refuses.
-   *
-   * **What the narrow answer closes.** A replica asking `?reach=admitted`
-   * mirrors what it was let into and nothing else: a canvas whose link grant
-   * is merely ON no longer lands on a machine nobody handed it, which is the
-   * last gap phase 7 left open and could not close. The wide answer still
-   * lists a link-granted canvas to anyone, and that is not a bug in it — a
-   * link grant says "anyone presenting the address may enter", so for a
-   * person browsing their own home "the ones you may enter" IS the home.
-   *
-   * The cost of the wide answer is one grant query per canvas the badge has
-   * not been in; the narrow answer costs none at all, because admissions are
-   * on the badge record the request already resolved.
+   * Discovery is admissions plus named grants and creator floors. A link is
+   * proof only when an address is presented; no hosted directory may supply
+   * that proof itself. All public lists ask this question, including homes,
+   * presence, unscoped watches and takedowns. A loopback daemon keeps its
+   * existing local trust: its canvas/home shelves show everything it holds.
    */
-  app.get("/api/projects", async (req) => {
+  const onLocalShelf = (req: FastifyRequest): boolean => {
+    const from = req.ip;
+    const answersOnlyThisMachine =
+      options.servesWorld === undefined ? loopbackBound(app) : !options.servesWorld;
+    return answersOnlyThisMachine &&
+      (from === "127.0.0.1" || from === "::1" || from === "::ffff:127.0.0.1");
+  };
+
+  const canvasDiscovery = (req: FastifyRequest, { admittedOnly = false, shelf = false } = {}) => {
     const badge = req.badge!;
-    const query = req.query as Record<string, string | undefined>;
-    // Anything other than the one narrowing word means the default. A typo
-    // must not silently hand a replica the wide list under a name that reads
-    // like the narrow one — it is spelled in exactly one place
-    // (`canvasesRoute`) so that a caller cannot arrive here with a near-miss.
-    const reach = query[CANVASES_REACH_PARAM];
-    const narrow = reach === "admitted";
-    /**
-     * `?reach=here` — of the ones this badge may see, the canvases **this
-     * daemon is the home of** (phase 10.3). What the web app's canvas list
-     * asks, because its links are client-side navigations that never reach the
-     * per-canvas page guard: without this the local origin would render a replica of
-     * a canvas that lives at dev, giving that canvas two doors, two cookies,
-     * two service workers and two browser replicas.
-     *
-     * It stacks ON the admissible answer rather than replacing it — being the
-     * home of a canvas does not admit anybody to it, and a route that answered
-     * "here" without the door's test would be a page server handing out a
-     * roster of the machine.
-     */
-    const hereOnly = reach === "here";
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
-    const visible: Canvas[] = [];
+    const local = onLocalShelf(req);
     /**
      * **The door's space reads, memoized for the wide list** (roles design,
      * "The door reads both"). One `spacesFor(badge)` — the bounded queries —
@@ -1520,12 +2122,50 @@ export function registerRoutes(
         return found;
       },
     };
-    for (const canvas of await engine.listCanvases()) {
-      if (hereOnly && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
-      if (admitted.has(canvas.id)) visible.push(canvas);
-      else if (!narrow && (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id, via))) {
-        visible.push(canvas);
+    return async (canvas: Canvas): Promise<boolean> => {
+      const context = sourceContexts.get(req);
+      if (context) {
+        try { await checkSource(canvas.id, badge.badgeId, context, "read", undefined, "discovery"); }
+        catch { return false; }
       }
+      if (admitted.has(canvas.id) || (!admittedOnly && shelf && local)) return true;
+      if (admittedOnly) return false;
+      return (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id, via, local ? "entry" : "discovery")) !== null;
+    };
+  };
+
+  /** Explicit publication only. This aggregate route has no canvas hook:
+   * current refusals, locality and lifecycle are checked before projection. */
+  app.get(PUBLIC_CANVASES_ROUTE, async (req) => {
+    const refused = refusedNet(req) ?? refusals.refusingAttestation(req.badge?.attestations ?? []);
+    if (refused) throw new RefusedError(refused);
+    const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+    const home = new URL(`${secure ? "https" : "http"}://${req.headers.host}`).origin;
+    const canvases: PublicCanvasesResponse["canvases"] = [];
+    const seen = new Set<string>();
+    for (const grant of await desk.listedGrants()) {
+      if (!isListedGrant(grant) || seen.has(grant.canvasId) || (options.homes?.homeOf(grant.canvasId) ?? null) !== null) continue;
+      if (refusals.of(grant.canvasId) || await desk.personalSource(grant.canvasId) || await desk.personalReplica(grant.canvasId)) continue;
+      const canvas = await store.canvasRecord(grant.canvasId);
+      if (!canvas) continue;
+      // A known badge's bars still apply. This asks the door without writing
+      // an admission; an anonymous browser only receives published metadata.
+      if (req.badge && !await admittingGrant(desk, canvas.id, req.badge, canvas.createdBy.id)) continue;
+      seen.add(canvas.id);
+      canvases.push({ id: canvas.id, title: canvas.title, home, capability: grant.capability });
+    }
+    canvases.sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+    return { canvases } satisfies PublicCanvasesResponse;
+  });
+
+  app.get("/api/projects", async (req) => {
+    const query = (req.query ?? {}) as Record<string, string | undefined>;
+    const reach = query[CANVASES_REACH_PARAM];
+    const mayDiscover = canvasDiscovery(req, { admittedOnly: reach === "admitted", shelf: true });
+    const visible: Canvas[] = [];
+    for (const canvas of await engine.listCanvases()) {
+      if (reach === "here" && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
+      if (await mayDiscover(canvas)) visible.push(canvas);
     }
     return visible;
   });
@@ -1586,16 +2226,14 @@ export function registerRoutes(
   });
 
   app.get(PRESENCE_WHERE_ROUTE, async (req) => {
-    const badge = req.badge!;
-    const admitted = new Set(badge.admissions.map((a) => a.canvasId));
+    const mayDiscover = canvasDiscovery(req);
+    const canvases = new Map((await engine.listCanvases()).map((canvas) => [canvas.id, canvas]));
     const seen = new Map<string, boolean>();
     const maySee = async (canvasId: string): Promise<boolean> => {
       const known = seen.get(canvasId);
       if (known !== undefined) return known;
-      // One grant query per ROOM, not per face: a canvas with nine agents on
-      // it asked nine times before this cache.
-      const allowed =
-        admitted.has(canvasId) || Boolean(await admittingGrant(desk, canvasId, badge));
+      const canvas = canvases.get(canvasId);
+      const allowed = canvas !== undefined && await mayDiscover(canvas);
       seen.set(canvasId, allowed);
       return allowed;
     };
@@ -1615,7 +2253,7 @@ export function registerRoutes(
     return { where } satisfies PresenceWhereResponse;
   });
 
-  app.get(HOMES_ROUTE, async () => {
+  app.get(HOMES_ROUTE, async (req) => {
     /**
      * **Every canvas this daemon HOLDS, not every row it has written down.**
      *
@@ -1635,8 +2273,9 @@ export function registerRoutes(
      */
     const rows = options.homes?.assignments() ?? {};
     const canvases: Record<string, string | null> = {};
+    const mayDiscover = canvasDiscovery(req, { shelf: true });
     for (const canvas of await store.listCanvases()) {
-      canvases[canvas.id] = rows[canvas.id] ?? null;
+      if (await mayDiscover(canvas)) canvases[canvas.id] = rows[canvas.id] ?? null;
     }
     return {
       birth: options.birthHome ?? null,
@@ -1652,7 +2291,7 @@ export function registerRoutes(
       links: (options.homes?.links() ?? []).map((link) => ({
         url: link.homeUrl,
         reachable: link.answering,
-        canvases: link.canvasStates(),
+        canvases: link.canvasStates().filter((canvas) => onLocalShelf(req) || canvas.canvasId in canvases),
       })),
     } satisfies HomesResponse;
   });
@@ -1694,7 +2333,38 @@ export function registerRoutes(
     const home = options.homes?.for(id) ?? null;
     if (home) return home.grants(id);
     await engine.getSnapshot(id); // 404 for unknown canvases, like every route here
-    return { grants: liveGrants(await desk.grantsFor(id)) } satisfies GrantsResponse;
+    return grantsAnswer(await desk.grantsFor(id));
+  });
+
+  /**
+   * **The live rows, and what the operator turned off** (operator phase 5).
+   * `turnedOff` is written only when there is something in it, so a home
+   * that has never turned anything off answers exactly as it did before —
+   * and the owner's own tombstones never appear, because they are hers.
+   */
+  const grantsAnswer = (rows: Grant[]): GrantsResponse => {
+    const off = operatorTurnedOff(rows);
+    return { grants: liveGrants(rows), ...(off.length > 0 ? { turnedOff: off } : {}) };
+  };
+
+  /** Publication changes only discovery, under the same owner's authority
+   * as sharing. The concrete grant is rechecked inside the Desk transaction. */
+  app.put("/api/projects/:id/grants/:grantId/listing", async (req, reply) => {
+    const { id, grantId } = req.params as { id: string; grantId: string };
+    const body = (req.body ?? {}) as Partial<SetPublicListingRequest>;
+    if (typeof body.listed !== "boolean") return reply.status(400).send({ error: "listed must be true or false", code: "bad-listing" });
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.for(id) ?? null;
+    if (home) return home.setPublicListing(id, grantId, body.listed, await actorNamed(actorId));
+    const snapshot = await engine.getSnapshot(id);
+    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null, await engine.actorJoins()), "own")) {
+      return reply.status(403).send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
+    }
+    await sourceMutation(req, id);
+    if (body.listed && (await desk.personalSource(id) || await desk.personalReplica(id))) throw new PersonalError("personal sources cannot be listed publicly", "personal-publication-refused");
+    const grant = await desk.setPublicListing(id, grantId, body.listed, new Date().toISOString(), req.badge!.badgeId);
+    if (!grant) return reply.status(409).send({ error: "this link is no longer eligible: publish a current Canvas Viewer or Presentation Viewer link", code: "listing-ineligible" });
+    return { grant } satisfies GrantResponse;
   });
 
   /**
@@ -1828,6 +2498,7 @@ export function registerRoutes(
      * the link. The sweep carries the bar without a mechanism of its own: it
      * re-runs the door, and the door now says no (roles phase 3).
      */
+    await sourceMutation(req, id);
     if (live) {
       await desk.revokeGrant(live.id, new Date().toISOString(), req.badge!.badgeId);
     }
@@ -2156,6 +2827,7 @@ export function registerRoutes(
         });
       }
     }
+    await sourceMutation(req, id);
     const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
     // The bar goes on the desk before the one sweep, for the replacement's
     // reason: the sweep re-runs the door, and the door has to meet the bar.
@@ -2195,6 +2867,172 @@ export function registerRoutes(
       ...(written ? { bar: written } : {}),
       ...(stillAdmittedBy ? { stillAdmittedBy } : {}),
     } satisfies GrantResponse;
+  });
+
+  /** One person's inbox. Remote entries and marks are read at their actual
+   * home, never from an offline replica whose access may have been withdrawn. */
+  app.get(INBOX_ROUTE, async (req, reply) => {
+    const query = req.query as { actorId?: unknown; canvasId?: unknown; label?: unknown };
+    const actorId = await actingActor(req, query.actorId);
+    if (!actorId) return reply.status(400).send({ error: "an inbox needs an actorId claimed by this badge", code: "bad-op" });
+    const actor = (await actorNamed(actorId))!;
+    const label = typeof query.label === "string" ? query.label.slice(0, 200) : undefined;
+    const only = typeof query.canvasId === "string" ? query.canvasId : undefined;
+    const aborter = new AbortController();
+    const cancel = () => { if (!reply.raw.writableEnded) aborter.abort(); };
+    reply.raw.on("close", cancel);
+    try {
+      let canvases = await engine.listCanvases();
+      if (only !== undefined) {
+        canvases = canvases.filter((canvas) => canvas.id === only);
+        if (canvases.length === 0) return reply.status(404).send({ error: "canvas not found", code: "not-found" });
+      } else {
+        const mayDiscover = canvasDiscovery(req, { shelf: true });
+        const visible: Canvas[] = [];
+        for (const canvas of canvases) if (await mayDiscover(canvas)) visible.push(canvas);
+        canvases = visible;
+      }
+      // Read this person's joined ledgers once, even on a home with many
+      // canvases. No other actor's marks can enter this assembly.
+      let localMarks: Promise<import("@isocan/core").SeenMarks> | undefined;
+      const readMarks = () => localMarks ??= (async () => {
+        const joins = await engine.actorJoins();
+        const ids = actorAliases(joins, resolveActor(joins, actor.id));
+        return mergeSeen(...await Promise.all(ids.map((id) => desk.seenOf(id))));
+      })();
+      return await collectInbox(canvases, async (canvas, signal): Promise<InboxResponse> => {
+        const context = sourceContexts.get(req);
+        if (context) await checkSource(canvas.id, req.badge!.badgeId, context, "read", undefined, only ? "entry" : "discovery");
+        const remote = options.homes?.for(canvas.id) ?? null;
+        if (remote) {
+          const bounded = AbortSignal.any([signal, AbortSignal.timeout(8000), ...(context?.signal ? [context.signal] : [])]);
+          const result = context
+            ? await remote.personalRequest<InboxResponse>("GET", `${INBOX_ROUTE}?${new URLSearchParams({ actorId: actor.id, canvasId: canvas.id, ...(label ? { label } : {}) })}`, undefined, actor, { ...context, signal: bounded })
+            : await remote.inbox(canvas.id, actor, label, bounded);
+          return { ...result, homes: { ...result.homes, [canvas.id]: options.homes!.homeOf(canvas.id) } };
+        }
+        const down = refusals.of(canvas.id);
+        if (down) throw new TakenDownError(down);
+        // Assembly sits outside the canvas route hook, so it must repeat the
+        // same refusal before an existing admission can short-circuit it.
+        const refused = refusals.refusingAttestation(req.badge!.attestations ?? []);
+        if (refused) throw new RefusedError(refused);
+        await admit(req, canvas.id);
+        const snapshot = await engine.getSnapshot(canvas.id);
+        const marks = await readMarks();
+        return {
+          entries: sequenceInbox(inboxOn(snapshot.canvas, actor, namesFor(actor, label), canvas.id, canvas.title, snapshot.joined), (await engine.getLog(canvas.id)).filter((entry) => entry.seq <= snapshot.lastSeq)),
+          marks: marks[canvas.id] ? { [canvas.id]: marks[canvas.id]! } : {},
+          homes: { [canvas.id]: null },
+          unavailable: [],
+        };
+      }, aborter.signal);
+    } finally { reply.raw.off("close", cancel); }
+  });
+
+  // ---- seen-marks: what one person has already looked at (#147, #134) ----
+  //
+  // `docs/research/2026-09-12-seen-marks.md`. Desk state, so a replica
+  // reads the home-scoped ledger, while a mark or targeted prior-read names
+  // its canvas and forwards to that canvas's home. Even on a mixed rig, the inbox
+  // reads it at the same authoritative home.
+  //
+  // **Not canvas-scoped, deliberately, and this is the roles half of the
+  // design.** `PUT /api/seen/:canvasId` names a canvas but is not a write TO
+  // one: it asks no capability and meets no door, because a private note
+  // about your own attention is not an edit to anybody's canvas. A `read`-rung
+  // viewer is turned away from `POST /api/ops` by the capability check there,
+  // which is exactly why an op would have been the wrong shape — a viewer must
+  // never be refused their own marks.
+  //
+  // **Scoped to the actors this badge claims, with no way to ask for anybody
+  // else's.** That absence is the privacy guarantee (D5): there is no route
+  // here, and no wire shape anywhere, that returns another person's marks.
+
+  /** Your own marks, every canvas, one read — what the inbox and the
+   *  switcher's "lately" both start from. */
+  app.get(SEEN_ROUTE, async (req, reply) => {
+    const query = req.query as { actorId?: unknown; canvasId?: unknown };
+    const actorId = await actingActor(req, query.actorId);
+    const canvasId = typeof query.canvasId === "string" ? query.canvasId : undefined;
+    if (canvasId !== undefined && !actorId) {
+      return reply.status(400).send({ error: "a canvas seen-read needs an actorId claimed by this badge", code: "bad-op" });
+    }
+    const home = canvasId === undefined ? options.homes?.homeScoped() : options.homes?.for(canvasId);
+    if (home) {
+      const aborter = new AbortController();
+      const cancel = () => { if (!reply.raw.writableEnded) aborter.abort(); };
+      reply.raw.on("close", cancel);
+      const signal = AbortSignal.any([aborter.signal, AbortSignal.timeout(8000)]);
+      try {
+        return await home.seen(await actorNamed(actorId), canvasId, signal);
+      } catch (error) {
+        if (aborter.signal.aborted) return reply; // the caller left; there is nobody to answer
+        if (signal.aborted) throw new HomeUnreachableError(home.homeUrl, "seen read timed out");
+        throw error;
+      } finally {
+        reply.raw.off("close", cancel);
+      }
+    }
+    if (canvasId !== undefined) {
+      // The targeted prior-visit read uses the same joined person's ledger
+      // that the authoritative inbox compares against its comment sequences.
+      const joins = await engine.actorJoins();
+      const ids = actorAliases(joins, resolveActor(joins, actorId!));
+      const marks = mergeSeen(...await Promise.all(ids.map((id) => desk.seenOf(id))));
+      return { marks: marks[canvasId] ? { [canvasId]: marks[canvasId]! } : {} } satisfies SeenMarksResponse;
+    }
+    // Every actor this badge claims, merged: a person who was two actors and
+    // folded them (`actor.join`) holds two ledgers of marks for one person,
+    // and a badge that claims both is precisely what the fold required of it.
+    // So the fold needs no migration — the read does the merging, with the
+    // same function the writes merge with.
+    const ids = actorId ? [actorId] : [...new Set(req.badge!.claims.map((c) => c.actorId))];
+    const ledgers = await Promise.all(ids.map((id) => desk.seenOf(id)));
+    return { marks: mergeSeen(...ledgers) } satisfies SeenMarksResponse;
+  });
+
+  /**
+   * Move one mark to the head you had in front of you.
+   *
+   * **Only a visit calls this** — opening a canvas in the browser, or an
+   * agent saying `isocan seen --mark` after reading one. That one rule is
+   * what lets a single fact serve two readers: the mark then means both "I
+   * was here at `at`" and "everything up to `seq` was on my screen", so the
+   * inbox reads the second half and the switcher's "lately" reads the first.
+   * A background sweep calling this would fill somebody's "lately" with
+   * canvases they never went to.
+   *
+   * `at` is stamped HERE and never taken from the body: a wall clock a client
+   * supplies is a wall clock a client can be wrong with, and this one orders
+   * a person's whole list of canvases.
+   */
+  app.put(`${SEEN_ROUTE}/:canvasId`, async (req, reply) => {
+    const { canvasId } = req.params as { canvasId: string };
+    const body = (req.body ?? {}) as Partial<MarkSeenRequest>;
+    const seq = typeof body.seq === "number" && Number.isFinite(body.seq) ? Math.trunc(body.seq) : NaN;
+    if (!Number.isFinite(seq) || seq < 0) {
+      return reply
+        .status(400)
+        .send({ error: "`seq` is the canvas's oplog head you had in front of you", code: "bad-op" });
+    }
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.for(canvasId) ?? null;
+    if (home) return home.markSeen(canvasId, seq, await actorNamed(actorId));
+    if (!actorId) {
+      return reply.status(400).send({
+        error:
+          "a mark belongs to somebody, and this badge did not say who — claim an actor first, " +
+          "or name one of this badge's actors as `actorId`",
+        code: "bad-op",
+      });
+    }
+    // Written under the id the person answers to NOW: a mark made as an actor
+    // that has since been folded into another belongs to the person, not to
+    // the id they have stopped using.
+    const mine = resolveActor(await engine.actorJoins(), actorId);
+    const mark = await desk.markSeen(mine, canvasId, { seq, at: new Date().toISOString() });
+    return { mark } satisfies SeenResponse;
   });
 
   // ---- the space: a named set of canvases access is set on once (roles phase 4) ----
@@ -2345,6 +3183,7 @@ export function registerRoutes(
       return { space: owned.space, swept: { expelled: 0, rerooted: 0 }, reached: 0 } satisfies SpaceCanvasResponse;
     }
     const next: Space = { ...owned.space, canvasIds: [...owned.space.canvasIds, canvasId] };
+    await sourceMutation(req, canvasId);
     await desk.putSpace(next);
     const swept = await sweepCanvas(desk, canvasId, snapshot.project.createdBy.id, sweeps.report);
     return { space: next, swept, reached: 1 } satisfies SpaceCanvasResponse;
@@ -2370,6 +3209,7 @@ export function registerRoutes(
       ...owned.space,
       canvasIds: owned.space.canvasIds.filter((held) => held !== canvasId),
     };
+    await sourceMutation(req, canvasId);
     await desk.putSpace(next);
     const swept = await sweepCanvas(desk, canvasId, await creatorOf(canvasId), sweeps.report);
     return { space: next, swept, reached: 1 } satisfies SpaceCanvasResponse;
@@ -2387,7 +3227,7 @@ export function registerRoutes(
     if (home) return home.spaceGrants(id);
     const space = await visibleSpace(req, id);
     if (!space) return spaceNotFound(reply, id);
-    return { grants: liveGrants(await desk.grantsForSpace(id)) } satisfies GrantsResponse;
+    return grantsAnswer(await desk.grantsForSpace(id));
   });
 
   /**
@@ -2805,13 +3645,20 @@ export function registerRoutes(
           () => null,
         ),
       sweeps.report,
+      // The dead badge's own sockets and parks (operator phase 4): closed and
+      // woken through the hub, and counted for the verb.
+      sweeps.ended,
     );
     if (!outcome) {
       return reply
         .status(404)
         .send({ error: `${badgeId} is already ended`, code: "unknown-badge" });
     }
-    return { killed: target, swept: outcome.swept } satisfies KillBadgeResponse;
+    return {
+      killed: target,
+      swept: outcome.swept,
+      reached: outcome.reached,
+    } satisfies KillBadgeResponse;
   });
 
   // ---- attestations: what this holder has PROVED (identity desk, mech 3+6) ----
@@ -2890,6 +3737,22 @@ export function registerRoutes(
     // No special case for an empty token: `verifyIdToken` refuses it as "not a
     // JWT", which is what it is, in the same voice as every other refusal.
     const attestation = await verifyIdToken(idToken, auth, await signingKeys());
+    /**
+     * **Proving a refused address is refused too** (operator phase 6; journey
+     * 9 step 2: *Proving it is refused too, so he cannot attest into it*).
+     * After the token verifies — a refusal names an address, and there is no
+     * address until the token proves one — and before the row is written, so a
+     * refused address never becomes an attestation the door would then have to
+     * catch on every request. 403 and the reason `refused`, the shape the door
+     * gives; the verify dialog already renders the error, so this arrives as
+     * the home's sentence in the dialog rather than a broken write.
+     */
+    const refused = refusals.refusingAddress(attestation.attribute);
+    if (refused) {
+      return reply
+        .status(403)
+        .send({ error: refusalSentence(refused), code: NOT_ADMITTED, reason: REFUSED, refusal: refusalNoticeOf(refused) });
+    }
     await desk.attest(req.badge!.badgeId, attestation);
     // Read back through the desk rather than assumed: the answer a surface
     // renders is what was WRITTEN, which is the discipline the sweep report
@@ -2898,6 +3761,1125 @@ export function registerRoutes(
       attestation,
       resumable: (await engine.resumable(req.badge!.badgeId)).map((row) => row.actor),
     } satisfies AttestResponse;
+  });
+
+  // ---- the operator (docs/projects/operator/design.md, phase 1) ----
+  //
+  // **The operator is a proof, not a credential.** An address this home's
+  // configuration names, proved fresh for each act by the attester the home
+  // already borrows, carried in one header and stored nowhere. Everything
+  // under `/api/operator/` is refused without that proof and writes its ledger
+  // row before it answers.
+  //
+  // **Not canvas-scoped, and that is the point rather than a convenience.**
+  // `CANVAS_API_ROUTE` matches `/api/projects/:id/`, so the door's admission
+  // hook does not run here — which is exactly journey 1's first act: *show on
+  // a canvas the operator was never admitted to*. The badge still travels and
+  // is still resolved; what it does NOT do is decide anything, because
+  // operator standing is not on it and never will be (decision D2). And
+  // journey 12 stands: Olu's badge is an ordinary badge, and opening a canvas
+  // he is not admitted to still refuses him like anyone.
+
+  /**
+   * **The proof, judged and written down — or the refusal, judged and written
+   * down.** Every operator route's first line.
+   *
+   * It answers `null` when it has already sent the reply, which is the shape
+   * `refuseAmbiguousHome` beside it uses: the caller writes `const proven =
+   * await proveAct(...); if (!proven) return;` and cannot proceed by
+   * forgetting an `if`.
+   *
+   * **The ledger row goes down BEFORE the act runs**, which is the operator
+   * project's one rule for every phase — *a power that exists before its
+   * record does is the Firestore hand edit again*. So the order here is:
+   * verify, write `attempted`, hand back the id, and let the caller settle it.
+   * A crash between the row and the answer leaves a row that says an act was
+   * attempted, which is the whole reason it is two writes.
+   *
+   * **A refusal is written too**, and this is the decision worth stating.
+   * `not-operator` is somebody who signed in, at a moment, and asked this home
+   * to act — the single most interesting thing an operator ledger could
+   * record. Nothing is written for a token that does not VERIFY: there is no
+   * address to name and nobody proved anything, so a row would be a record of
+   * a stranger's ability to post a string.
+   */
+  const proveAct = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    /** The reason and the note ride into the row here, rather than being
+     * written onto it by the act afterwards, for the phase rule's sake: the
+     * row goes down BEFORE the act runs, and a row that gained its reason only
+     * on the way out would be a crash-time record of an act with no account of
+     * why. A refused act keeps them too — somebody asked this home to take a
+     * canvas down for a reason, and that it was refused does not make the
+     * reason uninteresting. */
+    what: { act: string; target: string | null; reason?: string; note?: string },
+  ): Promise<OperatorAct | null> => {
+    const header = req.headers[OPERATOR_PROOF_HEADER];
+    const token = (Array.isArray(header) ? header[0] : header)?.trim() ?? "";
+    if (!token) {
+      await reply.status(403).send({ error: NO_PROOF_PRESENTED, code: NO_OPERATOR_PROOF });
+      return null;
+    }
+    // `auth` is non-null here: the door hook refuses the whole prefix when it
+    // is not, with the sentence that says why.
+    const verdict = await proveOperator({ token, auth: auth!, keys: signingKeys, operators });
+    const row: OperatorAct = {
+      id: newId("opr"),
+      act: what.act,
+      target: what.target,
+      ...(what.reason !== undefined ? { reason: what.reason } : {}),
+      ...(what.note !== undefined ? { note: what.note } : {}),
+      proof: verdict.ok ? verdict.proof : verdict.proof!,
+      badgeId: req.badge?.badgeId ?? null,
+      at: new Date().toISOString(),
+      outcome: verdict.ok ? "attempted" : verdict.code,
+    };
+    await desk.recordOperatorAct(row);
+    if (!verdict.ok) {
+      await reply.status(403).send({ error: verdict.error, code: verdict.code });
+      return null;
+    }
+    return row;
+  };
+
+  /**
+   * **What this home holds under that id** (journey 1 step 4), and nothing
+   * that would be a roster.
+   *
+   * Counts and one name. "No names of people other than the maker" is the
+   * journey's own line and it is the same rule `http.ts`'s badge comment gives:
+   * a listing would be a roster of people to act against. So the badges are a
+   * number, the sockets are a number, and the only person named is the one
+   * whose canvas it is.
+   *
+   * **Nothing is changed**, which is what makes `show` the right first verb:
+   * the whole proof path, the whole ledger path and the whole refusal path are
+   * exercised by an act that cannot hurt anybody if any of them is wrong.
+   */
+  const reachOf = async (canvasId: string): Promise<OperatorReach> => {
+    /**
+     * **The canvas record rather than the snapshot, when the snapshot cannot
+     * be loaded** — operator phase 2, closing phase 1's open finding that
+     * `show` on a canvas that is not servable is a 404.
+     *
+     * A taken-down canvas is exactly the one the operator most needs to be
+     * able to read the reach of: he took it down, Kai has written back, and
+     * `--lift` is the next decision. `load` refuses it — that is what a
+     * takedown IS — so `getSnapshot` throws, and everything `show` prints
+     * except the title and the maker comes from the desk and the blob index
+     * anyway. Those two come from `listCanvases`, which reads the canvas
+     * record and is untouched by a takedown.
+     *
+     * A soft-DELETED canvas is still a 404 here, and that is right: the file
+     * backing has moved the directory and there is no record left to read.
+     * Phase 3's purge is where the tombstone's own shape gets decided.
+     */
+    const project =
+      (await engine
+        .getSnapshot(canvasId)
+        .then((loaded) => loaded.project)
+        .catch(() => null)) ??
+      (await store.listCanvases()).find((canvas) => canvas.id === canvasId) ??
+      null;
+    if (!project) throw new CanvasNotFoundError(canvasId);
+    const grants = liveGrants(await desk.grantsFor(canvasId));
+    const link = grants.find((grant) => grant.subject === LINK);
+    const blobs = await store.listBlobs(canvasId);
+    /**
+     * **Which replicas are relaying for this canvas right now**, which is a
+     * narrower fact than journey 1's "which replicas are linked" and is the
+     * honest one this home can tell.
+     *
+     * A member daemon relaying presence stamps every face it sends with a
+     * relay origin, and the distinct origins on a canvas are its live relay
+     * connections. There is no registry of machines that have ever linked —
+     * `home-links.ts` is the REPLICA's table of the homes it dials, and the
+     * home keeps no mirror of it — so a laptop that is linked and asleep is
+     * not here. The verb prints these as *relaying now* rather than as
+     * *linked*, because the difference is the whole difference between a
+     * takedown's reach and a guess at it.
+     */
+    const relays = new Set(
+      presence
+        .roster(canvasId)
+        .map((session) => session.via)
+        .filter((via): via is string => typeof via === "string"),
+    );
+    return {
+      canvasId,
+      title: project.title,
+      madeBy: {
+        id: project.createdBy.id,
+        name: await ownerName(project),
+      },
+      at: project.createdAt,
+      link: link ? capabilityOf(link) : null,
+      grants: grants.length,
+      badges: (await desk.badgesIn(canvasId)).length,
+      sockets: options.sockets?.open(canvasId) ?? 0,
+      files: blobs.length,
+      bytes: blobs.reduce((total, blob) => total + blob.meta.size, 0),
+      replicas: [...relays],
+    };
+  };
+
+  app.get(OPERATOR_SHOW_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    /**
+     * **An operator act is never forwarded**, and a replica says so instead of
+     * relaying one.
+     *
+     * Every other canvas-scoped route hands its request to the home that owns
+     * the canvas. This one must not, and the reason is the proof: it was made
+     * at THIS origin, for a list THIS home's configuration names, and a
+     * daemon that passed it up would be asking another home to honour a
+     * credential minted against a different project — or, worse, would honour
+     * one on behalf of a home whose ledger never heard about it. The ledger
+     * belongs to the home that acted, so the act has to be sent there.
+     */
+    if (refuseIfReplica(id, reply)) return;
+    const proven = await proveAct(req, reply, { act: "show", target: id });
+    if (!proven) return;
+    const reach = await reachOf(id);
+    /**
+     * **`show` answers for a canvas this home has taken down** (operator phase
+     * 2, closing phase 1's open finding that it 404s on one).
+     *
+     * It is the read the operator makes when Kai writes back, or before a
+     * `--lift`, so a takedown is precisely the state it must be able to
+     * describe. The row rides on the reach rather than being a second call,
+     * because "what does this home hold under that id" now has a second half
+     * that a reader would otherwise have to know to go and ask for.
+     */
+    const down = await desk.takedownFor(id);
+    const answer: OperatorShowResponse = {
+      reach,
+      ...(down ? { takedown: down } : {}),
+    };
+    await desk.settleOperatorAct(proven.id, "done", reach);
+    return answer;
+  });
+
+  /**
+   * **The ledger, read by the operator and nobody else** (design, "The
+   * record").
+   *
+   * Innkeeper-private like every desk ledger, and enforced the same way every
+   * operator act is: by the proof, not by a second rule. That a look at the
+   * ledger is in the ledger is the property the design asks for one section
+   * later, about the LOOK: *an act is never unrecorded, even when it is
+   * unannounced*.
+   *
+   * **So the newest row in the answer is this read itself, saying
+   * `attempted`** — because the row goes down before the act runs, and this
+   * act is the reading. That is the one-rule-for-every-phase made visible
+   * rather than an artefact to hide: filtering the row out would mean the
+   * ledger showed one thing to its reader and another to the disk.
+   */
+  app.get(OPERATOR_LOG_ROUTE, async (req, reply) => {
+    const query = (req.query ?? {}) as { target?: string; limit?: string };
+    const target = typeof query.target === "string" && query.target ? query.target : null;
+    const proven = await proveAct(req, reply, { act: "log", target });
+    if (!proven) return;
+    const limit = Number.parseInt(query.limit ?? "", 10);
+    const acts = await desk.operatorActs({
+      target,
+      limit: Number.isFinite(limit) && limit > 0 ? Math.min(limit, 500) : 100,
+    });
+    await desk.settleOperatorAct(proven.id, "done", { rows: acts.length });
+    return { acts } satisfies OperatorLogResponse;
+  });
+
+  /**
+   * **An operator act is never forwarded** — the phase-1 branch every phase-2
+   * verb needs, in one place rather than copied into each.
+   *
+   * A proof is made at ONE origin, against ONE attester project, and honoured
+   * by that home only. A daemon that passed one up would be asking another
+   * home to honour a credential minted against a different project — or, worse,
+   * would honour one on behalf of a home whose ledger never heard about it. So
+   * a replica answers 409 naming the home, and the act is sent there.
+   */
+  const refuseIfReplica = (canvasId: string, reply: FastifyReply): boolean => {
+    const elsewhere = options.homes?.homeOf(canvasId) ?? null;
+    if (!elsewhere) return false;
+    void reply.status(409).send({
+      error:
+        `this daemon is a replica of ${canvasId}, not its home — an operator proof is made at ` +
+        `one home and honoured by that home only. Ask ${elsewhere}.`,
+      code: "not-this-home",
+    });
+    return true;
+  };
+
+  /**
+   * **`isocan operator look` — the pass, minted after the proof** (operator
+   * phase 2; design, "The look").
+   *
+   * The operator must judge a report and the canvas may be closed to the
+   * address, so he needs a way in that is not *being let in by somebody*. What
+   * this mints is the ordinary pass every other hand-over in this system uses,
+   * with one field: `look: {until}`, which makes its redemption write `{root:
+   * "operator", until}` at `view` instead of the minter's rung.
+   *
+   * **Why a pass rather than an admission written straight onto a badge.** The
+   * proof is made in a TERMINAL, and the canvas has to open in a BROWSER — two
+   * surfaces, two badges, and the terminal cannot write on the browser's. A
+   * pass is exactly the shape this system already has for "hand a way in to a
+   * surface that is not this one": `<address>#<token>`, redeemed by whatever
+   * tab the link is opened in. Nothing new had to be invented, and nothing new
+   * can be got wrong.
+   *
+   * **The reason is required.** A look is unannounced — nobody in the room
+   * sees him arrive — and the ledger is the counterweight (design, "The
+   * look"). A look with no reason recorded would be exactly the thing the
+   * ledger exists to prevent.
+   */
+  app.post(OPERATOR_LOOK_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (refuseIfReplica(id, reply)) return;
+    const body = (req.body ?? {}) as { reason?: string };
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const proven = await proveAct(req, reply, {
+      act: "look",
+      target: id,
+      ...(reason ? { reason } : {}),
+    });
+    if (!proven) return;
+    if (!reason) {
+      await desk.settleOperatorAct(proven.id, "no-reason");
+      return reply.status(400).send({
+        error:
+          "a look needs a reason, because a look is unannounced: nobody on the canvas is told " +
+          "you arrived, and the ledger row is the only record that it happened. " +
+          "`--reason \"report from …\"`.",
+        code: "no-reason",
+      });
+    }
+    /**
+     * **The canvas has to be here**, and the refusal is the ordinary 404 the
+     * route would give anyway — asked BEFORE the pass is minted so that a
+     * mistyped id does not leave a redeemable pass for a canvas that does not
+     * exist. A canvas this home has TAKEN DOWN cannot be looked at either, and
+     * that is right rather than awkward: the operator took it down, `show`
+     * still answers for it, and looking at what is no longer served would be a
+     * door this act quietly re-opened.
+     */
+    const reach = await reachOf(id);
+    const at = new Date();
+    const until = new Date(at.getTime() + OPERATOR_LOOK_MS).toISOString();
+    const { record, token } = mintPass({
+      canvasId: id,
+      mintedBy: req.badge!.badgeId,
+      look: { until },
+    });
+    await sourceMutation(req, id);
+    await desk.putPass(record);
+    /**
+     * The token and the window, and **not a URL**: the address to open is the
+     * home the CLI proved at, which it holds and this process can only guess
+     * at from behind a proxy. `operatorLookUrl` in core builds it, so the one
+     * caller that needs it spells it the same way the web app spells every
+     * other canvas address.
+     */
+    const answer: OperatorLookResponse = { until, token, reach };
+    await desk.settleOperatorAct(proven.id, "done", { until, canvasId: id });
+    return answer;
+  });
+
+  /**
+   * **`isocan operator takedown` and `--lift`** (operator phase 2; design,
+   * "Take a canvas down").
+   *
+   * **Taking down is not deleting, and the order of the writes is what makes
+   * that true under a crash.** A delete is the owner's: an op, into the log,
+   * broadcast as `canvas-deleted`, erasing the copy on every linked daemon and
+   * tab. This is the home's, and every step below is careful to leave every
+   * replica's copy exactly where it is.
+   *
+   * The order:
+   *
+   * 1. **The ledger row**, before anything (`proveAct`) — the project's one
+   *    rule for every phase.
+   * 2. **The desk row**, which holds the reason the surfaces show and the note
+   *    they do not. Before the flag, so a crash between them leaves a canvas
+   *    still being served with a row saying why it should not be — which is
+   *    recoverable by reading the row. The other order leaves a canvas refused
+   *    with nothing to say about it, which is the *not found* the design names
+   *    as the one thing a takedown must never look like.
+   * 3. **The store flag**, which is what actually stops it being served, on
+   *    both backings, where `load` refuses `deleted`.
+   * 4. **The registry**, so the door and the socket layer answer at once
+   *    rather than at the next boot.
+   * 5. **What is already open**: the engine's copy dropped, the sockets closed
+   *    with a reason that is NOT `canvas-deleted`, the parked rc holds ended.
+   *    The parked `isocan wait` needs nothing here — it re-collects when its
+   *    poll wakes, meets the door, and is refused with the sentence.
+   *
+   * A lift walks it backwards, and is the whole of "nothing is irreversible
+   * until purge": no op was ever appended, so the log replays as it was.
+   */
+  app.post(OPERATOR_TAKEDOWN_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (refuseIfReplica(id, reply)) return;
+    const body = (req.body ?? {}) as OperatorTakedownRequest;
+    const lifting = body.lift === true;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    const proven = await proveAct(req, reply, {
+      act: lifting ? "lift" : "takedown",
+      target: id,
+      ...(reason ? { reason } : {}),
+      ...(note ? { note } : {}),
+    });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+
+    const standing = refusals.of(id);
+    if (lifting) {
+      if (!standing) {
+        return refuse(
+          "not-taken-down",
+          `${id} is not taken down at this home, so there is nothing to lift.`,
+          409,
+        );
+      }
+      /**
+       * **A purged canvas is never lifted** (operator phase 3). The store
+       * refuses to load it whatever the flag says, so a lift here could only
+       * clear a flag on a tombstone and tell the operator the canvas was
+       * served again when nothing is. The id stays taken; the sentence stays.
+       */
+      if (standing.purgedAt) {
+        return refuse(
+          "purged",
+          `${id} was purged at this home on ${standing.purgedAt.slice(0, 10)}: there is ` +
+            "nothing under the id to bring back, and the id stays taken.",
+          409,
+        );
+      }
+      const lifted = { at: new Date().toISOString(), by: proven.proof.attribute, actId: proven.id };
+      await desk.liftTakedown(id, lifted);
+      await store.setTakenDown(id, null);
+      // The engine's copy was dropped when it came down and there is nothing
+      // cached to correct; the next read loads it from the backing, which now
+      // answers. Replicas come back on their own — the home link re-dials a
+      // refused canvas at the slowest backoff, which is journey 5 step 2.
+      const row = (await desk.takedownFor(id))!;
+      refusals.remember(row);
+      const answer: OperatorTakedownResponse = {
+        takedown: row,
+        reach: { sockets: 0, waits: 0, holds: 0, relays: 0, files: 0, bytes: 0 },
+        cdn: null,
+      };
+      await desk.settleOperatorAct(proven.id, "done", answer.reach);
+      return answer;
+    }
+
+    if (standing) {
+      return refuse(
+        "already-taken-down",
+        `${id} was already taken down at this home on ${standing.at.slice(0, 10)}: ` +
+          `${standing.reason}. \`--lift\` brings it back.`,
+        409,
+      );
+    }
+    if (!reason || !isTakedownReason(reason)) {
+      return refuse(
+        "no-reason",
+        `a takedown needs a reason from this list, because the reason is what the people on ` +
+          `that canvas are shown: ${takedownReasonList()}. The --note is yours and nobody ` +
+          "else's.",
+      );
+    }
+    /**
+     * The reach is read BEFORE the canvas stops being servable, because after
+     * it the snapshot cannot be loaded at all — and the counts are the answer
+     * to journey 3 step 2, which the operator pastes into a reply to Kai.
+     */
+    const reach = await reachOf(id);
+    /** Narrowed by `isTakedownReason` above, and NAMED here: the field the
+     * affected people are shown is a category from a closed list, never the
+     * string a terminal happened to send. */
+    const category: TakedownReason = reason;
+    const row: CanvasTakedown = {
+      canvasId: id,
+      at: new Date().toISOString(),
+      reason: category,
+      ...(note ? { note } : {}),
+      by: proven.proof.attribute,
+      actId: proven.id,
+    };
+    await desk.recordTakedown(row);
+    await store.setTakenDown(id, row.at);
+    refusals.remember(row);
+    engine.drop(id);
+    const sockets = options.sockets?.close(id, WS_NOT_ADMITTED, TAKEN_DOWN) ?? 0;
+    const holds = options.rc?.endCanvas(id) ?? 0;
+    /**
+     * **The parked waits, woken.** A `/api/oplog/watch` is a long poll holding
+     * a promise, and nothing in `engine.onEvent` reaches it for a takedown —
+     * the watch subscriber filters to `op-applied`, and a takedown is
+     * deliberately not an op. So they are woken here, and what wakes them is a
+     * re-collection that goes through the door and meets the refusal with the
+     * sentence. The CLI exits non-zero and does not re-park.
+     */
+    const waits = wakeWatchers(id);
+    /** What it actually reached, counted at the moment of acting rather than
+     * estimated — journey 3 step 2's *two tabs closed, one wait ended, one
+     * replica told*, which the operator pastes into a reply. */
+    const reached: TakedownReach = {
+      sockets,
+      waits,
+      holds,
+      relays: reach.replicas.length,
+      files: reach.files,
+      bytes: reach.bytes,
+    };
+    const answer: OperatorTakedownResponse = {
+      takedown: row,
+      reach: reached,
+      cdn: cdnPurgeFor(id),
+    };
+    await desk.settleOperatorAct(proven.id, "done", answer.reach);
+    return answer;
+  });
+
+  /**
+   * **`isocan operator purge --force`** (operator phase 3; design, "Purge: the
+   * bytes"; journey 6).
+   *
+   * **The second of two deliberate acts, and the first irreversible one.**
+   * Refused unless the canvas is taken down — at this route with the
+   * journey's sentence, and again at the store, which throws on a canvas it
+   * still serves, so that no wiring above the seam can make an erasure the
+   * first act on a canvas. Everything before this lifts; this does not, and
+   * the honest thing it can do about that is say exactly what is gone and
+   * exactly what is not.
+   *
+   * The same proof, the same ledger row before anything, the same preflight
+   * and the same replica refusal as every other verb: a purge is not a
+   * different kind of act, it is the takedown's second half, and it does not
+   * get a second path.
+   *
+   * The order:
+   *
+   * 1. **The ledger row**, before anything (`proveAct`).
+   * 2. **The refusals** — no `force`, not taken down, already purged — each
+   *    settled onto the row, because somebody asked this home to erase
+   *    something and that is what a ledger is for.
+   * 3. **The reach**, read while the tombstone can still say who made it and
+   *    how many replicas were relaying — the fourth horizon's number.
+   * 4. **The store's purge**, which is the act. It marks the tombstone
+   *    FIRST, so a crash mid-way leaves a canvas `load` already refuses.
+   * 5. **The desk row**, marked purged with the counts — the record journey 6
+   *    step 3 says stays — and the registry, so a lift is refused at once.
+   *
+   * Nothing here reaches sockets, waits or holds: the takedown already did,
+   * and anything that arrived since met the door's refusal. The engine's copy
+   * is dropped again anyway, because a purge that trusted the takedown to have
+   * done it would be a purge that could serve bytes it just erased.
+   */
+  app.post(OPERATOR_PURGE_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (refuseIfReplica(id, reply)) return;
+    const body = (req.body ?? {}) as OperatorPurgeRequest;
+    const proven = await proveAct(req, reply, { act: "purge", target: id });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+    if (body.force !== true) {
+      return refuse(
+        "no-force",
+        `a purge erases what this home holds under ${id} and cannot be lifted. Say so: ` +
+          "`--force`.",
+      );
+    }
+    const standing = refusals.of(id);
+    if (!standing) return refuse("not-taken-down", purgeNeedsTakedown(id), 409);
+    if (standing.purgedAt) {
+      return refuse(
+        "already-purged",
+        `${id} was already purged at this home on ${standing.purgedAt.slice(0, 10)}.`,
+        409,
+      );
+    }
+    const reach = await reachOf(id);
+    engine.drop(id);
+    const report = await store.purgeCanvas(id);
+    const { keeps, ...erased } = report;
+    const at = new Date().toISOString();
+    await desk.markPurged(id, { at, actId: proven.id, counts: erased });
+    const row = (await desk.takedownFor(id))!;
+    refusals.remember(row);
+    const answer: OperatorPurgeResponse = {
+      takedown: row,
+      erased,
+      survives: [...keeps, replicasHorizon(reach.replicas.length)],
+    };
+    await desk.settleOperatorAct(proven.id, "done", { erased, survives: answer.survives });
+    return answer;
+  });
+
+  /**
+   * **`isocan operator end`** (operator phase 4; design, "End a badge";
+   * journey 7).
+   *
+   * The owner's path, `killAndSweep`, with the `mySurfaces` check replaced by
+   * the proof — and the four gaps that path had are already closed for
+   * everyone by the first half of this phase, so what this route adds is the
+   * TARGET and the RECORD. Targets resolve by the id a report names: a badge
+   * id; an actor, through `actor.join`'s `resolveActor`, so a folded identity
+   * is one target; or an address, through `badgesAttesting`. The reach is
+   * read and answered BEFORE anything is ended, on a `preview`, so the verb
+   * lists what the id reaches — the badges, the actors they claim, the rooms
+   * they are in, and the enrolments those badges' passes let in — and asks
+   * whether to end the enrolments too (journey 7 step 2).
+   *
+   * **Not a listing.** Every badge described here was reached through the id
+   * the operator named, and a badge that no id names is not describable —
+   * the same narrowing `mySurfaces` has, for the same reason.
+   *
+   * **The tombstone carries the operator's half**: the reason category, the
+   * address that acted, and the act id, written by `killBadge` in the same
+   * write as the stamp, so the sentence every surface reads is rendered from
+   * one record — *This surface was ended by the operator of this home on
+   * <date>: <reason>. Write to <address>.* Ending is not refusing: the person
+   * can knock again as a stranger, and the verb says so.
+   *
+   * The same proof, the same ledger row before anything, the same preflight
+   * as phases 1–3. A preview is an act too — somebody with a proof asked this
+   * home what an address reaches — and settles as `previewed`.
+   */
+  app.post(OPERATOR_END_ROUTE, async (req, reply) => {
+    const { target } = req.params as { target: string };
+    const body = (req.body ?? {}) as OperatorEndRequest;
+    const previewing = body.preview === true;
+    const withEnrolments = body.withEnrolments === true;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    const proven = await proveAct(req, reply, {
+      act: "end",
+      target,
+      ...(reason ? { reason } : {}),
+      ...(note ? { note } : {}),
+    });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+
+    /**
+     * **The target, resolved to live badges.** A badge id names one; an
+     * address names every live badge that proved it; anything else is an
+     * actor id, folded to the person who answers for it now and widened to
+     * every alias that folds into them, so a report naming `Dimitri 2` ends
+     * Dimitri's surfaces and not half of them.
+     */
+    const found = new Map<string, BadgeRecord>();
+    let kind: OperatorEndReach["target"]["kind"];
+    if (target.startsWith("bdg_")) {
+      kind = "badge";
+      const badge = await desk.badge(target);
+      if (badge) found.set(badge.badgeId, badge);
+    } else if (target.includes(":")) {
+      kind = "address";
+      const attribute = normalizeAttribute(target);
+      if (!attribute) {
+        return refuse("bad-target", `${target} is not an address this home can read — say email:<address>.`);
+      }
+      for (const badge of await desk.badgesAttesting(attribute)) found.set(badge.badgeId, badge);
+    } else {
+      kind = "actor";
+      const joins = await engine.actorJoins();
+      for (const alias of actorAliases(joins, resolveActor(joins, target))) {
+        for (const holder of await desk.claimants(alias)) {
+          if (holder.badgeId === SHELF || found.has(holder.badgeId)) continue;
+          const badge = await desk.badge(holder.badgeId);
+          if (badge) found.set(badge.badgeId, badge);
+        }
+      }
+    }
+
+    /**
+     * **What those badges left behind**: every live badge whose admission to
+     * some room is rooted in a pass one of them minted — the enrolments
+     * innkeeper.md says outlive their creating badge — and the passes still
+     * outstanding. Read from the rooms the targets are in, which is where a
+     * pass-rooted admission can be, and where the sweep would walk anyway.
+     */
+    const enrolled = new Map<string, BadgeRecord>();
+    const rooms = new Set<string>();
+    for (const badge of found.values()) for (const a of badge.admissions) rooms.add(a.canvasId);
+    for (const canvasId of rooms) {
+      for (const other of await desk.badgesIn(canvasId)) {
+        if (found.has(other.badgeId) || enrolled.has(other.badgeId)) continue;
+        const byPass = other.admissions.some(
+          (a) => a.canvasId === canvasId && a.provenance.root === "pass" && found.has(a.provenance.badgeId),
+        );
+        if (byPass) enrolled.set(other.badgeId, other);
+      }
+    }
+    const now = new Date().toISOString();
+    let passes = 0;
+    for (const badge of found.values()) {
+      for (const pass of await desk.passesMintedBy(badge.badgeId)) {
+        if (pass.redeemedAt === undefined && !passExpired(pass, now)) passes += 1;
+      }
+    }
+    const names = await engine.actorNames();
+    const surface = (record: BadgeRecord): EndedSurface => ({
+      badgeId: record.badgeId,
+      kind: record.kind,
+      actors: [...new Map(record.claims.map((c) => [c.actorId, c])).keys()].map((id) => ({
+        id,
+        name: names[id] ?? "",
+      })),
+      canvases: record.admissions.length,
+      lastSeen: record.lastSeen,
+    });
+    const reach: OperatorEndReach = {
+      target: { kind, id: target },
+      badges: [...found.values()].map(surface),
+      enrolments: [...enrolled.values()].map(surface),
+      passes,
+    };
+
+    if (previewing) {
+      const answer: OperatorEndResponse = {
+        reach,
+        ended: [],
+        reached: { sockets: 0, waits: 0 },
+        swept: { expelled: 0, rerooted: 0 },
+        sentence: null,
+      };
+      await desk.settleOperatorAct(proven.id, "previewed", reach);
+      return answer;
+    }
+    if (found.size === 0) {
+      return refuse(
+        "nothing-to-end",
+        `${target} names no live badge at this home — it was never here, or it is already ended. ` +
+          "`isocan operator log --target " + target + "` says which.",
+        404,
+      );
+    }
+    if (!reason || !isTakedownReason(reason)) {
+      return refuse(
+        "no-reason",
+        `an end needs a reason from this list, because the reason is what the person is shown: ` +
+          `${takedownReasonList()}. The --note is yours and nobody else's.`,
+      );
+    }
+    const category: TakedownReason = reason;
+    const end: OperatorEnd = { reason: category, by: proven.proof.attribute, actId: proven.id };
+    const ended: string[] = [];
+    const reached = { sockets: 0, waits: 0 };
+    const swept = { expelled: 0, rerooted: 0 };
+    const targets = [...found.values(), ...(withEnrolments ? enrolled.values() : [])];
+    for (const badge of targets) {
+      const outcome = await killAndSweep(
+        desk,
+        badge.badgeId,
+        req.badge!.badgeId,
+        now,
+        (canvasId) =>
+          engine.getSnapshot(canvasId).then(
+            (snapshot) => snapshot.project.createdBy.id,
+            () => null,
+          ),
+        sweeps.report,
+        sweeps.ended,
+        end,
+      );
+      if (!outcome) continue; // ended by somebody between the reach and the act
+      ended.push(badge.badgeId);
+      reached.sockets += outcome.reached.sockets;
+      reached.waits += outcome.reached.waits;
+      swept.expelled += outcome.swept.expelled;
+      swept.rerooted += outcome.swept.rerooted;
+    }
+    const answer: OperatorEndResponse = {
+      reach,
+      ended,
+      reached,
+      swept,
+      sentence: endOf({ ...targets[0]!, killedAt: now, killedBy: req.badge!.badgeId, end }).sentence,
+    };
+    await desk.settleOperatorAct(proven.id, "done", { ended, reached, swept, reach });
+    return answer;
+  });
+
+  /**
+   * **`isocan operator revoke`** (operator phase 5; design, "Turn off a
+   * grant"; journey 8).
+   *
+   * The owner's revoke with `own` replaced by the proof: the same
+   * `desk.revokeGrant`, the same sweep of the canvas — or of every canvas in
+   * the space — and the same `?bar=1`, reached through the owner's own route
+   * helpers rather than a second path, so what the operator can turn off is
+   * exactly what an owner can, one scope at a time, by the subject a report
+   * names. The target is the id the report names too: a canvas or a space,
+   * told apart by their prefixes, because the ledger's `target` column is
+   * what `isocan operator log --target` is asked about afterwards.
+   *
+   * **What is different is the tombstone.** The row gains `revokedVia:
+   * "operator"` and the operator's half — reason, address, act id — in the
+   * same desk write as the stamp, so the Share dialog and `isocan share`
+   * render *turned off by the operator of this home on <date>: <reason>*
+   * instead of a badge id. The socket the sweep closes still reads
+   * `withdrawn`, deliberately: the person inside lost their access, which is
+   * what `withdrawn` has meant since roles phase 2, and the owner's Share is
+   * where the account of why lives. `taken-down` stays the canvas's word.
+   *
+   * **The owner can turn it back on**, and this route does nothing to stop
+   * her: her re-grant is `POST …/grants`, an ordinary owner's write with no
+   * proof, no ledger row and a new row on the desk. The operator's row stays
+   * a tombstone under it, which is why `operatorTurnedOff` stops showing the
+   * sentence the moment a live row names the subject again.
+   *
+   * The same proof, the same ledger row before anything, the same preflight
+   * and the same replica refusal as phases 1–4. A bar the operator lifted
+   * would be a grant of access, so a bar is refused as a target.
+   */
+  app.post(OPERATOR_REVOKE_ROUTE, async (req, reply) => {
+    const { target } = req.params as { target: string };
+    const kind: OperatorRevokeResponse["target"]["kind"] = target.startsWith("spc_") ? "space" : "canvas";
+    if (kind === "canvas") {
+      if (refuseIfReplica(target, reply)) return;
+    } else {
+      // A space's rows live at the home the space routes forward to; an
+      // operator act is never forwarded (phase 1), so a replica says so.
+      const elsewhere = options.homes?.homeScoped()?.homeUrl ?? null;
+      if (elsewhere) {
+        return reply.status(409).send({
+          error:
+            `this daemon forwards its spaces to ${elsewhere}, and an operator proof is made at one ` +
+            `home and honoured by that home only. Ask ${elsewhere}.`,
+          code: "not-this-home",
+        });
+      }
+    }
+    const body = (req.body ?? {}) as Partial<OperatorRevokeRequest>;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    const bar = body.bar === true;
+    const proven = await proveAct(req, reply, {
+      act: "revoke",
+      target,
+      ...(reason ? { reason } : {}),
+      ...(note ? { note } : {}),
+    });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+
+    const badSubject = grantSubjectRefusal(body.subject);
+    if (badSubject) return refuse("bad-grant", badSubject);
+    const subject = normalizeSubject(body.subject as GrantSubject);
+
+    /** The scope's creator, for the bar's refusal and the sweep's floor. */
+    let creator: string;
+    if (kind === "space") {
+      const space = await desk.space(target);
+      if (!space) return refuse("unknown-space", `no space ${target} at this home.`, 404);
+      creator = space.createdBy;
+    } else {
+      const project =
+        (await engine
+          .getSnapshot(target)
+          .then((loaded) => loaded.project)
+          .catch(() => null)) ??
+        (await store.listCanvases()).find((canvas) => canvas.id === target) ??
+        null;
+      if (!project) return refuse("unknown-canvas", `no canvas ${target} at this home.`, 404);
+      creator = project.createdBy.id;
+    }
+    const rows = kind === "space" ? await desk.grantsForSpace(target) : await desk.grantsFor(target);
+    const live = liveGrants(rows).find((row) => row.subject === subject);
+    if (!live) {
+      return refuse(
+        "nothing-to-revoke",
+        `${subject} has no live row on ${target} — it was never granted there, or it is already off. ` +
+          "`isocan operator log --target " + target + "` says which.",
+        404,
+      );
+    }
+    if (isBar(live)) {
+      return refuse(
+        "is-a-bar",
+        `${subject} is kept out of ${target}, not let in: that row is a bar, and revoking it would ` +
+          "let them back in, which is the owner's to do.",
+        409,
+      );
+    }
+    if (!reason || !isTakedownReason(reason)) {
+      return refuse(
+        "no-reason",
+        `a revoke needs a reason from this list, because the reason is what the owner is shown: ` +
+          `${takedownReasonList()}. The --note is yours and nobody else's.`,
+      );
+    }
+    if (bar) {
+      const refusal = barSubjectRefusal(subject);
+      if (refusal) return refuse("bad-grant", refusal);
+      if (await namesTheCreator(subject, { createdBy: { id: creator } })) {
+        return refuse("bad-grant", `${subject} is the creator's own address — the creator cannot be kept out`);
+      }
+    }
+
+    const category: TakedownReason = reason;
+    const now = new Date().toISOString();
+    const via: OperatorRevocation = { reason: category, by: proven.proof.attribute, actId: proven.id };
+    const revoked = (await desk.revokeGrant(live.id, now, req.badge!.badgeId, via)) ?? live;
+    // The bar goes on the desk before the sweep, for the owner's route's
+    // reason: the sweep re-runs the door, and the door has to meet the bar.
+    const written: Grant | null = bar
+      ? kind === "canvas"
+        ? barRow(target, subject, req.badge!.badgeId)
+        : { id: newId("gnt"), spaceId: target, subject, grantedBy: req.badge!.badgeId, at: now, bars: true }
+      : null;
+    if (written) await desk.putGrant(written);
+    const swept =
+      kind === "canvas"
+        ? { ...(await sweepCanvas(desk, target, creator, sweeps.report)), reached: 1 }
+        : await sweepSpace(desk, target, creatorOf, sweeps.report);
+    const answer: OperatorRevokeResponse = {
+      target: { kind, id: target },
+      grant: revoked,
+      ...(written ? { bar: written } : {}),
+      reached: swept.reached,
+      swept: { expelled: swept.expelled, rerooted: swept.rerooted },
+      sentence: revokedSentence(revoked) ?? "",
+    };
+    await desk.settleOperatorAct(proven.id, "done", {
+      subject,
+      grantId: live.id,
+      ...(written ? { bar: written.id } : {}),
+      reached: swept.reached,
+      swept: answer.swept,
+    });
+    return answer;
+  });
+
+  /**
+   * **`isocan operator refuse` and `--lift`** (operator phase 6; design,
+   * "Refuse at the door"; journey 9).
+   *
+   * The roles bar moved to home scope: one desk row the operator writes,
+   * lifts and reads, loaded into the door's registry and re-read on write. It
+   * shares everything with the phase-2 takedown — the proof, the ledger row
+   * before anything, the same preflight — and the two things that are its own:
+   *
+   * - **Refusing an address ends every badge that proved it, in the same act**
+   *   (journey 9 step 1). `killAndSweep` per badge, phase 4's machinery, with
+   *   the operator's half of the tombstone so each ended person reads the
+   *   *ended* sentence, not silence. A name and a network end no badge — a
+   *   name refusal stops it coming BACK, and a network is not a badge.
+   * - **A network refusal expires by default** (journey 9 step 3), a day, so
+   *   the row carries `expiresAt`; `--for` sets it on any subject.
+   *
+   * Never forwarded, like every operator act: a replica says so. A refusal is
+   * a home fact, and `net:` in particular is about knocks THIS home's meter
+   * sees.
+   */
+  app.post(OPERATOR_REFUSE_ROUTE, async (req, reply) => {
+    const { subject: raw } = req.params as { subject: string };
+    const body = (req.body ?? {}) as OperatorRefuseRequest;
+    const lifting = body.lift === true;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    const proven = await proveAct(req, reply, {
+      act: "refuse",
+      target: raw,
+      ...(reason ? { reason } : {}),
+      ...(note ? { note } : {}),
+    });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+
+    const parsed = refusalSubjectOf(raw);
+    if (!parsed) return refuse("bad-subject", refusalSubjectRefusal(raw)!);
+    const { subject, kind } = parsed;
+    // The registry's clock, so the horizon this act WRITES and the horizon the
+    // door READS are one clock — the acceptance's movable `--for 10m`.
+    const nowMs = refusals.nowMs();
+    const now = new Date(nowMs).toISOString();
+
+    /**
+     * **The lift** — a rewrite of the one row, never a second. It does NOT
+     * un-end the badges an address refusal ended: ending is `killAndSweep`,
+     * and a lifted refusal means the address may prove again and be admitted,
+     * not that the surfaces ended by the refusal come back. The verb says so.
+     */
+    if (lifting) {
+      const standing = refusals.refusalOf(subject);
+      if (!standing) {
+        return refuse(
+          "nothing-to-lift",
+          `${raw} is not refused at this home — it was never refused, or the refusal is already ` +
+            `gone. \`isocan operator log --target ${raw}\` says which.`,
+          409,
+        );
+      }
+      await desk.liftRefusal(subject, { at: now, by: proven.proof.attribute, actId: proven.id });
+      const lifted = await desk.refusalFor(subject);
+      if (lifted) refusals.rememberRefusal(lifted);
+      const answer: OperatorRefuseResponse = {
+        refusal: lifted ?? standing,
+        reach: { kind, ended: [], reached: { sockets: 0, waits: 0 }, swept: { expelled: 0, rerooted: 0 }, holders: 0 },
+        sentence: null,
+      };
+      await desk.settleOperatorAct(proven.id, "done", { subject, lifted: true });
+      return answer;
+    }
+
+    if (!reason || !isTakedownReason(reason)) {
+      return refuse(
+        "no-reason",
+        `a refusal needs a reason from this list, because the reason is what the person is shown: ` +
+          `${takedownReasonList()}. The --note is yours and nobody else's.`,
+      );
+    }
+    const category: TakedownReason = reason;
+
+    /** `--for`, or a day for a network, or nothing. */
+    let expiresAt: string | undefined;
+    if (typeof body.for === "string" && body.for.trim()) {
+      const ms = parseRefusalDuration(body.for.trim());
+      if (ms === null) {
+        return refuse("bad-duration", `not a duration: \`${body.for}\` — say 10m, 24h or 7d.`);
+      }
+      expiresAt = new Date(nowMs + ms).toISOString();
+    } else if (kind === "net") {
+      expiresAt = new Date(nowMs + NET_REFUSAL_DEFAULT_MS).toISOString();
+    }
+
+    const row: HomeRefusal = {
+      subject,
+      kind,
+      at: now,
+      reason: category,
+      ...(note ? { note } : {}),
+      by: proven.proof.attribute,
+      actId: proven.id,
+      ...(expiresAt ? { expiresAt } : {}),
+    };
+    await desk.recordRefusal(row);
+    refusals.rememberRefusal(row);
+
+    /**
+     * **Ending every badge that proved the address** (journey 9 step 1). Only
+     * for `email:`/`repo:`, which a badge can attest; a name and a network end
+     * nothing here. `killAndSweep` reaches the dead badge's own sockets and
+     * parked waits (phase 4) and sweeps its rooms, so the ended people read
+     * the *ended* sentence and the enrolments are handled as they always are.
+     */
+    const ended: string[] = [];
+    const reached = { sockets: 0, waits: 0 };
+    const swept = { expelled: 0, rerooted: 0 };
+    let holders = 0;
+    if (kind === "email" || kind === "repo") {
+      const end: OperatorEnd = { reason: category, by: proven.proof.attribute, actId: proven.id };
+      for (const badge of await desk.badgesAttesting(subject)) {
+        const outcome = await killAndSweep(
+          desk,
+          badge.badgeId,
+          req.badge!.badgeId,
+          now,
+          (canvasId) => engine.getSnapshot(canvasId).then((s) => s.project.createdBy.id, () => null),
+          sweeps.report,
+          sweeps.ended,
+          end,
+        );
+        if (!outcome) continue;
+        ended.push(badge.badgeId);
+        reached.sockets += outcome.reached.sockets;
+        reached.waits += outcome.reached.waits;
+        swept.expelled += outcome.swept.expelled;
+        swept.rerooted += outcome.swept.rerooted;
+      }
+    } else if (kind === "actor") {
+      // A name refusal stops the name coming back; the badges holding it now
+      // are `isocan operator end`'s to end. The verb prints this count so the
+      // operator sees what a refusal did NOT do.
+      const joins = await engine.actorJoins();
+      for (const alias of actorAliases(joins, resolveActor(joins, subject.slice("actor:".length)))) {
+        for (const holder of await desk.claimants(alias)) {
+          if (holder.badgeId !== SHELF) holders += 1;
+        }
+      }
+    }
+
+    const reach: RefusalReach = { kind, ended, reached, swept, holders };
+    const answer: OperatorRefuseResponse = {
+      refusal: row,
+      reach,
+      sentence: refusalSentence(row),
+    };
+    await desk.settleOperatorAct(proven.id, "done", { subject, ended, reached, swept, holders });
+    return answer;
+  });
+
+  /**
+   * **Where the affected people read the sentence** (design, "The record").
+   *
+   * Not an operator route, and the only route in this phase that is not: the
+   * operator reads the ledger, and everybody else reads one sentence about
+   * what happened to a canvas they were on.
+   *
+   * Two shapes, and the caller says which by naming a canvas or not.
+   * `?canvas=<id>` answers anybody — a member, a stranger with the address, a
+   * replica that has just been refused — because the door already tells them
+   * in the refusal, and a second read that refused to repeat it would make
+   * *this was removed, and here is who to ask* depend on which surface you
+   * were standing on. The listing is narrowed to what the badge may see,
+   * because a listing that was not would be a roster of this home's
+   * takedowns.
+   */
+  app.get(TAKEDOWNS_ROUTE, async (req) => {
+    const query = (req.query ?? {}) as Record<string, string | undefined>;
+    const one = query[TAKEDOWNS_CANVAS_PARAM];
+    if (one) {
+      const notice = refusals.notice(one);
+      return { takedowns: notice ? [notice] : [] } satisfies TakedownsResponse;
+    }
+    const badge = req.badge;
+    if (!badge) return { takedowns: [] } satisfies TakedownsResponse;
+    const admitted = new Set(badge.admissions.map((a) => a.canvasId));
+    const mine: TakedownNotice[] = [];
+    const mayDiscover = canvasDiscovery(req);
+    for (const row of refusals.all()) {
+      if (admitted.has(row.canvasId)) {
+        mine.push(noticeOf(row));
+        continue;
+      }
+      /**
+       * A member who has never opened it on this surface is still a member: the
+       * door's own test, asked against the canvas's grants, which a takedown
+       * leaves exactly where they were. The creator is read from the store's
+       * canvas record rather than from a snapshot, because a snapshot is what
+       * a taken-down canvas cannot produce.
+       */
+      const canvas = (await store.listCanvases()).find((c) => c.id === row.canvasId);
+      if (!canvas) continue;
+      if (await mayDiscover(canvas)) {
+        mine.push(noticeOf(row));
+      }
+    }
+    return { takedowns: mine } satisfies TakedownsResponse;
   });
 
   // ---- passes: what an admitted badge hands an unadmitted one (Scene 5) ----
@@ -2925,8 +4907,9 @@ export function registerRoutes(
   // passes would be handing out admissions to a canvas it does not own.
 
   /**
-   * Mint one. The token comes back exactly once — there is no route that
-   * reads a pass back out, and the desk keeps only its hash.
+   * Mint one. The token comes back exactly once — no route reads it back out
+   * (the read below returns the row, never the secret), and the desk keeps
+   * only its hash.
    *
    * `actorId` is optional and both shapes are real (see `Pass.actorId`): with
    * it the redeemer arrives being somebody, without it the redeemer arrives
@@ -2975,8 +4958,35 @@ export function registerRoutes(
       mintedBy: req.badge!.badgeId,
       ...(actorId !== undefined ? { actorId } : {}),
     });
+    await sourceMutation(req, id);
     await desk.putPass(record);
     return { pass: withoutSecret(record), token } satisfies MintPassResponse;
+  });
+
+  /**
+   * Read one back — **for the badge that minted it, and nobody else**
+   * (sheep-harness phase 2). The row without its secret, so the minter learns
+   * whether its pass was spent and by which badge (`redeemedBy`): the exact
+   * surface the pass made. An rc that minted a pass for a sheep's cell uses
+   * it to end that cell's badge when the agent is withdrawn.
+   *
+   * Another badge's pass, a pass for another canvas, and no pass at all
+   * answer the same `unknown-pass`, so this is no oracle over passes the
+   * caller did not mint. On a replica it forwards to the canvas's home, where
+   * the row is and where the minter was this daemon's badge.
+   */
+  app.get("/api/projects/:id/passes/:passId", async (req, reply) => {
+    const { id, passId } = req.params as { id: string; passId: string };
+    const home = options.homes?.for(id) ?? null;
+    if (home) return home.pass(id, passId);
+    const held = await desk.pass(passId);
+    if (!held || held.canvasId !== id || held.mintedBy !== req.badge!.badgeId) {
+      return reply.status(404).send({
+        error: `no pass ${passId} minted by this badge for ${id}`,
+        code: PASS_UNKNOWN,
+      });
+    }
+    return { pass: withoutSecret(held) } satisfies PassResponse;
   });
 
   /**
@@ -3015,6 +5025,23 @@ export function registerRoutes(
    */
   app.post(PASS_REDEEM_ROUTE, async (req, reply) => {
     const body = (req.body ?? {}) as Partial<RedeemPassRequest>;
+    if (body.adoptIdentity !== undefined && typeof body.adoptIdentity !== "boolean") {
+      return reply.status(400).send({ error: "adoptIdentity must be a boolean", code: "bad-request" });
+    }
+    const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+    if (
+      body.adoptIdentity &&
+      (options.servesWorld === true || !loopbackBound(app) || !local || !options.adoptIdentity)
+    ) {
+      return reply.status(403).send({
+        error: "saving a machine's person is available only through its local daemon",
+        code: "not-local-setup",
+      });
+    }
+    const finish = async (answer: RedeemPassResponse): Promise<RedeemPassResponse> => {
+      if (!body.adoptIdentity || !answer.actor) return answer;
+      return { ...answer, identity: await options.adoptIdentity!(answer.actor) };
+    };
     // No special case for a missing token: `redeemPass` parses it, and an
     // empty string is not a pass in exactly the way a mangled one is not.
     const token = typeof body.token === "string" ? body.token : "";
@@ -3054,7 +5081,7 @@ export function registerRoutes(
     if (home) {
       const answer = await home.redeemPass(token);
       if (answer.actor) await engine.endowClaim(badge.badgeId, answer.actor, answer.canvasId);
-      return answer;
+      return finish(answer);
     }
     const pass = await redeemPass(desk, token, badge);
     if (pass.actorId === undefined) {
@@ -3066,7 +5093,7 @@ export function registerRoutes(
     const names = await engine.actorNames();
     const actor: Actor = { id: pass.actorId, name: names[pass.actorId] ?? "" };
     await engine.endowClaim(badge.badgeId, actor, pass.canvasId);
-    return { canvasId: pass.canvasId, actor } satisfies RedeemPassResponse;
+    return finish({ canvasId: pass.canvasId, actor });
   });
 
   /**
@@ -3126,7 +5153,10 @@ export function registerRoutes(
     const home = options.homes.linkFor(address);
     let canvas: Canvas;
     try {
-      canvas = await home.join(canvasId);
+      const context = sourceContexts.get(req);
+      const actor = context?.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
+      if (actor) await engine.requireActor(req.badge!.badgeId, actor.id);
+      canvas = await home.join(canvasId, actor, context);
     } catch (err) {
       // A link opened for a join that failed has nothing to do and nobody to
       // answer; leaving it polling would be a socket and a timer per typo'd
@@ -3148,11 +5178,12 @@ export function registerRoutes(
     // No `admit` here any more: the hook took the door's test on the way in,
     // for this route and every other one shaped like it.
     const snapshot = await engine.getSnapshot(id);
+    requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.project);
     // The one fact about the READER that rides on the read (#88): a client
     // whose admission is not edit learns its rung here, with the canvas,
     // instead of discovering it as a refusal per gesture. Absent means edit,
     // so a pre-capability client parsing this response sees nothing new.
-    const held = req.badge ? capabilityIn(req.badge, id) : null;
+    const held = sourceCaps.get(req) ?? (req.badge ? capabilityIn(req.badge, id) : null);
     if (held !== null && narrowed(held)) {
       return { ...snapshot, capability: held };
     }
@@ -3183,8 +5214,11 @@ export function registerRoutes(
         });
         req.raw.on("close", done);
       });
+      const context = sourceContexts.get(req);
+      if (context) await checkSource(id, req.badge!.badgeId, context, "read");
       entries = await engine.getLog(id, sinceSeq);
     }
+    requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
     return entries;
   });
 
@@ -3197,40 +5231,58 @@ export function registerRoutes(
    */
   app.get("/api/projects/:id/oplog/archive", async (req) => {
     const { id } = req.params as { id: string };
-    return engine.getArchivedLog(id);
+    const entries = await engine.getArchivedLog(id);
+    requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
+    return entries;
   });
 
   /**
-   * The whole home's oplog, one cursor per canvas — what `isocan wait`
-   * listens on. An on-call agent hears canvases it has never opened, so the
-   * long poll must be woken by ANY canvas's op, and a canvas born while it
-   * waits is streamed from its first entry.
-   *
-   * **Home-wide, and no longer a leak** (roles phase 1). "Canvases it has
-   * never opened" is still the feature — a parked agent must hear a canvas
-   * it was summoned to — and at a multi-tenant home that sentence used to
-   * read as "hears everybody's": this route checked no admission at all, so
-   * any badge on the home could read any canvas's oplog. It now runs the
-   * same per-canvas door test as the listing above, per canvas in its list:
-   * a canvas the badge is admitted to, or that a live row would admit it to,
-   * is reported; any other is simply not in the answer. A summoned agent on
-   * a canvas whose link is on still hears it, because the link is the row
-   * that admits it. Nothing is written — hearing about a room is not
-   * entering it, the same rule the listing keeps.
+   * The home's oplog, one cursor per canvas. An unscoped watch discovers the
+   * same rooms the badge may list. `only` explicitly presents known addresses
+   * and may therefore use their link grants. Neither read writes admissions.
+   * A canvas shared by name while the watcher waits is heard from its birth.
    */
-  app.post("/api/oplog/watch", async (req) => {
+  app.post("/api/oplog/watch", async (req, reply) => {
     const body = (req.body ?? {}) as import("@isocan/core").WatchLogRequest;
     const { cursors } = body;
     const only = body.only ? new Set(body.only) : null;
     const badge = req.badge!;
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const judged = new Map<string, boolean>();
+    const mayDiscover = canvasDiscovery(req);
     const mayHear = async (canvas: Canvas): Promise<boolean> => {
+      const context = sourceContexts.get(req);
+      if (context) {
+        try { await checkSource(canvas.id, badge.badgeId, context, "read", undefined, only?.has(canvas.id) ? "entry" : "discovery"); }
+        catch (error) { if (only?.has(canvas.id)) throw error; return false; }
+      }
+      /**
+       * **A canvas this home has taken down is not heard** (operator phase 2),
+       * and the two shapes of this route get the two different answers the
+       * `withdrawn` branch below already draws.
+       *
+       * Named by the caller — an `isocan wait` parked on that canvas — and it
+       * is REFUSED, with the sentence, so the CLI prints it, exits non-zero
+       * and does not re-park (journey 4 step 2). Not named — a home-wide watch
+       * — and it is simply skipped, because a home-wide watch is not ended by
+       * one room, which is the rule the line below keeps too.
+       *
+       * Asked before the door test rather than after it, for the door hook's
+       * reason: the people parked on a canvas are its members, and a member is
+       * admitted.
+       */
+      const down = refusals.of(canvas.id);
+      if (down) {
+        if (only?.has(canvas.id)) throw new TakenDownError(down);
+        return false;
+      }
       const known = judged.get(canvas.id);
       if (known !== undefined) return known;
-      const allowed =
-        admitted.has(canvas.id) ||
-        Boolean(await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id));
+      // Naming an address is entry; an unscoped watch is discovery. Cursors
+      // are positions, not a request to widen discovery to every link.
+      const allowed = only?.has(canvas.id)
+        ? admitted.has(canvas.id) || Boolean(await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id))
+        : await mayDiscover(canvas);
       judged.set(canvas.id, allowed);
       /**
        * **An expelled badge's next poll is refused, and told why** (roles
@@ -3248,15 +5300,39 @@ export function registerRoutes(
       return allowed;
     };
 
+    /**
+     * **This poll's badge was ended while it was parked** (operator phase 4),
+     * set by the end listener below and raised at the top of the next
+     * collection — before any canvas is asked, because there is no canvas
+     * this badge may still hear. Whatever the poll named, or if it named
+     * nothing: an end is per badge, not per room, which is the one way this
+     * differs from `withdrawn` two branches down.
+     */
+    let ended: BadgeEnd | null = null;
+
     const collect = async (): Promise<import("@isocan/core").WatchLogResponse> => {
+      if (ended) throw new BadgeEndedError(ended);
       const entries: import("@isocan/core").WatchedLogEntry[] = [];
       const next: Record<string, number> = {};
       for (const canvas of await engine.listCanvases()) {
         if (only && !only.has(canvas.id)) continue;
         if (!(await mayHear(canvas))) continue;
+        if (canvas.groupMode === "groups" && !supportsCanvasGroups(req.headers[CLIENT_FEATURES_HEADER])) {
+          if (only?.has(canvas.id)) throw new CanvasGroupsClientError();
+          continue;
+        }
+        const context = sourceContexts.get(req);
+        const remote = options.homes?.for(canvas.id);
+        if (context && remote) {
+          const actor = context.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
+          const result = await remote.personalRequest<import("@isocan/core").WatchLogResponse>("POST", "/api/oplog/watch", { ...body, only: [canvas.id], waitMs: 0 }, actor, context);
+          entries.push(...result.entries); Object.assign(next, result.cursors);
+          continue;
+        }
         const since = cursors?.[canvas.id] ?? 0;
         // Seeding (no cursors at all) means "from now on" — tips, no entries.
         const log = cursors ? await engine.getLog(canvas.id, since) : [];
+        requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], canvas, log);
         const lastSeq = cursors
           ? (log[log.length - 1]?.seq ?? since)
           : (await engine.getSnapshot(canvas.id)).lastSeq;
@@ -3283,6 +5359,24 @@ export function registerRoutes(
     // And on this badge's own expulsion from a canvas it named: the parked
     // agent is told within the sweep, not at the end of its poll window.
     // The wake runs `collect`, which is where the refusal is raised.
+    /**
+     * **And on a takedown of a canvas this poll named** (operator phase 2).
+     *
+     * Nothing else reaches a parked watch for one. The engine subscriber above
+     * filters to `op-applied`, and a takedown is deliberately not an op — the
+     * vocabulary is closed, the log replicates and belongs to the members, and
+     * the log cannot carry authority (design, "Not an op"). The sweep hub does
+     * not see one either: nobody was expelled, and the difference matters —
+     * *your access was withdrawn* is not what happened.
+     *
+     * So the takedown route calls `wakeWatchers`, which calls this, which runs
+     * `collect` again — and the refusal is raised inside `mayHear`, where the
+     * withdrawn one is. One path to the refusal, woken two ways.
+     */
+    const unregisterWatch = watchers.register(only, () => {
+      landed = true;
+      wake?.();
+    });
     const unsubscribeSweeps = sweeps.on((canvasId, badgeId, outcome) => {
       if (badgeId !== badge.badgeId || outcome.outcome !== "expelled") return;
       if (!only?.has(canvasId)) return;
@@ -3293,20 +5387,36 @@ export function registerRoutes(
       landed = true;
       wake?.();
     });
+    /**
+     * **And on this badge's own end** (operator phase 4): the parked agent is
+     * told within the kill, not at the end of its poll window, and told the
+     * tombstone's sentence rather than hearing silence. Answers `waits: 1` so
+     * the kill can say how many parks it ended — counted at the moment of
+     * acting, as the takedown counts.
+     */
+    const unsubscribeEnds = sweeps.onEnded((badgeId, end) => {
+      if (badgeId !== badge.badgeId) return;
+      ended = end;
+      landed = true;
+      wake?.();
+      return { waits: 1 };
+    });
     try {
       let result = await collect();
       const holdMs = Math.min(Number(body.waitMs) || 0, 55_000);
-      if (result.entries.length === 0 && !landed && holdMs > 0) {
+      if (result.entries.length === 0 && !landed && holdMs > 0 && !reply.raw.destroyed) {
         await new Promise<void>((resolve) => {
           const done = () => {
             clearTimeout(timer);
             wake = null;
-            req.raw.off("close", done);
+            reply.raw.off("close", done);
             resolve();
           };
           const timer = setTimeout(done, holdMs);
           wake = done;
-          req.raw.on("close", done);
+          // IncomingMessage may already have closed when its body was read.
+          // The response closes when a caller cancels a held watch.
+          reply.raw.on("close", done);
         });
         result = await collect();
       }
@@ -3314,6 +5424,8 @@ export function registerRoutes(
     } finally {
       unsubscribe();
       unsubscribeSweeps();
+      unsubscribeEnds();
+      unregisterWatch();
     }
   });
 
@@ -3388,10 +5500,26 @@ export function registerRoutes(
    */
   const rc = options.rc ?? new RcHolds();
   app.post("/api/rc/hold", async (req) => {
-    const body = (req.body ?? {}) as { canvasId?: string; actorIds?: string[]; waitMs?: number };
+    const body = (req.body ?? {}) as Partial<import("@isocan/core").RcHoldRequest>;
     const canvasId = body.canvasId ?? "";
     const actorIds = new Set((body.actorIds ?? []).filter((a) => typeof a === "string"));
-    const hold = rc.hold(canvasId, actorIds, Math.min(Number(body.waitMs) || 0, 55_000));
+    // **Whose rc this is** (owner-only summons), believed only for an actor
+    // the holding badge may speak as — "Sian listens only to Nico" is said in
+    // Nico's name, and an ask to add an agent is routed by it. A hold never
+    // fails for want of the label: an rc that cannot say whose it is simply
+    // is not announced as anybody's.
+    const owner =
+      body.owner?.id && typeof body.owner.name === "string"
+        ? await engine.requireActor(req.badge!.badgeId, body.owner.id).then(
+            () => ({ id: body.owner!.id, name: body.owner!.name }),
+            () => undefined,
+          )
+        : undefined;
+    const policies = owner ? rcPoliciesOf(body.policies, actorIds, owner) : undefined;
+    const hold = rc.hold(canvasId, actorIds, Math.min(Number(body.waitMs) || 0, 55_000), {
+      ...(owner ? { owner } : {}),
+      ...(policies ? { policies } : {}),
+    });
     req.raw.on("close", hold.release);
     const asks = await hold.done;
     return { ok: true, asks };
@@ -3432,8 +5560,28 @@ export function registerRoutes(
     } catch {
       return reply.code(403).send({ error: `this badge may not speak as ${body.from.id}` });
     }
-    const ask = { askId: newId("ask"), name, from: body.from };
-    if (!rc.ask(id, ask)) {
+    // A template is an id and some strings (proposed: `templates`): read here,
+    // once, so every hop below carries only what `askTemplate` let through.
+    const template = askTemplate(body);
+    if ("error" in template) return reply.code(400).send({ error: template.error });
+    const ask = { askId: newId("ask"), name, from: body.from, ...template };
+    // Owner-only: an rc takes an ask from its owner — or anybody joined with
+    // them, which is why the comparison is made here, with the registry.
+    const joined = await engine.actorJoins();
+    const isOwner = (owner: import("@isocan/core").Actor, askerId: string) =>
+      sameActor(joined, owner.id, askerId);
+    if (!rc.ask(id, ask, isOwner)) {
+      const owners = rc.answering(id).owners;
+      if (owners.length > 0) {
+        const names = owners.map((o) => o.name);
+        const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`;
+        return reply.code(403).send({
+          error:
+            `the isocan rc parked here is ${who}'s, and adding an agent to a machine is its owner's gesture — ` +
+            `ask ${who} to add it, or run \`isocan rc\` on a machine of your own`,
+          code: NOT_YOUR_RC_CODE,
+        });
+      }
       return reply.code(409).send({
         error:
           "no `isocan rc` is parked on this canvas — someone with the project checked out runs one, and this gesture appears",
@@ -3446,13 +5594,13 @@ export function registerRoutes(
   app.post("/api/projects/:id/undo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.undo(id, body.actor, req.badge!.badgeId, body.clientId);
+    return engine.undo(id, body.actor, req.badge!.badgeId, body.clientId, body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? ""), sourceContexts.get(req));
   });
 
   app.post("/api/projects/:id/redo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.redo(id, body.actor, req.badge!.badgeId, body.clientId);
+    return engine.redo(id, body.actor, req.badge!.badgeId, body.clientId, body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? ""), sourceContexts.get(req));
   });
 
   // ---- presence sessions (ephemeral plane — no oplog, no storage) ----
@@ -3479,6 +5627,7 @@ export function registerRoutes(
     // Every beat re-asserts who is holding the face (that is what makes a
     // rename re-label it live), so every beat is checked.
     if (body.actor) await engine.requireActor(req.badge!.badgeId, body.actor.id);
+    if (body.textSelection !== undefined) body.textSelection = textAttention(body.textSelection, Date.now(), (await engine.getSnapshot(id)).canvas);
     if (!presence.touch(id, sid, body)) {
       return reply.status(404).send({ error: "session expired or unknown", code: "unknown-session" });
     }
@@ -3546,7 +5695,7 @@ export function registerRoutes(
   app.post("/api/projects/:id/blobs/reconcile", async (req) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as { push?: boolean };
-    return engine.reconcileBlobs(id, { push: body.push === true });
+    return engine.reconcileBlobs(id, { push: body.push === true }, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**
@@ -3567,7 +5716,7 @@ export function registerRoutes(
     if (typeof body.to !== "string" || body.to.trim() === "") {
       return { error: "teleport needs a home to send it to (`--to <url>`)", code: "bad-op" };
     }
-    return engine.teleport(id, body.to.trim(), { dryRun: body.dryRun === true });
+    return engine.teleport(id, body.to.trim(), { dryRun: body.dryRun === true }, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**
@@ -3596,7 +5745,8 @@ export function registerRoutes(
     if (!Array.isArray(body.entries)) {
       return { error: "adopt takes the canvas's entries", code: "bad-op" };
     }
-    const made = await engine.adopt(id, body.entries);
+    requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, body.entries);
+    const made = await engine.adopt(id, body.entries, sourceContexts.get(req), req.badge!.badgeId);
     // Both arrivals need this: a teleport's bytes follow the log, and a
     // restored backup is otherwise a canvas nobody could enter. See above.
     await admit(req, id, true);
@@ -3606,7 +5756,7 @@ export function registerRoutes(
   app.post("/api/projects/:id/gc", async (req) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as import("@isocan/core").GcRequest;
-    return engine.gc(id, body);
+    return engine.gc(id, body, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**
@@ -3627,13 +5777,10 @@ export function registerRoutes(
    * anybody at the door, and there does not need to be: the home's own timer
    * collects the rest, from inside the process, where no badge is involved.
    *
-   * **Admissions, not `admittingGrant`** — the narrow answer, where `GET
-   * /api/projects` takes the wide one. The wide answer is right for a LISTING
-   * because listing is not acting: telling a person that a link-granted canvas
-   * exists costs nothing. This route deletes bytes and rewrites oplogs, and
-   * "every canvas I could have entered" is not a set anybody meant to hand a
-   * chore. An admission is written the moment its holder actually enters, so
-   * the sweep follows where someone has been rather than where they might go.
+   * **Admissions only.** Discovery can also include named invitations and a
+   * local shelf; this route deletes bytes and rewrites oplogs, so a canvas
+   * merely offered in a list is not one it may collect. An admission is
+   * written when its holder enters, and the sweep follows those entries.
    *
    * The intersection with the held list is not belt-and-braces: an admission
    * outlives the canvas it names (a delete does not walk every badge), and
@@ -3646,7 +5793,13 @@ export function registerRoutes(
     const body = (req.body ?? {}) as import("@isocan/core").GcRequest;
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const held = (await engine.listCanvases()).filter((canvas) => admitted.has(canvas.id));
-    return gcCanvases(engine, held.map((canvas) => canvas.id), body);
+    const context = sourceContexts.get(req);
+    const ids: string[] = [];
+    for (const canvas of held) {
+      if (context) { try { await checkSource(canvas.id, badge.badgeId, context, "edit", undefined, "discovery"); } catch { context.signal?.throwIfAborted(); continue; } }
+      ids.push(canvas.id);
+    }
+    return gcCanvases({ gc: (id, request) => engine.gc(id, request, context, badge.badgeId) }, ids, body);
   });
 
   /**
@@ -3720,12 +5873,30 @@ export function registerRoutes(
       .send({ urls, expiresAt, ttlSeconds: signing.ttlSeconds } satisfies SignedBlobsResponse);
   });
 
-  // Its own scope, so `application/json` bytes arrive as bytes here and stay
-  // parsed everywhere else — see the note at the `*` parser above.
+  /**
+   * Its own scope, so bytes whose media type Fastify already parses arrive
+   * here as bytes and stay parsed everywhere else — see the note at the `*`
+   * parser above.
+   *
+   * **`text/plain` is the second one, found the same way as the first** (12
+   * Sep 2026). Fastify ships parsers for `application/json` AND `text/plain`;
+   * the JSON one was fixed on 6 Sep by the first code to upload a blob with a
+   * deliberate mime, and the note written then says exactly this would happen
+   * again. It did: the sandbox module posts a run's transcript as
+   * `text/plain`, Fastify handed the route a string, `Buffer.isBuffer` said
+   * no, and the upload was refused with `empty blob body` — the same message
+   * about the same non-empty body. Nothing else had hit it because the mime
+   * tables call a `.txt` file `text/plain` only on the way OUT; an upload
+   * from the CLI falls through to `application/octet-stream`.
+   *
+   * Listed rather than discovered, because the list is short and closed: a
+   * parser Fastify adds in a future version would be a third instance, and
+   * `blobs.test.ts` holds both of these.
+   */
   void app.register(async (blobs) => {
-    blobs.addContentTypeParser("application/json", { parseAs: "buffer" }, (_req, body, done) =>
-      done(null, body),
-    );
+    for (const parsed of ["application/json", "text/plain"]) {
+      blobs.addContentTypeParser(parsed, { parseAs: "buffer" }, (_req, body, done) => done(null, body));
+    }
     blobs.post("/api/projects/:id/blobs", async (req, reply) => {
       const { id } = req.params as { id: string };
       await engine.getSnapshot(id); // 404 for unknown canvases
@@ -3735,7 +5906,7 @@ export function registerRoutes(
       }
       const mimeType = req.headers["content-type"] ?? "application/octet-stream";
       const filename = decodeFilename(req.headers[FILENAME_HEADER.toLowerCase()]);
-      return engine.putBlob(id, data, { mimeType, filename });
+      return engine.putBlob(id, data, { mimeType, filename }, sourceContexts.get(req), req.badge!.badgeId);
     });
   });
 
@@ -3759,7 +5930,7 @@ export function registerRoutes(
     if (known) {
       return { blob: { blobHash: asked.blobHash, mimeType: known.mimeType, size: known.size } };
     }
-    const upload = await engine.beginUpload(id, asked);
+    const upload = await engine.beginUpload(id, asked, sourceContexts.get(req), req.badge!.badgeId);
     if (!upload) {
       return reply
         .status(409)
@@ -3775,7 +5946,7 @@ export function registerRoutes(
     const request = req.body as Partial<BlobUploadRequest> | undefined;
     const problem = badUploadRequest(request);
     if (problem) return reply.status(400).send({ error: problem, code: "bad-op" });
-    return engine.registerBlob(id, request as BlobUploadRequest);
+    return engine.registerBlob(id, request as BlobUploadRequest, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**
@@ -4003,7 +6174,33 @@ export function registerRoutes(
         .status(result.refusal === "drifted" ? 409 : 400)
         .send({ error: sentence[result.refusal ?? "unwritable"], code: result.refusal });
     }
-    return { root, path: rel, wrote: current.blobHash };
+
+    const visualRel = visualFileOf(item);
+    let visualResult: { path: string; wrote: string } | undefined;
+    if (visualRel && current.visual) {
+      const vStream = await store.openBlob(id, current.visual.blobHash);
+      if (vStream) {
+        const vChunks: Buffer[] = [];
+        for await (const chunk of vStream) vChunks.push(Buffer.from(chunk as Buffer));
+        const vBytes = Buffer.concat(vChunks);
+        const vOurs = force
+          ? [(await hashBound(root, visualRel, hashOf)) ?? ""]
+          : item.versions
+              .map((v) => v.visual?.blobHash)
+              .filter((h): h is string => typeof h === "string");
+        const vRes = await writeBound(root, visualRel, vBytes, vOurs, hashOf);
+        if (vRes.ok) {
+          visualResult = { path: visualRel, wrote: current.visual.blobHash };
+        }
+      }
+    }
+
+    return {
+      root,
+      path: rel,
+      wrote: current.blobHash,
+      ...(visualResult ? { visualPath: visualResult.path, wroteVisual: visualResult.wrote } : {}),
+    };
   });
 
   /**
@@ -4024,9 +6221,15 @@ export function registerRoutes(
     if (bound.length > 0) {
       for (const item of Object.values(snapshot.canvas.items)) {
         const rel = fileOf(item);
-        if (!rel || onDisk[rel] !== undefined) continue;
-        const hash = await hashBound(bound[0]!, rel, hashOf);
-        if (hash !== null) onDisk[rel] = hash;
+        if (rel && onDisk[rel] === undefined) {
+          const hash = await hashBound(bound[0]!, rel, hashOf);
+          if (hash !== null) onDisk[rel] = hash;
+        }
+        const vRel = visualFileOf(item);
+        if (vRel && onDisk[vRel] === undefined) {
+          const hash = await hashBound(bound[0]!, vRel, hashOf);
+          if (hash !== null) onDisk[vRel] = hash;
+        }
       }
     }
     return { bound: bound.length > 0, onDisk };
@@ -4193,7 +6396,7 @@ export function registerRoutes(
   // The one-origin rule, per canvas since phase 10.3. See `registerPages`.
   // The meter travels with it: the SPA fallback is the second mint path, and
   // it draws on the same bucket the door does (phase 13.7).
-  registerPages(app, desk, store, options, { mayMint, logRefusal });
+  registerPages(app, desk, store, options, { mayMint, logRefusal, refusedNet });
 }
 
 /**
@@ -4424,6 +6627,11 @@ function registerPages(
   meter: {
     mayMint: (req: FastifyRequest) => MintRefusal | null;
     logRefusal: (req: FastifyRequest, what: string, refusal: MintRefusal) => void;
+    /** The operator's network refusal on this knock, or null (operator phase
+     * 6). The page path withholds the badge on it, as it does on a metered
+     * knock — the page is served, and a browser that arrives badge-less takes
+     * `api.ts`'s recover route, which meets the door's 403 and the sentence. */
+    refusedNet: (req: FastifyRequest) => HomeRefusal | null;
   },
 ): void {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -4493,7 +6701,7 @@ function registerPages(
     return (await pureReplica()) ? (options.birthHome ?? null) : null;
   };
 
-  const send = (reply: { header: Function; send: Function; type: Function }, file: string) => {
+  const send = (reply: FastifyReply, file: string) => {
     const types = STATIC_TYPES;
     /**
      * **An unknown extension falls through to `application/octet-stream`, and
@@ -4553,7 +6761,9 @@ function registerPages(
     const font = path.extname(file) === ".woff2";
     reply.header(
       "Cache-Control",
-      hashed
+      reply.getHeader("Cache-Control") === "no-store"
+        ? "no-store"
+        : hashed
         ? "public, max-age=31536000, immutable"
         : font
           ? "public, max-age=86400"
@@ -4574,7 +6784,12 @@ function registerPages(
     // be the cheerful wrong address again, in HTML this time.
     if (`/${url}`.startsWith("/api/")) return apiNotFound(reply, req.method, `/${url}`);
 
-    const home = await elsewhere(pathname);
+    // Built app files contain no canvas data. Serve them on a pure replica
+    // too, so its explicitly local /public page can load its own app code.
+    const resolved = path.resolve(dist, url);
+    const staticFile = built && resolved.startsWith(`${dist}${path.sep}`) && url && existsSync(resolved) && statSync(resolved).isFile();
+    if (staticFile && resolved !== path.join(dist, "index.html")) return send(reply, resolved);
+    const home = pathname === "/public" || pathname === "/public/" ? null : await elsewhere(pathname);
     if (home !== null) return signpost(reply, req.headers.accept, home);
 
     // Nothing built to serve. A daemon with no `packages/web/dist` has always
@@ -4584,10 +6799,7 @@ function registerPages(
       return reply.status(404).send({ error: `not found: ${req.method} ${pathname}` });
     }
 
-    const resolved = path.resolve(dist, url);
-    if (resolved.startsWith(dist) && url && existsSync(resolved)) {
-      return send(reply, resolved);
-    }
+    if (staticFile) return send(reply, resolved);
     // The browser is badged on the PAGE LOAD, not on a round trip — the
     // desk's Scene 3 diagram is literal about it: `GET /p/7f3a… → web app +
     // Set-Cookie`. So the app is badged before its first fetch, and the
@@ -4619,14 +6831,19 @@ function registerPages(
     // being told to wait, answers 429 instead. Same accounting, two refusals,
     // because they are two different asks.
     if (!req.badge) {
-      const refusal = meter.mayMint(req);
+      // A refused network gets the page and no badge (operator phase 6), the
+      // same softest refusal a metered knock gets: the badge-less browser
+      // recovers through the door, which answers 403 with the sentence.
+      const refusal = meter.refusedNet(req) ? { retryAfter: 0 } : meter.mayMint(req);
       if (refusal) {
         meter.logRefusal(req, "served a page without minting: metered", refusal);
       } else {
         const { record, token } = mintBadge("cookie");
         await desk.put(record);
         const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
-        reply.header("Set-Cookie", badgeCookie(token, secure));
+        // A canvas opened in an agent manager's pane arrives HERE first, and
+        // this is the one request that can still tell it is a frame (#220).
+        reply.header("Set-Cookie", badgeCookie(token, secure, framedRequest(req.headers)));
       }
     }
     return send(reply, path.join(dist, "index.html")); // SPA fallback

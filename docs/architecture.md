@@ -10,6 +10,13 @@ later. The record of what moved it lives in the phase findings of
 [the multiuser phases](projects/multiuser/phases.md): a finding that redraws
 the map edits this doc in the same change.
 
+The same system is drawn as instruments on the
+[\[isocan\] System design](https://isocan.io/p/prj_6fgykNN1_m) canvas — the hourglass, the
+life of an operation, the door, the two ledgers, home and replica, the
+storage seam, the GCP map — each screen citing the files it was read from.
+Drive that first if the names here do not yet mean anything; this doc is the
+one that has to stay exact.
+
 ## Givens
 
 - **Google Cloud**, one region (`us-west1` — compute, Firestore, and
@@ -35,6 +42,60 @@ the map edits this doc in the same change.
   commitment 2 is a test this doc must keep passing.
 
 ## The stack
+
+The web and CLI use the same daemon/API vocabulary. `@isocan/mcp` adapts that
+API to stdio tools and current canvas/Context resources; it owns no canvas
+state. Explicit per-call session keys select durable `mcp:` agent claims,
+and calls without them retain ambient identity. A known canvas ID goes to
+admission directly; discovery controls lists rather than removing the
+known-address door. Shared context assembly and feedback addressing remain
+in API/core. A feedback call's deadline covers connection setup, admission
+and polling, and its cancellation reaches HTTP as well as held daemon watches.
+
+Personal memory adds private Desk records for stable owner/source bindings,
+concrete link consent and source-specific agent delegation. A first explicit
+use reserves its birth identity before the writer creates it without a link
+grant or inherited space. FileDesk serializes one daemon's callers; CloudDesk
+transactions also coordinate independent instances. Metadata lifecycle checks
+and a narrow reserved-birth recovery distinguish an interrupted birth from a
+deleted dataset. Joined owners keep all existing datasets.
+
+Core defines contributed pieces and provenance; the browser-safe
+`@isocan/api/context` leaf assembles local, inherited and explicitly authorized
+personal layers for both clients. Personal reads validate the current caller,
+destination edge and home-owned consent before opening source data. Automatic
+linked previews and inheritance classify their sources first and remain
+redacted for personal or unknown sources. Browser private text exists only in
+the current Context inspection; shared canvas state and frozen requests do not
+acquire it.
+
+MCP's `read_personal_context` adapts that same authoritative read. A claimed
+session and concrete destination card are required; the resolved destination
+handle carries the actor and cancellation through the request. Pagination and
+current-piece provenance remain the API's contract, and no tool adds a second
+permission decision or changes frozen request content.
+
+MCP excludes personal sources from ambient resolution and carries an immutable
+actor and read/edit/own ceiling on explicit requests. The HTTP boundary checks
+that restriction before admission or source reads and again at queued writes;
+forwarding carries it to the authority rather than reading a retained replica.
+A replica retains only source/home classification to prevent automatic link
+migration, never ownership or delegation authority. Personal canvases refuse
+ordinary teleport because it cannot transfer these private custody records.
+
+Inbox assembly also belongs to the daemon. CLI and web ask the same route;
+each remote canvas is read through its authoritative home connection with
+that home's admission and operator checks. The response includes private
+visit marks and explicit unavailable canvases. A visible browser polls every
+30 seconds without writing marks. Marking a visit routes by that canvas's
+home, independently of the other homes the replica happens to hold.
+
+Modules also remain clients. They can carry bounded assets, declare validated
+data contributions, fill dialogs and ask the person's rc for installed
+templates. The template's directory and rc configuration exist before
+enrolment is published. Arena creation uses core's explicit prepared forest
+and one bounded group operation; removing the module leaves ordinary files,
+properties and reactions in the log.
 
 | layer | choice |
 | --- | --- |
@@ -205,19 +266,31 @@ because the loser's copy is overwritten with nothing anywhere saying so.
 A log line and not a throw — the other canvases at that home are
 innocent.
 
-The listing route still answers the WIDE question by default, because a
-browser asks a different question on the same route — "what can I open
-from here", which on a solo home includes the canvas a CLI just made
-under a badge the tab has never carried — and the caller states which,
-never the route sniffing who called. Phase 10.3 added a third question to
-the same route for the same reason: `?reach=here`, the canvases this
-daemon is the home of, which is what the web app's canvas list asks,
-because its links are client-side navigations that never reach the
-per-canvas page guard and the local origin would otherwise render a
-replica of a canvas that lives at dev. Enumerate-and-mirror was the
-easiest thing that worked while a home had one member; it is how a
-stranger's canvas landed on a laptop the moment a link grant was on. An
-arrival that
+Hosted discovery now includes admissions, named canvas/group/space grants
+and creator floors. Link grants answer a known address and never supply an
+ordinary hosted working directory, including explicit `?reach=admissible`
+requests. The same
+boundary governs homes, presence whereabouts, takedown lists and unscoped
+oplog watches. Named watch targets retain the entry door. Link candidates
+are excluded before choosing a discovery grant, so a stronger link cannot
+hide a valid named invitation.
+
+Public is a separate home catalogue (`GET /api/public`), not a discovery
+scope on that working list. A concrete canvas link at read/view carries an
+optional latest listing decision `{listed, at, by}`. FileDesk journals its
+atomic change; CloudDesk transacts the grant row. Revocation clears consent,
+replacement starts unlisted, and indexed grant candidates are rechecked
+against metadata-only `Store.canvasRecord`, home authority and refusals.
+Catalogue reads admit nobody and read no snapshots, blobs or thumbnails.
+The unsigned `/public` page and signed-in home section render the same narrow
+DTO; public responses and canvas entry HTML send noindex instructions.
+
+A loopback-bound daemon retains its local shelf: a local browser sees what
+its own machine holds, including a canvas the CLI created under a different
+badge. `?reach=admitted` remains narrow for replicas. `?reach=here` additionally
+limits the answer to canvases this daemon is the home of; the web list needs
+that limit because its client-side links would otherwise open stale local
+replicas. An arrival that
 holds only an ADDRESS — a cloned `.isocan/project.json`, a pass-less
 `isocan setup` — asks for that one canvas by name (`POST
 /api/home/join`), and the home runs the same door test it would have run
@@ -742,3 +815,16 @@ When reality produces something this map didn't see, the map changes
 surfaced it, in [phases.md](projects/multiuser/phases.md). Things seen during mapping
 (the 32 MiB blob cap, deploy overlap) are in the map above, not there
 — the findings are only for what the map missed.
+
+
+### Shared document attention
+
+Markdown/plain-text selections travel as optional `textSelection` presence,
+not operations: item/version/blob identity, `markdown-hast-v1` code-point
+range, rendering flavor and a 15-second expiry independent of session beats.
+The web captures only saved, entered documents. The CLI's `session select`
+uses core's lazy `@isocan/core/markdown` projection, tested against the actual
+renderer (including React's table-whitespace removal). Receivers resolve local
+DOM ranges; CSS Custom Highlights never replace native selection. Older
+browsers retain the named attention status and explicit Show selection action.
+Version changes clear the highlight instead of guessing at another sentence.

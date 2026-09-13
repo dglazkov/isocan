@@ -24,8 +24,28 @@ const repo = path.resolve(here, "../../..");
  * needs to be told about these to collaborate; the guide covers the ones it
  * does need (setup, status) in prose. `turn` (`rc turn`) is a person's dev
  * verb that REFUSES harness sessions — telling agents about it would be
- * documenting a door that is closed to them. */
-const PLUMBING = new Set(["serve", "stop", "restart", "status", "upgrade", "help", "gc", "turn"]);
+ * documenting a door that is closed to them.
+ *
+ * `mcp` (#220, phase 2) is here for a reason worth stating, because it is the
+ * one entry that looks like a canvas verb: it serves the canvas to an agent
+ * over MCP, but it is never TYPED — it goes in an agent manager's config and
+ * is spawned from there. And the agent it serves is by construction not the
+ * agent reading this guide: an agent that has the CLI on its PATH should use
+ * the CLI, which is everything the guide already describes. Documenting it
+ * for agents would be telling them to reach for a thinner copy of the surface
+ * they are already holding. A PERSON finds it in `isocan --help` and in
+ * `docs/projects/embed/phases.md`, which carries the config to paste. */
+const PLUMBING = new Set([
+  "serve",
+  "stop",
+  "restart",
+  "status",
+  "upgrade",
+  "help",
+  "gc",
+  "turn",
+  "mcp",
+]);
 
 /**
  * The verbs the guide actually NAMES, as opposed to the words it happens to
@@ -56,7 +76,8 @@ export function documentedVerbs(markdown: string): Set<string> {
   for (const span of markdown.matchAll(/`([^`\n]+)`/g)) {
     // `isocan comment main <thread>` and `comment main <thread>` name the
     // same verbs; the first two words are where a command name can be.
-    const words = span[1]!.trim().replace(/^isocan\s+/, "").split(/\s+/).slice(0, 2);
+    const path = span[1]!.trim().replace(/^isocan\s+/, "").split(/\s+/);
+    const words = path.slice(0, (path[0] === "canvas" && path[1] === "group") || (path[0] === "context" && path[1] === "personal") ? 3 : 2);
     for (const word of words) {
       for (const alt of word.split("|")) {
         // Only bare lowercase words: `--dry-run`, `<item>` and `[--css]` are
@@ -85,6 +106,9 @@ function moduleDirs(): string[] {
 function registeredCommands(): string[] {
   const sources = [
     path.join(repo, "packages/cli/src/main.ts"),
+    path.join(repo, "packages/cli/src/canvas-groups.ts"),
+    path.join(repo, "packages/cli/src/context-reads.ts"),
+    path.join(repo, "packages/cli/src/personal-context.ts"),
     ...moduleDirs().map((dir) => path.join(dir, "src/cli.ts")).filter((f) => existsSync(f)),
   ];
   const names = new Set<string>();

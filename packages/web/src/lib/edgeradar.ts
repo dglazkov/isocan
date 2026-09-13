@@ -216,7 +216,14 @@ function newer(candidate: RadarItem, current: RadarItem): boolean {
   return candidate.updatedAt > current.updatedAt;
 }
 
-/** "1,400px away" — the distance as a person reads it. */
-export function formatDistance(distance: number): string {
-  return `${distance.toLocaleString("en-US")}px away`;
+/**
+ * "1,400px away" — the distance as a person reads it, in THEIR locale: "1.400"
+ * in German, "1 400" in French. It named `"en-US"` until 11 Sep 2026, so the
+ * one number the app formats was American for everybody — the i18n note's one
+ * real bug (`docs/research/2026-09-07-internationalization.md`).
+ * `locale` exists so a test can pin one; the app passes nothing, which is the
+ * viewer's own, and `locale.test.ts` refuses a literal anywhere in src.
+ */
+export function formatDistance(distance: number, locale?: string): string {
+  return `${distance.toLocaleString(locale)}px away`;
 }

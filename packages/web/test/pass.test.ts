@@ -3,6 +3,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  CANVAS_GROUPS_FEATURE,
+  CLIENT_FEATURES_HEADER,
   DOOR_ROUTE,
   formatBadgeToken,
   INSTALL_SPEC,
@@ -145,13 +147,14 @@ beforeEach(async () => {
     body: JSON.stringify({ carrier: "bearer" }),
   });
   const { badgeId, secret } = (await door.json()) as { badgeId: string; secret: string };
-  auth = { Authorization: `Bearer ${formatBadgeToken(badgeId, secret)}` };
+  auth = { Authorization: `Bearer ${formatBadgeToken(badgeId, secret)}`, [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE };
 
   // Jordan's tab: it claims her, and it creates the canvas — which is what
   // admits it (bootstrap provenance), so it may mint.
   tab = await mintTestBadge(base);
   await tab.speakAs(jordan);
-  await asTab({ type: "project.create", canvasId: "prj_acme", title: "Acme Sprint Board" }, null);
+  const birth = await asTab({ type: "project.create", canvasId: "prj_acme", title: "Acme Sprint Board" }, null);
+  expect(birth.status, await birth.text()).toBe(200);
   speakAsBrowser();
 });
 

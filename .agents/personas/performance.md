@@ -39,9 +39,18 @@ goal:
   #
   # `at most: 0` because the metric reports the DEBT, not the size: it is zero
   # whenever the chunk is at or under the ceiling.
+  #
+  # **`against` is what makes that bound of 0 mean anything from one night to
+  # the next** (13 Sep 2026). A bound cannot move here — it is 0 by
+  # construction — so raising the ceiling, which is the entire content of
+  # answering one of these findings, changed nothing a report could see, and
+  # `scripts/reviews.mjs` let an answer given at 641,100 go on covering creep
+  # against 721,200. The finding now says which ceiling it is 0-past, and an
+  # answer stops covering the nights measured against a different one.
   - name: bytes past the last size somebody agreed to
     at most: 0
     measured by: node scripts/measure.mjs bundle-over-ceiling
+    against: node scripts/bundle-ceiling.mjs
     baseline: 0, 2026-09-07, ea12371
 runs: docs/reviews/
 trigger:

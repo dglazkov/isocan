@@ -51,15 +51,21 @@ describe("the API/CLI seam", () => {
     // `@isocan/api` and holds typed results. A script that instead hand-rolled
     // a `fetch` of an `/api/` path would be the drift this file exists to
     // prevent, wearing a different directory — so the sweep covers scripts/
-    // too. Two named exemptions, for one reason: `lib/browser.mjs` holds the
-    // door-crossing every headless run makes, and `journeys.mjs` watches the
-    // page's own requests — in both, the `/api/` strings are evaluated inside
-    // the page, where they are the web client's own speech, not a Node-side
-    // client. The crossing moved from journeys.mjs into the shared helper when
-    // the canvas screenshot needed the same door, so there is one copy of it.
+    // too. Named browser exemptions: `lib/browser.mjs` holds the door-crossing
+    // every headless run makes; `journeys.mjs` and `journey-personal.mjs` watch
+    // the page's own requests; `check-text-selection.mjs` drives isolated
+    // readers with distinct browser badges. Their route strings are browser
+    // speech or observations of it, not a second Node-side daemon client.
+    // Exact paths keep similarly named scripts inside the ordinary boundary.
+    const browserScripts = new Set([
+      path.join(repo, "scripts", "lib", "browser.mjs"),
+      path.join(repo, "scripts", "journeys.mjs"),
+      path.join(repo, "scripts", "journey-personal.mjs"),
+      path.join(repo, "scripts", "check-text-selection.mjs"),
+    ]);
     const offenders: string[] = [];
     for (const file of scriptFiles(path.join(repo, "scripts"))) {
-      if (path.basename(file) === "browser.mjs" || path.basename(file) === "journeys.mjs") continue;
+      if (browserScripts.has(file)) continue;
       const text = readFileSync(file, "utf8");
       for (const [i, line] of text.split("\n").entries()) {
         const lead = line.trimStart();

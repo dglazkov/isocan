@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import type { DoorResponse } from "@isocan/core";
+import type { Actor, DoorResponse } from "@isocan/core";
 import { BADGE_SCHEME, DOOR_ROUTE, formatBadgeToken, normalizeHomeUrl } from "@isocan/core";
 import { writeFileAtomic } from "./fsutil.ts";
 import { identityFile } from "./paths.ts";
@@ -74,52 +74,69 @@ export async function readBadge(home: string, base: string): Promise<StoredBadge
 }
 
 /**
- * Badge writes, serialized within this process.
- *
- * A read-modify-write on one file, which was safe while one thing in a daemon
- * ever wrote it. Phase 10.3 put several home links in one process, each
- * fetching its own badge, and two of them badging at the same moment BOTH read
- * the pre-write file and the second write erased the first's key — a machine
- * that had been let into a canvas at one home losing that badge, silently, and
- * re-badging into an admissionless one at the next boot.
- *
- * A chain rather than a lock file: the writers are all in this process (the
- * CLI writes its local badge, the daemon writes its home badges), badge writes
- * are rare, and a cross-process lock would be ceremony for a file two
- * processes touch minutes apart. The honest limit, stated: a CLI and a daemon
- * writing in the same millisecond can still clobber, exactly as before, and
- * the cost is one re-badge.
+ * One process owns setup's credential writes (#284). Replica setup asks its
+ * daemon to adopt the pass-returned actor; direct setup writes here in the
+ * same process as its badge client. Both share this read/modify/write queue.
+ * This is not a cross-process lock for unrelated identity rename commands.
  */
-let badgeWrites: Promise<unknown> = Promise.resolve();
+let identityWrites: Promise<unknown> = Promise.resolve();
 
-/** Read-merge, never clobber: `identity.json` also holds the human's name,
- * and a badge write that rewrote the file from scratch would delete it (and
- * the mirror bug — `isocan identity --name` deleting the badge — is why
- * `writeIdentity` merges too). The same argument now covers a second badge:
- * a daemon writing its home badge must not erase the CLI's local one, nor its
- * own badge at another home. */
-export async function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void> {
-  const work = badgeWrites.then(async () => {
+async function updateIdentity<T>(
+  home: string,
+  update: (current: Record<string, unknown>) => { next?: Record<string, unknown>; result: T },
+): Promise<T> {
+  const work = identityWrites.then(async () => {
     await fs.mkdir(home, { recursive: true });
+    const file = identityFile(home);
     let current: Record<string, unknown> = {};
     try {
-      current = JSON.parse(await fs.readFile(identityFile(home), "utf8")) as Record<string, unknown>;
+      current = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
     } catch {
-      // No identity yet: an agent-only machine gets a file holding just its
-      // badge. `readIdentity` returns null without id/name, so nothing
-      // mis-resolves.
+      // A fresh machine may have a badge before it has a person.
     }
-    const auth = {
-      ...((current.auth as Record<string, StoredBadge>) ?? {}),
-      [normalizeHomeUrl(base)]: badge,
-    };
-    // Atomic, for `homes.json`'s reason and with more at stake: this file
-    // holds the human's name AND every badge, a torn read of it is a machine
-    // with no identity and no credentials, and the daemon reads it at boot.
-    await writeFileAtomic(identityFile(home), JSON.stringify({ ...current, auth }, null, 2));
+    const { next, result } = update(current);
+    if (next) {
+      const mode = await fs.stat(file).then((stat) => stat.mode & 0o777).catch(() => 0o600);
+      await writeFileAtomic(file, JSON.stringify(next, null, 2), mode);
+    }
+    return result;
   });
-  badgeWrites = work.catch(() => {});
+  identityWrites = work.catch(() => {});
   return work;
+}
+
+/** Merge a credential without dropping the person, other badges or private fields. */
+export async function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void> {
+  return updateIdentity(home, (current) => ({
+    next: {
+      ...current,
+      auth: {
+        ...((current.auth as Record<string, StoredBadge>) ?? {}),
+        [normalizeHomeUrl(base)]: badge,
+      },
+    },
+    result: undefined,
+  }));
+}
+
+/** Persist only an actor returned by successful pass redemption. A different
+ * person already held by the machine remains its default. The choice and
+ * write share the badge queue, so neither can erase the other's fresh fields. */
+export async function adoptIdentity(
+  home: string,
+  actor: Actor,
+): Promise<{ actor: Actor; adopted: boolean }> {
+  return updateIdentity<{ actor: Actor; adopted: boolean }>(home, (current) => {
+    const existing = current.id && current.name
+      ? { id: current.id as string, name: current.name as string }
+      : null;
+    if (existing && existing.id !== actor.id) return { result: { actor: existing, adopted: false } };
+    if (!actor.name) return { result: { actor, adopted: false } };
+    return {
+      next: { ...current, ...actor, createdAt: new Date().toISOString() },
+      result: { actor, adopted: true },
+    };
+  });
 }
 
 /**
@@ -157,13 +174,13 @@ export type DoorAnswer =
   | { badge: StoredBadge }
   | { refused: { status: number; error: string; code?: string } };
 
-export async function askTheDoor(base: string, timeoutMs = 10_000): Promise<DoorAnswer> {
+export async function askTheDoor(base: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<DoorAnswer> {
   try {
     const res = await fetch(`${base}${DOOR_ROUTE}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ carrier: "bearer" }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
     });
     const body = (await res.json().catch(() => null)) as (DoorResponse & Refused) | null;
     if (!res.ok) {

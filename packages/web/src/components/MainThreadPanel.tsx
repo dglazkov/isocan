@@ -1,7 +1,8 @@
+import { useChatDraft } from "../lib/chatdraft.ts";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
-import { isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
+import { commentReferencedItemIds, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -21,10 +22,15 @@ import { markRead } from "../stores/unreadStore.ts";
 import { openPanel, storedPanel } from "../lib/panels.ts";
 import { ChatGlyph } from "./Glyphs.tsx";
 import { OnIt } from "./OnIt.tsx";
+import { GateGrant } from "./LazyGate.tsx";
 import { runLocalCommand } from "../lib/localcommands.ts";
 import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { QuestionnaireDock, activeQuestion, parseQuestionPayload } from "./QuestionnaireDock.tsx";
+import { messageContextRoots, useMessageContext, useMessageSend } from "../lib/messagecontext.ts";
+import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
+import { useCanEdit } from "../lib/capability.ts";
+
 
 /**
  * The designated main thread (#36): one thread per canvas rendered as a
@@ -217,20 +223,20 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
     // No pan: the viewport being restored was saved WITH this rail open, so
     // it is already correct. Panning here would slide the canvas sideways on
     // every load.
-    openPanel(canvasId, stored, false);
+    openPanel(canvasId, stored, false, false);
   }, [canvasId]);
 
   useEffect(() => {
     if (!canvas || initedFor.current === canvasId) return;
     initedFor.current = canvasId;
     // Never chosen here: a canvas that already has a main thread opens with it.
-    openPanel(canvasId, mainThread(canvas) ? "main" : null, false);
+    openPanel(canvasId, mainThread(canvas) ? "main" : null, false, false);
   }, [canvas, canvasId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the
   // unread badge) is the "Main" button in the top bar's create actions.
   if (!canvas || !open) return null;
-  return <Panel canvasId={canvasId} actor={actor} />;
+  return <Panel key={canvasId} canvasId={canvasId} actor={actor} />;
 }
 
 /**
@@ -348,22 +354,26 @@ export function MainThreadBody({
   canvasId,
   actor,
   docked = true,
+  onOpenItem,
 }: {
   canvasId: string;
   actor: Actor;
   docked?: boolean;
+  onOpenItem?: ((id: string) => void) | undefined;
 }) {
-  return <Panel canvasId={canvasId} actor={actor} docked={docked} />;
+  return <Panel key={canvasId} canvasId={canvasId} actor={actor} docked={docked} onOpenItem={onOpenItem} />;
 }
 
 function Panel({
   canvasId,
   actor,
   docked = true,
+  onOpenItem,
 }: {
   canvasId: string;
   actor: Actor;
   docked?: boolean;
+  onOpenItem?: ((id: string) => void) | undefined;
 }) {
   // A subscription, not a read: the chips have to appear and vanish as the
   // selection changes under the pointer.
@@ -375,10 +385,14 @@ function Panel({
   const names = useActorNames();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas ? mainThread(canvas) : null;
-  useLaneFollow(canvas, thread);
-  const [draft, setDraft] = useState("");
+  useLaneFollow(onOpenItem ? null : canvas, onOpenItem ? null : thread);
+  const [draft, setDraft] = useChatDraft(canvasId, actor.id);
+  const context = useMessageContext(canvasId, messageContextRoots(canvas, draft, selected));
+  const sending = useMessageSend(canvasId, context, draft);
+  const canEdit = useCanEdit();
   const [dismissedCommentId, setDismissedCommentId] = useState<string | null>(null);
   const activeQ = useMemo(() => activeQuestion(thread), [thread]);
+
 
   /**
    * A command the launcher picked, handed over rather than posted.
@@ -396,7 +410,7 @@ function Panel({
     if (pendingChat === null) return;
     setDraft((current) => (current.trim() === "" ? pendingChat : current));
     useUiStore.getState().setPendingChat(null);
-  }, [pendingChat]);
+  }, [pendingChat, setDraft]);
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const commands = useCommands();
@@ -428,10 +442,6 @@ function Panel({
   }, [thread?.id, commentCount]);
 
   if (!canvas) return null; // reconnecting — parent unmounts us next render
-
-  async function send(body: string, attached: string[]) {
-    await postToMain(canvasId, actor, body, attached);
-  }
 
   function chipTarget(e: { target: EventTarget }): string | null {
     return (e.target as HTMLElement).closest("[data-item-id]")?.getAttribute("data-item-id") ?? null;
@@ -471,7 +481,7 @@ function Panel({
        *
        * Deliberately reintroducing it would trip `chrome.test.ts`.
        */}
-      <PanelHead
+      {!onOpenItem && <PanelHead
         glyph={<ChatGlyph size={13} />}
         /* The same word the button that opens it says. It read "Main thread"
            under a button that said "Main" — two labels for one panel, and both
@@ -482,13 +492,13 @@ function Panel({
         closeTitle="Collapse"
         closeLabel="Collapse the Chat"
         onClose={() => openMainPanel(canvasId, false)}
-      />
+      />}
       <div
         className="main-scroll"
         ref={scrollRef}
         onClick={(e) => {
           const itemId = chipTarget(e);
-          if (itemId) catapultBesidePanel(itemId);
+          if (itemId) (onOpenItem ?? catapultBesidePanel)(itemId);
         }}
       >
         <div className="main-msgs">
@@ -535,13 +545,22 @@ function Panel({
                     {withoutCommand(comment.body)}
                   </Markdown>
                 </div>
-                {canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
-                {(comment.items ?? [])
+                {!onOpenItem && canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
+                {comment.context && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
+                {onOpenItem && canvas ? <MessageReferenceCards canvas={canvas} canvasId={canvasId} comment={comment} onOpenItem={onOpenItem} /> : !comment.context && (comment.items ?? [])
                   .filter((id, i, all) => all.indexOf(id) === i)
                   .map((itemId) => (
-                    <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} />
+                    <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} onOpenItem={onOpenItem} />
                   ))}
               </CommentFold>
+              {/* The refusal is the control (#272): the Chat reaches everyone,
+                  so a mention here is turned away exactly as one in a thread
+                  is, and the owner answers it in the same place. Mounted only
+                  for a comment that names somebody — it subscribes to the rc
+                  poll, and the Chat is the longest thread on the canvas. */}
+              {thread && comment.mentions && comment.mentions.length > 0 && (
+                <GateGrant canvasId={canvasId} viewer={actor} thread={thread} comment={comment} />
+              )}
             </div>
           ))}
           {thread && (
@@ -558,14 +577,14 @@ function Panel({
         <QuestionnaireDock
           payload={activeQ.payload}
           onAnswer={async (reply) => {
-            await send(reply, []);
+            await postToMain(canvasId, actor, reply, []);
           }}
           onDismiss={() => {
             setDismissedCommentId(activeQ.comment.id);
           }}
         />
       )}
-      <form
+      {canEdit && <form
         onKeyDown={(e) => {
           submitOnEnter(e);
           submitOnCmdEnter(e);
@@ -573,7 +592,7 @@ function Panel({
         onSubmit={async (e) => {
           e.preventDefault();
           const body = draft.trim();
-          if (!body) return;
+          if (!body || sending.disabled) return;
           // /help and its kind are answered here rather than posted: see
           // lib/localcommands.ts.
           if (runLocalCommand(body, commands)) {
@@ -581,11 +600,11 @@ function Panel({
             return;
           }
           const attached = useUiStore.getState().selectedItemIds;
-          setDraft("");
-          await send(body, attached);
+          await sending.submit(() => postToMain(canvasId, actor, body, attached, context.request), () => setDraft(""));
         }}
       >
-        <Attached canvasId={canvasId} />
+        {context.enabled ? <MessageContextPreview context={context} /> : <Attached canvasId={canvasId} />}
+        {sending.error && <p role="alert">{sending.error}</p>}
         <MentionField
           // One placeholder, both states: what the CHANNEL is beats what the
           // moment is. Everything typed here reaches every agent listening
@@ -602,12 +621,25 @@ function Panel({
           itemCandidates={itemRoster.candidates}
           items={itemRoster.entries}
         />
-        <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim()}>
+        <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim() || sending.disabled}>
           ↑
         </button>
-      </form>
+      </form>}
     </div>
   );
+}
+
+/** The phone can enter only recorded references; the frozen disclosure stays separate. */
+function MessageReferenceCards({ canvas, canvasId, comment, onOpenItem }: {
+  canvas: CanvasContents; canvasId: string; comment: Comment; onOpenItem: (id: string) => void;
+}) {
+  const ids = commentReferencedItemIds(canvas, comment);
+  if (!ids.length) return null;
+  const label = comment.context ? "Request context" : "Linked in this message";
+  return <section className="message-reference-cards" aria-label={label}>
+    <small>{label} · current preview</small>
+    {ids.map((id) => <ItemCard key={id} canvasId={canvasId} itemId={id} onOpenItem={onOpenItem} />)}
+  </section>;
 }
 
 /**
@@ -616,7 +648,7 @@ function Panel({
  * it, and pointing at it opens the same peek the panel and the rim open,
  * beside the panel, while the item itself lights up on the canvas.
  */
-function ItemCard({ canvasId, itemId }: { canvasId: string; itemId: string }) {
+function ItemCard({ canvasId, itemId, onOpenItem }: { canvasId: string; itemId: string; onOpenItem?: ((id: string) => void) | undefined }) {
   const item = useCanvasStore((s) => s.canvas?.items[itemId]);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const [peekTop, setPeekTop] = useState<number | null>(null);
@@ -632,9 +664,10 @@ function ItemCard({ canvasId, itemId }: { canvasId: string; itemId: string }) {
     <>
       <button
         className="mt-card"
-        onClick={() => catapultBesidePanel(itemId)}
-        aria-label={`Fly to ${item.title}`}
+        onClick={() => (onOpenItem ?? catapultBesidePanel)(itemId)}
+        aria-label={`${onOpenItem ? "Open" : "Fly to"} ${item.title}`}
         onPointerEnter={(e) => {
+          if (onOpenItem) return;
           const rect = e.currentTarget.getBoundingClientRect();
           setPeekTop(rect.top + rect.height / 2);
           useUiStore.getState().setPeeked(itemId);

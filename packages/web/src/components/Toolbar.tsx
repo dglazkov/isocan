@@ -1,3 +1,4 @@
+import { groupsEnabled, openGroupCreation } from "../lib/canvasgroups.ts";
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -26,7 +27,7 @@ import { Presence } from "./Presence.tsx";
 import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
-import { useCanEdit } from "../lib/capability.ts";
+import { canEditNow, useCanEdit } from "../lib/capability.ts";
 
 /**
  * The top bar: where you are (canvas name, whether you're live, who's here) and
@@ -107,6 +108,17 @@ export function Toolbar({
           <HomeGlyph />
         </Link>
         <CanvasTitle actor={actor} />
+        {canvas && <button className="btn" aria-label="Groups" aria-haspopup="menu" onClick={async (e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          const contents = useCanvasStore.getState().canvas;
+          const selected = useUiStore.getState().selectedItemIds.map((id) => contents?.items[id]).filter((item) => !!item);
+          try {
+          const { canvasGroupEntries } = await import("../lib/canvasgroupmenus.ts");
+          const entries = [{ label: "New group", writes: true, ...(!groupsEnabled() ? { value: "Preview conversion first" } : {}), run: () => openGroupCreation() }, ...canvasGroupEntries(selected, { canvasId: canvas.id, actor, navigate })];
+          useUiStore.getState().setContextMenu({ at: { x: r.left, y: r.bottom + 6 }, entries: entries.filter((entry) => !("writes" in entry && entry.writes) || canEditNow()) });
+          } catch (error) { setNotice((error as Error).message); }
+        }}>Groups</button>}
+
         {canvas && (
           <button
             className="btn drawer-handle"
@@ -227,11 +239,12 @@ export function Toolbar({
               return;
             }
             try {
+              const originGroupMode = canvas.groupMode ?? "legacy";
               const up = await uploadBlob(canvas.id, file, file.name);
               await sendEchoed(canvas.id, actor, {
                 type: "project.update",
                 patch: groundPatch(up.blobHash),
-              });
+              }, undefined, originGroupMode);
             } catch {
               // The same sentence shape every other upload failure here uses:
               // name the file, say what did not happen, and leave the canvas

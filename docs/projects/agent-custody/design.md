@@ -2,7 +2,7 @@
 status: built
 since: 2026-08-31
 see: agent-custody
-note: designed and built 31 Aug — no Add button without a visible rc; enrolment is a handshake the rc completes, the desk changed not at all. The Open section records what the build decided and what still waits.
+note: designed and built 31 Aug — no Add button without a visible rc; enrolment is a handshake the rc completes, the desk changed not at all. The Open section records what the build decided and what still waits. Its oldest open question — whose ask a parked rc honors — answered 11 Sep 2026 by owner-only summons (its owner's, announced with the hold).
 ---
 # Agent custody
 
@@ -166,12 +166,30 @@ sequenceDiagram
 
 ## Open
 
-- **Whose ask a parked rc honors.** Any admitted member of a shared
-  canvas can send the ask, and turns bill the rc owner's harness — the
-  compute-consent question the gate narrows but does not answer. (This
-  is also the posture the rc's adoption of enrolments already had.)
-  Candidates: owner-only by default with an rc-side allow, or the rc
-  announcing its policy with its hold.
+- ~~**Whose ask a parked rc honors.**~~ **Answered 11 Sep 2026: its
+  owner's** — owner-only summons, decided by Dion (D2 in the rc research
+  note) and built the same day
+  ([its last section](../../research/2026-09-10-what-the-rc-hands-over.md#owner-only-summons--11-september)).
+  Both candidates, together: owner-only by default with the allow at the
+  rc (`isocan rc listen <name> --to <names|everyone>`, or *Let anyone
+  ask* on the owner's row), AND the rc announcing its policy with its
+  hold, so the tray, the add dialog and `isocan who` say whose word it
+  takes. The owner is the machine's person; the machine's other actors
+  are the owner's hands. A summons from anybody else starts nothing and is
+  answered in its thread; an ask to add an agent is routed only to an rc
+  its asker owns, and anybody else is refused at the home with the
+  owner's name. Only the owner's word widens: the enrolment row records
+  who wrote it (`writtenBy`), and a gate somebody else wrote is set aside.
+  What the fence bounds (reach) and what this bounds (who may start) are
+  now both built; a stranger can no longer spend your tokens on your
+  laptop. **The widening gesture stopped being a command line the same
+  evening** (#272): the refusal in the thread carries the owner's own
+  buttons — *Let \<asker\> ask*, *Let anyone ask* — the tray's row opens the
+  people here as checkboxes rather than a two-position switch, and a grant
+  may carry an expiry, carried as an entry beside the name it grants to
+  (`ListenEntry`; a bare id is still a grant with no expiry). Same op, same
+  `withListener` in core, same words; only the owner sees a control, because
+  only the owner's write survives the rc.
 - **The dialog does not name the machine.** With two rcs parked it says
   "the parked rc" and first-wins picks silently; the promise should
   name its keeper once the hold carries a machine label.

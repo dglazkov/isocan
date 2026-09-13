@@ -40,6 +40,7 @@ export function canEditNow(): boolean {
  * canvas.
  */
 export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string }[] = [
+  { what: "group migration confirmation", file: "components/GroupMigration.tsx", gate: "{canEdit && <button" },
   {
     what: "the tool rail — the create actions: pen, text, comment, upload, site",
     file: "pages/CanvasPage.tsx",
@@ -84,6 +85,11 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
     what: "the comment composer — a reply",
     file: "components/CommentLayer.tsx",
     gate: "{canEdit && (\n        <form",
+  },
+  {
+    what: "the main Chat comment composer — frozen context stays readable",
+    file: "components/MainThreadPanel.tsx",
+    gate: "{canEdit && <form",
   },
   {
     what: "reactions — adding one, and toggling one already worn",

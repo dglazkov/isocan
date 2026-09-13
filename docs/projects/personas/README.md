@@ -44,7 +44,7 @@ You are responsible for whether this still feels fast…
 arrangement the isocan skill already uses. Claude Code sees them as subagents;
 any other harness reads the file directly.
 
-## The eight, and the rule that decided them
+## The nine, and the rule that decided them
 
 | Persona | The lens | Its number |
 | --- | --- | --- |
@@ -52,6 +52,7 @@ any other harness reads the file directly.
 | `architect` | The op vocabulary, boundaries, the isomorphism | core's runtime deps, op types |
 | `copy` | Labels, errors, tooltips, empty states | greppable copy tells |
 | `design-auditor` | Tokens, both themes, the tells of a generated interface | grader checks, colour literals |
+| `journeys` | Whether the app works when somebody opens it and uses it | failing journeys in `scripts/journeys.mjs` |
 | `market-researcher` | What else exists and what to take from it | **none, and it says so** |
 | `performance` | Whether it still feels fast | largest built chunk |
 | `qa-tester` | Whether the tests mean anything | eslint errors |

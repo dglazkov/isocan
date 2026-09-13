@@ -17,7 +17,10 @@ import {
   blobFileName,
   blobsNamedBy,
   isCanvasRecord,
+  isGroupItem,
+  groupTransformClosure,
   opsTouching,
+  visualFaceOf,
 } from "@isocan/core";
 import { ApiError, type DaemonRoutes } from "./routes.ts";
 
@@ -125,10 +128,18 @@ export async function exportCanvases(
   let names: Pick<CanvasSnapshotResponse, "names" | "colors"> | null = null;
 
   for (const canvas of canvases) {
-    const entries = await wholeLog(client, canvas.id);
     const snapshot = await client.snapshot(canvas.id);
+    // The project mode/boundary and its restore history describe one revision.
+    // A conversion landing during download belongs to the next backup, not
+    // to a newer record beside an older log (or the other way around).
+    const entries = (await wholeLog(client, canvas.id)).filter((entry) => entry.seq <= snapshot.lastSeq);
+    // Archive and live reads can straddle GC. A gap is an unavailable backup,
+    // never a successful export which cannot recreate the captured state.
+    if (!Number.isSafeInteger(snapshot.lastSeq) || snapshot.lastSeq < 0 || entries.length !== snapshot.lastSeq || entries.some((entry, index) => entry.seq !== index + 1)) {
+      throw new Error(`cannot export ${canvas.id} at revision ${snapshot.lastSeq}: incomplete operation history; retry after GC or restore the missing archive before making a native backup`);
+    }
     names = { names: snapshot.names, colors: snapshot.colors };
-    const named = blobsNamedBy(entries);
+    const named = blobsNamedBy(entries, { project: snapshot.project, canvas: snapshot.canvas });
     const dir = path.join(L.canvases, canvas.id);
     const index: Record<string, ExportedBlob> = {};
     const missing: string[] = [];
@@ -144,6 +155,7 @@ export async function exportCanvases(
           items: snapshot.canvas.items,
           threads: snapshot.canvas.threads,
           agents: snapshot.canvas.agents ?? {},
+          ...(snapshot.canvas.groupCohorts ? { groupCohorts: snapshot.canvas.groupCohorts } : {}),
         }),
         written,
       );
@@ -200,7 +212,8 @@ export async function exportCanvases(
 }
 
 /**
- * Back up one item: its record, every version's bytes, the threads pinned to
+ * Back up an item (or a complete group subtree and its attached marks):
+ * its record, every source and visual version, the threads pinned to
  * it, and the entries of the log that name it. Not a canvas — it does not
  * restore through `import` — but everything somebody would want back if the
  * item were the thing they cared about.
@@ -216,37 +229,48 @@ export async function exportItem(
   const written: string[] = [];
   const entries = await wholeLog(client, canvas.id);
   const snapshot = await client.snapshot(canvas.id);
-  const ops = opsTouching(entries, item.id);
-  const threads = Object.values(snapshot.canvas.threads).filter((t) => t.anchorItemId === item.id);
-  const dir = path.join(L.items, canvas.id, item.id);
-  const missing: string[] = [];
+  const current = snapshot.canvas.items[item.id] ?? item;
+  const selected = isGroupItem(current) ? groupTransformClosure(snapshot.canvas, [current.id]).map((id) => snapshot.canvas.items[id]!) : [current];
+  const rows: ExportedItem[] = [];
+  for (const item of selected) {
+    const ops = opsTouching(entries, item.id);
+    const threads = Object.values(snapshot.canvas.threads).filter((t) => t.anchorItemId === item.id);
+    const dir = path.join(L.items, canvas.id, item.id);
+    const missing: string[] = [];
 
-  if (!options.dryRun) {
-    await writeInto(out, path.join(dir, L.item), pretty(item), written);
-    await writeInto(out, path.join(dir, L.itemOps), lines(ops), written);
-    await writeInto(out, path.join(dir, L.itemThreads), pretty(threads), written);
-    for (const [i, version] of item.versions.entries()) {
-      const data = await fetchBlob(client, canvas.id, version.blobHash);
-      if (data === null) {
-        missing.push(version.blobHash);
-        continue;
+    if (!options.dryRun) {
+      await writeInto(out, path.join(dir, L.item), pretty(item), written);
+      await writeInto(out, path.join(dir, L.itemOps), lines(ops), written);
+      await writeInto(out, path.join(dir, L.itemThreads), pretty(threads), written);
+      for (const [i, version] of item.versions.entries()) {
+        const data = await fetchBlob(client, canvas.id, version.blobHash);
+        if (data === null) {
+          missing.push(version.blobHash);
+        }
+        const name = `${String(i + 1).padStart(2, "0")}-${path.basename(version.filename)}`;
+        if (data !== null) await writeInto(out, path.join(dir, L.versions, name), data, written);
+        const visual = visualFaceOf(version);
+        if (visual.blobHash !== version.blobHash) {
+          const visualData = await fetchBlob(client, canvas.id, visual.blobHash);
+          if (visualData === null) missing.push(visual.blobHash);
+          else await writeInto(out, path.join(dir, L.versions, `${String(i + 1).padStart(2, "0")}-visual-${path.basename(visual.filename)}`), visualData, written);
+        }
       }
-      const name = `${String(i + 1).padStart(2, "0")}-${path.basename(version.filename)}`;
-      await writeInto(out, path.join(dir, L.versions, name), data, written);
     }
-  }
 
-  const row: ExportedItem = {
-    canvasId: canvas.id,
-    itemId: item.id,
-    title: item.title,
-    versions: item.versions.length,
-    ops: ops.length,
-    missing,
-  };
-  say(`${options.dryRun ? "would write" : "wrote"} ${row.title} (${row.itemId}): ${row.versions} versions, ${row.ops} ops`);
-  if (!options.dryRun) await writeManifest(out, client.base, options.by, [], [row], written);
-  return { out, from: client.base, dryRun: options.dryRun === true, canvases: [], items: [row], written };
+    const row: ExportedItem = {
+      canvasId: canvas.id,
+      itemId: item.id,
+      title: item.title,
+      versions: item.versions.length,
+      ops: ops.length,
+      missing,
+    };
+    say(`${options.dryRun ? "would write" : "wrote"} ${row.title} (${row.itemId}): ${row.versions} versions, ${row.ops} ops`);
+    rows.push(row);
+  }
+  if (!options.dryRun) await writeManifest(out, client.base, options.by, [], rows, written);
+  return { out, from: client.base, dryRun: options.dryRun === true, canvases: [], items: rows, written };
 }
 
 /**

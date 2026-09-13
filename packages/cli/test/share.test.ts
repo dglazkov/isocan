@@ -1,11 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Grant } from "@isocan/core";
-import { canvasUrl, grantsRoute } from "@isocan/core";
+import type { Grant, PublicCanvasesResponse } from "@isocan/core";
+import { canvasUrl, grantsRoute, PUBLIC_CANVASES_ROUTE } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { markerFile } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
@@ -125,6 +126,76 @@ async function strangerCanRead(canvasId: string): Promise<number> {
 }
 
 describe("isocan share", () => {
+  it("Public publication crosses the replica, while catalogue browsing and unlisting change no entry access", async () => {
+    const id = await bornCanvas();
+    expect((await cli("share", "--public", "on")).code).toBe(1); // The existing Editor link is not lowered.
+    expect((await grantsAtHome(id)).find((grant) => grant.subject === "link")!.capability ?? "edit").toBe("edit");
+    expect((await cli("share", "--link", "read")).code).toBe(0);
+    const published = await cli("share", "--public", "on", "--json");
+    expect(published.code, published.stderr).toBe(0);
+    expect(JSON.parse(published.stdout).public).toBe(true);
+    const listed = await cli("canvas", "list", "--public", "--home", homeBase, "--json");
+    expect(listed.code, listed.stderr).toBe(0);
+    expect(JSON.parse(listed.stdout)).toEqual([{ id, title: expect.any(String), home: homeBase, capability: "read" }]);
+    const replica = await cli("canvas", "list", "--public", "--json");
+    expect(replica.code, replica.stderr).toBe(0);
+    expect(JSON.parse(replica.stdout)).toEqual([]);
+    const unlisted = await cli("share", "--public", "off", "--json");
+    expect(unlisted.code, unlisted.stderr).toBe(0);
+    expect(JSON.parse(unlisted.stdout).public).toBe(false);
+    expect((await (await fetch(`${homeBase}${PUBLIC_CANVASES_ROUTE}`)).json() as PublicCanvasesResponse).canvases).toEqual([]);
+    expect(await strangerCanRead(id)).toBe(200);
+    expect((await cli("share", "--public", "on")).code).toBe(0);
+    expect((await cli("share", "--link", "view")).code).toBe(0);
+    expect(JSON.parse((await cli("share", "--json")).stdout).public).toBe(false); // Replacement needs its own consent.
+    expect((await cli("share", "--public", "on")).code).toBe(0);
+    expect((await cli("share", "--link", "off")).code).toBe(0);
+    expect(await strangerCanRead(id)).toBe(403);
+    expect((await cli("share", "--link", "read")).code).toBe(0);
+    expect(JSON.parse((await cli("share", "--json")).stdout).public).toBe(false);
+  }, 60_000);
+
+  it("Public rejects incompatible share options before changing a grant or invitation", async () => {
+    const id = await bornCanvas();
+    const before = await grantsAtHome(id);
+    for (const args of [["--public", "on", "--link", "read"], ["--public", "off", "--space", "missing"], ["someone@acme.test", "--public", "on"], ["--public", "perhaps"]]) {
+      const result = await cli("share", ...args);
+      expect(result.code, args.join(" ")).toBe(1);
+      expect(result.stderr).toContain("--public");
+    }
+    expect(await grantsAtHome(id)).toEqual(before);
+  }, 60_000);
+
+  it("Public catalogue reads bypass a bound directory and all ordinary canvas, actor and space queries", async () => {
+    await bornCanvas();
+    // A malformed marker would prevent ordinary canvas context resolution.
+    await fs.writeFile(markerFile(work), "{ deliberately malformed");
+    const paths: string[] = [];
+    // A separate wire witness keeps the replica's background polling out of
+    // this assertion: every request here belongs to this CLI invocation.
+    const catalogue = createServer((request, response) => {
+      paths.push(request.url ?? "");
+      response.writeHead(request.url === PUBLIC_CANVASES_ROUTE ? 200 : 404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ canvases: [] }));
+    });
+    await new Promise<void>((resolve) => catalogue.listen(0, "127.0.0.1", resolve));
+    const address = catalogue.address() as import("node:net").AddressInfo;
+    try {
+      const result = await cli("canvas", "list", "--public", "--home", `http://127.0.0.1:${address.port}`, "--json");
+      expect(result.code, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual([]);
+      expect(paths).toEqual([PUBLIC_CANVASES_ROUTE]);
+      for (const options of [["--all"], ["--archived"], ["--with-archived"], ["--sort", "recent"], ["--filter", "Acme"]]) {
+        const invalid = await cli("canvas", "list", "--public", ...options);
+        expect(invalid.code).toBe(1);
+        expect(invalid.stderr).toContain("--public");
+      }
+      const ordinary = await cli("canvas", "list", "--home", homeBase);
+      expect(ordinary.code).toBe(1);
+      expect(ordinary.stderr).toContain("--home is for canvas list --public");
+    } finally { await new Promise<void>((resolve, reject) => catalogue.close((error) => error ? reject(error) : resolve())); }
+  }, 60_000);
+
   it("prints the address a person is sent, and says the link is on", async () => {
     const canvasId = await bornCanvas();
 

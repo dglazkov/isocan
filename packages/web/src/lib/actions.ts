@@ -1,6 +1,8 @@
+import { isGroupItem, keyFor } from "@isocan/core";
+import { changeCanvasGroup, groupsEnabled, enterCanvasGroup, groupTask, openGroupCreation, openGroupMigration, openGroupAddition, selectParentGroup } from "./canvasgroups.ts";
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor, AlignEdge } from "@isocan/core";
-import { alignMoves, canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
+import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -65,6 +67,15 @@ const withSelection = (ctx: ActionContext) => ctx.selection.length > 0;
 
 /** Everything the launcher can do, grouped in the order it shows them. */
 export const ACTIONS: readonly Action[] = [
+  { id: "group-selection", name: "Group selection", keys: keyFor("Group selection") ?? "", group: "Canvas", writes: true, available: (ctx) => onCanvas(ctx) && withSelection(ctx), run: (ctx) => openGroupCreation([...ctx.selection]) },
+  { id: "migrate-canvas-groups", name: "Preview group conversion…", group: "Canvas", available: (ctx) => onCanvas(ctx) && !groupsEnabled(), run: openGroupMigration },
+  { id: "new-canvas-group", name: "New group", group: "Canvas", writes: true, available: onCanvas, run: () => openGroupCreation() },
+  { id: "ungroup-selection", name: "Ungroup", keys: keyFor("Ungroup") ?? "", group: "Canvas", writes: true, available: (ctx) => ctx.selection.some((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); }), run: (ctx) => groupTask(() => changeCanvasGroup(ctx.canvasId!, ctx.actor, { kind: "ungroup", itemIds: ctx.selection.filter((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); }) })) },
+  { id: "enter-group", name: "Enter group", group: "Open", available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!] && isGroupItem(useCanvasStore.getState().canvas!.items[ctx.selection[0]!]!), run: (ctx) => enterCanvasGroup(ctx.selection[0]!) },
+  { id: "parent-group", name: "Select parent group", group: "Open", available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!]?.containerId, run: (ctx) => selectParentGroup(ctx.selection[0]!) },
+  { id: "add-to-group", name: "Add to group…", group: "Canvas", writes: true, available: (ctx) => onCanvas(ctx) && withSelection(ctx), run: (ctx) => openGroupAddition([...ctx.selection]) },
+  { id: "fit-group", name: "Fit frame to contents", group: "Canvas", writes: true, available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!] && isGroupItem(useCanvasStore.getState().canvas!.items[ctx.selection[0]!]!), run: (ctx) => groupTask(() => changeCanvasGroup(ctx.canvasId!, ctx.actor, { kind: "frame", itemId: ctx.selection[0]!, fit: true })) },
+
   {
     id: "add",
     name: "Add…",
@@ -218,7 +229,6 @@ export const ACTIONS: readonly Action[] = [
     hint: "the ones you were on lately first; type to find any",
     keys: "⌘O",
     group: "Open",
-    available: onCanvas,
     /* The palette handles this one itself — it flips the window to the
        switcher rather than closing it — so `run` is what a caller OUTSIDE the
        palette gets: the same window, opened on that face. */
@@ -230,6 +240,13 @@ export const ACTIONS: readonly Action[] = [
     hint: "back to the home screen",
     group: "Open",
     run: (ctx) => ctx.navigate("/"),
+  },
+  {
+    id: "open-public",
+    name: "Public canvases",
+    hint: "canvases their owners listed on this home",
+    group: "Open",
+    run: (ctx) => ctx.navigate("/public"),
   },
   {
     id: "open-help",
@@ -331,7 +348,21 @@ function moduleActions(): Action[] {
   );
   return pages.concat(modules().flatMap((m) =>
     (m.actions ?? []).map(
-      (a): Action => ({
+      (a): Action =>
+        // An action that OPENS a dialog is a door, not a write (proposed:
+        // `dialogs`): offered on a read-only canvas too, and the dialog says
+        // what it cannot do there.
+        a.opens !== undefined ? {
+        id: a.id,
+        name: a.name,
+        ...(a.hint ? { hint: a.hint } : {}),
+        group: "Canvas",
+        available: (ctx) => {
+          const canvas = useCanvasStore.getState().canvas;
+          return onCanvas(ctx) && canvas !== null && (a.available?.({ canvas, selection: ctx.selection }) ?? true);
+        },
+        run: () => useUiStore.getState().openModuleDialog(a.opens!),
+      } : ({
         id: a.id,
         name: a.name,
         ...(a.hint ? { hint: a.hint } : {}),
@@ -344,7 +375,7 @@ function moduleActions(): Action[] {
         run: async (ctx) => {
           const canvas = useCanvasStore.getState().canvas;
           if (!canvas || !ctx.canvasId) return;
-          for (const op of a.run({ canvas, selection: ctx.selection }) ?? []) {
+          for (const op of a.run?.({ canvas, selection: ctx.selection }) ?? []) {
             await sendEchoed(ctx.canvasId, ctx.actor, op);
           }
         },
@@ -374,6 +405,12 @@ export async function tidyItems(
 ): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return;
+  if (groupsEnabled()) {
+    const project = useCanvasStore.getState().project!;
+    const ids = itemIds.length ? [...itemIds] : groupScopeRoots(canvas, useUiStore.getState().activeGroupId).map((item) => item.id);
+    if (ids.length) await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, ids, { kind: "tidy", mode }));
+    return;
+  }
   const scoped = formatScope(canvas, itemIds);
   const moves = scoped
     ? formatMoves(scoped.scope, { mode, origin: scoped.origin })
@@ -398,6 +435,11 @@ export async function alignItems(
 ): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return;
+  if (groupsEnabled()) {
+    const project = useCanvasStore.getState().project!;
+    await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, itemIds, { kind: "align", edge }));
+    return;
+  }
   const boxes = itemIds
     .map((id) => canvas.items[id])
     .filter((one): one is NonNullable<typeof one> => Boolean(one))
@@ -405,6 +447,13 @@ export async function alignItems(
   const moves = alignMoves(boxes, edge);
   if (moves.length === 0) return;
   await sendEchoed(canvasId, actor, { type: "items.move", moves });
+}
+
+/** Equal spacing uses the same annotated placement units as group moves and the CLI. */
+export async function distributeGroupItems(canvasId: string, actor: Actor, itemIds: string[], axis: "h" | "v"): Promise<void> {
+  const { project, canvas } = useCanvasStore.getState();
+  if (!project || !canvas || !groupsEnabled()) return;
+  await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, itemIds, { kind: "distribute", axis }));
 }
 
 async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<void> {
@@ -415,6 +464,7 @@ async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<vo
 /** What can be run right now, in the order the groups are declared. On the
  * read-only canvas the actions that write are not in the list at all. */
 export function availableActions(ctx: ActionContext): Action[] {
+  if (!ctx.canvasId) return ACTIONS.filter((action) => ["open-lens", "switch-canvas", "open-canvases", "open-public"].includes(action.id));
   // The module actions are read live, so a runtime module's arrive without a
   // reload; the build-time ones are already in ACTIONS and are not doubled.
   const live = moduleActions();

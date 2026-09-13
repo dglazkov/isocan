@@ -1,13 +1,35 @@
+import type { TextAttention } from "./text-attention.ts";
 import { INSTALL_SPEC } from "./address.ts";
 import type { Capability } from "./grants.ts";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.ts";
 import type { Actor, Canvas, CanvasContents } from "./model.ts";
+import type { ListenEntry } from "./inbox.ts";
 import type { ModuleManifest } from "./modules.ts";
 import type { NewsDay } from "./whatsnew.ts";
+import type { TakedownNotice } from "./takedown.ts";
 import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
 
 /** Default daemon port, localhost only. */
 export const DEFAULT_PORT = 4441;
+
+/** Reducer capability, independent of the caller's access-control rung. A
+ * client advertises this before receiving explicit canvas-group state. */
+export const CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
+/** Shared spelling for HTTP clients and ingress checks; an upgraded replica
+ * still preserves its original caller's declaration when forwarding writes. */
+export const CLIENT_FEATURES_HEADER = "x-isocan-features";
+/** Browser WebSockets cannot set headers, so their upgrade URL carries the
+ * same reducer feature list that HTTP clients put in the feature header. */
+export const CLIENT_FEATURES_PARAM = "features";
+/** Distinguishes an unsupported reducer from an access refusal or network
+ * outage: refreshing credentials or retrying the same client cannot help. */
+export const CANVAS_GROUPS_REQUIRED = "canvas-groups-required";
+
+/** Parse both transport spellings identically. Missing or malformed input
+ * never promises reducer support, and future unrelated features may coexist. */
+export function supportsCanvasGroups(value: unknown): boolean {
+  return typeof value === "string" && value.split(",").some((part) => part.trim() === CANVAS_GROUPS_FEATURE);
+}
 
 // ---- WebSocket ----
 
@@ -146,7 +168,7 @@ export type ServerMessage =
    * add` makes, so the actor is born first-claim on the machine that answers
    * for it. Carries a NAME and never an actor: minting is the rc's.
    */
-  | { type: "rc-ask"; askId: string; name: string; from: Actor };
+  | { type: "rc-ask"; askId: string; name: string; from: Actor; template?: string; args?: Record<string, string> };
 
 /** Client → server. Presence is the ephemeral plane: daemon memory + WS
  * fan-out only — never the oplog, never storage, never undo. */
@@ -158,6 +180,7 @@ export type ClientMessage =
       actor: Actor;
       cursor: { x: number; y: number } | null;
       selection: string[];
+      textSelection?: TextAttention | null;
     }
   /**
    * A whole roster, from a connection that speaks for several people at once.
@@ -191,7 +214,17 @@ export type ClientMessage =
    * `presence-relay`, and the home checks every actor id against the relaying
    * badge's claims for the same reason it checks relayed faces.
    */
-  | { type: "rc-relay"; parked: boolean; actorIds: string[] };
+  | {
+      type: "rc-relay";
+      parked: boolean;
+      actorIds: string[];
+      /** The owners of the rcs parked behind this daemon, and the policy
+       * each applies per relayed agent (owner-only summons). The home checks
+       * every owner against the relaying badge's claims, as it checks faces:
+       * "Sian listens only to Nico" is a claim made in Nico's name. */
+      owners?: Actor[];
+      policies?: Record<string, RcPolicy>;
+    };
 
 // ---- presence sessions ----
 
@@ -240,6 +273,8 @@ export interface PresenceSession {
   label: string | null;
   cursor: { x: number; y: number } | null;
   selection: string[];
+  /** Temporary text attention, absent on older clients. */
+  textSelection?: TextAttention | null;
   status: string | null;
   /**
    * Who is speaking when `status` is set — the same tri-state the update
@@ -336,6 +371,7 @@ export interface UpdateSessionRequest {
   actor?: Actor;
   cursor?: { x: number; y: number } | null;
   selection?: string[];
+  textSelection?: TextAttention | null;
   status?: string | null;
   /** Who is speaking when `status` is set. "explicit" (default) — the actor
    * said it (`session say/work --say`); it sticks until they post a comment
@@ -476,6 +512,36 @@ export interface RcAsk {
   name: string;
   /** Who asked, for the rc's narration and the enrolment's history. */
   from: Actor;
+  /**
+   * A working-directory template to prepare before enrolling (proposed:
+   * `templates`, 11 Sep 2026) — an ID, never code. The rc honours ids from
+   * modules its operator installed and refuses the rest by name, so a canvas
+   * can say which template and never what it runs.
+   */
+  template?: string;
+  /** Strings the template reads. Nothing else crosses. */
+  args?: Record<string, string>;
+}
+
+/**
+ * **Whose word one agent's rc honours** — owner-only summons (decided
+ * 11 Sep 2026; `docs/research/2026-09-10-what-the-rc-hands-over.md`,
+ * recommendation 6). The rc computes it (`answerPolicy`), applies it at
+ * dispatch, and ANNOUNCES it with its hold, so the web and `isocan who` can
+ * say who may summon before anybody tries — a gate only the rc could read
+ * would be the silent gate the sheepdog design refuses.
+ */
+export interface RcPolicy {
+  /** The person whose machine answers — whose tokens a summons spends. The
+   * machine's home identity; always admitted, and through `actor.join` so is
+   * anybody they are joined with. */
+  owner: Actor;
+  /** Who else may wake it: `[]` nobody else (the default), `["*"]` everyone
+   * admitted here, otherwise actor ids — each an id, or `{ id, until }` when
+   * the owner said how long (`ListenEntry`). Lapsed grants stay in the list
+   * so a refusal can say *lapsed* rather than *never*; `mayWake` is what
+   * decides, never the presence of a name. */
+  listen: ListenEntry[];
 }
 
 /** An rc parking against the home: hold this connection open, and wake me
@@ -485,6 +551,12 @@ export interface RcHoldRequest {
   /** The agents this rc currently answers for — answerable while held. */
   actorIds: string[];
   waitMs: number;
+  /** The person this rc answers to — its machine's home identity. Absent from
+   * an rc older than owner-only summons, which answered everyone. The daemon
+   * believes it only for an actor the holding badge may speak as. */
+  owner?: Actor;
+  /** Per held agent, the policy the rc applies (`RcPolicy`). */
+  policies?: Record<string, RcPolicy>;
 }
 
 /** The hold returning — nearly always empty, because the interesting
@@ -502,12 +574,22 @@ export interface RcHoldResponse {
 export interface RcAnsweringResponse {
   parked: boolean;
   actorIds: string[];
+  /** The people whose rcs are parked here, as each announced itself. Absent
+   * from a daemon older than owner-only summons. An rc takes an ask to add an
+   * agent only from its owner, so this is who the add dialog is for. */
+  owners?: Actor[];
+  /** Per answerable agent, whose word wakes it (`RcPolicy`). An answerable
+   * agent with no entry is held by an rc older than owner-only summons, which
+   * answers everyone its canvas-state gate admits. */
+  policies?: Record<string, RcPolicy>;
 }
 
 /** The doorbell: somebody wants an agent by name, on this canvas. */
 export interface RcAskRequest {
   name: string;
   from: Actor;
+  template?: string;
+  args?: Record<string, string>;
 }
 
 /** The receipt for a ring, so the caller can follow what it started. */
@@ -520,6 +602,11 @@ export interface RcAskResponse {
  * the Web UI should not have offered the gesture (the gate), but a gate is a
  * poll and an rc can die between polls. */
 export const NO_RC_CODE = "no-rc";
+
+/** The ask route's refusal when every rc parked here belongs to somebody
+ * else (owner-only summons): an rc runs what its owner says, and adding an
+ * agent to a machine is its owner's gesture. The error names them. */
+export const NOT_YOUR_RC_CODE = "not-your-rc";
 
 // ---- a client older than this home ----
 
@@ -665,6 +752,11 @@ export function staleClientRefusal(
 /** An operation on its way up. Carries no timestamp on purpose — the home
  *  stamps it, so a client cannot lie about when something happened. */
 export interface PostOpRequest {
+  /** Captured before the first send and retained on queued retries across mode cutover. */
+  originGroupMode?: "legacy" | "groups";
+  /** Original caller's reducer features, preserved by forwarding replicas.
+   * Absent on a direct request: use its transport declaration. */
+  clientFeatures?: string;
   /** null only for project.create and actor.claim. */
   canvasId: string | null;
   /** **One gesture, one undo** — see `LogEntry.group`. Ops sent under the
@@ -769,6 +861,7 @@ export interface PostOpResponse {
 /** Whose stack to walk. Undo is per ACTOR, so two people working at once
  *  never take back each other's work. */
 export interface UndoRedoRequest {
+  clientFeatures?: string;
   actor: Actor;
   clientId?: string;
 }
@@ -940,6 +1033,43 @@ interface HealthResponse {
 const LOOPBACK = /^(\[::1\]|::1|localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
 
 /**
+ * **Is this address on this machine?** — the one question two different
+ * decisions both turn on, asked in one place so they cannot drift apart.
+ *
+ * `healthPath` below asks it to choose a door to knock on. The CLI's client
+ * asks it to decide whether a connect may be given a deadline: a loopback
+ * handshake is the kernel's own, a millisecond even against a process whose
+ * event loop is blocked for five seconds, so a connect that takes longer is
+ * a lost SYN and nothing else. Over a network it is an ordinary RTT away and
+ * on a bad link it is seconds, so the same deadline there would refuse a slow
+ * link that was working. See `boundedFetch` in `@isocan/api`'s `client.ts`,
+ * and `docs/research/2026-08-29-the-flake-family.md`.
+ *
+ * Anything unparseable is remote, for the reason `healthPath` gives: that is
+ * the safe way to be wrong, because the remote answer is the one that changes
+ * nothing.
+ */
+export function isLoopbackBase(base: string): boolean {
+  return LOOPBACK.test(hostOf(base) ?? "");
+}
+
+/** The hostname of an address somebody meant, scheme or no scheme; null when
+ * it cannot be read as one at all. */
+function hostOf(base: string): string | null {
+  try {
+    return new URL(base).hostname;
+  } catch {
+    try {
+      // A bare `127.0.0.1:4441` or `dev.isocan.io` — no scheme, still an
+      // address somebody meant. Parsing it is cheaper than refusing it.
+      return new URL(`http://${base}`).hostname;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
  * WHICH health path to ask a daemon at this address for.
  *
  * The daemon answers `/healthz` and `/api/healthz` from one handler with one
@@ -978,19 +1108,7 @@ const LOOPBACK = /^(\[::1\]|::1|localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
  * the exact failure this function exists to prevent.
  */
 export function healthPath(base: string): string {
-  let host: string;
-  try {
-    host = new URL(base).hostname;
-  } catch {
-    try {
-      // A bare `127.0.0.1:4441` or `dev.isocan.io` — no scheme, still an
-      // address somebody meant. Parsing it is cheaper than refusing it.
-      host = new URL(`http://${base}`).hostname;
-    } catch {
-      return "/api/healthz";
-    }
-  }
-  return LOOPBACK.test(host) ? "/healthz" : "/api/healthz";
+  return isLoopbackBase(base) ? "/healthz" : "/api/healthz";
 }
 
 // ---- the canvas listing: two callers, two questions, one route ----
@@ -1003,11 +1121,14 @@ export function healthPath(base: string): string {
  *
  * - A **browser** asks "what can I open from here?" That is a person looking
  *   at their own home's front page, and the honest answer includes a canvas
- *   they have never been in but could walk into by clicking it — which on a
- *   solo home is most of them, because a canvas created from the CLI is
- *   admitted to the CLI's BEARER badge while the tab carries a COOKIE badge
- *   that has never been in it. Narrow this and the person opens `/` and
- *   cannot see the canvas their own agent just made.
+ *   they have never been in — a canvas created from the CLI is admitted to the
+ *   CLI's BEARER badge while the tab carries a COOKIE badge that has never
+ *   been in it. That answer used to be "anything a door would open", which on
+ *   a solo home is most of them and on a shared home is everybody's; it is now
+ *   the **shelf**: on a daemon bound to loopback, asked from that machine, the
+ *   list is everything the daemon holds — a laptop's list is exactly what it
+ *   always was. A home serving the world (`ISOCAN_BIND=0.0.0.0`) answers
+ *   admissions and named rows, and nothing else.
  * - A **replica** asks "what am I supposed to be carrying?" A replica that
  *   answers that with "everything a door would let me through" mirrors a
  *   stranger's canvas onto a laptop because a link grant happened to be on —
@@ -1025,16 +1146,15 @@ export function healthPath(base: string): string {
  * engine), because it is the same distinction: what a badge has been let
  * into, versus what the door would let it into if it knocked.
  *
- * - `"admissible"` — admitted ∪ what a grant would admit. **The default**,
- *   which is what makes this change backwards compatible in the direction
- *   that matters: an OLD replica polling a new home sends no parameter and
- *   gets exactly the answer it always got. A NEW replica polling an old home
- *   sends one that home ignores, and over-replicates the way it does today —
- *   a known, pre-existing behaviour rather than a new failure.
- * - `"admitted"` — admissions and nothing else. What a replica asks.
- * - `"here"` — of the admissible ones, the canvases **this daemon is the home
- *   of** (phase 10.3). A third question rather than a narrowing of the other
- *   two, and it exists because of a real hole: the web app's canvas list
+ * - `"admissible"` — the default discovery answer: admissions and named
+ *   grants on a hosted home, the local shelf on a loopback daemon. Kept for
+ *   existing callers; it cannot widen a hosted list to link-only canvases.
+ * - `"admitted"` — admissions and nothing else, and never the shelf. What a
+ *   replica asks: it must mirror what it was told it holds, not what the
+ *   machine it runs on happens to have.
+ * - `"here"` — of the ones this badge may see, the canvases **this daemon is
+ *   the home of** (phase 10.3). A third question rather than a narrowing of the
+ *   other two, and it exists because of a real hole: the web app's canvas list
  *   links to a canvas with a react-router `<Link>`, which is a client-side
  *   navigation that never touches the server, so the per-canvas page guard on
  *   `GET /p/<id>` is simply bypassed for anything in that list. A local origin
@@ -1370,6 +1490,17 @@ export interface CanvasLinkState {
   /** How the last attempt ended: a close code, or the error that stopped it
    * before there was a socket at all. */
   lastFailure: string | null;
+  /**
+   * **The home has taken this canvas down** (operator phase 2), with the
+   * home's own sentence about it.
+   *
+   * Present only for that one refusal, and it is the field that makes the
+   * difference visible where it matters most: a replica whose home has taken a
+   * canvas down still HOLDS that canvas — the copy is the member's, the
+   * operator cannot reach a laptop — and every other reason a link is down is
+   * a reason to expect it back. `isocan status` reads this to say so.
+   */
+  takenDown?: TakedownNotice;
 }
 
 /** Every refusal, in one shape. The code is what a client branches on; the

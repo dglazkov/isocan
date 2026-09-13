@@ -205,7 +205,10 @@ describe("corner radii", () => {
   const RESTATES_THE_TOKEN = [
     ".share-link-row",
     ".terminal-command",
-    ".theme-switch",
+    /* `.theme-switch` was here until the canvas list's ordering joined it as
+       the second segmented control: sharing the rule meant writing the radius
+       once, and this test's own instruction — "use the token" — is what it
+       was written as. */
     ".item-peek .item-thumb",
     ".beacon-row",
     ".onit",

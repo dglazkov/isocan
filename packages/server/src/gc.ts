@@ -8,7 +8,7 @@ import type {
   LogEntry,
   Operation,
 } from "@isocan/core";
-import { blobsInProperties, undoneSeqs } from "@isocan/core";
+import { blobsInProperties, blobsNamedBy, undoneSeqs } from "@isocan/core";
 import type { Engine } from "./engine.ts";
 
 /**
@@ -73,10 +73,23 @@ export function chooseRetained(entries: LogEntry[], keepOps: number): LogEntry[]
 /** Every blobHash an operation can (re-)introduce. */
 function hashesInOperation(op: Operation): string[] {
   switch (op.type) {
+    case "group.change": {
+      const versions = op.action.kind === "create" ? [op.action.group.version]
+        : op.action.kind === "insert" ? [op.action.item.version]
+        : op.action.kind === "content" && op.action.operation.type === "item.addVersion" ? [op.action.operation.version]
+        : op.action.kind === "apply" ? [
+          ...op.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions : write.kind === "patch" ? write.content?.versions ?? [] : []),
+          ...op.action.change.expected.flatMap((row) => row.content?.versions ?? []),
+        ] : [];
+      return versions.flatMap((version) => [version.blobHash, ...(version.visual ? [version.visual.blobHash] : [])]);
+    }
     case "item.add":
     case "item.addVersion":
-    case "item.restoreVersion":
-      return [op.version.blobHash];
+    case "item.restoreVersion": {
+      const hashes = [op.version.blobHash];
+      if (op.version.visual?.blobHash) hashes.push(op.version.visual.blobHash);
+      return hashes;
+    }
     default:
       return [];
   }
@@ -100,12 +113,21 @@ function hashesInOperation(op: Operation): string[] {
  */
 export function reachableHashes(state: CanvasState, retained: LogEntry[]): Set<string> {
   const marked = new Set<string>();
+  // Full metadata references include request provenance, both in saved comments
+  // and in retained comment inverses, after their source items have gone.
+  for (const hash of blobsNamedBy(retained, state).keys()) marked.add(hash);
   for (const hash of blobsInProperties(state)) marked.add(hash);
   for (const item of Object.values(state.canvas.items)) {
-    for (const version of item.versions) marked.add(version.blobHash);
+    for (const version of item.versions) {
+      marked.add(version.blobHash);
+      if (version.visual?.blobHash) marked.add(version.visual.blobHash);
+    }
   }
   for (const entry of state.canvas.trash) {
-    for (const version of entry.item.versions) marked.add(version.blobHash);
+    for (const version of entry.item.versions) {
+      marked.add(version.blobHash);
+      if (version.visual?.blobHash) marked.add(version.visual.blobHash);
+    }
   }
   for (const entry of retained) {
     for (const hash of hashesInOperation(entry.envelope.op)) marked.add(hash);

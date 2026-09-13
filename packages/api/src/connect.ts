@@ -2,21 +2,30 @@ import type {
   Actor,
   Canvas,
   CanvasSnapshotResponse,
+  ContextManifest,
+  ContextContentPage,
   CommentThread,
   Item,
   ItemKind,
   MentionCandidate,
   NewComment,
   Operation,
+  PostOpResponse,
   PresenceSession,
   WatchedLogEntry,
   WatchLogResponse,
+  SourceRequestContext,
+  PersonalSourcePolicy,
 } from "@isocan/core";
 import {
   actorNameIn,
   actorsAnswerTo,
   resolveActor,
   annotationsOf,
+  groupChildren,
+  groupDescendants,
+  findArea,
+  itemsIn,
   collectCanvasActors,
   collectCanvasNames,
   collectItemRefCandidates,
@@ -26,16 +35,25 @@ import {
   filenameFromTitle,
   itemKind,
   mainThread,
+  itemThread,
   newCommentId,
   newItemId,
   newThreadId,
   newVersionId,
   recentActivity,
   type ActivityEntry,
+  parseSourcePolicyHeader,
+  sourcePolicyHeader,
 } from "@isocan/core";
-import { matchRef, resolveCanvas, resolveCtx, type Ctx } from "./ctx.ts";
-import { noIdentityHere, type ExplicitIdentity } from "./identity.ts";
+import { matchRef, resolveCanvas, resolveCanvasRef, resolveCtx, readHomeRecord, homeAddressOf, sourceContextForCanvas, type Ctx } from "./ctx.ts";
+import { DaemonClient } from "./client.ts";
+import { claimSessionIdentity, noIdentityHere, type ExplicitIdentity } from "./identity.ts";
+import { readContextSummary, type ContextSummaryOptions } from "./context-summary.ts";
+import { waitForFeedback, type FeedbackOptions, type FeedbackResult } from "./feedback.ts";
+import type { ContextExtras, ContextLayer } from "@isocan/core";
 import { ApiError, type DaemonRoutes } from "./routes.ts";
+import { CanvasGroups, resolveCanvasGroupRef, type CanvasGroupCopyOptions, type CanvasGroupResult } from "./canvas-groups.ts";
+import { readContextItem, type CommentContextOptions, type ContextReadOptions, type ContextPageOptions, type ContextBytesOptions, type ContextItemContent } from "./canvas-context.ts";
 
 /**
  * **Unreachable is a typed refusal here, not a stack trace** (journey 1's
@@ -97,6 +115,8 @@ export interface ConnectOptions {
   identity?: ExplicitIdentity;
   /** The daemon port, when it is not `ISOCAN_PORT`/the default. */
   port?: number;
+  /** Optional lifetime for this connection, including identity and admission IO. */
+  signal?: AbortSignal;
 }
 
 export async function connect(options: ConnectOptions = {}): Promise<Home> {
@@ -104,7 +124,9 @@ export async function connect(options: ConnectOptions = {}): Promise<Home> {
     interactive: false,
     ...(options.port !== undefined ? { port: options.port } : {}),
     ...(options.identity !== undefined ? { identity: options.identity } : {}),
+    ...(options.signal !== undefined ? { signal: options.signal } : {}),
   });
+  options.signal?.throwIfAborted();
   // Refused with a reason, at the door (the phases' settled answer to the
   // harness-less environment — mint-and-warn stays a closed door). The lazy
   // getter is the CLI's shape, where `ls` should not demand a name; a script
@@ -126,6 +148,15 @@ export async function connect(options: ConnectOptions = {}): Promise<Home> {
   return new Home(ctx);
 }
 
+/** Deliberately claim a stable caller session without changing process-wide identity. */
+export async function claimSession(options: ConnectOptions & { identity: ExplicitIdentity; name: string }): Promise<Actor> {
+  if (!options.identity.session.trim() || !options.name.trim()) throw new Error("a session key and agent name are required");
+  const ctx = await resolveCtx({ interactive: false, ...(options.port === undefined ? {} : { port: options.port }), ...(options.signal ? { signal: options.signal } : {}), identity: options.identity });
+  options.signal?.throwIfAborted();
+  const result = await claimSessionIdentity(ctx.client, ctx.home, { identity: options.identity, name: options.name, ...(ctx.binding ? { canvasId: ctx.binding.canvasId } : {}) });
+  return result.actor;
+}
+
 /**
  * **A home handle, not only a directory handle** — what journey 1 forces: the
  * board cannot be written against "this directory's canvas" alone. The
@@ -140,6 +171,24 @@ export class Home {
     return this.ctx.actor;
   }
 
+  /** Restrict one caller without changing the shared badge or any other tool's client. */
+  withSourcePolicy(policy: PersonalSourcePolicy, signal?: AbortSignal): Home {
+    signal?.throwIfAborted();
+    if (policy.mode === "direct" && policy.actorId !== this.actor.id) throw new Error("Source policy must name this call's selected actor.");
+    const sourceContext: SourceRequestContext = Object.freeze({
+      ...parseSourcePolicyHeader(sourcePolicyHeader({ policy })), ...(signal ? { signal } : {}),
+    });
+    return new Home(this.sourceScoped(sourceContext));
+  }
+
+  private sourceScoped(sourceContext: SourceRequestContext): Ctx {
+    const client = new DaemonClient(this.ctx.client.base, this.ctx.home, sourceContext.signal, sourceContext);
+    this.ctx.reclaimOn?.(client);
+    let record: ReturnType<typeof readHomeRecord> | undefined;
+    const homes = () => record ??= readHomeRecord(client, this.ctx.birthHome);
+    return { ...this.ctx, client, sourceContext, homes, homeOf: async (id) => homeAddressOf(await homes(), id) };
+  }
+
   /**
    * A canvas to work: no ref means the directory's canvas resolved the way
    * every CLI command resolves it (marker walk, home default, only-one); a
@@ -147,11 +196,12 @@ export class Home {
    */
   async canvas(ref?: string): Promise<CanvasHandle> {
     return reaching(this.ctx.client.base, async () => {
+      const ctx = this.ctx.sourceContext ? this.sourceScoped(await sourceContextForCanvas(this.ctx, ref)) : this.ctx;
       const record =
         ref === undefined
-          ? await resolveCanvas(this.ctx)
-          : matchRef(await this.ctx.client.listCanvases(), ref);
-      return new CanvasHandle(this.ctx, record);
+          ? await resolveCanvas(ctx)
+          : await resolveCanvasRef(ctx.client, ref, ctx.sourceContext);
+      return new CanvasHandle(ctx, record);
     });
   }
 }
@@ -178,6 +228,11 @@ export interface AddSpec extends ContentSpec {
   at?: { x: number; y: number };
   size?: { width: number; height: number };
   properties?: Record<string, string>;
+  /** Explicit group ID or unique reference; insertion and any frame growth are one act. */
+  in?: string;
+  containerId?: string | null;
+  cell?: { row: number; column: number };
+  groupPlacement?: "auto" | "preserve" | "exact";
 }
 
 /** The metadata half of `isocan set`, sized to what a script reaches for. */
@@ -185,6 +240,19 @@ export interface SetSpec {
   properties?: Record<string, string>;
   removeProperties?: string[];
   size?: { width: number; height: number };
+}
+
+export interface PostedComment {
+  threadId: string;
+  commentId: string;
+  /** Authoritative writer provenance, when this message supplied group context. */
+  context?: ContextManifest;
+}
+
+function postedComment(threadId: string, commentId: string, receipt: PostOpResponse): PostedComment {
+  const op = receipt.envelope.op;
+  const context = op.type === "thread.create" || op.type === "thread.reply" ? op.comment.context : undefined;
+  return { threadId, commentId, ...(context ? { context } : {}) };
 }
 
 /** A name in use on a canvas — from a live session or from its history. Keyed
@@ -285,6 +353,17 @@ export class CanvasHandle {
     return this.record.title;
   }
 
+  /** Membership verbs share the CLI's typed canvas-group helper and atomic writer boundary. */
+  get groups(): CanvasGroups { return new CanvasGroups(this.ctx.client, this.id, () => this.ctx.actor); }
+
+  /** Copy a selected graph and both content faces in one writer act. */
+  async copy(refs: string[], options: CanvasGroupCopyOptions & { to?: string } = {}): Promise<CanvasGroupResult> {
+    return this.reach(async () => {
+      const target = options.to ? matchRef(await this.ctx.client.listCanvases(), options.to) : this.record;
+      return new CanvasGroups(this.ctx.client, target.id, () => this.ctx.actor).copyFrom(this.id, refs, options);
+    });
+  }
+
   private snapshot(): Promise<CanvasSnapshotResponse> {
     return this.reach(() => this.ctx.client.snapshot(this.id));
   }
@@ -295,9 +374,56 @@ export class CanvasHandle {
   }
 
   /** Every live item, each carrying its derived kind — `--json ls`. */
-  async items(): Promise<ListedItem[]> {
-    const { canvas } = await this.snapshot();
-    return Object.values(canvas.items).map((item) => ({ ...item, kind: itemKind(item) }));
+  async items(options: { in?: string | undefined; recursive?: boolean | undefined } = {}): Promise<ListedItem[]> {
+    const { project, canvas } = await this.snapshot();
+    let items = Object.values(canvas.items);
+    if (options.in !== undefined) {
+      if (project.groupMode === "groups") {
+        const parent = resolveCanvasGroupRef(canvas, options.in, true);
+        items = options.recursive ? groupDescendants(canvas, parent.id) : groupChildren(canvas, parent.id);
+      } else {
+        const area = findArea(canvas, options.in);
+        if (!area) throw new Error(`no area called "${options.in}"`);
+        items = itemsIn(canvas, area);
+      }
+    }
+    return items.map((item) => ({ ...item, kind: itemKind(item) }));
+  }
+
+  /** Complete current hierarchy at one revision; omission reads ambient pins. */
+  async context(options: ContextReadOptions = {}): Promise<ContextManifest> {
+    return this.reach(async () => {
+      if (options.in === undefined && options.rootIds === undefined) {
+        if (options.includeExcluded !== undefined || options.expectedRevision !== undefined) throw new Error("includeExcluded and expectedRevision require explicit context roots or in");
+        return this.ctx.client.contextManifest(this.id);
+      }
+      const snapshot = await this.snapshot();
+      const roots = [...(options.rootIds ?? []).map((ref) => resolveCanvasGroupRef(snapshot.canvas, ref).id)];
+      if (options.in !== undefined) roots.push(resolveCanvasGroupRef(snapshot.canvas, options.in, true).id);
+      return this.ctx.client.contextManifest(this.id, { rootIds: [...new Set(roots)], ...(options.includeExcluded !== undefined ? { includeExcluded: options.includeExcluded } : {}), ...(options.expectedRevision !== undefined ? { expectedRevision: options.expectedRevision } : {}) });
+    });
+  }
+
+  contextOfComment(threadId: string, commentId: string): Promise<ContextManifest> {
+    return this.reach(() => this.ctx.client.commentContext(this.id, threadId, commentId));
+  }
+
+  /** Live ambient layers, distinct from a current item manifest or saved request. */
+  contextSummary(extras: ContextExtras = {}, options: ContextSummaryOptions = {}): Promise<ContextLayer[]> {
+    return this.reach(() => readContextSummary(this.ctx, this.id, extras, options));
+  }
+
+  /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */
+  waitForFeedback(options: FeedbackOptions = {}): Promise<FeedbackResult> {
+    return this.reach(() => waitForFeedback(this.ctx.client, this.id, this.ctx.actor, options));
+  }
+
+  contextPage(options: ContextPageOptions): Promise<ContextContentPage> {
+    return this.reach(() => this.ctx.client.contextContentPage(this.id, options));
+  }
+
+  contextItem(threadId: string, commentId: string, itemId: string, options: ContextBytesOptions = {}): Promise<ContextItemContent> {
+    return this.reach(() => readContextItem(this.ctx.client, this.id, threadId, commentId, itemId, options));
   }
 
   /** One item, by exact id, fresh from the store. */
@@ -435,13 +561,16 @@ export class CanvasHandle {
    */
   async add(spec: AddSpec): Promise<Item> {
     return this.reach(async () => {
+      const snapshot = await this.snapshot();
+      const containerId = spec.in !== undefined ? resolveCanvasGroupRef(snapshot.canvas, spec.in, true).id : spec.containerId;
+      if (spec.cell && !containerId) throw new Error("a cell requires a destination group");
       const data = typeof spec.content === "string" ? Buffer.from(spec.content) : spec.content;
       const filename = spec.filename ?? defaultFilename(spec.title, spec.mime);
       const upload = await this.ctx.client.uploadBlob(this.id, data, spec.mime, filename);
       const itemId = newItemId();
       const { width, height } = spec.size ?? DEFAULT_SIZE;
-      const placement = spec.at ?? (await this.defaultPlacement());
-      await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+      const placement = spec.at ?? this.defaultPlacement(snapshot);
+      const accepted = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
         type: "item.add",
         itemId,
         version: {
@@ -454,21 +583,25 @@ export class CanvasHandle {
         width,
         height,
         placement,
+        ...(containerId !== undefined ? { containerId, groupPlacement: spec.groupPlacement ?? (spec.at ? "exact" : "auto") } : {}),
+        ...(spec.cell ? { cell: spec.cell } : {}),
         ...(spec.title !== undefined ? { title: spec.title } : {}),
         ...(spec.description !== undefined ? { description: spec.description } : {}),
         ...(spec.properties && Object.keys(spec.properties).length > 0
           ? { properties: spec.properties }
           : {}),
-      });
+      }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
+      const written = accepted.envelope.op;
+      if (written.type === "group.change" && written.action.kind === "apply") {
+        const created = written.action.change.writes.find((write) => write.kind === "create" && write.item.id === itemId);
+        if (created?.kind === "create") return created.item;
+      }
       return this.item(itemId);
     });
   }
 
   /** The CLI's default: left of the leftmost item, origin on an empty canvas. */
-  private async defaultPlacement(): Promise<
-    { x: number; y: number } | { anchorItemId: string }
-  > {
-    const { canvas } = await this.snapshot();
+  private defaultPlacement({ canvas }: CanvasSnapshotResponse): { x: number; y: number } | { anchorItemId: string } {
     const leftmost = Object.values(canvas.items).reduce<Item | null>(
       (best, item) => (best === null || item.x < best.x ? item : best),
       null,
@@ -483,7 +616,9 @@ export class CanvasHandle {
    */
   async edit(itemId: string, spec: ContentSpec): Promise<Item> {
     return this.reach(async () => {
-      const before = await this.item(itemId);
+      const snapshot = await this.snapshot();
+      const before = snapshot.canvas.items[itemId];
+      if (!before) throw new Error(`no item ${itemId} on ${this.record.title}`);
       const current = before.versions.find((v) => v.id === before.currentVersionId);
       const mime = spec.mime ?? current?.mimeType;
       const filename = spec.filename ?? current?.filename;
@@ -502,7 +637,7 @@ export class CanvasHandle {
           filename,
           size: upload.size,
         },
-      });
+      }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
       return this.item(itemId);
     });
   }
@@ -537,12 +672,19 @@ export class CanvasHandle {
     };
     let did = false;
     await this.reach(async () => {
+      const snapshot = await this.snapshot();
+      if (snapshot.project.groupMode === "groups") {
+        if (!Object.keys(meta).length && !patch.size) throw new Error("nothing to change");
+        await this.groups.update(itemId, { patch: meta, ...(patch.size ? { size: patch.size } : {}) });
+        did = true;
+        return;
+      }
       if (Object.keys(meta).length > 0) {
         await this.ctx.client.sendOp(this.id, this.ctx.actor, {
           type: "item.update",
           itemId,
           patch: meta,
-        });
+        }, undefined, undefined, undefined, "legacy");
         did = true;
       }
       if (patch.size) {
@@ -551,7 +693,7 @@ export class CanvasHandle {
           itemId,
           width: patch.size.width,
           height: patch.size.height,
-        });
+        }, undefined, undefined, undefined, "legacy");
         did = true;
       }
     });
@@ -562,7 +704,9 @@ export class CanvasHandle {
    * the CLI's `mv` and the web app's drag follow. */
   async move(itemId: string, x: number, y: number): Promise<void> {
     await this.reach(async () => {
-      const { canvas } = await this.snapshot();
+      const snapshot = await this.snapshot();
+      if (snapshot.project.groupMode === "groups") { await this.groups.move(itemId, { at: { x, y } }); return; }
+      const { canvas } = snapshot;
       const item = canvas.items[itemId];
       if (!item) throw new Error(`no item ${itemId} on ${this.record.title}`);
       const dx = x - item.x;
@@ -576,6 +720,7 @@ export class CanvasHandle {
         this.id,
         this.ctx.actor,
         moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves },
+        undefined, undefined, undefined, "legacy",
       );
     });
   }
@@ -588,30 +733,30 @@ export class CanvasHandle {
    * channel — it noticed itself, mid-run, that it had posted 80 of a
    * thread's 96 messages.
    */
-  async comment(itemId: string, message: string): Promise<{ threadId: string; commentId: string }> {
+  async comment(itemId: string, message: string, options: CommentContextOptions = {}): Promise<PostedComment> {
     return this.reach(async () => {
       const snapshot = await this.snapshot();
-      const comment = await this.newComment(snapshot, message);
+      const comment = await this.newComment(snapshot, message, options);
       const threadId = newThreadId();
-      await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+      const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
         type: "thread.create",
         threadId,
         x: 0,
         y: 0,
         anchorItemId: itemId,
         comment,
-      });
-      return { threadId, commentId: comment.id };
+      }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
+      return postedComment(threadId, comment.id, receipt);
     });
   }
 
   /** Reply in a thread that exists — `isocan comment reply`'s act. */
-  async reply(threadId: string, message: string): Promise<{ threadId: string; commentId: string }> {
+  async reply(threadId: string, message: string, options: CommentContextOptions = {}): Promise<PostedComment> {
     return this.reach(async () => {
       const snapshot = await this.snapshot();
-      const comment = await this.newComment(snapshot, message);
-      await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "thread.reply", threadId, comment });
-      return { threadId, commentId: comment.id };
+      const comment = await this.newComment(snapshot, message, options);
+      const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "thread.reply", threadId, comment }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
+      return postedComment(threadId, comment.id, receipt);
     });
   }
 
@@ -620,21 +765,21 @@ export class CanvasHandle {
    * the reply, or is born from the first message, with `@Name` mentions and
    * `#Title` references resolved the way every comment resolves them.
    */
-  async notify(message: string): Promise<{ threadId: string; commentId: string }> {
+  async notify(message: string, options: CommentContextOptions = {}): Promise<PostedComment> {
     return this.reach(async () => {
       const snapshot = await this.snapshot();
-      const comment = await this.newComment(snapshot, message);
+      const comment = await this.newComment(snapshot, message, options);
       const main = mainThread(snapshot.canvas);
       if (main) {
-        await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+        const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
           type: "thread.reply",
           threadId: main.id,
           comment,
-        });
-        return { threadId: main.id, commentId: comment.id };
+        }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
+        return postedComment(main.id, comment.id, receipt);
       }
       const threadId = newThreadId();
-      await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+      const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
         type: "thread.create",
         threadId,
         x: 0,
@@ -642,13 +787,29 @@ export class CanvasHandle {
         anchorItemId: null,
         main: true,
         comment,
-      });
-      return { threadId, commentId: comment.id };
+      }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
+      return postedComment(threadId, comment.id, receipt);
     });
   }
 
-  private newComment(snapshot: CanvasSnapshotResponse, body: string): Promise<NewComment> {
-    return buildComment(this.ctx.client, this.id, snapshot, body);
+  say(message: string, options: CommentContextOptions = {}): Promise<PostedComment> {
+    return this.notify(message, options);
+  }
+
+  async ask(question: string, options: CommentContextOptions & { itemId?: string } = {}): Promise<PostedComment> {
+    const words = question.trim();
+    if (!words) throw new Error("ask what?");
+    const body = words.startsWith("/ask") ? words : `/ask ${words}`;
+    if (options.itemId) {
+      const snapshot = await this.snapshot();
+      const existing = itemThread(snapshot.canvas, options.itemId);
+      return existing ? this.reply(existing.id, body, options) : this.comment(options.itemId, body, options);
+    }
+    return this.notify(body, options);
+  }
+
+  private newComment(snapshot: CanvasSnapshotResponse, body: string, options: CommentContextOptions = {}): Promise<NewComment> {
+    return buildComment(this.ctx.client, this.id, snapshot, body, options);
   }
 }
 
@@ -665,6 +826,7 @@ export async function buildComment(
   canvasId: string,
   snapshot: CanvasSnapshotResponse,
   body: string,
+  options: CommentContextOptions = {},
 ): Promise<NewComment> {
   // What the canvas remembers, plus what everyone goes by NOW — otherwise
   // "@Di" resolves to nobody the moment Dion 2 renames, and the summons that
@@ -680,12 +842,20 @@ export async function buildComment(
     if (session.label) candidates.push({ id: session.actor.id, name: session.label });
   }
   const mentions = extractMentions(body, candidates);
-  const items = extractItemRefs(body, collectItemRefCandidates(snapshot.canvas));
+  const items = [...new Set([
+    ...extractItemRefs(body, collectItemRefCandidates(snapshot.canvas)),
+    ...(options.items ?? []).map((ref) => resolveCanvasGroupRef(snapshot.canvas, ref).id),
+    ...(options.rootIds ?? []).map((ref) => resolveCanvasGroupRef(snapshot.canvas, ref).id),
+    ...(options.in !== undefined ? [resolveCanvasGroupRef(snapshot.canvas, options.in, true).id] : []),
+  ])];
+  const explicit = options.in !== undefined || options.rootIds !== undefined || options.includeExcluded !== undefined || options.expectedRevision !== undefined;
+  if (explicit && snapshot.project.groupMode !== "groups") throw new Error("group context requires a group-enabled canvas");
   return {
     id: newCommentId(),
     body,
     ...(mentions.length > 0 ? { mentions } : {}),
     ...(items.length > 0 ? { items } : {}),
+    ...(explicit ? { contextRequest: { rootIds: items, ...(options.includeExcluded !== undefined ? { includeExcluded: options.includeExcluded } : {}), ...(options.expectedRevision !== undefined ? { expectedRevision: options.expectedRevision } : {}) } } : {}),
   };
 }
 

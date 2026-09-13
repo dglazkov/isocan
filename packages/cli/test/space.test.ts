@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Grant, Space } from "@isocan/core";
 import { spaceGrantsRoute, SPACES_ROUTE } from "@isocan/core";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { startDaemon, readBadge, bearerHeader, type Daemon } from "@isocan/server";
 import { markerFile } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
 import { mintTestBadge } from "./badge.ts";
@@ -128,6 +128,33 @@ const enter = async (badge: { headers: Record<string, string> }, canvasId: strin
   (await fetch(`${homeBase}/api/projects/${canvasId}/canvas`, { headers: badge.headers })).status;
 
 describe("isocan space", () => {
+  it("canvas create --space is born at the home with inherited access and no link grant", async () => {
+    await bornCanvas();
+    const space = await cli("space", "new", "Design");
+    expect(space.code, space.stderr).toBe(0);
+    const id = space.stdout.match(/\((spc_\S+)\)/)![1]!;
+    const invited = await cli("share", "--space", "Design", "jordan@acme.test", "--as", "read");
+    expect(invited.code, invited.stderr).toBe(0);
+    for (const ref of ["Design", id]) {
+      const made = await cli("canvas", "create", `Acme ${ref}`, "--space", ref, "--json");
+      expect(made.code, made.stderr).toBe(0);
+      const answer = JSON.parse(made.stdout) as { canvasId: string; spaceId: string };
+      expect(answer.spaceId).toBe(id);
+      expect((await homeDaemon.desk.space(id))!.canvasIds).toContain(answer.canvasId);
+      expect(await homeDaemon.desk.grantsFor(answer.canvasId)).toEqual([]);
+      expect(await strangerCanRead(answer.canvasId)).toBe(403);
+      expect(await enter(await holderOf("jordan@acme.test"), answer.canvasId)).toBe(200);
+    }
+    const unknown = await cli("canvas", "create", "Acme missing", "--space", "Missing");
+    expect(unknown.code).toBe(1);
+    expect(unknown.stderr).toContain("no space called Missing");
+    const empty = await cli("canvas", "create", "Acme empty space", "--space", "");
+    expect(empty.code).toBe(1);
+    expect(empty.stderr).toContain("no space called");
+    const ordinary = await anotherCanvas("Acme ordinary");
+    expect((await homeDaemon.desk.grantsFor(ordinary)).some((g) => g.subject === "link")).toBe(true);
+    expect(await strangerCanRead(ordinary)).toBe(200);
+  }, 90_000);
   it("makes a space at the home, lists it, and puts canvases in and out of it", async () => {
     const a = await bornCanvas();
     const b = await anotherCanvas("Acme Roadmap");
@@ -291,6 +318,23 @@ describe("isocan space", () => {
     const byId = await cli("space", "add", jordansSpace.id, a);
     expect(byId.code, byId.stderr).toBe(0);
     expect((await homeDaemon.desk.space(jordansSpace.id))!.canvasIds).toEqual([a]);
+    const birthAmbiguous = await cli("canvas", "create", "Acme ambiguous", "--space", "Design");
+    expect(birthAmbiguous.code).toBe(1);
+    expect(birthAmbiguous.stderr).toContain("2 spaces are called Design");
+    const grantedBirth = await cli("canvas", "create", "Acme granted owner", "--space", jordansSpace.id, "--json");
+    expect(grantedBirth.code, grantedBirth.stderr).toBe(0);
+    const newborn = JSON.parse(grantedBirth.stdout).canvasId as string;
+    expect((await homeDaemon.desk.space(jordansSpace.id))!.canvasIds).toContain(newborn);
+    expect(await homeDaemon.desk.grantsFor(newborn)).toEqual([]);
+    const demoted = await fetch(`${homeBase}${spaceGrantsRoute(jordansSpace.id)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...jordanBadge.headers },
+      body: JSON.stringify({ subject: "email:priya@acme.test", capability: "edit" }),
+    });
+    expect(demoted.status).toBe(200);
+    const refused = await cli("canvas", "create", "Acme editor cannot create", "--space", jordansSpace.id);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/own|owner/);
   }, 90_000);
 
   it("delete keeps every canvas, and the space stops being listed", async () => {
@@ -305,3 +349,81 @@ describe("isocan space", () => {
     expect(await strangerCanRead(a)).toBe(200);
   }, 90_000);
 });
+
+it("inbox uses the remote home's addressed comments and marks without writing on read", async () => {
+  const canvasId = await bornCanvas();
+  const snapshot = await homeDaemon.engine.getSnapshot(canvasId);
+  const recipient = snapshot.project.createdBy;
+  const author = await mintTestBadge(homeBase);
+  await author.speakAs(jordan);
+  const response = await fetch(`${homeBase}/api/ops`, {
+    method: "POST", headers: { ...author.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ canvasId, actor: jordan, op: { type: "thread.create", threadId: "thr_inbox", x: 10, y: 10, anchorItemId: null, comment: { id: "cmt_inbox", body: "Please review the synthetic proposal", mentions: [recipient.id] } } }),
+  });
+  expect(response.status).toBe(200);
+  const found = await cli("inbox", "--mentions", "--new", "--json");
+  expect(found.code, found.stderr).toBe(0);
+  const entries = JSON.parse(found.stdout);
+  expect(entries.map((entry: { threadId: string }) => entry.threadId)).toEqual(["thr_inbox"]);
+  expect(await homeDaemon.desk.seenOf(recipient.id)).toEqual({});
+  const mark = await cli("seen", "--mark", "--canvas", canvasId);
+  expect(mark.code, mark.stderr).toBe(0);
+  const seen = await cli("inbox", "--mentions", "--new", "--json");
+  expect(seen.code, seen.stderr).toBe(0);
+  expect(JSON.parse(seen.stdout)).toEqual([]);
+});
+
+it("seen --mark reaches each addressed home before the CLI inbox reads it on a mixed rig", async () => {
+  const firstId = await bornCanvas();
+  const recipient = (await homeDaemon.engine.getSnapshot(firstId)).project.createdBy;
+  const secondDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-inbox-second-home-"));
+  const second = await startDaemon({ port: 0, home: secondDir, birthHome: null });
+  const secondBase = baseOf(second);
+  const secondId = "prj_second_home";
+  try {
+    for (const [base, id] of [[homeBase, firstId], [secondBase, secondId]] as const) {
+      const author = await mintTestBadge(base);
+      await author.speakAs(jordan);
+      if (id === secondId) {
+        const made = await fetch(`${base}/api/ops`, {
+          method: "POST", headers: { ...author.headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ canvasId: null, actor: jordan, op: { type: "project.create", canvasId: id, title: "Acme second home" } }),
+        });
+        expect(made.status).toBe(200);
+      }
+      const wrote = await fetch(`${base}/api/ops`, {
+        method: "POST", headers: { ...author.headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ canvasId: id, actor: jordan, op: { type: "thread.create", threadId: `thr_${id}`, x: 10, y: 10, anchorItemId: null, comment: { id: `cmt_${id}`, body: "Synthetic request at this home", mentions: [recipient.id] } } }),
+      });
+      expect(wrote.status).toBe(200);
+    }
+    await laptop.homes.linkFor(secondBase).join(secondId);
+    const deadline = Date.now() + 5000;
+    while (!(await laptop.engine.listCanvases()).some((canvas) => canvas.id === secondId)) {
+      if (Date.now() > deadline) throw new Error("second inbox home did not replicate");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    expect(laptop.homes.homeOf(firstId)).toBe(homeBase);
+    expect(laptop.homes.homeOf(secondId)).toBe(secondBase);
+    const unread = await cli("inbox", "--new", "--mentions", "--json");
+    expect(unread.code, unread.stderr).toBe(0);
+    expect(JSON.parse(unread.stdout)).toHaveLength(2);
+    for (const [id, home] of [[firstId, homeDaemon], [secondId, second]] as const) {
+      const marked = await cli("seen", "--mark", "--canvas", id, "--json");
+      expect(marked.code, marked.stderr).toBe(0);
+      const after = await cli("inbox", "--new", "--mentions", "--canvas", id, "--json");
+      expect(after.code, after.stderr).toBe(0);
+      expect(JSON.parse(after.stdout), JSON.stringify({ marked: JSON.parse(marked.stdout), first: await homeDaemon.desk.seenOf(recipient.id), second: await second.desk.seenOf(recipient.id), local: await laptop.desk.seenOf(recipient.id) })).toEqual([]);
+      expect((await home.desk.seenOf(recipient.id))[id]).toMatchObject({ seq: JSON.parse(marked.stdout).mark.seq });
+      const localBadge = (await readBadge(laptopDir, baseOf(laptop)))!;
+      const prior = await fetch(`${baseOf(laptop)}/api/seen?actorId=${recipient.id}&canvasId=${id}`, { headers: bearerHeader(localBadge) });
+      expect(prior.status).toBe(200);
+      expect(await prior.json()).toEqual({ marks: { [id]: JSON.parse(marked.stdout).mark } });
+    }
+    expect((await homeDaemon.desk.seenOf(recipient.id))[secondId]).toBeUndefined();
+    expect(await laptop.desk.seenOf(recipient.id)).toEqual({});
+  } finally {
+    await second.close();
+    await fs.rm(secondDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+}, 60_000);

@@ -43,6 +43,10 @@ export const canvasDoc = (id: string) => `${CANVASES}/${id}`;
 export const opsCollection = (id: string) => `${CANVASES}/${id}/ops`;
 export const blobMetaCollection = (id: string) => `${CANVASES}/${id}/blobmeta`;
 
+/** Everything a canvas holds in the bucket lives under this, and a purge
+ * (operator phase 3) is a delete of exactly this prefix — the trailing slash
+ * is what keeps `canvases/prj_1/` from also naming `canvases/prj_10/`. */
+export const canvasPrefix = (id: string) => `${CANVASES}/${id}/`;
 export const snapshotKey = (id: string) => `${CANVASES}/${id}/snapshot.json`;
 export const blobKey = (id: string, file: string) => `${CANVASES}/${id}/blobs/${file}`;
 export const archiveKey = (id: string) => `${CANVASES}/${id}/oplog-archive.jsonl`;

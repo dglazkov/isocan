@@ -11,6 +11,7 @@ import {
   areasOf,
   findArea,
   freeSpotIn,
+  areaEnclosing,
   inArea,
   isArea,
   itemsIn,
@@ -144,12 +145,39 @@ describe("a spot inside the sheet", () => {
     expect(inArea(sheet, { ...first, ...spot })).toBe(true);
   });
 
-  it("answers the sheet's own corner when it is full, never a spot outside", () => {
+  it("automatically grows the area when it is full, returning a clear spot and new dimensions", () => {
     // A sheet that holds one thing the size of its whole inner region.
     const inner = areaInner(sheet);
     const filler = item("filler", inner.x, inner.y, inner.width, inner.height);
     const spot = freeSpotIn(canvasOf(sheet, filler), sheet, 300, 300);
-    expect(spot).toEqual({ x: inner.x, y: inner.y });
+    expect(spot.x).toBe(inner.x);
+    expect(spot.y).toBeGreaterThanOrEqual(inner.y + inner.height);
+    expect(spot.resizedArea).toBeDefined();
+    expect(spot.resizedArea!.height).toBeGreaterThan(sheet.height);
+    const expandedSheet = { ...sheet, ...spot.resizedArea };
+    expect(inArea(expandedSheet, { ...filler, id: "new", x: spot.x, y: spot.y, width: 300, height: 300 })).toBe(true);
+  });
+
+  it("grows width and shifts downstream items when an oversized item is placed", () => {
+    const wideItem = item("wide", 0, 0, sheet.width + 500, 300);
+    const neighbor = item("neighbor", sheet.x + sheet.width + 100, sheet.y, 200, 200);
+    const spot = freeSpotIn(canvasOf(sheet, neighbor), sheet, wideItem.width, wideItem.height);
+    expect(spot.resizedArea).toBeDefined();
+    expect(spot.resizedArea!.width).toBeGreaterThan(sheet.width);
+    expect(spot.shifts).toBeDefined();
+    expect(spot.shifts!.find((s) => s.itemId === "neighbor")).toBeDefined();
+    const neighborShift = spot.shifts!.find((s) => s.itemId === "neighbor")!;
+    expect(neighborShift.x).toBeGreaterThan(neighbor.x);
+  });
+
+  it("areaEnclosing computes bounding box with padding", () => {
+    const inner = areaInner(sheet);
+    const a = item("a", inner.x, inner.y, 400, 300);
+    const b = item("b", inner.x + 500, inner.y + 800, 600, 400);
+    const enclosing = areaEnclosing(sheet, [a, b]);
+    expect(enclosing).not.toBeNull();
+    expect(enclosing!.width).toBeGreaterThanOrEqual(inner.x + 500 + 600 - sheet.x + AREA_INSET);
+    expect(enclosing!.height).toBeGreaterThanOrEqual(inner.y + 800 + 400 - sheet.y + AREA_INSET);
   });
 });
 

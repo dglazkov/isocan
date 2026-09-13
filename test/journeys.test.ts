@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -16,6 +19,78 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
 const runner = read("../scripts/journeys.mjs");
 const persona = read("../.agents/personas/journeys.md");
 const workflow = read("../.github/workflows/journeys.yml");
+
+describe("the workflow reports unsuccessful runs", () => {
+  // Execute the shipped shell, with only the expensive browser runner
+  // replaced. Testing a second implementation of the verdict would miss
+  // the original bug: ignoring a nonzero exit unless stdout said FAIL.
+  const step = workflow.split("- name: Walk them")[1]!.split("- name: Say so")[0]!;
+  const shell = step.split("run: |\n")[1]!.split("\n")
+    .map((line) => line.replace(/^ {10}/, "")).join("\n").trim();
+
+  it.each([
+    ["success", "console.log('1/1 journeys walked')", "no", 0],
+    ["failed journey", "console.log('FAIL  pen'); process.exit(1)", "yes", 1],
+    ["startup crash", "throw new Error('browser failed to boot')", "yes", 1],
+    ["invalid selection", "console.error('unknown journey'); process.exit(2)", "yes", 2],
+    ["teardown crash", "console.log('  ok  pen'); throw new Error('close failed')", "yes", 1],
+    ["failure text with a broken exit code", "console.log('FAIL  pen')", "yes", 0],
+  ])("reports %s", (_name, source, verdict, status) => {
+    const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-report-"));
+    try {
+      mkdirSync(path.join(dir, "scripts"));
+      writeFileSync(path.join(dir, "scripts/journeys.mjs"), String(source));
+      const output = path.join(dir, "outputs");
+      execFileSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
+        cwd: dir, encoding: "utf8", timeout: 10_000,
+        env: { ...process.env, JOURNEY_ONLY: "", RUNNER_TEMP: dir, GITHUB_OUTPUT: output },
+      });
+      expect(readFileSync(output, "utf8")).toBe(`failing=${verdict}\n`);
+      expect(readFileSync(path.join(dir, "journeys.txt"), "utf8"))
+        .toContain(`Runner exit status: ${status}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+});
+
+describe("a failing journey fails the run", () => {
+  /**
+   * `text-tool` failed on 9, 10 and 11 Sep 2026 and the workflow finished
+   * green each night, with the failure in a commit comment nobody opened. A
+   * scheduled run gates nothing, so red costs nobody a merge — it only stops
+   * the run list saying "fine" about a walk that said otherwise.
+   */
+  const step = workflow.split("- name: A failing journey fails the run")[1] ?? "";
+
+  it("is the last step, and runs only when the walk said so", () => {
+    expect(step, "the step is missing from journeys.yml").not.toBe("");
+    // Last, so the comment is always written before the run goes red.
+    expect(step).not.toMatch(/- name:/);
+    expect(workflow.indexOf("- name: Say so")).toBeLessThan(workflow.indexOf("- name: A failing journey fails the run"));
+    expect(step).toContain("if: steps.walk.outputs.failing == 'yes'");
+    expect(step).not.toContain("continue-on-error");
+  });
+
+  it("actually exits non-zero", () => {
+    // Run the shipped shell rather than grepping for `exit 1`: a step that
+    // prints the failure and succeeds is the bug this replaces.
+    const shell = step.split("run: |\n")[1]!.split("\n")
+      .map((line) => line.replace(/^ {10}/, "")).join("\n").trim();
+    const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-red-"));
+    try {
+      writeFileSync(path.join(dir, "journeys.txt"), "FAIL  text-tool\nRunner exit status: 1\n");
+      expect(() =>
+        execFileSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
+          cwd: dir, encoding: "utf8", timeout: 10_000, stdio: "pipe",
+          env: { ...process.env, RUNNER_TEMP: dir },
+        }),
+      ).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+});
 
 describe("the journeys runner", () => {
   it("can prove it is able to report a failure", () => {

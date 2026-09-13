@@ -3,6 +3,7 @@ import { SIGN_BLOBS_LIMIT } from "@isocan/core";
 import { getServing, signedBlobs } from "./api.ts";
 import type { ContentOrigin } from "./frame.ts";
 import { activateRuntimeModules } from "./runtimeModules.ts";
+import { loadExperiments } from "../modules.ts";
 
 /**
  * The content origin's base URL, as this tab knows it — the app half of
@@ -49,6 +50,8 @@ export async function loadContentBase(): Promise<void> {
     // The same answer names the home's runtime modules (modules phase 3);
     // one fetch, two facts, and the modules arrive after first paint.
     void activateRuntimeModules(serving.modules ?? []);
+    // And the experiments this browser already had on, from the same beat.
+    void loadExperiments();
   } catch {
     adoptContentBase(null);
   }

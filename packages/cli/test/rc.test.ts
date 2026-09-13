@@ -1,13 +1,29 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, formatBadgeToken } from "@isocan/core";
+import { adoptRcAgent, type RcAgentRow } from "../src/rc.ts";
+import { describe, expect, it, vi } from "vitest";
 import { promises as fs, readFileSync } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
-import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import {
+  answeringFor,
+  badge,
+  base,
+  collect,
+  dimitri,
+  daemon,
+  home,
+  isocan,
+  nico,
+  post,
+  rcRows,
+  restartDaemon,
+  snapshotAgents,
+  spawnCli,
+  TEAM,
+  until,
+  useRcHome,
+} from "./rc-fixture.ts";
 
 /**
  * **`isocan rc` and the enrolment records** (agents-on-demand phase 2).
@@ -25,201 +41,59 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * - the vocabulary divide holds mechanically: bare `isocan rc` refuses
  *   inside a harness session, and `isocan agent add` refuses --canvas —
  *   the syntax is the containment
+ *
+ * The sheep harness's half of the same machinery is `rc-sheep.test.ts`, and
+ * `rc-fixture.ts` holds the home, the daemon and the helpers they share.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
-const nico = { id: "usr_nico", name: "Nico" };
-const dimitri = { id: "usr_dimitri", name: "Dimitri" };
-
-let home: string;
-let daemon: Daemon;
-let base: string;
-let badge: TestBadge;
-
-beforeEach(async () => {
-  home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-rc-"));
-  await fs.writeFile(
-    path.join(home, "identity.json"),
-    JSON.stringify({ ...nico, createdAt: new Date().toISOString() }),
-  );
-  // Phase 4: a summons DISPATCHES now. The scripted adapter answers for
-  // every harness this suite enrols, so no test can reach for a real one.
-  const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
-  await fs.writeFile(
-    path.join(home, "config.json"),
-    // …and named as the default outright: a web add's row says null, which
-    // means the machine's default, and the runner's PATH must not vote.
-    JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }),
-  );
-  daemon = await startDaemon({ port: 0, home });
-  const address = daemon.app.server.address();
-  base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  badge = await mintTestBadge(base);
-  await badge.speakAs(dimitri);
-  await post("/api/ops", {
-    canvasId: null,
-    actor: dimitri,
-    op: { type: "project.create", canvasId: "prj_1", title: "P" },
-  });
-});
-
-afterEach(async () => {
-  /**
-   * **Reap first, then remove.** A test that reached its own `rc.kill` has
-   * nothing here; a test that did not leaves a parked process, and removing
-   * its home underneath it leaves the process running with a deleted working
-   * directory — quieter than the `ENOTEMPTY` it used to cause, and worse,
-   * because the noise WAS the signal that something was still alive.
-   *
-   * `SIGKILL` after a grace period, not just `SIGINT`: an rc mid-turn is
-   * exactly the case that ignores a polite ask, and a teardown that waits
-   * forever is a hang rather than a failure.
-   *
-   * **And then WAIT for it to be gone** (9 Sep 2026). Sending a signal is not
-   * tearing down; observing the exit is. The first version fired `SIGKILL` and
-   * returned, so the next test's `beforeEach` could raise a daemon while the
-   * last test's rc was still in the process table — and an rc that outlives
-   * its daemon by a few milliseconds reconnects to whatever is on that port
-   * next and registers a park. What the innocent later test then sees is
-   * *"another park adopted Sian's cursor — standing down for it"*, which is
-   * precisely the line that reddened the release for `ce10535c` on CI, where
-   * there is no previous RUN to leak from and so no other explanation.
-   *
-   * That is lesson #44 one step further than it went: it put every spawn on a
-   * list the teardown drains, and draining meant asking rather than checking.
-   */
-  for (const child of started.splice(0)) {
-    if (child.exitCode !== null || child.signalCode !== null) continue;
-    const gone = new Promise<void>((resolve) => child.once("exit", () => resolve()));
-    child.kill("SIGINT");
-    await Promise.race([gone, new Promise<void>((resolve) => setTimeout(resolve, 2000))]);
-    if (child.exitCode !== null || child.signalCode !== null) continue;
-    child.kill("SIGKILL");
-    // Bounded, for the teardown-that-hangs reason above — but a SIGKILL that
-    // has not landed within a second is a machine in trouble, not a slow rc.
-    await Promise.race([gone, new Promise<void>((resolve) => setTimeout(resolve, 1000))]);
-  }
-  await daemon.close();
-  // And the daemon an rc started for itself, which is not this file's `daemon`
-  // and so survives closing that one.
-  await stopDaemons(Number(new URL(base).port), home).catch(() => {});
-  await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-});
-
-async function post(url: string, body: unknown): Promise<any> {
-  const res = await fetch(`${base}${url}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...badge.headers },
-    body: JSON.stringify(body),
-  });
-  return res.json().catch(() => null);
-}
-
-async function snapshotAgents(): Promise<Record<string, { actor: { id: string; name: string } }>> {
-  const res = await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers });
-  const snapshot = (await res.json()) as { canvas: { agents?: Record<string, any> } };
-  return snapshot.canvas.agents ?? {};
-}
-
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
-/**
- * **Everything this file has started that is still alive.**
- *
- * Every test here kills its own `rc` on its last line, and that is enough
- * right up until a test fails or times out before reaching it — at which point
- * a parked rc outlives the run, and the NEXT run's rc finds it holding the
- * cursor: *"another park adopted Sian's cursor — standing down for it."* The
- * failure lands on a later, innocent test, which is why it reads as the suite
- * being unreliable rather than as one thing.
- *
- * Two of these were found alive on 8 Sep 2026, from runs 37 minutes apart,
- * with an `rc` and a `serve` each — `ps` and `lsof` said their working
- * directories were `/T/isocan-rc-*`, so they were nobody's but this file's.
- */
-const started: ChildProcess[] = [];
-
-function spawnCli(args: string[], extraEnv: Record<string, string> = {}): ChildProcess {
-  // The runner's own harness variables must not leak in: this suite asserts
-  // the same person/agent split under every harness, park.test.ts's rule.
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  started.push(child);
-  return child;
-}
-
-function collect(child: ChildProcess): Promise<Run> {
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
-}
-
-function isocan(...args: string[]): Promise<Run> {
-  return collect(spawnCli(args));
-}
-
-/**
- * **A deadline under the test's own, and a message that says what it saw.**
- *
- * This was ten seconds flat, and `vitest.config.ts` already records what that
- * costs: *"a hard 5s line straight through the middle of the distribution —
- * so a test passed alone, passed on a fast laptop, and failed on a shared
- * runner, which is the most expensive kind of failure there is because it
- * teaches people to re-run."* Same shape, one level down. These tests start
- * an rc, an ACP adapter and a daemon; on a two-core CI box that is seconds
- * before anything is asked. "a web add gets its rc half from the parked rc"
- * failed twice on CI at 10.9s, on two unrelated commits, passing 3/3 locally
- * each time.
- *
- * Twenty seconds sits under the 30s the tests declare, so a genuinely wedged
- * wait still fails HERE — with the name of what it was waiting for — rather
- * than as vitest's anonymous timeout.
- *
- * And it says what it last saw. "timed out waiting for the adoption" tells you
- * nothing about whether the adoption half-happened; the tail does, and this is
- * the same fix `dispatch.test.ts` got for the same reason.
- */
-async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: string): Promise<T> {
-  const deadline = Date.now() + 20_000;
-  let last: T | undefined;
-  for (;;) {
-    const value = await fn();
-    last = value;
-    if (ok(value)) return value;
-    if (Date.now() > deadline) {
-      const saw = typeof last === "string" ? last : JSON.stringify(last);
-      throw new Error(
-        `timed out waiting for ${what} after 20s. What it saw:\n${String(saw).slice(-1200)}`,
-      );
-    }
-    await new Promise((r) => setTimeout(r, 50));
-  }
-}
-
-async function rcRows(): Promise<RcAgentRow[]> {
-  try {
-    return JSON.parse(await fs.readFile(rcAgentsFile(home), "utf8")) as RcAgentRow[];
-  } catch {
-    return [];
-  }
-}
+useRcHome();
 
 describe("the enrolment record, in two halves", () => {
+  it("publishes enrolment only after the rc can read its working directory", async () => {
+    const submit = daemon.engine.submit.bind(daemon.engine);
+    let observed: RcAgentRow[] = [];
+    let adopted: boolean | undefined;
+    const gate = vi.spyOn(daemon.engine, "submit").mockImplementation(async (request) => {
+      if (request.op.type === "agent.enroll") {
+        // This intercepts the writer BEFORE it can publish an op or wake an
+        // actor. No timer decides whether the configuration was ready.
+        observed = await rcRows();
+        adopted = await adoptRcAgent(home, { canvasId: "prj_1", actorId: request.op.agent.id, name: request.op.agent.name, cwd: "/wrong-default", harness: null, sessionId: null });
+      }
+      return submit(request);
+    });
+    try {
+      const run = await isocan("agent", "add", "Acme builder");
+      expect(run.code, run.stderr).toBe(0);
+      expect(observed).toMatchObject([{ name: "Acme builder", cwd: await fs.realpath(home) }]);
+      expect(adopted).toBe(false);
+    } finally { gate.mockRestore(); }
+  });
+
+  it("a receipt dropped after acceptance leaves the prepared rc configuration intact", async () => {
+    let response: ServerResponse | undefined;
+    const capture = (request: IncomingMessage, reply: ServerResponse) => {
+      if (request.method === "POST" && request.url === "/api/ops") response = reply;
+    };
+    daemon.app.server.prependListener("request", capture);
+    const submit = daemon.engine.submit.bind(daemon.engine);
+    const gate = vi.spyOn(daemon.engine, "submit").mockImplementation(async (request) => {
+      const accepted = await submit(request);
+      if (request.op.type === "agent.enroll") response!.destroy();
+      return accepted;
+    });
+    try {
+      const run = await isocan("agent", "add", "Acme lost receipt");
+      expect(run.code).not.toBe(0);
+      const agent = Object.values(await snapshotAgents()).find((a) => a.actor.name === "Acme lost receipt");
+      expect(agent).toBeDefined();
+      expect(await rcRows()).toMatchObject([{ actorId: agent!.actor.id, cwd: await fs.realpath(home) }]);
+    } finally {
+      gate.mockRestore();
+      daemon.app.server.removeListener("request", capture);
+    }
+  });
+
   it("`isocan agent add` writes both halves — and the actor exists before any session", async () => {
     const run = await isocan("agent", "add", "Sian");
     expect(run.code).toBe(0);
@@ -241,6 +115,135 @@ describe("the enrolment record, in two halves", () => {
     });
   });
 
+  /**
+   * **The speaker gate, through the verbs** (sheepdog, "whom it listens
+   * to"). The routing rule itself is pinned in `core/test/agents.test.ts`,
+   * where it belongs — a dispatch cascade asserting a predicate is the
+   * end-to-end-pretending-to-be-a-unit-test this file already learned about.
+   * What these pin is the part only the CLI can get wrong: that the gate is
+   * WRITTEN where every surface reads it, that one gesture reaches every
+   * canvas the agent stands on, and that a person who looks can see it.
+   */
+  it("`--listen` writes the gate into canvas state and says so", async () => {
+    // Owner-only summons: with nothing said, an agent already listens to its
+    // owner alone — so the flag that means something now is a widening.
+    const plain = await isocan("agent", "add", "Percy");
+    expect(plain.stdout).toContain("listens only to you");
+    expect(plain.stdout).toContain("isocan rc listen Percy --to <names|everyone>");
+
+    const run = await isocan("agent", "add", "Sian", "--listen", "Dimitri");
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain("listens to you and Dimitri");
+
+    const agents = await snapshotAgents();
+    const row = Object.values(agents).find((a) => a.actor.name === "Sian") as
+      | { rules?: { listen?: string[] }; writtenBy?: { id: string } }
+      | undefined;
+    // In canvas state, not a machine file: a gate a mentioner cannot see is
+    // the silent gate the design refuses — stamped with who wrote it, so the
+    // rc can tell its owner's widening from anybody else's.
+    expect(row?.rules?.listen).toEqual([dimitri.id]);
+    expect(row?.writtenBy?.id).toBe(nico.id);
+
+    // And it is readable where somebody looks after being ignored.
+    const who = await isocan("--canvas", "prj_1", "who");
+    expect(who.stdout).toContain("listens to you and Dimitri");
+    const rules = await isocan("--canvas", "prj_1", "agent", "rules", "Sian");
+    expect(rules.stdout).toContain("listens to you and Dimitri");
+  });
+
+  it("`rc listen --to` reaches every canvas the agent stands on, in one gesture", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Q" },
+    });
+    await isocan("--canvas", "prj_1", "rc", "add", "Percy");
+    await isocan("--canvas", "prj_2", "rc", "add", "Percy");
+
+    // Nothing written is where every enrolment starts — and since owner-only
+    // summons that means its owner alone, on both canvases.
+    const before = await isocan("--json", "rc", "listen", "Percy");
+    expect(JSON.parse(before.stdout).map((r: { listens: string }) => r.listens)).toEqual([
+      "listens only to you",
+      "listens only to you",
+    ]);
+
+    const set = await isocan("rc", "listen", "Percy", "--to", "me,Dimitri");
+    expect(set.stderr).toBe("");
+    expect(set.code).toBe(0);
+    expect(set.stdout).toContain("on 2 canvases");
+
+    const gateOn = async (canvasId: string) => {
+      const res = await fetch(`${base}/api/projects/${canvasId}/canvas`, { headers: badge.headers });
+      const snapshot = (await res.json()) as {
+        canvas: { agents?: Record<string, { actor: { name: string }; rules?: { listen?: string[] } }> };
+      };
+      return Object.values(snapshot.canvas.agents ?? {}).find((a) => a.actor.name === "Percy")?.rules
+        ?.listen;
+    };
+    // The same gate in both rooms — "listens to Nico" must not mean two
+    // different things one canvas apart.
+    expect(await gateOn("prj_1")).toEqual([nico.id, dimitri.id]);
+    expect(await gateOn("prj_2")).toEqual([nico.id, dimitri.id]);
+
+    // Off again, said out loud rather than by deleting the field.
+    await isocan("rc", "listen", "Percy", "--to", "everyone");
+    expect(await gateOn("prj_1")).toEqual(["*"]);
+    const after = await isocan("--json", "rc", "listen", "Percy");
+    expect(JSON.parse(after.stdout)[0].listens).toBe("everyone");
+  });
+
+  it("`--until` writes how long as an entry beside the name (#272 phase 3)", async () => {
+    await isocan("--canvas", "prj_1", "rc", "add", "Percy");
+    const set = await isocan("rc", "listen", "Percy", "--to", "Dimitri", "--until", "7d");
+    expect(set.code).toBe(0);
+    expect(set.stdout).toContain("listens to you and Dimitri for 7d");
+
+    const agents = await snapshotAgents();
+    const row = Object.values(agents).find((a) => a.actor.name === "Percy") as
+      | { rules?: { listen?: unknown[] } }
+      | undefined;
+    // An entry, not a name with a date packed into it: a reader that has
+    // never heard of expiry keeps only strings in this list, so it drops
+    // this whole and admits nobody — the direction a gate must fail.
+    expect(row?.rules?.listen).toHaveLength(1);
+    expect(row?.rules?.listen?.[0]).toMatchObject({ id: dimitri.id });
+    expect((row?.rules?.listen?.[0] as { until: string }).until).toMatch(/^\d{4}-/);
+
+    // And it is readable — a timed grant nobody can see is the silent gate
+    // in slower motion.
+    const read = await isocan("--json", "rc", "listen", "Percy");
+    expect(JSON.parse(read.stdout)[0].until).toMatch(/Dimitri for 7d/);
+
+    // `--until` without a `--to` is not a gesture: it says how long a grant
+    // lasts, and there is no grant.
+    const alone = await isocan("rc", "listen", "Percy", "--until", "7d");
+    expect(alone.code).not.toBe(0);
+    expect(alone.stderr).toContain("wants a `--to` to grant");
+
+    // Without `--until`, a grant is the bare id it has always been — so a
+    // gate that gains no expiry never changes shape, and nothing stored
+    // before today is rewritten.
+    await isocan("rc", "listen", "Percy", "--to", "Dimitri");
+    const plain = Object.values(await snapshotAgents()).find((a) => a.actor.name === "Percy") as
+      | { rules?: { listen?: unknown[] } }
+      | undefined;
+    expect(plain?.rules?.listen).toEqual([dimitri.id]);
+  });
+
+  it("a gate naming somebody nobody here answers to is refused, not written half-way", async () => {
+    await isocan("--canvas", "prj_1", "rc", "add", "Percy");
+    const run = await isocan("rc", "listen", "Percy", "--to", "Nobody");
+    expect(run.code).not.toBe(0);
+    expect(run.stderr).toContain('answers to "Nobody"');
+    const agents = await snapshotAgents();
+    const row = Object.values(agents).find((a) => a.actor.name === "Percy") as
+      | { rules?: { listen?: string[] } }
+      | undefined;
+    expect(row?.rules?.listen).toBeUndefined();
+  });
+
   it("withdrawal takes both halves back and leaves the history", async () => {
     await isocan("agent", "add", "Sian");
     const run = await isocan("agent", "remove", "Sian");
@@ -258,11 +261,7 @@ describe("the enrolment record, in two halves", () => {
 
   it("the records survive a daemon restart — enrolment is a record, not a process", async () => {
     await isocan("agent", "add", "Sian");
-    await daemon.close();
-    daemon = await startDaemon({ port: 0, home });
-    const address = daemon.app.server.address();
-    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-    badge = await mintTestBadge(base);
+    await restartDaemon();
 
     const agents = await snapshotAgents();
     expect(Object.values(agents).map((a) => a.actor.name)).toEqual(["Sian"]);
@@ -297,7 +296,7 @@ describe("the running rc — quiet start, events narrated", () => {
     expect(out).toContain("/p/prj_1");
 
     // An enrolment created by verb, noticed by the running rc — no restart.
-    await isocan("agent", "add", "Sian");
+    await isocan("agent", "add", "Sian", ...TEAM);
     await until(async () => out, (o) => o.includes("enrolled Sian"), "the enrolment narrated");
 
     // A summons is recognized, narrated — and since phase 4, ANSWERED: the
@@ -391,6 +390,81 @@ describe("the web doors' mechanics (phase 2.5)", () => {
     await done;
   }, 30_000);
 
+  it("a web ask naming a template gets a working directory from a module on THIS machine (proposed: templates)", async () => {
+    const rc = spawnCli(["rc"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+
+    const parked = () => until(async () => {
+      const response = await fetch(`${base}/api/projects/prj_1/rc`, { headers: badge.headers });
+      return response.json() as Promise<{ parked?: boolean }>;
+    }, (state) => state.parked === true, "the rc's live park");
+    await parked();
+
+    // What the design competition's Fight button sends: a name, a template
+    // id and strings — never code. The template is the module's, installed
+    // in this build; the rc runs it here, into a directory it chooses. Asked
+    // by the rc's owner: since owner-only summons (#269) a template ask meets
+    // the same gate as a plain one, and this machine is Nico's. Asked on the
+    // badge this machine already holds — a test badge may not become somebody
+    // live here, and the owner's own surface is what the Fight button is.
+    const { auth } = JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8")) as {
+      auth: Record<string, { badgeId: string; secret: string }>;
+    };
+    const [mine] = Object.values(auth);
+    const asOwner = (body: unknown): Promise<any> =>
+      fetch(`${base}/api/projects/prj_1/agents/ask`, {
+        method: "POST",
+        headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, "Content-Type": "application/json", Authorization: `Bearer ${formatBadgeToken(mine!.badgeId, mine!.secret)}` },
+        body: JSON.stringify(body),
+      }).then((r) => r.json());
+    const asked = await asOwner({
+      name: "Less but Better",
+      from: nico,
+      template: "design-competition.fighter",
+      args: { pack: "rams", bout: "itm_bout", lane: "Less but Better", canvas: "prj_1" },
+    });
+    expect(asked.ok, JSON.stringify(asked)).toBe(true);
+    await until(async () => out, (o) => o.includes("from the template design-competition.fighter"), "the template ask narrated");
+    await until(rcRows, (r) => r.some((row) => row.name === "Less but Better"), "the enrolment");
+    const row = (await rcRows()).find((r) => r.name === "Less but Better")!;
+    expect(await fs.realpath(row.cwd)).toBe(await fs.realpath(path.join(home, "templates", "design-competition.fighter", "prj_1", "less-but-better")));
+    expect(await fs.readFile(path.join(row.cwd, "AGENTS.md"), "utf8")).toMatch(/You are Less but Better/);
+
+    // Somebody else's template ask is refused at the door like any ask would
+    // be — a template names what to write, never whose machine may be asked.
+    await parked();
+    const theirs = await post("/api/projects/prj_1/agents/ask", {
+      name: "Road Signs",
+      from: dimitri,
+      template: "design-competition.fighter",
+      args: { pack: "kare", bout: "itm_bout", lane: "Road Signs", canvas: "prj_1" },
+    });
+    expect(theirs).toMatchObject({ code: "not-your-rc" });
+    expect(theirs.error).toContain("Nico's");
+
+    // A template nobody installed here is refused by id, and enrols nobody.
+    await parked();
+    await asOwner({ name: "Stranger", from: nico, template: "nobody.here" });
+    await until(async () => out, (o) => o.includes("no module on this machine offers the template nobody.here"), "the refusal");
+    expect((await rcRows()).some((r) => r.name === "Stranger")).toBe(false);
+
+    rc.kill("SIGINT");
+    await done;
+  }, 30_000);
+
+  it("refuses at the door an ask whose template is not an id and strings", async () => {
+    const res = await fetch(`${base}/api/projects/prj_1/agents/ask`, {
+      method: "POST",
+      headers: { ...badge.headers, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Sly", from: dimitri, template: "../../bin/sh" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("an rc that starts late reconciles the enrolments it missed", async () => {
     // Enrolled from the web while NO rc ran — the record works with nothing
     // running; the rc supplies where and how at its next start.
@@ -424,6 +498,19 @@ describe("the vocabulary divide, enforced", () => {
     const run = await collect(spawnCli(["rc"], { ISOCAN_SESSION_ID: "sess-1" }));
     expect(run.code).toBe(1);
     expect(run.stderr).toContain("isocan agent");
+  });
+
+  it("`rc listen --to` refuses inside a harness session — widening is the owner's gesture", async () => {
+    // Consent to spend somebody's tokens is not an agent's to give (owner-
+    // only summons): an agent a stranger can talk to must not be the thing
+    // that opens its owner's agents to strangers. Reading stays open.
+    await isocan("--canvas", "prj_1", "rc", "add", "Percy");
+    const widen = await collect(spawnCli(["rc", "listen", "Percy", "--to", "everyone"], { ISOCAN_SESSION_ID: "sess-1" }));
+    expect(widen.code).toBe(1);
+    expect(widen.stderr).toContain("the owner's gesture");
+    const agents = await snapshotAgents();
+    const row = Object.values(agents).find((a) => a.actor.name === "Percy") as { rules?: { listen?: string[] } } | undefined;
+    expect(row?.rules?.listen).toBeUndefined();
   });
 
   it("`isocan agent add` refuses --canvas — the syntax is the containment", async () => {
@@ -510,8 +597,8 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
       actor: dimitri,
       op: { type: "project.create", canvasId: "prj_2", title: "Q" },
     });
-    await isocan("--canvas", "prj_1", "rc", "add", "Sian");
-    await isocan("--canvas", "prj_2", "rc", "add", "Sian");
+    await isocan("--canvas", "prj_1", "rc", "add", "Sian", ...TEAM);
+    await isocan("--canvas", "prj_2", "rc", "add", "Sian", ...TEAM);
 
     const rc = spawnCli(["rc", "--all"]);
     let out = "";
@@ -573,17 +660,17 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
 describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
   // A PATH with nothing on it, so only what config.json declares is
   // runnable and the runner's own installs cannot vote.
-  const bare = { PATH: path.join(home ?? os.tmpdir(), "no-such-bin") };
+  const bare = () => ({ PATH: path.join(home, "no-such-bin") });
 
   it("`isocan harness` reads the machine, with no daemon in the way", async () => {
-    const run = await collect(spawnCli(["--json", "harness"], bare));
+    const run = await collect(spawnCli(["--json", "harness"], bare()));
     expect(run.code).toBe(0);
     const scan = JSON.parse(run.stdout) as { harnesses: Array<{ name: string; runnable: boolean; default: boolean }>; default: string | null; source: string };
     expect(scan.default).toBe("claude-code");
     expect(scan.source).toBe("config");
     expect(scan.harnesses.find((h) => h.name === "claude-code")).toMatchObject({ runnable: true, default: true });
     expect(scan.harnesses.find((h) => h.name === "pi")).toMatchObject({ runnable: false, default: false });
-    const table = await collect(spawnCli(["harness"], bare));
+    const table = await collect(spawnCli(["harness"], bare()));
     expect(table.stdout).toContain("HARNESS");
     expect(table.stdout).toContain("config.json's defaultHarness");
   });
@@ -592,7 +679,7 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
     );
     // Enrolled from the web: a row that says null, meaning "the machine's default".
     await post("/api/ops", {
@@ -600,14 +687,14 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
       actor: dimitri,
       op: { type: "agent.enroll", agent: { id: "usr_sian", name: "Sian" } },
     });
-    const refused = await collect(spawnCli(["rc"], bare));
+    const refused = await collect(spawnCli(["rc"], bare()));
     expect(refused.code).not.toBe(0);
     expect(refused.stderr).toContain("Sian named no harness");
     expect(refused.stderr).toContain("2 harnesses here (claude-code, fake); an agent added without naming one can't run until");
     expect(refused.stderr).toContain("isocan rc --default-harness <name>");
 
     // The flag answers and is kept: the next bare start needs no flag.
-    const rc = spawnCli(["rc", "--default-harness", "fake"], bare);
+    const rc = spawnCli(["rc", "--default-harness", "fake"], bare());
     let out = "";
     rc.stdout!.setEncoding("utf8");
     rc.stdout!.on("data", (chunk) => (out += chunk));
@@ -617,11 +704,11 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     rc.kill("SIGINT");
     await done;
     expect(JSON.parse(await fs.readFile(path.join(home, "config.json"), "utf8")).defaultHarness).toBe("fake");
-    const again = await collect(spawnCli(["--json", "harness"], bare));
+    const again = await collect(spawnCli(["--json", "harness"], bare()));
     expect(JSON.parse(again.stdout).default).toBe("fake");
 
     // A flag naming what cannot run here is refused with the list.
-    const wrong = await collect(spawnCli(["rc", "--default-harness", "pi"], bare));
+    const wrong = await collect(spawnCli(["rc", "--default-harness", "pi"], bare()));
     expect(wrong.code).not.toBe(0);
     expect(wrong.stderr).toContain("--default-harness pi: not runnable here");
     expect(wrong.stderr).toContain("runnable: claude-code, fake");
@@ -631,10 +718,11 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] } }),
     );
     await isocan("rc", "add", "Sian", "--harness", "fake");
-    const rc = spawnCli(["rc"], bare);
+    const { actorId } = (await rcRows()).find((r) => r.name === "Sian")!;
+    const rc = spawnCli(["rc"], bare());
     let out = "";
     rc.stdout!.setEncoding("utf8");
     rc.stdout!.on("data", (chunk) => (out += chunk));
@@ -642,7 +730,17 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
     expect(out).toContain("2 harnesses here (claude-code, fake); every agent enrolled here named its own");
     expect(out).not.toContain("--default-harness");
-    // `who` says which harness a standing agent would run on.
+    /**
+     * `who` says which harness a standing agent would run on — and calls it
+     * `answerable` only while a live rc holds its cursor, which the rc
+     * claims several round trips AFTER it says "answering on". Asking once
+     * on that sentinel is the race that reddened the release for
+     * `ca307057` on 10 Sep 2026 with *expected 'WHO KIND STATE …' to match
+     * /Sian\s+fake\s+answerable/*: the table was printed, Sian's row simply
+     * still said `enrolled`. So wait for the claim itself — the fact the
+     * column renders — and then read the table once.
+     */
+    await until(answeringFor, (ids) => ids.includes(actorId), "the rc to claim Sian's cursor");
     const who = await isocan("who");
     expect(who.stdout).toMatch(/Sian\s+fake\s+answerable/);
     rc.kill("SIGINT");
@@ -683,5 +781,32 @@ describe("both ways of taking up an agent do the same two things", () => {
     // wordings would make the rc's narration depend on which path noticed.
     const said = main.match(/· where and how supplied — \$\{rcCwd\}/g) ?? [];
     expect(said.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/**
+ * **A withdrawal inside the rc's startup window** (sheep-harness phase 2).
+ * The same window as above, from the other side, and source-shape for the
+ * same reason: it cannot be forced from outside.
+ */
+describe("a withdrawal is reaped however the rc noticed it", () => {
+  const main = readFileSync(fileURLToPath(new URL("../src/main.ts", import.meta.url)), "utf8");
+
+  it("reaps and takes up once more after the start tip, where neither branch can see it", () => {
+    // Both halves of the same window (sheep-harness phase 2): an agent
+    // withdrawn between `opening` and `startTip` kept its row, and on the
+    // sheep harness its sheep — found by the full file under load; and one
+    // enrolled there waited for the first lap that read a roster, the end of
+    // a thirty-second poll on a quiet canvas — "a web add gets its rc half"
+    // failed on CI twice in three runs on it.
+    const tip = main.indexOf("const startTip = ");
+    const reaped = main.indexOf('await reap(settled, "as this rc started")');
+    const takenUp = main.indexOf("await takeUp(settled)");
+    const loop = main.indexOf("for (;;)", tip);
+    expect(tip).toBeGreaterThan(-1);
+    expect(reaped).toBeGreaterThan(tip);
+    expect(main.slice(tip, reaped)).toContain("const settled = await rosterOf()");
+    expect(takenUp).toBeGreaterThan(reaped);
+    expect(takenUp).toBeLessThan(loop);
   });
 });

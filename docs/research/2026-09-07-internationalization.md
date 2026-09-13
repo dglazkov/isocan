@@ -3,7 +3,7 @@ status: designed
 since: 2026-09-07
 issue: 199
 see: personas, ui-refresh
-note: low priority and deliberately not built — the interesting finding is that this codebase has two audiences for its words, and only one of them is human
+note: low priority and deliberately not built — the interesting finding is that this codebase has two audiences for its words, and only one of them is human. The one real bug it found, edgeradar's hard-coded "en-US", was fixed 11 Sep with the guard it recommended (packages/web/test/locale.test.ts)
 ---
 
 # Internationalization: which words, for whom
@@ -70,6 +70,11 @@ line. **It is also greppable**, which makes it the shape of a guard: a rule
 that no `toLocale*` call names a locale literal would have caught it and would
 keep catching it, and that rule is worth having whether or not this issue is
 ever built.
+
+*Fixed 11 Sep 2026.* `formatDistance` passes no locale (the viewer's own) and
+takes one as a parameter only so a test can pin it, and
+`packages/web/test/locale.test.ts` is the guard: no `toLocale*` call and no
+`Intl` constructor in `packages/web/src` names a locale literal.
 
 ## The questions a build would have to answer first
 

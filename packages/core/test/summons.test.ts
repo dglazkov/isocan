@@ -145,6 +145,26 @@ describe("a summons carries a receipt", () => {
     const state = summonsState(ask, { sessions: [], rcParked: true, pickedUpAt: T0 + 2_000 }, T0 + ANSWER_WITHIN_MS + 5_000);
     expect(state).toEqual({ state: "picked-up", afterMs: 2_000 });
   });
+
+  it("says refused — at once, never 'nothing answered' — when the rc does not take the asker's word", () => {
+    /* Owner-only summons (11 Sep 2026). Nothing was asked of the agent: its
+       rc turned the ask away at the gate, and the policy it announced says so
+       the instant the ask lands. Counting it as unanswered would blame an
+       agent for a request it was never given, and would wait 45 seconds to. */
+    const policy = { owner: { id: "usr_nico", name: "Nico" }, listen: [] };
+    const asked = { ...ask, askerId: "usr_alice" };
+    for (const now of [T0 + 1_000, T0 + ANSWER_WITHIN_MS + 10_000]) {
+      const state = summonsState(asked, { sessions: [], rcParked: true, policy }, now);
+      expect(state).toEqual({ state: "refused", policy });
+      expect(summonsLine("Percy", state)).toBe(
+        "Percy listens only to Nico — this did not wake Percy. Ask Nico to widen it.",
+      );
+    }
+    // The owner asking is an ordinary ask.
+    expect(summonsState({ ...ask, askerId: "usr_nico" }, { sessions: [], rcParked: true, policy }, T0 + 1_000).state).toBe(
+      "asked",
+    );
+  });
 });
 
 describe("the line for an agent that was woken and has said nothing", () => {

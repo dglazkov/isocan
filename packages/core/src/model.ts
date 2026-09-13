@@ -1,3 +1,5 @@
+import type { TextAnchor } from "./text-anchor.ts";
+import type { GroupLayout, GroupDeletionCohort, GroupCohortRecord, GroupMigrationBoundary } from "./canvas-group-types.ts";
 /**
  * The shared state model. Both the daemon (authoritative) and the web client
  * (live replica) hold this shape; the CLI reads it through queries.
@@ -36,6 +38,10 @@ export function isSystemActor(actorId: string): boolean {
 
 export interface Canvas {
   id: string;
+  /** Missing is historical area mode; the public writer defaults new canvases to groups. */
+  groupMode?: "groups" | "legacy";
+  /** An explicit conversion boundary, never inferred from the newest visible group. */
+  groupMigration?: GroupMigrationBoundary;
   title: string;
   description: string;
   properties: Record<string, string>;
@@ -57,7 +63,9 @@ export interface Canvas {
   updatedAt: string;
   updatedBy: Actor;
   /**
-   * The type of that last operation — `item.add`, `thread.create`, and so on.
+   * The semantic type of that last act — `item.add`, `thread.create`, and so
+   * on. An atomic group insertion still describes the item it added; its
+   * canonical log entry remains `group.change`.
    *
    * Stored rather than derived because the alternative is reading every
    * canvas's log to draw a list of canvases: one metadata file per canvas is
@@ -72,19 +80,86 @@ export interface Canvas {
   lastOp?: string;
 }
 
+export interface VisualFace {
+  /** sha256 of visual content; stored at blobs/<hash>.<ext> */
+  blobHash: string;
+  mimeType: string;
+  filename?: string;
+  size?: number;
+}
+
 export interface ItemVersion {
   id: string;
-  /** sha256 of content; stored at blobs/<hash>.<ext> */
+  /** sha256 of content; stored at blobs/<hash>.<ext>. The source face of the artifact. */
   blobHash: string;
   mimeType: string;
   filename: string;
   size: number;
+  /**
+   * The visual face of the artifact, if distinct from the source.
+   * When present, canvas cards, fullscreen, and stage preview render this face.
+   * When absent, renderers fall back to the source face (blobHash).
+   */
+  visual?: VisualFace;
   createdAt: string;
   createdBy: Actor;
 }
 
+/**
+ * The face to render visually on the canvas card, in full screen, and in the
+ * workbench preview pane. Falls back to the source face (blobHash) when no
+ * distinct visual face is defined.
+ */
+export function visualFaceOf(version: ItemVersion): {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+} {
+  if (version.visual) {
+    return {
+      blobHash: version.visual.blobHash,
+      mimeType: version.visual.mimeType,
+      filename: version.visual.filename ?? version.filename,
+      size: version.visual.size ?? version.size,
+    };
+  }
+  return {
+    blobHash: version.blobHash,
+    mimeType: version.mimeType,
+    filename: version.filename,
+    size: version.size,
+  };
+}
+
+/**
+ * The source face of the artifact: shown in the workbench editor, inspected via
+ * `isocan get`, and synchronized with disk via `isocan save`.
+ */
+export function sourceFaceOf(version: ItemVersion): {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+} {
+  return {
+    blobHash: version.blobHash,
+    mimeType: version.mimeType,
+    filename: version.filename,
+    size: version.size,
+  };
+}
+
+/** Is the visual face distinct from the source face? */
+export function hasDistinctVisualFace(version: ItemVersion): boolean {
+  return version.visual !== undefined && version.visual.blobHash !== version.blobHash;
+}
+
 export interface Item {
   id: string;
+  /** Explicit canvas membership; coordinates remain in world space. */
+  containerId?: string;
+  groupLayout?: GroupLayout;
   /** World coordinates, top-left corner. */
   x: number;
   y: number;
@@ -140,6 +215,8 @@ export interface Comment {
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];
+  /** Writer-resolved request scope, retained independently of live item versions. */
+  context?: import("./canvas-group-context.ts").ContextManifest;
   createdAt: string;
   /** When the author last rewrote it, if they did. This is what makes a
    * working note possible: one comment that says "on it", then what it found,
@@ -158,6 +235,8 @@ export interface CommentThread {
   /** null = freestanding. If the anchor item is in the trash or missing,
    * renderers fall back to treating (x, y) as world coordinates. */
   anchorItemId: string | null;
+  /** Optional saved text selection, with the original version as provenance. */
+  textAnchor?: TextAnchor | null;
   /** Always at least one comment. */
   comments: Comment[];
   /** At most one thread on a canvas is "main": the designated agent↔user
@@ -173,6 +252,10 @@ export interface TrashEntry {
   item: Item;
   deletedAt: string;
   deletedBy: Actor;
+  /** Captured deletion act; subtree restore never steals another act's trash. */
+  cohort?: GroupDeletionCohort;
+  /** Converted legacy trash has no historical subtree or deletion cohort to recover. */
+  legacyGroupRestore?: "frame-only" | "root";
 }
 
 /**
@@ -189,12 +272,30 @@ export interface EnrolledAgent {
   actor: Actor;
   /** Opaque until phase 4 defines the vocabulary; stored as handed over. */
   rules?: unknown;
+  /**
+   * **Who wrote the enrolment as it stands** — the author of the last
+   * `agent.enroll` for this actor, stamped by the reducer from the envelope
+   * the way an item's `updatedBy` is (owner-only summons, 11 Sep 2026).
+   *
+   * It exists because `rules.listen` is a consent fact written into a record
+   * every admitted member can write: without it, "answers only its owner" is
+   * one hand-made `agent.enroll` away from "answers everyone", and the rc
+   * could not tell the owner's widening from a stranger's. The rc that
+   * answers honours a stored gate only when this is its owner's word (or an
+   * actor speaking from the owner's machine); anyone else's write reads as
+   * owner-only there. Absent on rows written before the stamp, which the rc
+   * takes as they stand — until that day the only verbs that wrote a gate ran
+   * on the machine that answers.
+   */
+  writtenBy?: Actor;
 }
 
 export interface CanvasContents {
   items: Record<string, Item>;
   threads: Record<string, CommentThread>;
   trash: TrashEntry[];
+  /** One O(n) capture per deletion, retained while members may be restored. */
+  groupCohorts?: Record<string, GroupCohortRecord>;
   /** Standing agents by actor id. Optional because snapshots older than the
    * field exist on disk; read it through `?? {}`. */
   agents?: Record<string, EnrolledAgent>;

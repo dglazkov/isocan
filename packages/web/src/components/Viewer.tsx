@@ -1,12 +1,18 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem } from "@isocan/core";
+import { sourceOf, deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem, visualFaceOf } from "@isocan/core";
 import { connectToCanvas, disconnect, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { isTyping } from "../lib/keys.ts";
 import { flipTo } from "../lib/deckflip.ts";
+
+import { usePhone } from "../lib/phone.ts";
+import { useTouchNavigation } from "../lib/touchnavigation.ts";
+import "./presentation.css";
+import "./mobile-navigation.css";
+const PresentationNotes = lazy(() => import("./PresentationNotes.tsx").then((m) => ({ default: m.PresentationNotes })));
 
 /** The deck keys, exactly `FullScreen`'s (#87): a presenter's clicker sends
  * Page Up/Down, and both axes flip because the deck is linear. */
@@ -45,9 +51,22 @@ const REST_AFTER_MS = 2500;
  */
 export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string | null }) {
   const navigate = useNavigate();
+  const phone = usePhone();
+  const [phoneNotes, setPhoneNotes] = useState(false);
+  const gestures = useTouchNavigation((direction) => {
+    const canvas = useCanvasStore.getState().canvas;
+    if (!canvas || !itemId) return;
+    const next = deckStep(canvas, itemId, direction === "ArrowRight" ? 1 : -1);
+    if (next) navigate(itemPath(canvasId, next.id));
+  }, undefined, true);
+
   const canvas = useCanvasStore((s) => s.canvas);
   const title = useCanvasStore((s) => s.project?.title ?? null);
   const connection = useCanvasStore((s) => s.connection);
+  // The home's own sentence about a canvas it took down (operator phase 2).
+  const takenDown = useCanvasStore((s) => s.takenDown);
+  const ended = useCanvasStore((s) => s.ended);
+  const refusedHere = useCanvasStore((s) => s.refusedHere);
 
   // The stranger path connects here (no actor — nobody to announce); the
   // CanvasPage path arrives already connected, and reconnecting would drop a
@@ -114,15 +133,39 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
     connection === "refused" ||
     connection === "withdrawn" ||
     connection === "gone" ||
+    connection === "taken-down" ||
+    connection === "ended" ||
+    connection === "refused-here" ||
+    connection === "upgrade-required" ||
     connection === "absent"
   ) {
     return (
       <div className="page-note">
-        {connection === "gone"
+        {connection === "upgrade-required"
+          ? "This canvas needs an updated isocan app. Reload to continue."
+          : connection === "gone"
           ? "This canvas was deleted."
           : connection === "withdrawn"
             ? "Your access to this canvas was withdrawn."
-            : "This canvas will not have you."}
+            : // The home's own sentence, with the date, the reason and the
+              // address to write to (operator phase 2). The viewer is where a
+              // stranger with a view link lands, so this is the surface on
+              // which *this was removed, and here is who to ask* is most often
+              // read by the person who needs it.
+              connection === "taken-down"
+              ? (takenDown?.sentence ??
+                "This canvas was taken down by the operator of this home.")
+              : // This badge was ended (operator phase 4): the tombstone's
+                // own sentence, off the 401, or the short version.
+                connection === "ended"
+                ? (ended?.sentence ?? "This surface was ended.")
+                : // The operator refuses the address this badge proved
+                  // (operator phase 6): the home's sentence, off the 403.
+                  connection === "refused-here"
+                  ? (refusedHere?.sentence ??
+                    "This home will not admit the address this browser proved.")
+                  : "This canvas will not have you."}
+        {connection === "upgrade-required" && <button className="btn" onClick={() => window.location.reload()}>Reload app</button>}
       </div>
     );
   }
@@ -134,7 +177,12 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
   const at = item ? slides.findIndex((s) => s.id === item.id) : -1;
 
   return (
-    <div className={`fullscreen${resting ? " resting" : ""}`}>
+    <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
+      {phone ? <div className="fs-bar mobile-presentation-bar">
+        <button onClick={() => navigate("/")} aria-label="Exit presentation">Back</button>
+        <strong>{item?.title ?? "Presentation"}</strong>
+        <button onClick={() => setPhoneNotes(!phoneNotes)} aria-pressed={phoneNotes}>Notes</button>
+      </div> : <>
       <div className="fs-bar">
         <div className="floats fs-cluster">
           {title && <span className="fullscreen-title"><b>{title}</b></span>}
@@ -157,26 +205,33 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
           </div>
         )}
       </div>
-      <div className="fullscreen-stage">
+      </>}
+      <div className="fullscreen-stage" {...gestures}>
         {!canvas ? (
           <div className="page-note">Finding the presentation…</div>
         ) : !item || !current ? (
           <div className="page-note">
             {itemId ? "That item is not on this canvas any more." : "Nothing here yet."}
           </div>
-        ) : (
-          <VersionContent
-            canvasId={canvasId}
-            blobHash={current.blobHash}
-            mimeType={current.mimeType}
-            filename={current.filename}
-            entered={true}
-            designSystem={isDesignSystem(item)}
-            textNode={isTextItem(item)}
-            reloadToken={0}
-          />
-        )}
+        ) : (() => {
+          const visual = visualFaceOf(current);
+          return (
+            <VersionContent
+              canvasOf={item.properties.canvas ?? null}
+              canvasSource={sourceOf(item)}
+              canvasId={canvasId}
+              blobHash={visual.blobHash}
+              mimeType={visual.mimeType}
+              filename={visual.filename ?? current.filename}
+              entered={true}
+              designSystem={isDesignSystem(item)}
+              textNode={isTextItem(item)}
+              reloadToken={0}
+            />
+          );
+        })()}
       </div>
+      {phone && phoneNotes && <Suspense><PresentationNotes canvasId={canvasId} itemId={itemId} onClose={() => setPhoneNotes(false)} /></Suspense>}
     </div>
   );
 }

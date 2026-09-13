@@ -11,6 +11,14 @@
  *   node scripts/measure.mjs --list
  *   node scripts/measure.mjs --selftest
  *
+ * **`--names` is the second half of the ones that have it.** A count says a
+ * ratchet slipped; it does not say what to do about it, so a metric that can
+ * name its offenders declares a `names()` beside its `take()` and prints them
+ * instead of the number. `--list` marks which. Asking a metric that has none
+ * is an error rather than a silent count, because a guard's failure message
+ * naming a flag that quietly does nothing is exactly the rot this line exists
+ * to stop.
+ *
  * **`--selftest` is not optional politeness.** The build rule in
  * `docs/projects/personas/design.md` is that no persona may declare a goal
  * whose measuring command has not been shown to fail on something broken —
@@ -23,6 +31,7 @@ import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CEILING } from "./bundle-ceiling.mjs";
+import { operationMembers } from "./isomorphism.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const run = (cmd, args, opts = {}) =>
@@ -74,15 +83,30 @@ const METRICS = {
       },
     },
   },
+  /**
+   * **The members of `Operation`, not every union in the file.**
+   *
+   * This counted each line shaped like `  | {` in `ops.ts`, and its own
+   * selftest proved it with exactly the wrong mutation: a NEW union appended
+   * beside `Operation`, which moved the number — so the instrument was shown
+   * to count unions, and believed to count operations. On 9 Sep 2026
+   * `c8213d70` reformatted `Placement` into a multi-line union and the
+   * vocabulary read 35 against 33 real operations for two nights.
+   *
+   * The reading lives in `isomorphism.mjs` beside the list the isomorphism
+   * audit uses, so "which operations exist" has one answer; the mutation now
+   * adds a member to `Operation` itself, and `test/measure.test.ts` holds that
+   * the old trap no longer moves it.
+   */
   "op-types": {
     what: "operations in the vocabulary — every one is a fact both surfaces must speak",
     take() {
-      const src = readFileSync(path.join(repo, "packages/core/src/ops.ts"), "utf8");
-      return (src.match(/^ {2}\| \{/gm) ?? []).length;
+      return operationMembers(readFileSync(path.join(repo, "packages/core/src/ops.ts"), "utf8")).length;
     },
     breakIt: {
       file: "packages/core/src/ops.ts",
-      apply: (t) => t + "\n// selftest\ntype Extra =\n  | { type: \"selftest.noop\" };\n",
+      apply: (t) =>
+        t.replace("export type Operation =\n", 'export type Operation =\n  | { type: "selftest.noop" }\n'),
     },
   },
   /**
@@ -177,23 +201,8 @@ const METRICS = {
      * sheet names, and the right answer there is to raise the bound WITH THE
      * REASON — which is what happened at 47.
      */
-    take() {
-      const css = readFileSync(path.join(repo, "packages/web/src/styles.css"), "utf8");
-      const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
-      const seen = new Map();
-      let copies = 0;
-      for (const [, body] of bare.matchAll(/\{([^{}]*)\}/g)) {
-        const decls = body
-          .split(";")
-          .map((d) => d.trim().replace(/\s+/g, " "))
-          .filter(Boolean);
-        if (decls.length < 3) continue;
-        const key = decls.sort().join(";");
-        if (seen.has(key)) copies += 1;
-        else seen.set(key, true);
-      }
-      return copies;
-    },
+    take: () => copiedRules().copies,
+    names: () => copiedRuleLines(),
     breakIt: {
       file: "packages/web/src/styles.css",
       // Paste the shared panel header back as a private copy — the exact
@@ -317,6 +326,7 @@ const METRICS = {
   "unused-exports": {
     what: "exports that nothing outside their own file uses",
     take: () => scanExports().unused,
+    names: () => scanExports(true).found,
     breakIt: {
       file: "packages/core/src/kinds.ts",
       /**
@@ -341,6 +351,7 @@ const METRICS = {
   "undocumented-exports": {
     what: "exports with no comment above them",
     take: () => scanExports().bare,
+    names: () => scanExports(true).bareFound,
     breakIt: {
       file: "packages/core/src/kinds.ts",
       apply: (t) => `${t}\nexport const SELFTEST_BARE_EXPORT = 2;\n`,
@@ -432,6 +443,7 @@ function scanExports(names = false) {
   let unused = 0;
   let bare = 0;
   const found = [];
+  const bareFound = [];
   for (const file of sources) {
     const src = bodies.get(file) ?? readFileSync(path.join(repo, file), "utf8");
     const lines = src.split("\n");
@@ -441,7 +453,10 @@ function scanExports(names = false) {
       const name = m[1];
       // A comment on the line above — a block's `*/`, a `//`, or a continuation.
       const prev = (lines[i - 1] ?? "").trim();
-      if (!(prev.endsWith("*/") || prev.startsWith("//") || prev.startsWith("*"))) bare += 1;
+      if (!(prev.endsWith("*/") || prev.startsWith("//") || prev.startsWith("*"))) {
+        bare += 1;
+        if (names) bareFound.push(`${file}:${i + 1}  ${name}`);
+      }
       const word = new RegExp(`\\b${name}\\b`);
       let usedElsewhere = false;
       for (const [other, body] of bodies) {
@@ -454,20 +469,80 @@ function scanExports(names = false) {
       }
     });
   }
-  return { unused, bare, found };
+  return { unused, bare, found, bareFound };
+}
+
+/**
+ * **One walk behind both halves of `copied-rules`**, for the same reason the
+ * export metrics share `scanExports`: a `--names` that scanned separately from
+ * the count could print a set whose size is not the number the guard failed on
+ * (`docs/reviews/lessons.md` #5).
+ *
+ * The selector is the text between the previous brace and this body's `{` —
+ * which is what a person needs to go and look, and is why the reading grew a
+ * capture group it does not use for counting. `{` and `}` cannot appear in it,
+ * so a nested block (`@media … { .foo { … } }`) yields `.foo` rather than the
+ * at-rule: the innermost rule is the one that was copied.
+ */
+function copiedRules() {
+  const css = readFileSync(path.join(repo, "packages/web/src/styles.css"), "utf8");
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const bodies = new Map();
+  let copies = 0;
+  for (const [, selector, body] of bare.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    const decls = body
+      .split(";")
+      .map((d) => d.trim().replace(/\s+/g, " "))
+      .filter(Boolean);
+    if (decls.length < 3) continue;
+    const key = decls.sort().join(";");
+    const who = selector.trim().replace(/\s+/g, " ");
+    const seen = bodies.get(key);
+    if (seen) {
+      seen.repeats.push(who);
+      copies += 1;
+    } else {
+      bodies.set(key, { first: who, repeats: [], decls });
+    }
+  }
+  return { copies, families: [...bodies.values()].filter((f) => f.repeats.length > 0) };
+}
+
+/**
+ * **What to go and look at**, biggest family first, because a body five
+ * selectors repeat is a different conversation from a body two do: the first
+ * is a vocabulary asking to be named, the second is usually one rule written
+ * twice.
+ *
+ * It prints the body too, not only the selectors. The question this number
+ * asks — "is this one thing written twice, or two things that agree?" — cannot
+ * be answered from selector names alone.
+ */
+function copiedRuleLines() {
+  const { copies, families } = copiedRules();
+  const lines = [];
+  for (const f of [...families].sort((a, b) => b.repeats.length - a.repeats.length || a.first.localeCompare(b.first))) {
+    // Copies, not occurrences — so the numbers printed here add up to the
+    // number the metric prints, and nobody has to work out whether the rule
+    // that declared the body first was counted as a copy of itself.
+    lines.push(`${f.first}  ${f.repeats.length} ${f.repeats.length === 1 ? "copy" : "copies"}`);
+    lines.push(`    ${f.decls.join("; ")}`);
+    for (const who of f.repeats) lines.push(`    repeated by  ${who}`);
+    lines.push("");
+  }
+  lines.push(`${copies} copies over ${families.length} bodies — the first number is what \`copied-rules\` prints.`);
+  return lines;
 }
 
 const argv = process.argv.slice(2);
 
-// `unused-exports --names` prints the offenders rather than the count, so a
-// tripped ratchet is actionable without a second scan somewhere else.
-if (argv[0] === "unused-exports" && argv.includes("--names")) {
-  for (const line of scanExports(true).found) console.log(line);
-  process.exit(0);
-}
-
 if (argv.includes("--list")) {
-  for (const [name, m] of Object.entries(METRICS)) console.log(`${name.padEnd(24)} ${m.what}`);
+  // The `--names` marker is part of the listing: a flag nobody can discover is
+  // a flag that goes stale unnoticed, which is how `copied-rules --names` came
+  // to be printed in a failure message without existing.
+  for (const [name, m] of Object.entries(METRICS)) {
+    console.log(`${name.padEnd(24)} ${m.what}${m.names ? "  [--names]" : ""}`);
+  }
   process.exit(0);
 }
 
@@ -559,4 +634,33 @@ if (!metric) {
   console.error(`unknown metric "${name ?? ""}" — try --list`);
   process.exit(2);
 }
+
+/**
+ * **`--names` belongs to the metric, not to an `if` naming one of them.**
+ *
+ * This dispatch used to read `argv[0] === "unused-exports" && …`, so
+ * `copied-rules --names` — the exact command `test/copied-rules.test.ts` hands
+ * somebody at the moment its guard reddens their commit — fell through to the
+ * count and exited 0. A number they already had, from the failure message that
+ * had just printed it. `undocumented-exports --names` said the same nothing.
+ *
+ * A metric that can say WHICH declares a `names()` beside its `take()`, both
+ * reading the same scan; one that cannot says so and exits non-zero, because a
+ * flag that silently means nothing is how this went stale in the first place.
+ */
+if (argv.includes("--names")) {
+  if (!metric.names) {
+    const answering = Object.entries(METRICS)
+      .filter(([, m]) => m.names)
+      .map(([n]) => n);
+    console.error(
+      `"${name}" is a count and nothing more — it has no --names.\n` +
+        `Metrics that can say which: ${answering.join(", ")}`,
+    );
+    process.exit(2);
+  }
+  for (const line of metric.names()) console.log(line);
+  process.exit(0);
+}
+
 console.log(metric.take());

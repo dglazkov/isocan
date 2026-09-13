@@ -28,19 +28,39 @@ import { fileURLToPath } from "node:url";
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel: string) => fs.readFile(path.join(repo, rel), "utf8");
 
-/** The method names an interface declares, from its source. Deliberately a
- * regex over the file rather than a type-level trick: the point is to read
- * what a person reading the file would read. */
+/** Required method names, including every named parent supplied with the
+ * seam's source. An unresolved parent fails rather than hiding its methods. */
 function methodsOf(source: string, interfaceName: string): string[] {
-  const start = source.indexOf(`export interface ${interfaceName} {`);
-  expect(start, `${interfaceName} not found`).toBeGreaterThan(-1);
-  const body = source.slice(start, source.indexOf("\n}", start));
   const names = new Set<string>();
-  for (const match of body.matchAll(/^\s{2}(\w+)\s*\(/gm)) names.add(match[1]!);
+  const visited = new Set<string>();
+  const visit = (name: string) => {
+    if (visited.has(name)) return;
+    visited.add(name);
+    const declaration = new RegExp(`export interface ${name}(?:\\s+extends\\s+([^{}]+?))?\\s*\\{`).exec(source);
+    expect(declaration, `${name} not found`).not.toBeNull();
+    const start = declaration!.index;
+    const end = source.indexOf("\n}", start);
+    expect(end, `${name} body not found`).toBeGreaterThan(start);
+    const body = source.slice(start + declaration![0].length, end);
+    for (const parent of declaration![1]?.split(",") ?? []) {
+      const inherited = parent.trim();
+      expect(inherited, `unsupported parent of ${name}`).toMatch(/^\w+$/);
+      visit(inherited);
+    }
+    for (const match of body.matchAll(/^\s{2}(\w+)\s*\(/gm)) names.add(match[1]!);
+  };
+  visit(interfaceName);
   return [...names];
 }
 
 describe("the storage seam", () => {
+  it("counts inherited methods and refuses a missing parent declaration", () => {
+    const parent = "export interface Parent {\n  inherited(): void;\n}";
+    const child = "export interface Child extends Parent {\n  own(): void;\n}";
+    expect(methodsOf(`${parent}\n${child}`, "Child")).toEqual(["inherited", "own"]);
+    expect(() => methodsOf(child, "Child")).toThrow("Parent not found");
+  });
+
   it("every Store method is exercised by the shared conformance suite", async () => {
     const methods = methodsOf(await read("packages/server/src/store.ts"), "Store");
     // A sanity floor: if the regex ever stops finding methods, this test must
@@ -55,7 +75,8 @@ describe("the storage seam", () => {
   });
 
   it("every Desk method is exercised by the shared conformance suite", async () => {
-    const methods = methodsOf(await read("packages/server/src/desk.ts"), "Desk");
+    const sources = await Promise.all(["packages/server/src/desk.ts", "packages/server/src/personal-desk.ts"].map(read));
+    const methods = methodsOf(sources.join("\n"), "Desk");
     expect(methods.length).toBeGreaterThan(10);
     const suite = await read("test/conformance/desk-conformance.ts");
     for (const method of methods) {
@@ -78,7 +99,7 @@ describe("the storage seam", () => {
   });
 
   it("store.ts and desk.ts still have no runtime import at all", async () => {
-    for (const file of ["packages/server/src/store.ts", "packages/server/src/desk.ts"]) {
+    for (const file of ["packages/server/src/store.ts", "packages/server/src/desk.ts", "packages/server/src/personal-desk.ts"]) {
       const source = await read(file);
       // `[\s\S]` on purpose: these files' imports are multi-line, and a regex
       // that only saw single-line ones would pass by not looking.

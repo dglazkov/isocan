@@ -3,7 +3,8 @@ import { type CanvasContents, type Item, mainThread } from "./model.ts";
 import { designSystem } from "./designsystem.ts";
 
 import { moduleContextPieces } from "./modules.ts";
-import { excludedItems, pinnedItems } from "./contextmark.ts";
+import { excludedItems } from "./contextmark.ts";
+import { ambientContextItems } from "./canvas-group-context.ts";
 
 /**
  * **What an agent will actually read when it starts work here.**
@@ -140,7 +141,7 @@ export function contextPieces(
    * nothing else existed — collapsing them now that both do would lose exactly
    * the distinction stage 2 was asked for.
    */
-  const pinned = pinnedItems(canvas);
+  const pinned = ambientContextItems(canvas);
   pieces.push({
     name: "Pinned items",
     source: "canvas",

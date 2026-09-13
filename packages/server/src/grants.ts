@@ -208,6 +208,9 @@ export async function admittingGrant(
   badge: BadgeRecord,
   creator: string | null = null,
   via: DoorLookup = desk,
+  /** Discovery has no presented address, so a link cannot answer it. Bars,
+   * named grants and creator floors are still judged by the same door. */
+  scope: "entry" | "discovery" = "entry",
 ): Promise<DoorAnswer | null> {
   /**
    * **Both scopes** (roles design, "Who holds what"): the canvas's rows and
@@ -246,7 +249,7 @@ export async function admittingGrant(
   if (!barred) {
     const rung = (grant: Grant) => RUNGS.indexOf(capabilityOf(grant));
     const rows = live
-      .filter((grant) => !isBar(grant))
+      .filter((grant) => !isBar(grant) && (scope === "entry" || grant.subject !== LINK))
       .sort((a, b) => rung(b) - rung(a) || a.at.localeCompare(b.at));
     for (const grant of rows) {
       if (await subjectAdmits(grant.subject, attestations, groupOf)) {
@@ -309,7 +312,67 @@ export function rungOfAdmission(admission: Admission): Capability {
   const root = admission.provenance.root;
   // `space` is the space creator's floor (roles phase 4): `own`, like `created`.
   if (root === "created" || root === "space") return "own";
+  /**
+   * **A look is a CEILING, where the two above are floors** (operator phase
+   * 2). The look is admitted at `view` and the field says so, so this branch
+   * changes nothing today — it is here because the fallthrough below reads an
+   * absent field as `edit`, and an operator admission that lost its capability
+   * for any reason must not become an operator who can WRITE on a canvas he is
+   * judging a report about. The design gives the operator no power to change
+   * anything on a canvas, ever; this is that sentence expressed where it
+   * cannot be forgotten.
+   */
+  if (root === "operator") return "view";
   return admission.capability ?? "edit";
+}
+
+/**
+ * **Is this admission still one — asked at the door, per request** (operator
+ * phase 2).
+ *
+ * Every admission in this system was live until somebody revoked it, and the
+ * door's whole test is `canvasId ∈ admissions` (`admit` in `http.ts`, and its
+ * second spelling in `ws.ts`). The operator's look is the first that ends on
+ * its own, so this is the first question that has to be asked about one — and
+ * it is asked HERE, beside `capabilityIn`, so that the two copies of the door
+ * ask the same one. Two spellings of a policy is two policies.
+ *
+ * A root with no expiry answers true forever, which is what every admission
+ * written before this meant and what every ordinary one still means.
+ *
+ * **An expired look is not a special refusal.** It falls out of the set, the
+ * door runs its ordinary test, finds no grant, and refuses exactly as it
+ * refuses a stranger — journey 2 step 3: *reloading the tab shows the refusal
+ * any stranger gets*. A dedicated "your look has ended" would be the home
+ * telling a person on the other side of the address that somebody had been
+ * looking.
+ */
+export function liveAdmission(admission: Admission, nowMs: number = Date.now()): boolean {
+  const root = admission.provenance;
+  if (root.root !== "operator") return true;
+  const until = Date.parse(root.until);
+  // An unparseable `until` is treated as expired rather than as forever: the
+  // field is the only thing that ends this admission, so a broken one must
+  // fail closed.
+  return Number.isFinite(until) && nowMs < until;
+}
+
+/** Ordinary arrival keeps a live admission. A redeemed pass may replace a
+ * weaker one, under the backing's mutation lock; equal/stronger standing and
+ * an active operator look keep their provenance and capability. */
+export function keepsAdmission(existing: Admission | undefined, provenance: Provenance, capability?: Capability): boolean {
+  return existing !== undefined && liveAdmission(existing) &&
+    (provenance.root !== "pass" || existing.provenance.root === "operator" || atLeast(rungOfAdmission(existing), capability ?? "edit"));
+}
+
+/** The admission this badge holds here and may still use, or undefined. One
+ * spelling of "look it up", so nothing finds an expired one by accident. */
+export function admissionIn(
+  badge: BadgeRecord,
+  canvasId: string,
+  nowMs: number = Date.now(),
+): Admission | undefined {
+  return badge.admissions.find((a) => a.canvasId === canvasId && liveAdmission(a, nowMs));
 }
 
 /**
@@ -453,8 +516,15 @@ export class ViewOnlyError extends Error {
  * copies the capability onto it. Absent means edit, as everywhere.
  */
 export function capabilityIn(badge: BadgeRecord, canvasId: string): Capability | null {
-  const admission = badge.admissions.find((a) => a.canvasId === canvasId);
+  // An EXPIRED admission is not one (operator phase 2): this is the answer the
+  // door hook compares against `edit`, and a look that had run out must not go
+  // on answering it.
+  const admission = admissionIn(badge, canvasId);
   if (!admission) return null;
+  // The stored field, as before, with one exception: an operator's look reads
+  // as `view` whatever the field says, so the line that stops a look writing
+  // is in `rungOfAdmission` and not in whether a field got written.
+  if (admission.provenance.root === "operator") return "view";
   return admission.capability ?? "edit";
 }
 
@@ -485,6 +555,8 @@ export async function heldCapability(
 ): Promise<Capability | null> {
   const held = capabilityIn(badge, canvasId);
   if (held === null || atLeast(held, "edit")) return held;
+  // A look is a ceiling until expiry, even when a pass later adds a claim.
+  if (admissionIn(badge, canvasId)?.provenance.root === "operator") return held;
   const answer = await admittingGrant(desk, canvasId, badge, creator);
   if (!answer || answer.capability === held) return held;
   await desk.reroot(badge.badgeId, canvasId, answer.provenance, answer.capability);
@@ -518,6 +590,7 @@ export async function ensureLinkGrant(
   canvasId: string,
   grantedBy: string,
 ): Promise<Grant | null> {
+  if (await desk.personalSource(canvasId) || await desk.personalReplica(canvasId)) return null;
   const existing = await desk.grantsFor(canvasId);
   if (existing.length > 0) return null;
   const grant: Grant = {

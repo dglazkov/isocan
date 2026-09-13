@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { isGroupItem, groupContentBox } from "@isocan/core";
+import { creationDestination, QueuedItemError, selectCreatedItems } from "../lib/groupplacement.ts";
+import { groupsEnabled, openGroupCreation } from "../lib/canvasgroups.ts";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { Actor, Canvas, AddKind, Addable, Item, Placement } from "@isocan/core";
 import {
   CANVAS_ITEM_SIZE,
@@ -10,7 +13,6 @@ import {
   addableKind,
   addableWords,
   ago,
-  classifyAddable,
   docFilenameFrom,
   googleDocId,
   normalizeSiteUrl,
@@ -18,9 +20,10 @@ import {
   siteLabel,
 } from "@isocan/core";
 import { checkFrameable, exportDoc, listCanvases } from "../lib/api.ts";
+import { classifyAddableDraft, siteDraftWords } from "../lib/adddraft.ts";
 import { BROWSER_SIZE, addAreaItem, addBrowserItem, addCanvasItem, addDocumentItem } from "../lib/upload.ts";
 import { placeableArea, spotInView } from "../lib/spot.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { KindIcon } from "./KindIcon.tsx";
 
@@ -50,6 +53,16 @@ const PLACEHOLDER: Record<AddKind | "any", string> = {
   canvas: "Search your canvases, or paste an address",
 };
 
+/** What the field is called per pinned kind — screen readers get the same
+ * narrowing the sighted placeholder does, including when a kind is pinned. */
+const ARIA_LABEL: Record<AddKind | "any", string> = {
+  any: "Address or canvas name",
+  file: "Files to add",
+  site: "Site address",
+  doc: "Google Doc address",
+  canvas: "Canvas name or address",
+};
+
 export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; actor: Actor; onFiles: () => void }) {
   const adding = useUiStore((s) => s.adding);
   const setAdding = (next: AddKind | "any" | null) => useUiStore.getState().setAdding(next);
@@ -57,7 +70,9 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   const [query, setQuery] = useState("");
   const [canvases, setCanvases] = useState<Canvas[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
   const [busy, setBusy] = useState(false);
+  const [queued, setQueued] = useState(false);
   // Memory phase 1: a canvas card can carry `memory=inherit`, and the popover
   // is where the design says the tick lives — "places it, and ticks inherit".
   const [inherit, setInherit] = useState(false);
@@ -68,6 +83,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   // who never places a canvas pays nothing for the option.
   useEffect(() => {
     if (!open) return;
+    setQueued(false);
     let live = true;
     setCanvases(null);
     listCanvases()
@@ -98,10 +114,10 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
    * or, when a row pinned the kind, read AS that kind: "Site" makes any
    * words an address, "Canvas" makes them a search.
    */
-  const guess = useMemo(() => classifyAddable(query, canvases ?? [], canvasId), [query, canvases, canvasId]);
+  const guess = useMemo(() => classifyAddableDraft(query, canvases ?? [], canvasId), [query, canvases, canvasId]);
   const pinned: Addable = useMemo(() => {
     const s = query.trim();
-    if (adding === "site") return s ? { kind: "site", url: normalizeSiteUrl(s) } : { kind: "empty" };
+    if (adding === "site") return s ? { kind: "site", url: s } : { kind: "empty" };
     if (adding === "doc") {
       const id = googleDocId(s);
       return id ? guess : s ? { kind: "search", query: s } : { kind: "empty" };
@@ -125,13 +141,20 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
     return spotInView(useUiStore.getState().viewport, Object.values(canvas?.items ?? {}), width, height, placeableArea());
   }
   function done(itemId: string) {
+    if (!selectCreatedItems(canvasId, [itemId])) return;
     setAdding(null);
     setQuery("");
     setError(null);
-    useUiStore.getState().select(itemId);
   }
 
   async function placeCanvas(target: { id: string; title: string; origin?: string | null }) {
+    if (inherit) {
+      const { automaticSource } = await import("../lib/personal.ts");
+      const { canvasUrl } = await import("@isocan/core");
+      const access = await automaticSource(target.id, canvasUrl(target.origin ?? window.location.origin, target.id), canvasId);
+      if (access.kind !== "ordinary") throw new Error(access.refused);
+    }
+    let destination = creationDestination();
     // A spot found FOR the card is not `chosen`; the daemon may tidy it clear.
     let at: Placement = spotFor(CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height);
     // `inherit` is memory phase 1: the card wears memory=inherit and the
@@ -143,19 +166,29 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
       if (!sheet) {
         const spot = contextSheetSpot(canvas);
         const id = await addAreaItem(canvasId, actor, CONTEXT_SHEET_TITLE, spot, CONTEXT_SHEET_SIZE);
-        sheet = { id, title: CONTEXT_SHEET_TITLE, ...spot, ...CONTEXT_SHEET_SIZE, properties: { kind: "area" } } as unknown as Item;
+        sheet = useCanvasStore.getState().canvas?.items[id] ?? { id, title: CONTEXT_SHEET_TITLE, ...spot, ...CONTEXT_SHEET_SIZE, properties: { kind: destination.groupPlacement ? "group" : "area" } } as unknown as Item;
       }
-      at = { ...freeSpotIn(canvas, sheet, CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height), chosen: true };
+      if (isGroupItem(sheet)) {
+        destination = { ...destination, containerId: sheet.id, groupPlacement: "auto" };
+        at = groupContentBox(sheet);
+      } else {
+      const spot = freeSpotIn(canvas, sheet, CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height);
+      if (spot.resizedArea) {
+        await sendEchoed(canvasId, actor, { type: "item.resize", itemId: sheet.id, width: spot.resizedArea.width, height: spot.resizedArea.height });
+      }
+      at = { ...spot, chosen: true };
+      }
     }
     done(
-      await addCanvasItem(canvasId, actor, target.origin ?? window.location.origin, target.id, target.title, at, inherit ? "inherit" : null),
+      await addCanvasItem(canvasId, actor, target.origin ?? window.location.origin, target.id, target.title, at, inherit ? "inherit" : null, destination),
     );
   }
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
-    if (busy) return;
+    if (busy || queued) return;
     setBusy(true);
+    const destination = creationDestination();
     try {
       const what = pinned;
       if (what.kind === "doc") {
@@ -167,18 +200,28 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
             actor,
             { title: doc.title, markdown: doc.markdown, filename: docFilenameFrom(doc.title), source: doc.source, syncedAt: doc.fetchedAt },
             at,
+            destination,
           ),
         );
       } else if (what.kind === "site") {
+        // A draft such as "https://" is ordinary while typing, but cannot
+        // reach the network or create an item when the form is submitted.
+        let url: string;
+        try {
+          url = normalizeSiteUrl(what.url);
+        } catch {
+          setError("Enter a valid site address, such as https://example.com or localhost:5173. Only HTTP and HTTPS are supported.");
+          return;
+        }
         const at = spotFor(BROWSER_SIZE.width, BROWSER_SIZE.height);
         // Advice before the item, never a gate: a site that refuses framing
         // would be a blank rectangle nobody could explain.
-        const verdict = await checkFrameable(what.url);
+        const verdict = await checkFrameable(url);
         if (!verdict.ok) {
-          setError(`${siteLabel(verdict.url ?? what.url)} ${verdict.why ?? "refuses to be shown in a frame"}. Nothing was added.`);
+          setError(`${siteLabel(verdict.url ?? url)} ${verdict.why ?? "refuses to be shown in a frame"}. Nothing was added.`);
           return;
         }
-        done(await addBrowserItem(canvasId, actor, what.url, at));
+        done(await addBrowserItem(canvasId, actor, url, at, destination));
       } else if (what.kind === "canvas") {
         await placeCanvas({ id: what.canvasId, title: what.title ?? what.canvasId, origin: what.origin });
       } else if (what.kind === "search" && matches[0]) {
@@ -188,12 +231,26 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
       }
     } catch (err) {
       setError((err as Error).message);
+      if (err instanceof QueuedItemError) setQueued(true);
     } finally {
       setBusy(false);
     }
   }
 
-  const preview = addableWords(pinned);
+  async function chooseCanvas(target: { id: string; title: string }) {
+    if (busy || queued) return;
+    setBusy(true);
+    try { await placeCanvas(target); }
+    catch (error) { setError((error as Error).message); if (error instanceof QueuedItemError) setQueued(true); }
+    finally { setBusy(false); }
+  }
+
+  // A draft wears kind "site" so the field can keep it, but the shared words
+  // read that kind as a promise the draft cannot keep — "Add  as a live site"
+  // for a half-typed `https://`, and `file:///etc/passwd` announced as a live
+  // site directly above the error refusing it. The draft speaks for itself
+  // until it is an address; then the shared words take over again.
+  const preview = pinned.kind === "site" ? (siteDraftWords(pinned.url) ?? addableWords(pinned)) : addableWords(pinned);
   // What the row shows and what the row PINS are different questions: an
   // unpinned field still reads as something, and the pill should say so
   // rather than sit grey under a line that already named the answer.
@@ -209,7 +266,9 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
     <div className="add-door">
       <button
         className={`tool-btn${open ? " active" : ""}`}
-        title="Add to the canvas — files, a site, a Google Doc, or a canvas"
+        /* The rail's drawn tip (`.tool-btn[data-tip]`); none while the
+           popover is open, or it would land on the popover. */
+        data-tip={open ? undefined : "Add to the canvas — files, a site, a Google Doc, or a canvas"}
         aria-label="Add"
         aria-pressed={open}
         onClick={() => {
@@ -227,6 +286,9 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
             className="text-input"
             autoFocus
             placeholder={PLACEHOLDER[adding ?? "any"]}
+            aria-label={ARIA_LABEL[adding ?? "any"]}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -234,6 +296,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") setAdding(null);
+              if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault();
             }}
           />
           {/* What Enter would do — the one line that makes a single field safe. */}
@@ -256,6 +319,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
               </button>
             ))}
           </div>
+          <button type="button" className="btn" title={groupsEnabled() ? "Create an empty group" : "Preview conversion of this legacy canvas first"} onClick={() => { setAdding(null); openGroupCreation(); }}>New group</button>
           {(pinned.kind === "canvas" || pinned.kind === "search" || adding === "canvas") && (
             <label className="add-inherit">
               <input type="checkbox" checked={inherit} onChange={(e) => setInherit(e.target.checked)} />
@@ -269,7 +333,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
                 <div className="canvas-picker-note">{needle ? "No canvas by that name — paste its address instead." : "No other canvases here yet."}</div>
               )}
               {matches.map((one) => (
-                <button key={one.id} type="button" className="canvas-picker-row" role="option" onClick={() => void placeCanvas({ id: one.id, title: one.title })}>
+                <button key={one.id} type="button" className="canvas-picker-row" role="option" disabled={busy || queued} onClick={() => void chooseCanvas({ id: one.id, title: one.title })}>
                   <span className="canvas-picker-title">{one.title}</span>
                   <span className="canvas-picker-meta">
                     {one.updatedBy.name} {opWords(one.lastOp) ?? "did something"} · {ago(one.updatedAt, nowMs) || "just now"}
@@ -278,10 +342,10 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
               ))}
             </div>
           )}
-          <button className="btn primary" type="submit" disabled={busy || pinned.kind === "empty" || (pinned.kind === "search" && !matches[0])}>
+          <button className="btn primary" type="submit" disabled={busy || queued || pinned.kind === "empty" || (pinned.kind === "search" && !matches[0])}>
             {pinned.kind === "doc" ? "Add document" : pinned.kind === "site" ? "Add site" : pinned.kind === "canvas" || pinned.kind === "search" ? "Place canvas" : "Add"}
           </button>
-          {error && <div className="site-error">{error}</div>}
+          {error && <div className="site-error" id={errorId} role="alert">{error}</div>}
         </form>
       )}
     </div>

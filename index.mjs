@@ -29,14 +29,24 @@ const api = await import("@isocan/api");
 export const {
   // connect.ts — the public surface
   connect,
+  claimSession,
   Home,
   CanvasHandle,
   activityRows,
   buildComment,
+  readContextSummary,
+  linkedCanvasesOf,
+  waitForFeedback,
+  waitForResolvedFeedback,
+  // canvas-groups.ts — explicit membership and resolved dry-run reports
+  CanvasGroups,
+  resolveCanvasGroupRef,
+  insertedItemBox,
   // routes.ts / client.ts — the typed routes and the daemon lifecycle
   ApiError,
   DaemonClient,
   DaemonRoutes,
+  platformFetch,
   resolveBase,
   baseForCwd,
   shaOfRoot,
@@ -44,6 +54,8 @@ export const {
   DEFAULT_MODE,
   resolveCtx,
   resolveCanvas,
+  resolveCanvasRef,
+  sourceContextForCanvas,
   resolveDeclared,
   matchRef,
   ensureDirBinding,

@@ -81,6 +81,35 @@ describe("a goal is a number, a bound, and the command that produces it", () => 
     expect(noBound.goals).toEqual([]);
   });
 
+  it("reads what a debt is a debt against, and leaves it off when there is none", () => {
+    /**
+     * A goal bounded `at most 0` on an OVERSHOOT has a bound that cannot move,
+     * so a report of it says nothing about which number it overshot. `against`
+     * is the command that prints that number — see `PersonaGoal`, and
+     * `test/review-queue.test.ts` for what went wrong without it.
+     */
+    const p = parsePersona(
+      file(
+        "name: p\ndescription: d\ngoal:\n  - name: bytes past the last size somebody agreed to\n" +
+          "    at most: 0\n    measured by: node scripts/measure.mjs bundle-over-ceiling\n" +
+          "    against: node scripts/bundle-ceiling.mjs",
+      ),
+      "p.md",
+    )!;
+    expect(p.goals[0]).toMatchObject({ against: "node scripts/bundle-ceiling.mjs" });
+    const plain = parsePersona(
+      file("name: p\ndescription: d\ngoal:\n  - name: contrast\n    at most: 0\n    measured by: grade.mjs"),
+      "p.md",
+    )!;
+    // Absent rather than empty: a goal measured against nothing says nothing.
+    expect(plain.goals[0]!).not.toHaveProperty("against");
+    // And both surfaces say so: `goalLine` is what `isocan persona ls` prints
+    // and what the board's panel renders, so "at most 0" on its own would read
+    // as an absolute in the two places a person meets this goal.
+    expect(goalLine(p.goals[0]!)).toContain("at most 0 of what `node scripts/bundle-ceiling.mjs` prints");
+    expect(goalLine(plain.goals[0]!)).toBe("contrast — at most 0, never measured");
+  });
+
   it("reads both directions and a bare count", () => {
     expect(parseBound("at most 12ms")).toMatchObject({ bound: { kind: "at most", value: 12 }, unit: "ms" });
     expect(parseBound("at least 95%")).toMatchObject({ bound: { kind: "at least", value: 95 }, unit: "%" });

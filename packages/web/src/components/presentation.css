@@ -1,0 +1,15 @@
+.presentation-notes-sheet { position: fixed; inset: max(100px, 30dvh) 0 0; z-index: var(--z-popover); background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 18px 18px 0 0; box-shadow: var(--shadow-pop); display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
+.presentation-notes-sheet header { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.presentation-notes-sheet button { min-width: 44px; min-height: 44px; padding: 8px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); }
+.presentation-notes-sheet > div { overflow-y: auto; padding: 16px; font-size: 16px; line-height: 1.6; }
+/* The gesture meets the first scroll container, so constrain both stage and text. */
+.fullscreen-stage, .fullscreen-stage .md-view { touch-action: pan-y; }
+@media (max-width: 639px) {
+  .touch-presenting .fs-bar { opacity: 1; transform: none; pointer-events: auto; flex-wrap: wrap; padding: 8px; gap: 6px; }
+  .touch-presenting .fs-bar button, .touch-presenting .fs-bar a { min-width: 44px; min-height: 44px; padding: 8px 12px; }
+  .mobile-presentation-bar { display: flex; align-items: center; background: var(--card); color: var(--ink); border-bottom: 1px solid var(--line); }
+  .mobile-presentation-bar strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-presentation-bar button { background: var(--card); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); }
+  .touch-presenting .fullscreen-stage { padding: 76px 12px 12px; }
+  .touch-presenting .fullscreen-stage > iframe { width: 100%; height: 100%; border: 0; }
+}

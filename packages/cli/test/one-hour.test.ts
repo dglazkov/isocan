@@ -146,7 +146,7 @@ describe("the one-hour cut", () => {
 
     // The board reads left to right, with every phase's outcome on its sheet.
     const sheets = await json("area", "ls", "--canvas", S);
-    const holds = Object.fromEntries(sheets.map((one: any) => [one.title, Number(one.holds)]));
+    const holds = Object.fromEntries(sheets.map((one: any) => [one.title, one.directCount]));
     expect(sheets.map((one: any) => one.title)).toEqual(SPRINT_BOARD.map((one) => one.title));
     expect(holds).toMatchObject({
       Brief: 1,

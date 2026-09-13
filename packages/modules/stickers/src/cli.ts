@@ -35,8 +35,10 @@ export const stickersCli: CliModule = {
       .description("Put one on the canvas — by emoji, id or name")
       .option("--canvas <canvas>")
       .option("--at <x,y>", "where to put it")
+      .option("--in <group>", "insert into a canvas group")
+      .option("--cell <row,column>", "insert in a 1-based grid cell; requires --in")
       .action(
-        host.run(async (which: string, opts: { at?: string }, cmd) => {
+        host.run(async (which: string, opts: { at?: string; in?: string; cell?: string }, cmd) => {
           const sticker = findSticker(which);
           if (!sticker) {
             throw new Error(
@@ -46,12 +48,13 @@ export const stickersCli: CliModule = {
           const ctx = await host.ctxOf(cmd);
           const canvas = await host.resolveCanvas(ctx);
           const file = stickerFile(sticker);
-          const upload = await ctx.client.uploadBlob(canvas.id, Buffer.from(file.body, "utf8"), STICKER_MIME, file.filename);
           const snapshot = await ctx.client.snapshot(canvas.id);
           const placement = host.placementFor(snapshot, opts, { ...STICKER_SIZE });
+          const upload = await ctx.client.uploadBlob(canvas.id, Buffer.from(file.body, "utf8"), STICKER_MIME, file.filename);
+          const itemId = `itm_${Math.random().toString(36).slice(2, 12)}`;
           const result = await host.sendOp(ctx, canvas.id, {
             type: "item.add",
-            itemId: `itm_${Math.random().toString(36).slice(2, 12)}`,
+            itemId,
             version: {
               id: `ver_${Math.random().toString(36).slice(2, 12)}`,
               blobHash: upload.blobHash,
@@ -64,7 +67,8 @@ export const stickersCli: CliModule = {
             placement,
             title: sticker.name,
           } as never);
-          void result;
+          const placed = host.insertionReceiptPlacement(result.envelope.op, itemId);
+          if (ctx.json) return host.printJson({ itemId, placement: placed, sticker: sticker.id });
           console.log(`${sticker.emoji} ${sticker.name} on ${canvas.title}`);
         }),
       );

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { grantRevokeRoute, grantRoute, grantsRoute, LINK } from "@isocan/core";
+import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, grantRevokeRoute, grantRoute, grantsRoute, LINK } from "@isocan/core";
 import { ApiError, createBar, createGrant, listGrants, revokeGrant } from "../src/lib/api.ts";
 
 /**
@@ -63,7 +63,7 @@ describe("the Share dialog's endpoint", () => {
     const { grants } = await listGrants("prj_acme");
 
     expect(seen).toEqual([
-      { method: "GET", url: grantsRoute("prj_acme"), headers: undefined, body: undefined },
+      { method: "GET", url: grantsRoute("prj_acme"), headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE }, body: undefined },
     ]);
     expect(grants[0]!.subject).toBe(LINK);
   });
@@ -98,7 +98,9 @@ describe("the Share dialog's endpoint", () => {
     expect(seen[0]!.method).toBe("DELETE");
     expect(seen[0]!.url).toBe(grantRoute("prj_acme", "gnt_1"));
     expect(seen[0]!.body).toBeUndefined();
-    expect(seen[0]!.headers).toBeUndefined();
+    const headers = new Headers(seen[0]!.headers);
+    expect(headers.get("content-type")).toBeNull();
+    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CANVAS_GROUPS_FEATURE);
   });
 
   it("keeps somebody out with `bars: true` and no rung (roles phase 3)", async () => {
@@ -120,7 +122,9 @@ describe("the Share dialog's endpoint", () => {
     expect(seen[0]!.url).toBe(grantRevokeRoute("prj_acme", "gnt_1", { actorId: "usr_priya", bar: true }));
     expect(seen[0]!.url).toContain("bar=1");
     expect(seen[0]!.body).toBeUndefined();
-    expect(seen[0]!.headers).toBeUndefined();
+    const headers = new Headers(seen[0]!.headers);
+    expect(headers.get("content-type")).toBeNull();
+    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CANVAS_GROUPS_FEATURE);
     // And without the flag the parameter is not sent at all.
     await revokeGrant("prj_acme", "gnt_1", "usr_priya", false);
     expect(seen[1]!.url).not.toContain("bar");

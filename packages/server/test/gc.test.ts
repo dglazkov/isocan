@@ -248,6 +248,37 @@ describe("blob GC", () => {
     expect((await post("/api/projects/prj_1/undo", { actor: alice })).status).toBe(200);
   });
 
+  it("keeps visual face blob of a dual-face item version", async () => {
+    await seed();
+    const visualHash = await uploadBlob("<html><body>preview</body></html>\n", "preview.html");
+    const sourceHash = await uploadBlob("# source markdown\n", "source.md");
+    await op({
+      type: "item.add",
+      itemId: "itm_dual",
+      version: {
+        id: "ver_dual",
+        blobHash: sourceHash,
+        mimeType: "text/markdown",
+        filename: "source.md",
+        size: 18,
+        visual: {
+          blobHash: visualHash,
+          mimeType: "text/html",
+          filename: "preview.html",
+          size: 34,
+        },
+      },
+      width: 200,
+      height: 200,
+      placement: { x: 100, y: 100 },
+    });
+
+    const report = await gc({ graceMs: 0 });
+    expect(report.sweptBlobs).toBe(0);
+    expect(await blobStatus(visualHash)).toBe(200);
+    expect(await blobStatus(sourceHash)).toBe(200);
+  });
+
   it("survives a restart after compaction", async () => {
     await seed();
     await op({ type: "item.move", itemId: "itm_live", x: 42, y: 42 });

@@ -347,7 +347,16 @@ CLI inside presents exactly the enrolment's mint key (one idempotent
 badge); and permission requests are auto-allowed for now, in one
 documented function — the agent runs as the person, in the person's
 directory, and what a summoned agent may do unattended is phase 4/5's
-door. Adapters resolve harness→command through `config.json`'s
+door. *(Half of that door was never actually closed: phase 5 bound how
+OFTEN an agent runs — the ceiling and the cycle guard — and not what it
+may reach. The reach half was settled 11 Sep 2026, eleven days later and
+only because somebody said out loud that an rc "pretty much has access to
+my entire system":
+[`docs/research/2026-09-10-what-the-rc-hands-over.md`](../../research/2026-09-10-what-the-rc-hands-over.md),
+built as permissions-answered-by-kind and an allow-listed environment in
+`cli/src/acp.ts`, and `isocan rc --sandbox` in `cli/src/sandbox.ts`. The
+lesson for a walk: a door deferred to a later phase is only closed if that
+phase's own record says so.)* Adapters resolve harness→command through `config.json`'s
 `acpAdapters` hook (the `harnessVars` posture), with `claude-code` known
 without being told; a null harness runs claude-code.
 

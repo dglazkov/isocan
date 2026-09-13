@@ -58,6 +58,23 @@ async function boot(): Promise<void> {
     home,
     birthHome: null,
     auth: { project: "acme-test", apiKey: "test-key" },
+    /**
+     * **A home with several people in it**, which is what a space is for — and
+     * since 13 Sep that is a different daemon from a laptop. `GET
+     * /api/projects` shows a machine answering only itself everything it
+     * holds, and a home serving the world admissions and the rows that NAME
+     * you. Journey 5's acceptance line below — a stranger's list is the one
+     * canvas whose link they hold — is a sentence about the second kind, and
+     * on a loopback daemon it would pass for the wrong reason.
+     *
+     * Said rather than bound: this still listens on loopback like every other
+     * suite. Binding `0.0.0.0` from a test opens a port to the network and,
+     * with `SO_REUSEADDR` on by default, can be handed a port another suite
+     * already holds on `127.0.0.1` — after which the two daemons trade
+     * requests under parallel load, which cost an afternoon to find.
+     * `127.0.0.2` is not an address macOS has at all.
+     */
+    servesWorld: true,
   });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -514,6 +531,28 @@ describe("the space's rows", () => {
 });
 
 describe("born in a space", () => {
+  it("lets a granted owner grow the space, refuses an editor, and lists the birth only to members", async () => {
+    const design = await makeSpace("Design");
+    await inviteOnSpace(design.id, JORDAN, "edit");
+    const member = await holderOf(JORDAN);
+    await member.speakAs(jordan);
+    const request = { canvasId: null, actor: jordan, spaceId: design.id, op: { type: "project.create", canvasId: "prj_space_birth", title: "Acme exploration" } };
+    const refused = await post(member, "/api/ops", request);
+    expect(refused.status).toBe(403);
+    expect((await body(refused)).code).toBe("not-owner");
+    expect(await daemon.store.canvasExists("prj_space_birth")).toBe(false);
+    await inviteOnSpace(design.id, JORDAN, "own");
+    expect((await post(member, "/api/ops", request)).status).toBe(200);
+    expect(await daemon.desk.grantsFor("prj_space_birth")).toEqual([]);
+    expect((await daemon.desk.space(design.id))!.canvasIds).toEqual(["prj_space_birth"]);
+    const unrelated = await stranger();
+    for (const badge of [owner, member, unrelated]) {
+      const listed = ((await (await get(badge, "/api/projects?reach=admissible")).json()) as Canvas[]).map((c) => c.id);
+      expect(listed).toEqual(badge === unrelated ? [] : ["prj_space_birth"]);
+    }
+    expect((await enter(owner, "prj_space_birth")).status).toBe(200);
+    expect((await enter(unrelated, "prj_space_birth")).status).toBe(403);
+  });
   it("writes no link grant, adds the newborn to the space, and refuses `spaceId` beside anything else", async () => {
     const design = await makeSpace("Design");
     const born = await post(owner, "/api/ops", {

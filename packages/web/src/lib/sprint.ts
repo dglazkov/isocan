@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Actor, Canvas, CanvasContents, Item, Paper, SprintState } from "@isocan/core";
 import {
   PAPER_SIZE,
+  isGroupItem,
+  groupContentBox,
   copyProperties,
   deskOf,
   freeSpotIn,
@@ -12,9 +14,12 @@ import {
   newGroupId,
   newItemId,
   newVersionId,
+  roundRunning,
+  roundsOn,
   sprintState,
   wallFor,
 } from "@isocan/core";
+import { changeGroupItem } from "./canvasgroups.ts";
 import { getSnapshot, readBlob, sendOp, uploadBlob } from "./api.ts";
 import { flashNotice, sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -43,6 +48,7 @@ const listeners = new Set<() => void>();
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   if (subscribers++ === 0) {
+    nowSecond = Math.floor(Date.now() / 1000);
     // A countdown nobody can see does not need to tick, and the tick is a
     // re-render of every subscriber. Coming back re-reads the clock first, so
     // the number is right the instant you look at it rather than up to a
@@ -61,6 +67,8 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+const idleSubscribe = () => () => {};
+
 /**
  * **The current second, shared** — one interval for every subscriber, and it
  * stops while the tab is hidden (`everyWhileVisible`, above).
@@ -71,18 +79,26 @@ function subscribe(listener: () => void): () => void {
  * shape. It lives here rather than in its own file because this is where the
  * single shared tick already is, and two ticking intervals would be two.
  */
-export function useClockSecond(): number {
-  return useSyncExternalStore(subscribe, () => nowSecond, () => nowSecond);
+export function useClockSecond(enabled = true): number {
+  return useSyncExternalStore(enabled ? subscribe : idleSubscribe, () => nowSecond, () => nowSecond);
+}
+
+const sprintMemo = new WeakMap<CanvasContents, SprintState | null>();
+/** All item selectors share one sprint derivation for each immutable canvas revision. */
+export function sprintForCanvas(canvas: CanvasContents | null): SprintState | null {
+  if (!canvas) return null;
+  if (!sprintMemo.has(canvas)) sprintMemo.set(canvas, sprintState(canvas));
+  return sprintMemo.get(canvas)!;
 }
 
 /** The running sprint (or null) and the shared clock, in ms. */
 export function useSprint(): { state: SprintState | null; nowMs: number } {
-  const canvas = useCanvasStore((s) => s.canvas);
-  const second = useClockSecond();
-  // Derived on every store change; cheap, because the fold stops at the first
-  // `/sprint` line it meets walking back from the end of the Chat.
-  const state = canvas ? sprintState(canvas) : null;
-  return useMemo(() => ({ state, nowMs: second * 1000 }), [state, second]);
+  const state = useCanvasStore((s) => sprintForCanvas(s.canvas));
+  const ticking = state?.endsAt != null && Date.parse(state.endsAt) > Date.now();
+  const second = useClockSecond(ticking);
+  // An absent, untimed or completed sprint must not tick every item tree.
+  // OnIt still subscribes independently through useClockSecond's default.
+  return useMemo(() => ({ state, nowMs: ticking ? second * 1000 : Date.now() }), [state, second, ticking]);
 }
 
 /**
@@ -127,7 +143,7 @@ export function newNoteIn(state: SprintState): void {
   const canvas = useCanvasStore.getState().canvas;
   const at =
     state.area && canvas
-      ? freeSpotIn(canvas, state.area, PAPER_SIZE, PAPER_SIZE)
+      ? (isGroupItem(state.area) ? groupContentBox(state.area) : freeSpotIn(canvas, state.area, PAPER_SIZE, PAPER_SIZE))
       : (() => {
           const centre = screenToWorld(ui.viewport, window.innerWidth / 2, window.innerHeight / 2);
           return { x: Math.round(centre.x - PAPER_SIZE / 2), y: Math.round(centre.y - PAPER_SIZE / 2) };
@@ -136,6 +152,7 @@ export function newNoteIn(state: SprintState): void {
     x: at.x,
     y: at.y,
     itemId: null,
+    ...(state.area && isGroupItem(state.area) ? { containerId: state.area.id } : {}),
     body: "",
     style: ui.lastTextStyle,
     face: ui.lastTextFace,
@@ -160,8 +177,15 @@ export async function handIn(canvasId: string, actor: Actor, items: readonly Ite
   const group = newGroupId();
   let canvas = useCanvasStore.getState().canvas;
   for (const item of pending) {
+    if (state.area && isGroupItem(state.area)) {
+      await changeGroupItem(canvasId, actor, { type: "item.update", itemId: item.id, patch: handInPatch(state.phase.name), containerId: state.area.id, groupPlacement: "auto" });
+      continue;
+    }
     if (state.area && canvas && !inArea(state.area, item)) {
       const spot = freeSpotIn(canvas, state.area, item.width, item.height);
+      if (spot.resizedArea) {
+        await sendEchoed(canvasId, actor, { type: "item.resize", itemId: state.area.id, width: spot.resizedArea.width, height: spot.resizedArea.height }, group);
+      }
       await sendEchoed(canvasId, actor, { type: "item.move", itemId: item.id, x: spot.x, y: spot.y }, group);
       // The next spot has to see this one land.
       canvas = useCanvasStore.getState().canvas;
@@ -194,8 +218,9 @@ export function useRemoteSprint(canvasId: string | null): {
   state: SprintState | null;
   canvas: CanvasContents | null;
   nowMs: number;
+  originGroupMode: "legacy" | "groups" | null;
 } {
-  const [remote, setRemote] = useState<{ id: string; canvas: CanvasContents } | null>(null);
+  const [remote, setRemote] = useState<{ id: string; canvas: CanvasContents; originGroupMode: "legacy" | "groups" } | null>(null);
   const second = useClockSecond();
   useEffect(() => {
     if (!canvasId) {
@@ -206,7 +231,7 @@ export function useRemoteSprint(canvasId: string | null): {
     const pull = () =>
       getSnapshot(canvasId)
         .then((snapshot) => {
-          if (live) setRemote({ id: canvasId, canvas: snapshot.canvas });
+          if (live) setRemote({ id: canvasId, canvas: snapshot.canvas, originGroupMode: snapshot.project.groupMode ?? "legacy" });
         })
         .catch(() => {
           // A pull that failed leaves the last one standing: a stale clock is
@@ -219,7 +244,7 @@ export function useRemoteSprint(canvasId: string | null): {
     };
   }, [canvasId]);
   const canvas = remote && remote.id === canvasId ? remote.canvas : null;
-  return { state: canvas ? sprintState(canvas) : null, canvas, nowMs: second * 1000 };
+  return { state: canvas ? sprintState(canvas) : null, canvas, nowMs: second * 1000, originGroupMode: canvas ? remote!.originGroupMode : null };
 }
 
 /**
@@ -238,6 +263,7 @@ export async function handInFromDesk(
   actor: Actor,
   items: readonly Item[],
   state: SprintState,
+  originGroupMode: "legacy" | "groups",
 ): Promise<number> {
   const group = newGroupId();
   let occupied = sprintCanvas;
@@ -248,13 +274,15 @@ export async function handInFromDesk(
     const bytes = await readBlob(deskId, version.blobHash).catch(() => null);
     if (bytes === null) continue;
     const up = await uploadBlob(sprintId, bytes, version.filename);
-    const spot = state.area ? freeSpotIn(occupied, state.area, item.width, item.height) : { x: item.x, y: item.y };
+    const destination = state.area && isGroupItem(state.area) ? state.area : null;
+    const spot = destination ? groupContentBox(destination) : state.area ? freeSpotIn(occupied, state.area, item.width, item.height) : { x: item.x, y: item.y };
     const itemId = newItemId();
     await sendOp(
       sprintId,
       actor,
       {
         type: "item.add",
+        ...(destination ? { containerId: destination.id, groupPlacement: "auto" as const } : {}),
         itemId,
         version: {
           id: newVersionId(),
@@ -274,6 +302,7 @@ export async function handInFromDesk(
         },
       },
       group,
+      originGroupMode,
     );
     occupied = { ...occupied, items: { ...occupied.items, [itemId]: { ...item, id: itemId, ...spot } } };
     made++;
@@ -316,16 +345,35 @@ function wallIdsFor(canvas: CanvasContents, state: SprintState): Set<string> {
 /** Whether this item is on the running sprint's wall. */
 export function useOnWall(item: Item): boolean {
   const { state } = useSprint();
-  const canvas = useCanvasStore((s) => s.canvas);
-  return state !== null && canvas !== null && wallIdsFor(canvas, state).has(item.id);
+  return useCanvasStore((s) => state !== null && s.canvas !== null && wallIdsFor(s.canvas, state).has(item.id));
 }
 
 export function useVotesHiddenOn(item: Item): boolean {
   const { state, nowMs } = useSprint();
   const canvas = useCanvasStore((s) => s.canvas);
+  // A module's vote round (proposed: `rounds`, 11 Sep 2026) curtains its own
+  // area by the same lens — the sprint is the curtain's first caller now,
+  // not its only case. Same shared clock, so a round's curtain lifts on the
+  // same tick as every chip.
+  if (canvas && roundsOn(canvas, item).some((round) => roundRunning(round, nowMs))) return true;
   if (!hidesVotes(state, nowMs) || !state || !canvas) return false;
   return wallIdsFor(canvas, state).has(item.id);
 }
+
+/**
+ * The marks that are votes on this item beyond the sprint's own: every mark
+ * of every module round it sits in, running or finished — so a heat map of
+ * dots draws on a competition's entries the way it does on a sprint's wall,
+ * hidden but your own while the round runs and all of them at the bell.
+ */
+export function useRoundMarks(item: Item): readonly string[] {
+  const canvas = useCanvasStore((s) => s.canvas);
+  return useMemo(
+    () => (canvas ? [...new Set(roundsOn(canvas, item).flatMap((round) => round.marks))] : EMPTY_MARKS),
+    [canvas, item],
+  );
+}
+const EMPTY_MARKS: readonly string[] = [];
 
 /** The mark a running vote phase counts, or null outside one. */
 export function voteMark(state: SprintState | null): string | null {

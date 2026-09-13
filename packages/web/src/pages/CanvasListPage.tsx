@@ -1,3 +1,4 @@
+import { Inbox } from "../components/Inbox.tsx";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Canvas, Space } from "@isocan/core";
@@ -18,6 +19,7 @@ import {
   ownsSpace,
   sortCanvases,
   type CanvasSort,
+  type TakedownNotice,
   faceMark,
 } from "@isocan/core";
 import {
@@ -26,6 +28,7 @@ import {
   createSpace,
   deleteSpace,
   fetchHomes,
+  fetchTakedowns,
   listCanvases,
   listSpaces,
   removeFromSpace,
@@ -35,6 +38,7 @@ import {
 const ShareDialog = lazy(() =>
   import("../components/ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })),
 );
+const PublicCatalogue = lazy(() => import("../components/PublicCatalogue.tsx").then((m) => ({ default: m.PublicCatalogue })));
 import { GroupsPanel } from "../components/GroupsPanel.tsx";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
@@ -103,6 +107,18 @@ export function CanvasListPage({
    * but the headings.
    */
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [birthSpaceId, setBirthSpaceId] = useState("");
+  /**
+   * **Which of these this home has stopped serving, and what it says about
+   * them** (operator phase 2), by canvas id.
+   *
+   * Read BESIDE the canvases and never instead of them, exactly as the spaces
+   * beside it are: a home too old for the route, or one that simply will not
+   * answer, must cost this list nothing but the greying. Empty is the answer
+   * on every home in this repo, and an empty map renders the list it always
+   * rendered.
+   */
+  const [takenDown, setTakenDown] = useState<Map<string, TakedownNotice>>(new Map());
   const refresh = useCallback(
     () =>
       Promise.all([
@@ -111,10 +127,12 @@ export function CanvasListPage({
           (answer) => answer.spaces,
           () => [] as Space[],
         ),
+        fetchTakedowns().catch(() => [] as TakedownNotice[]),
       ]).then(
-        ([found, seen]) => {
+        ([found, seen, down]) => {
           setProjects(found);
           setSpaces(seen);
+          setTakenDown(new Map(down.map((row) => [row.canvasId, row])));
           setListError(null);
           return found;
         },
@@ -179,6 +197,22 @@ export function CanvasListPage({
   const [justMade, setJustMade] = useState<string | null>(null);
   /** The card somebody is pointing at or has tabbed to, if any. */
   const [peeking, setPeeking] = useState<string | null>(null);
+
+  /**
+   * **Escape puts a floating preview away.** The peek is an overlay now —
+   * it covers the cards under the one being read — so it owes the dismissal
+   * every overlay gets. Pointer and keyboard both: the listener is on the
+   * window because a pointer-hovered card may hold no focus at all.
+   */
+  const peekOpen = peeking !== null;
+  useEffect(() => {
+    if (!peekOpen) return;
+    const dismiss = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPeeking(null);
+    };
+    window.addEventListener("keydown", dismiss);
+    return () => window.removeEventListener("keydown", dismiss);
+  }, [peekOpen]);
 
   /**
    * **A clock, because "8m ago" is a lie the moment it is painted.**
@@ -412,6 +446,27 @@ export function CanvasListPage({
     return () => clearTimeout(t);
   }, [justMade]);
 
+  const birthSpacePicker = spaces.length > 0 || birthSpaceId ? (
+    <>
+      <label htmlFor="birth-space">Space</label>
+      <select
+        id="birth-space"
+        className="text-input"
+        value={birthSpaceId}
+        disabled={creating}
+        onChange={(e) => setBirthSpaceId(e.target.value)}
+        aria-describedby={birthSpaceId ? "birth-space-note" : undefined}
+      >
+        <option value="">No space</option>
+        {birthSpaceId && !spaces.some((space) => space.id === birthSpaceId) && (
+          <option value={birthSpaceId}>Selected space unavailable</option>
+        )}
+        {spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}
+      </select>
+      {birthSpaceId && <p className="create-note" id="birth-space-note">A space owner can create here. Access comes from this space.</p>}
+    </>
+  ) : null;
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = title.trim();
@@ -420,7 +475,7 @@ export function CanvasListPage({
     setCreateNote(null);
     const canvasId = newCanvasId();
     try {
-      await sendOp(null, actor, { type: "project.create", canvasId, title: trimmed });
+      await sendOp(null, actor, { type: "project.create", canvasId, title: trimmed }, undefined, undefined, birthSpaceId || undefined);
     } catch (err) {
       /**
        * **It threw into nothing before.** `create` was an async submit handler
@@ -491,9 +546,22 @@ export function CanvasListPage({
    * share this page's state without a prop per control.
    */
   function card(canvas: Canvas) {
+    /**
+     * **A canvas this home has taken down is here, greyed, with the sentence**
+     * (operator phase 2; journey 4 step 3) — *listed for its members with the
+     * sentence, not hidden, so the owner is told.*
+     *
+     * Hiding it was the obvious alternative and is the wrong one: Priya's
+     * canvas disappearing from her own list is indistinguishable from her
+     * having lost it, and she would spend her afternoon looking for a thing
+     * that has an explanation nobody showed her.
+     */
+    const down = takenDown.get(canvas.id) ?? null;
     return (
           <div
-            className={`canvas-card${justMade === canvas.id ? " just-made" : ""}`}
+            className={`canvas-card${justMade === canvas.id ? " just-made" : ""}${
+              down ? " taken-down" : ""
+            }`}
             key={canvas.id}
             /* A card is dragged onto a heading (roles phase 4): the id rides
                the drag, and the drop is `move`. */
@@ -512,7 +580,12 @@ export function CanvasListPage({
              * is a child, and listening on the card catches all of them.
              */
             onPointerEnter={() => setPeeking(canvas.id)}
-            onPointerLeave={() => setPeeking((at) => (at === canvas.id ? null : at))}
+            onPointerLeave={(e) => {
+              /* The pointer leaving must not take a preview the keyboard is
+                 still reading: focus within the card is a second hold on it. */
+              if (e.currentTarget.contains(document.activeElement)) return;
+              setPeeking((at) => (at === canvas.id ? null : at));
+            }}
             onFocus={() => setPeeking(canvas.id)}
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -535,6 +608,23 @@ export function CanvasListPage({
                     link now and the other two are behind the same `···` the
                     canvas uses, which is also what stops Delete sitting one
                     pixel from Open. */}
+                {/**
+                 * **It does not open**, and the sentence is in its place.
+                 *
+                 * A `<Link>` that led to the refusal would be one more click
+                 * to reach the same words; a card that looked ordinary and
+                 * refused when clicked would be the silence this whole phase
+                 * exists to remove. So the card keeps its title and its meta
+                 * line — it is still her canvas — and the thing that opened it
+                 * is replaced by the home's own account of why it does not.
+                 */}
+                {down ? (
+                  <div className="card-open">
+                    <h3>{canvas.title}</h3>
+                    <div className="card-taken-down">{down.sentence}</div>
+                    <div className="meta">Nothing has been erased, and it can be brought back.</div>
+                  </div>
+                ) : (
                 <Link className="card-open" to={canvasPath(canvas.id)}>
                   {/**
                     * **Which of these did I put away?** (#194). `Archived`
@@ -576,9 +666,15 @@ export function CanvasListPage({
                     </span>
                   </div>
                 </Link>
-                {/* Under the meta line, inside the card: a popover floating
-                    outside would need placing, and this is a few short rows
-                    that the card has room for. */}
+                )}
+                {/* In the card's box but OUT of its flow. This used to sit
+                    in flow between the link and the ··· row — "the card has
+                    room for it" — and every hover grew the card by the peek's
+                    height and pushed the whole grid down: the page jumped
+                    under the pointer. `.card-peek` is absolutely positioned
+                    now and overlays the cards below; the grid never moves.
+                    The DOM position stays, so Tab still reaches the peek's
+                    rows between the open link and the ··· buttons. */}
                 <CardPeek canvasId={canvas.id} open={peeking === canvas.id} />
                 <div className="card-more">
                   {confirmingDelete === canvas.id ? (
@@ -803,6 +899,8 @@ export function CanvasListPage({
        * nesting the two made the smaller question inherit the larger one's
        * answer.
        */}
+      <Inbox actor={actor} />
+      <h2 className="working-canvases-head">Your canvases</h2>
       {(browsing || hasShelf) && (
         <div className="canvas-browse">
           {browsing && (
@@ -815,9 +913,17 @@ export function CanvasListPage({
               onChange={(e) => setQuery(e.target.value)}
             />
           )}
-          <div className="canvas-sorts" role="group" aria-label="Order">
-            {browsing &&
-              CANVAS_SORTS.map((option) => (
+          {/**
+            * **The ordering is one control, not three buttons.** A segmented
+            * track, so the set reads as the set: three chips side by side said
+            * "three separate things you can press" and nothing drew the fact
+            * that choosing one un-chooses the others. `role="group"` labelled
+            * `Order` is now true of everything inside it, which it was not
+            * while `Archived` sat in here.
+            */}
+          {browsing && (
+            <div className="canvas-sorts segmented" role="group" aria-label="Order">
+              {CANVAS_SORTS.map((option) => (
                 <button
                   key={option}
                   className={`btn quiet${option === sort ? " on" : ""}`}
@@ -827,25 +933,31 @@ export function CanvasListPage({
                   {CANVAS_SORT_LABEL[option]}
                 </button>
               ))}
-            {/**
-              * **Show archived** (#194). Widens the list to everything rather
-              * than swapping to the shelf alone: somebody hunting for one they
-              * put away is usually not sure they did, and a view that hides
-              * the live ones answers a question nobody asked. Offered only
-              * when there is a shelf, so the control appears the day it means
-              * something — and now on any home with one, however short its
-              * list.
-              */}
-            {hasShelf && (
-              <button
-                className={`btn quiet${showArchived ? " on" : ""}`}
-                aria-pressed={showArchived}
-                onClick={() => setShowArchived((was) => !was)}
-              >
-                Archived
-              </button>
-            )}
-          </div>
+            </div>
+          )}
+          {/**
+            * **Show archived** (#194). Widens the list to everything rather
+            * than swapping to the shelf alone: somebody hunting for one they
+            * put away is usually not sure they did, and a view that hides
+            * the live ones answers a question nobody asked. Offered only
+            * when there is a shelf, so the control appears the day it means
+            * something — and now on any home with one, however short its
+            * list.
+            *
+            * Beside the ordering track rather than inside it: this widens what
+            * is listed and the track chooses how it is sorted, and a fourth
+            * segment would have said that turning the shelf on turns an
+            * ordering off.
+            */}
+          {hasShelf && (
+            <button
+              className={`btn quiet canvas-archived${showArchived ? " on" : ""}`}
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived((was) => !was)}
+            >
+              Archived
+            </button>
+          )}
         </div>
       )}
       {/* Said out loud rather than left as an empty grid: a filter that matches
@@ -873,6 +985,7 @@ export function CanvasListPage({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {birthSpacePicker}
           <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
             {creating ? "Creating…" : "Create"}
           </button>
@@ -905,6 +1018,7 @@ export function CanvasListPage({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {birthSpacePicker}
           <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
             {creating ? "Creating…" : "Create"}
           </button>
@@ -992,6 +1106,7 @@ export function CanvasListPage({
       {canvases === null && <p className="canvases-loading">Loading…</p>}
       {/* An unreadable list is not an empty one, and must not render as one. */}
       {listError && <p className="canvases-error">{listError}</p>}
+      <Suspense fallback={<p>Loading public canvases…</p>}><PublicCatalogue /></Suspense>
     </div>
   );
 }

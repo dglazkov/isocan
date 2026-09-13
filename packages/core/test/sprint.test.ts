@@ -5,6 +5,7 @@ import {
   SPRINT_PROP,
   agentActorIds,
   clockLabel,
+  boardAreaFor,
   handInPatch,
   handedInFor,
   hidesVotes,
@@ -245,6 +246,13 @@ describe("two tallies on one sketch", () => {
 });
 
 describe("the wall a vote is about", () => {
+  it("finds a renamed group sheet and reads explicit members without geometric overlap", () => {
+    const group = { ...item("vote", { kind: "group", board: "vote" }), width: 2000, height: 2000 };
+    const member = { ...item("member"), containerId: "vote" };
+    const canvas = canvasOf([group, member, item("overlap")], chat([{ id: "c1", author: "F", body: "/sprint heatmap" }]));
+    expect(boardAreaFor(canvas, "vote")?.id).toBe("vote");
+    expect(wallFor(canvas, sprintState(canvas)!).map((item) => item.id)).toEqual(["member"]);
+  });
   it("is what was handed in for the last silent phase before the vote", () => {
     const canvas = canvasOf(
       [item("s1", { sprint: "sketch" }), item("s2", { sprint: "sketch" }), item("h1", { sprint: "hmw" }), item("other")],

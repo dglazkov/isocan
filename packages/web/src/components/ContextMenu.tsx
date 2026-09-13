@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keyFor } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 
@@ -89,11 +89,37 @@ export function ContextMenu({
       onClose();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation(); // Escape closes the menu, not the selection behind it
-        onClose();
+      const root = box.current;
+      if (!root) return;
+      const focused = document.activeElement as HTMLElement | null;
+      const menu = focused?.closest('[role="menu"]') ?? root;
+      const rows = [...menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')].filter((row) => row.closest('[role="menu"]') === menu);
+      if (["Escape", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", " ", "Tab"].includes(e.key)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      } else return;
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "ArrowLeft" && menu === root) return;
+      if (e.key === "ArrowLeft" && menu !== root) {
+        const parent = menu.parentElement?.querySelector<HTMLButtonElement>(":scope > button");
+        if (parent) { parent.dataset.menuIntent = "close"; parent.click(); parent.focus(); }
+        return;
       }
+      if (e.key === "ArrowRight" && focused?.getAttribute("aria-haspopup") !== "menu") return;
+      if (e.key === "Enter" || e.key === " " || e.key === "ArrowRight") {
+        if (focused instanceof HTMLButtonElement && !focused.disabled) {
+          if (focused.getAttribute("aria-haspopup") === "menu") focused.dataset.menuIntent = "keyboard-open";
+          focused.click();
+        }
+        return;
+      }
+      if (!rows.length) return;
+      const current = rows.indexOf(focused as HTMLButtonElement);
+      const next = e.key === "Home" ? 0 : e.key === "End" ? rows.length - 1 : (current + ((e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) ? -1 : 1) + rows.length) % rows.length;
+      rows[next]?.focus();
+      rows[next]?.scrollIntoView({ block: "nearest" });
     }
+    box.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     document.addEventListener("pointerdown", away, true);
     document.addEventListener("wheel", away, true);
     document.addEventListener("keydown", onKey, true);
@@ -142,6 +168,7 @@ export function ContextMenu({
             aria-checked={entry.checked === undefined ? undefined : entry.checked}
             className={`context-item${entry.danger ? " danger" : ""}${entry.checked === true ? " checked" : ""}`}
             disabled={entry.disabled === true}
+            title={entry.value}
             onClick={() => {
               onClose();
               entry.run();
@@ -149,6 +176,7 @@ export function ContextMenu({
           >
             {marks && <span className="menu-icon">{entry.icon}</span>}
             <span>{entry.label}</span>
+            {entry.value && <span className="menu-value">{entry.value}</span>}
             {/* The tick is the only thing on the row that says what is TRUE
                 rather than what would happen, so it sits where the eye scans
                 for state — after the words, before the accelerator. */}
@@ -189,7 +217,9 @@ function Submenu({
   onClose: () => void;
 }): ReactNode {
   const [open, setOpen] = useState(false);
+  const [focusChildren, setFocusChildren] = useState(false);
   const panel = useRef<HTMLDivElement | null>(null);
+  const trigger = useRef<HTMLButtonElement | null>(null);
   const children = entry.submenu ?? [];
 
   /**
@@ -205,20 +235,33 @@ function Submenu({
    * then the pointer leaving the child crosses the parent and re-opens it.
    * Vertically it slides, because nothing is covered by moving up.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = panel.current;
-    if (!open || !el) return;
-    el.style.left = "";
-    el.style.right = "";
-    el.style.top = "";
-    const r = el.getBoundingClientRect();
-    if (r.right > window.innerWidth - 8) {
-      el.style.left = "auto";
-      el.style.right = "calc(100% + 4px)";
+    const button = trigger.current;
+    if (!open || !el || !button) return;
+    function position() {
+      const anchor = button!.getBoundingClientRect();
+      const bounds = el!.getBoundingClientRect();
+      // Fixed positioning escapes the parent menu's scrolling clip. The
+      // trigger still owns the anchor; scrolling keeps the two together.
+      const left = anchor.right + 4 + bounds.width <= window.innerWidth - 8
+        ? anchor.right + 4 : anchor.left - bounds.width - 4;
+      el!.style.left = `${Math.max(8, left)}px`;
+      el!.style.top = `${Math.max(8, Math.min(anchor.top - 5, window.innerHeight - bounds.height - 8))}px`;
     }
-    const over = el.getBoundingClientRect().bottom - (window.innerHeight - 8);
-    if (over > 0) el.style.top = `${-5 - over}px`;
+    position();
+    document.addEventListener("scroll", position, true);
+    return () => document.removeEventListener("scroll", position, true);
   }, [open, children.length]);
+  // React mounts the children after the opening event. A keyboard request
+  // focuses here, after commit; pointer hover never requests this focus.
+  useLayoutEffect(() => {
+    if (!open || !focusChildren) return;
+    const first = panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)");
+    first?.focus();
+    first?.scrollIntoView({ block: "nearest" });
+    setFocusChildren(false);
+  }, [open, focusChildren]);
   return (
     <div
       className="context-sub"
@@ -228,12 +271,19 @@ function Submenu({
       <button
         role="menuitem"
         aria-haspopup="menu"
+        ref={trigger}
         aria-expanded={open}
         className={`context-item${open ? " open" : ""}`}
         disabled={entry.disabled === true}
-        onClick={() => setOpen((was) => !was)}
+        onClick={(event) => {
+          const intent = event.currentTarget.dataset.menuIntent;
+          delete event.currentTarget.dataset.menuIntent;
+          if (intent === "keyboard-open") { setFocusChildren(true); setOpen(true); }
+          else if (intent === "close") { setFocusChildren(false); setOpen(false); }
+          else setOpen((was) => !was);
+        }}
         onKeyDown={(e) => {
-          if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") setOpen(true);
+          if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") { setFocusChildren(true); setOpen(true); }
           if (e.key === "ArrowLeft") setOpen(false);
         }}
       >

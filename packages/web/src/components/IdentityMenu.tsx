@@ -16,6 +16,7 @@ import { refreshActorMarks, useActorMarks } from "../lib/marks.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 import { HIDEABLE, showAllChrome } from "../lib/hideable.ts";
 import { EXPERIMENTS } from "../lib/experiments.ts";
+import { loadExperiments } from "../modules.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { TerminalDialog } from "./TerminalDialog.tsx";
@@ -334,7 +335,7 @@ export function IdentityMenu({
         })}
       </div>
       <div className="identity-menu-head">Theme</div>
-      <div className="theme-switch" role="group" aria-label="Theme">
+      <div className="theme-switch segmented" role="group" aria-label="Theme">
         {THEME_OPTS.map((opt) => (
           <button
             key={opt.value}
@@ -389,7 +390,10 @@ export function IdentityMenu({
                 <input
                   type="checkbox"
                   checked={experiments.includes(entry.id)}
-                  onChange={(e) => setExperiment(entry.id, e.target.checked)}
+                  onChange={(e) => {
+                    setExperiment(entry.id, e.target.checked);
+                    void loadExperiments();
+                  }}
                 />
                 <span className="chrome-name">{entry.name}</span>
                 <span className="chrome-where">{entry.what}</span>

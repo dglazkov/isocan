@@ -10,7 +10,7 @@ import { SPRINT_BOARD } from "@isocan/core";
 
 /**
  * **The board and the brief, over the wire** (sprint phase 1). A laid board
- * is eleven areas the daemon accepted where the layout put them; laying it
+ * is eleven groups the daemon accepted where the layout put them; laying it
  * again lays nothing; a phase called afterwards knows its sheet; the brief
  * lands on the Brief sheet and the second brief is a version of the first.
  */
@@ -73,9 +73,9 @@ describe("the board, laid and read back", () => {
     const laid = await json("sprint", "board");
     expect(laid.laid.map((one: any) => one.key)).toEqual(SPRINT_BOARD.map((one) => one.key));
     expect(laid.laid[0].x).toBeGreaterThan(400);
-    const areas = await json("area", "ls");
-    expect(areas.length).toBe(SPRINT_BOARD.length);
-    expect(areas[0]).toMatchObject({ title: "Brief", holds: "0" });
+    const groups = await json("area", "ls");
+    expect(groups.length).toBe(SPRINT_BOARD.length);
+    expect(groups[0]).toMatchObject({ title: "Brief", parentId: null, directCount: 0, directMemberIds: [] });
 
     // Again: nothing laid twice.
     const again = await json("sprint", "board");
@@ -95,6 +95,7 @@ describe("the board, laid and read back", () => {
     expect(first.version).toBe(1);
     const onBrief = await json("ls", "--in", "Brief");
     expect(onBrief.map((one: any) => one.title)).toEqual(["Brief"]);
+    expect(onBrief[0].containerId).toBe(groups[0].id);
     const second = await json("sprint", "brief", "--goal", "Sign-up feels like ten seconds", "--decider", "Maya", "--question", "Can we skip the password?");
     expect(second.itemId).toBe(first.itemId);
     expect(second.version).toBe(2);

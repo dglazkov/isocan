@@ -6,7 +6,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { SKILL_INSTALL_COMMAND } from "@isocan/core";
-import { TERMS_PATH, faceFor } from "../src/lib/faces.ts";
+import { PUBLIC_PATH, TERMS_PATH, faceFor } from "../src/lib/faces.ts";
 import { browserClipboard, copyLabel, copySaid, copyToClipboard } from "../src/lib/copy.ts";
 import { LEDGER, verbOf } from "../src/lib/ledger.ts";
 import { TERMS } from "../src/lib/terms.ts";
@@ -83,6 +83,12 @@ const { Doorway } = await import("../src/App.tsx");
 beforeEach(stubBrowserGlobals);
 
 describe("which face the origin wears", () => {
+  it("allows anonymous Public browsing at that exact path while named browsers retain app navigation", () => {
+    expect(faceFor(PUBLIC_PATH, null)).toBe("public");
+    expect(faceFor(`${PUBLIC_PATH}/`, null)).toBe("public");
+    expect(faceFor(PUBLIC_PATH, priya)).toBe("here");
+    for (const at of ["/publicity", "/public/other", "/p/public"]) expect(faceFor(at, null)).toBe("door");
+  });
   it("gives a browser that is nobody yet the front page, at the origin only", () => {
     expect(faceFor("/", null)).toBe("front-page");
     // A trailing slash names the same door.
@@ -254,7 +260,7 @@ describe("the front page", () => {
   it("sends nobody away to documentation to learn how to enter", () => {
     const hrefs = [...page().matchAll(/href="([^"]*)"/g)].map((m) => m[1]!);
     expect(hrefs.filter((h) => !h.startsWith("/"))).toEqual([GITHUB]);
-    expect(hrefs.filter((h) => h.startsWith("/"))).toEqual([TERMS_PATH]);
+    expect(hrefs.filter((h) => h.startsWith("/"))).toEqual([PUBLIC_PATH, TERMS_PATH]);
   });
 
   /**

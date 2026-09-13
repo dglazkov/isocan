@@ -6,11 +6,20 @@ export type {
   BlobMeta,
   BlobUploadRequest,
   LoadedCanvas,
+  PurgeReport,
   Store,
 } from "./store.ts";
 export { FileStore } from "./file-store.ts";
 export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.ts";
 export { FileDesk } from "./file-desk.ts";
+/**
+ * `liveAdmission` crosses the package boundary because the second desk backing
+ * has to ask it too (operator phase 2): "an admission that has run out is
+ * replaced, not kept" is one rule, and two backings that each had their own
+ * copy of it would be two rules.
+ */
+export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.ts";
+export { Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
 export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
 export {
   DocRefusal,
@@ -25,7 +34,7 @@ export {
   type GoogleToken,
 } from "./google.ts";
 export type { HomeConfig } from "./config.ts";
-export { askTheDoor, bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
+export { adoptIdentity, askTheDoor, bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
 export type { DoorAnswer, StoredBadge } from "./badge-store.ts";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.ts";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
@@ -62,3 +71,7 @@ export {
 } from "./binding.ts";
 export type { DirBinding, DirMarker } from "./binding.ts";
 export * from "./personas.ts";
+
+export * from "./personal-desk.ts";
+
+export type { CanvasLifecycle } from "./store.ts";

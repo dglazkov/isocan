@@ -2,7 +2,7 @@
 status: partial
 since: 2026-08-29
 issue: 146
-note: 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue
+note: 4 of 5 witnesses diagnosed; on 3 Sep the suite's fetch gained a per-attempt connect deadline (undici `UND_ERR_CONNECT_TIMEOUT`, provably before any bytes), so a lost SYN costs a 1.2 s retry inside the 3 s budget instead of the kernel's 7.8 s — proved against a stopped listener with a full queue. On 13 Sep the CLI's own client got the same pair, gated on the base being loopback: the product answered `error: fetch failed` after 7.8 s where it now answers in 1.6 s, and a loopback connect is 1 ms even against a blocked loop, so the deadline has no false-positive surface there and none is applied anywhere else
 ---
 # The flake family, and the first one caught in the act
 
@@ -936,3 +936,169 @@ stop, that is the eight-second stall gone; if a witness still fails inside
 a 3 s budget with three attempts, it is a listener that would not answer
 three SYNs in a row, and that is a different animal from any in this note.
 
+---
+
+## One that wore the family's name and was not in it, 12 Sep
+
+`rc.test.ts` was read as the family's last surviving member for a week: the
+slowest file in the suite, failing on unrelated commits including docs-only
+PRs, which is the family's signature. It is not in the family. Two cases
+were **waiting for a line that is not the last line of a sequence** — the
+pasture line rather than the badge line that follows an HTTP round trip
+after it, and the rc's *"answering on …"* rather than the cursor claims that
+land several round trips later. Both reproduce character for character by
+forcing the window with a `setTimeout` in the product, which is the test
+this note's own hypotheses were held to, and both survive that forcing once
+the sentinel names the end of the sequence. No connect was slow; nothing
+waited on a SYN.
+
+The lesson for anything still called a flake here: **before reaching for the
+family, check whether the test's wait and its assertion are the same
+moment.** That is cheaper to rule out than a kernel, it is forceable from
+inside the product, and this family's reputation is what made two of them
+look unforceable for a week. lessons.md #53 states the shape.
+
+**And the family showed up in the same campaign, where the 3 Sep fix does
+not reach.** Fifteen runs of the repaired rc files under 12x CPU
+oversubscription on 14 cores: fourteen clean, and the fifteenth failed
+differently — *"Percy · turn FAILED — fetch failed (retrying in 60s)"*,
+**eight seconds** after the summons, which is this note's own 7.8 s
+signature. That fetch is not the suite's. It is a SPAWNED `isocan rc`
+calling its daemon over loopback, so it uses Node's global fetch and gets
+the kernel's SYN ladder, where `test/setup.ts` got a 1.2 s connect deadline
+on 3 Sep. The product survived it — the turn is retried in 60 s, which is
+the rc behaving correctly — and only the test's 20 s deadline did not, so
+this is not a reason to widen a test. It is the one open question in this
+note arriving in a new place: **the connect deadline was given to the
+suite's client, and every process the suite starts has its own.** Whether
+the CLI's client should carry one is a product decision and has not been
+made; it has never been seen on CI, where the load is a quarter of this.
+
+
+### The decision, 13 Sep: yes, and only on loopback
+
+**The answer is yes, and the reason is not the test.** The test was the
+witness; the finding is what the same eight seconds does to a person at a
+terminal. Reproduced against the product's own client — Node's global fetch,
+a POST, the rig from `test/connect-deadline.test.ts`:
+
+```
+global fetch (the CLI today)     : 7815ms, "fetch failed", connect/ETIMEDOUT
+undici, connect deadline 1200ms  : 1502ms, UND_ERR_CONNECT_TIMEOUT
+```
+
+`DaemonRoutes.request` makes ONE attempt and does not catch, and `run()` in
+`main.ts` prints `error: ${err.message}` — so what a lost SYN hands somebody
+who typed `isocan add` is **`error: fetch failed`, after eight seconds, exit
+1, from a daemon that was alive and answering the whole time.** That is the
+same sentence this note spent a week indicting in the suite, shipped. The rc
+is the gentler case, not the representative one: it survives because it
+retries in 60 s, and the price it pays is a system line in somebody's thread
+saying an agent couldn't answer.
+
+**What decides it is a measurement, not a preference.** A loopback handshake
+is the kernel's own work, and the control this note already ran proves the
+process cannot slow it — re-run here directly:
+
+```
+TCP connect completed in 1ms against a listener whose loop was blocked 5s
+```
+
+So on 127.0.0.1 a connect is ~1 ms or it is a lost SYN. There is no
+slow-but-legitimate middle, which means a deadline there has **no
+false-positive surface at all** — it cannot refuse a connect that would have
+worked. That is not true anywhere else, and it is the whole of the argument.
+
+**Which is why the deadline is by ADDRESS and not by caller.** Measured from
+this machine: `isocan.io` 38 ms TCP / 78 ms TLS, `dev.isocan.io` 34/73,
+loopback 1 ms. A remote home is forty times further on a *good* link and
+seconds away on a bad one — and over `https:` undici's `connect.timeout`
+covers the TLS handshake too, because its connector clears the timer on
+`secureConnect` rather than on `connect` (`lib/core/connect.js`), so the
+budget a remote base would need is the doubled one. A bound generous here
+would refuse a slow link that was working. A remote base also has no 7.8 s ladder to escape: the thing being
+bought does not exist there. So remote keeps today's behaviour exactly — the
+platform's fetch, one attempt, no deadline. `healthPath` already made this
+choice belong to the address; `isLoopbackBase` is now that question, asked
+once, in `protocol.ts`.
+
+**The retry is what the deadline is for**, and it is the half that a "fail
+faster" framing misses. The release-mid-budget trial, same rig:
+
+```
+listener released at 1500ms → HTTP 200 after 1580ms, 2 attempts
+listener released at 3000ms → HTTP 200 after 3017ms, 3 attempts
+```
+
+Where the product today returns `fetch failed` at 7.8 s, it now returns the
+answer in 1.6 s. The licence is unchanged from 3 Sep and is the reason this
+is possible at all: `UND_ERR_CONNECT_TIMEOUT` means, by construction, that no
+request was written, so replaying a POST cannot land an op twice. An
+`AbortSignal.timeout` on the whole request — the obvious alternative, and the
+one the CLI uses for its probes — could not be retried for exactly that
+reason, which is why the bound is on the connect and not on the request.
+
+**A number that is not the number it says.** undici's connect deadline runs
+on its own coarse timer wheel: `setupConnectTimeout` calls `setFastTimeout`,
+which constructs a `FastTimer` unconditionally and never takes the native
+path that `timers.setTimeout` would for a delay under 1000 ms. Measured
+against the stopped listener:
+
+```
+connect.timeout  800ms → fired at 1015, 1004, 1003 ms
+connect.timeout 1000ms → fired at 1503, 1501, 1500 ms
+connect.timeout 1200ms → fired at 1500, 1501, 1501 ms
+connect.timeout 1500ms → fired at 2001, 2000, 2000 ms
+```
+
+So the suite's "1.2 s" is ~1.5 s on the wire, asking for less than a second
+buys nothing, and any value carries up to ~500 ms of slack. The product uses
+the same 1.2 s / 3 s pair, so there is one number to remember, and gives up
+at about 3.4 s after two or three attempts — measured — against 7.8 s and no
+chance of recovery.
+
+**What shipped.** `routes.ts` gains one replaceable thing and no new concept:
+a `fetcher` field defaulting to the platform's fetch, because `undici` is
+Node and the moment the route surface imports it the browser build of the
+transport kernel stops being possible (`boundary.test.ts`). The mechanism —
+deadline and bounded retry together, which are only safe together — lives in
+`client.ts`, the half already allowed to know about Node, and `DaemonClient`
+installs it when `isLoopbackBase(this.base)`. When it does give up it says
+which daemon, what happened to the connection, how many attempts, and that
+nothing was sent — so the next occurrence in somebody's terminal is evidence
+rather than another sighting, which is the same move the instrument made for
+the suite.
+
+**One thing the suite retries on and the product does not.** `ECONNREFUSED`
+is in `test/setup.ts`'s predicate and is not in the product's, though it is
+equally provable and equally safe to replay. It is also the answer for a
+daemon that simply is not running — instant today, and three seconds of
+hopeful sleeping before the identical failure if it were retried. The suite
+wants that, because its daemons are always on their way back; a person at a
+terminal does not. What is being bought here is the 7.8 s ladder, so the
+predicate is exactly the ladder: `UND_ERR_CONNECT_TIMEOUT` and
+`connect/ETIMEDOUT`, nothing else.
+
+**Three things this deliberately does not claim.**
+
+- **It does not bound a response.** A daemon that accepts and then never
+  answers still hangs the CLI forever, exactly as today. That is a different
+  animal and needs a different, unsafe-to-retry bound.
+- **It does not cover `askTheDoor`.** The door POST — the route four
+  witnesses in this note hit — lives in `@isocan/server` and keeps its 10 s
+  abort, which already contains the ladder without escaping it. Reached only
+  after a 401, and widening the seam to thread a fetch through the server
+  package buys less than it costs.
+- **It does not explain the seventh witness.** Arrived-and-not-completed
+  still stands, and this changes what that costs rather than why it happens
+  — the same thing the 3 Sep fix said about itself, now said on the other
+  side of the process boundary.
+
+**And the honest limit of the test that guards it.** Inside this suite
+`globalThis.fetch` IS the bounded, retrying one, so a product path with no
+deadline of its own still looks fast here and a duration alone cannot tell
+the two apart. `packages/api/test/connect-deadline.test.ts` is decomposed
+around that: two cases say what the bounded fetch does, and a third says the
+product is the thing using it — reverting the override leaves the first
+standing only on its sentence and fails the third. No test was widened for
+any of this.

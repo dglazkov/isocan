@@ -1,3 +1,4 @@
+import type { GroupBox, TextAnchor } from "@isocan/core";
 import { create } from "zustand";
 import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
@@ -5,6 +6,7 @@ import type { Clipboard } from "../lib/clipboard.ts";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
+import { chooseMinimap, minimapShown, narrowNow, type MinimapFold } from "../lib/minimapfold.ts";
 
 /** The pointer tools on the right rail. */
 export type Tool = "select" | "hand" | "comment" | "zoom" | "pen" | "text";
@@ -41,6 +43,8 @@ export interface ResizeState {
 
 /** A text node being typed — before it exists, or while it is re-worded. */
 export interface PendingText {
+  /** The scope at composition start, retained through async upload and later navigation. */
+  containerId?: string | null;
   /** World coordinates of the node's top-left. */
   x: number;
   y: number;
@@ -78,6 +82,8 @@ export interface PendingText {
 }
 
 export interface PendingComment {
+  /** A quote captured before the composer takes focus. */
+  textAnchor?: TextAnchor;
   /** World coordinates of the click. */
   x: number;
   y: number;
@@ -93,6 +99,8 @@ interface UiStore {
   fannedItemId: string | null;
   drag: DragState | null;
   resize: ResizeState | null;
+  groupPreview: { id: string; boxes: ReadonlyMap<string, GroupBox> } | null;
+  groupDropTargetId: string | null;
   marquee: MarqueeState | null;
   /** Alignment guides for the drag in hand: the lines the dragged box has
    * settled onto. World coordinates; empty when nothing is aligned. */
@@ -102,6 +110,9 @@ interface UiStore {
   /** Item whose content owns the pointer (entered by double-click): an HTML
    * document or a projected browser item. */
   enteredItemId: string | null;
+  /** Membership scope; separate from an embedded document owning the pointer. */
+  activeGroupId: string | null;
+  groupDialog: { kind: "create" | "add" | "inspect" | "migrate"; itemIds: string[]; groupId?: string; at?: { x: number; y: number } } | null;
   /** Item whose name is being edited in place — double-clicking the label, or
    * F2 on the selection. */
   renamingItemId: string | null;
@@ -167,9 +178,13 @@ interface UiStore {
   /** The docked main-thread panel (pill when closed). Persisted per canvas
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
-  /** The minimap, which folds away into its corner. Remembered per browser:
-   * someone who put it away wants it away tomorrow too. */
+  /** Whether the minimap is drawn open NOW — what every control reads. The
+   * choice behind it is remembered per browser (someone who put it away wants
+   * it away tomorrow too), but below 460px the width folds it without
+   * touching that choice: see `lib/minimapfold.ts` (#182). */
   minimapOpen: boolean;
+  /** The three facts `minimapOpen` is derived from; only `kept` is stored. */
+  minimapFold: MinimapFold;
   /** Whether the dot grid lights up under the pointer. */
   cursorGlow: boolean;
   /** Full screen shows the slide's speaker note to the presenter (N). A
@@ -247,6 +262,12 @@ interface UiStore {
    *  3), so the slots that read the module list re-render. Never stored. */
   modulesGeneration: number;
   bumpModules: () => void;
+  /** The module dialog open over the canvas, if any (proposed: `dialogs`):
+   *  which one, and what followed the slash command that opened it. One at a
+   *  time, by construction. Never stored. */
+  moduleDialog: { id: string; args: string } | null;
+  openModuleDialog: (id: string, args?: string) => void;
+  closeModuleDialog: () => void;
   /** Google Doc items this browser shows LIVE — the `/preview` frame in
    *  place of the words (Google Docs stage 4). A mode you flip, remembered
    *  per person, never a second item. */
@@ -281,9 +302,13 @@ interface UiStore {
   setFanned: (itemId: string | null) => void;
   setDrag: (drag: DragState | null) => void;
   setResize: (resize: ResizeState | null) => void;
+  setGroupPreview: (preview: UiStore["groupPreview"]) => void;
+  setGroupDropTarget: (itemId: string | null) => void;
   setMarquee: (marquee: MarqueeState | null) => void;
   setGuides: (guides: Guide[], spacing?: SpacingGuide[]) => void;
   setEntered: (itemId: string | null) => void;
+  setActiveGroup: (itemId: string | null) => void;
+  setGroupDialog: (dialog: UiStore["groupDialog"]) => void;
   setRenaming: (itemId: string | null) => void;
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
@@ -311,7 +336,11 @@ interface UiStore {
   setIdentityOpen: (open: boolean) => void;
   setShareOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
+  /** A person folding or unfolding the map. Written to storage only on a
+   *  wide window; on a narrow one it holds for this visit. */
   setMinimapOpen: (open: boolean) => void;
+  /** The width crossing 460px, from the media query. Never stored. */
+  setMinimapNarrow: (narrow: boolean) => void;
   /**
    * **The cursor glow, off if you want it off.**
    *
@@ -574,7 +603,15 @@ function writeInkColor(color: string | null): void {
 }
 
 /** Local-only UI state — never synced, deliberately per-client. */
-export const useUiStore = create<UiStore>((set) => {
+export const useUiStore = create<UiStore>((set, get) => {
+  // The width is read once here, so the first paint on a phone is already
+  // folded rather than open for a frame and then folding; the Minimap keeps
+  // it current from then on.
+  const minimapFold: MinimapFold = {
+    kept: readFlag(MINIMAP_KEY, true),
+    narrow: narrowNow(),
+    narrowOpen: false,
+  };
   // Fan-out and entered-HTML only make sense for a single-item selection.
   const selectionSideEffects = (s: UiStore, next: string[]) => ({
     selectedItemIds: next,
@@ -587,10 +624,14 @@ export const useUiStore = create<UiStore>((set) => {
     fannedItemId: null,
     drag: null,
     resize: null,
+    groupPreview: null,
+    groupDropTargetId: null,
     marquee: null,
     guides: [],
     spacing: [],
     enteredItemId: null,
+    activeGroupId: null,
+    groupDialog: null,
     renamingItemId: null,
     openThreadId: null,
     pendingComment: null,
@@ -613,7 +654,8 @@ export const useUiStore = create<UiStore>((set) => {
     identityOpen: false,
     shareOpen: false,
     mainPanelOpen: false,
-    minimapOpen: readFlag(MINIMAP_KEY, true),
+    minimapOpen: minimapShown(minimapFold),
+    minimapFold,
     cursorGlow: readFlag(GLOW_KEY, true),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     panelWidth: readPanelWidth(),
@@ -632,6 +674,9 @@ export const useUiStore = create<UiStore>((set) => {
     collapsedComments: [],
     modulesGeneration: 0,
     bumpModules: () => set((s) => ({ modulesGeneration: s.modulesGeneration + 1 })),
+    moduleDialog: null,
+    openModuleDialog: (id, args = "") => set({ moduleDialog: { id, args } }),
+    closeModuleDialog: () => set({ moduleDialog: null }),
     liveDocs: readIdList(LIVE_DOCS_KEY),
     pendingChat: null,
     paletteOpen: null,
@@ -659,9 +704,13 @@ export const useUiStore = create<UiStore>((set) => {
     setFanned: (fannedItemId) => set({ fannedItemId }),
     setDrag: (drag) => set({ drag }),
     setResize: (resize) => set({ resize }),
+    setGroupPreview: (groupPreview) => set({ groupPreview }),
+    setGroupDropTarget: (groupDropTargetId) => set({ groupDropTargetId }),
     setMarquee: (marquee) => set({ marquee }),
     setGuides: (guides, spacing = []) => set({ guides, spacing }),
     setEntered: (enteredItemId) => set({ enteredItemId }),
+    setActiveGroup: (activeGroupId) => set({ activeGroupId, enteredItemId: null, selectedItemIds: [] }),
+    setGroupDialog: (groupDialog) => set({ groupDialog }),
     setRenaming: (renamingItemId) => set({ renamingItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
@@ -681,7 +730,7 @@ export const useUiStore = create<UiStore>((set) => {
       set((s) =>
         pendingText === null && s.pendingText?.oneShot === true && s.activeTool === "text"
           ? { pendingText, activeTool: "select" as Tool }
-          : { pendingText },
+          : { pendingText: pendingText && pendingText.containerId === undefined ? { ...pendingText, containerId: s.activeGroupId } : pendingText },
       ),
     setClipboard: (clipboard) => set({ clipboard }),
     setContextMenu: (contextMenu) => set({ contextMenu }),
@@ -827,9 +876,18 @@ export const useUiStore = create<UiStore>((set) => {
       writeFlag(GLOW_KEY, cursorGlow);
       set({ cursorGlow });
     },
-    setMinimapOpen: (minimapOpen) => {
-      writeFlag(MINIMAP_KEY, minimapOpen);
-      set({ minimapOpen });
+    setMinimapOpen: (open) => {
+      const { fold, store } = chooseMinimap(get().minimapFold, open);
+      // Only a wide window's choice is a preference. A narrow one is this
+      // visit's, and writing it would be the width deciding the desktop.
+      if (store) writeFlag(MINIMAP_KEY, open);
+      set({ minimapFold: fold, minimapOpen: minimapShown(fold) });
+    },
+    setMinimapNarrow: (narrow) => {
+      const was = get().minimapFold;
+      if (was.narrow === narrow) return;
+      const fold = { ...was, narrow };
+      set({ minimapFold: fold, minimapOpen: minimapShown(fold) });
     },
   };
 });

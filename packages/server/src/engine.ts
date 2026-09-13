@@ -1,4 +1,8 @@
+import { PersonalError } from "./personal.ts";
+import type { PersonalSourceRecord } from "./personal-desk.ts";
+import type { SourceRequestContext } from "@isocan/core";
 import { createHash } from "node:crypto";
+import { StringDecoder } from "node:string_decoder";
 import type {
   Actor,
   ActorBindingRecord,
@@ -8,6 +12,7 @@ import type {
   ActorJoinOp,
   ActorJoins,
   ActorMarks,
+  HomeRefusal,
   ActorKinds,
   ActorNames,
   ActorRegistry,
@@ -25,11 +30,15 @@ import type {
   ServerMessage,
   SlashCommand,
   UploadTicket,
+  GroupChange,
+  GroupMigrationEffect,
 } from "@isocan/core";
 import {
   INTERNAL_OP_TYPES,
   OplogFencedError,
   OpValidationError,
+  refusalSentence,
+  REFUSED,
   DEFAULT_COMMANDS,
   actorAliases,
   actorColors,
@@ -57,7 +66,19 @@ import {
   positionIsMeaningful,
   resolvePlacement,
   SHELF,
+  GroupConflictError,
+  resolveCanvasGroupRequest,
+  validateGroupForest,
+  isGroupItem,
+  rejectPublicContext,
+  resolveContextOperation,
+  validateContextManifest,
+  MigrationBoundaryError,
+  canvasGroupMigrationPreview,
+  resolveCanvasGroupMigration,
 } from "@isocan/core";
+import { groupOperation, requireGroupClient } from "./canvas-groups.ts";
+import { contextBlobAvailable, hydrateContextManifest } from "./canvas-group-context.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
 import { admittingGrant, ensureHomeLinkGrant, ensureLinkGrant } from "./grants.ts";
@@ -154,6 +175,17 @@ interface EngineOptions {
   /** Who is visibly on a canvas right now — presence, which lives outside
    * the engine. Claims consult it so a live face holds its name. */
   liveness?: (canvasId: string) => PresenceSession[];
+  /**
+   * **The operator's refusal on a name, or null** (operator phase 6). Handed
+   * in rather than reached for, because the engine must not import the
+   * refusals registry — it is home-scope operator state, and the engine
+   * judges actors, never operator standing. When it answers with a row,
+   * `actor.claim {as}` for that name is refused with the home's sentence: the
+   * name stops coming back, which is the `actor:` subject's whole job and the
+   * enforcement operator phase 4 said would land here. Absent in a caller
+   * that wired the engine by hand — a home with no operator refuses nobody.
+   */
+  refusedActor?: (actorId: string) => HomeRefusal | null;
 }
 
 export class CanvasNotFoundError extends Error {
@@ -171,6 +203,9 @@ export class NothingToUndoError extends Error {
 }
 
 interface SubmitRequest {
+  sourceContext?: SourceRequestContext;
+  clientFeatures?: string;
+  originGroupMode?: "legacy" | "groups";
   canvasId: string | null;
   actor: Actor;
   clientId?: string;
@@ -366,6 +401,76 @@ export class Engine {
     const result = this.queue.then(work);
     this.queue = result.catch(() => {});
     return result;
+  }
+
+  /** HomeLink records classification before adopting any private replica bytes. */
+  recordPersonalReplica(canvasId: string, home: string): Promise<void> { return this.desk.recordPersonalReplica(canvasId, home); }
+
+  private async refusePersonalTransfer(canvasId: string): Promise<void> {
+    if (await this.desk.personalSource(canvasId) || await this.desk.personalReplica(canvasId)) {
+      throw new PersonalError("personal sources cannot be teleported or adopted; their private ownership stays at their home", "personal-transfer-refused");
+    }
+  }
+
+  /** Request policy is rechecked when queued work begins, before any source state is loaded. */
+  private sourceGuard?: (canvasId: string, badgeId: string, context: SourceRequestContext, intent: "read" | "edit" | "own", actorId?: string) => Promise<void>;
+
+  setSourceGuard(guard: NonNullable<Engine["sourceGuard"]>): void { this.sourceGuard = guard; }
+
+  /** A private workflow enters this queue once; callbacks use only the unqueued writer port. */
+  personalWrite<T>(work: (port: {
+    snapshot: (canvasId: string) => Promise<CanvasSnapshotResponse>;
+    submit: (request: SubmitRequest) => Promise<LogEntry>;
+    birth: (source: PersonalSourceRecord, actor: Actor, badgeId: string) => Promise<boolean>;
+  }) => Promise<T>): Promise<T> {
+    return this.enqueue(() => work({
+      snapshot: (id) => this.getSnapshot(id),
+      submit: async (request) => {
+        await this.requireActor(request.badgeId, request.actor.id);
+        if (this.homes?.for(request.canvasId!)) throw new Error("personal writes require the authoritative home");
+        const prior = request.opId ? await this.alreadyWritten(request) : null;
+        return prior ?? this.applyAndPersist(request, undefined);
+      },
+      birth: (source, actor, badgeId) => this.birthPersonal(source, actor, badgeId),
+    }));
+  }
+
+  private async birthPersonal(source: PersonalSourceRecord, actor: Actor, badgeId: string): Promise<boolean> {
+    await this.requireActor(badgeId, actor.id);
+    const lifecycle = await this.store.canvasLifecycle(source.canvasId);
+    if (lifecycle === "live") {
+      if (source.birth === "reserved") {
+        const first = (await this.store.readBirthLog(source.canvasId))[0];
+        const joined = await this.actorJoins();
+        if (!first || first.seq !== 1 || first.envelope.id !== source.birthOpId || first.envelope.op.type !== "project.create" || first.envelope.op.canvasId !== source.canvasId ||
+            resolveActor(joined, first.envelope.actor.id) !== resolveActor(joined, source.ownerId)) throw new Error("reserved personal birth does not match the existing canvas");
+      }
+      await this.desk.finishPersonalBirth(source.canvasId, source.birthOpId); return false;
+    }
+    if (source.birth === "created" || !["absent", "incomplete"].includes(lifecycle)) return false;
+    if (this.homes) await this.homes.bindLocal(source.canvasId);
+    const entries = await this.store.readBirthLog(source.canvasId);
+    if (entries.length) {
+      const first = entries[0]!;
+      const op = first.envelope.op;
+      if (first.seq !== 1 || first.envelope.id !== source.birthOpId || resolveActor(await this.actorJoins(), first.envelope.actor.id) !== resolveActor(await this.actorJoins(), source.ownerId) ||
+          op.type !== "project.create" || op.canvasId !== source.canvasId) throw new Error("reserved personal birth log does not match");
+      let state = applyOperation(null, first.envelope);
+      let seq = 1;
+      for (const entry of entries.slice(1)) {
+        if (entry.seq !== seq + 1 || !state) throw new Error("personal birth log is incomplete");
+        state = applyOperation(state, entry.envelope); seq = entry.seq;
+      }
+      if (!state) throw new Error("personal source was deleted during birth");
+      await this.store.saveSnapshot(source.canvasId, state, seq);
+      this.canvases.delete(source.canvasId);
+    } else {
+      await this.createProject({ canvasId: null, actor, badgeId, opId: source.birthOpId, withoutLinkGrant: true,
+        op: { type: "project.create", canvasId: source.canvasId, title: `~${actor.name}`, groupMode: "groups" } },
+        { type: "project.create", canvasId: source.canvasId, title: `~${actor.name}`, groupMode: "groups" }, source);
+    }
+    await this.desk.finishPersonalBirth(source.canvasId, source.birthOpId);
+    return true;
   }
 
   async listCanvases(): Promise<Canvas[]> {
@@ -820,8 +925,11 @@ export class Engine {
     canvasId: string,
     toHomeUrl: string,
     options: { dryRun: boolean },
+    sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<TeleportReport> {
     return this.enqueue(async () => {
+      await this.refusePersonalTransfer(canvasId);
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       const already = this.homes?.for(canvasId) ?? null;
       if (already !== null) {
         throw new OpValidationError(
@@ -910,8 +1018,10 @@ export class Engine {
    * merging two orders is the thing `docs/research/2026-09-01-teleport.md`
    * argues is a different product.
    */
-  adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{ seqs: number }> {
+  adopt(canvasId: string, entries: readonly LogEntry[], sourceContext?: SourceRequestContext, badgeId?: string): Promise<{ seqs: number }> {
     return this.enqueue(async () => {
+      await this.refusePersonalTransfer(canvasId);
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       if (await this.store.canvasExists(canvasId)) {
         throw new OpValidationError(
           "bad-op",
@@ -962,8 +1072,35 @@ export class Engine {
     return this.store.readArchivedLog(canvasId);
   }
 
+  /** A migration preview reads the home's current revision, even through a replica. */
+  groupMigrationPreview(canvasId: string, sourceContext?: SourceRequestContext, badgeId?: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview> {
+    return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "read"); }
+      const home = this.homes?.for(canvasId);
+      if (home) return home.groupMigrationPreview(canvasId);
+      const runtime = await this.runtime(canvasId);
+      return canvasGroupMigrationPreview(runtime.state, runtime.lastSeq);
+    });
+  }
+
   submit(request: SubmitRequest): Promise<LogEntry> {
     return this.enqueue(async () => {
+      const targetId = request.canvasId ?? (request.op.type === "project.create" ? request.op.canvasId : undefined);
+      if (request.sourceContext && targetId) await this.sourceGuard?.(targetId, request.badgeId, request.sourceContext, request.op.type === "project.create" ? "own" : "edit", request.actor.id);
+      if (request.op.type === "project.create" && (await this.desk.personalSource(request.op.canvasId) || await this.desk.personalReplica(request.op.canvasId))) {
+        throw new PersonalError("a personal source can only be born through its reserved private birth", "personal-birth-reserved");
+      }
+      if (request.originGroupMode !== undefined && request.originGroupMode !== "legacy" && request.originGroupMode !== "groups") throw new OpValidationError("bad-op", "originGroupMode must be legacy or groups");
+      rejectPublicContext(request.op);
+      if (request.op.type === "project.create" && request.op.groupMode !== undefined &&
+          request.op.groupMode !== "groups" && request.op.groupMode !== "legacy") {
+        throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
+      }
+      // Canonical records are writer/undo output, never a public patch API.
+      // Check before forwarding AND before looking up an idempotent receipt.
+      if (request.op.type === "group.change" && request.op.action?.kind === "apply") {
+        throw new OpValidationError("internal-op", "resolved group changes cannot be issued directly");
+      }
       // Mechanism 5's local half, and it runs on a replica exactly as it runs
       // on a home: THIS daemon is the only one that can tell one process on
       // this machine from another, so it checks session-level before anything
@@ -1298,8 +1435,10 @@ export class Engine {
     canvasId: string,
     data: Buffer,
     meta: { mimeType: string; filename: string },
+    sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
     return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       // On a replica the bytes go where the ops that name them go — the home
       // first, because its refusal is the one that matters, and then here.
       // Both copies, not one: the home is where every browser tab and every
@@ -1369,6 +1508,7 @@ export class Engine {
   reconcileBlobs(
     canvasId: string,
     options: { push: boolean },
+    sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<{
     home: string | null;
     checked: number;
@@ -1377,6 +1517,7 @@ export class Engine {
     unknown: string[];
   }> {
     return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       const home = this.homes?.for(canvasId) ?? null;
       // No home is not a problem to report: this daemon IS where the bytes
       // live, and there is nothing for them to be behind.
@@ -1418,7 +1559,8 @@ export class Engine {
    * nothing, and minting can involve a round trip to a signing API — putting
    * it on the chain would stall every op behind somebody's video.
    */
-  beginUpload(canvasId: string, request: BlobUploadRequest): Promise<UploadTicket | null> {
+  async beginUpload(canvasId: string, request: BlobUploadRequest, sourceContext?: SourceRequestContext, badgeId?: string): Promise<UploadTicket | null> {
+    if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
     return this.store.beginUpload(canvasId, request);
   }
 
@@ -1431,8 +1573,12 @@ export class Engine {
   registerBlob(
     canvasId: string,
     request: BlobUploadRequest,
+    sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
-    return this.enqueue(() => this.store.registerBlob(canvasId, request));
+    return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
+      return this.store.registerBlob(canvasId, request);
+    });
   }
 
   /**
@@ -1441,8 +1587,9 @@ export class Engine {
    * changed); inverses invalidated by other actors' ops are repaired (batch
    * ops shrink to their surviving members) or skipped entirely.
    */
-  undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
+  undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string, sourceContext?: SourceRequestContext): Promise<LogEntry> {
     return this.enqueue(async () => {
+      if (sourceContext) await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit", actor.id);
       // Checked here as well as on `submit`, and for a reason of its own:
       // undo is actor-scoped, so naming somebody else is not a slip, it is
       // undoing their work.
@@ -1459,11 +1606,13 @@ export class Engine {
           canvasId,
           await home.undo(canvasId, {
             actor,
+            ...(clientFeatures !== undefined ? { clientFeatures } : {}),
             ...(clientId !== undefined ? { clientId } : {}),
           }),
         );
       }
       const runtime = await this.runtime(canvasId);
+      if (clientFeatures !== undefined) requireGroupClient(clientFeatures, runtime.state.project);
       /**
        * **One ⌘Z reverses one GESTURE**, which is usually one op and is
        * sometimes eight — see `LogEntry.group`.
@@ -1490,8 +1639,12 @@ export class Engine {
           throw new NothingToUndoError("undo", actor.name);
         }
         const targetSeq = group[0]!;
+        checkMigrationHistoryBoundary(runtime, group);
+        const inverses = group.map((seq) => undoOperationFor(runtime, runtime.entries.find((entry) => entry.seq === seq)!));
+        for (const inverse of inverses) checkMigrationRollback(runtime, inverse);
+        preflightGroupHistory(runtime.state, inverses, actor);
         const target = runtime.entries.find((entry) => entry.seq === targetSeq)!;
-        const op = repairInverse(runtime.state, target.inverse!);
+        const op = repairInverse(runtime.state, undoOperationFor(runtime, target));
         if (op !== null) {
           try {
             written = await this.applyAndPersist(
@@ -1503,6 +1656,7 @@ export class Engine {
             if (group.length === 1) return written;
             continue;
           } catch (err) {
+            if (op.type === "group.change" || err instanceof GroupConflictError) throw err;
             if (!(err instanceof OpValidationError)) throw err;
           }
         }
@@ -1513,8 +1667,9 @@ export class Engine {
     });
   }
 
-  redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
+  redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string, sourceContext?: SourceRequestContext): Promise<LogEntry> {
     return this.enqueue(async () => {
+      if (sourceContext) await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit", actor.id);
       await this.requireActor(badgeId, actor.id);
       // This canvas's home; see `undo` above.
       const home = this.homes?.for(canvasId) ?? null;
@@ -1523,11 +1678,13 @@ export class Engine {
           canvasId,
           await home.redo(canvasId, {
             actor,
+            ...(clientFeatures !== undefined ? { clientFeatures } : {}),
             ...(clientId !== undefined ? { clientId } : {}),
           }),
         );
       }
       const runtime = await this.runtime(canvasId);
+      if (clientFeatures !== undefined) requireGroupClient(clientFeatures, runtime.state.project);
       // The mirror of `undo` above, member for member: a gesture redone is a
       // gesture, and in the order it was originally written.
       const person = actorAliases((await this.actors()).registry.joined, actor.id);
@@ -1539,6 +1696,11 @@ export class Engine {
           throw new NothingToUndoError("redo", actor.name);
         }
         const next = group[0]!;
+        checkMigrationHistoryBoundary(runtime, group.map((candidate) => candidate.targetSeq));
+        preflightGroupHistory(runtime.state, group.map((candidate) => redoOpFor(
+          runtime.entries.find((entry) => entry.seq === candidate.targetSeq)!,
+          runtime.entries.find((entry) => entry.seq === candidate.undoSeq)!,
+        )), actor);
         const target = runtime.entries.find((entry) => entry.seq === next.targetSeq)!;
         const undoEntry = runtime.entries.find((entry) => entry.seq === next.undoSeq)!;
         const op = repairInverse(runtime.state, redoOpFor(target, undoEntry));
@@ -1551,6 +1713,7 @@ export class Engine {
             if (group.length === 1) return redone;
             continue;
           } catch (err) {
+            if (op.type === "group.change" || err instanceof GroupConflictError) throw err;
             if (!(err instanceof OpValidationError)) throw err;
           }
         }
@@ -1566,8 +1729,9 @@ export class Engine {
    * cannot race a mutation; the mtime grace period covers uploads that have
    * not become items yet. Maintenance, not an Operation — never undoable.
    */
-  gc(canvasId: string, options: GcOptions = {}): Promise<GcReport> {
+  gc(canvasId: string, options: GcOptions = {}, sourceContext?: SourceRequestContext, badgeId?: string): Promise<GcReport> {
     return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       const runtime = await this.runtime(canvasId);
       const keepOps = options.keepOps ?? DEFAULT_KEEP_OPS;
       const graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
@@ -1679,6 +1843,19 @@ export class Engine {
   adoptRemoteSnapshot(canvasId: string, snapshot: CanvasSnapshotResponse): Promise<void> {
     return this.enqueue(async () => {
       const state: CanvasState = { project: snapshot.project, canvas: snapshot.canvas };
+      if (state.project.id !== canvasId) throw new OpValidationError("bad-op", "snapshot belongs to another canvas");
+      if (state.project.groupMode !== undefined && state.project.groupMode !== "groups" && state.project.groupMode !== "legacy") {
+        throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
+      }
+      validateGroupForest(state);
+      // Snapshot adoption bypasses the reducer. Validate retained provenance
+      // here too, without requiring its original items or versions to survive.
+      for (const thread of Object.values(state.canvas.threads)) {
+        for (const comment of thread.comments) if (comment.context !== undefined) {
+          if (state.project.groupMode !== "groups") throw new OpValidationError("bad-op", "frozen context requires a group-mode canvas");
+          validateContextManifest(comment.context, canvasId);
+        }
+      }
       let held: LogEntry[] = [];
       if (await this.store.canvasExists(canvasId)) {
         const runtime = await this.runtime(canvasId).catch(() => null);
@@ -1708,6 +1885,25 @@ export class Engine {
       // sitting in their store.
       await ensureHomeLinkGrant(this.desk, canvasId);
     });
+  }
+
+  /**
+   * **Forget the in-memory copy of a canvas, without touching the store.**
+   *
+   * A delete does this as its third step; a TAKEDOWN does only this (operator
+   * phase 2). The engine holds a canvas's state, its log tail and its undo
+   * stack in `canvases`, and a home that had stopped serving a canvas while
+   * still holding it in memory would go on answering `getSnapshot` from the
+   * cache — which is the one read the content origin makes on the serve path,
+   * so a signed URL minted a minute before would keep working. The phase's
+   * acceptance is precisely that it does not.
+   *
+   * Public and named, rather than the fourth bare `canvases.delete` in this
+   * file: the takedown route is outside the engine, and a caller reaching into
+   * a private map is how the three deletes above came to be three copies.
+   */
+  drop(canvasId: string): void {
+    this.canvases.delete(canvasId);
   }
 
   /** The home says this canvas is gone. Soft, like every delete here: the
@@ -1820,6 +2016,8 @@ export class Engine {
    * on. */
   private async forwardSubmit(home: HomeConnection, request: SubmitRequest): Promise<LogEntry> {
     const answer = await home.submitOp({
+      ...(request.clientFeatures !== undefined ? { clientFeatures: request.clientFeatures } : {}),
+      ...(request.originGroupMode !== undefined ? { originGroupMode: request.originGroupMode } : {}),
       canvasId: request.canvasId,
       actor: request.actor,
       op: request.op,
@@ -1940,6 +2138,19 @@ export class Engine {
   private async applyClaimAndPersist(request: ClaimRequest): Promise<LogEntry> {
     const runtime = await this.actors();
     const ts = new Date().toISOString();
+    /**
+     * **The operator refused this name** (operator phase 6). Only `as`
+     * resuming an existing actor is checked: `fresh` mints a new name, which
+     * the operator has never seen and cannot have refused, and the whole
+     * point of refusing an `actor:` is that the name *stops coming back* — a
+     * modified client re-badging and re-claiming the ended name (operator
+     * phase 4's open finding) meets this here, at the one writer, where a
+     * client-side courtesy could not reach it. The sentence is the home's.
+     */
+    if (request.op.as) {
+      const refused = this.options.refusedActor?.(request.op.as);
+      if (refused) throw new OpValidationError(REFUSED, refusalSentence(refused));
+    }
     const { registry, actor, claims, adopted } = applyClaim(
       await this.claimContext(request, runtime.registry, ts),
       request.op,
@@ -2359,6 +2570,9 @@ export class Engine {
     }
     const runtime = await this.runtime(canvasId);
 
+    if (request.clientFeatures !== undefined) requireGroupClient(request.clientFeatures, runtime.state.project);
+    if (cause === undefined && request.originGroupMode !== undefined && request.originGroupMode !== (runtime.state.project.groupMode ?? "legacy")) throw new MigrationBoundaryError(`This write was prepared in ${request.originGroupMode} mode, but the canvas now uses ${runtime.state.project.groupMode ?? "legacy"}. Review the queued work before sending a new request.`);
+
     // Normalize placement so the logged op never references ephemeral client
     // state — and so it records where the item ACTUALLY went.
     //
@@ -2373,8 +2587,8 @@ export class Engine {
     // is what makes the reducer's own call a no-op on the way back: any
     // correct search returns a free spot unchanged, so the layout survives the
     // algorithm changing.
-    const normalizedOp: Operation =
-      op.type === "item.add"
+    let normalizedOp: Operation =
+      op.type === "item.add" && runtime.state.project.groupMode !== "groups"
         ? {
             ...op,
             placement: {
@@ -2393,7 +2607,57 @@ export class Engine {
           }
         : op;
 
+    const contentOp = normalizedOp.type === "group.change" && normalizedOp.action.kind === "content" ? normalizedOp.action.operation : normalizedOp;
+    if (cause === undefined && runtime.state.project.groupMode === "groups" && (contentOp.type === "item.addVersion" || contentOp.type === "item.setCurrentVersion")) {
+      const item = runtime.state.canvas.items[contentOp.itemId];
+      if (item && isGroupItem(item) && contentOp.briefHeight === undefined) {
+        const version = contentOp.type === "item.addVersion" ? contentOp.version : item.versions.find((one) => one.id === contentOp.versionId);
+        if (version?.mimeType === "text/markdown") {
+          const stream = await this.store.openBlob(canvasId, version.blobHash);
+          if (!stream) throw new OpValidationError("bad-op", "group brief bytes are unavailable; upload them before changing the brief");
+          const decoder = new StringDecoder("utf8");
+          let nonempty = false;
+          for await (const chunk of stream) { if (/\S/u.test(decoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))) { nonempty = true; break; } }
+          nonempty ||= /\S/u.test(decoder.end());
+          const repaired = { ...contentOp, briefHeight: nonempty ? item.groupLayout?.briefHeight || 120 : 0 };
+          normalizedOp = normalizedOp.type === "group.change" ? { type: "group.change", action: { kind: "content", operation: repaired } } : repaired;
+        }
+      }
+    }
+    if (cause === undefined) {
+      normalizedOp = resolveContextOperation(runtime.state, runtime.lastSeq, normalizedOp);
+      if (normalizedOp.type === "thread.create" || normalizedOp.type === "thread.reply") {
+        if (normalizedOp.comment.context) normalizedOp = { ...normalizedOp, comment: { ...normalizedOp.comment, context: await hydrateContextManifest(this.store, runtime.state, normalizedOp.comment.context) } };
+      } else if (normalizedOp.type === "comment.update" && normalizedOp.context) {
+        normalizedOp = { ...normalizedOp, context: await hydrateContextManifest(this.store, runtime.state, normalizedOp.context) };
+      }
+    }
     const envelope = this.envelope(request, normalizedOp);
+    if (cause?.kind === "redo" && isMigrationChange(normalizedOp, "groups")) {
+      normalizedOp = { ...normalizedOp, action: { kind: "apply", change: { ...normalizedOp.action.change, migration: { ...normalizedOp.action.change.migration!, boundary: { version: 1, opId: envelope.id, seq: runtime.lastSeq + 1 } } } } };
+      envelope.op = normalizedOp;
+    }
+    if (cause === undefined) {
+      // New group fields cannot enter a legacy canvas through generic item
+      // APIs. Validate new writes here; old records still replay unchanged.
+      if (runtime.state.project.groupMode !== "groups") {
+        const introducesGroup = op.type === "item.add" ? op.properties?.kind === "group" || "containerId" in op || "groupLayout" in op
+          : op.type === "item.update" ? op.patch.properties?.kind === "group" || "containerId" in op.patch || "groupLayout" in op.patch || "containerId" in op || "briefHeight" in op || "size" in op
+          : (op.type === "item.addVersion" || op.type === "item.setCurrentVersion") && "briefHeight" in op;
+        if (introducesGroup) throw new OpValidationError("bad-op", "canvas groups require an explicitly enabled group canvas");
+      }
+      const stamp = { actor: envelope.actor, ts: envelope.ts, opId: envelope.id };
+      normalizedOp = normalizedOp.type === "group.change" && normalizedOp.action.kind === "migrate"
+        ? resolveCanvasGroupMigration(runtime.state, runtime.lastSeq, normalizedOp.action, stamp)
+        : resolveCanvasGroupRequest(runtime.state, normalizedOp, stamp);
+      envelope.op = normalizedOp;
+      if (op.type === "group.change" && op.action.kind === "copy" && normalizedOp.type === "group.change" && normalizedOp.action.kind === "apply") {
+        // A paste is all-or-nothing, including distinct visual bytes. This is
+        // checked at the home after shape validation and before any append.
+        const hashes = new Set(normalizedOp.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions.flatMap((version) => [version.blobHash, ...(version.visual ? [version.visual.blobHash] : [])]) : []));
+        for (const hash of hashes) if (!(await contextBlobAvailable(this.store, canvasId, hash))) throw new OpValidationError("bad-op", `copy content is unavailable: ${hash}; prepare every source and visual blob before pasting`);
+      }
+    }
     const inverse = invertOperation(runtime.state, normalizedOp);
     const nextState = applyOperation(runtime.state, envelope);
     const seq = runtime.lastSeq + 1;
@@ -2450,7 +2714,19 @@ export class Engine {
   private async createProject(
     request: SubmitRequest,
     op: Operation & { type: "project.create" },
+    personalBirth?: PersonalSourceRecord,
   ): Promise<LogEntry> {
+    const reserved = await this.desk.personalSource(op.canvasId);
+    if (reserved || await this.desk.personalReplica(op.canvasId)) {
+      const joins = await this.actorJoins();
+      if (!reserved || !personalBirth || reserved.birth !== "reserved" || reserved.canvasId !== personalBirth.canvasId ||
+          reserved.birthOpId !== request.opId || personalBirth.birthOpId !== reserved.birthOpId ||
+          resolveActor(joins, reserved.ownerId) !== resolveActor(joins, request.actor.id)) {
+        throw new PersonalError("a personal source can only be born through its reserved private birth", "personal-birth-reserved");
+      }
+    }
+    op = { ...op, groupMode: op.groupMode ?? "groups" };
+    if (request.clientFeatures !== undefined) requireGroupClient(request.clientFeatures, { groupMode: op.groupMode } as Canvas);
     if (await this.store.canvasExists(op.canvasId)) {
       throw new OpValidationError("duplicate-id", `canvas id already exists: ${op.canvasId}`);
     }
@@ -2562,12 +2838,57 @@ export class Engine {
  * restores full fidelity (trash contents, thread snapshots, version
  * authorship) that re-running the original op would lose or violate.
  */
+type MigrationOperation = { type: "group.change"; action: { kind: "apply"; change: GroupChange & { migration: GroupMigrationEffect } } };
+function isMigrationChange(op: Operation, mode?: "legacy" | "groups"): op is MigrationOperation {
+  return op.type === "group.change" && op.action.kind === "apply" && op.action.change.intent === "migrate" && !!op.action.change.migration && (mode === undefined || op.action.change.migration.mode === mode);
+}
+
+function undoOperationFor(runtime: CanvasRuntime, target: LogEntry): Operation {
+  if (isMigrationChange(target.envelope.op)) {
+    for (let i = runtime.entries.length - 1; i >= 0; i--) {
+      const entry = runtime.entries[i]!;
+      if (entry.cause?.kind === "redo" && entry.cause.targetSeq === target.seq && entry.inverse) return entry.inverse;
+    }
+  }
+  return target.inverse!;
+}
+
+function checkMigrationHistoryBoundary(runtime: CanvasRuntime, targets: number[]): void {
+  const boundary = runtime.state.project.groupMigration;
+  if (!boundary) return;
+  for (const seq of targets) if (seq < boundary.seq) {
+    const entry = runtime.entries.find((candidate) => candidate.seq === seq);
+    if (entry && isMigrationChange(entry.envelope.op, "groups")) continue;
+    throw new MigrationBoundaryError(`Undo/Redo stops at canvas conversion sequence ${boundary.seq}; earlier history remains readable and its candidate was not consumed.`);
+  }
+}
+
+function checkMigrationRollback(runtime: CanvasRuntime, op: Operation): void {
+  if (!isMigrationChange(op, "legacy")) return;
+  const { state } = runtime;
+  const boundary = state.project.groupMigration;
+  if (!boundary) return;
+  const expected = new Map(op.action.change.expected.map((entry) => [entry.itemId, entry]));
+  const depends = (item: import("@isocan/core").Item): boolean => item.properties.kind === "group" || item.containerId !== undefined || item.groupLayout !== undefined;
+  const dependencies: string[] = [];
+  for (const item of Object.values(state.canvas.items)) if (depends(item) && expected.get(item.id)?.location !== "live") dependencies.push(`live ${item.id}`);
+  for (const entry of state.canvas.trash) if ((depends(entry.item) || entry.legacyGroupRestore !== undefined || entry.cohort !== undefined) && expected.get(entry.item.id)?.location !== "trash") dependencies.push(`trash ${entry.item.id}`);
+  for (const thread of Object.values(state.canvas.threads)) for (const comment of thread.comments) if (comment.context) dependencies.push(`saved context ${comment.id}`);
+  for (const candidate of runtime.undo.dependencyTargets()) {
+    if (candidate.seq < boundary.seq) continue;
+    const entry = runtime.entries.find((one) => one.seq === candidate.seq);
+    if (entry && !isMigrationChange(entry.envelope.op) && (groupOperation(entry.envelope.op) || entry.inverse !== null && groupOperation(entry.inverse))) dependencies.push(`${candidate.kind} sequence ${candidate.seq}`);
+  }
+  if (dependencies.length) throw new MigrationBoundaryError(`Migration rollback would strand later group-dependent work: ${dependencies.join(", ")}. Resolve these dependencies explicitly; trash and history were not changed.`);
+}
+
 function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
   switch (target.envelope.op.type) {
     case "item.add": // re-add would collide with the trashed item → restore it
     case "item.addVersion": // restoreVersion keeps original authorship
     case "thread.create": // thread.restore keeps replies added before the undo
     case "thread.reply": // comment.restore keeps author + timestamp
+    case "group.change": // exact structural preconditions and restore-based creation redo
       return undoEntry.inverse!;
     default:
       return target.envelope.op;
@@ -2583,6 +2904,19 @@ function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
  */
 function repairInverse(state: CanvasState, op: Operation): Operation | null {
   switch (op.type) {
+    case "group.change": {
+      if (op.action.kind !== "apply") return op;
+      const change = op.action.change, write = change.writes[0], expected = change.expected[0];
+      // A plain root insertion uses group placement, but owns no relation or
+      // frame repair. Preserve ordinary creation undo after others move/edit
+      // that card. Any old or current group/annotation dependency keeps the
+      // exact canonical inverse and its non-consuming conflict behavior.
+      if (change.intent !== "insert" || change.writes.length !== 1 || write?.kind !== "trash" || change.expected.length !== 1 || expected?.itemId !== write.itemId || expected.location !== "live" || !expected.facts || expected.facts.containerId !== null || expected.facts.groupLayout !== null || expected.facts.kind === "group" || expected.facts.annotates !== null || expected.children?.length || expected.annotations?.length) return op;
+      const item = state.canvas.items[write.itemId];
+      if (!item) return null;
+      if (isGroupItem(item) || item.containerId !== undefined || item.groupLayout !== undefined || item.properties.annotates || Object.values(state.canvas.items).some((other) => other.containerId === item.id || other.properties.annotates === item.id)) return op;
+      return { type: "item.delete", itemId: item.id };
+    }
     case "items.move": {
       const moves = op.moves.filter((move) => state.canvas.items[move.itemId] !== undefined);
       if (moves.length === 0) return null;
@@ -2601,5 +2935,24 @@ function repairInverse(state: CanvasState, op: Operation): Operation | null {
     }
     default:
       return op;
+  }
+}
+
+/** A label may include ordinary ops beside one atomic structural change.
+ * Check the whole gesture first so a later group conflict cannot leave its
+ * earlier ordinary members already undone. Ordinary repair still skips the
+ * same invalidated items it did before groups existed. */
+function preflightGroupHistory(state: CanvasState, ops: Operation[], actor: Actor): void {
+  if (!ops.some((op) => op.type === "group.change")) return;
+  let preview = state;
+  for (const candidate of ops) {
+    const op = repairInverse(preview, candidate);
+    if (!op) continue;
+    try {
+      const next = applyOperation(preview, { id: "op_preflight", canvasId: state.project.id, actor, ts: new Date().toISOString(), op });
+      if (next) preview = next;
+    } catch (err) {
+      if (op.type === "group.change" || !(err instanceof OpValidationError)) throw err;
+    }
   }
 }
