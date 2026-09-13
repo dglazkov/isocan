@@ -367,6 +367,9 @@ Phase 2 adds `remove` to this same closed action union. Unlike `reparent`,
 which names one destination, removal derives each selected root's destination
 from its current parent (or the explicit canvas-root option). It still emits
 one bounded resolved change and one exact inverse for a mixed selection.
+The recorded change keeps the existing canonical `reparent` intent: phase 1
+readers already advertising `canvas-groups-v1` accept that value but reject a
+new `remove` value. The public spelling does not require a new replay shape.
 
 Keep operation members directly discoverable by `scripts/isomorphism.mjs`.
 Any vocabulary-bound adjustment must name the semantic acts it accounts for;

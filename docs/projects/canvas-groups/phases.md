@@ -95,6 +95,7 @@ are assigned explicitly by the conductor to avoid overlapping ownership.
 **Trajectory:**
 
 - **2026-09-12** — Removing roots from different groups can require different destination parents. Phase 2 adds one closed `remove` intent within `group.change`, resolving all destinations from the starting relation. Its membership walk also requires `mv --in` now; phase 3 retains broader geometry dispatch.
+- **2026-09-12** — Public `remove` resolves to the existing canonical `reparent` intent. Review found that recording a new intent value under `canvas-groups-v1` would admit phase 1 readers whose reducer rejects it; preserving the replay shape keeps that capability truthful without a version bump.
 
 ## Phase 3 — Transforms, frame fitting and label-safe layout
 
