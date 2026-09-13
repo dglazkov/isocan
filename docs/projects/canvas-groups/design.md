@@ -271,6 +271,11 @@ subtree; if necessary extend the frame downward or outward. Every producer
 must use this path: text, files, paste, duplicates, URLs, Google Docs, module
 commands, and sprint hand-in. A requested grid cell may grow the frame to
 fit or report the constraint; it must not silently place outside that cell.
+Existing multi-step producers may still assemble several independent sheets:
+sprint setup is a workflow, not a new general transaction introduced here.
+Each created sheet is a real group, and every item insertion or transfer
+includes its membership and required frame changes atomically. No producer
+may add an item and establish its intended membership in a later request.
 Sandbox transcript creation is a producer too: inherit the program's group
 explicitly when creating the transcript, and preserve the transcript's own
 membership when adding later versions.

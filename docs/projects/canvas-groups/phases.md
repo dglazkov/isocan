@@ -116,6 +116,11 @@ Google Doc/module/sprint placement routes; drop target feedback and reparent;
 annotation placement-unit semantics. Update tests, agent guide and README.
 Include sandbox transcript creation, which inherits its program's group;
 later transcript versions keep the transcript's existing membership.
+Existing producers that assemble several independent sheets (such as sprint
+setup) keep their existing workflow boundaries. Each sheet creation and each
+item insertion/transfer is atomic; this phase does not introduce a general
+whole-workflow transaction. Creating an item and then reparenting it remains
+forbidden. The implicit Context sheet becomes a group on a group canvas.
 Geometry changes on a stale dependency refuse as a whole and clear previews.
 Extend bounded canonical effects for item insertion and atomic brief/header
 changes; require canvas-groups-v2 for this richer replay schema while retaining
