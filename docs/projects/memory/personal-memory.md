@@ -180,6 +180,14 @@ can see that the owner brought personal memory and cannot enable it.
 CLI context personal inspects/ensures the person's canvas; its link/unlink,
 allow/revoke and read subcommands use the same routes. Home choice is explicit
 and shown in output: one personal canvas per person per authoritative home.
+Standalone CLI status/ensure uses the connected daemon's home unless the caller
+selects `--home`; it need not resolve a working canvas. Your canvas inside a
+project uses that project's authoritative home for status, birth, open and
+link alike. Destination-scoped status/ensure forwards through the recorded
+home connection, including on a daemon holding projects from several homes.
+It never births locally and then links a different personal source remotely,
+and the browser does not send local cookies directly to an arbitrary home.
+An explicit home that disagrees with the destination is refused visibly.
 The general context command prints the third heading for an authorized caller.
 
 Private results are cleared synchronously on observed actor, target/home, link

@@ -91,3 +91,7 @@ only the personal portion that implementation did not claim to provide.
   cross-process fencing. Personal birth preserves the existing single-local-
   writer boundary; only CloudDesk claims cross-instance reservation safety.
   Concurrent requests and crash/reopen are distinct proof cases.
+- **2026-09-13** — Your canvas follows the destination's recorded home for
+  both birth and linking. A mixed replica can otherwise create one personal
+  canvas locally and link another remotely; standalone CLI status/ensure
+  retains its explicit connected-home or `--home` choice.
