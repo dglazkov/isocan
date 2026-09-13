@@ -69,6 +69,12 @@ redacted for personal or unknown sources. Browser private text exists only in
 the current Context inspection; shared canvas state and frozen requests do not
 acquire it.
 
+MCP's `read_personal_context` adapts that same authoritative read. A claimed
+session and concrete destination card are required; the resolved destination
+handle carries the actor and cancellation through the request. Pagination and
+current-piece provenance remain the API's contract, and no tool adds a second
+permission decision or changes frozen request content.
+
 MCP excludes personal sources from ambient resolution and carries an immutable
 actor and read/edit/own ceiling on explicit requests. The HTTP boundary checks
 that restriction before admission or source reads and again at queued writes;

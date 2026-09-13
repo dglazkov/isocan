@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents, embed, public
-note: phases 0–3 are closed, including private personal birth, concrete consent, delegation and CLI/browser acceptance on 13 Sep. Memory phase 4 is next for the dedicated MCP read and three-layer transport proof; recap-head and pin-from-source remain separate
+note: phases 0–4 and all four journeys are verified on CLI, browser and real MCP transport, 13 Sep. Private current context requires concrete consent and explicit caller authority. Recap-head and pin-from-source remain the next engineering phases
 ---
 # Memory — bring a source, see where it came from
 

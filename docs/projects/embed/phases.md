@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-09
 issue: 220
 see: harnesses, context, memory, iso-api
-note: phases 1 and 2 built. The framed pane keeps its own badge over HTTPS. MCP now has fifteen tools, current canvas and layered Context resources, explicit durable agent sessions, attributed item/comment writes and cancellable feedback waits; the machine's ambient identity remains the default. Real stdio overlap, restart, frozen content and admission proofs passed 13 Sep. Phase 3 MCP Apps remains unbuilt and outside this continuation; phase 4 retains the decision against per-IDE extensions
+note: phases 1 and 2 built. The framed pane keeps its own badge over HTTPS. MCP now has sixteen tools after memory phase 4, current canvas and layered Context resources, explicit durable agent sessions, attributed item/comment writes and cancellable feedback waits; ordinary tools retain ambient identity by default, while personal text requires an explicit claimed session. Real stdio overlap, restart, frozen content and admission proofs passed 13 Sep. Phase 3 MCP Apps remains unbuilt and outside this continuation; phase 4 retains the decision against per-IDE extensions
 ---
 
 # Embed: isocan in somebody else's window
@@ -21,8 +21,9 @@ inside C, and A is what C falls back to on a host that does not speak it.
 ## Where we are
 
 **Where we are:** phases 1 and 2 are closed. Embed phase 3, MCP Apps, is next
-and outside the 13 September continuation. The server now exposes fifteen tools and two
-resource templates. [context-and-sessions.md](context-and-sessions.md) is the
+and outside the 13 September continuation. The server exposes sixteen tools and
+two resource templates after [memory phase 4](../memory/phases.md) added the
+explicit personal read. [context-and-sessions.md](context-and-sessions.md) is the
 contract; existing `read_context` and `read_context_content` keep their
 request-manifest meanings. No external memory index was installed.
 

@@ -123,6 +123,7 @@ describe("what a host can see", () => {
       "read_context_content",
       "read_context_summary",
       "read_item",
+      "read_personal_context",
       "read_threads",
       "reply_comment",
       "wait_for_feedback",
@@ -140,6 +141,26 @@ describe("what a host can see", () => {
     const { tools } = await host().then((c) => c.listTools());
     for (const tool of tools) expect(tool.inputSchema.properties).toHaveProperty("session");
     expect(tools.map((tool) => tool.name)).not.toContain("send_op");
+  });
+
+  it("requires a session and concrete personal link before opening a home", async () => {
+    let connections = 0;
+    const client = await host({ home: async () => { connections++; return connected; } });
+    try {
+      const tool = (await client.listTools()).tools.find((one) => one.name === "read_personal_context")!;
+      expect(tool.annotations?.readOnlyHint).toBe(true);
+      expect(tool.inputSchema.required).toEqual(["session", "item"]);
+      expect(tool.inputSchema.properties?.limit).toMatchObject({ type: "integer", minimum: 1, maximum: 64 });
+      for (const args of [
+        { item: "itm_link" }, { session: "t-1" },
+        { session: " ", item: "itm_link" }, { session: "t-1", item: " " },
+        ...[0, 65, 1.5].map((limit) => ({ session: "t-1", item: "itm_link", limit })),
+      ]) {
+        const result = await client.callTool({ name: "read_personal_context", arguments: args });
+        expect(result.isError, JSON.stringify(result)).toBe(true);
+      }
+      expect(connections).toBe(0);
+    } finally { await client.close(); }
   });
 });
 

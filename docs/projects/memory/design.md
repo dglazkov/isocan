@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents
-note: phases 0–3 are closed, including private personal birth, concrete consent, delegation and CLI/browser acceptance on 13 Sep. Memory phase 4 is next for the dedicated MCP read and three-layer transport proof; recap-head and pin-from-source remain separate
+note: phases 0–4 and all four journeys are verified on CLI, browser and real MCP transport, 13 Sep. Private current context requires concrete consent and explicit caller authority. Recap-head and pin-from-source remain the next engineering phases
 ---
 # Memory, in layers you can see
 
@@ -188,11 +188,11 @@ home. [phases.md](phases.md) records the build and independently verified proof.
 3. **The Context sheet** convention, laid on first link; the memory mark on
    the card.
 4. **MCP read surface** over the three layers, so any index can index this.
-   *Partly built 13 Sep through [embed phase 2](../embed/phases.md):
-   `read_context_summary` and Context resources expose the existing local
-   and inherited layers. Memory phase 2 supplies authorized personal summaries.
-   The dedicated personal-text tool and three-layer transport acceptance
-   remain memory phase 4.*
+   *Built 13 Sep through [embed phase 2](../embed/phases.md) and memory phase 4:
+   `read_context_summary` exposes the authorized layers, ambient resources omit
+   personal sources, and `read_personal_context` reads current private pieces
+   for an explicitly claimed owner or delegated session. Real stdio acceptance
+   verifies the three layers without changing frozen request semantics.*
 
 **Zero new op types** again: visible links use the existing canvas operation
 vocabulary. Personal birth, consent and delegation use the private Desk and
@@ -258,3 +258,12 @@ The retained browser journey includes a real response held during an in-place
 identity change, private export isolation and camera profile destruction.
 The dedicated MCP text tool remains memory phase 4; recap-head and pin-from-source
 remain separate unfinished work. See phases.md for exact verification.
+
+
+**Phase 4, 13 September 2026.** The dedicated personal MCP read is built.
+It requires a claimed session and a concrete destination card, then adapts
+the same authoritative route, cancellation, provenance and pagination that
+the other clients use. Real stdio calls prove all three layers, independent
+callers, current versions, zero private reads on refusal and unchanged saved
+requests. The four journeys are verified; recap-head and pin-from-source are
+the next engineering phases.

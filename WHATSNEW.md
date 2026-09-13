@@ -28,7 +28,9 @@ second week.
   here and allow the agents who may read it. Everyone sees the linked card;
   permitted readers see your current pinned context. Unlinking and agent
   revocation stop the next read. Phone users reach it through **More →
-  Context**; the terminal uses `isocan context personal`.
+  Context**; the terminal uses `isocan context personal`. MCP agents can call
+  `read_personal_context` with their claimed session and the linked card to
+  read the current permitted text with its source.
 
 - Make a canvas findable on its home. With a Canvas Viewer or Presentation
   Viewer link, turn on **Public on this home** in Share. People can browse

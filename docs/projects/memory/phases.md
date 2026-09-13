@@ -1,10 +1,10 @@
 # Memory — the walk
 
-**Where we are:** phases 0–3 are closed. Phase 2's private personal birth,
-consent, delegation and both client surfaces passed independent acceptance
-on 13 September. Memory phase 4 is next: the dedicated personal MCP read and
-three-layer transport proof. Public is closed. Recap-head and pin-from-source
-remain separate engineering work after phase 4.
+**Where we are:** phases 0–4 are closed. Personal memory works through CLI,
+desktop, phone and explicit MCP sessions; all four journeys passed independent
+acceptance on 13 September. Next is memory phase 5's inherited recap-head
+contract and build, then pin-from-source. Those are remaining engineering
+promises, with no credential, resource or person blocking them. Public is closed.
 
 ## Phase 0 — Context with headings
 
@@ -82,7 +82,9 @@ inheritance.
 
 ## Phase 4 — Finish the personal MCP surface
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 13 September 2026 — the explicit personal MCP tool and
+real three-layer transport acceptance pass without changing shared or frozen
+context.
 
 **Proof:** a real MCP client over the existing transport reads all three
 layers under an explicitly claimed delegated session and reads the current
@@ -91,6 +93,25 @@ resources perform zero private source fetches; a previous successful tool
 session never changes the next call's identity. Unlink and delegate removal
 refuse the next read. Existing read_context and frozen-request semantics
 stay unchanged. Run the full suite, typecheck, build and the browser journeys.
+
+**Verified:** the conductor independently ran the actual SDK/CLI stdio test in
+`packages/mcp/test/personal-tool-transport.test.ts`: exit 0. Two owners and two
+agents on one badge proved current text and provenance, all three summary
+layers, bounded pages, stale cursors, identity isolation, zero private source
+reads on refusal, unlink/undo and revocation. Shared state and saved request
+bytes stayed unchanged. The test failed first when the tool was absent.
+
+The full suite with Firestore and bundle required passed 5,151 tests across
+517 files, with three existing skips, exit 0. Workspace typecheck and build
+passed; entry remains 734,190 bytes against 734,200. All ten standard browser
+journeys and the retained personal browser journey passed on this build.
+
+**Both surfaces:** no new Operation, CLI verb or core rule was needed; MCP
+adapts the existing personal read used by CLI and web. The agent guide and
+README expose the explicit tool, and actual transport/browser proofs cover
+its permission and interaction boundaries.
+
+**Trajectory:** *nothing — the phase went as planned.*
 
 **Formerly:** phase 4 named the whole MCP read surface. Its local/inherited
 part shipped through embed phase 2 on 13 September. This continuation names

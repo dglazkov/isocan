@@ -275,6 +275,26 @@ export function createServer(deps: ServerDeps): McpServer {
     annotations: { readOnlyHint: true }, inputSchema: canvasArg,
   }, async ({ canvas, session }, extra) => answering(async () => summary(await canvasOf(canvas, session, "read", extra.signal), session !== undefined)));
 
+  server.registerTool("read_personal_context", {
+    title: "Read current personal context",
+    description: "Read the current design and pinned pieces from one personal link on the destination canvas, with owner and source provenance. Requires an explicitly claimed session authorized as the owner or a delegated agent; consent is rechecked on every call. Text is bounded to 65,536 bytes per piece with explicit truncation. Follow nextCursor for more pieces. Includes no Chat or history and does not change frozen requests.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      canvas: canvasArg.canvas,
+      session: canvasArg.session.unwrap().describe("Your explicitly claimed MCP session key. Required; ambient identity is never used."),
+      item: z.string().trim().min(1).describe("The concrete personal link item id on the destination canvas, not an item inside the private source."),
+      cursor: z.string().optional().describe("The nextCursor returned by the previous page of this current contribution set."),
+      limit: z.number().int().min(1).max(64).optional().describe("Maximum pieces per page (1–64, default 16); this is not a byte limit."),
+    },
+  }, async ({ canvas, session, item, cursor, limit }, extra) => answering(async () => {
+    const handle = await canvasOf(canvas, session, "read", extra.signal);
+    extra.signal.throwIfAborted();
+    return handle.ctx.client.readPersonal(handle.id, {
+      actorId: handle.ctx.actor.id, itemId: item, mode: "content",
+      ...(cursor === undefined ? {} : { cursor }), ...(limit === undefined ? {} : { limit }),
+    }, extra.signal);
+  }));
+
   server.registerTool("claim_agent", {
     title: "Claim an agent session",
     description: "Deliberately claim a name under a stable caller-supplied session key. Use that key on later calls; restarting MCP preserves the claim. A missing claim never falls back to the person's identity.",

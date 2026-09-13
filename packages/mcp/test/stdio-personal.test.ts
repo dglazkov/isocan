@@ -150,7 +150,9 @@ it("keeps personal source authority explicit across ambient resources and simult
       expect(sharedManifest).not.toContain(version.id);
       expect(sharedManifest).not.toContain(version.blobHash);
     }
-    expect((await host.listTools()).tools.some((tool) => tool.name === "read_personal_context")).toBe(false);
+    const personalTool = (await host.listTools()).tools.find((tool) => tool.name === "read_personal_context");
+    expect(personalTool?.annotations?.readOnlyHint).toBe(true);
+    expect(personalTool?.inputSchema.required).toEqual(["session", "item"]);
     expect(stderr).not.toMatch(/SyntaxError|UnhandledPromiseRejection/);
   } finally {
     vi.restoreAllMocks();

@@ -384,11 +384,12 @@ itemId, { face: "source", offset: 0, limit: 16384 })` reads saved byte pages.
 in: destinationId, dryRun: true })` uses the same graph planner as the CLI.
 MCP keeps `read_context` and `read_context_content` for that same manifest and
 frozen-version contract. `read_context_summary` separately reads the live
-layered Context view: local and inherited sources, exclusions, overrides,
-staleness and reasons a source could not be read. JSON resources at
+layered Context view: local and inherited sources, plus permitted personal
+summaries when you supply an explicitly claimed session. It reports exclusions,
+overrides, staleness and reasons a source could not be read. JSON resources at
 `isocan://canvas/{id}` and `isocan://canvas/{id}/context` expose the current
-canvas and summary; resource listing includes only discoverable canvases,
-and every read uses ordinary admission.
+canvas and summary under ambient identity; they omit personal memory.
+Resource listing includes only discoverable canvases, and every read checks admission.
 
 For collaboration over `isocan mcp`, call `claim_agent` with a name and a
 stable conversation `session` key, then supply that key on **each tool call**.
@@ -397,6 +398,34 @@ server keep separate identities; an unclaimed explicit key is an error.
 Omitting `session` uses the CLI/API ambient identity, and **resources always
 use ambient identity**; they do not inherit the previous tool's session.
 `clientInfo` identifies the manager application, not a conversation.
+
+`read_personal_context` requires that claimed `session` and an `item`: the
+concrete personal link card on the destination canvas. `canvas` is optional
+and uses the usual canvas selector; it names the destination, not the private
+source. For example, after claiming `acme-review`, call the tool with:
+
+```json
+{"session":"acme-review","canvas":"prj_acme","item":"itm_personal_link","limit":16}
+```
+
+The owner must have explicitly linked that dataset here. An agent also needs
+the owner's allowance for its exact actor ID; an explicitly claimed owner
+session needs no self-delegation. Each call rechecks the selected caller's
+authority and the concrete link. A previous success, another claim on the
+badge, or copied card properties do not grant access. Unlinking or revoking the delegate stops the next read.
+Omitting `session` is an error for this tool; ambient resources never select
+an owner for you.
+
+The response carries the owner, `sourceCanvasId`, `home`, destination `itemId`
+and current `pieces`: pinned context and design contributions, with text when
+readable. It includes no Chat or history. Optional `limit` counts pieces
+(1..64, default 16); each text read is bounded to 65,536 source bytes. Inspect the
+response's `truncated` flag and each piece's `unavailable` reason; non-text
+pieces are metadata only. Follow `nextCursor` by supplying optional `cursor`
+with the same session, destination and link. If the current contribution set
+changes, start a new read rather than treating the old cursor as history.
+This private read leaves `read_context`, `read_context_content` and saved
+request bytes unchanged.
 
 `create_item` and `edit_item` write attributed versions. `post_comment` posts
 on an item or in Chat; `reply_comment` replies to a thread. These use the
@@ -2336,6 +2365,8 @@ and `canvas group migrate [--dry-run] [--revision n]`.
 `context personal read <item-id> [--cursor <cursor>] [--limit <pieces>]`.
 Standalone personal/status defaults to this daemon; `--home <url>` chooses a home.
 Destination commands accept the global `--canvas <canvas>` and all support `--json`.
+MCP uses `read_personal_context` with required claimed `session` and link `item`,
+plus optional `canvas`, `cursor` and `limit` (pieces); ambient resources omit this layer.
 
 **Group context:** `context --in <group> [--include-excluded]` reads the complete
 current hierarchy. `context request <thread> <comment>` reads the complete

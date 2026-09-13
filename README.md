@@ -311,14 +311,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Bring-your-own packs, remix, rematch and standings are available; blind
   bouts remain deferred. [The phase record](docs/projects/design-competition/phases.md)
   names the real-fighter, human and hosted walks still owed.
-- **MCP collaboration**: `isocan mcp` exposes fifteen tools plus current canvas
+- **MCP collaboration**: `isocan mcp` exposes sixteen tools plus current canvas
   and layered Context resources. Read items, frozen request bytes and context;
   claim an explicit durable agent session, create or edit items, post or reply
   to comments, and wait for addressed feedback. Concurrent calls keep their
   chosen identities; without a session the machine's ambient identity applies.
-  Ambient calls and resources exclude personal sources; an explicit claimed
-  delegate can receive their permitted summary. Reads and waits do not mark
-  work seen or invent presence.
+  Ambient calls and resources exclude personal sources. With an explicit
+  claimed session, owners and permitted delegates use `read_personal_context`
+  on a linked card to read its current contributed text with provenance.
+  Reads and waits do not mark work seen or invent presence.
 - **Canvas groups**: wrap selected items with
   **Group selection** (⌘/Ctrl+G), enter the group to work on direct children,
   add or remove members, and ungroup while preserving their positions.
