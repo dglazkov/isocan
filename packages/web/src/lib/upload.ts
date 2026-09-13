@@ -329,6 +329,10 @@ export async function addCanvasItem(
   memory: "inherit" | null = null,
   destination = creationDestination(),
 ): Promise<string> {
+  const { automaticSource } = await import("./personal.ts");
+  const access = await automaticSource(targetCanvasId, canvasItemOf(origin, targetCanvasId).properties.source ?? null, canvasId);
+  if (memory && access.kind !== "ordinary") throw new Error(access.refused);
+  if (access.kind !== "ordinary") title = "Canvas";
   const made = canvasItemOf(origin, targetCanvasId);
   const blob = new Blob([made.blob], { type: made.mimeType });
   const upload = await uploadBlob(canvasId, blob, made.filename);

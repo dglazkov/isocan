@@ -32,6 +32,20 @@ export declare const CANVAS_ITEM_SIZE: {
 export declare function isCanvasItem(item: Item): boolean;
 /** The canvas this item points at, or null when it is not a canvas item. */
 export declare function canvasIdOf(item: Item): string | null;
+/** Automatic readers inspect declared addresses before choosing a MIME renderer:
+ * changing kind cannot turn a personal canvas into an unguarded site or image.
+ * Pass the raw canvas property, not canvasIdOf's kind-dependent result. This
+ * extracts a target only; its authoritative classification still precedes IO. */
+export declare function automaticCanvasTarget(declaredCanvasId: string | null, source: string | null): {
+    kind: "none";
+} | {
+    kind: "canvas";
+    canvasId: string;
+    source: string | null;
+} | {
+    kind: "unavailable";
+    refused: string;
+};
 /** What the ↗ opens, on any item that has one. */
 export declare function sourceOf(item: Item): string | null;
 /**

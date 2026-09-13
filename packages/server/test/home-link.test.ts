@@ -20,7 +20,6 @@ import {
   passesRoute,
   canvasesRoute,
   HOMES_ROUTE,
-  WS_NO_CANVAS,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { bearerHeader, readBadge } from "../src/badge-store.ts";
@@ -1014,8 +1013,8 @@ describe("the link a canvas actually has to its home", () => {
 
   /**
    * A canvas this machine has a row for and the home has never heard of: the
-   * 4404 close. The link is dropped and the next sweep makes a new one, which
-   * is correct and was completely silent — a fresh `CanvasLink` counts from
+   * source classification now refuses before any socket can open. Repeated
+   * failures used to be completely silent — a fresh `CanvasLink` counted from
    * zero, so an endless two-second retry looked like a first attempt forever.
    * The count outlives the link precisely so this can be reported.
    */
@@ -1027,6 +1026,6 @@ describe("the link a canvas actually has to its home", () => {
       "A to report repeated failures",
     );
     expect(state).toMatchObject({ connected: false, opens: 0, relayedAt: null });
-    expect(state!.lastFailure).toContain(String(WS_NO_CANVAS));
+    expect(state!.lastFailure).toContain("source classification is unavailable");
   }, 20_000);
 });

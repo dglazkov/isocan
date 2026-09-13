@@ -1,3 +1,4 @@
+import type { PersonalDesk } from "./personal-desk.js";
 import type { ActorClaim, Attestation, BadgeKind, CanvasTakedown, Capability, Grant, GrantSubject, Group, HomeRefusal, OperatorAct, OperatorEnd, OperatorRevocation, Pass, PurgeCounts, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
@@ -271,7 +272,7 @@ export interface BadgeRecord {
 export interface PassRecord extends Pass {
     secretHash: string;
 }
-export interface Desk {
+export interface Desk extends PersonalDesk {
     init(): Promise<void>;
     /** Release whatever the backing holds open — the twin of `Store.close`, and
      * for the same reason: a gRPC channel nobody closes is a process that never

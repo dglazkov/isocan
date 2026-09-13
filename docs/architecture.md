@@ -52,6 +52,31 @@ known-address door. Shared context assembly and feedback addressing remain
 in API/core. A feedback call's deadline covers connection setup, admission
 and polling, and its cancellation reaches HTTP as well as held daemon watches.
 
+Personal memory adds private Desk records for stable owner/source bindings,
+concrete link consent and source-specific agent delegation. A first explicit
+use reserves its birth identity before the writer creates it without a link
+grant or inherited space. FileDesk serializes one daemon's callers; CloudDesk
+transactions also coordinate independent instances. Metadata lifecycle checks
+and a narrow reserved-birth recovery distinguish an interrupted birth from a
+deleted dataset. Joined owners keep all existing datasets.
+
+Core defines contributed pieces and provenance; the browser-safe
+`@isocan/api/context` leaf assembles local, inherited and explicitly authorized
+personal layers for both clients. Personal reads validate the current caller,
+destination edge and home-owned consent before opening source data. Automatic
+linked previews and inheritance classify their sources first and remain
+redacted for personal or unknown sources. Browser private text exists only in
+the current Context inspection; shared canvas state and frozen requests do not
+acquire it.
+
+MCP excludes personal sources from ambient resolution and carries an immutable
+actor and read/edit/own ceiling on explicit requests. The HTTP boundary checks
+that restriction before admission or source reads and again at queued writes;
+forwarding carries it to the authority rather than reading a retained replica.
+A replica retains only source/home classification to prevent automatic link
+migration, never ownership or delegation authority. Personal canvases refuse
+ordinary teleport because it cannot transfer these private custody records.
+
 Inbox assembly also belongs to the daemon. CLI and web ask the same route;
 each remote canvas is read through its authoritative home connection with
 that home's admission and operator checks. The response includes private

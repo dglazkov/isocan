@@ -1,3 +1,6 @@
+import { PersonalError } from "./personal.ts";
+import type { PersonalSourceRecord } from "./personal-desk.ts";
+import type { SourceRequestContext } from "@isocan/core";
 import { createHash } from "node:crypto";
 import { StringDecoder } from "node:string_decoder";
 import type {
@@ -200,6 +203,7 @@ export class NothingToUndoError extends Error {
 }
 
 interface SubmitRequest {
+  sourceContext?: SourceRequestContext;
   clientFeatures?: string;
   originGroupMode?: "legacy" | "groups";
   canvasId: string | null;
@@ -397,6 +401,76 @@ export class Engine {
     const result = this.queue.then(work);
     this.queue = result.catch(() => {});
     return result;
+  }
+
+  /** HomeLink records classification before adopting any private replica bytes. */
+  recordPersonalReplica(canvasId: string, home: string): Promise<void> { return this.desk.recordPersonalReplica(canvasId, home); }
+
+  private async refusePersonalTransfer(canvasId: string): Promise<void> {
+    if (await this.desk.personalSource(canvasId) || await this.desk.personalReplica(canvasId)) {
+      throw new PersonalError("personal sources cannot be teleported or adopted; their private ownership stays at their home", "personal-transfer-refused");
+    }
+  }
+
+  /** Request policy is rechecked when queued work begins, before any source state is loaded. */
+  private sourceGuard?: (canvasId: string, badgeId: string, context: SourceRequestContext, intent: "read" | "edit" | "own", actorId?: string) => Promise<void>;
+
+  setSourceGuard(guard: NonNullable<Engine["sourceGuard"]>): void { this.sourceGuard = guard; }
+
+  /** A private workflow enters this queue once; callbacks use only the unqueued writer port. */
+  personalWrite<T>(work: (port: {
+    snapshot: (canvasId: string) => Promise<CanvasSnapshotResponse>;
+    submit: (request: SubmitRequest) => Promise<LogEntry>;
+    birth: (source: PersonalSourceRecord, actor: Actor, badgeId: string) => Promise<boolean>;
+  }) => Promise<T>): Promise<T> {
+    return this.enqueue(() => work({
+      snapshot: (id) => this.getSnapshot(id),
+      submit: async (request) => {
+        await this.requireActor(request.badgeId, request.actor.id);
+        if (this.homes?.for(request.canvasId!)) throw new Error("personal writes require the authoritative home");
+        const prior = request.opId ? await this.alreadyWritten(request) : null;
+        return prior ?? this.applyAndPersist(request, undefined);
+      },
+      birth: (source, actor, badgeId) => this.birthPersonal(source, actor, badgeId),
+    }));
+  }
+
+  private async birthPersonal(source: PersonalSourceRecord, actor: Actor, badgeId: string): Promise<boolean> {
+    await this.requireActor(badgeId, actor.id);
+    const lifecycle = await this.store.canvasLifecycle(source.canvasId);
+    if (lifecycle === "live") {
+      if (source.birth === "reserved") {
+        const first = (await this.store.readBirthLog(source.canvasId))[0];
+        const joined = await this.actorJoins();
+        if (!first || first.seq !== 1 || first.envelope.id !== source.birthOpId || first.envelope.op.type !== "project.create" || first.envelope.op.canvasId !== source.canvasId ||
+            resolveActor(joined, first.envelope.actor.id) !== resolveActor(joined, source.ownerId)) throw new Error("reserved personal birth does not match the existing canvas");
+      }
+      await this.desk.finishPersonalBirth(source.canvasId, source.birthOpId); return false;
+    }
+    if (source.birth === "created" || !["absent", "incomplete"].includes(lifecycle)) return false;
+    if (this.homes) await this.homes.bindLocal(source.canvasId);
+    const entries = await this.store.readBirthLog(source.canvasId);
+    if (entries.length) {
+      const first = entries[0]!;
+      const op = first.envelope.op;
+      if (first.seq !== 1 || first.envelope.id !== source.birthOpId || resolveActor(await this.actorJoins(), first.envelope.actor.id) !== resolveActor(await this.actorJoins(), source.ownerId) ||
+          op.type !== "project.create" || op.canvasId !== source.canvasId) throw new Error("reserved personal birth log does not match");
+      let state = applyOperation(null, first.envelope);
+      let seq = 1;
+      for (const entry of entries.slice(1)) {
+        if (entry.seq !== seq + 1 || !state) throw new Error("personal birth log is incomplete");
+        state = applyOperation(state, entry.envelope); seq = entry.seq;
+      }
+      if (!state) throw new Error("personal source was deleted during birth");
+      await this.store.saveSnapshot(source.canvasId, state, seq);
+      this.canvases.delete(source.canvasId);
+    } else {
+      await this.createProject({ canvasId: null, actor, badgeId, opId: source.birthOpId, withoutLinkGrant: true,
+        op: { type: "project.create", canvasId: source.canvasId, title: `~${actor.name}`, groupMode: "groups" } },
+        { type: "project.create", canvasId: source.canvasId, title: `~${actor.name}`, groupMode: "groups" }, source);
+    }
+    await this.desk.finishPersonalBirth(source.canvasId, source.birthOpId);
+    return true;
   }
 
   async listCanvases(): Promise<Canvas[]> {
@@ -851,8 +925,11 @@ export class Engine {
     canvasId: string,
     toHomeUrl: string,
     options: { dryRun: boolean },
+    sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<TeleportReport> {
     return this.enqueue(async () => {
+      await this.refusePersonalTransfer(canvasId);
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       const already = this.homes?.for(canvasId) ?? null;
       if (already !== null) {
         throw new OpValidationError(
@@ -941,8 +1018,10 @@ export class Engine {
    * merging two orders is the thing `docs/research/2026-09-01-teleport.md`
    * argues is a different product.
    */
-  adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{ seqs: number }> {
+  adopt(canvasId: string, entries: readonly LogEntry[], sourceContext?: SourceRequestContext, badgeId?: string): Promise<{ seqs: number }> {
     return this.enqueue(async () => {
+      await this.refusePersonalTransfer(canvasId);
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       if (await this.store.canvasExists(canvasId)) {
         throw new OpValidationError(
           "bad-op",
@@ -994,8 +1073,9 @@ export class Engine {
   }
 
   /** A migration preview reads the home's current revision, even through a replica. */
-  groupMigrationPreview(canvasId: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview> {
+  groupMigrationPreview(canvasId: string, sourceContext?: SourceRequestContext, badgeId?: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview> {
     return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "read"); }
       const home = this.homes?.for(canvasId);
       if (home) return home.groupMigrationPreview(canvasId);
       const runtime = await this.runtime(canvasId);
@@ -1005,6 +1085,11 @@ export class Engine {
 
   submit(request: SubmitRequest): Promise<LogEntry> {
     return this.enqueue(async () => {
+      const targetId = request.canvasId ?? (request.op.type === "project.create" ? request.op.canvasId : undefined);
+      if (request.sourceContext && targetId) await this.sourceGuard?.(targetId, request.badgeId, request.sourceContext, request.op.type === "project.create" ? "own" : "edit", request.actor.id);
+      if (request.op.type === "project.create" && (await this.desk.personalSource(request.op.canvasId) || await this.desk.personalReplica(request.op.canvasId))) {
+        throw new PersonalError("a personal source can only be born through its reserved private birth", "personal-birth-reserved");
+      }
       if (request.originGroupMode !== undefined && request.originGroupMode !== "legacy" && request.originGroupMode !== "groups") throw new OpValidationError("bad-op", "originGroupMode must be legacy or groups");
       rejectPublicContext(request.op);
       if (request.op.type === "project.create" && request.op.groupMode !== undefined &&
@@ -1350,8 +1435,10 @@ export class Engine {
     canvasId: string,
     data: Buffer,
     meta: { mimeType: string; filename: string },
+    sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
     return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       // On a replica the bytes go where the ops that name them go — the home
       // first, because its refusal is the one that matters, and then here.
       // Both copies, not one: the home is where every browser tab and every
@@ -1421,6 +1508,7 @@ export class Engine {
   reconcileBlobs(
     canvasId: string,
     options: { push: boolean },
+    sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<{
     home: string | null;
     checked: number;
@@ -1429,6 +1517,7 @@ export class Engine {
     unknown: string[];
   }> {
     return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       const home = this.homes?.for(canvasId) ?? null;
       // No home is not a problem to report: this daemon IS where the bytes
       // live, and there is nothing for them to be behind.
@@ -1470,7 +1559,8 @@ export class Engine {
    * nothing, and minting can involve a round trip to a signing API — putting
    * it on the chain would stall every op behind somebody's video.
    */
-  beginUpload(canvasId: string, request: BlobUploadRequest): Promise<UploadTicket | null> {
+  async beginUpload(canvasId: string, request: BlobUploadRequest, sourceContext?: SourceRequestContext, badgeId?: string): Promise<UploadTicket | null> {
+    if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
     return this.store.beginUpload(canvasId, request);
   }
 
@@ -1483,8 +1573,12 @@ export class Engine {
   registerBlob(
     canvasId: string,
     request: BlobUploadRequest,
+    sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
-    return this.enqueue(() => this.store.registerBlob(canvasId, request));
+    return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
+      return this.store.registerBlob(canvasId, request);
+    });
   }
 
   /**
@@ -1493,8 +1587,9 @@ export class Engine {
    * changed); inverses invalidated by other actors' ops are repaired (batch
    * ops shrink to their surviving members) or skipped entirely.
    */
-  undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string): Promise<LogEntry> {
+  undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string, sourceContext?: SourceRequestContext): Promise<LogEntry> {
     return this.enqueue(async () => {
+      if (sourceContext) await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit", actor.id);
       // Checked here as well as on `submit`, and for a reason of its own:
       // undo is actor-scoped, so naming somebody else is not a slip, it is
       // undoing their work.
@@ -1572,8 +1667,9 @@ export class Engine {
     });
   }
 
-  redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string): Promise<LogEntry> {
+  redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string, sourceContext?: SourceRequestContext): Promise<LogEntry> {
     return this.enqueue(async () => {
+      if (sourceContext) await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit", actor.id);
       await this.requireActor(badgeId, actor.id);
       // This canvas's home; see `undo` above.
       const home = this.homes?.for(canvasId) ?? null;
@@ -1633,8 +1729,9 @@ export class Engine {
    * cannot race a mutation; the mtime grace period covers uploads that have
    * not become items yet. Maintenance, not an Operation — never undoable.
    */
-  gc(canvasId: string, options: GcOptions = {}): Promise<GcReport> {
+  gc(canvasId: string, options: GcOptions = {}, sourceContext?: SourceRequestContext, badgeId?: string): Promise<GcReport> {
     return this.enqueue(async () => {
+      if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       const runtime = await this.runtime(canvasId);
       const keepOps = options.keepOps ?? DEFAULT_KEEP_OPS;
       const graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
@@ -2617,7 +2714,17 @@ export class Engine {
   private async createProject(
     request: SubmitRequest,
     op: Operation & { type: "project.create" },
+    personalBirth?: PersonalSourceRecord,
   ): Promise<LogEntry> {
+    const reserved = await this.desk.personalSource(op.canvasId);
+    if (reserved || await this.desk.personalReplica(op.canvasId)) {
+      const joins = await this.actorJoins();
+      if (!reserved || !personalBirth || reserved.birth !== "reserved" || reserved.canvasId !== personalBirth.canvasId ||
+          reserved.birthOpId !== request.opId || personalBirth.birthOpId !== reserved.birthOpId ||
+          resolveActor(joins, reserved.ownerId) !== resolveActor(joins, request.actor.id)) {
+        throw new PersonalError("a personal source can only be born through its reserved private birth", "personal-birth-reserved");
+      }
+    }
     op = { ...op, groupMode: op.groupMode ?? "groups" };
     if (request.clientFeatures !== undefined) requireGroupClient(request.clientFeatures, { groupMode: op.groupMode } as Canvas);
     if (await this.store.canvasExists(op.canvasId)) {

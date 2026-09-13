@@ -1,3 +1,5 @@
+import { selectPersonalBinding, assertPersonalIntent, type PersonalSourceRecord, type PersonalOwnerRecord, type PersonalConsent, type PersonalLinkIntent, type ReservePersonalRequest, type PersonalReservation } from "@isocan/server";
+import type { PersonalDelegate } from "@isocan/core";
 import { randomBytes } from "node:crypto";
 import type { DocumentData, Firestore } from "@google-cloud/firestore";
 import type {
@@ -256,6 +258,107 @@ export class CloudDesk implements Desk {
 
   async close(): Promise<void> {
     await this.shutdown?.();
+  }
+
+  async personalReplica(canvasId: string): Promise<string | null> {
+    const doc = await this.db.collection("personalReplicas").doc(canvasId).get();
+    return doc.exists ? doc.data()!["home"] as string : null;
+  }
+
+  async recordPersonalReplica(canvasId: string, home: string): Promise<void> {
+    const ref = this.db.collection("personalReplicas").doc(canvasId);
+    await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (doc.exists) { if (doc.data()!["home"] !== home) throw new Error("personal replica authority changed"); return; }
+      tx.create(ref, { canvasId, home });
+    });
+  }
+
+  async personalSource(canvasId: string): Promise<PersonalSourceRecord | null> {
+    const doc = await this.db.collection("personalSources").doc(canvasId).get();
+    return doc.exists ? doc.data() as PersonalSourceRecord : null;
+  }
+
+  async personalBinding(ownerIds: string[]): Promise<PersonalReservation | null> {
+    const owners = await Promise.all([...new Set(ownerIds)].map(async (id) => {
+      const doc = await this.db.collection("personalOwners").doc(id).get();
+      return doc.exists ? doc.data() as PersonalOwnerRecord : null;
+    }));
+    const rows = owners.filter((row): row is PersonalOwnerRecord => !!row);
+    const sources = await Promise.all(rows.map((row) => this.personalSource(row.sourceCanvasId)));
+    return selectPersonalBinding(ownerIds, rows, sources.filter((row): row is PersonalSourceRecord => !!row));
+  }
+
+  async reservePersonal(request: ReservePersonalRequest): Promise<PersonalReservation> {
+    return this.db.runTransaction(async (tx) => {
+      const ids = [...new Set([request.ownerId, ...request.aliases])];
+      const ownerDocs = await Promise.all(ids.map((id) => tx.get(this.db.collection("personalOwners").doc(id))));
+      const owners = ownerDocs.filter((doc) => doc.exists).map((doc) => doc.data() as PersonalOwnerRecord);
+      const sourceIds = [...new Set([request.canvasId, ...owners.map((row) => row.sourceCanvasId)])];
+      const sourceDocs = await Promise.all(sourceIds.map((id) => tx.get(this.db.collection("personalSources").doc(id))));
+      const sources = sourceDocs.filter((doc) => doc.exists).map((doc) => doc.data() as PersonalSourceRecord);
+      const existing = selectPersonalBinding(ids, owners, sources);
+      if (existing) {
+        if (!owners.some((row) => row.ownerId === request.ownerId)) tx.create(this.db.collection("personalOwners").doc(request.ownerId), { ownerId: request.ownerId, sourceCanvasId: existing.source.canvasId, enrolledAt: request.at });
+        return existing;
+      }
+      if (sources.length) throw new Error("personal source id is already reserved");
+      const source: PersonalSourceRecord = { canvasId: request.canvasId, ownerId: request.ownerId, birthOpId: request.birthOpId, createdAt: request.at, birth: "reserved" };
+      tx.create(this.db.collection("personalSources").doc(request.canvasId), source);
+      tx.create(this.db.collection("personalOwners").doc(request.ownerId), { ownerId: request.ownerId, sourceCanvasId: request.canvasId, enrolledAt: request.at });
+      return { source, preserved: [] };
+    });
+  }
+
+  async finishPersonalBirth(canvasId: string, birthOpId: string): Promise<void> {
+    const ref = this.db.collection("personalSources").doc(canvasId);
+    await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      const source = doc.data() as PersonalSourceRecord | undefined;
+      if (!source || source.birthOpId !== birthOpId) throw new Error("personal birth reservation does not match");
+      if (source.birth !== "created") tx.update(ref, { birth: "created" });
+    });
+  }
+
+  async reservePersonalLink(intent: PersonalLinkIntent): Promise<PersonalLinkIntent> {
+    const key = Buffer.from(JSON.stringify([intent.destinationCanvasId, intent.ownerId, intent.requestId])).toString("base64url");
+    const ref = this.db.collection("personalIntents").doc(key);
+    const card = this.db.collection("personalCards").doc(Buffer.from(JSON.stringify([intent.destinationCanvasId, intent.itemId])).toString("base64url"));
+    return this.db.runTransaction(async (tx) => {
+      const [doc, source, previousCard] = await Promise.all([tx.get(ref), tx.get(this.db.collection("personalSources").doc(intent.sourceCanvasId)), tx.get(card)]);
+      if (doc.exists) { const previous = doc.data() as PersonalLinkIntent; assertPersonalIntent(previous, intent); return previous; }
+      if (!source.exists) throw new Error("personal source is not reserved");
+      if (previousCard.exists) throw new Error("personal card id is already reserved");
+      tx.create(ref, intent);
+      tx.create(card, intent);
+      return intent;
+    });
+  }
+
+  async personalLinksFor(destinationCanvasId: string): Promise<PersonalConsent[]> {
+    const rows = await this.db.collection("personalCards").where("destinationCanvasId", "==", destinationCanvasId).get();
+    return rows.docs.map((doc) => doc.data() as PersonalConsent).filter((row) => row.destinationCanvasId === destinationCanvasId);
+  }
+
+  async personalLinkForItem(destinationCanvasId: string, itemId: string): Promise<PersonalConsent | null> {
+    const doc = await this.db.collection("personalCards").doc(Buffer.from(JSON.stringify([destinationCanvasId, itemId])).toString("base64url")).get();
+    const row = doc.exists ? doc.data() as PersonalConsent : null;
+    return row?.destinationCanvasId === destinationCanvasId && row.itemId === itemId ? row : null;
+  }
+
+  async personalDelegations(sourceCanvasId: string): Promise<PersonalDelegate[]> {
+    const rows = await this.db.collection("personalSources").doc(sourceCanvasId).collection("delegates").get();
+    return rows.docs.map((doc) => doc.data() as PersonalDelegate);
+  }
+
+  async setPersonalDelegation(sourceCanvasId: string, delegation: PersonalDelegate): Promise<PersonalDelegate> {
+    const source = this.db.collection("personalSources").doc(sourceCanvasId);
+    const delegate = source.collection("delegates").doc(delegation.agentId);
+    await this.db.runTransaction(async (tx) => {
+      if (!(await tx.get(source)).exists) throw new Error("personal source is not reserved");
+      tx.set(delegate, delegation);
+    });
+    return delegation;
   }
 
   async put(badge: BadgeRecord): Promise<void> {

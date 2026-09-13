@@ -14,6 +14,8 @@ import type {
   PresenceSession,
   WatchedLogEntry,
   WatchLogResponse,
+  SourceRequestContext,
+  PersonalSourcePolicy,
 } from "@isocan/core";
 import {
   actorNameIn,
@@ -40,10 +42,13 @@ import {
   newVersionId,
   recentActivity,
   type ActivityEntry,
+  parseSourcePolicyHeader,
+  sourcePolicyHeader,
 } from "@isocan/core";
-import { matchRef, resolveCanvas, resolveCanvasRef, resolveCtx, type Ctx } from "./ctx.ts";
+import { matchRef, resolveCanvas, resolveCanvasRef, resolveCtx, readHomeRecord, homeAddressOf, sourceContextForCanvas, type Ctx } from "./ctx.ts";
+import { DaemonClient } from "./client.ts";
 import { claimSessionIdentity, noIdentityHere, type ExplicitIdentity } from "./identity.ts";
-import { readContextSummary } from "./context-summary.ts";
+import { readContextSummary, type ContextSummaryOptions } from "./context-summary.ts";
 import { waitForFeedback, type FeedbackOptions, type FeedbackResult } from "./feedback.ts";
 import type { ContextExtras, ContextLayer } from "@isocan/core";
 import { ApiError, type DaemonRoutes } from "./routes.ts";
@@ -166,6 +171,24 @@ export class Home {
     return this.ctx.actor;
   }
 
+  /** Restrict one caller without changing the shared badge or any other tool's client. */
+  withSourcePolicy(policy: PersonalSourcePolicy, signal?: AbortSignal): Home {
+    signal?.throwIfAborted();
+    if (policy.mode === "direct" && policy.actorId !== this.actor.id) throw new Error("Source policy must name this call's selected actor.");
+    const sourceContext: SourceRequestContext = Object.freeze({
+      ...parseSourcePolicyHeader(sourcePolicyHeader({ policy })), ...(signal ? { signal } : {}),
+    });
+    return new Home(this.sourceScoped(sourceContext));
+  }
+
+  private sourceScoped(sourceContext: SourceRequestContext): Ctx {
+    const client = new DaemonClient(this.ctx.client.base, this.ctx.home, sourceContext.signal, sourceContext);
+    this.ctx.reclaimOn?.(client);
+    let record: ReturnType<typeof readHomeRecord> | undefined;
+    const homes = () => record ??= readHomeRecord(client, this.ctx.birthHome);
+    return { ...this.ctx, client, sourceContext, homes, homeOf: async (id) => homeAddressOf(await homes(), id) };
+  }
+
   /**
    * A canvas to work: no ref means the directory's canvas resolved the way
    * every CLI command resolves it (marker walk, home default, only-one); a
@@ -173,11 +196,12 @@ export class Home {
    */
   async canvas(ref?: string): Promise<CanvasHandle> {
     return reaching(this.ctx.client.base, async () => {
+      const ctx = this.ctx.sourceContext ? this.sourceScoped(await sourceContextForCanvas(this.ctx, ref)) : this.ctx;
       const record =
         ref === undefined
-          ? await resolveCanvas(this.ctx)
-          : await resolveCanvasRef(this.ctx.client, ref);
-      return new CanvasHandle(this.ctx, record);
+          ? await resolveCanvas(ctx)
+          : await resolveCanvasRef(ctx.client, ref, ctx.sourceContext);
+      return new CanvasHandle(ctx, record);
     });
   }
 }
@@ -385,8 +409,8 @@ export class CanvasHandle {
   }
 
   /** Live ambient layers, distinct from a current item manifest or saved request. */
-  contextSummary(extras: ContextExtras = {}): Promise<ContextLayer[]> {
-    return this.reach(() => readContextSummary(this.ctx, this.id, extras));
+  contextSummary(extras: ContextExtras = {}, options: ContextSummaryOptions = {}): Promise<ContextLayer[]> {
+    return this.reach(() => readContextSummary(this.ctx, this.id, extras, options));
   }
 
   /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */

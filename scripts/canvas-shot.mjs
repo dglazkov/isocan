@@ -26,8 +26,14 @@
  * script; `--into` is the ordinary `isocan edit`, an op like any other,
  * undoable.
  */
+import "../index.mjs";
+const { DaemonClient } = await import("@isocan/api");
+const { classifyAutomaticSource } = await import("@isocan/api/context");
+const { paths } = await import("@isocan/server");
+const { BADGE_COOKIE } = await import("@isocan/core");
+const { personalCaptureOwner } = await import("../packages/cli/src/personal-capture.ts");
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,6 +62,16 @@ const on = arg("--on");
 const width = Number(arg("--width") ?? 1600);
 const height = Number(arg("--height") ?? 1000);
 
+// The standalone camera has the same barrier as the CLI, before Chrome,
+// private source entry, output bytes or a new screenshot version.
+const access = await classifyAutomaticSource(new DaemonClient(origin, paths.isocanHome()), { canvasId: slug, home: origin, source: address.href });
+let owner = null;
+if (access.kind !== "ordinary") {
+  if (access.kind !== "personal" || into || !argv.includes("--owner-from-stdin")) throw new Error(access.refused);
+  const input = JSON.parse(readFileSync(0, "utf8"));
+  if (!input.actor || typeof input.actor.id !== "string" || typeof input.actor.name !== "string") throw new Error("An explicit owner identity is required for private capture.");
+  owner = await personalCaptureOwner(paths.isocanHome(), origin, slug, input.actor);
+}
 const b = await browser();
 try {
   await b.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
@@ -64,7 +80,10 @@ try {
   const loaded = b.once("Page.loadEventFired");
   await b.send("Page.navigate", { url: origin });
   await Promise.race([loaded, sleep(15_000)]);
-  await throughTheDoor(b, origin, "Camera", "canvas-shot");
+  if (owner) {
+    await b.send("Network.setCookie", { name: BADGE_COOKIE, value: `${owner.badge.badgeId}.${owner.badge.secret}`, url: origin, httpOnly: true, secure: address.protocol === "https:", sameSite: "Lax" });
+    await b.ev(`localStorage.setItem("isocan.identity", ${JSON.stringify(JSON.stringify(owner.actor))})`);
+  } else await throughTheDoor(b, origin, "Camera", "canvas-shot");
   const opened = b.once("Page.loadEventFired");
   await b.send("Page.navigate", { url: address.href });
   await Promise.race([opened, sleep(15_000)]);
@@ -85,5 +104,9 @@ try {
     if (r.status !== 0) process.exit(r.status ?? 1);
   }
 } finally {
+  // Closing the owned browser destroys its exact fresh profile, including
+  // credentials. CDP storage clearing can wait on the still-running app and
+  // must never prevent that bounded process/profile teardown.
+  owner = null;
   await b.close();
 }

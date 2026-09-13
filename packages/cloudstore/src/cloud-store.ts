@@ -1,3 +1,4 @@
+import type { CanvasLifecycle } from "@isocan/server";
 import { createHash, randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import type { CollectionReference, DocumentData, Firestore } from "@google-cloud/firestore";
@@ -203,6 +204,21 @@ export class CloudStore implements Store {
     const data = doc.data();
     if (!data || data["deleted"] === true || typeof data["takenDownAt"] === "string" || typeof data["purgedAt"] === "string") return null;
     return (data["project"] as Canvas | undefined) ?? null;
+  }
+
+  async canvasLifecycle(id: string): Promise<CanvasLifecycle> {
+    const doc = await this.db.doc(canvasDoc(id)).get();
+    const data = doc.data();
+    if (typeof data?.["purgedAt"] === "string") return "purged";
+    if (typeof data?.["takenDownAt"] === "string") return "taken-down";
+    if (data?.["deleted"] === true) return "deleted";
+    if (data?.["project"]) return "live";
+    if (doc.exists || !(await this.db.collection(opsCollection(id)).limit(1).get()).empty) return "incomplete";
+    return "absent";
+  }
+
+  async readBirthLog(id: string): Promise<LogEntry[]> {
+    return this.readOps(id, 0);
   }
 
   /** A bucket has no directories and Firestore has no schema, so there is

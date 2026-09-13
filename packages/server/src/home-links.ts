@@ -289,6 +289,8 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
     return upgradeVerdict(link?.homeBuild ?? null);
   }
 
+  async bindLocal(canvasId: string): Promise<void> { await this.record(canvasId, null); }
+
   async bind(canvasId: string, homeUrl: string | null): Promise<HomeConnection | null> {
     const target = homeUrl !== null ? normalizeHomeUrl(homeUrl) : this.birthHome;
     // Written BEFORE the write is forwarded, not after: the answer landing

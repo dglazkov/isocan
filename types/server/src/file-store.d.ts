@@ -1,3 +1,4 @@
+import type { CanvasLifecycle } from "./store.js";
 import type { Readable } from "node:stream";
 import type { ActorRegistry, LogEntry, Canvas, CanvasState, SlashCommand } from "../../core/src/index.js";
 import type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, PurgeReport, Store } from "./store.js";
@@ -10,6 +11,8 @@ export declare class FileStore implements Store {
     close(): Promise<void>;
     listCanvases(): Promise<Canvas[]>;
     canvasRecord(id: string): Promise<Canvas | null>;
+    canvasLifecycle(id: string): Promise<CanvasLifecycle>;
+    readBirthLog(id: string): Promise<LogEntry[]>;
     createCanvasDir(id: string): Promise<void>;
     canvasExists(id: string): Promise<boolean>;
     takenDownAt(id: string): Promise<string | null>;

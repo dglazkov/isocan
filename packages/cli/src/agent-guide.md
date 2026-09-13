@@ -781,6 +781,36 @@ design system of its own checks against the inherited one and says whose. A
 linked canvas at another home is named under its heading and not read from
 here. The same headings are in the app's Context panel.
 
+**Your personal canvas is private.** `isocan context personal` creates it on
+explicit first use and prints the same address thereafter. `context personal status`
+only inspects the binding. These standalone commands use the connected daemon;
+add `--home <url>` to choose another authoritative home. They do not create or
+resolve a working canvas. An agent session cannot enroll itself as a person.
+
+On a working canvas, `context personal link` places one visible owner-labelled
+card; `context personal links` reports each concrete card and your current
+availability. The card discloses its address and owner label, with no private
+preview. `context personal unlink <item-id>` deletes your card; ordinary undo
+restores the same consent. Closing a browser is not unlinking. A fresh link
+uses a fresh request ID; use `--request-id <id>` only to retry the same gesture.
+
+The owner can inspect `context personal delegates --source <canvas-id>`, then
+`context personal allow <agent-id> --source <canvas-id>` or
+`context personal revoke <agent-id> --source <canvas-id>`. Access belongs to
+that exact dataset; revocation applies to the next authoritative read even
+while its visible card remains. The selected actor must be claimed by the
+calling badge; another claim on the same badge does not lend its ownership.
+
+`context personal read <item-id> [--cursor <cursor>] [--limit <pieces>]` reads
+current pinned text and design contributions through that concrete destination
+card. The response names the owner, source and home. Follow `nextCursor` when
+present; `--limit` counts pieces (1..64, default 16), with text bounded to 64 KiB per piece. Non-text contributions are metadata only and truncated output says so.
+`--json` preserves the typed response. General Context reports local, inherited,
+and permitted personal summaries; a personal layer never governs shared design.
+Copied or forged cards grant no access. Automatic previews, inheritance and
+screenshots redact personal sources; private responses are never frozen into a
+shared request or exported by reading another project's Context.
+
 **Pinning is a decision; a reaction is a response.** The list shows both and
 does not merge them — somebody putting 👍 on a screen is real evidence, and it
 is not the same as saying "an agent should read this first".
@@ -2298,6 +2328,15 @@ anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 `canvas group grid <group> [RxC] [--rows names] [--cols names] [--tidy] [--clear]`,
 and `canvas group migrate [--dry-run] [--revision n]`.
 `area new <title>`, `area ls` and `area grid <group> [RxC] [--clear]` are compatibility aliases; `area ls` can also read legacy areas.
+**Personal context:** `context personal`, `context personal status`,
+`context personal link`, `context personal links`, `context personal unlink <item-id>`,
+`context personal delegates --source <canvas-id>`,
+`context personal allow <agent-id> --source <canvas-id>`,
+`context personal revoke <agent-id> --source <canvas-id>`, and
+`context personal read <item-id> [--cursor <cursor>] [--limit <pieces>]`.
+Standalone personal/status defaults to this daemon; `--home <url>` chooses a home.
+Destination commands accept the global `--canvas <canvas>` and all support `--json`.
+
 **Group context:** `context --in <group> [--include-excluded]` reads the complete
 current hierarchy. `context request <thread> <comment>` reads the complete
 frozen manifest saved with a message, including the actual selected root IDs,

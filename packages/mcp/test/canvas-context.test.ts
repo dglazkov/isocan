@@ -16,7 +16,14 @@ it("serves full frozen manifests and bounded original bytes through the real MCP
   await handle.remove(group);
   const count = f.writes.length;
   const reader = new CanvasHandle({ client: f.client, get actor() { throw new Error("reads must not demand identity"); } } as unknown as Ctx, f.state.project);
-  const server = createServer({ home: async () => ({ canvas: async () => reader }) as unknown as Home });
+  // This fixture owns only frozen-manifest serialization. The separate real
+  // stdio personal suite proves authority; even this port must request the
+  // ambient exclusion before resolving its synthetic canvas.
+  const scoped = { canvas: async () => reader } as unknown as Home;
+  const server = createServer({ home: async () => ({ withSourcePolicy: (policy: unknown) => {
+    expect(policy).toEqual({ mode: "exclude" });
+    return scoped;
+  } }) as unknown as Home });
   const host = new Client({ name: "acme-host", version: "1" });
   const [c, s] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(s), host.connect(c)]);
@@ -25,7 +32,7 @@ it("serves full frozen manifests and bounded original bytes through the real MCP
     expect(tools.tools.find((tool) => tool.name === "read_context")?.annotations?.readOnlyHint).toBe(true);
     const payload = async (name: string, args: Record<string, unknown>) => {
       const response = await host.callTool({ name, arguments: args });
-      expect(response.isError).toBeUndefined();
+      expect(response.isError, JSON.stringify(response)).toBeUndefined();
       return JSON.parse((response.content as Array<{ text: string }>)[0]!.text);
     };
     const manifest = await payload("read_context", { thread: posted.threadId, comment: posted.commentId });

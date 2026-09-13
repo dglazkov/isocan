@@ -130,6 +130,16 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   (`allow-scripts` without `allow-same-origin`). "Double-click to interact"
   hangs under the item while you point at it, rather than lying across the
   bottom of the document it is describing.
+- **Personal memory**: **Your canvas** in Context creates one private canvas
+  for your identity at this home. Pin a preference there, link it into a
+  project, and explicitly allow the agents who may read it. The project shows
+  your linked card without a source preview; Context reads the permitted pieces
+  with your name beside them. Unlink stops the next read, undo restores the
+  same link, and revoking an agent stops its access independently. On a phone,
+  open **More → Context**. Agents use `isocan context personal` and its
+  `link`, `unlink`, `allow`, `revoke` and `read` subcommands. The project's
+  design still governs, and exporting the project does not copy the private
+  source's contents.
 - **Markdown reading**: Read / select text mode, a heading outline, and live
   shared text selections. `isocan session select <item> --quote "words"` points
   agents to the same saved passage without changing the document. Select words
@@ -306,7 +316,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   claim an explicit durable agent session, create or edit items, post or reply
   to comments, and wait for addressed feedback. Concurrent calls keep their
   chosen identities; without a session the machine's ambient identity applies.
-  Reads and waits do not mark work seen or invent presence.
+  Ambient calls and resources exclude personal sources; an explicit claimed
+  delegate can receive their permitted summary. Reads and waits do not mark
+  work seen or invent presence.
 - **Canvas groups**: wrap selected items with
   **Group selection** (⌘/Ctrl+G), enter the group to work on direct children,
   add or remove members, and ungroup while preserving their positions.

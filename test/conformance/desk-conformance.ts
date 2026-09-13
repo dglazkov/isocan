@@ -45,6 +45,62 @@ export function deskConformance(
       }
     };
 
+    test("personal reservation is stable under concurrent requests and canonical joins preserve datasets", withDesk(async ({ desk }) => {
+      const at = "2026-09-13T00:00:00Z";
+      const rows = await Promise.all(Array.from({ length: 6 }, (_, i) => desk.reservePersonal({ ownerId: "usr_person", aliases: [], canvasId: `prj_candidate_${i}`, birthOpId: `op_birth_${i}`, at })));
+      expect(new Set(rows.map((row) => row.source.canvasId)).size).toBe(1);
+      const original = rows[0]!.source;
+      await desk.finishPersonalBirth(original.canvasId, original.birthOpId);
+      const alias = await desk.reservePersonal({ ownerId: "usr_alias", aliases: [], canvasId: "prj_alias", birthOpId: "op_alias", at });
+      const joined = await desk.reservePersonal({ ownerId: "usr_person", aliases: ["usr_alias"], canvasId: "prj_never", birthOpId: "op_never", at });
+      expect(await desk.personalBinding(["usr_person", "usr_alias"])).toEqual(joined);
+      expect(joined.source.canvasId).toBe(original.canvasId);
+      expect(joined.preserved.map((row) => row.canvasId)).toEqual([alias.source.canvasId]);
+      expect(await desk.personalSource("prj_never")).toBeNull();
+      expect((await desk.personalSource(original.canvasId))!.birth).toBe("created");
+      expect((await desk.personalSource(alias.source.canvasId))!.ownerId).toBe("usr_alias");
+    }));
+
+    test("private replica classification is immutable and grants no owner binding", withDesk(async ({ desk }) => {
+      expect(await desk.personalReplica("prj_remote")).toBeNull();
+      await desk.recordPersonalReplica("prj_remote", "https://home.acme.test");
+      await desk.recordPersonalReplica("prj_remote", "https://home.acme.test");
+      expect(await desk.personalReplica("prj_remote")).toBe("https://home.acme.test");
+      expect(await desk.personalSource("prj_remote")).toBeNull();
+      expect(await desk.personalBinding(["usr_person"])).toBeNull();
+      await expect(desk.recordPersonalReplica("prj_remote", "https://another.acme.test")).rejects.toThrow("authority changed");
+      expect(await desk.personalReplica("prj_remote")).toBe("https://home.acme.test");
+    }));
+
+    test("personal consent retries keep concrete identities and delegation stays on its source", withDesk(async ({ desk }) => {
+      const at = "2026-09-13T00:00:00Z";
+      await desk.reservePersonal({ ownerId: "usr_person", aliases: [], canvasId: "prj_personal", birthOpId: "op_birth", at });
+      const intent = { ownerId: "usr_person", sourceCanvasId: "prj_personal", destinationCanvasId: "prj_shared", itemId: "itm_card", groupId: "itm_group", opId: "op_link", requestId: "gesture-one", createdAt: at };
+      await desk.reservePersonalLink(intent);
+      expect(await desk.reservePersonalLink({ ...intent, itemId: "itm_retry", opId: "op_retry" })).toEqual(intent);
+      await expect(desk.reservePersonalLink({ ...intent, sourceCanvasId: "prj_other" })).rejects.toThrow();
+      expect(await desk.personalLinkForItem("prj_copy", "itm_card")).toBeNull();
+      expect(await desk.personalLinkForItem("prj_shared", "itm_copy")).toBeNull();
+      await desk.setPersonalDelegation("prj_personal", { agentId: "usr_agent", allowed: true, at, byOwnerId: "usr_person" });
+      await desk.setPersonalDelegation("prj_personal", { agentId: "usr_agent", allowed: false, at, byOwnerId: "usr_person" });
+      expect(await desk.personalDelegations("prj_personal")).toEqual([{ agentId: "usr_agent", allowed: false, at, byOwnerId: "usr_person" }]);
+      expect(await desk.personalDelegations("prj_other")).toEqual([]);
+      expect((await desk.personalLinksFor("prj_shared"))[0]!.itemId).toBe("itm_card");
+    }));
+
+    test("personal consent keys preserve the complete destination and item tuple", withDesk(async ({ desk }) => {
+      const at = "2026-09-13T00:00:00Z";
+      await desk.reservePersonal({ ownerId: "usr_person", aliases: [], canvasId: "prj_personal", birthOpId: "op_birth", at });
+      const base = { ownerId: "usr_person", sourceCanvasId: "prj_personal", groupId: "itm_group", createdAt: at };
+      const first = { ...base, destinationCanvasId: "prj_a_itm_b", itemId: "itm_c", requestId: "gesture-one", opId: "op_one" };
+      const second = { ...base, destinationCanvasId: "prj_a", itemId: "itm_b_itm_c", requestId: "gesture-two", opId: "op_two" };
+      await desk.reservePersonalLink(first); await desk.reservePersonalLink(second);
+      expect(await desk.personalLinkForItem(first.destinationCanvasId, first.itemId)).toEqual(first);
+      expect(await desk.personalLinkForItem(second.destinationCanvasId, second.itemId)).toEqual(second);
+      expect(await desk.personalLinksFor(first.destinationCanvasId)).toEqual([first]);
+      expect(await desk.personalLinksFor(second.destinationCanvasId)).toEqual([second]);
+    }));
+
     test(
       "init is idempotent, and close can be called twice",
       withDesk(async ({ desk }) => {

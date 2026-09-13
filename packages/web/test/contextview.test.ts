@@ -11,18 +11,18 @@ const read = (rel: string) =>
 const panel = read("components/ContextPanel.tsx");
 
 describe("the Context view", () => {
-  it("asks core, the same function `isocan context` asks", () => {
+  it("uses the same layered reader as `isocan context`", () => {
     // "A view the CLI cannot print is a view agents cannot use, and the whole
     // point is that both read the same thing." Two readers would agree until
     // the day one of them was taught something the other was not.
-    expect(panel).toMatch(/contextLayers\(canvas, linked\)/);
+    expect(panel).toMatch(/readLayeredContext\(contextIO,/);
     const cli = readFileSync(
       fileURLToPath(new URL("../../cli/src/main.ts", import.meta.url)),
       "utf8",
     );
     expect(cli).toMatch(/new CanvasHandle\(ctx, p\)\.contextSummary\(/);
     const api = readFileSync(fileURLToPath(new URL("../../api/src/context-summary.ts", import.meta.url)), "utf8");
-    expect(api).toMatch(/contextLayers\(snapshot\.canvas/);
+    expect(api).toMatch(/readLayeredContext\(port\(ctx\)/);
   });
 
   it("stores nothing, which is why this stage came first", () => {
@@ -46,7 +46,7 @@ describe("the Context view", () => {
     // this trap has been worth the two extra lines.
     const code = panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code, "no machine facts on a surface that cannot have them").not.toMatch(/directory/i);
-    expect(code, "and no extras object at all").toMatch(/contextLayers\(canvas, linked\)/);
+    expect(code, "and no machine extras passed to the shared reader").not.toMatch(/extras\s*:/);
   });
 
   it("shows a reason beside anything it flags", () => {

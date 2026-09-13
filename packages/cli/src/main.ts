@@ -1,3 +1,5 @@
+import { classifyAutomaticSource } from "@isocan/api/context";
+import { registerPersonalContext } from "./personal-context.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
 import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
@@ -357,6 +359,7 @@ import {
   type CanvasContents,
   type MetaPatch,
   canvasIdOf,
+  automaticCanvasTarget,
   isCanvasItem,
   markLabel,
   isSlide,
@@ -5629,6 +5632,28 @@ async function placeCanvasItem(
 ): Promise<void> {
   let { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
   /**
+   * Two doors, one item: an address names a canvas at some home and is
+   * taken as written; anything else is a ref among the canvases this
+   * machine knows — an id or a title prefix — and its address is the
+   * home the canvas lives at, or this daemon when it lives here.
+   */
+  const address = parseCanvasAddress(ref);
+  let target: { id: string; title: string };
+  let origin: string;
+  if (address) {
+    origin = address.origin;
+    const known = (await ctx.client.listCanvases()).find((one) => one.id === address.canvasId);
+    target = known ?? { id: address.canvasId, title: opts.title ?? address.canvasId };
+  } else {
+    const known = matchRef(await ctx.client.listCanvases(), ref);
+    target = known;
+    origin = (await ctx.homeOf(known.id)) ?? ctx.client.base;
+  }
+  if (target.id === p.id) throw new Error("a canvas cannot be placed on itself — that is the canvas you are on");
+  const access = await classifyAutomaticSource(ctx.client, { canvasId: target.id, home: (await ctx.homeOf(p.id)) ?? ctx.client.base, source: canvasUrl(origin, target.id) });
+  if (opts.inherit && access.kind !== "ordinary") throw new Error(access.refused);
+  if (access.kind !== "ordinary") target = { ...target, title: opts.title ?? "Canvas" };
+  /**
    * **The Context sheet** (memory phase 3): a link placed with nowhere said
    * goes onto the sheet named Context — laid now, at the origin or to the
    * left of everything, if this is the first link — so every canvas has a
@@ -5656,25 +5681,6 @@ async function placeCanvasItem(
     }
     opts = { ...opts, in: CONTEXT_SHEET_TITLE };
   }
-  /**
-   * Two doors, one item: an address names a canvas at some home and is
-   * taken as written; anything else is a ref among the canvases this
-   * machine knows — an id or a title prefix — and its address is the
-   * home the canvas lives at, or this daemon when it lives here.
-   */
-  const address = parseCanvasAddress(ref);
-  let target: { id: string; title: string };
-  let origin: string;
-  if (address) {
-    origin = address.origin;
-    const known = (await ctx.client.listCanvases()).find((one) => one.id === address.canvasId);
-    target = known ?? { id: address.canvasId, title: opts.title ?? address.canvasId };
-  } else {
-    const known = matchRef(await ctx.client.listCanvases(), ref);
-    target = known;
-    origin = (await ctx.homeOf(known.id)) ?? ctx.client.base;
-  }
-  if (target.id === p.id) throw new Error("a canvas cannot be placed on itself — that is the canvas you are on");
   const made = canvasItemOf(origin, target.id);
   await narrate(ctx, p.id, { status: `placing ${truncate(target.title, 32)}…` });
   const upload = await ctx.client.uploadBlob(p.id, Buffer.from(made.blob), made.mimeType, made.filename);
@@ -5743,13 +5749,22 @@ canvas
       // The address, whole, built here by `canvasUrl` — so the script never
       // spells the one shape this repo refuses to write twice.
       const origin = (await ctx.homeOf(target.id)) ?? ctx.client.base;
+      const access = await classifyAutomaticSource(ctx.client, { canvasId: target.id, home: origin, source: canvasUrl(origin, target.id) });
+      let ownerInput: string | undefined;
+      if (access.kind !== "ordinary") {
+        if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
+        const { personalCaptureOwner } = await import("./personal-capture.ts");
+        await personalCaptureOwner(ctx.home, origin, target.id, ctx.actor);
+        ownerInput = JSON.stringify({ actor: ctx.actor });
+      }
       const args = [script, "--url", canvasUrl(origin, target.id), "--width", String(width), "--height", String(height)];
       if (opts.out) args.push("--out", opts.out);
       if (opts.into) {
         const { canvas: p } = await canvasAndSnapshot(ctx);
         args.push("--into", opts.into, "--on", p.id);
       }
-      const child = spawnSync(process.execPath, args, { stdio: "inherit" });
+      if (ownerInput) args.push("--owner-from-stdin");
+      const child = spawnSync(process.execPath, args, ownerInput ? { stdio: ["pipe", "inherit", "inherit"], input: ownerInput } : { stdio: "inherit" });
       if (child.status !== 0) throw new Error(`the screenshot did not land (exit ${child.status ?? "?"})`);
     }),
   );
@@ -9378,6 +9393,7 @@ const context = program
   .option("--canvas <canvas>");
 
 registerContextReads(context, ctxOf);
+registerPersonalContext(context, ctxOf);
 
 /**
  * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,
@@ -9398,6 +9414,11 @@ function inheritVerb(name: "inherit" | "uninherit", memory: "inherit" | null, bl
         const item = resolveItem(snapshot, itemRef);
         if (!isCanvasItem(item)) {
           throw new Error(`"${item.title}" is not a canvas card — \`isocan canvas place <ref> --inherit\` places one that is`);
+        }
+        if (memoryOf(item) === "personal") throw new Error("Use `isocan context personal unlink <item>` to remove a personal link.");
+        if (memory === "inherit") {
+          const access = await classifyAutomaticSource(ctx.client, { canvasId: canvasIdOf(item)!, home: (await ctx.homeOf(p.id)) ?? ctx.client.base, source: sourceOf(item) });
+          if (access.kind !== "ordinary") throw new Error(access.refused);
         }
         const was = memoryOf(item);
         if (was === memory) {
@@ -9469,7 +9490,7 @@ context
       const options = cmd.optsWithGlobals() as { in?: string; includeExcluded?: boolean };
       if (options.in !== undefined) return reportContext(ctx, await new CanvasHandle(ctx, p).context(options));
       if (options.includeExcluded) throw new Error("--include-excluded requires --in <group>");
-      const layers = await new CanvasHandle(ctx, p).contextSummary({ guideVersion: describeBuild(buildStamp()) });
+      const layers = await new CanvasHandle(ctx, p).contextSummary({ guideVersion: describeBuild(buildStamp()) }, { personal: { actorId: ctx.actor.id } });
       if (ctx.json) return printJson(layers);
       console.log(layersReport(layers, (pieces) => contextReport(pieces)));
     }),
@@ -9595,6 +9616,11 @@ slidesCmd
       if (ext === ".html" || ext === ".htm") {
         const contents: DeckPageContent[] = await Promise.all(
           pages.map(async (page) => {
+            for (const id of [page.id, page.note?.id]) {
+              const item = id ? snapshot.canvas.items[id] : undefined;
+              const target = item && automaticCanvasTarget(item.properties.canvas ?? null, sourceOf(item));
+              if (target && (target.kind === "unavailable" || target.kind === "canvas" && (await classifyAutomaticSource(ctx.client, { canvasId: target.canvasId, home: (await ctx.homeOf(p.id)) ?? ctx.client.base, source: target.source })).kind !== "ordinary")) return { id: page.id, title: "Canvas · preview private or unavailable", mimeType: "text/uri-list", blobHash: "" };
+            }
             // The speaker note's words ride along; N shows them in the file.
             const notes = page.note ? { notes: await textOf(page.note.blobHash) } : {};
             if (page.mimeType === "text/html") {

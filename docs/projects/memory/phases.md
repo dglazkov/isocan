@@ -1,10 +1,10 @@
 # Memory — the walk
 
-**Where we are:** phases 0, 1 and 3 built on 4 September. Phase 2 is next:
-private personal birth, explicit linking and agent delegation on both clients.
-Phase 4 then completes the personal MCP read and independently proves all
-three layers. Public's catalogue and lifecycle are closed. The
-recap-head and pin-from-source promises are separate remaining work.
+**Where we are:** phases 0–3 are closed. Phase 2's private personal birth,
+consent, delegation and both client surfaces passed independent acceptance
+on 13 September. Memory phase 4 is next: the dedicated personal MCP read and
+three-layer transport proof. Public is closed. Recap-head and pin-from-source
+remain separate engineering work after phase 4.
 
 ## Phase 0 — Context with headings
 
@@ -29,7 +29,9 @@ explicitly left unbuilt in the original build record and remains separate.
 
 ## Phase 2 — The person's private canvas
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 13 September 2026 — private birth, concrete consent,
+explicit delegation and current personal reading work on CLI, desktop and
+phone; both backings and automatic-source boundaries pass acceptance.
 
 **Proof:** actual CLI and browser calls create one private canvas per person
 and home, link it visibly, read a pinned synthetic preference as the owner and
@@ -46,6 +48,27 @@ generic target resolution exclude personal sources before reads; explicit
 sessions never borrow another claimed actor’s owner floor. These birth-time
 protections precede phase 4’s dedicated personal tool. Run full tests, typecheck and
 build; preserve the entry ceiling and existing inherited design behavior.
+
+**Verified:** the conductor ran `npm test -- --maxWorkers=6` with Firestore
+and bundle checks required: 5,149 passed, three existing ACP/dispatch skips,
+516 files, exit 0. Workspace typecheck and build passed; entry 734,190 bytes
+against the unchanged 734,200 ceiling. Actual CLI tests and an independent
+owner/delegate walk proved private birth, caller selection, unlink/undo and
+shared snapshot/history/frozen/export isolation. Both-backing lifecycle tests
+prove retention across rename, join and restart before opening source data.
+
+`node --import ./index.mjs scripts/journey-personal.mjs` passed actual browser
+birth/link/read, agent allow/revoke, saved-face redaction, shared exports and
+phone Context. Switching people in place while a real authorized response was
+held cleared the rendered bytes and prevented late repopulation. The camera
+exited 0 with its observed temporary profile removed. All ten standard browser
+journeys and `scripts/public-journeys.mjs` passed on the integrated build.
+
+**Both surfaces:** existing native operations keep link/unlink undoable;
+`context personal` and its guide expose the same acts as Your canvas in Context.
+Core owns contribution/target rules and the browser-safe API owns composition.
+README describes the feature; pure/backing tests and real browser interaction
+cover their respective boundaries. No private authority travels as an Operation.
 
 ## Phase 3 — The Context sheet
 

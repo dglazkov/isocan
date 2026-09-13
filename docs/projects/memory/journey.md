@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents, embed, public
-note: local and inherited Context and its visible sheet are built. Personal memory is the next build, followed by explicit three-layer MCP acceptance; the personal contract is revised 13 Sep to make consent and private birth enforceable
+note: phases 0–3 are closed, including private personal birth, concrete consent, delegation and CLI/browser acceptance on 13 Sep. Memory phase 4 is next for the dedicated MCP read and three-layer transport proof; recap-head and pin-from-source remain separate
 ---
 # Memory — bring a source, see where it came from
 

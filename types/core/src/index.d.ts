@@ -10,6 +10,7 @@ export { applyOperation } from "./reducer.js";
 export * from "./badge.js";
 export * from "./grants.js";
 export * from "./public.js";
+export * from "./personal.js";
 export * from "./passes.js";
 export * from "./address.js";
 export * from "./emoji.js";

@@ -1,12 +1,12 @@
-import { lazy, Suspense, useEffect, useState, type ComponentProps } from "react";
+import { lazy, Suspense, type ComponentProps } from "react";
+import { usePhone } from "../lib/phone.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
 const Panel = lazy(() => import("./ContextPanel.tsx").then((module) => ({ default: module.ContextPanel })));
 
-/** Read the context layers only after inspection is requested; retain loaded links on close. */
+/** Read context only during inspection; closing unmounts any private response state. */
 export function ContextPanel(props: ComponentProps<typeof Panel>) {
+  const phone = usePhone();
   const open = useUiStore((state) => state.contextPanelOpen);
-  const [opened, setOpened] = useState(open);
-  useEffect(() => { if (open) setOpened(true); }, [open]);
-  return open || opened ? <Suspense fallback={null}><Panel {...props} /></Suspense> : null;
+  return (!phone && open) || props.onClose ? <Suspense fallback={null}><Panel {...props} /></Suspense> : null;
 }

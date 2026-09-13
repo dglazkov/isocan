@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import type { Backing } from "@isocan/core";
-import { backingOf, deckStep, editableText, isDesignSystem, isTextItem, sourceFaceOf, visualFaceOf } from "@isocan/core";
+import { automaticCanvasTarget, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, sourceFaceOf, visualFaceOf } from "@isocan/core";
 import { homeAnswered, writeItem } from "../lib/api.ts";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
+import { CanvasPreviewBoundary } from "./CanvasPreviewBoundary.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { NeighbourPad } from "./NeighbourPad.tsx";
@@ -156,7 +157,14 @@ function writePanes(surface: Surface, panes: Panes): void {
   }
 }
 
-export function ArtifactStage({
+/** A persisted source face and its editor obey the same automatic preview boundary. */
+export function ArtifactStage(props: Parameters<typeof OrdinaryArtifactStage>[0]) {
+  const item = useCanvasStore((s) => s.canvas?.items[props.itemId] ?? null);
+  const target = item && automaticCanvasTarget(item.properties.canvas ?? null, sourceOf(item));
+  return target && target.kind !== "none" ? <CanvasPreviewBoundary key={`${props.canvasId}:${item!.id}:${sourceOf(item!)}`} canvasId={item!.properties.canvas ?? null} source={sourceOf(item!)} destinationCanvasId={props.canvasId}><OrdinaryArtifactStage {...props} /></CanvasPreviewBoundary> : <OrdinaryArtifactStage {...props} />;
+}
+
+function OrdinaryArtifactStage({
   canvasId,
   itemId,
   actor,
@@ -254,7 +262,7 @@ export function ArtifactStage({
     surface === "fullscreen" && canvas
       ? ([1, -1] as const)
           .map((delta) => deckStep(canvas, item.id, delta))
-          .filter((one): one is NonNullable<typeof one> => Boolean(one))
+          .filter((one): one is NonNullable<typeof one> => Boolean(one) && automaticCanvasTarget(one!.properties.canvas ?? null, sourceOf(one!)).kind === "none")
           .map((one) => one.versions.find((v) => v.id === one.currentVersionId)?.blobHash)
           .filter((hash): hash is string => Boolean(hash))
       : [];
@@ -262,6 +270,8 @@ export function ArtifactStage({
   const face = hasVisual && previewFace === "source" ? sourceFaceOf(current) : visualFaceOf(current);
   const saved = (
     <VersionContent
+      canvasOf={item.properties.canvas ?? null}
+      canvasSource={sourceOf(item)}
       canvasId={canvasId}
       blobHash={face.blobHash}
       mimeType={face.mimeType}

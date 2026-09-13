@@ -1,3 +1,5 @@
+import { selectPersonalBinding, assertPersonalIntent, type PersonalSourceRecord, type PersonalOwnerRecord, type PersonalConsent, type PersonalLinkIntent, type ReservePersonalRequest, type PersonalReservation } from "./personal-desk.ts";
+import type { PersonalDelegate } from "@isocan/core";
 import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import type {
@@ -93,7 +95,10 @@ import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./des
  * must not be able to stall behind one.
  */
 
+type PersonalRows = { replicas?: { canvasId: string; home: string }[]; sources?: PersonalSourceRecord[]; owners?: PersonalOwnerRecord[]; intents?: PersonalLinkIntent[]; delegates?: { sourceCanvasId: string; delegation: PersonalDelegate }[] };
+
 type DeskLogEntry =
+  | { seq: number; type: "personal"; rows: PersonalRows; at: string }
   | { seq: number; type: "badge"; badgeId: string; secretHash: string; kind: BadgeRecord["kind"]; at: string }
   | { seq: number; type: "claims"; badgeId: string; claims: ActorClaim[]; at: string }
   | { seq: number; type: "shelve"; rows: Record<string, ActorClaim>; at: string }
@@ -174,6 +179,11 @@ type DeskLogEntry =
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
 
 interface DeskSnapshot {
+  personalReplicas?: Record<string, string>;
+  personalSources?: Record<string, PersonalSourceRecord>;
+  personalOwners?: Record<string, PersonalOwnerRecord>;
+  personalIntents?: Record<string, PersonalLinkIntent>;
+  personalDelegates?: Record<string, Record<string, PersonalDelegate>>;
   lastSeq: number;
   badges: Record<string, BadgeRecord>;
   /** Pre-badge claims waiting for the sessionKey that will collect them. */
@@ -235,6 +245,11 @@ export class FileDesk implements Desk {
     const snapshot = await readJson<DeskSnapshot>(p.badgesFile(this.home));
     this.state = {
       lastSeq: snapshot?.lastSeq ?? 0,
+      personalSources: snapshot?.personalSources ?? {},
+      personalReplicas: snapshot?.personalReplicas ?? {},
+      personalOwners: snapshot?.personalOwners ?? {},
+      personalIntents: snapshot?.personalIntents ?? {},
+      personalDelegates: snapshot?.personalDelegates ?? {},
       badges: snapshot?.badges ?? {},
       shelf: snapshot?.shelf ?? {},
       // Absent in every desk written before phase 7 — and correctly EMPTY
@@ -285,6 +300,88 @@ export class FileDesk implements Desk {
    * its snapshot; nothing is held open beyond that. */
   async close(): Promise<void> {
     await this.chain;
+  }
+
+  async personalReplica(canvasId: string): Promise<string | null> { return this.state.personalReplicas?.[canvasId] ?? null; }
+
+  async recordPersonalReplica(canvasId: string, home: string): Promise<void> {
+    await this.enqueue(async () => {
+      const existing = await this.personalReplica(canvasId);
+      if (existing === home) return;
+      if (existing) throw new Error("personal replica authority changed");
+      await this.commitPersonal({ replicas: [{ canvasId, home }] }, new Date().toISOString());
+    });
+  }
+
+  async personalSource(canvasId: string): Promise<PersonalSourceRecord | null> {
+    return structuredClone(this.state.personalSources?.[canvasId] ?? null);
+  }
+
+  async personalBinding(ownerIds: string[]): Promise<PersonalReservation | null> {
+    return structuredClone(selectPersonalBinding(ownerIds, Object.values(this.state.personalOwners ?? {}), Object.values(this.state.personalSources ?? {})));
+  }
+
+  async reservePersonal(request: ReservePersonalRequest): Promise<PersonalReservation> {
+    return this.enqueue(async () => {
+      const existing = await this.personalBinding([request.ownerId, ...request.aliases]);
+      if (existing) {
+        if (!this.state.personalOwners?.[request.ownerId]) await this.commitPersonal({ owners: [{ ownerId: request.ownerId, sourceCanvasId: existing.source.canvasId, enrolledAt: request.at }] }, request.at);
+        return existing;
+      }
+      if (this.state.personalSources?.[request.canvasId]) throw new Error("personal source id is already reserved");
+      const source: PersonalSourceRecord = { canvasId: request.canvasId, ownerId: request.ownerId, birthOpId: request.birthOpId, createdAt: request.at, birth: "reserved" };
+      await this.commitPersonal({ sources: [source], owners: [{ ownerId: request.ownerId, sourceCanvasId: request.canvasId, enrolledAt: request.at }] }, request.at);
+      return { source, preserved: [] };
+    });
+  }
+
+  async finishPersonalBirth(canvasId: string, birthOpId: string): Promise<void> {
+    await this.enqueue(async () => {
+      const source = await this.personalSource(canvasId);
+      if (!source || source.birthOpId !== birthOpId) throw new Error("personal birth reservation does not match");
+      if (source.birth === "created") return;
+      await this.commitPersonal({ sources: [{ ...source, birth: "created" }] }, source.createdAt);
+    });
+  }
+
+  async reservePersonalLink(intent: PersonalLinkIntent): Promise<PersonalLinkIntent> {
+    return this.enqueue(async () => {
+      const key = JSON.stringify([intent.destinationCanvasId, intent.ownerId, intent.requestId]);
+      const existing = this.state.personalIntents?.[key];
+      if (existing) { assertPersonalIntent(existing, intent); return structuredClone(existing); }
+      if (!this.state.personalSources?.[intent.sourceCanvasId]) throw new Error("personal source is not reserved");
+      if (Object.values(this.state.personalIntents ?? {}).some((row) => row.destinationCanvasId === intent.destinationCanvasId && row.itemId === intent.itemId)) throw new Error("personal card id is already reserved");
+      await this.commitPersonal({ intents: [intent] }, intent.createdAt);
+      return structuredClone(intent);
+    });
+  }
+
+  async personalLinksFor(destinationCanvasId: string): Promise<PersonalConsent[]> {
+    return structuredClone(Object.values(this.state.personalIntents ?? {}).filter((row) => row.destinationCanvasId === destinationCanvasId));
+  }
+
+  async personalLinkForItem(destinationCanvasId: string, itemId: string): Promise<PersonalConsent | null> {
+    return (await this.personalLinksFor(destinationCanvasId)).find((row) => row.itemId === itemId) ?? null;
+  }
+
+  async personalDelegations(sourceCanvasId: string): Promise<PersonalDelegate[]> {
+    return structuredClone(Object.values(this.state.personalDelegates?.[sourceCanvasId] ?? {}));
+  }
+
+  async setPersonalDelegation(sourceCanvasId: string, delegation: PersonalDelegate): Promise<PersonalDelegate> {
+    return this.enqueue(async () => {
+      if (!this.state.personalSources?.[sourceCanvasId]) throw new Error("personal source is not reserved");
+      await this.commitPersonal({ delegates: [{ sourceCanvasId, delegation }] }, delegation.at);
+      return structuredClone(delegation);
+    });
+  }
+
+  private async commitPersonal(rows: PersonalRows, at: string): Promise<void> {
+    const entry: DeskLogEntry = { seq: this.state.lastSeq + 1, type: "personal", rows, at };
+    await appendLineDurable(p.badgesLogFile(this.home), JSON.stringify(entry));
+    this.replay(entry);
+    this.state.lastSeq = entry.seq;
+    await this.writeSnapshot();
   }
 
   async put(badge: BadgeRecord): Promise<void> {
@@ -972,6 +1069,14 @@ export class FileDesk implements Desk {
 
   private replay(entry: DeskLogEntry): void {
     switch (entry.type) {
+      case "personal": {
+        for (const row of entry.rows.replicas ?? []) (this.state.personalReplicas ??= {})[row.canvasId] = row.home;
+        for (const row of entry.rows.sources ?? []) (this.state.personalSources ??= {})[row.canvasId] = row;
+        for (const row of entry.rows.owners ?? []) (this.state.personalOwners ??= {})[row.ownerId] = row;
+        for (const row of entry.rows.intents ?? []) (this.state.personalIntents ??= {})[JSON.stringify([row.destinationCanvasId, row.ownerId, row.requestId])] = row;
+        for (const row of entry.rows.delegates ?? []) ((this.state.personalDelegates ??= {})[row.sourceCanvasId] ??= {})[row.delegation.agentId] = row.delegation;
+        return;
+      }
       case "badge": {
         // A recovered badge starts with no admissions: the address admits, so
         // it re-admits itself the moment it asks for something.

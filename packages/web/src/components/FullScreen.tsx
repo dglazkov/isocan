@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, deckStep, itemPath, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
+import { sourceOf, canvasPath, deckStep, itemPath, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { readBlobText } from "../lib/api.ts";
@@ -302,7 +302,7 @@ export function FullScreen({
           const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
           if (!current) return <p>This item has no preview.</p>;
           const visual = visualFaceOf(current);
-          return <VersionContent canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} />;
+          return <VersionContent canvasOf={item.properties.canvas ?? null} canvasSource={sourceOf(item)} canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} />;
         })() : <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />}
       </div>
       {/* Under the stage, never over it: the audience's picture keeps its

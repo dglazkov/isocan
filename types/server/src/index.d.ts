@@ -39,3 +39,5 @@ export { modulesDir, readRuntimeModules, type RuntimeModule } from "./modules.js
 export { bindableRoot, dirsOf, findBinding, markerFile, readMarker, recordDir, writeMarker, } from "./binding.js";
 export type { DirBinding, DirMarker } from "./binding.js";
 export * from "./personas.js";
+export * from "./personal-desk.js";
+export type { CanvasLifecycle } from "./store.js";

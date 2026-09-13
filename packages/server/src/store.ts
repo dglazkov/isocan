@@ -62,6 +62,9 @@ export interface LoadedCanvas {
   recoveredSeqs: number[];
 }
 
+/** Metadata-only lifecycle distinguishes an interrupted reserved birth from a tombstone. */
+export type CanvasLifecycle = "absent" | "incomplete" | "live" | "deleted" | "taken-down" | "purged";
+
 /**
  * Persistence for one isocan home — the seam the engine mutates through, and
  * the only thing it knows about storage. `FileStore` (see `file-store.ts`) is
@@ -104,6 +107,10 @@ export interface Store {
   /** Current metadata only, with no logs or snapshots read. Null for absent,
    * deleted, taken-down or purged canvases, including retained tombstones. */
   canvasRecord(id: string): Promise<Canvas | null>;
+  /** Never loads a canvas snapshot or content. */
+  canvasLifecycle(id: string): Promise<CanvasLifecycle>;
+  /** Only authorized reserved-birth recovery reads this exact original log. */
+  readBirthLog(id: string): Promise<LogEntry[]>;
 
   createCanvasDir(id: string): Promise<void>;
 

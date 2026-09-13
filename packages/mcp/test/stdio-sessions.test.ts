@@ -105,7 +105,9 @@ it("keeps two stdio sessions attributed, addressed, cancellable and durable acro
     expect(quiet.cursor).toBe((await routes.snapshot(canvas)).lastSeq);
     expect(quiet.cursor).toBeGreaterThan(heardA.cursor);
     expect(JSON.stringify(quiet)).not.toContain(reply.commentId);
-    expect(watches).toBe(0);
+    // A quiet deadline aborts the HTTP poll. Its response-close event crosses
+    // the socket after the MCP answer, just as explicit cancellation does.
+    await expect.poll(() => watches).toBe(0);
     const followup = await handle.reply(threadA.threadId, "One more detail");
     const participating = await call<Feedback>("wait_for_feedback", { session: "conversation-a", cursor: quiet.cursor, timeoutMs: 150 });
     expect(JSON.stringify(participating.entries)).toContain(followup.commentId);

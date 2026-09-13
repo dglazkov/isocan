@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { LogEntry, OpEnvelope, Operation, CanvasState, ActorRegistry } from "@isocan/core";
 import { applyOperation, emptyActorRegistry, invertOperation } from "@isocan/core";
 import type { Store } from "@isocan/server";
@@ -93,6 +93,58 @@ export function storeConformance(
       await store.purgeCanvas("prj_1");
       await store.setTakenDown("prj_1", null);
       expect(await store.canvasRecord("prj_1")).toBeNull();
+    }));
+
+    test("classifies lifecycle without loading source state, and purge survives lift and restart", withStore(async (fixture) => {
+      let store = fixture.store;
+      const loads = vi.spyOn(store, "load");
+      const blobs = vi.spyOn(store, "openBlob");
+      const births = vi.spyOn(store, "readBirthLog");
+      expect(await store.canvasLifecycle("prj_missing")).toBe("absent");
+      await seed(store);
+      expect(await store.canvasLifecycle("prj_1")).toBe("live");
+      await store.setTakenDown("prj_1", "2026-09-13T01:00:00Z");
+      expect(await store.canvasLifecycle("prj_1")).toBe("taken-down");
+      await store.setTakenDown("prj_1", null);
+      expect(await store.canvasLifecycle("prj_1")).toBe("live");
+      await store.setTakenDown("prj_1", "2026-09-13T02:00:00Z");
+      await store.purgeCanvas("prj_1");
+      expect(await store.canvasLifecycle("prj_1")).toBe("purged");
+      await store.setTakenDown("prj_1", null);
+      expect(await store.canvasLifecycle("prj_1")).toBe("purged");
+      expect(loads).not.toHaveBeenCalled(); expect(blobs).not.toHaveBeenCalled(); expect(births).not.toHaveBeenCalled();
+      store = await fixture.reopen();
+      expect(await store.canvasLifecycle("prj_1")).toBe("purged");
+    }));
+
+    test("a deleted source stays deleted across a backing restart", withStore(async (fixture) => {
+      let store = fixture.store;
+      await seed(store); await store.softDeleteCanvas("prj_1");
+      expect(await store.canvasLifecycle("prj_1")).toBe("deleted");
+      store = await fixture.reopen();
+      expect(await store.canvasLifecycle("prj_1")).toBe("deleted");
+    }));
+
+    test("recovers the exact reserved birth log before any canvas metadata exists", withStore(async (fixture) => {
+      let store = fixture.store;
+      expect(await store.readBirthLog("prj_1")).toEqual([]);
+      const birth = envelope({ type: "project.create", canvasId: "prj_1", title: "Acme private source" });
+      const first: LogEntry = { seq: 1, envelope: birth, inverse: null };
+      const initial = applyOperation(null, birth)!;
+      const update = envelope({ type: "project.update", patch: { description: "Durable tail" } });
+      const second: LogEntry = { seq: 2, envelope: update, inverse: invertOperation(initial, update.op) };
+      await store.createCanvasDir("prj_1");
+      await store.appendLog("prj_1", first); await store.appendLog("prj_1", second);
+      expect(await store.canvasLifecycle("prj_1")).toBe("incomplete");
+      expect(await store.canvasRecord("prj_1")).toBeNull();
+      expect(await store.readBirthLog("prj_1")).toEqual([first, second]);
+      store = await fixture.reopen();
+      expect(await store.canvasLifecycle("prj_1")).toBe("incomplete");
+      expect(await store.readBirthLog("prj_1")).toEqual([first, second]);
+      await store.saveSnapshot("prj_1", applyOperation(initial, update)!, 2);
+      expect(await store.canvasLifecycle("prj_1")).toBe("live");
+      expect(await store.readBirthLog("prj_1")).toEqual([first, second]);
+      expect(await store.tipSeq("prj_1")).toBe(2);
     }));
 
     test("a soft-deleted canvas is not live catalogue metadata", withStore(async ({ store }) => {

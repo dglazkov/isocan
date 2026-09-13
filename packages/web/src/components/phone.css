@@ -44,3 +44,8 @@
 
 /* Text is its own scroll container: retain vertical reading and local sideways swipes. */
 .phone-node .md-view { touch-action: pan-y; }
+
+.phone-more-menu { position: absolute; top: 56px; right: 110px; z-index: var(--z-popover); padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow-pop); }
+.phone-context-sheet { inset: 56px 0 60px; border-radius: 0; padding: 0; }
+.phone-context-sheet .context-panel { display: flex; position: static; width: 100% !important; height: 100%; max-height: none; min-height: 0; border: 0; box-shadow: none; }
+.phone-context-sheet .panel-resizer { display: none; }

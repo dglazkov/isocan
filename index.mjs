@@ -55,6 +55,7 @@ export const {
   resolveCtx,
   resolveCanvas,
   resolveCanvasRef,
+  sourceContextForCanvas,
   resolveDeclared,
   matchRef,
   ensureDirBinding,

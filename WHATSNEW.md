@@ -23,6 +23,13 @@ second week.
 
 ## 13 September 2026
 
+- Bring your own preferences into a project. Open **Your canvas** in Context
+  to create your private canvas at this home, pin what matters, then link it
+  here and allow the agents who may read it. Everyone sees the linked card;
+  permitted readers see your current pinned context. Unlinking and agent
+  revocation stop the next read. Phone users reach it through **More →
+  Context**; the terminal uses `isocan context personal`.
+
 - Make a canvas findable on its home. With a Canvas Viewer or Presentation
   Viewer link, turn on **Public on this home** in Share. People can browse
   **Public canvases** without signing in; opening one uses its existing

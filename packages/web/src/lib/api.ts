@@ -274,15 +274,17 @@ export async function knockOnDoor(claimIdentity = true): Promise<boolean> {
   }
 }
 
-async function request<T>(
+/** Shared authenticated transport for lazy feature adapters, with caller cancellation. */
+export async function request<T>(
   method: string, url: string, body?: unknown, signal?: AbortSignal,
   recovery: "identity" | "badge" = "identity",
+  extraHeaders?: Record<string, string>,
 ): Promise<T> {
   const send = () =>
     fetch(url, {
       method,
       ...(signal ? { signal } : {}),
-      headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
+      headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extraHeaders, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
       ...(body !== undefined
         ? { body: JSON.stringify(body) }
         : {}),
@@ -612,8 +614,8 @@ export function fetchHomes(): Promise<HomesResponse> {
  * of them; opening a dozen to keep a dozen dots exact is a cost nobody asked
  * for, and a dot a few seconds stale is still a dot.
  */
-export function fetchPresenceWhere(): Promise<PresenceWhereResponse> {
-  return request("GET", PRESENCE_WHERE_ROUTE);
+export function fetchPresenceWhere(signal?: AbortSignal): Promise<PresenceWhereResponse> {
+  return request("GET", PRESENCE_WHERE_ROUTE, undefined, signal);
 }
 
 /** What changed, for the person using this — see `NEWS_ROUTE`. Open, because
@@ -646,8 +648,8 @@ export function askEnrolAgent(canvasId: string, body: RcAskRequest): Promise<RcA
   return request("POST", `/api/projects/${encodeURIComponent(canvasId)}/agents/ask`, body);
 }
 
-export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
-  return request("GET", `/api/projects/${canvasId}/canvas`);
+export function getSnapshot(canvasId: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<CanvasSnapshotResponse> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/canvas`, undefined, signal, "identity", headers);
 }
 
 /**
@@ -1304,10 +1306,15 @@ export function blobUrl(canvasId: string, blobHash: string): string {
  * `homeAnswered` tells that apart from never reaching it — so a caller can
  * say which silence it is instead of rendering empty.
  */
-async function fetchBlob(canvasId: string, blobHash: string): Promise<Response> {
+async function fetchBlob(canvasId: string, blobHash: string, signal?: AbortSignal, headers: Record<string, string> = {}): Promise<Response> {
   const url = blobUrl(canvasId, blobHash);
-  let res = await fetch(url);
-  if (res.status === 401 && (await knockOnDoor())) res = await fetch(url);
+  const send = () => fetch(url, { signal: signal ?? null, headers });
+  let res = await send();
+  signal?.throwIfAborted();
+  if (res.status === 401 && (await knockOnDoor())) {
+    signal?.throwIfAborted();
+    res = await send();
+  }
   if (!res.ok) {
     const json = (await res.json().catch(() => null)) as any;
     throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
@@ -1316,8 +1323,8 @@ async function fetchBlob(canvasId: string, blobHash: string): Promise<Response> 
 }
 
 /** A version's bytes. */
-export async function readBlob(canvasId: string, blobHash: string): Promise<Blob> {
-  return (await fetchBlob(canvasId, blobHash)).blob();
+export async function readBlob(canvasId: string, blobHash: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<Blob> {
+  return (await fetchBlob(canvasId, blobHash, signal, headers)).blob();
 }
 
 /**
@@ -1328,8 +1335,8 @@ export async function readBlob(canvasId: string, blobHash: string): Promise<Blob
  * that JSON ends up rendered on the canvas — or, worse, opened in an editor
  * and saved back over the file.
  */
-export async function readBlobText(canvasId: string, blobHash: string): Promise<string> {
-  return (await fetchBlob(canvasId, blobHash)).text();
+export async function readBlobText(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<string> {
+  return (await fetchBlob(canvasId, blobHash, signal)).text();
 }
 
 /** How this home serves — today, only whether a content origin exists. */

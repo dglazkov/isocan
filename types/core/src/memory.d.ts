@@ -1,4 +1,5 @@
-import type { CanvasContents, Item } from "./model.js";
+import type { CanvasContents, Item, ItemVersion } from "./model.js";
+import { canvasItemOf } from "./canvasitem.js";
 import { type ContextExtras, type ContextPiece } from "./context.js";
 /**
  * **Memory, in layers you can see** (`docs/projects/memory/design.md`).
@@ -31,6 +32,22 @@ export declare function memoryOf(item: Item): MemoryLink | null;
  * An excluded card or ancestor removes that edge before any source is read.
  */
 export declare function memoryLinks(canvas: CanvasContents): Item[];
+/** Personal candidates are visible edges, not authority: the home checks concrete consent. */
+export declare function personalMemoryLinks(canvas: CanvasContents): Item[];
+/** The authorized home reads only these current contributions, never a source's Chat. */
+interface PersonalContribution {
+    kind: "design" | "pin";
+    item: Item;
+    version: ItemVersion | null;
+}
+/** Personal memory contributes its design and ambient pins once, with ancestor exclusions. */
+export declare function personalContributions(canvas: CanvasContents): PersonalContribution[];
+/** A shared personal card discloses only its owner's label and source address. */
+export declare function personalCanvasItemOf(home: string, sourceCanvasId: string, owner: {
+    name: string;
+}): ReturnType<typeof canvasItemOf> & {
+    title: string;
+};
 /** The patch that sets or clears the link — one spelling for both surfaces,
  *  cleared with `removeProperties` for the reason `markPatch` records. */
 export declare function memoryPatch(memory: MemoryLink | null): {
@@ -50,15 +67,29 @@ export interface LinkedCanvas {
     /** Why it could not be read, when it could not. */
     refused?: string;
 }
-/** One heading in the Context view: whose pieces these are. */
-export interface ContextLayer {
-    /** Null for this canvas itself. */
-    canvasId: string | null;
+interface LayerContents {
     heading: string;
     pieces: ContextPiece[];
     /** Set when the layer could not be read — the heading stands, with why. */
     refused?: string;
 }
+/** Layer identity distinguishes personal owner provenance from inherited design authority. */
+export type ContextLayer = LayerContents & ({
+    kind: "local";
+    canvasId: null;
+} | {
+    kind: "inherited";
+    canvasId: string;
+    itemId: string;
+} | {
+    kind: "personal";
+    canvasId: string;
+    itemId: string;
+    owner: {
+        id: string;
+        name: string;
+    } | null;
+});
 /**
  * What a linked canvas contributes: its design system, its pins, its size.
  * `localHasDesign` is the override rule — when this canvas has its own, the
@@ -96,6 +127,8 @@ export declare function governingDesign(canvas: CanvasContents, linked: LinkedCa
 /** The layers as a terminal prints them: a heading per source, the pieces
  *  under it the way `contextReport` prints them, and a refusal in words. */
 export declare function layersReport(layers: ContextLayer[], report: (pieces: ContextPiece[]) => string): string;
+/** A visible link's identity distinguishes repeated sources and private/inherited headings. */
+export declare function contextLayerKey(layer: ContextLayer): string;
 /** The canvas a card links, when it is a memory link — for a reader that
  *  walks a canvas's cards deciding what to fetch. */
 export declare function linkedCanvasId(item: Item): string | null;
@@ -122,3 +155,4 @@ export declare function contextSheetSpot(canvas: CanvasContents, size?: {
     x: number;
     y: number;
 };
+export {};

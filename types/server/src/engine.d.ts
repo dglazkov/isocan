@@ -1,3 +1,5 @@
+import type { PersonalSourceRecord } from "./personal-desk.js";
+import type { SourceRequestContext } from "../../core/src/index.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, ActorColors, ActorJoinOp, ActorJoins, ActorMarks, HomeRefusal, ActorKinds, ActorNames, ActorSetColorOp, ActorSetMarkOp, CanvasSnapshotResponse, LogEntry, Operation, PresenceSession, Canvas, ServerMessage, SlashCommand, UploadTicket } from "../../core/src/index.js";
 import type { BlobUploadRequest, Store } from "./store.js";
 import type { Desk } from "./desk.js";
@@ -44,6 +46,7 @@ export declare class NothingToUndoError extends Error {
     constructor(kind: "undo" | "redo", actorName?: string);
 }
 interface SubmitRequest {
+    sourceContext?: SourceRequestContext;
     clientFeatures?: string;
     originGroupMode?: "legacy" | "groups";
     canvasId: string | null;
@@ -217,6 +220,19 @@ export declare class Engine {
     settled(): Promise<void>;
     /** Serialize all mutations through one chain. */
     private enqueue;
+    /** HomeLink records classification before adopting any private replica bytes. */
+    recordPersonalReplica(canvasId: string, home: string): Promise<void>;
+    private refusePersonalTransfer;
+    /** Request policy is rechecked when queued work begins, before any source state is loaded. */
+    private sourceGuard?;
+    setSourceGuard(guard: NonNullable<Engine["sourceGuard"]>): void;
+    /** A private workflow enters this queue once; callbacks use only the unqueued writer port. */
+    personalWrite<T>(work: (port: {
+        snapshot: (canvasId: string) => Promise<CanvasSnapshotResponse>;
+        submit: (request: SubmitRequest) => Promise<LogEntry>;
+        birth: (source: PersonalSourceRecord, actor: Actor, badgeId: string) => Promise<boolean>;
+    }) => Promise<T>): Promise<T>;
+    private birthPersonal;
     listCanvases(): Promise<Canvas[]>;
     getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse>;
     /** Chosen identity colors, actor id → hex. Everything absent is derived
@@ -414,7 +430,7 @@ export declare class Engine {
      */
     teleport(canvasId: string, toHomeUrl: string, options: {
         dryRun: boolean;
-    }): Promise<TeleportReport>;
+    }, sourceContext?: SourceRequestContext, badgeId?: string): Promise<TeleportReport>;
     /**
      * **Take a canvas whole, as somebody else's log** — the receiving half of a
      * teleport.
@@ -441,7 +457,7 @@ export declare class Engine {
      * merging two orders is the thing `docs/research/2026-09-01-teleport.md`
      * argues is a different product.
      */
-    adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{
+    adopt(canvasId: string, entries: readonly LogEntry[], sourceContext?: SourceRequestContext, badgeId?: string): Promise<{
         seqs: number;
     }>;
     getLog(canvasId: string, sinceSeq?: number): Promise<LogEntry[]>;
@@ -454,7 +470,7 @@ export declare class Engine {
      */
     getArchivedLog(canvasId: string): Promise<LogEntry[]>;
     /** A migration preview reads the home's current revision, even through a replica. */
-    groupMigrationPreview(canvasId: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;
+    groupMigrationPreview(canvasId: string, sourceContext?: SourceRequestContext, badgeId?: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;
     submit(request: SubmitRequest): Promise<LogEntry>;
     /**
      * Where this op's write belongs: a home, or null for "this daemon".
@@ -599,7 +615,7 @@ export declare class Engine {
     putBlob(canvasId: string, data: Buffer, meta: {
         mimeType: string;
         filename: string;
-    }): Promise<{
+    }, sourceContext?: SourceRequestContext, badgeId?: string): Promise<{
         blobHash: string;
         size: number;
         mimeType: string;
@@ -626,7 +642,7 @@ export declare class Engine {
      */
     reconcileBlobs(canvasId: string, options: {
         push: boolean;
-    }): Promise<{
+    }, sourceContext?: SourceRequestContext, badgeId?: string): Promise<{
         home: string | null;
         checked: number;
         missing: string[];
@@ -640,14 +656,14 @@ export declare class Engine {
      * nothing, and minting can involve a round trip to a signing API — putting
      * it on the chain would stall every op behind somebody's video.
      */
-    beginUpload(canvasId: string, request: BlobUploadRequest): Promise<UploadTicket | null>;
+    beginUpload(canvasId: string, request: BlobUploadRequest, sourceContext?: SourceRequestContext, badgeId?: string): Promise<UploadTicket | null>;
     /**
      * Name bytes that arrived without us. ON the chain, because GC is on the
      * chain: a register that lands mid-sweep would otherwise re-name a blob the
      * sweep has just decided is garbage, and the item pointing at it would 404
      * forever.
      */
-    registerBlob(canvasId: string, request: BlobUploadRequest): Promise<{
+    registerBlob(canvasId: string, request: BlobUploadRequest, sourceContext?: SourceRequestContext, badgeId?: string): Promise<{
         blobHash: string;
         size: number;
         mimeType: string;
@@ -658,8 +674,8 @@ export declare class Engine {
      * changed); inverses invalidated by other actors' ops are repaired (batch
      * ops shrink to their surviving members) or skipped entirely.
      */
-    undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string): Promise<LogEntry>;
-    redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string): Promise<LogEntry>;
+    undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string, sourceContext?: SourceRequestContext): Promise<LogEntry>;
+    redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string, sourceContext?: SourceRequestContext): Promise<LogEntry>;
     /**
      * Blob garbage collection: compact the oplog to an undo horizon (dropped
      * entries go to the archive), then sweep blobs unreachable from live state,
@@ -667,7 +683,7 @@ export declare class Engine {
      * cannot race a mutation; the mtime grace period covers uploads that have
      * not become items yet. Maintenance, not an Operation — never undoable.
      */
-    gc(canvasId: string, options?: GcOptions): Promise<GcReport>;
+    gc(canvasId: string, options?: GcOptions, sourceContext?: SourceRequestContext, badgeId?: string): Promise<GcReport>;
     /**
      * One entry from the home, landed here with **the home's seq, verbatim**.
      *

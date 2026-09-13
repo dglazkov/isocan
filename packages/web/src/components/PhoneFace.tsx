@@ -2,7 +2,7 @@ import { VisitDigest } from "./VisitDigest.tsx";
 import type { PriorVisit } from "../lib/visitdigest.ts";
 import { Suspense, lazy, useEffect, useState, type MutableRefObject } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { isDesignSystem, isTextItem, itemPath, THREAD_QUERY, roster, visualFaceOf, type Actor } from "@isocan/core";
+import { sourceOf, isDesignSystem, isTextItem, itemPath, THREAD_QUERY, roster, visualFaceOf, type Actor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
 import { useTouchNavigation } from "../lib/touchnavigation.ts";
@@ -10,6 +10,7 @@ import { useAnswerable } from "../lib/answerable.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { MainThreadBody } from "./MainThreadPanel.tsx";
 import { AgentRowView } from "./AgentRow.tsx";
+import { ContextPanel } from "./LazyContextPanel.tsx";
 import { VersionContent } from "./ItemView.tsx";
 import { CanvasViewport } from "./CanvasViewport.tsx";
 import { ComposePopover, ThreadPopover, itemThread } from "./CommentLayer.tsx";
@@ -33,6 +34,15 @@ export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit
   const [state, setState] = useState(visit.current);
   const [digestThread, setDigestThread] = useState<string | null>(null);
   const [threadOpen, setThreadOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
+  useEffect(() => { setMoreOpen(false); setContextOpen(false); }, [canvasId, actor.id]);
+  useEffect(() => {
+    if (!moreOpen && !contextOpen) return;
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMoreOpen(false); setContextOpen(false); } };
+    window.addEventListener("keydown", escape, true);
+    return () => window.removeEventListener("keydown", escape, true);
+  }, [moreOpen, contextOpen]);
   const { search } = useLocation();
   const requestedThread = new URLSearchParams(search).get(THREAD_QUERY);
   const [mainFocus, setMainFocus] = useState(0);
@@ -65,7 +75,8 @@ export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit
   }, [mainFocus, state.tab]);
   const rows = roster(sessions, canvas, Date.now(), answerable).filter((r) => !(r.state === "away" && r.actorId === actor.id));
   return <section className={`phone-face${state.plan && state.tab === "Canvas" ? " phone-plan" : ""}`} aria-label="Phone canvas">
-    <header className="phone-header"><Link to="/" aria-label="All canvases">‹</Link><strong>{title}</strong><span>{canEdit ? actor.name : "Read only"}</span></header>
+    <header className="phone-header"><Link to="/" aria-label="All canvases">‹</Link><strong>{title}</strong><span>{canEdit ? actor.name : "Read only"}</span><button aria-label="More canvas options" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)}>More</button></header>
+    {moreOpen && <div className="phone-more-menu" role="menu"><button role="menuitem" onClick={() => { setMoreOpen(false); setThreadOpen(false); setContextOpen(true); }}>Context</button></div>}
     <div className="phone-body">
       {state.tab === "Chat" && <div className="phone-chat">
         <VisitDigest prior={prior} onItem={open} onThread={openThread} />
@@ -82,13 +93,14 @@ export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit
       </div> : <div className="phone-node" data-node-id={item?.id} {...gestures}>
         {item ? <>
           <div className="phone-node-bar"><strong>{item.title}</strong><button onClick={() => update({ plan: true })}>Plan</button><button onClick={() => navigate(itemPath(canvasId, item.id))}>Present</button></div>
-          <div className="phone-artifact">{current && visual ? <VersionContent canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} /> : <p>This node has no preview.</p>}</div>
+          <div className="phone-artifact">{current && visual ? <VersionContent canvasOf={item.properties.canvas ?? null} canvasSource={sourceOf(item)} canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} /> : <p>This node has no preview.</p>}</div>
           {directions.map(([direction, name, glyph]) => { const next = findNextItem(item, items, direction); return <button key={direction} className={`phone-edge edge-${name}`} aria-label={next ? `${name}: ${canvas?.items[next.id]?.title}` : `No item ${name}`} disabled={!next} onClick={() => step(direction)}>{glyph}</button>; })}
           <button className="phone-thread-toggle" onClick={() => { setDigestThread(null); setThreadOpen(true); }}>Conversation{thread ? ` · ${thread.comments.length}` : ""}</button>
         </> : <p className="phone-empty">Nothing on the canvas yet. Ask for something in Chat.</p>}
       </div>)}
     </div>
-    <nav className="phone-tabs" aria-label="Canvas views">{(["Chat", "Canvas", "Agents"] as const).map((tab) => <button key={tab} aria-current={state.tab === tab ? "page" : undefined} onClick={() => { setThreadOpen(false); update({ tab }); }}>{tab}</button>)}</nav>
+    <nav className="phone-tabs" aria-label="Canvas views">{(["Chat", "Canvas", "Agents"] as const).map((tab) => <button key={tab} aria-current={state.tab === tab ? "page" : undefined} onClick={() => { setThreadOpen(false); setContextOpen(false); setMoreOpen(false); update({ tab }); }}>{tab}</button>)}</nav>
+    {contextOpen && <div className="phone-sheet phone-context-sheet" role="dialog" aria-label="Context"><ContextPanel canvasId={canvasId} actor={actor} onClose={() => setContextOpen(false)} /></div>}
     {threadOpen && (item || thread) && <div className="phone-sheet" role="dialog" aria-label={`Conversation about ${digestThread ? "this change" : item?.title}`}>
       <header><strong>{digestThread ? "Conversation" : item?.title}</strong><button onClick={() => setThreadOpen(false)} aria-label="Close conversation">Close</button></header>
       {thread ? <ThreadPopover key={thread.id} thread={thread} canvasId={canvasId} actor={actor} embedded screen={{ x: 0, y: 0 }} onOpenItem={open} /> : canEdit && item ? <ComposePopover key={item.id} canvasId={canvasId} actor={actor} embedded pending={{ anchorItemId: item.id, x: 0, y: 0 }} onSent={() => setThreadOpen(false)} /> : <p>No conversation on this node yet.</p>}

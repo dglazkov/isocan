@@ -134,7 +134,12 @@ export function createServer(deps: ServerDeps): McpServer {
   });
 
   const identityOf = (session?: string): ExplicitIdentity | undefined => session === undefined ? undefined : { session, harness: "mcp" };
-  const canvasOf = async (ref?: string, session?: string) => (await deps.home(identityOf(session))).canvas(ref);
+  const homeOf = async (session?: string, intent: "read" | "edit" = "read", signal?: AbortSignal) => {
+    const home = await deps.home(identityOf(session), signal);
+    signal?.throwIfAborted();
+    return home.withSourcePolicy(session === undefined ? { mode: "exclude" } : { mode: "direct", actorId: home.actor.id, intent }, signal);
+  };
+  const canvasOf = async (ref?: string, session?: string, intent: "read" | "edit" = "read", signal?: AbortSignal) => (await homeOf(session, intent, signal)).canvas(ref);
 
   server.registerTool(
     "list_canvases",
@@ -144,9 +149,9 @@ export function createServer(deps: ServerDeps): McpServer {
         "The canvases discoverable to this caller, with id and title. Start here when you do not know which canvas the work is on.",
       inputSchema: { session: canvasArg.session },
     },
-    async ({ session }) =>
+    async ({ session }, extra) =>
       answering(async () => {
-        const home = await deps.home(identityOf(session));
+        const home = await homeOf(session, "read", extra.signal);
         // `ctx` is the API's own public handle to the client; a listing is
         // the one read `Home` does not wrap, and reaching through it beats
         // widening the API surface for a single caller.
@@ -166,9 +171,9 @@ export function createServer(deps: ServerDeps): McpServer {
         "What is on a canvas: every item with its id, title, kind and position. The map, not the contents — use read_item for one item's text.",
       inputSchema: { ...canvasArg, in: z.string().optional().describe("Read direct members of this canvas group (or legacy sheet)."), recursive: z.boolean().optional().describe("Include nested descendants of the named group.") },
     },
-    async ({ canvas, session, in: group, recursive }) =>
+    async ({ canvas, session, in: group, recursive }, extra) =>
       answering(async () => {
-        const handle = await canvasOf(canvas, session);
+        const handle = await canvasOf(canvas, session, "read", extra.signal);
         return canvasRead(handle, group, recursive);
       }),
   );
@@ -178,8 +183,8 @@ export function createServer(deps: ServerDeps): McpServer {
     description: "The complete context manifest: hierarchy, original selected roots, included/excluded/unavailable counts and exact source/visual versions. Supply thread and comment to read a frozen request; otherwise read current roots or ambient pins. This never sends a message.",
     annotations: { readOnlyHint: true },
     inputSchema: { ...canvasArg, roots: z.array(z.string()).optional(), in: z.string().optional(), includeExcluded: z.boolean().optional(), thread: z.string().optional(), comment: z.string().optional() },
-  }, async ({ canvas, session, roots, in: group, includeExcluded, thread, comment }) => answering(async () => {
-    const handle = await canvasOf(canvas, session);
+  }, async ({ canvas, session, roots, in: group, includeExcluded, thread, comment }, extra) => answering(async () => {
+    const handle = await canvasOf(canvas, session, "read", extra.signal);
     if (thread !== undefined || comment !== undefined) {
       if (!thread || !comment) throw new Error("frozen context needs both thread and comment");
       if (roots !== undefined || group !== undefined || includeExcluded !== undefined) throw new Error("a saved request already fixes its roots and exclusion policy");
@@ -193,8 +198,8 @@ export function createServer(deps: ServerDeps): McpServer {
     description: "Read one exact version from a saved message's context, even after its live item changes or is deleted. Returns a bounded byte page with progress, exclusion/unavailability reasons, and UTF-8 or lossless base64. Follow nextOffset until null; source and visual are separate faces. Access refusal is an error, never reported as missing content.",
     annotations: { readOnlyHint: true },
     inputSchema: { ...canvasArg, thread: z.string(), comment: z.string(), item: z.string(), face: z.enum(["source", "visual"]).optional(), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(262144).optional() },
-  }, async ({ canvas, session, thread, comment, item, face, offset, limit }) => answering(async () => {
-    return (await canvasOf(canvas, session)).contextItem(thread, comment, item, { face, offset, limit });
+  }, async ({ canvas, session, thread, comment, item, face, offset, limit }, extra) => answering(async () => {
+    return (await canvasOf(canvas, session, "read", extra.signal)).contextItem(thread, comment, item, { face, offset, limit });
   }));
 
   server.registerTool(
@@ -205,9 +210,9 @@ export function createServer(deps: ServerDeps): McpServer {
         "One item's own content — the text of a note, the source of a document. Ids come from read_canvas.",
       inputSchema: { ...canvasArg, item: z.string().describe("The item id (itm_…).") },
     },
-    async ({ canvas, session, item }) =>
+    async ({ canvas, session, item }, extra) =>
       answering(async () => {
-        const handle = await canvasOf(canvas, session);
+        const handle = await canvasOf(canvas, session, "read", extra.signal);
         return handle.item(item);
       }),
   );
@@ -220,9 +225,9 @@ export function createServer(deps: ServerDeps): McpServer {
         "The comment threads on a canvas — what people and agents have said, and what is still unanswered. This is where the reasoning lives; the items are only what it produced.",
       inputSchema: canvasArg,
     },
-    async ({ canvas, session }) =>
+    async ({ canvas, session }, extra) =>
       answering(async () => {
-        const handle = await canvasOf(canvas, session);
+        const handle = await canvasOf(canvas, session, "read", extra.signal);
         return { threads: await handle.threads() };
       }),
   );
@@ -238,9 +243,9 @@ export function createServer(deps: ServerDeps): McpServer {
         limit: z.number().int().min(1).max(100).optional().describe("How many entries (default 10)."),
       },
     },
-    async ({ canvas, session, limit }) =>
+    async ({ canvas, session, limit }, extra) =>
       answering(async () => {
-        const handle = await canvasOf(canvas, session);
+        const handle = await canvasOf(canvas, session, "read", extra.signal);
         return { activity: await handle.activity(limit ?? 10) };
       }),
   );
@@ -253,19 +258,22 @@ export function createServer(deps: ServerDeps): McpServer {
         "The people and agents this canvas knows, and how to address them. Names here are what an @mention resolves against.",
       inputSchema: canvasArg,
     },
-    async ({ canvas, session }) =>
+    async ({ canvas, session }, extra) =>
       answering(async () => {
-        const handle = await canvasOf(canvas, session);
+        const handle = await canvasOf(canvas, session, "read", extra.signal);
         return { who: await handle.who() };
       }),
   );
 
-  const summary = async (handle: CanvasHandle) => ({ layers: await handle.contextSummary(deps.version ? { guideVersion: deps.version } : {}) });
+  const summary = async (handle: CanvasHandle, personal = false) => ({ layers: await handle.contextSummary(
+    deps.version ? { guideVersion: deps.version } : {},
+    { personal: personal ? { actorId: handle.ctx.actor.id } : "exclude" },
+  ) });
   server.registerTool("read_context_summary", {
     title: "Read layered context",
-    description: "The live Context view: local and inherited sources, pins, exclusions, overrides, staleness and unavailable-source reasons. Distinct from item manifests and frozen request content; this poll marks nothing seen.",
+    description: "The live Context view: local and inherited sources, plus authorized personal summaries for an explicit session. Ambient calls omit personal memory. Includes pins, exclusions, overrides, staleness and unavailable-source reasons; distinct from frozen requests, and marks nothing seen.",
     annotations: { readOnlyHint: true }, inputSchema: canvasArg,
-  }, async ({ canvas, session }) => answering(async () => summary(await canvasOf(canvas, session))));
+  }, async ({ canvas, session }, extra) => answering(async () => summary(await canvasOf(canvas, session, "read", extra.signal), session !== undefined)));
 
   server.registerTool("claim_agent", {
     title: "Claim an agent session",
@@ -281,18 +289,18 @@ export function createServer(deps: ServerDeps): McpServer {
     title: "Create an item",
     description: "Create an attributed item from text or source content. Supply your claimed session to act as that agent; optional group insertion remains one atomic canvas act.",
     inputSchema: { ...canvasArg, content, mime: z.string().min(1).default("text/markdown"), title: z.string().optional(), in: z.string().optional() },
-  }, async ({ canvas, session, content, mime, title, in: group }) => answering(async () => (await canvasOf(canvas, session)).add({ content, mime, ...(title === undefined ? {} : { title }), ...(group === undefined ? {} : { in: group }) })));
+  }, async ({ canvas, session, content, mime, title, in: group }, extra) => answering(async () => (await canvasOf(canvas, session, "edit", extra.signal)).add({ content, mime, ...(title === undefined ? {} : { title }), ...(group === undefined ? {} : { in: group }) })));
   server.registerTool("edit_item", {
     title: "Edit an item",
     description: "Create a new attributed version of an existing item from text/source content. Prior versions remain available; supply your deliberate session key to write as that agent.",
     inputSchema: { ...canvasArg, item: z.string(), content, mime: z.string().optional() },
-  }, async ({ canvas, session, item, content, mime }) => answering(async () => (await canvasOf(canvas, session)).edit(item, { content, ...(mime === undefined ? {} : { mime }) })));
+  }, async ({ canvas, session, item, content, mime }, extra) => answering(async () => (await canvasOf(canvas, session, "edit", extra.signal)).edit(item, { content, ...(mime === undefined ? {} : { mime }) })));
   server.registerTool("post_comment", {
     title: "Post a comment",
     description: "Post an attributed comment on an item, or in the canvas Chat when item is omitted. Mentions use the shared CLI address rules; roots can freeze exact context for the request.",
     inputSchema: { ...canvasArg, ...contextArgs, item: z.string().optional(), message: z.string().min(1).max(65536) },
-  }, async ({ canvas, session, item, message, roots, in: group, includeExcluded }) => answering(async () => {
-    const handle = await canvasOf(canvas, session);
+  }, async ({ canvas, session, item, message, roots, in: group, includeExcluded }, extra) => answering(async () => {
+    const handle = await canvasOf(canvas, session, "edit", extra.signal);
     const options = { rootIds: roots, in: group, includeExcluded };
     return item ? handle.comment(item, message, options) : handle.notify(message, options);
   }));
@@ -300,14 +308,14 @@ export function createServer(deps: ServerDeps): McpServer {
     title: "Reply in a thread",
     description: "Reply as the selected caller identity in an existing thread. Mentions and thread participation determine who receives feedback, using the same rules as CLI comments.",
     inputSchema: { ...canvasArg, ...contextArgs, thread: z.string(), message: z.string().min(1).max(65536) },
-  }, async ({ canvas, session, thread, message, roots, in: group, includeExcluded }) => answering(async () => (await canvasOf(canvas, session)).reply(thread, message, { rootIds: roots, in: group, includeExcluded })));
+  }, async ({ canvas, session, thread, message, roots, in: group, includeExcluded }, extra) => answering(async () => (await canvasOf(canvas, session, "edit", extra.signal)).reply(thread, message, { rootIds: roots, in: group, includeExcluded })));
   server.registerTool("wait_for_feedback", {
     title: "Wait for addressed feedback",
     description: "Wait up to 60 seconds for mentions, Chat messages or participating-thread replies addressed to this identity. Return and resume the cursor, including irrelevant traffic; timeout/cancellation ends the poll. Marks nothing seen and advertises no presence.",
     annotations: { readOnlyHint: true },
     inputSchema: { ...canvasArg, cursor: z.number().int().nonnegative().optional(), timeoutMs: z.number().int().min(1).max(60000).default(30000) },
   }, async ({ canvas, session, cursor, timeoutMs }, extra) => answering(() => waitForResolvedFeedback(async (signal) => {
-    const home = await deps.home(identityOf(session), signal);
+    const home = await homeOf(session, "read", signal);
     signal.throwIfAborted();
     const handle = await home.canvas(canvas);
     signal.throwIfAborted();
@@ -317,10 +325,10 @@ export function createServer(deps: ServerDeps): McpServer {
   for (const kind of ["canvas", "context"] as const) {
     const uriFor = (id: string) => `isocan://canvas/${encodeURIComponent(id)}${kind === "context" ? "/context" : ""}`;
     server.registerResource(kind, new ResourceTemplate(`isocan://canvas/{id}${kind === "context" ? "/context" : ""}`, {
-      list: async () => ({ resources: (await (await deps.home()).ctx.client.listCanvases()).map((canvas) => ({ uri: uriFor(canvas.id), name: `${canvas.title} — ${kind}`, mimeType: "application/json" })) }),
-    }), { mimeType: "application/json", description: `Current ${kind} JSON using ambient identity and ordinary canvas admission; explicit agent sessions are selected per tool call.` }, async (uri, { id }) => {
+      list: async (extra) => ({ resources: (await (await homeOf(undefined, "read", extra.signal)).ctx.client.listCanvases()).map((canvas) => ({ uri: uriFor(canvas.id), name: `${canvas.title} — ${kind}`, mimeType: "application/json" })) }),
+    }), { mimeType: "application/json", description: `Current ${kind} JSON using ambient identity and ordinary canvas admission; explicit agent sessions are selected per tool call.` }, async (uri, { id }, extra) => {
       if (typeof id !== "string") throw new Error("a single canvas id is required");
-      const handle = await canvasOf(id);
+      const handle = await canvasOf(id, undefined, "read", extra.signal);
       const value = kind === "context" ? await summary(handle) : await canvasRead(handle);
       return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(value, null, 2) }] };
     });

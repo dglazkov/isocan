@@ -1,3 +1,4 @@
+import type { CanvasLifecycle } from "./store.ts";
 import { createReadStream, promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -97,6 +98,28 @@ export class FileStore implements Store {
   async canvasRecord(id: string): Promise<Canvas | null> {
     if (await this.takenDownAt(id) || await this.purgedAt(id)) return null;
     return readJson<Canvas>(p.canvasMetaFile(this.home, id));
+  }
+
+  async canvasLifecycle(id: string): Promise<CanvasLifecycle> {
+    if (await this.purgedAt(id)) return "purged";
+    if (await this.takenDownAt(id)) return "taken-down";
+    if (await this.canvasExists(id)) return "live";
+    const deleted = await fs.readdir(p.deletedCanvasesDir(this.home)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    });
+    for (const name of deleted.filter((name) => name.startsWith(`${id}-`))) {
+      const record = await readJson<Canvas>(path.join(p.deletedCanvasesDir(this.home), name, "project.json"));
+      if (record?.id === id) return "deleted";
+    }
+    return fs.stat(p.canvasDir(this.home, id)).then(() => "incomplete" as const, (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return "absent" as const;
+      throw error;
+    });
+  }
+
+  async readBirthLog(id: string): Promise<LogEntry[]> {
+    return readJsonLines<LogEntry>(p.oplogFile(this.home, id));
   }
 
   async createCanvasDir(id: string): Promise<void> {

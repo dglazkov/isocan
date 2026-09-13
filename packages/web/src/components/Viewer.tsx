@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem, visualFaceOf } from "@isocan/core";
+import { sourceOf, deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem, visualFaceOf } from "@isocan/core";
 import { connectToCanvas, disconnect, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
@@ -217,6 +217,8 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
           const visual = visualFaceOf(current);
           return (
             <VersionContent
+              canvasOf={item.properties.canvas ?? null}
+              canvasSource={sourceOf(item)}
               canvasId={canvasId}
               blobHash={visual.blobHash}
               mimeType={visual.mimeType}

@@ -71,3 +71,7 @@ export {
 } from "./binding.ts";
 export type { DirBinding, DirMarker } from "./binding.ts";
 export * from "./personas.ts";
+
+export * from "./personal-desk.ts";
+
+export type { CanvasLifecycle } from "./store.ts";

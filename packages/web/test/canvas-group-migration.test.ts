@@ -149,8 +149,9 @@ describe("conversion is a reviewed writer request", () => {
     for (const [id, kind] of [["itm_inner", "group"], ["itm_outer", "group"], ["itm_card", "text"]] as const) state = applyOperation(state, { id: `op_${id}`, canvasId: "prj_acme", actor, ts: "2026-09-13T00:00:00Z", op: { type: "item.add", itemId: id, title: id, width: 500, height: 500, placement: { x: 0, y: 0 }, properties: { kind }, version: { ...version, id: `ver_${id}` } } })!;
     state.canvas.items.itm_inner!.containerId = "itm_outer";
     state.canvas.items.itm_card!.containerId = "itm_inner";
-    hooks.slots = [{ kind: "ready", title: "Acme", canvas: state.canvas, here: 0 }]; hooks.cursor = 0;
-    const html = renderToStaticMarkup(createElement(CanvasCard, { canvasId: "prj_acme", width: 500, height: 500 }));
+    vi.stubGlobal("window", { location: { origin: "http://acme.test" } });
+    hooks.slots = [{ scope: "http://acme.test:prj_acme:prj_acme:null", kind: "ordinary" }, null, { kind: "ready", title: "Acme", canvas: state.canvas, here: 0, home: "http://acme.test" }]; hooks.cursor = 0;
+    const html = renderToStaticMarkup(createElement(CanvasCard, { canvasId: "prj_acme", destinationCanvasId: "prj_acme", width: 500, height: 500 }));
     expect(html).toContain("1 item");
     expect(html.indexOf('title="itm_outer"')).toBeLessThan(html.indexOf('title="itm_inner"'));
     expect(html.indexOf('title="itm_inner"')).toBeLessThan(html.indexOf('title="itm_card"'));

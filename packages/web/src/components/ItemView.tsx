@@ -17,6 +17,7 @@ import {
   isArea,
   isCanvasItem,
   canvasIdOf,
+  automaticCanvasTarget,
   KIND_MARK_MIN,
   sourceOf,
   areaGrid,
@@ -61,6 +62,7 @@ import { itemPath } from "@isocan/core";
  * refreshes on a timer — a real component for a gesture most canvases never
  * use. It arrives when one is actually on screen.
  */
+const CanvasPreviewBoundary = lazy(() => import("./CanvasPreviewBoundary.tsx").then((m) => ({ default: m.CanvasPreviewBoundary })));
 const CanvasCard = lazy(() => import("./CanvasCard.tsx").then((m) => ({ default: m.CanvasCard })));
 import { iconKindFor, kindNoun } from "../lib/kinds.ts";
 import { moduleRendererFor } from "../modules.ts";
@@ -1024,11 +1026,15 @@ function ItemViewInner({
             aria-pressed={memoryOf(item) === "inherit"}
             onClick={(e) => {
               e.stopPropagation();
-              void sendEchoed(canvasId, actor, {
-                type: "item.update",
-                itemId: item.id,
-                patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit"),
-              });
+              void (async () => {
+                if (memoryOf(item) === "personal") throw new Error("Use Context to unlink your personal canvas.");
+                if (memoryOf(item) !== "inherit") {
+                  const { automaticSource } = await import("../lib/personal.ts");
+                  const access = await automaticSource(canvasIdOf(item)!, source, canvasId);
+                  if (access.kind !== "ordinary") throw new Error(access.refused);
+                }
+                await sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit") });
+              })().catch((error) => setNotice(error.message ?? String(error)));
             }}
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -1151,7 +1157,7 @@ function ItemViewInner({
               versionId={current.id}
               designSystem={isDesignSystem(item)}
               textNode={isText}
-              canvasOf={canvasIdOf(item)}
+              canvasOf={item.properties.canvas ?? null}
               canvasSource={source}
               size={{ width, height }}
               reloadToken={reloadToken}
@@ -1412,7 +1418,13 @@ function BlobError({ reason }: { reason: string }) {
   );
 }
 
-export function VersionContent({
+/** Source facts gate every face, including screenshots and module renderers. */
+export function VersionContent(props: Parameters<typeof VersionFace>[0]) {
+  if (automaticCanvasTarget(props.canvasOf, props.canvasSource).kind !== "none") return <Suspense><CanvasPreviewBoundary canvasId={props.canvasOf} source={props.canvasSource} destinationCanvasId={props.canvasId}><VersionFace {...props} /></CanvasPreviewBoundary></Suspense>;
+  return <VersionFace {...props} />;
+}
+
+function VersionFace({
   canvasId,
   blobHash,
   mimeType,
@@ -1438,9 +1450,9 @@ export function VersionContent({
   liveDoc?: string | null;
   /** A canvas placed here: the id of the canvas to draw small and live,
    *  instead of framing the address the blob carries (`core/canvasitem.ts`). */
-  canvasOf?: string | null;
+  canvasOf: string | null;
   /** The address the canvas item points at — which home it is at. */
-  canvasSource?: string | null;
+  canvasSource: string | null;
   /** The item's box, for content that lays itself out to it (the canvas card). */
   size?: { width: number; height: number };
   entered: boolean;
@@ -1516,6 +1528,7 @@ export function VersionContent({
       <Suspense fallback={null}>
       <CanvasCard
         canvasId={canvasOf}
+        destinationCanvasId={canvasId}
         width={size?.width ?? 800}
         height={size?.height ?? 600}
         // A screenshot version, when one was taken: the picture that
@@ -1764,6 +1777,8 @@ function BrowserView({
   if ("failed" in load) return <BlobError reason={load.failed} />;
   const site = parseUriList(load.text);
   if (site === null) return <BlobError reason="not a link" />;
+  const target = automaticCanvasTarget(null, site);
+  if (target.kind !== "none") return <Suspense><CanvasCard canvasId={target.kind === "canvas" ? target.canvasId : ""} destinationCanvasId={canvasId} source={site} width={800} height={600} /></Suspense>;
   return <SiteFrame key={reloadToken} site={site} />;
 }
 

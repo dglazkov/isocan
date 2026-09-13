@@ -1,3 +1,4 @@
+import { SOURCE_POLICY_HEADER, sourcePolicyHeader, parseSourcePolicyHeader, sourceClassificationRoute, SOURCE_ACCESS_ROUTE, personalRoute, personalCanvasRoute, personalDelegatesRoute, type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "@isocan/core";
 import { inboxRoute, type InboxResponse } from "@isocan/core";
 import type {
   Actor,
@@ -217,12 +218,30 @@ export class DaemonRoutes {
    * Callers holding an older placement preview pass its mode explicitly. */
   private observedGroupModes = new Map<string, "legacy" | "groups">();
 
+  private readonly sourceContext?: SourceRequestContext;
+
   constructor(
     readonly base: string,
     readonly home: string,
     /** Optional lifetime of a per-call connection, including its identity setup. */
     protected readonly lifetime?: AbortSignal,
-  ) {}
+    /** A restriction captured before target resolution, shared by JSON and raw calls. */
+    sourceContext?: SourceRequestContext,
+  ) {
+    if (sourceContext) this.sourceContext = Object.freeze({
+      ...parseSourcePolicyHeader(sourcePolicyHeader(sourceContext)),
+      ...(sourceContext.signal ? { signal: sourceContext.signal } : {}),
+    });
+  }
+
+  private requestSignal(signal?: AbortSignal): AbortSignal | undefined {
+    const signals = [this.lifetime, this.sourceContext?.signal, signal].filter((value): value is AbortSignal => !!value);
+    return signals.length > 1 ? AbortSignal.any(signals) : signals[0];
+  }
+
+  private policyHeaders(): Record<string, string> {
+    return this.sourceContext ? { [SOURCE_POLICY_HEADER]: sourcePolicyHeader(this.sourceContext) } : {};
+  }
 
   /**
    * **The fetch this surface makes its requests with**, so that the half of
@@ -265,10 +284,10 @@ export class DaemonRoutes {
      */
     extra?: Record<string, string>,
   ): Promise<T> {
-    signal = this.lifetime ? AbortSignal.any([this.lifetime, ...(signal ? [signal] : [])]) : signal;
+    signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extra };
+      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extra, ...this.policyHeaders() };
       signal?.throwIfAborted();
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url}`, {
@@ -611,6 +630,56 @@ export class DaemonRoutes {
   // enough that neither surface spells a URL. On a replica the daemon forwards
   // all three to the home, because the row that decides who may enter lives
   // there; nothing here has to know that.
+
+  /** Classify before automatic previews or target resolution; unknown remains redacted. */
+  classifySource(request: SourceClassificationRequest, signal?: AbortSignal): Promise<SourceClassificationResponse> {
+    return this.request("GET", sourceClassificationRoute(request), undefined, signal);
+  }
+
+  /** Check an explicit tool source without borrowing a stored badge admission. */
+  sourceAccess(request: SourceAccessRequest, signal?: AbortSignal): Promise<SourceAccessResponse> {
+    return this.request("POST", SOURCE_ACCESS_ROUTE, request, signal);
+  }
+
+  /** Inspect the selected person's binding without creating a canvas. */
+  personalStatus(actorId: string, signal?: AbortSignal, destinationCanvasId?: string): Promise<PersonalStatusResponse> {
+    return this.request("GET", personalRoute(actorId, destinationCanvasId), undefined, signal);
+  }
+
+  /** Lazily reserve and create the person's private source at this home. */
+  ensurePersonal(actorId: string, signal?: AbortSignal, destinationCanvasId?: string): Promise<PersonalEnsureResponse> {
+    return this.request("POST", `${personalRoute()}/ensure`, { actorId, ...(destinationCanvasId ? { destinationCanvasId } : {}) }, signal);
+  }
+
+  /** Visible personal cards and this caller's current availability, without source bytes. */
+  personalLinks(canvasId: string, actorId: string, signal?: AbortSignal): Promise<PersonalLinksResponse> {
+    return this.request("GET", personalCanvasRoute(canvasId, undefined, actorId), undefined, signal);
+  }
+
+  /** One concrete consent and one undoable native operation per new link. */
+  linkPersonal(canvasId: string, request: PersonalLinkRequest, signal?: AbortSignal): Promise<PersonalLinkResponse> {
+    return this.request("POST", personalCanvasRoute(canvasId, "link"), request, signal);
+  }
+
+  /** Delete the concrete card while retaining its identity-bound consent for undo. */
+  unlinkPersonal(canvasId: string, request: PersonalUnlinkRequest, signal?: AbortSignal): Promise<PersonalUnlinkResponse> {
+    return this.request("POST", personalCanvasRoute(canvasId, "unlink"), request, signal);
+  }
+
+  /** The selected owner's source-specific agent access controls. */
+  personalDelegates(sourceCanvasId: string, actorId: string, signal?: AbortSignal): Promise<PersonalDelegatesResponse> {
+    return this.request("GET", personalDelegatesRoute(sourceCanvasId, undefined, actorId), undefined, signal);
+  }
+
+  /** Explicitly allow or revoke one agent on this exact dataset. */
+  setPersonalDelegate(sourceCanvasId: string, agentId: string, request: SetPersonalDelegateRequest, signal?: AbortSignal): Promise<PersonalDelegateResponse> {
+    return this.request("PUT", personalDelegatesRoute(sourceCanvasId, agentId), request, signal);
+  }
+
+  /** Authoritative owner/delegate reading, with a blob-free summary mode. */
+  readPersonal(canvasId: string, request: PersonalReadRequest, signal?: AbortSignal): Promise<PersonalReadResponse> {
+    return this.request("POST", personalCanvasRoute(canvasId, "read"), request, signal);
+  }
 
   /** The connected home's catalogue, without canvas admission or identity claims. */
   publicCanvases(): Promise<PublicCanvasesResponse> {
@@ -1293,43 +1362,49 @@ export class DaemonRoutes {
     data: Buffer,
     mimeType: string,
     filename: string,
+    signal?: AbortSignal,
   ): Promise<BlobUploadResponse> {
+    signal = this.requestSignal(signal);
+    signal?.throwIfAborted();
     // Blobs bypass `request` (raw bytes, no JSON), so they need the badge and
     // the recovery retry spelled out — easy to miss, and a 401 on an upload
     // would read as a broken drop.
     const send = async () => {
       const auth = await this.authHeader();
-      this.lifetime?.throwIfAborted();
+      signal?.throwIfAborted();
       return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs`, {
         method: "POST",
         headers: {
           ...auth,
+          ...this.policyHeaders(),
           "Content-Type": mimeType,
           [FILENAME_HEADER]: encodeFilename(filename),
         },
         body: new Uint8Array(data),
-        ...(this.lifetime ? { signal: this.lifetime } : {}),
+        ...(signal ? { signal } : {}),
       });
     };
     let res = await send();
-    if (res.status === 401 && (await this.reBadge())) res = await send();
+    if (res.status === 401 && (await this.reBadge(signal))) res = await send();
     const json = (await res.json().catch(() => null)) as any;
-    this.lifetime?.throwIfAborted();
+    signal?.throwIfAborted();
     if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
     return json as BlobUploadResponse;
   }
 
-  async downloadBlob(canvasId: string, blobHash: string): Promise<Buffer> {
+  async downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Buffer> {
+    signal = this.requestSignal(signal);
+    signal?.throwIfAborted();
     const send = async () => {
-      const headers = await this.authHeader();
-      this.lifetime?.throwIfAborted();
+      const headers = { ...await this.authHeader(), ...this.policyHeaders() };
+      signal?.throwIfAborted();
       return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
         headers,
-        ...(this.lifetime ? { signal: this.lifetime } : {}),
+        ...(signal ? { signal } : {}),
       });
     };
     let res = await send();
-    if (res.status === 401 && (await this.reBadge())) res = await send();
+    if (res.status === 401 && (await this.reBadge(signal))) res = await send();
     if (!res.ok) {
       const json = await res.json().catch(() => null) as { error?: string; code?: string; reason?: string } | null;
       throw new ApiError(res.status, json?.error ?? `blob not found: ${blobHash}`, json?.code, json?.reason);

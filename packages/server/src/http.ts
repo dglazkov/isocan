@@ -1,3 +1,6 @@
+import { Readable } from "node:stream";
+import { PersonalService, PersonalError } from "./personal.ts";
+import { SOURCE_POLICY_HEADER, parseSourcePolicyHeader, SOURCE_ACCESS_ROUTE, personalRoute, type SourceRequestContext, type SourceAccessRequest, type PersonalLinkRequest, type PersonalUnlinkRequest, type PersonalReadRequest } from "@isocan/core";
 import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type SetPublicListingRequest } from "@isocan/core";
 import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
 import { collectInbox, sequenceInbox } from "./inbox.ts";
@@ -1050,8 +1053,58 @@ export function registerRoutes(
     return new ViewOnlyError(canvasId, snapshot ? await ownerName(snapshot.project) : undefined);
   };
 
+  const personal = new PersonalService(engine, store, desk, (id) => !!options.homes?.for(id));
+  const sourceContexts = new WeakMap<FastifyRequest, SourceRequestContext>();
+  const sourceCaps = new WeakMap<FastifyRequest, Capability>();
+  const localOrigin = (req: FastifyRequest): string => new URL(`${isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted)) ? "https" : "http"}://${req.headers.host}`).origin;
+  const sourceIntent = (method: string, pathname: string): "read" | "edit" | "own" => {
+    if (method === "GET" || method === "HEAD" || pathname === "/api/oplog/watch" || pathname.startsWith("/api/park/") || /\/personal\/read$/.test(pathname)) return "read";
+    return /\/(?:grants|passes|space)(?:\/|$)/.test(pathname) || /^\/api\/spaces\/[^/]+\/canvases\/[^/]+$/.test(pathname) ? "own" : "edit";
+  };
+  const checkSource = async (canvasId: string, badgeId: string, context: SourceRequestContext, intent: "read" | "edit" | "own", actorId?: string, lookup: "entry" | "discovery" = "entry"): Promise<Capability | null> => {
+    context.signal?.throwIfAborted();
+    const badge = await desk.badge(badgeId);
+    const refused = refusals.refusingAttestation(badge?.attestations ?? []);
+    if (refused) throw new RefusedError(refused);
+    const down = refusals.of(canvasId); if (down) throw new TakenDownError(down);
+    const home = options.homes?.for(canvasId);
+    if (home) {
+      if (context.expectedHome && normalizeHomeUrl(context.expectedHome) !== normalizeHomeUrl(home.homeUrl)) throw new PersonalError("the selected source home does not match its recorded authority");
+      const policy = context.policy;
+      if (policy.mode === "direct") await engine.requireActor(badgeId, policy.actorId);
+      const answer = await home.personalRequest<{ kind: string; capability: Capability }>("POST", SOURCE_ACCESS_ROUTE,
+        { canvasId, expectedHome: home.homeUrl, lookup, policy }, policy.mode === "direct" ? await actorNamed(policy.actorId) : undefined, context);
+      if (policy.mode === "direct" && !atLeast(policy.intent, intent)) throw new PersonalError("this request exceeds its selected source intent", "personal-intent-exceeded");
+      return answer.kind === "personal" ? answer.capability : null;
+    }
+    return personal.direct(canvasId, badgeId, context, intent, lookup, actorId);
+  };
+  engine.setSourceGuard(async (id, badge, context, intent, actor) => {
+    if (options.homes?.for(id)) throw new PersonalError("source authority changed while this write waited; retry at its home");
+    await checkSource(id, badge, context, intent, actor);
+  });
+
+  // Raw content handlers normally set immutable caching after onRequest.
+  // A scoped source decision must reach the authority on every read.
+  app.addHook("onSend", async (req, reply, payload) => {
+    if (sourceContexts.has(req)) reply.header("Cache-Control", "no-store");
+    return payload;
+  });
+
   app.addHook("onRequest", async (req, reply) => {
     const pathname = (req.url ?? "/").split("?")[0]!;
+    const sourceHeader = req.headers[SOURCE_POLICY_HEADER.toLowerCase()];
+    if (sourceHeader !== undefined) {
+      if (typeof sourceHeader !== "string") throw new PersonalError("invalid source policy", "bad-source-policy");
+      let decoded: Omit<SourceRequestContext, "signal">;
+      try { decoded = parseSourcePolicyHeader(sourceHeader); } catch { throw new PersonalError("invalid source policy", "bad-source-policy"); }
+      const controller = new AbortController();
+      req.raw.once("aborted", () => controller.abort());
+      reply.raw.once("close", () => { if (!reply.raw.writableFinished) controller.abort(); });
+      sourceContexts.set(req, Object.freeze({ ...decoded, signal: controller.signal }));
+      reply.header("Cache-Control", "no-store");
+    }
+    if (pathname.includes("/personal") || pathname === "/api/source-classification" || pathname === SOURCE_ACCESS_ROUTE) reply.header("Cache-Control", "no-store");
     if (pathname === PUBLIC_CANVASES_ROUTE || pathname === "/public" || pathname === "/public/") {
       reply.header("X-Robots-Tag", "noindex, nofollow");
       reply.header("Cache-Control", "no-store");
@@ -1165,6 +1218,14 @@ export function registerRoutes(
          */
         const refused = refusals.refusingAttestation(req.badge?.attestations ?? []);
         if (refused) throw new RefusedError(refused);
+        const sourceContext = sourceContexts.get(req);
+        if (sourceContext) {
+          if (!options.homes?.for(canvasId) && sourceContext.expectedHome && normalizeHomeUrl(sourceContext.expectedHome) !== normalizeHomeUrl(localOrigin(req))) throw new PersonalError("the selected source home does not match this authority");
+          const cap = await checkSource(canvasId, req.badge.badgeId, sourceContext, sourceIntent(req.method, pathname));
+          if (cap) sourceCaps.set(req, cap);
+          // The actual authoritative response is forwarded after parsing the body.
+          if (options.homes?.for(canvasId)) return;
+        }
         await admit(req, canvasId);
         // Blob renderers do not carry reducer state. Every other canvas
         // route is gated, including newly added mutation routes.
@@ -1186,6 +1247,7 @@ export function registerRoutes(
         if (
           req.method !== "GET" &&
           req.method !== "HEAD" &&
+          !/\/personal\/read$/.test(pathname) &&
           !atLeast(capabilityIn(req.badge, canvasId) ?? "edit", "edit")
         ) {
           throw await viewOnly(canvasId);
@@ -1248,6 +1310,35 @@ export function registerRoutes(
    * be reachable.
    */
   app.addHook("preValidation", async (req, reply) => {
+    const context = sourceContexts.get(req);
+    if (context && req.badge) {
+      const pathname = req.url.split("?")[0]!;
+      const body = req.body as { canvasId?: string; actor?: Actor; actorId?: string; op?: { type?: string; canvasId?: string } } | undefined;
+      const scoped = CANVAS_API_ROUTE.exec(pathname)?.[1] ?? /^\/api\/spaces\/[^/]+\/canvases\/([^/]+)$/.exec(pathname)?.[1];
+      const canvasId = scoped ? decodeSegment(scoped) : (pathname === "/api/ops" || pathname.startsWith("/api/park/")) ? body?.canvasId ?? (body?.op?.type === "project.create" ? body.op.canvasId : undefined) : undefined;
+      if (canvasId) {
+        if (!options.homes?.for(canvasId) && context.expectedHome && normalizeHomeUrl(context.expectedHome) !== normalizeHomeUrl(localOrigin(req))) throw new PersonalError("the selected source home does not match this authority");
+        const intent = body?.op?.type === "project.create" ? "own" : sourceIntent(req.method, pathname);
+        const actors = [body?.actor?.id, body?.actorId, (req.query as { actorId?: string }).actorId].filter((id) => id !== undefined);
+        const cap = await checkSource(canvasId, req.badge.badgeId, context, intent);
+        if (cap) for (const actor of actors) {
+          if (typeof actor !== "string" || !actor) throw new PersonalError("a source actor must be a nonempty actor id");
+          await checkSource(canvasId, req.badge.badgeId, context, intent, actor);
+        }
+        if (cap) sourceCaps.set(req, cap);
+        const home = options.homes?.for(canvasId);
+        if (home) {
+          const headers: Record<string, string> = {};
+          for (const name of ["content-type", "range", "x-isocan-filename"]) if (typeof req.headers[name] === "string") headers[name] = req.headers[name] as string;
+          const actor = context.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
+          const response = await home.sourceRequest(req.method, req.url, req.body, headers, actor, context);
+          reply.status(response.status);
+          for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "content-security-policy", "x-content-type-options", "content-disposition"]) { const value = response.headers.get(name); if (value) reply.header(name, value); }
+          reply.header("Cache-Control", "no-store");
+          return reply.send(response.body ? Readable.fromWeb(response.body as import("node:stream/web").ReadableStream) : undefined);
+        }
+      }
+    }
     const body = req.body as { op?: unknown } | undefined;
     // The nested `op` too: `project.create` is the one op that carries the
     // canvas's id INSIDE the operation, so a pre-rename create is stale in two
@@ -1443,11 +1534,134 @@ export function registerRoutes(
     ];
   };
 
+  const sourceMutation = async (req: FastifyRequest, canvasId: string) => {
+    const context = sourceContexts.get(req);
+    if (context) await checkSource(canvasId, req.badge!.badgeId, context, "own");
+  };
+  const personalCaller = async (req: FastifyRequest, actorId: unknown): Promise<string> => {
+    const refused = refusedNet(req) ?? refusals.refusingAttestation(req.badge?.attestations ?? []);
+    if (refused) throw new RefusedError(refused);
+    if (typeof actorId !== "string" || !actorId) throw new PersonalError("select an explicit claimed actor", "personal-actor-required");
+    await engine.requireActor(req.badge!.badgeId, actorId);
+    const context = sourceContexts.get(req);
+    if (context) {
+      if (context.policy.mode === "exclude") throw new PersonalError("ambient calls cannot use personal memory", "personal-source-excluded");
+      const joined = await engine.actorJoins();
+      if (resolveActor(joined, context.policy.actorId) !== resolveActor(joined, actorId)) throw new PersonalError("the personal caller differs from the selected source actor");
+      const pathname = req.url.split("?")[0]!;
+      const intent = pathname.includes("/delegates") && req.method !== "GET" ? "own" : sourceIntent(req.method, pathname);
+      if (!atLeast(context.policy.intent, intent)) throw new PersonalError("this request exceeds its selected source intent", "personal-intent-exceeded");
+    }
+    return actorId;
+  };
+  const personalContext = (req: FastifyRequest): SourceRequestContext | undefined => sourceContexts.get(req);
+  const homeForPersonal = async (req: FastifyRequest, canvasId: unknown) => {
+    if (canvasId === undefined) return null;
+    if (typeof canvasId !== "string" || !canvasId) throw new PersonalError("a destination canvas id is required");
+    const down = refusals.of(canvasId); if (down) throw new TakenDownError(down);
+    await admit(req, canvasId);
+    return options.homes?.for(canvasId) ?? null;
+  };
+  app.get("/api/source-classification", async (req) => {
+    const refused = refusedNet(req) ?? refusals.refusingAttestation(req.badge?.attestations ?? []);
+    if (refused) throw new RefusedError(refused);
+    const query = req.query as { canvasId?: string; expectedHome?: string };
+    if (!query.canvasId || !query.expectedHome) throw new PersonalError("classification requires a source id and expected home");
+    const home = options.homes?.for(query.canvasId);
+    const expected = normalizeHomeUrl(query.expectedHome);
+    if (expected !== normalizeHomeUrl(home?.homeUrl ?? localOrigin(req))) return { kind: "unavailable" };
+    if (home) {
+      const answer = await home.personalRequest<import("@isocan/core").SourceClassificationResponse>("GET", req.url, undefined, undefined, personalContext(req));
+      if (answer.kind === "personal") await desk.recordPersonalReplica(query.canvasId, home.homeUrl);
+      return answer;
+    }
+    if (await desk.personalReplica(query.canvasId)) return { kind: "unavailable" };
+    if (await desk.personalSource(query.canvasId)) return { kind: "personal" };
+    return { kind: await store.canvasLifecycle(query.canvasId) === "live" ? "ordinary" : "unavailable" };
+  });
+  app.post(SOURCE_ACCESS_ROUTE, async (req) => {
+    const body = req.body as SourceAccessRequest;
+    if (!body?.canvasId || !body.expectedHome || (body.lookup !== "entry" && body.lookup !== "discovery")) throw new PersonalError("source access requires its address and lookup intent");
+    let context: SourceRequestContext;
+    try { context = { ...parseSourcePolicyHeader(JSON.stringify({ policy: body.policy, expectedHome: body.expectedHome })), ...(personalContext(req)?.signal ? { signal: personalContext(req)!.signal } : {}) }; }
+    catch { throw new PersonalError("invalid source policy"); }
+    const home = options.homes?.for(body.canvasId);
+    if (normalizeHomeUrl(body.expectedHome) !== normalizeHomeUrl(home?.homeUrl ?? localOrigin(req))) throw new PersonalError("the selected source home does not match its recorded authority");
+    const cap = await checkSource(body.canvasId, req.badge!.badgeId, context, context.policy.mode === "direct" ? context.policy.intent : "read", undefined, body.lookup);
+    return { kind: cap ? "personal" : "ordinary", capability: cap ?? capabilityIn(req.badge!, body.canvasId) ?? "edit" };
+  });
+  const rememberPersonalStatus = async <T extends import("@isocan/core").PersonalStatusResponse>(home: import("./home-link.ts").HomeConnection, answer: T): Promise<T> => {
+    if (normalizeHomeUrl(answer.home) !== normalizeHomeUrl(home.homeUrl)) throw new PersonalError("personal status came from a different home");
+    for (const source of [...(answer.source ? [answer.source] : []), ...answer.preserved]) {
+      if (!await options.homes!.mayDial(source.canvasId, home.homeUrl)) throw new PersonalError("personal source has a conflicting home assignment");
+      await desk.recordPersonalReplica(source.canvasId, home.homeUrl);
+    }
+    return answer;
+  };
+  app.get("/api/personal", async (req) => {
+    const query = req.query as { actorId?: string; destinationCanvasId?: string };
+    const actorId = await personalCaller(req, query.actorId);
+    const home = await homeForPersonal(req, query.destinationCanvasId);
+    if (home) return rememberPersonalStatus(home, await home.personalRequest<import("@isocan/core").PersonalStatusResponse>("GET", req.url, undefined, await actorNamed(actorId), personalContext(req)));
+    return personal.status(req.badge!.badgeId, actorId, localOrigin(req));
+  });
+  app.post("/api/personal/ensure", async (req) => {
+    const body = req.body as { actorId?: string; destinationCanvasId?: string };
+    const actorId = await personalCaller(req, body?.actorId);
+    const home = await homeForPersonal(req, body.destinationCanvasId);
+    if (home) return rememberPersonalStatus(home, await home.personalRequest<import("@isocan/core").PersonalEnsureResponse>("POST", req.url, body, await actorNamed(actorId), personalContext(req)));
+    return personal.ensure(req.badge!.badgeId, actorId, localOrigin(req));
+  });
+  app.get("/api/projects/:id/personal", async (req) => {
+    const { id } = req.params as { id: string };
+    const actorId = await personalCaller(req, (req.query as { actorId?: string }).actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, await actorNamed(actorId), personalContext(req));
+    return { links: await personal.links(req.badge!.badgeId, actorId, id, localOrigin(req)) };
+  });
+  app.post("/api/projects/:id/personal/link", async (req) => {
+    const { id } = req.params as { id: string }; const body = req.body as PersonalLinkRequest;
+    const actorId = await personalCaller(req, body?.actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
+    return personal.link(req.badge!.badgeId, id, body, localOrigin(req));
+  });
+  app.post("/api/projects/:id/personal/unlink", async (req) => {
+    const { id } = req.params as { id: string }; const body = req.body as PersonalUnlinkRequest;
+    const actorId = await personalCaller(req, body?.actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
+    return personal.unlink(req.badge!.badgeId, id, body);
+  });
+  app.post("/api/projects/:id/personal/read", async (req) => {
+    const { id } = req.params as { id: string }; const body = req.body as PersonalReadRequest;
+    const actorId = await personalCaller(req, body?.actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
+    return personal.read(req.badge!.badgeId, id, body, localOrigin(req), sourceContexts.get(req));
+  });
+  app.get("/api/personal/sources/:id/delegates", async (req) => {
+    const { id } = req.params as { id: string };
+    const actorId = await personalCaller(req, (req.query as { actorId?: string }).actorId);
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, await actorNamed(actorId), personalContext(req));
+    return { sourceCanvasId: id, delegates: await personal.delegates(req.badge!.badgeId, actorId, id) };
+  });
+  app.put("/api/personal/sources/:id/delegates/:agentId", async (req) => {
+    const { id, agentId } = req.params as { id: string; agentId: string };
+    const body = req.body as { actorId?: string; allowed?: boolean };
+    const actorId = await personalCaller(req, body?.actorId);
+    if (typeof body.allowed !== "boolean") throw new PersonalError("allowed must be true or false");
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("PUT", req.url, body, await actorNamed(actorId), personalContext(req));
+    return { delegation: await personal.delegate(req.badge!.badgeId, actorId, id, agentId, body.allowed) };
+  });
+
   registerCanvasGroupContext(app, engine, store);
 
   app.get("/api/projects/:id/groups/migration", async (req) => {
     if (!supportsCanvasGroups(String(req.headers[CLIENT_FEATURES_HEADER] ?? ""))) throw new CanvasGroupsClientError();
-    return engine.groupMigrationPreview((req.params as { id: string }).id);
+    return engine.groupMigrationPreview((req.params as { id: string }).id, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   app.post("/api/ops", async (req, reply) => {
@@ -1626,6 +1840,7 @@ export function registerRoutes(
       ...(body as PostOpRequest & { actor: Actor }),
       clientFeatures,
       badgeId: req.badge!.badgeId,
+      ...(sourceContexts.has(req) ? { sourceContext: sourceContexts.get(req)! } : {}),
       ...(bornInto ? { withoutLinkGrant: true } : {}),
     });
     if (body.op?.type === "project.create") {
@@ -1908,6 +2123,11 @@ export function registerRoutes(
       },
     };
     return async (canvas: Canvas): Promise<boolean> => {
+      const context = sourceContexts.get(req);
+      if (context) {
+        try { await checkSource(canvas.id, badge.badgeId, context, "read", undefined, "discovery"); }
+        catch { return false; }
+      }
       if (admitted.has(canvas.id) || (!admittedOnly && shelf && local)) return true;
       if (admittedOnly) return false;
       return (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id, via, local ? "entry" : "discovery")) !== null;
@@ -1925,7 +2145,7 @@ export function registerRoutes(
     const seen = new Set<string>();
     for (const grant of await desk.listedGrants()) {
       if (!isListedGrant(grant) || seen.has(grant.canvasId) || (options.homes?.homeOf(grant.canvasId) ?? null) !== null) continue;
-      if (refusals.of(grant.canvasId)) continue;
+      if (refusals.of(grant.canvasId) || await desk.personalSource(grant.canvasId) || await desk.personalReplica(grant.canvasId)) continue;
       const canvas = await store.canvasRecord(grant.canvasId);
       if (!canvas) continue;
       // A known badge's bars still apply. This asks the door without writing
@@ -2140,6 +2360,8 @@ export function registerRoutes(
     if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null, await engine.actorJoins()), "own")) {
       return reply.status(403).send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
     }
+    await sourceMutation(req, id);
+    if (body.listed && (await desk.personalSource(id) || await desk.personalReplica(id))) throw new PersonalError("personal sources cannot be listed publicly", "personal-publication-refused");
     const grant = await desk.setPublicListing(id, grantId, body.listed, new Date().toISOString(), req.badge!.badgeId);
     if (!grant) return reply.status(409).send({ error: "this link is no longer eligible: publish a current Canvas Viewer or Presentation Viewer link", code: "listing-ineligible" });
     return { grant } satisfies GrantResponse;
@@ -2276,6 +2498,7 @@ export function registerRoutes(
      * the link. The sweep carries the bar without a mechanism of its own: it
      * re-runs the door, and the door now says no (roles phase 3).
      */
+    await sourceMutation(req, id);
     if (live) {
       await desk.revokeGrant(live.id, new Date().toISOString(), req.badge!.badgeId);
     }
@@ -2604,6 +2827,7 @@ export function registerRoutes(
         });
       }
     }
+    await sourceMutation(req, id);
     const revoked = await desk.revokeGrant(grantId, new Date().toISOString(), req.badge!.badgeId);
     // The bar goes on the desk before the one sweep, for the replacement's
     // reason: the sweep re-runs the door, and the door has to meet the bar.
@@ -2677,9 +2901,14 @@ export function registerRoutes(
         return mergeSeen(...await Promise.all(ids.map((id) => desk.seenOf(id))));
       })();
       return await collectInbox(canvases, async (canvas, signal): Promise<InboxResponse> => {
+        const context = sourceContexts.get(req);
+        if (context) await checkSource(canvas.id, req.badge!.badgeId, context, "read", undefined, only ? "entry" : "discovery");
         const remote = options.homes?.for(canvas.id) ?? null;
         if (remote) {
-          const result = await remote.inbox(canvas.id, actor, label, AbortSignal.any([signal, AbortSignal.timeout(8000)]));
+          const bounded = AbortSignal.any([signal, AbortSignal.timeout(8000), ...(context?.signal ? [context.signal] : [])]);
+          const result = context
+            ? await remote.personalRequest<InboxResponse>("GET", `${INBOX_ROUTE}?${new URLSearchParams({ actorId: actor.id, canvasId: canvas.id, ...(label ? { label } : {}) })}`, undefined, actor, { ...context, signal: bounded })
+            : await remote.inbox(canvas.id, actor, label, bounded);
           return { ...result, homes: { ...result.homes, [canvas.id]: options.homes!.homeOf(canvas.id) } };
         }
         const down = refusals.of(canvas.id);
@@ -2954,6 +3183,7 @@ export function registerRoutes(
       return { space: owned.space, swept: { expelled: 0, rerooted: 0 }, reached: 0 } satisfies SpaceCanvasResponse;
     }
     const next: Space = { ...owned.space, canvasIds: [...owned.space.canvasIds, canvasId] };
+    await sourceMutation(req, canvasId);
     await desk.putSpace(next);
     const swept = await sweepCanvas(desk, canvasId, snapshot.project.createdBy.id, sweeps.report);
     return { space: next, swept, reached: 1 } satisfies SpaceCanvasResponse;
@@ -2979,6 +3209,7 @@ export function registerRoutes(
       ...owned.space,
       canvasIds: owned.space.canvasIds.filter((held) => held !== canvasId),
     };
+    await sourceMutation(req, canvasId);
     await desk.putSpace(next);
     const swept = await sweepCanvas(desk, canvasId, await creatorOf(canvasId), sweeps.report);
     return { space: next, swept, reached: 1 } satisfies SpaceCanvasResponse;
@@ -3843,6 +4074,7 @@ export function registerRoutes(
       mintedBy: req.badge!.badgeId,
       look: { until },
     });
+    await sourceMutation(req, id);
     await desk.putPass(record);
     /**
      * The token and the window, and **not a URL**: the address to open is the
@@ -4726,6 +4958,7 @@ export function registerRoutes(
       mintedBy: req.badge!.badgeId,
       ...(actorId !== undefined ? { actorId } : {}),
     });
+    await sourceMutation(req, id);
     await desk.putPass(record);
     return { pass: withoutSecret(record), token } satisfies MintPassResponse;
   });
@@ -4920,7 +5153,10 @@ export function registerRoutes(
     const home = options.homes.linkFor(address);
     let canvas: Canvas;
     try {
-      canvas = await home.join(canvasId);
+      const context = sourceContexts.get(req);
+      const actor = context?.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
+      if (actor) await engine.requireActor(req.badge!.badgeId, actor.id);
+      canvas = await home.join(canvasId, actor, context);
     } catch (err) {
       // A link opened for a join that failed has nothing to do and nobody to
       // answer; leaving it polling would be a socket and a timer per typo'd
@@ -4947,7 +5183,7 @@ export function registerRoutes(
     // whose admission is not edit learns its rung here, with the canvas,
     // instead of discovering it as a refusal per gesture. Absent means edit,
     // so a pre-capability client parsing this response sees nothing new.
-    const held = req.badge ? capabilityIn(req.badge, id) : null;
+    const held = sourceCaps.get(req) ?? (req.badge ? capabilityIn(req.badge, id) : null);
     if (held !== null && narrowed(held)) {
       return { ...snapshot, capability: held };
     }
@@ -4978,6 +5214,8 @@ export function registerRoutes(
         });
         req.raw.on("close", done);
       });
+      const context = sourceContexts.get(req);
+      if (context) await checkSource(id, req.badge!.badgeId, context, "read");
       entries = await engine.getLog(id, sinceSeq);
     }
     requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
@@ -5013,6 +5251,11 @@ export function registerRoutes(
     const judged = new Map<string, boolean>();
     const mayDiscover = canvasDiscovery(req);
     const mayHear = async (canvas: Canvas): Promise<boolean> => {
+      const context = sourceContexts.get(req);
+      if (context) {
+        try { await checkSource(canvas.id, badge.badgeId, context, "read", undefined, only?.has(canvas.id) ? "entry" : "discovery"); }
+        catch (error) { if (only?.has(canvas.id)) throw error; return false; }
+      }
       /**
        * **A canvas this home has taken down is not heard** (operator phase 2),
        * and the two shapes of this route get the two different answers the
@@ -5076,6 +5319,14 @@ export function registerRoutes(
         if (!(await mayHear(canvas))) continue;
         if (canvas.groupMode === "groups" && !supportsCanvasGroups(req.headers[CLIENT_FEATURES_HEADER])) {
           if (only?.has(canvas.id)) throw new CanvasGroupsClientError();
+          continue;
+        }
+        const context = sourceContexts.get(req);
+        const remote = options.homes?.for(canvas.id);
+        if (context && remote) {
+          const actor = context.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
+          const result = await remote.personalRequest<import("@isocan/core").WatchLogResponse>("POST", "/api/oplog/watch", { ...body, only: [canvas.id], waitMs: 0 }, actor, context);
+          entries.push(...result.entries); Object.assign(next, result.cursors);
           continue;
         }
         const since = cursors?.[canvas.id] ?? 0;
@@ -5343,13 +5594,13 @@ export function registerRoutes(
   app.post("/api/projects/:id/undo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.undo(id, body.actor, req.badge!.badgeId, body.clientId, body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? ""));
+    return engine.undo(id, body.actor, req.badge!.badgeId, body.clientId, body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? ""), sourceContexts.get(req));
   });
 
   app.post("/api/projects/:id/redo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.redo(id, body.actor, req.badge!.badgeId, body.clientId, body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? ""));
+    return engine.redo(id, body.actor, req.badge!.badgeId, body.clientId, body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? ""), sourceContexts.get(req));
   });
 
   // ---- presence sessions (ephemeral plane — no oplog, no storage) ----
@@ -5444,7 +5695,7 @@ export function registerRoutes(
   app.post("/api/projects/:id/blobs/reconcile", async (req) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as { push?: boolean };
-    return engine.reconcileBlobs(id, { push: body.push === true });
+    return engine.reconcileBlobs(id, { push: body.push === true }, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**
@@ -5465,7 +5716,7 @@ export function registerRoutes(
     if (typeof body.to !== "string" || body.to.trim() === "") {
       return { error: "teleport needs a home to send it to (`--to <url>`)", code: "bad-op" };
     }
-    return engine.teleport(id, body.to.trim(), { dryRun: body.dryRun === true });
+    return engine.teleport(id, body.to.trim(), { dryRun: body.dryRun === true }, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**
@@ -5495,7 +5746,7 @@ export function registerRoutes(
       return { error: "adopt takes the canvas's entries", code: "bad-op" };
     }
     requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, body.entries);
-    const made = await engine.adopt(id, body.entries);
+    const made = await engine.adopt(id, body.entries, sourceContexts.get(req), req.badge!.badgeId);
     // Both arrivals need this: a teleport's bytes follow the log, and a
     // restored backup is otherwise a canvas nobody could enter. See above.
     await admit(req, id, true);
@@ -5505,7 +5756,7 @@ export function registerRoutes(
   app.post("/api/projects/:id/gc", async (req) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as import("@isocan/core").GcRequest;
-    return engine.gc(id, body);
+    return engine.gc(id, body, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**
@@ -5542,7 +5793,13 @@ export function registerRoutes(
     const body = (req.body ?? {}) as import("@isocan/core").GcRequest;
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const held = (await engine.listCanvases()).filter((canvas) => admitted.has(canvas.id));
-    return gcCanvases(engine, held.map((canvas) => canvas.id), body);
+    const context = sourceContexts.get(req);
+    const ids: string[] = [];
+    for (const canvas of held) {
+      if (context) { try { await checkSource(canvas.id, badge.badgeId, context, "edit", undefined, "discovery"); } catch { context.signal?.throwIfAborted(); continue; } }
+      ids.push(canvas.id);
+    }
+    return gcCanvases({ gc: (id, request) => engine.gc(id, request, context, badge.badgeId) }, ids, body);
   });
 
   /**
@@ -5649,7 +5906,7 @@ export function registerRoutes(
       }
       const mimeType = req.headers["content-type"] ?? "application/octet-stream";
       const filename = decodeFilename(req.headers[FILENAME_HEADER.toLowerCase()]);
-      return engine.putBlob(id, data, { mimeType, filename });
+      return engine.putBlob(id, data, { mimeType, filename }, sourceContexts.get(req), req.badge!.badgeId);
     });
   });
 
@@ -5673,7 +5930,7 @@ export function registerRoutes(
     if (known) {
       return { blob: { blobHash: asked.blobHash, mimeType: known.mimeType, size: known.size } };
     }
-    const upload = await engine.beginUpload(id, asked);
+    const upload = await engine.beginUpload(id, asked, sourceContexts.get(req), req.badge!.badgeId);
     if (!upload) {
       return reply
         .status(409)
@@ -5689,7 +5946,7 @@ export function registerRoutes(
     const request = req.body as Partial<BlobUploadRequest> | undefined;
     const problem = badUploadRequest(request);
     if (problem) return reply.status(400).send({ error: problem, code: "bad-op" });
-    return engine.registerBlob(id, request as BlobUploadRequest);
+    return engine.registerBlob(id, request as BlobUploadRequest, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**

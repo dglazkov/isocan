@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { canvasIdOf, isDesignSystem, isTextItem, sourceOf, visualFaceOf } from "@isocan/core";
+import { isDesignSystem, isTextItem, sourceOf, visualFaceOf } from "@isocan/core";
 
 import { useUiStore } from "../stores/uiStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -153,7 +153,7 @@ function FanCard({
             entered={false}
             designSystem={isDesignSystem(item)}
             textNode={isTextItem(item)}
-            canvasOf={canvasIdOf(item)}
+            canvasOf={item.properties.canvas ?? null}
             canvasSource={sourceOf(item)}
             size={{ width: item.width, height: item.height }}
           />

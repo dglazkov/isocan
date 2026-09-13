@@ -40,14 +40,16 @@ incomplete birth reads only the exact reserved birth envelope after
 authorization, matches its id/owner/opId, reconstructs without appending seq1
 again, and replays any remaining tail. Existing load() does not recover a
 project.create missing its metadata; that narrow recovery must be implemented
-rather than assumed. Restoration uses the existing lifecycle. No editable
-project property is ownership authority.
+rather than assumed. Lifting an operator takedown restores the existing
+dataset. Deleted and purged bindings remain retained; neither ensure nor
+ordinary import/adoption recreates them. This phase adds no personal restore
+API. No editable project property is ownership authority.
 
 If joined identities already have two personal canvases, keep both datasets.
 The canonical identity's existing binding wins, otherwise select an existing
 alias binding deterministically. Never merge contents, delete a canvas, or
-write a new one merely to hide the ambiguity. The extra canvas remains an
-ordinary owned canvas. The response can name the preserved extra binding to
+write a new one merely to hide the ambiguity. The extra canvas remains
+separately owned with its personal-source classification. The response can name the preserved extra binding to
 its owner. Existing consents and delegations stay attached to their original
 source dataset; choosing another primary never transfers an agent to the
 winning source. Fresh source access needs a fresh owner allow/link act. The

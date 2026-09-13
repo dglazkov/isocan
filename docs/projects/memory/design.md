@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents
-note: local/inherited Context and its sheet are built. Personal phase 2 is next, followed by the personal MCP continuation in phase 4. The revised journey and personal-memory.md define private birth, explicit delegation and concrete link consent; recap-head and pin-from-source remain separate
+note: phases 0–3 are closed, including private personal birth, concrete consent, delegation and CLI/browser acceptance on 13 Sep. Memory phase 4 is next for the dedicated MCP read and three-layer transport proof; recap-head and pin-from-source remain separate
 ---
 # Memory, in layers you can see
 
@@ -190,9 +190,9 @@ home. [phases.md](phases.md) records the build and independently verified proof.
 4. **MCP read surface** over the three layers, so any index can index this.
    *Partly built 13 Sep through [embed phase 2](../embed/phases.md):
    `read_context_summary` and Context resources expose the existing local
-   and inherited layers. The personal layer still depends on phase 2; its
-   creation, ownership and three-layer acceptance are not implied by the
-   new read surface.*
+   and inherited layers. Memory phase 2 supplies authorized personal summaries.
+   The dedicated personal-text tool and three-layer transport acceptance
+   remain memory phase 4.*
 
 **Zero new op types** again: visible links use the existing canvas operation
 vocabulary. Personal birth, consent and delegation use the private Desk and
@@ -244,3 +244,17 @@ on the card's strip, *memory*, lit when the other canvas's context is read
 here — and it is the switch, writing the same patch `isocan context inherit
 | uninherit` writes, so a card already on the canvas becomes a link from
 the strip. Not built: phase 2 and phase 4, as above.
+
+
+**Phase 2, 13 September 2026.** The personal contract is built on both clients.
+Private Desk bindings reserve birth before any link or space can exist;
+concrete consent and explicit delegation authorize only current contributed
+pieces. Automatic previews and ambient MCP calls exclude personal sources
+before content reads. Replica classification and immutable per-request actor
+ceilings keep that boundary through adoption, retries and forwarding.
+
+Independent CLI, browser, real stdio and required File/Cloud proofs passed.
+The retained browser journey includes a real response held during an in-place
+identity change, private export isolation and camera profile destruction.
+The dedicated MCP text tool remains memory phase 4; recap-head and pin-from-source
+remain separate unfinished work. See phases.md for exact verification.

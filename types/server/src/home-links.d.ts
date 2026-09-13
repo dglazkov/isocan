@@ -181,6 +181,7 @@ export declare class HomeLinks implements HomeDirectory, HomeRegistry {
      * a guess, and every verdict that IS produced names the home it came from.
      */
     upgrade(): UpgradeVerdict | null;
+    bindLocal(canvasId: string): Promise<void>;
     bind(canvasId: string, homeUrl: string | null): Promise<HomeConnection | null>;
     /**
      * That canvas is gone. Drop its row, or a re-created id inherits a dead

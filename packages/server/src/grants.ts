@@ -590,6 +590,7 @@ export async function ensureLinkGrant(
   canvasId: string,
   grantedBy: string,
 ): Promise<Grant | null> {
+  if (await desk.personalSource(canvasId) || await desk.personalReplica(canvasId)) return null;
   const existing = await desk.grantsFor(canvasId);
   if (existing.length > 0) return null;
   const grant: Grant = {

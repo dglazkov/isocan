@@ -5,6 +5,7 @@ import { designSystemProperties } from "../src/designsystem.ts";
 import {
   CONTEXT_SHEET_SIZE,
   contextLayers,
+  contextLayerKey,
   contextSheet,
   contextSheetSpot,
   governingDesign,
@@ -14,6 +15,9 @@ import {
   memoryLinks,
   memoryOf,
   memoryPatch,
+  personalMemoryLinks,
+  personalContributions,
+  personalCanvasItemOf,
 } from "../src/memory.ts";
 import { contextReport } from "../src/context.ts";
 
@@ -154,6 +158,7 @@ describe("the layers, and the design system that governs", () => {
       { item: here.items["link"]!, canvasId: "prj_far", title: "Far away", canvas: null, refused: "lives at other.example — not read from here" },
     ]);
     expect(layers.map((l) => l.heading)).toEqual(["This canvas", "Design System", "Far away"]);
+    expect(layers.map((l) => l.kind)).toEqual(["local", "inherited", "inherited"]);
     expect(layers[0]!.canvasId).toBeNull();
     expect(layers[1]!.pieces[0]!.name).toBe("Design system");
     expect(layers[2]!.refused).toContain("lives at");
@@ -168,5 +173,58 @@ describe("the layers, and the design system that governs", () => {
     const own = canvas([card("link", "prj_ds", "inherit"), item("DESIGN.md", { properties: designSystemProperties() })]);
     expect(governingDesign(own, linked)?.from).toBeNull();
     expect(governingDesign(canvas([item("x")]), [])).toBeNull();
+  });
+});
+
+describe("personal contributions are a separate, explicitly owned layer", () => {
+  it("constructs a shared card from an owner label and address without accepting private preview metadata", () => {
+    const card = personalCanvasItemOf("https://acme.invalid", "prj_memory", { name: "Maya" });
+    expect(card.title).toBe("Maya's canvas");
+    expect(card.properties).toEqual({
+      kind: "canvas", canvas: "prj_memory", source: "https://acme.invalid/p/prj_memory", memory: "personal",
+    });
+    expect(card.blob).toBe("https://acme.invalid/p/prj_memory\n");
+  });
+
+  it("finds personal candidates in reading order while excluded ancestors remove edges", () => {
+    const group = item("group", { properties: { kind: "group", context: "excluded" } });
+    const hidden = { ...card("hidden", "prj_secret", "personal"), containerId: group.id };
+    const visible = card("visible", "prj_self", "personal", 0, 500);
+    const first = card("first", "prj_self", "personal", 0, 0);
+    const c = canvas([group, hidden, visible, first, card("inherited", "prj_library", "inherit")]);
+    expect(personalMemoryLinks(c).map(({ id }) => id)).toEqual(["first", "visible"]);
+    expect(memoryLinks(c).map(({ id }) => id)).toEqual(["inherited"]);
+  });
+
+  it("selects design and contributed pins once, excluding ancestors and refusing missing current versions", () => {
+    const design = item("design", { properties: { ...designSystemProperties(), context: "pinned" } });
+    const group = item("group", { properties: { kind: "group", context: "pinned" } });
+    const pin = item("pin", { containerId: group.id, properties: { context: "pinned" } });
+    const missing = item("missing", { properties: { context: "pinned" }, currentVersionId: "ver_gone" });
+    const hiddenGroup = item("hidden", { properties: { kind: "group", context: "excluded" } });
+    const hiddenPin = item("secret", { containerId: hiddenGroup.id, properties: { context: "pinned" } });
+    const c = canvas([design, group, pin, missing, hiddenGroup, hiddenPin, item("unrelated")]);
+    const contributed = personalContributions(c);
+    expect(contributed.map(({ kind, item }) => [kind, item.id])).toEqual([
+      ["design", "design"], ["pin", "group"], ["pin", "pin"], ["pin", "missing"],
+    ]);
+    expect(contributed.find(({ item }) => item.id === "pin")?.version?.id).toBe(pin.currentVersionId);
+    expect(contributed.find(({ item }) => item.id === "missing")?.version).toBeNull();
+    design.properties.context = "excluded";
+    expect(personalContributions(c).some(({ item }) => item.id === "design")).toBe(false);
+  });
+
+  it("labels personal provenance without giving it inherited governing authority or collapsing repeated links", () => {
+    const c = canvas([]);
+    const local = contextLayers(c, []);
+    const personal = {
+      kind: "personal" as const, canvasId: "prj_personal", itemId: "itm_link",
+      owner: { id: "usr_maya", name: "Maya" }, heading: "Maya's canvas", pieces: [],
+    };
+    expect(layersReport([...local, personal], contextReport)).toContain("Maya's canvas — personal (prj_personal)");
+    expect(layersReport([{ ...personal, refused: "Not delegated" }], contextReport)).toContain("Not delegated");
+    expect(contextLayerKey(personal)).not.toEqual(contextLayerKey({ ...personal, itemId: "itm_other" }));
+    expect(contextLayerKey(personal)).not.toEqual(contextLayerKey({ ...personal, kind: "inherited" }));
+    expect(governingDesign(c, [])).toBeNull();
   });
 });

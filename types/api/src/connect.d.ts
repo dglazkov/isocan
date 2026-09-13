@@ -1,7 +1,8 @@
-import type { Actor, Canvas, CanvasSnapshotResponse, ContextManifest, ContextContentPage, CommentThread, Item, ItemKind, NewComment, Operation, WatchedLogEntry } from "../../core/src/index.js";
+import type { Actor, Canvas, CanvasSnapshotResponse, ContextManifest, ContextContentPage, CommentThread, Item, ItemKind, NewComment, Operation, WatchedLogEntry, PersonalSourcePolicy } from "../../core/src/index.js";
 import { type ActivityEntry } from "../../core/src/index.js";
 import { type Ctx } from "./ctx.js";
 import { type ExplicitIdentity } from "./identity.js";
+import { type ContextSummaryOptions } from "./context-summary.js";
 import { type FeedbackOptions, type FeedbackResult } from "./feedback.js";
 import type { ContextExtras, ContextLayer } from "../../core/src/index.js";
 import { type DaemonRoutes } from "./routes.js";
@@ -62,6 +63,9 @@ export declare class Home {
     constructor(ctx: Ctx);
     /** Who this connection speaks as. */
     get actor(): Actor;
+    /** Restrict one caller without changing the shared badge or any other tool's client. */
+    withSourcePolicy(policy: PersonalSourcePolicy, signal?: AbortSignal): Home;
+    private sourceScoped;
     /**
      * A canvas to work: no ref means the directory's canvas resolved the way
      * every CLI command resolves it (marker walk, home default, only-one); a
@@ -193,7 +197,7 @@ export declare class CanvasHandle {
     context(options?: ContextReadOptions): Promise<ContextManifest>;
     contextOfComment(threadId: string, commentId: string): Promise<ContextManifest>;
     /** Live ambient layers, distinct from a current item manifest or saved request. */
-    contextSummary(extras?: ContextExtras): Promise<ContextLayer[]>;
+    contextSummary(extras?: ContextExtras, options?: ContextSummaryOptions): Promise<ContextLayer[]>;
     /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */
     waitForFeedback(options?: FeedbackOptions): Promise<FeedbackResult>;
     contextPage(options: ContextPageOptions): Promise<ContextContentPage>;

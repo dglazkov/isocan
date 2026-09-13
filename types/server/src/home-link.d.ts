@@ -1,3 +1,4 @@
+import { type SourceRequestContext } from "../../core/src/index.js";
 import { type InboxResponse } from "../../core/src/index.js";
 import { Readable } from "node:stream";
 import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupsResponse, UndoRedoRequest } from "../../core/src/index.js";
@@ -39,6 +40,10 @@ export declare class HomeRefusedError extends Error {
  * engine learns "there is somewhere else to send this", never how a socket
  * works. */
 export interface HomeConnection {
+    /** Authoritative private routes retain per-call policy and cancellation without local fallback. */
+    personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext): Promise<T>;
+    /** Raw forwarding keeps source policy off this long-lived connection's mutable state. */
+    sourceRequest(method: string, path: string, body: unknown, headers: Record<string, string>, actor: Actor | undefined, context: SourceRequestContext): Promise<Response>;
     readonly homeUrl: string;
     /** `POST /api/ops` at the home, with this daemon's badge. */
     submitOp(body: PostOpRequest): Promise<PostOpResponse>;
@@ -176,7 +181,7 @@ export interface HomeConnection {
      * ADDRESS gets let in. See `HOME_JOIN_ROUTE` for which arrivals those are
      * and why they are not a new privilege.
      */
-    join(canvasId: string): Promise<Canvas>;
+    join(canvasId: string, actor?: Actor, context?: SourceRequestContext): Promise<Canvas>;
     /** Blob bytes go where the ops that name them go. */
     putBlob(canvasId: string, data: Buffer, meta: {
         mimeType: string;
@@ -260,6 +265,8 @@ export interface HomeDirectory {
      * canvas under the "this id has no row, so it must be mine" rule.
      */
     bind(canvasId: string, homeUrl: string | null): Promise<HomeConnection | null>;
+    /** Private birth explicitly stays here, regardless of the configured birth default. */
+    bindLocal(canvasId: string): Promise<void>;
     /** That canvas is gone; drop its row, or a re-created id inherits a dead
      * routing. */
     release(canvasId: string): Promise<void>;
@@ -402,6 +409,8 @@ export declare class HomeLink implements HomeConnection {
      * measurement: presence beats arrive by the hundred under one unchanging
      * actor, and a desk round trip per beat is a desk round trip per mouse move.
      */
+    private classifiedReplicas;
+    private classifyReplica;
     private claimed;
     private claiming;
     constructor(options: HomeLinkOptions);
@@ -658,6 +667,8 @@ export declare class HomeLink implements HomeConnection {
      */
     freeName(): Promise<string>;
     private ensureClaim;
+    personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext): Promise<T>;
+    sourceRequest(method: string, path: string, body: unknown, headers: Record<string, string>, actor: Actor | undefined, context: SourceRequestContext): Promise<Response>;
     submitOp(body: PostOpRequest): Promise<PostOpResponse>;
     groupMigrationPreview(canvasId: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;
     /** Who may enter this canvas, as the HOME has it. No claim goes up first:
@@ -759,7 +770,7 @@ export declare class HomeLink implements HomeConnection {
      * below (for `redeemPass`'s reason: somebody just typed the command) opens
      * the socket.
      */
-    join(canvasId: string): Promise<Canvas>;
+    join(canvasId: string, actor?: Actor, context?: SourceRequestContext): Promise<Canvas>;
     undo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
     redo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
     /**

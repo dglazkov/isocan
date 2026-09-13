@@ -1,5 +1,5 @@
-import type { CanvasContents, Item } from "./model.ts";
-import { canvasIdOf, isCanvasItem } from "./canvasitem.ts";
+import type { CanvasContents, Item, ItemVersion } from "./model.ts";
+import { canvasIdOf, canvasItemOf, isCanvasItem } from "./canvasitem.ts";
 import { areasOf } from "./area.ts";
 import { isGroupItem } from "./canvas-groups.ts";
 import { PLACEMENT_GAP } from "./placement.ts";
@@ -46,9 +46,48 @@ export function memoryOf(item: Item): MemoryLink | null {
  * An excluded card or ancestor removes that edge before any source is read.
  */
 export function memoryLinks(canvas: CanvasContents): Item[] {
+  return linksOfKind(canvas, MEMORY_INHERIT);
+}
+
+/** Personal candidates are visible edges, not authority: the home checks concrete consent. */
+export function personalMemoryLinks(canvas: CanvasContents): Item[] {
+  return linksOfKind(canvas, MEMORY_PERSONAL);
+}
+
+function linksOfKind(canvas: CanvasContents, kind: MemoryLink): Item[] {
   return Object.values(canvas.items)
-    .filter((item) => memoryOf(item) === MEMORY_INHERIT && !excludedInAmbient(canvas, item))
+    .filter((item) => memoryOf(item) === kind && !!canvasIdOf(item) && !excludedInAmbient(canvas, item))
     .sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+/** The authorized home reads only these current contributions, never a source's Chat. */
+interface PersonalContribution {
+  kind: "design" | "pin";
+  item: Item;
+  version: ItemVersion | null;
+}
+
+/** Personal memory contributes its design and ambient pins once, with ancestor exclusions. */
+export function personalContributions(canvas: CanvasContents): PersonalContribution[] {
+  const design = designSystem(canvas);
+  const pieces: Array<{ kind: "design" | "pin"; item: Item }> = [];
+  if (design && !excludedInAmbient(canvas, design)) pieces.push({ kind: "design", item: design });
+  const included = new Set(pieces.map(({ item }) => item.id));
+  for (const item of ambientContextItems(canvas)) {
+    if (included.has(item.id)) continue;
+    included.add(item.id);
+    pieces.push({ kind: "pin", item });
+  }
+  return pieces.map((piece) => ({
+    ...piece,
+    version: piece.item.versions.find((version) => version.id === piece.item.currentVersionId) ?? null,
+  }));
+}
+
+/** A shared personal card discloses only its owner's label and source address. */
+export function personalCanvasItemOf(home: string, sourceCanvasId: string, owner: { name: string }): ReturnType<typeof canvasItemOf> & { title: string } {
+  const card = canvasItemOf(home, sourceCanvasId);
+  return { ...card, title: `${owner.name}'s canvas`, properties: { ...card.properties, [MEMORY_PROP]: MEMORY_PERSONAL } };
 }
 
 /** The patch that sets or clears the link — one spelling for both surfaces,
@@ -72,15 +111,19 @@ export interface LinkedCanvas {
   refused?: string;
 }
 
-/** One heading in the Context view: whose pieces these are. */
-export interface ContextLayer {
-  /** Null for this canvas itself. */
-  canvasId: string | null;
+interface LayerContents {
   heading: string;
   pieces: ContextPiece[];
   /** Set when the layer could not be read — the heading stands, with why. */
   refused?: string;
 }
+
+/** Layer identity distinguishes personal owner provenance from inherited design authority. */
+export type ContextLayer = LayerContents & (
+  | { kind: "local"; canvasId: null }
+  | { kind: "inherited"; canvasId: string; itemId: string }
+  | { kind: "personal"; canvasId: string; itemId: string; owner: { id: string; name: string } | null }
+);
 
 /**
  * What a linked canvas contributes: its design system, its pins, its size.
@@ -143,13 +186,15 @@ export function contextLayers(
   nowMs: number = Date.now(),
 ): ContextLayer[] {
   const layers: ContextLayer[] = [
-    { canvasId: null, heading: "This canvas", pieces: contextPieces(canvas, extras, nowMs) },
+    { kind: "local", canvasId: null, heading: "This canvas", pieces: contextPieces(canvas, extras, nowMs) },
   ];
   const localHasDesign = designSystem(canvas) !== null;
   for (const link of linked) {
     if (!link.canvas) {
       layers.push({
+        kind: "inherited",
         canvasId: link.canvasId,
+        itemId: link.item.id,
         heading: link.title,
         pieces: [],
         refused: link.refused ?? "could not be read",
@@ -157,7 +202,9 @@ export function contextLayers(
       continue;
     }
     layers.push({
+      kind: "inherited",
       canvasId: link.canvasId,
+      itemId: link.item.id,
       heading: link.title,
       pieces: inheritedPieces(link.canvas, { canvasId: link.canvasId, title: link.title }, localHasDesign),
     });
@@ -192,13 +239,23 @@ export function governingDesign(
 export function layersReport(layers: ContextLayer[], report: (pieces: ContextPiece[]) => string): string {
   const out: string[] = [];
   for (const layer of layers) {
-    out.push(layer.canvasId ? `${layer.heading} — inherited (${layer.canvasId})` : layer.heading);
+    out.push(contextLayerHeading(layer));
     if (layer.refused) out.push(`  ${layer.refused}`);
-    else if (layer.pieces.length === 0) out.push("  nothing to inherit");
+    else if (layer.pieces.length === 0) out.push(layer.kind === "personal" ? "  no personal contributions" : "  nothing to inherit");
     else out.push(report(layer.pieces).replace(/^/gm, "  "));
     out.push("");
   }
   return out.join("\n").trimEnd();
+}
+
+/** Both surfaces name the layer's kind explicitly instead of treating every source as inherited. */
+function contextLayerHeading(layer: ContextLayer): string {
+  return layer.kind === "local" ? layer.heading : `${layer.heading} — ${layer.kind} (${layer.canvasId})`;
+}
+
+/** A visible link's identity distinguishes repeated sources and private/inherited headings. */
+export function contextLayerKey(layer: ContextLayer): string {
+  return layer.kind === "local" ? "local" : `${layer.kind}:${layer.canvasId}:${layer.itemId}`;
 }
 
 /** The canvas a card links, when it is a memory link — for a reader that

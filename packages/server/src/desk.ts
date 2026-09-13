@@ -1,3 +1,4 @@
+import type { PersonalDesk } from "./personal-desk.ts";
 import type {
   ActorClaim,
   Attestation,
@@ -280,7 +281,7 @@ export interface PassRecord extends Pass {
   secretHash: string;
 }
 
-export interface Desk {
+export interface Desk extends PersonalDesk {
   init(): Promise<void>;
 
   /** Release whatever the backing holds open — the twin of `Store.close`, and

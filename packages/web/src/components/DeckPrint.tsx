@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { canvasPath, deckFilename, deckHtml, deckPages, type DeckPageContent } from "@isocan/core";
+import { automaticCanvasTarget, sourceOf, type Item, canvasPath, deckFilename, deckHtml, deckPages, type DeckPageContent } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { useFrameSrc } from "../lib/frame.ts";
+import { CanvasPreviewBoundary } from "./CanvasPreviewBoundary.tsx";
+import { automaticSource } from "../lib/personal.ts";
 import { Markdown } from "../lib/markdown.tsx";
 
 /**
@@ -78,6 +80,11 @@ export function DeckPrint({ canvasId }: { canvasId: string }) {
     try {
       const contents: DeckPageContent[] = await Promise.all(
         pages.map(async (page) => {
+          for (const id of [page.id, page.note?.id]) {
+            const item = id ? canvas?.items[id] : undefined;
+            const target = item && automaticCanvasTarget(item.properties.canvas ?? null, sourceOf(item));
+            if (target && (target.kind === "unavailable" || target.kind === "canvas" && (await automaticSource(target.canvasId, target.source, canvasId)).kind !== "ordinary")) return { id: page.id, title: "Canvas · preview private or unavailable", mimeType: "text/uri-list", blobHash: "" };
+          }
           const notes = page.note ? { notes: await readBlobText(canvasId, page.note.blobHash) } : {};
           if (page.mimeType === "text/html") return { ...page, ...notes, html: await readBlobText(canvasId, page.blobHash) };
           if (page.mimeType.startsWith("image/")) return { ...page, ...notes, imageDataUrl: await dataUrl(blobUrl(canvasId, page.blobHash)) };
@@ -94,7 +101,7 @@ export function DeckPrint({ canvasId }: { canvasId: string }) {
     } finally {
       setSaving(false);
     }
-  }, [pages, canvasId, title, withNotes]);
+  }, [pages, canvasId, title, withNotes, canvas]);
 
   return (
     <div className={`deck-print${withNotes ? " with-notes" : ""}`} data-pages={pages.length}>
@@ -124,16 +131,21 @@ export function DeckPrint({ canvasId }: { canvasId: string }) {
           {pages.map((page, i) => (
             <li key={page.id} className="deck-sheet" data-item={page.id}>
               <div className="deck-page">
-                <DeckSlide canvasId={canvasId} mimeType={page.mimeType} blobHash={page.blobHash} title={page.title} />
+                <DeckSource destination={canvasId} item={canvas?.items[page.id]}><DeckSlide canvasId={canvasId} mimeType={page.mimeType} blobHash={page.blobHash} title={page.title} /></DeckSource>
                 <span className="deck-page-n">{i + 1}</span>
               </div>
-              {withNotes && <DeckNotes canvasId={canvasId} blobHash={page.note?.blobHash ?? null} />}
+              {withNotes && <DeckSource destination={canvasId} item={page.note ? canvas?.items[page.note.id] : undefined}><DeckNotes canvasId={canvasId} blobHash={page.note?.blobHash ?? null} /></DeckSource>}
             </li>
           ))}
         </ol>
       )}
     </div>
   );
+}
+
+function DeckSource({ destination, item, children }: { destination: string; item: Item | undefined; children: React.ReactNode }) {
+  const target = item && automaticCanvasTarget(item.properties.canvas ?? null, sourceOf(item));
+  return target && target.kind !== "none" ? <CanvasPreviewBoundary key={`${item!.id}:${sourceOf(item!)}`} canvasId={item!.properties.canvas ?? null} source={sourceOf(item!)} destinationCanvasId={destination}>{children}</CanvasPreviewBoundary> : children;
 }
 
 function DeckSlide({ canvasId, mimeType, blobHash, title }: { canvasId: string; mimeType: string; blobHash: string; title: string }) {

@@ -1,4 +1,4 @@
-import type { Actor, HomesResponse, Canvas } from "../../core/src/index.js";
+import type { Actor, HomesResponse, Canvas, SourceRequestContext } from "../../core/src/index.js";
 import { type DaemonRoutes } from "./routes.js";
 import { DaemonClient } from "./client.js";
 import { type ExplicitIdentity } from "./identity.js";
@@ -21,6 +21,10 @@ export interface Ctx {
     harness: string | null;
     home: string;
     canvasRef?: string;
+    /** An isolated caller restriction carried by every request, never a shared badge mutation. */
+    sourceContext?: SourceRequestContext;
+    /** Rebind the already selected identity's recovery to a new isolated client. */
+    reclaimOn?(client: DaemonClient): void;
     /** The directory's canvas, when the cwd sits under a `.isocan/project.json`
      * marker (#60). Resolved once per command; null outside any bound tree. */
     binding: DirBinding | null;
@@ -210,7 +214,9 @@ export declare function resolveCanvas(ctx: Ctx, opts?: ResolveOptions): Promise<
  * entry, and that must not make a caller's already-known address unusable.
  * A prj_-qualified value is always exact, including older/adopted ids; no
  * shortened id is ever expanded against canvases the caller cannot discover. */
-export declare function resolveCanvasRef(client: Pick<DaemonRoutes, "snapshot" | "listCanvases">, ref: string): Promise<Canvas>;
+export declare function resolveCanvasRef(client: Pick<DaemonRoutes, "snapshot" | "listCanvases" | "sourceAccess" | "homes" | "base">, ref: string, sourceContext?: SourceRequestContext): Promise<Canvas>;
+/** Resolve only metadata before binding an exact expected home to the ensuing content requests. */
+export declare function sourceContextForCanvas(ctx: Ctx, ref?: string): Promise<SourceRequestContext>;
 /** Exact id, then case-insensitive title prefix. */
 /** A canvas by id or by a unique title prefix — the one spelling of "which
  *  canvas did they mean", shared so `--to` on a copy means exactly what

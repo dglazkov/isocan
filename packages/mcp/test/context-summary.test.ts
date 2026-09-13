@@ -62,16 +62,16 @@ it("reads live local/inherited layers without leaking private memory or unadmitt
     await link(newCanvasId(), "Elsewhere card", "inherit", "https://elsewhere.invalid");
     const excludedCard = await link(excludedLibrary.id, "Excluded inheritance edge");
     await here.groups.add(localExcluded, [excludedCard.id]);
-    const read = async (): Promise<{ layers: ContextLayer[] }> => {
-      const result = await host.callTool({ name: "read_context_summary", arguments: { canvas: here.id, session: "explicit-caller" } });
+    const read = async (session: string | undefined = "explicit-caller"): Promise<{ layers: ContextLayer[] }> => {
+      const result = await host.callTool({ name: "read_context_summary", arguments: { canvas: here.id, ...(session ? { session } : {}) } });
       expect(result.isError, JSON.stringify(result)).toBeUndefined();
       return JSON.parse((result.content as Array<{ text: string }>)[0]!.text);
     };
     const seen = await routes.seen();
     const seq = (await routes.snapshot(here.id)).lastSeq;
-    const asked = vi.spyOn(routes, "snapshot");
+    const asked = vi.spyOn(daemon.engine, "getSnapshot");
     const first = await read();
-    expect(first.layers.map((layer) => layer.heading)).toEqual(["This canvas", "Acme Library", "Unavailable card", "Elsewhere card"]);
+    expect(first.layers.map((layer) => layer.heading)).toEqual(["This canvas", "Acme Library", "Unavailable card", "Elsewhere card", "Personal card"]);
     const local = first.layers[0]!;
     expect(local.pieces.find((piece) => piece.name === "Pinned items")?.present).toBe(false);
     expect(local.pieces.find((piece) => piece.name === "Excluded items")?.size).toContain("Acme local excluded group");
@@ -82,6 +82,7 @@ it("reads live local/inherited layers without leaking private memory or unadmitt
     expect(inherited.pieces.find((piece) => piece.name === "Excluded items")?.size).toContain("Acme skipped group");
     expect(first.layers[2]).toMatchObject({ pieces: [], refused: expect.any(String) });
     expect(first.layers[3]).toMatchObject({ pieces: [], refused: expect.stringContaining("not read from here") });
+    expect(first.layers[4]).toMatchObject({ kind: "personal", owner: null, pieces: [], refused: expect.any(String) });
     expect(asked.mock.calls.some(([id]) => id === personal.id)).toBe(false);
     expect(asked.mock.calls.some(([id]) => id === excludedLibrary.id)).toBe(false);
     expect(JSON.stringify(first)).not.toMatch(/Confidential|Personal memory|excluded nested pin|local excluded pin/);
@@ -96,7 +97,7 @@ it("reads live local/inherited layers without leaking private memory or unadmitt
     }
     const resource = await host.readResource({ uri: `isocan://canvas/${here.id}/context` });
     expect(connections.at(-1)).toBeUndefined();
-    expect(JSON.parse((resource.contents[0] as { text: string }).text)).toEqual(await read());
+    expect(JSON.parse((resource.contents[0] as { text: string }).text)).toEqual(await read(""));
     expect(await routes.seen()).toEqual(seen);
     expect((await routes.snapshot(here.id)).lastSeq).toBe(seq);
   } finally {

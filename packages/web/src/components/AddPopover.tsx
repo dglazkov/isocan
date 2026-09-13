@@ -148,6 +148,12 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   }
 
   async function placeCanvas(target: { id: string; title: string; origin?: string | null }) {
+    if (inherit) {
+      const { automaticSource } = await import("../lib/personal.ts");
+      const { canvasUrl } = await import("@isocan/core");
+      const access = await automaticSource(target.id, canvasUrl(target.origin ?? window.location.origin, target.id), canvasId);
+      if (access.kind !== "ordinary") throw new Error(access.refused);
+    }
     let destination = creationDestination();
     // A spot found FOR the card is not `chosen`; the daemon may tidy it clear.
     let at: Placement = spotFor(CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height);

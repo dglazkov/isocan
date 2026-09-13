@@ -1,3 +1,4 @@
+import { type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "../../core/src/index.js";
 import { type InboxResponse } from "../../core/src/index.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
 import type { UpgradeVerdict } from "../../core/src/index.js";
@@ -94,9 +95,14 @@ export declare class DaemonRoutes {
     /** The last observed mode is captured into each request body before retries.
      * Callers holding an older placement preview pass its mode explicitly. */
     private observedGroupModes;
+    private readonly sourceContext?;
     constructor(base: string, home: string, 
     /** Optional lifetime of a per-call connection, including its identity setup. */
-    lifetime?: AbortSignal | undefined);
+    lifetime?: AbortSignal | undefined, 
+    /** A restriction captured before target resolution, shared by JSON and raw calls. */
+    sourceContext?: SourceRequestContext);
+    private requestSignal;
+    private policyHeaders;
     /**
      * **The fetch this surface makes its requests with**, so that the half of
      * the client which is allowed to know about Node can bound them.
@@ -249,6 +255,26 @@ export declare class DaemonRoutes {
      *  answer may be AHEAD of what you sent: another machine of yours may have
      *  got further, and the merge never goes backwards. */
     markSeen(canvasId: string, seq: number, actorId?: string): Promise<SeenResponse>;
+    /** Classify before automatic previews or target resolution; unknown remains redacted. */
+    classifySource(request: SourceClassificationRequest, signal?: AbortSignal): Promise<SourceClassificationResponse>;
+    /** Check an explicit tool source without borrowing a stored badge admission. */
+    sourceAccess(request: SourceAccessRequest, signal?: AbortSignal): Promise<SourceAccessResponse>;
+    /** Inspect the selected person's binding without creating a canvas. */
+    personalStatus(actorId: string, signal?: AbortSignal, destinationCanvasId?: string): Promise<PersonalStatusResponse>;
+    /** Lazily reserve and create the person's private source at this home. */
+    ensurePersonal(actorId: string, signal?: AbortSignal, destinationCanvasId?: string): Promise<PersonalEnsureResponse>;
+    /** Visible personal cards and this caller's current availability, without source bytes. */
+    personalLinks(canvasId: string, actorId: string, signal?: AbortSignal): Promise<PersonalLinksResponse>;
+    /** One concrete consent and one undoable native operation per new link. */
+    linkPersonal(canvasId: string, request: PersonalLinkRequest, signal?: AbortSignal): Promise<PersonalLinkResponse>;
+    /** Delete the concrete card while retaining its identity-bound consent for undo. */
+    unlinkPersonal(canvasId: string, request: PersonalUnlinkRequest, signal?: AbortSignal): Promise<PersonalUnlinkResponse>;
+    /** The selected owner's source-specific agent access controls. */
+    personalDelegates(sourceCanvasId: string, actorId: string, signal?: AbortSignal): Promise<PersonalDelegatesResponse>;
+    /** Explicitly allow or revoke one agent on this exact dataset. */
+    setPersonalDelegate(sourceCanvasId: string, agentId: string, request: SetPersonalDelegateRequest, signal?: AbortSignal): Promise<PersonalDelegateResponse>;
+    /** Authoritative owner/delegate reading, with a blob-free summary mode. */
+    readPersonal(canvasId: string, request: PersonalReadRequest, signal?: AbortSignal): Promise<PersonalReadResponse>;
     /** The connected home's catalogue, without canvas admission or identity claims. */
     publicCanvases(): Promise<PublicCanvasesResponse>;
     /** Publish or unlist the concrete link an owner inspected. */
@@ -512,6 +538,6 @@ export declare class DaemonRoutes {
      * badge may see, which is what a canvas list draws beside its rows.
      */
     takedowns(canvasId?: string): Promise<TakedownsResponse>;
-    uploadBlob(canvasId: string, data: Buffer, mimeType: string, filename: string): Promise<BlobUploadResponse>;
-    downloadBlob(canvasId: string, blobHash: string): Promise<Buffer>;
+    uploadBlob(canvasId: string, data: Buffer, mimeType: string, filename: string, signal?: AbortSignal): Promise<BlobUploadResponse>;
+    downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Buffer>;
 }

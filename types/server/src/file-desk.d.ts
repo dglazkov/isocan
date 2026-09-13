@@ -1,3 +1,5 @@
+import { type PersonalSourceRecord, type PersonalConsent, type PersonalLinkIntent, type ReservePersonalRequest, type PersonalReservation } from "./personal-desk.js";
+import type { PersonalDelegate } from "../../core/src/index.js";
 import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, HomeRefusal, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct, OperatorEnd, OperatorRevocation } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
@@ -9,6 +11,18 @@ export declare class FileDesk implements Desk {
     /** Drain the write chain so a shutdown cannot land between a log append and
      * its snapshot; nothing is held open beyond that. */
     close(): Promise<void>;
+    personalReplica(canvasId: string): Promise<string | null>;
+    recordPersonalReplica(canvasId: string, home: string): Promise<void>;
+    personalSource(canvasId: string): Promise<PersonalSourceRecord | null>;
+    personalBinding(ownerIds: string[]): Promise<PersonalReservation | null>;
+    reservePersonal(request: ReservePersonalRequest): Promise<PersonalReservation>;
+    finishPersonalBirth(canvasId: string, birthOpId: string): Promise<void>;
+    reservePersonalLink(intent: PersonalLinkIntent): Promise<PersonalLinkIntent>;
+    personalLinksFor(destinationCanvasId: string): Promise<PersonalConsent[]>;
+    personalLinkForItem(destinationCanvasId: string, itemId: string): Promise<PersonalConsent | null>;
+    personalDelegations(sourceCanvasId: string): Promise<PersonalDelegate[]>;
+    setPersonalDelegation(sourceCanvasId: string, delegation: PersonalDelegate): Promise<PersonalDelegate>;
+    private commitPersonal;
     put(badge: BadgeRecord): Promise<void>;
     /** A killed badge answers null, exactly like one this home never minted —
      * the desk seam's contract, and what turns a kill into `bad-badge` at the
