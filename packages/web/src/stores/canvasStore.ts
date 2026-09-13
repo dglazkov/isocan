@@ -16,6 +16,7 @@ import type {
   ActorNames,
   SlashCommand,
   TakedownNotice,
+  BadgeEnd,
 } from "@isocan/core";
 import {
   applyOperation,
@@ -26,10 +27,12 @@ import {
   WS_NOT_ADMITTED,
   WITHDRAWN,
   TAKEN_DOWN,
+  ENDED,
 } from "@isocan/core";
 import {
   ApiError,
   CLIENT_ID,
+  fetchEnded,
   fetchTakedown,
   getBacking,
   homeAnswered,
@@ -112,6 +115,15 @@ export type Connection =
    * The sentence is the HOME's and arrives with it — see `takenDown` below.
    */
   | "taken-down"
+  /**
+   * **This badge was ended** (operator phase 4; journey 7 step 3: *Sam's open
+   * tab closes with a sentence naming the operator and the address to write
+   * to*). Its own state beside `withdrawn`, because nobody removed this
+   * person from a canvas — the surface itself was ended, everywhere at once,
+   * by its own holder from another surface or by the operator of the home.
+   * The sentence is the HOME's and is read off the 401 — see `ended` below.
+   */
+  | "ended"
   /** There is no canvas at this address here. */
   | "absent";
 
@@ -176,6 +188,9 @@ interface CanvasStore {
    * and throws rather than truncating — so the sentence is asked for.
    */
   takenDown: TakedownNotice | null;
+  /** The tombstone's notice, when this badge was ended (operator phase 4) —
+   * the date, and for an end by the operator the reason and the address. */
+  ended: BadgeEnd | null;
   /** Remote presence sessions (own tab filtered out). Ephemeral plane. */
   sessions: PresenceSession[];
   /** Chosen identity colors (actor id → hex), from the daemon's actor
@@ -235,6 +250,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   lastSeq: 0,
   connection: "connecting",
   takenDown: null,
+  ended: null,
   sessions: [],
   actorColors: {},
   actorNames: {},
@@ -714,6 +730,7 @@ export function connectToCanvas(canvasId: string, actor: Actor | null): void {
     // carrying one across would tell a person a canvas they just opened had
     // been taken down.
     takenDown: null,
+    ended: null,
     sessions: [],
     // Edit until THIS canvas's hello says otherwise: the flag is per
     // admission, and carrying a previous canvas's "view" across would dress
@@ -1218,8 +1235,28 @@ function openSocket(canvasId: string): void {
                   // operator reaching into somebody's browser.
                   event.reason === TAKEN_DOWN
                   ? "taken-down"
-                  : "refused",
+                  : // **And the one that says THIS BADGE was ended** (operator
+                    // phase 4). Not `withdrawn`: nobody removed this person
+                    // from a canvas. The sentence is asked for below.
+                    event.reason === ENDED
+                    ? "ended"
+                    : "refused",
       });
+      /**
+       * **The tombstone's sentence, off the 401** (operator phase 4). Asked
+       * for FIRST, before `disconnect()` and before anything else on this page
+       * can make a request through `request` — which would knock on the door
+       * on that 401 and replace the cookie, after which the home has nothing
+       * to say about the badge that was ended. The same store-canvas guard
+       * as the takedown's, for the same measured reason.
+       */
+      if (event.reason === ENDED) {
+        void fetchEnded().then((ended) => {
+          if (ended && useCanvasStore.getState().canvasId === canvasId) {
+            useCanvasStore.setState({ ended });
+          }
+        });
+      }
       // The sentence, from the home. Fire-and-forget: a home that cannot
       // answer leaves the page saying the short version, which is still true.
       if (event.reason === TAKEN_DOWN) {

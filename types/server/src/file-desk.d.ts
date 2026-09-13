@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct, OperatorEnd } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
@@ -30,7 +30,8 @@ export declare class FileDesk implements Desk {
     badgesIn(canvasId: string): Promise<BadgeRecord[]>;
     reroot(badgeId: string, canvasId: string, provenance: Provenance, capability?: Capability): Promise<void>;
     expel(badgeId: string, canvasId: string): Promise<void>;
-    killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null>;
+    killBadge(badgeId: string, at: string, by: string, end?: OperatorEnd): Promise<BadgeRecord | null>;
+    endedBadge(badgeId: string): Promise<BadgeRecord | null>;
     attest(badgeId: string, attestation: Attestation): Promise<void>;
     badgesAttesting(attribute: string): Promise<BadgeRecord[]>;
     grantsFor(canvasId: string): Promise<Grant[]>;
@@ -63,6 +64,7 @@ export declare class FileDesk implements Desk {
     revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null>;
     putPass(pass: PassRecord): Promise<void>;
     pass(passId: string): Promise<PassRecord | null>;
+    passesMintedBy(badgeId: string): Promise<PassRecord[]>;
     /**
      * Single-use, and on a file backing the guarantee comes from the desk's own
      * write chain: `enqueue` serializes this read-modify-write against every

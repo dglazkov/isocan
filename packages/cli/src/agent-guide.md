@@ -2258,10 +2258,13 @@ given to once; `remove` reaches every canvas the group is shared with),
 `pass` (a credential for another MACHINE — never post
 it, never commit it; `share`'s address is what you hand a person),
 `badges` (the surfaces carrying this identity; `--kill` ends one — ask first),
-`operator show|look|takedown|purge|log <canvas>` — **this one is not yours.**
-`isocan operator` is for the person who runs the home; it needs their sign-in in
-a browser and refuses inside a session — if asked to take something down or
-erase it, say so and give the address on /terms.
+`operator show|look|takedown|purge|log <canvas>`, `operator end <badge|actor|email:…>`
+— **this one is not yours.** `isocan operator` is for the person who runs the
+home; it needs their sign-in in a browser and refuses inside a session — if
+asked to take something down, erase it, or end somebody's surface, say so and
+give the address on /terms. If a wait of yours exits with `ended`, or a command
+prints *This surface was ended by the operator of this home*, your badge is
+finished here: stop, and tell the person who asked you to work.
 `open`, `setup`, `home` (which home this daemon answers to — read it
 freely, set it only when asked).
 

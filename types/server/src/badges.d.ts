@@ -1,4 +1,5 @@
 import type { IncomingHttpHeaders } from "node:http";
+import { type BadgeEnd } from "../../core/src/index.js";
 import type { BadgeKind, BadgeRecord, Desk } from "./desk.js";
 /**
  * Everything the door does with `node:crypto`, in one file: mint, hash,
@@ -35,6 +36,43 @@ export declare function presentedBadge(headers: IncomingHttpHeaders): PresentedB
 /** The badge behind a presented token, or null if the desk does not know it
  * or the secret does not match. */
 export declare function resolveBadge(desk: Desk, presented: PresentedBadge | null): Promise<BadgeRecord | null>;
+/**
+ * **The tombstone behind a presented token, when the secret matches**
+ * (operator phase 4) — asked only after `resolveBadge` came back empty.
+ *
+ * The secret is checked against the tombstone exactly as it is against a
+ * live record, and for the same reason the desk hashes it: a badge id is
+ * visible to the badge's co-holders and to whoever read a `badges` listing,
+ * and *this id was ended by the operator for harassment* is a sentence for
+ * the holder, not for anybody who can spell the id. Nothing about the
+ * tombstone is said to a caller that cannot present the secret.
+ */
+export declare function resolveEnded(desk: Desk, presented: PresentedBadge | null): Promise<BadgeRecord | null>;
+/** The notice for a tombstone — `killedAt` is set on every record this is
+ * handed, by construction of `resolveEnded` and `endedBadge`. */
+export declare function endOf(record: BadgeRecord): BadgeEnd;
+/**
+ * **A parked wait whose badge was ended while it was parked** (operator
+ * phase 4; design, "End a badge": *a watch held by the dead badge is woken and
+ * refused*).
+ *
+ * 403 and `not-admitted` with the reason `ended`, deliberately the shape
+ * `withdrawn` and `taken-down` already have rather than the 401 every other
+ * request from a dead badge meets. The 401 is the right answer to a request:
+ * it sends the client to the door. It is the wrong answer to a PARK: the
+ * client's one recovery per request would knock, replay the watch as a
+ * stranger, and park again in silence — which is the *parked agent hearing
+ * silence forever* failure the watch's refusals exist to prevent. A 403 with
+ * a reason is what `isocan wait` prints and exits on, and the next command
+ * that machine runs meets the 401 and its own remedy.
+ */
+export declare class BadgeEndedError extends Error {
+    readonly end: BadgeEnd;
+    readonly code = "not-admitted";
+    readonly reason = "ended";
+    readonly status = 403;
+    constructor(end: BadgeEnd);
+}
 /**
  * The `Set-Cookie` value for a badge.
  *

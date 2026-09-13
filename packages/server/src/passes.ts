@@ -4,13 +4,14 @@ import {
   newId,
   parsePassToken,
   PASS_EXPIRED,
+  PASS_MINTER_ENDED,
   PASS_SPENT,
   PASS_TTL_MS,
   PASS_UNKNOWN,
   passExpired,
   type PassRefusal,
 } from "@isocan/core";
-import { sha256, secretMatches } from "./badges.ts";
+import { endOf, sha256, secretMatches } from "./badges.ts";
 import { rungOfAdmission } from "./grants.ts";
 import type { BadgeRecord, Desk, PassRecord } from "./desk.ts";
 
@@ -97,7 +98,8 @@ export class PassRefusedError extends Error {
   ) {
     super(message);
     this.name = "PassRefusedError";
-    this.status = code === PASS_SPENT ? 409 : code === PASS_EXPIRED ? 410 : 404;
+    this.status =
+      code === PASS_SPENT ? 409 : code === PASS_EXPIRED || code === PASS_MINTER_ENDED ? 410 : 404;
   }
 }
 
@@ -161,6 +163,26 @@ export async function redeemPass(
       `this pass expired at ${held.expiresAt} — passes are good for ${Math.round(
         PASS_TTL_MS / 60_000,
       )} minutes. Ask the surface that minted it for another`,
+    );
+  }
+  /**
+   * **A dead minter's pass is refused, unspent** (operator phase 4; design,
+   * "End a badge": *`redeemPass` refuses a pass whose minter is dead*).
+   *
+   * Before the spend, with the cheap read-only questions, because there is
+   * nothing to spend it on: the admission this would write names the minter
+   * as its root, and a root that no longer stands is what the sweep expels.
+   * Refusing here rather than letting the sweep catch up is the difference
+   * between an hour and never — the hour being exactly how long a stolen
+   * laptop's outstanding pass was good for. The tombstone's own sentence
+   * travels, so the stranger holding the pass reads who ended it and when.
+   */
+  const ended = await desk.endedBadge(held.mintedBy);
+  if (ended) {
+    throw new PassRefusedError(
+      PASS_MINTER_ENDED,
+      `the surface that minted this pass has been ended, so the pass hands on nothing. ` +
+        `${endOf(ended).sentence} Ask a surface that is still recognised for another`,
     );
   }
   const outcome = await desk.redeemPass(held.id, now, redeemer.badgeId);

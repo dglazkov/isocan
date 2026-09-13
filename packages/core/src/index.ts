@@ -63,6 +63,7 @@ export * from "./authaction.ts";
 export * from "./operator.ts";
 export * from "./takedown.ts";
 export * from "./purge.ts";
+export * from "./ended.ts";
 export * from "./lane.ts";
 export * from "./frameable.ts";
 export * from "./modules.ts";

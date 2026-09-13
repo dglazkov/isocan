@@ -25,6 +25,7 @@ import type {
   MintPassResponse,
   TakedownNotice,
   TakedownsResponse,
+  BadgeEnd,
   Operation,
   Persona,
   PostOpResponse,
@@ -65,6 +66,7 @@ import {
   SPACES_ROUTE,
   badgeRoute,
   BADGES_ROUTE,
+  BADGE_ENDED,
   DOOR_ROUTE,
   encodeFilename,
   FILENAME_HEADER,
@@ -427,6 +429,30 @@ export async function fetchTakedowns(canvasId?: string): Promise<TakedownNotice[
 export async function fetchTakedown(canvasId: string): Promise<TakedownNotice | null> {
   const rows = await fetchTakedowns(canvasId).catch(() => []);
   return rows.find((row) => row.canvasId === canvasId) ?? null;
+}
+
+/**
+ * **The sentence about THIS badge having been ended** (operator phase 4), or
+ * null.
+ *
+ * Read off the 401, deliberately, and not through `request`: a dead badge is
+ * given exactly one answer by its home — *this surface was ended, on this
+ * date, by this hand* — and it is given as the refusal of whatever it asks
+ * next. `request` would knock on the door on that 401 and come back a
+ * stranger with nothing to say; a raw fetch reads the words before the cookie
+ * is replaced. Best-effort, like `fetchTakedown`: a home that has already
+ * handed this tab a new badge answers 200 here, and the page says the short
+ * version, which is still true.
+ */
+export async function fetchEnded(): Promise<BadgeEnd | null> {
+  try {
+    const res = await fetch(BADGES_ROUTE);
+    if (res.status !== 401) return null;
+    const json = (await res.json().catch(() => null)) as { code?: string; ended?: BadgeEnd } | null;
+    return json?.code === BADGE_ENDED && json.ended ? json.ended : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

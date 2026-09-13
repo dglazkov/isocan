@@ -1,4 +1,5 @@
-import type { Capability, Grant, SweepReport } from "@isocan/core";
+import type { BadgeEnd, Capability, EndReach, Grant, OperatorEnd, SweepReport } from "@isocan/core";
+import { endOf } from "./badges.ts";
 import { admittingGrant, rungOfAdmission } from "./grants.ts";
 import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
 
@@ -109,6 +110,19 @@ export type SweepOutcome =
 type SweepListener = (canvasId: string, badgeId: string, outcome: SweepOutcome) => void;
 
 /**
+ * **What a kill did to one badge, told to whoever is holding something for
+ * it** (operator phase 4; design, "End a badge": *a kill is an outcome the
+ * sweep hub reports*).
+ *
+ * Not a `SweepOutcome`, because those are per canvas and an end is per
+ * badge: the dead badge's sockets are in whatever rooms it was in, and its
+ * parked wait may have named no canvas at all. A listener answers with what
+ * it reached — sockets closed, waits woken — so the route can print counts
+ * the person who pressed the control can check.
+ */
+type EndListener = (badgeId: string, end: BadgeEnd) => Partial<EndReach> | void;
+
+/**
  * **Where the sweep's outcomes go, and what it remembers of them.**
  *
  * One hub per daemon, handed to the routes that sweep and to `ws.ts`, which
@@ -128,6 +142,7 @@ type SweepListener = (canvasId: string, badgeId: string, outcome: SweepOutcome) 
  */
 export class SweepHub {
   private readonly listeners = new Set<SweepListener>();
+  private readonly enders = new Set<EndListener>();
   /** `${badgeId} ${canvasId}` → when. Insertion-ordered, which is what
    * makes the bound a FIFO. */
   private readonly withdrawn = new Map<string, string>();
@@ -160,6 +175,38 @@ export class SweepHub {
         // written and the next badge still has to be told.
       }
     }
+  };
+
+  /** Hear every end, for as long as the returned function is not called —
+   * `ws.ts` for the life of the daemon, a parked watch for the life of its
+   * poll. */
+  onEnded(listener: EndListener): () => void {
+    this.enders.add(listener);
+    return () => void this.enders.delete(listener);
+  }
+
+  /**
+   * **A badge was ended: tell everything holding something for it, and add
+   * up what was reached.** Bound, like `report`, so `killAndSweep` can be
+   * handed it as is.
+   *
+   * The dead badge is not remembered under `withdrawn`: that memory exists to
+   * tell *put out* from *never let in* on a badge that may come back, and an
+   * ended badge never does — its next request meets the 401 with the
+   * tombstone's own sentence, which is a better answer than any memory here.
+   */
+  readonly ended = (badgeId: string, end: BadgeEnd): EndReach => {
+    const reached: EndReach = { sockets: 0, waits: 0 };
+    for (const listener of this.enders) {
+      try {
+        const answer = listener(badgeId, end);
+        reached.sockets += answer?.sockets ?? 0;
+        reached.waits += answer?.waits ?? 0;
+      } catch {
+        // As for `report`: a listener's failure is the listener's.
+      }
+    }
+    return reached;
   };
 
   /** Was this badge swept out of this canvas, and not admitted since? */
@@ -479,6 +526,15 @@ export async function sweepCanvases(
  * Returns null when there was no live badge to kill: an already-dead badge is
  * not an error (two people can end one laptop) and there is nothing left to
  * sweep, because the first kill swept it.
+ *
+ * **And the dead badge itself is told, before the sweep** (operator phase 4).
+ * The sweep reaches the badges `badgesIn` still returns, and a dead one is
+ * not among them — so a kill that only swept left the killed badge's own
+ * sockets open and receiving broadcasts, and its parked wait hearing silence.
+ * `tell` is `SweepHub.ended` in the daemon: the room closes those sockets
+ * with `ended`, the watch route wakes and refuses that poll, and the counts
+ * come back for the verb to print. First, because the tombstone is written
+ * and the sockets are the thing the holder of a stolen laptop is watching.
  */
 export async function killAndSweep(
   desk: Desk,
@@ -490,9 +546,20 @@ export async function killAndSweep(
   creatorOf: (canvasId: string) => Promise<string | null> = async () => null,
   /** Hears every outcome, per badge — see `sweepCanvas`. */
   report: SweepListener = () => {},
-): Promise<{ killed: BadgeRecord; swept: SweepReport } | null> {
-  const killed = await desk.killBadge(badgeId, now, by);
+  /** Hears the end itself, and says what it reached — `SweepHub.ended`. */
+  tell: (badgeId: string, end: BadgeEnd) => EndReach = () => ({ sockets: 0, waits: 0 }),
+  /** The operator's half of the tombstone, when the operator is the hand
+   * (operator phase 4): written onto the record, and what turns the sentence
+   * from *from another of its holder's surfaces* into the reason and the
+   * address. Absent for the owner's own path. */
+  end?: OperatorEnd,
+): Promise<{ killed: BadgeRecord; swept: SweepReport; reached: EndReach } | null> {
+  const killed = await desk.killBadge(badgeId, now, by, end);
   if (!killed) return null;
+  const reached = tell(
+    badgeId,
+    endOf({ ...killed, killedAt: now, killedBy: by, ...(end ? { end } : {}) }),
+  );
   let expelled = 0;
   let rerooted = 0;
   for (const admission of killed.admissions) {
@@ -505,5 +572,5 @@ export async function killAndSweep(
     expelled += swept.expelled;
     rerooted += swept.rerooted;
   }
-  return { killed, swept: { expelled, rerooted } };
+  return { killed, swept: { expelled, rerooted }, reached };
 }

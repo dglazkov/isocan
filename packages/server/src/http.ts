@@ -168,6 +168,8 @@ import {
   TAKEN_DOWN,
   takedownReasonList,
   WS_NOT_ADMITTED,
+  BADGE_ENDED,
+  type BadgeEnd,
   type CanvasTakedown,
   type CdnPurge,
   type OperatorLookResponse,
@@ -179,6 +181,15 @@ import {
   type TakedownsResponse,
   // operator phase 3: the purge.
   OPERATOR_PURGE_ROUTE,
+  // operator phase 4: the operator's end, by badge, actor or address.
+  OPERATOR_END_ROUTE,
+  actorAliases,
+  passExpired,
+  type EndedSurface,
+  type OperatorEnd,
+  type OperatorEndReach,
+  type OperatorEndRequest,
+  type OperatorEndResponse,
   purgeNeedsTakedown,
   replicasHorizon,
   type OperatorPurgeRequest,
@@ -227,12 +238,15 @@ import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
 import {
   badgeCookie,
+  BadgeEndedError,
+  endOf,
   framedRequest,
   isSecureRequest,
   mintBadge,
   originAllowed,
   presentedBadge,
   resolveBadge,
+  resolveEnded,
 } from "./badges.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildRoot, buildStamp } from "./build.ts";
@@ -777,6 +791,17 @@ export function registerRoutes(
         .status(err.status)
         .send({ error: err.message, code: err.code, reason: err.reason });
     }
+    /**
+     * **A parked wait whose badge was ended** (operator phase 4): the same
+     * 403 and `not-admitted` as the two above, with the reason `ended` and the
+     * tombstone's sentence — see `BadgeEndedError` for why a park is refused
+     * this way when every other request from a dead badge meets a 401.
+     */
+    if (err instanceof BadgeEndedError) {
+      return reply
+        .status(err.status)
+        .send({ error: err.message, code: err.code, reason: err.reason, ended: err.end });
+    }
     // 403 like `not-admitted`, one notch further in (#88): badged, admitted,
     // and the ledger says look-don't-touch. Its own code because the remedy is
     // different again — not the door, not the link, but being shared with for
@@ -1064,13 +1089,35 @@ export function registerRoutes(
       return;
     }
     if (isOpen(req.method, pathname)) return;
-    return presented
-      ? reply
-          .status(401)
-          .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" })
-      : reply
-          .status(401)
-          .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+    if (!presented) {
+      return reply
+        .status(401)
+        .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+    }
+    /**
+     * **The 401 carries the tombstone's reason** (operator phase 4; design,
+     * "End a badge"). `bad-badge` is what a wiped home says, and it is the
+     * right thing to say to a credential from nowhere: throw it away and
+     * knock. A badge this home ENDED is one it has a record about, and the
+     * record is the whole message — *this surface was ended, on this date,
+     * by this hand*. Still a 401, because the credential is finished; a
+     * different code and a `reason` of `holder` or `operator`, because the
+     * client's one recovery per request branches on it: an end by the holder
+     * keeps the quiet re-badge that lost-badge recovery is made of, and an end
+     * by the operator prints the sentence and stops. The secret was checked
+     * against the tombstone, so a caller that can only spell the id reads
+     * `bad-badge` as before.
+     */
+    const gone = await resolveEnded(desk, presented);
+    if (gone) {
+      const ended = endOf(gone);
+      return reply
+        .status(401)
+        .send({ error: ended.sentence, code: BADGE_ENDED, reason: ended.by, ended });
+    }
+    return reply
+      .status(401)
+      .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" });
   });
 
   /**
@@ -3124,13 +3171,20 @@ export function registerRoutes(
           () => null,
         ),
       sweeps.report,
+      // The dead badge's own sockets and parks (operator phase 4): closed and
+      // woken through the hub, and counted for the verb.
+      sweeps.ended,
     );
     if (!outcome) {
       return reply
         .status(404)
         .send({ error: `${badgeId} is already ended`, code: "unknown-badge" });
     }
-    return { killed: target, swept: outcome.swept } satisfies KillBadgeResponse;
+    return {
+      killed: target,
+      swept: outcome.swept,
+      reached: outcome.reached,
+    } satisfies KillBadgeResponse;
   });
 
   // ---- attestations: what this holder has PROVED (identity desk, mech 3+6) ----
@@ -3783,6 +3837,196 @@ export function registerRoutes(
   });
 
   /**
+   * **`isocan operator end`** (operator phase 4; design, "End a badge";
+   * journey 7).
+   *
+   * The owner's path, `killAndSweep`, with the `mySurfaces` check replaced by
+   * the proof — and the four gaps that path had are already closed for
+   * everyone by the first half of this phase, so what this route adds is the
+   * TARGET and the RECORD. Targets resolve by the id a report names: a badge
+   * id; an actor, through `actor.join`'s `resolveActor`, so a folded identity
+   * is one target; or an address, through `badgesAttesting`. The reach is
+   * read and answered BEFORE anything is ended, on a `preview`, so the verb
+   * lists what the id reaches — the badges, the actors they claim, the rooms
+   * they are in, and the enrolments those badges' passes let in — and asks
+   * whether to end the enrolments too (journey 7 step 2).
+   *
+   * **Not a listing.** Every badge described here was reached through the id
+   * the operator named, and a badge that no id names is not describable —
+   * the same narrowing `mySurfaces` has, for the same reason.
+   *
+   * **The tombstone carries the operator's half**: the reason category, the
+   * address that acted, and the act id, written by `killBadge` in the same
+   * write as the stamp, so the sentence every surface reads is rendered from
+   * one record — *This surface was ended by the operator of this home on
+   * <date>: <reason>. Write to <address>.* Ending is not refusing: the person
+   * can knock again as a stranger, and the verb says so.
+   *
+   * The same proof, the same ledger row before anything, the same preflight
+   * as phases 1–3. A preview is an act too — somebody with a proof asked this
+   * home what an address reaches — and settles as `previewed`.
+   */
+  app.post(OPERATOR_END_ROUTE, async (req, reply) => {
+    const { target } = req.params as { target: string };
+    const body = (req.body ?? {}) as OperatorEndRequest;
+    const previewing = body.preview === true;
+    const withEnrolments = body.withEnrolments === true;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    const proven = await proveAct(req, reply, {
+      act: "end",
+      target,
+      ...(reason ? { reason } : {}),
+      ...(note ? { note } : {}),
+    });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+
+    /**
+     * **The target, resolved to live badges.** A badge id names one; an
+     * address names every live badge that proved it; anything else is an
+     * actor id, folded to the person who answers for it now and widened to
+     * every alias that folds into them, so a report naming `Dimitri 2` ends
+     * Dimitri's surfaces and not half of them.
+     */
+    const found = new Map<string, BadgeRecord>();
+    let kind: OperatorEndReach["target"]["kind"];
+    if (target.startsWith("bdg_")) {
+      kind = "badge";
+      const badge = await desk.badge(target);
+      if (badge) found.set(badge.badgeId, badge);
+    } else if (target.includes(":")) {
+      kind = "address";
+      const attribute = normalizeAttribute(target);
+      if (!attribute) {
+        return refuse("bad-target", `${target} is not an address this home can read — say email:<address>.`);
+      }
+      for (const badge of await desk.badgesAttesting(attribute)) found.set(badge.badgeId, badge);
+    } else {
+      kind = "actor";
+      const joins = await engine.actorJoins();
+      for (const alias of actorAliases(joins, resolveActor(joins, target))) {
+        for (const holder of await desk.claimants(alias)) {
+          if (holder.badgeId === SHELF || found.has(holder.badgeId)) continue;
+          const badge = await desk.badge(holder.badgeId);
+          if (badge) found.set(badge.badgeId, badge);
+        }
+      }
+    }
+
+    /**
+     * **What those badges left behind**: every live badge whose admission to
+     * some room is rooted in a pass one of them minted — the enrolments
+     * innkeeper.md says outlive their creating badge — and the passes still
+     * outstanding. Read from the rooms the targets are in, which is where a
+     * pass-rooted admission can be, and where the sweep would walk anyway.
+     */
+    const enrolled = new Map<string, BadgeRecord>();
+    const rooms = new Set<string>();
+    for (const badge of found.values()) for (const a of badge.admissions) rooms.add(a.canvasId);
+    for (const canvasId of rooms) {
+      for (const other of await desk.badgesIn(canvasId)) {
+        if (found.has(other.badgeId) || enrolled.has(other.badgeId)) continue;
+        const byPass = other.admissions.some(
+          (a) => a.canvasId === canvasId && a.provenance.root === "pass" && found.has(a.provenance.badgeId),
+        );
+        if (byPass) enrolled.set(other.badgeId, other);
+      }
+    }
+    const now = new Date().toISOString();
+    let passes = 0;
+    for (const badge of found.values()) {
+      for (const pass of await desk.passesMintedBy(badge.badgeId)) {
+        if (pass.redeemedAt === undefined && !passExpired(pass, now)) passes += 1;
+      }
+    }
+    const names = await engine.actorNames();
+    const surface = (record: BadgeRecord): EndedSurface => ({
+      badgeId: record.badgeId,
+      kind: record.kind,
+      actors: [...new Map(record.claims.map((c) => [c.actorId, c])).keys()].map((id) => ({
+        id,
+        name: names[id] ?? "",
+      })),
+      canvases: record.admissions.length,
+      lastSeen: record.lastSeen,
+    });
+    const reach: OperatorEndReach = {
+      target: { kind, id: target },
+      badges: [...found.values()].map(surface),
+      enrolments: [...enrolled.values()].map(surface),
+      passes,
+    };
+
+    if (previewing) {
+      const answer: OperatorEndResponse = {
+        reach,
+        ended: [],
+        reached: { sockets: 0, waits: 0 },
+        swept: { expelled: 0, rerooted: 0 },
+        sentence: null,
+      };
+      await desk.settleOperatorAct(proven.id, "previewed", reach);
+      return answer;
+    }
+    if (found.size === 0) {
+      return refuse(
+        "nothing-to-end",
+        `${target} names no live badge at this home — it was never here, or it is already ended. ` +
+          "`isocan operator log --target " + target + "` says which.",
+        404,
+      );
+    }
+    if (!reason || !isTakedownReason(reason)) {
+      return refuse(
+        "no-reason",
+        `an end needs a reason from this list, because the reason is what the person is shown: ` +
+          `${takedownReasonList()}. The --note is yours and nobody else's.`,
+      );
+    }
+    const category: TakedownReason = reason;
+    const end: OperatorEnd = { reason: category, by: proven.proof.attribute, actId: proven.id };
+    const ended: string[] = [];
+    const reached = { sockets: 0, waits: 0 };
+    const swept = { expelled: 0, rerooted: 0 };
+    const targets = [...found.values(), ...(withEnrolments ? enrolled.values() : [])];
+    for (const badge of targets) {
+      const outcome = await killAndSweep(
+        desk,
+        badge.badgeId,
+        req.badge!.badgeId,
+        now,
+        (canvasId) =>
+          engine.getSnapshot(canvasId).then(
+            (snapshot) => snapshot.project.createdBy.id,
+            () => null,
+          ),
+        sweeps.report,
+        sweeps.ended,
+        end,
+      );
+      if (!outcome) continue; // ended by somebody between the reach and the act
+      ended.push(badge.badgeId);
+      reached.sockets += outcome.reached.sockets;
+      reached.waits += outcome.reached.waits;
+      swept.expelled += outcome.swept.expelled;
+      swept.rerooted += outcome.swept.rerooted;
+    }
+    const answer: OperatorEndResponse = {
+      reach,
+      ended,
+      reached,
+      swept,
+      sentence: endOf({ ...targets[0]!, killedAt: now, killedBy: req.badge!.badgeId, end }).sentence,
+    };
+    await desk.settleOperatorAct(proven.id, "done", { ended, reached, swept, reach });
+    return answer;
+  });
+
+  /**
    * **Where the affected people read the sentence** (design, "The record").
    *
    * Not an operator route, and the only route in this phase that is not: the
@@ -4225,7 +4469,18 @@ export function registerRoutes(
       return allowed;
     };
 
+    /**
+     * **This poll's badge was ended while it was parked** (operator phase 4),
+     * set by the end listener below and raised at the top of the next
+     * collection — before any canvas is asked, because there is no canvas
+     * this badge may still hear. Whatever the poll named, or if it named
+     * nothing: an end is per badge, not per room, which is the one way this
+     * differs from `withdrawn` two branches down.
+     */
+    let ended: BadgeEnd | null = null;
+
     const collect = async (): Promise<import("@isocan/core").WatchLogResponse> => {
+      if (ended) throw new BadgeEndedError(ended);
       const entries: import("@isocan/core").WatchedLogEntry[] = [];
       const next: Record<string, number> = {};
       for (const canvas of await engine.listCanvases()) {
@@ -4288,6 +4543,20 @@ export function registerRoutes(
       landed = true;
       wake?.();
     });
+    /**
+     * **And on this badge's own end** (operator phase 4): the parked agent is
+     * told within the kill, not at the end of its poll window, and told the
+     * tombstone's sentence rather than hearing silence. Answers `waits: 1` so
+     * the kill can say how many parks it ended — counted at the moment of
+     * acting, as the takedown counts.
+     */
+    const unsubscribeEnds = sweeps.onEnded((badgeId, end) => {
+      if (badgeId !== badge.badgeId) return;
+      ended = end;
+      landed = true;
+      wake?.();
+      return { waits: 1 };
+    });
     try {
       let result = await collect();
       const holdMs = Math.min(Number(body.waitMs) || 0, 55_000);
@@ -4309,6 +4578,7 @@ export function registerRoutes(
     } finally {
       unsubscribe();
       unsubscribeSweeps();
+      unsubscribeEnds();
       unregisterWatch();
     }
   });

@@ -16,19 +16,19 @@ after, because a takedown answers every one of those reports on its own,
 more bluntly. The words on `/terms` come first of all, because they are
 untrue today and fixing them costs nothing.
 
-**Where we are:** phases 1, 2 and 3 are PART-DONE (12 Sep 2026): the
-operator is proved per act and refused in words; a look admits for an hour
-and is not in presence; a takedown stops the home serving a canvas and lifts;
-a purge erases the bytes on both backings, keeps the record as the tombstone,
-refuses unless the canvas was taken down first, and says what survives and for
-how long; every act writes its ledger row before it answers. All of it green
-here — the cloud halves against the Firestore emulator — and walked by hand
-against local daemons; none of it walked on dev. Phase 0 still waits on
-Dion's call on the wording. The dev walks for 1–3 wait on a person:
-`ISOCAN_OPERATORS` on dev.isocan.io, a sign-in, a second account, a third
-browser, and a decision about journey 1 step 3, which says Google where this
-app has only an emailed link. Phase 4 (end a surface) is next, and its
-owner's-path half is a bug fix that needs nothing.
+**Where we are:** phases 1 to 4 are PART-DONE (12 Sep 2026): the operator
+is proved per act and refused in words; a look admits for an hour and is not
+in presence; a takedown stops the home serving a canvas and lifts; a purge
+erases the bytes and keeps the tombstone; ending a badge now reaches what it
+held — sockets, the parked wait, outstanding passes — for everyone, and the
+operator can end by badge, actor or address with the reach shown first; every
+act writes its ledger row before it answers. All of it green here with the
+cloud halves against the Firestore emulator, walked by hand against local
+daemons; none of it walked on dev. Phase 0 still waits on Dion's call on the
+wording. The dev walks for 1–4 wait on a person: `ISOCAN_OPERATORS` on
+dev.isocan.io, a sign-in, a second account, a third browser, a phone — and a
+decision about journey 1 step 3, which says Google where this app has only an
+emailed link. Phase 5 (turn off a grant) is next, and needs none of that.
 
 **Sizes.** S is a day's work with its tests. M is two or three. L would be a
 week; nothing here is one.
@@ -219,7 +219,14 @@ so the day a horizon changes the sentence fails rather than lies.
 
 ## Phase 4 — End a surface, and mean it (M)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE (2026-09-12).** Both halves built and proved here. The
+owner's-path fix first and alone, for everyone: a killed badge's sockets close
+`ended`, its parked wait is woken and refused with the sentence, its
+outstanding passes are refused unspent, and the 401 says who ended it and why.
+Then `isocan operator end` by badge, actor or address, the reach previewed
+before the act, the ledger row before the answer, the CLI refusing to knock
+for a new badge under that name. The walk — a laptop tab and a phone, journey
+7 on dev — waits on a person.
 
 Closes journey 7. **The half that fixes the owner's path ships first and
 alone**, because it is a bug fix nobody needs a decision for.
@@ -237,6 +244,32 @@ alone**, because it is a bug fix nobody needs a decision for.
 while the laptop has a tab open and a wait parked: the tab closes, the wait
 exits, the laptop's outstanding pass is refused. Then journey 7 on dev,
 steps 1 to 5.
+
+**Trajectory:**
+
+- **2026-09-12** — A parked wait is refused with 403 `ended`, not the 401 every
+  other request from a dead badge meets: the client's one recovery per request
+  would otherwise replay the park as a stranger into silence, the failure the
+  watch's refusals exist to prevent.
+- **2026-09-12** — The 401 branches on who ended the badge, and only the CLI's
+  re-badge branches with it: `holder` keeps lost-badge recovery quiet,
+  `operator` prints the sentence and stops. The stop is the client's courtesy;
+  `Engine.vouch` does not enforce it.
+- **2026-09-12** — A tab reads the ended sentence off the 401 itself, with a
+  raw fetch before `request()` can knock: a dead badge gets exactly one answer
+  from its home, and the door replaces the cookie on the next.
+- **2026-09-12** — The reach lists enrolments and passes; registrations are
+  absent because Scene 7's are not built, and a field that is always empty is
+  a seam somebody fills in by accident.
+- **2026-09-12** — Open: the walk on dev — journey 7 steps 1 to 5, a real tab,
+  a phone, `ISOCAN_OPERATORS`. Waits on Dion.
+- **2026-09-12** — Open: whether `Engine.vouch` should refuse `actor.claim {as}`
+  for a name whose last holder the operator ended. Today a modified client
+  could reclaim it; operator phase 6's refuse-by-actor is where enforcement
+  naturally lands.
+- **2026-09-12** — Open: `RcHolds` are per canvas, not per badge, so an end
+  does not end a dead badge's rc holds; its sockets close, which is what a
+  summoned session reads. Named rather than wired.
 
 ## Phase 5 — Turn off a grant (S)
 

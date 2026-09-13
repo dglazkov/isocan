@@ -253,6 +253,7 @@ function CanvasSurface({
   const connection = useCanvasStore((s) => s.connection);
   // The home's own sentence about a canvas it took down (operator phase 2).
   const takenDown = useCanvasStore((s) => s.takenDown);
+  const ended = useCanvasStore((s) => s.ended);
   const capability = useCanvasStore((s) => s.capability);
   const canEdit = useCanEdit();
   const joined = useCanvasStore((s) => s.actorJoins);
@@ -916,6 +917,23 @@ function CanvasSurface({
       hint:
         "Nothing has been erased. If you run a daemon that replicates it, your copy is still " +
         "on your machine, and it can be brought back.",
+    },
+    /**
+     * **This badge was ended** (operator phase 4; journey 7 step 3). The note
+     * is the HOME's tombstone sentence, read off the 401 — the date, and for
+     * an end by the operator the reason category and the address to write
+     * to. It is not `withdrawn`: nobody removed this person from this canvas,
+     * the surface itself was ended, everywhere at once. The hint says the one
+     * thing that is true of both kinds of end: ending is not refusing.
+     */
+    ended: {
+      note: ended?.sentence ?? "This surface was ended.",
+      hint:
+        ended?.by === "operator"
+          ? "This browser's badge is no longer recognised here. Nothing you made is undone. " +
+            "You can still open this home as a stranger; write to the address above about the rest."
+          : "This browser's badge was ended from another of your surfaces — a sign-out, or a " +
+            "lost machine. Nothing you made is undone; reload to start again.",
     },
   };
   const end = dead[connection];

@@ -15,11 +15,18 @@ import {
   WS_STALE_CLIENT,
   WITHDRAWN,
   TAKEN_DOWN,
+  ENDED,
 } from "@isocan/core";
 import { Engine, CanvasNotFoundError } from "./engine.ts";
 import type { Desk } from "./desk.ts";
 import { admissionIn, admittingGrant, heldCapability } from "./grants.ts";
-import { isSecureRequest, originAllowed, presentedBadge, resolveBadge } from "./badges.ts";
+import {
+  isSecureRequest,
+  originAllowed,
+  presentedBadge,
+  resolveBadge,
+  resolveEnded,
+} from "./badges.ts";
 import { isContentRequest } from "./content.ts";
 import { PresenceHub } from "./presence.ts";
 import { type RcHolds, rcPoliciesOf } from "./rc-holds.ts";
@@ -315,6 +322,31 @@ export function attachWebSockets(
   });
 
   /**
+   * **The dead badge's own sockets, in every room** (operator phase 4; design,
+   * "End a badge": *a kill is an outcome the sweep hub reports, so `ws.ts`
+   * closes the dead badge's sockets with a reason*).
+   *
+   * The sweep above never reaches them: it reports the badges `badgesIn`
+   * still returns, and a killed badge is out of every query by construction.
+   * So until this listener a stolen laptop's tab stayed open and kept
+   * receiving every broadcast after the phone had ended it. Closed with
+   * `ended` — not `withdrawn`, because nobody removed this person from a
+   * canvas, and the tab reads the difference — and counted, for the verb.
+   */
+  options.sweeps?.onEnded((badgeId) => {
+    let sockets = 0;
+    for (const room of rooms.values()) {
+      for (const [socket, member] of room) {
+        if (member.badgeId !== badgeId) continue;
+        if (socket.readyState !== WebSocket.OPEN) continue;
+        socket.close(WS_NOT_ADMITTED, ENDED);
+        sockets += 1;
+      }
+    }
+    return { sockets };
+  });
+
+  /**
    * **The instance hangs up on a room it has fallen behind on** (#85). Every
    * client redials — the tab and the replica daemons alike — through the load
    * balancer, which routes to the current instance; one that lands back here
@@ -490,7 +522,18 @@ export function attachWebSockets(
       }
     }
     const badge = await resolveBadge(desk, presented);
-    if (!badge) return { code: WS_NO_BADGE, reason: "badge required" };
+    if (!badge) {
+      /**
+       * **A dead badge dialling again is told so** (operator phase 4), not sent
+       * to the door. `WS_NO_BADGE` means *get one*, and a tab hearing it knocks
+       * and redials at once — which for an ended badge would quietly reopen
+       * the canvas as a stranger under a page that a second ago said whose
+       * surface this was. The same word the room closed it with, so the tab
+       * that redialled reads the same sentence the tab that was closed does.
+       */
+      if (await resolveEnded(desk, presented)) return { code: WS_NOT_ADMITTED, reason: ENDED };
+      return { code: WS_NO_BADGE, reason: "badge required" };
+    }
     await desk.touch(badge.badgeId, new Date().toISOString());
     /**
      * **Taken down: refused here, before the door, with its own reason**

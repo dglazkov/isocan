@@ -16,6 +16,8 @@
  * now PRODUCES something the home can recognize later.
  */
 
+import type { EndReach } from "./ended.ts";
+
 // ---- carriers ----
 
 /** The browser's carrier: one HTTP-only cookie at the one origin.
@@ -339,6 +341,15 @@ export const badgeRoute = (badgeId: string): string =>
 export interface KillBadgeResponse {
   killed: BadgeSummary;
   swept: SweepReport;
+  /**
+   * **What the end reached at the moment it happened** (operator phase 4):
+   * the dead badge's own sockets closed with `ended`, and the waits it held
+   * woken. Before this, a kill ended recognition and reached nothing the
+   * badge was holding — the sweep reports only the badges `badgesIn` still
+   * returns, and a dead one is not among them. Optional, so a client reading
+   * an older home gets `undefined` rather than a crash.
+   */
+  reached?: EndReach;
 }
 
 /**
