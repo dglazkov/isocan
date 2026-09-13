@@ -19,6 +19,8 @@ import {
 } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { setNotice } from "../stores/canvasStore.ts";
+import { creationDestination, QueuedItemError } from "../lib/groupplacement.ts";
+import { groupsEnabled } from "../lib/canvasgroups.ts";
 import { addTextNode, restyleTextNode, reviseTextNode, textCommit } from "../lib/text.ts";
 
 /**
@@ -39,6 +41,8 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   const pending = useUiStore((s) => s.pendingText);
   const setPendingText = useUiStore((s) => s.setPendingText);
   const [body, setBody] = useState(pending?.body ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const area = useRef<HTMLTextAreaElement | null>(null);
   // The WHOLE composer, toolbar included — see the click-outside effect.
   const box = useRef<HTMLDivElement | null>(null);
@@ -78,6 +82,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     setPeekStyle(undefined);
     setPeekFace(undefined);
     done.current = false;
+    setSaving(false); setSaveError("");
     placeCaret.current = true;
     // `key` is the dependency ON PURPOSE and `pending.body` must NOT be one:
     // the body is what the person is typing, and re-running this on it would
@@ -241,6 +246,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
    * and travels with the words when they commit.
    */
   function restyle(next: { style?: TextStyle; face?: TextFace; paper?: Paper | null }) {
+    if (saving || done.current) return;
     const ui = useUiStore.getState();
     const at = ui.pendingText;
     if (!at) return;
@@ -278,11 +284,13 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     if (done.current) return;
     const at = pending!;
     done.current = true;
-    setPendingText(null);
+    const waitForHome = groupsEnabled() && at.itemId === null;
+    if (!waitForHome) setPendingText(null);
     // The rules for what a close means live in `lib/text.ts`, where they are
     // named and tested — this only carries them out.
     const decision = textCommit(body, at.body, at.itemId !== null);
-    if (decision.do === "nothing") return;
+    if (decision.do === "nothing") { if (waitForHome) setPendingText(null); return; }
+    if (waitForHome) { setSaving(true); setSaveError(""); }
     const words = decision.body;
     // The box under the caret IS what commits, whichever rule sized it above:
     // a new caption's measured words, a post-it's square, an existing node's
@@ -315,12 +323,20 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           at.style,
           at.face,
           at.paper ?? null,
+          creationDestination(at.containerId),
         );
       }
+      if (waitForHome && useUiStore.getState().pendingText === at) setPendingText(null);
     } catch (err) {
       // The words are gone from the screen by now, so say what they were:
       // a failed daemon must not silently eat a sentence somebody wrote.
       setNotice(`Could not place that text: ${err instanceof Error ? err.message : String(err)}`);
+      if (waitForHome && useUiStore.getState().pendingText === at) {
+        setSaveError(err instanceof Error ? err.message : String(err));
+        done.current = err instanceof QueuedItemError;
+      }
+    } finally {
+      if (useUiStore.getState().pendingText === at) setSaving(false);
     }
   }
 
@@ -406,6 +422,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
         ref={area}
         style={{ fontSize: size, fontFamily: TEXT_FACE_STACK[face], height }}
         value={body}
+        readOnly={saving || (done.current && saveError !== "")}
         placeholder="Type…"
         spellCheck
         onChange={(e) => setBody(e.target.value)}
@@ -422,6 +439,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           }
         }}
       />
+      {(saving || saveError) && <div className="text-composer-status" role="status">{saving ? "Saving…" : saveError}</div>}
     </div>
   );
 }

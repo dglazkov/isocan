@@ -1,5 +1,5 @@
 import type { TextAnchor } from "./text-anchor.ts";
-import type { GroupAction } from "./canvas-group-types.ts";
+import type { GroupAction, GroupCell, GroupPlacementPolicy } from "./canvas-group-types.ts";
 import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.ts";
 
 /**
@@ -209,6 +209,10 @@ export type Operation =
   | { type: "group.change"; action: GroupAction }
   | {
       type: "item.add";
+      /** Explicit destination on group canvases; attached ink inherits its target's parent. */
+      containerId?: string | null;
+      cell?: GroupCell;
+      groupPlacement?: GroupPlacementPolicy;
       itemId: string;
       version: NewVersion;
       width: number;
@@ -242,6 +246,13 @@ export type Operation =
   | { type: "item.resize"; itemId: string; width: number; height: number }
   | {
       type: "item.update";
+      /** Saved group brief reservation; omitted lets the home inspect the brief bytes. */
+      briefHeight?: number;
+      /** A group metadata edit and resize share one resolved content/geometry change. */
+      size?: { width: number; height: number };
+      containerId?: string | null;
+      cell?: GroupCell;
+      groupPlacement?: GroupPlacementPolicy;
       itemId: string;
       patch: MetaPatch;
       /** Rename the file under the CURRENT version too. Renaming an item and
@@ -250,8 +261,8 @@ export type Operation =
        * rather than in the patch (which canvases share). */
       filename?: string;
     }
-  | { type: "item.addVersion"; itemId: string; version: NewVersion }
-  | { type: "item.setCurrentVersion"; itemId: string; versionId: string }
+  | { type: "item.addVersion"; itemId: string; version: NewVersion; briefHeight?: number }
+  | { type: "item.setCurrentVersion"; itemId: string; versionId: string; briefHeight?: number }
   | {
       // internal: inverse of item.addVersion only
       type: "item.removeVersion";

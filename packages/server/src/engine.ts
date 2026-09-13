@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { StringDecoder } from "node:string_decoder";
 import type {
   Actor,
   ActorBindingRecord,
@@ -63,6 +64,7 @@ import {
   GroupConflictError,
   resolveCanvasGroupRequest,
   validateGroupForest,
+  isGroupItem,
 } from "@isocan/core";
 import { requireGroupClient } from "./canvas-groups.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
@@ -2453,7 +2455,7 @@ export class Engine {
     // correct search returns a free spot unchanged, so the layout survives the
     // algorithm changing.
     let normalizedOp: Operation =
-      op.type === "item.add"
+      op.type === "item.add" && runtime.state.project.groupMode !== "groups"
         ? {
             ...op,
             placement: {
@@ -2472,13 +2474,31 @@ export class Engine {
           }
         : op;
 
+    const contentOp = normalizedOp.type === "group.change" && normalizedOp.action.kind === "content" ? normalizedOp.action.operation : normalizedOp;
+    if (cause === undefined && runtime.state.project.groupMode === "groups" && (contentOp.type === "item.addVersion" || contentOp.type === "item.setCurrentVersion")) {
+      const item = runtime.state.canvas.items[contentOp.itemId];
+      if (item && isGroupItem(item) && contentOp.briefHeight === undefined) {
+        const version = contentOp.type === "item.addVersion" ? contentOp.version : item.versions.find((one) => one.id === contentOp.versionId);
+        if (version?.mimeType === "text/markdown") {
+          const stream = await this.store.openBlob(canvasId, version.blobHash);
+          if (!stream) throw new OpValidationError("bad-op", "group brief bytes are unavailable; upload them before changing the brief");
+          const decoder = new StringDecoder("utf8");
+          let nonempty = false;
+          for await (const chunk of stream) { if (/\S/u.test(decoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))) { nonempty = true; break; } }
+          nonempty ||= /\S/u.test(decoder.end());
+          const repaired = { ...contentOp, briefHeight: nonempty ? item.groupLayout?.briefHeight || 120 : 0 };
+          normalizedOp = normalizedOp.type === "group.change" ? { type: "group.change", action: { kind: "content", operation: repaired } } : repaired;
+        }
+      }
+    }
     const envelope = this.envelope(request, normalizedOp);
     if (cause === undefined) {
       // New group fields cannot enter a legacy canvas through generic item
       // APIs. Validate new writes here; old records still replay unchanged.
       if (runtime.state.project.groupMode !== "groups") {
         const introducesGroup = op.type === "item.add" ? op.properties?.kind === "group" || "containerId" in op || "groupLayout" in op
-          : op.type === "item.update" ? op.patch.properties?.kind === "group" || "containerId" in op.patch || "groupLayout" in op.patch : false;
+          : op.type === "item.update" ? op.patch.properties?.kind === "group" || "containerId" in op.patch || "groupLayout" in op.patch || "containerId" in op || "briefHeight" in op || "size" in op
+          : (op.type === "item.addVersion" || op.type === "item.setCurrentVersion") && "briefHeight" in op;
         if (introducesGroup) throw new OpValidationError("bad-op", "canvas groups require an explicitly enabled group canvas");
       }
       normalizedOp = resolveCanvasGroupRequest(runtime.state, normalizedOp, { actor: envelope.actor, ts: envelope.ts, opId: envelope.id });

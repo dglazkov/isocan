@@ -60,6 +60,10 @@ export function weightOf(entry: LogEntry): number {
   const op = entry.envelope.op;
   if (op.type === "group.change") {
     const intent = op.action.kind === "apply" ? op.action.change.intent : op.action.kind;
+    if (intent === "content") {
+      if (op.action.kind === "apply") return op.action.change.writes.some((write) => write.kind === "patch" && write.content?.versions) ? 6 : 1;
+      return op.action.kind === "content" && op.action.operation.type === "item.addVersion" ? 6 : 1;
+    }
     return intent === "transform" || intent === "frame" ? 0.4 : 5;
   }
   return WEIGHT[entry.envelope.op.type] ?? 0;

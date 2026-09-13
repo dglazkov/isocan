@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyOperation, applyGroupChange, blobsNamedBy, buildRecap, captureGroupExpectations, GroupConflictError, groupAncestors, groupChildren, groupContentBox, groupDescendants, groupFitBox, groupRemoveAction, groupResizeBox, groupScopedRoot, groupScopeRoots, groupSelectionRoots, groupTransform, groupTransformClosure, groupWrapAction, invertOperation, itemsTouchedBy, majors, resolveCanvasGroupRequest, resolveGroupOperation, validateGroupForest, weightOf } from "../src/index.ts";
+import { applyOperation, applyGroupChange, blobsNamedBy, buildRecap, harvestPreferences, captureGroupExpectations, GroupConflictError, groupArrangeAction, groupCellBox, groupDropPolicy, groupDropTarget, groupFitAction, groupGridNeedsRoom, groupPreviewBoxes, groupAncestors, groupChildren, groupContentBox, groupDescendants, groupFitBox, groupRemoveAction, groupResizeBox, groupScopedRoot, groupScopeRoots, groupSelectionRoots, groupTransform, groupTransformClosure, groupWrapAction, invertOperation, itemsTouchedBy, majors, resolveCanvasGroupRequest, resolveGroupOperation, validateGroupForest, weightOf } from "../src/index.ts";
 import type { CanvasState, GroupAction, GroupBox, GroupChange, GroupOperation, LogEntry, Operation } from "../src/index.ts";
 
 const actor = { id: "usr_test", name: "Test" };
@@ -304,4 +304,185 @@ describe("atomic records, inverses and deletion cohorts", () => {
     expect(() => change(card(), action as GroupAction)).toThrowError(/canvas group|canvas group changed/);
     try { change(card(), action as GroupAction); } catch (error) { expect(error).not.toBeInstanceOf(TypeError); }
   });
+});
+
+describe("atomic group insertion and content repair", () => {
+  it("places a card in its named cell without borrowing its old coordinates, then undoes creation and frame effects", () => {
+    const state = change(empty(), { kind: "create", group: { id: "g", title: "Acme grid", version: version("g"), box: { x: 0, y: 0, width: 1200, height: 1200 }, layout: { rows: ["A", "B"], columns: ["One", "Two"], rowCount: 2, columnCount: 2 } } }).state;
+    const inserted = change(state, { kind: "insert", item: { type: "item.add", itemId: "card", version: version("card"), width: 400, height: 400, placement: { x: -800, y: -700 }, containerId: "g", cell: { row: 2, column: 2 } } });
+    expect(inserted.state.canvas.items.card).toMatchObject({ x: 680, y: 664, width: 400, height: 400, containerId: "g" });
+    expect(inserted.op.action).toMatchObject({ kind: "apply", change: { intent: "insert", schemaVersion: 2 } });
+    const undone = undo(inserted.state, inserted.inverse);
+    expect(boxes(undone)).toEqual(boxes(state));
+    expect(undone.canvas.trash.find((entry) => entry.item.id === "card")?.item.createdBy).toEqual(actor);
+    expect(() => change(inserted.state, { kind: "insert", item: { type: "item.add", itemId: "too_large", version: version("large"), width: 900, height: 900, placement: { x: 0, y: 0 }, containerId: "g", cell: { row: 1, column: 1 } } })).toThrow(/cell/);
+  });
+
+  it("creates annotations directly in their target's group and retains the native overhang", () => {
+    const state = wrap(card(), "g", ["a"]).state;
+    const inserted = change(state, { kind: "insert", item: { type: "item.add", itemId: "ink", version: version("ink", "image/svg+xml"), width: 500, height: 300, placement: { x: 70, y: 180 }, properties: { kind: "drawing", annotates: "a" } } });
+    expect(inserted.state.canvas.items.ink).toMatchObject({ x: 70, y: 180, width: 500, height: 300, containerId: "g" });
+    expect(inserted.state.canvas.items.g!.x).toBe(46);
+    expect(() => change(state, { kind: "insert", item: { type: "item.add", itemId: "ink", version: version("ink", "image/svg+xml"), width: 500, height: 300, placement: { x: 70, y: 180 }, properties: { kind: "drawing", annotates: "a" }, containerId: null } })).toThrow(/differs/);
+  });
+
+  it("wraps a future frame's dangling annotation identically before or after target creation", () => {
+    const mark = { x: 50, y: -40, width: 90, height: 90 };
+    const first = wrap(ordinary(card(), "frameInk", mark, { kind: "drawing", annotates: "inner" }), "inner", ["a"]).state;
+    const second = ordinary(wrap(card(), "inner", ["a"]).state, "frameInk", mark, { kind: "drawing", annotates: "inner" });
+    expect(boxes(first)).toEqual(boxes(second));
+    expect(first.canvas.items.frameInk).toMatchObject(mark);
+    const nested = wrap(first, "outer", ["inner"]).state;
+    expect(nested.canvas.items.frameInk?.containerId).toBe("outer");
+  });
+
+  it("replaces brief content and header geometry in one record, preserving members and unrelated edits on inverse", () => {
+    const before = wrap(card(), "g", ["a"]).state;
+    const nextVersion = { ...version("brief"), visual: { blobHash: "visual_brief", mimeType: "image/png" } };
+    const updated = change(before, { kind: "content", operation: { type: "item.addVersion", itemId: "g", version: nextVersion, briefHeight: 120 } });
+    expect(updated.state.canvas.items.g).toMatchObject({ y: 0, height: 648, groupLayout: { briefHeight: 120 }, currentVersionId: nextVersion.id });
+    expect(updated.state.canvas.items.a).toEqual(before.canvas.items.a);
+    const renamed = undo(updated.state, { type: "item.update", itemId: "g", patch: { title: "Acme renamed", properties: { tint: "rose" } } });
+    const restored = undo(renamed, updated.inverse);
+    expect(restored.canvas.items.g).toMatchObject({ y: 120, height: 528, title: "Acme renamed", properties: { tint: "rose" }, currentVersionId: "ver_g" });
+    const later = undo(updated.state, { type: "item.addVersion", itemId: "g", version: version("newer") });
+    expect(() => undo(later, updated.inverse)).toThrow(GroupConflictError);
+    const entry: LogEntry = { seq: 1, envelope: { id: "op_brief", canvasId: before.project.id, actor, ts, op: updated.op }, inverse: updated.inverse };
+    expect(blobsNamedBy([entry]).get("visual_brief")).toEqual({ mimeType: "image/png", filename: "brief.md", size: 12 });
+    expect(weightOf(entry)).toBe(6);
+  });
+
+  it("keeps ordinary wording on its existing inverse path after geometry changes", () => {
+    const state = wrap(card(), "g", ["a"]).state;
+    const plain: Operation = { type: "item.update", itemId: "a", patch: { title: "Acme text" } };
+    const normalized = resolveCanvasGroupRequest(state, plain, { actor, ts, opId: "op_words" });
+    expect(normalized).toEqual(plain);
+    const inverse = invertOperation(state, normalized)!;
+    const renamed = undo(state, normalized);
+    const moved = change(renamed, { kind: "transform", itemIds: ["g"], by: { x: 20, y: 30 }, expected: captureGroupExpectations(renamed, ["g"]) }).state;
+    const restored = undo(moved, inverse);
+    expect(restored.canvas.items.a!.title).toBe(state.canvas.items.a!.title);
+    expect(restored.canvas.items.a).toMatchObject({ x: 120, y: 230 });
+  });
+
+  it("refuses malformed bounded insertion/content requests and under-guarded content replay", () => {
+    const state = wrap(card(), "g", ["a"]).state;
+    for (const operation of [
+      { type: "item.update", itemId: "g", patch: { title: 1 }, briefHeight: 120 },
+      { type: "item.update", itemId: "g", patch: { removeProperties: "kind" }, briefHeight: 120 },
+      { type: "item.update", itemId: "g", patch: {}, size: null },
+      { type: "item.addVersion", itemId: "g", version: { ...version("bad"), visual: { blobHash: 12 } } },
+      { type: "item.setCurrentVersion", itemId: "g", versionId: null },
+    ]) expect(() => change(state, { kind: "content", operation } as GroupAction)).toThrow(/canvas group/);
+    const resolved = change(state, { kind: "content", operation: { type: "item.update", itemId: "g", patch: { title: "Changed" }, briefHeight: 120 } }).op;
+    if (resolved.action.kind !== "apply") throw new Error("unresolved");
+    const tampered = structuredClone(resolved.action.change);
+    const patch = tampered.writes.find((write) => write.kind === "patch" && write.itemId === "g");
+    if (!patch || patch.kind !== "patch") throw new Error("no patch");
+    patch.content!.description = "unguarded";
+    expect(() => applyGroupChange(state, tampered, actor, ts)).toThrow(/precondition/);
+  });
+});
+
+describe("shared group layout intents", () => {
+  it("tidies actual placement units into saved grid cells and grows cells for footprints", () => {
+    let state = ordinary(card(), "b", { x: 1400, y: 1200, width: 300, height: 300 });
+    state = ordinary(state, "ink", { x: 70, y: 170, width: 480, height: 480 }, { kind: "drawing", annotates: "a" });
+    state = wrap(state, "g", ["a", "b"]).state;
+    const tidied = change(state, { kind: "layout", itemId: "g", layout: { rowCount: 1, columnCount: 2, columns: ["One", "Two"], rows: ["Row"] }, tidy: true });
+    const group = tidied.state.canvas.items.g!;
+    const first = groupCellBox(group, 1, 1); const second = groupCellBox(group, 1, 2);
+    expect(tidied.state.canvas.items.ink).toMatchObject({ x: first.x, y: first.y });
+    expect(tidied.state.canvas.items.a).toMatchObject({ x: first.x + 30, y: first.y + 30 });
+    expect(tidied.state.canvas.items.b).toMatchObject({ x: second.x, y: second.y });
+    expect(tidied.state.canvas.items.b!.y).not.toBe(1200);
+    expect(boxes(undo(tidied.state, tidied.inverse))).toEqual(boxes(state));
+  });
+
+  it("uses complete annotation footprints for align and raw fit normalizes ancestor plus child", () => {
+    let state = ordinary(card(), "ink", { x: 70, y: 170, width: 480, height: 480 }, { kind: "drawing", annotates: "a" });
+    state = ordinary(state, "b", { x: 900, y: 900, width: 100, height: 100 });
+    const aligned = change(state, groupArrangeAction(state, ["a", "ink", "b"], { kind: "align", edge: "top" })).state;
+    expect(aligned.canvas.items.b!.y).toBe(170);
+    expect(aligned.canvas.items.a!.y).toBe(200);
+    const wrapped = wrap(state, "g", ["a"]).state;
+    const fitted = change(wrapped, { kind: "frame", targets: [{ itemId: "g" }, { itemId: "a", box: { x: 0, y: 0, width: 80, height: 60 } }] }).state;
+    expect(fitted.canvas.items.a).toEqual(wrapped.canvas.items.a);
+    const planned = groupFitAction(wrapped, [{ itemId: "b", width: 200, height: 180 }]);
+    const moved = undo(wrapped, { type: "item.move", itemId: "b", x: 1300, y: 1300 });
+    expect(() => change(moved, planned)).toThrow(GroupConflictError);
+  });
+
+  it("offers deepest named header targets and previews one atomic move plus drop", () => {
+    let state = wrap(card(), "inner", ["a"]).state;
+    state = wrap(state, "outer", ["inner"]).state;
+    state = ordinary(state, "b", { x: 900, y: 900, width: 100, height: 100 });
+    const inner = state.canvas.items.inner!;
+    const header = { x: inner.x + 20, y: inner.y + 10 };
+    expect(groupDropTarget(state.canvas, header, ["b"])?.id).toBe("inner");
+    expect(groupDropPolicy(inner, header)).toBe("auto");
+    expect(groupDropTarget(state.canvas, header, ["outer"])).toBeNull();
+    const action: GroupAction = { kind: "transform", itemIds: ["b"], by: { x: -800, y: -800 }, containerId: "inner", groupPlacement: "auto", expected: captureGroupExpectations(state, ["b", "inner"]) };
+    const preview = groupPreviewBoxes(state, action);
+    const accepted = change(state, action);
+    for (const [id, box] of preview) expect(accepted.state.canvas.items[id]).toMatchObject(box);
+    expect(accepted.state.canvas.items.b?.containerId).toBe("inner");
+    expect(accepted.state.canvas.items.b!.y).toBeGreaterThanOrEqual(groupContentBox(accepted.state.canvas.items.inner!).y);
+    expect(boxes(undo(accepted.state, accepted.inverse))).toEqual(boxes(state));
+  });
+});
+
+it("rounds newly persisted roots and descendants consistently while inverse restores historical fractions", () => {
+  const before = wrap(card(), "g", ["a"]).state;
+  const historical = { ...before, canvas: { ...before.canvas, items: Object.fromEntries(Object.values(before.canvas.items).map((item) => [item.id, { ...item, x: item.x + 0.123456789 }])) } };
+  const action = request(historical, "g", { x: 80.123456789, y: 90.26894865525674, width: 632.5965770171149, height: 700.987654321 });
+  const preview = groupPreviewBoxes(historical, action);
+  const resized = change(historical, action);
+  expect(resized.state.canvas.items.g).toMatchObject({ x: 80.123457, y: 90.268949, width: 632.596577, height: 700.987654 });
+  for (const [id, box] of preview) expect(resized.state.canvas.items[id]).toMatchObject(box);
+  expect(boxes(undo(resized.state, resized.inverse))).toEqual(boxes(historical));
+});
+
+it("keeps historical v1 dense grid records readable and gives new grids usable full-clearance cells", () => {
+  const state = wrap(card(), "g", ["a"]).state;
+  const original = state.canvas.items.g!;
+  const labels = Array.from({ length: 20 }, (_, index) => `Row ${index + 1}`);
+  // This is the original v1 canonical patch shape: no schemaVersion or
+  // counts, and only its then-supported layout labels and geometry fields.
+  const historical: GroupChange = { canvasId: state.project.id, intent: "layout", expected: captureGroupExpectations(state, ["g"]), writes: [{ kind: "patch", itemId: "g", fields: { groupLayout: { rows: labels, columns: labels }, x: original.x - 120, y: original.y - 32, width: original.width + 120, height: original.height + 32 } }] };
+  const read = applyGroupChange(state, historical, actor, ts);
+  expect(read.canvas.items.g!.width).toBe(568);
+  expect(groupGridNeedsRoom(read.canvas.items.g!)).toBe(true);
+  expect(groupCellBox(read.canvas.items.g!, 20, 20).width).toBeGreaterThan(0);
+  expect(groupCellBox(read.canvas.items.g!, 20, 20).height).toBeGreaterThan(0);
+  const configured = change(state, { kind: "layout", itemId: "g", layout: { rowCount: 20, columnCount: 20 } });
+  expect(configured.op.action).toMatchObject({ kind: "apply", change: { schemaVersion: 2 } });
+  const group = configured.state.canvas.items.g!;
+  expect(groupGridNeedsRoom(group)).toBe(false);
+  expect(group.width).toBeGreaterThanOrEqual(828);
+  expect(group.height).toBeGreaterThanOrEqual(884);
+  const resized = change(configured.state, request(configured.state, "g", { x: group.x, y: group.y, width: 160, height: 160 })).state;
+  expect(groupCellBox(resized.canvas.items.g!, 20, 20).width).toBeGreaterThan(0);
+  expect(groupCellBox(resized.canvas.items.g!, 20, 20).height).toBeGreaterThan(0);
+});
+
+it("harvests a version choice recorded inside atomic brief/header repair", () => {
+  const made = wrap(card(), "g", ["a"]);
+  const added = change(made.state, { kind: "content", operation: { type: "item.addVersion", itemId: "g", version: version("next"), briefHeight: 120 } });
+  const chosen = change(added.state, { kind: "content", operation: { type: "item.setCurrentVersion", itemId: "g", versionId: "ver_g", briefHeight: 0 } });
+  const log: LogEntry[] = [made, added, chosen].map((one, index) => ({ seq: index + 1, envelope: { id: `op_choice_${index}`, canvasId: made.state.project.id, actor, ts, op: one.op }, inverse: one.inverse }));
+  expect(harvestPreferences(chosen.state.canvas, log)).toEqual([{ itemId: "g", title: "Acme g", chosen: "ver_g", chosenAt: ts, chosenBy: actor.name, chosenById: actor.id, against: ["ver_next"] }]);
+});
+
+it.each(["transform", "delete", "restore"] as const)("marks counted-grid %s preconditions and inverses as v2, and rejects a missing marker", (kind) => {
+  const configured = change(wrap(card(), "g", ["a"]).state, { kind: "layout", itemId: "g", layout: { rowCount: 2, columnCount: 2 } }).state;
+  const before = kind === "restore" ? change(configured, { kind: "delete", itemIds: ["g"] }).state : configured;
+  const action: GroupAction = kind === "transform" ? { kind, itemIds: ["g"], by: { x: 5, y: 7 }, expected: captureGroupExpectations(before, ["g"]) } : { kind, itemIds: ["g"] };
+  const result = change(before, action);
+  expect(result.op.action).toMatchObject({ kind: "apply", change: { schemaVersion: 2 } });
+  expect(result.inverse).toMatchObject({ type: "group.change", action: { kind: "apply", change: { schemaVersion: 2 } } });
+  expect(boxes(undo(result.state, result.inverse))).toEqual(boxes(before));
+  if (result.op.action.kind !== "apply") throw new Error("not resolved");
+  const { schemaVersion: _version, ...untagged } = result.op.action.change;
+  expect(() => applyGroupChange(before, untagged, actor, ts)).toThrow(/preconditions require group schema v2/);
 });

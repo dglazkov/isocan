@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-12
 see: sprint, context, mindmap, 2026-08-28-op-grouping.md
-note: phases 1–2 verify shared operations and membership on both surfaces; gesture/layout completion, context and migration remain in phases 3–5
+note: phases 1–3 verify shared membership, transforms, insertion and label layout on both surfaces; group context, lifecycle and migration remain in phases 4–5
 ---
 # From areas to groups
 
@@ -11,8 +11,9 @@ that mismatch: a **group is an item with explicit members**, and working on
 that item acts on the things it contains. Membership, movement, resizing,
 context and layout must mean the same thing in the browser and the CLI.
 
-The shared foundation and membership clients are implemented and verified in
-phases 1–2. The remaining experience below is the implementation contract.
+The shared foundation, membership clients, transforms and placement are
+implemented and verified in phases 1–3. The remaining experience below is the
+implementation contract.
 The initial review used `main` at `ed1520a6`;
 the checkout was subsequently updated to `19355501` on 12 September 2026.
 The conduct contract is now [phases.md](phases.md), with the user-visible

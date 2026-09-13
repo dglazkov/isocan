@@ -5,11 +5,12 @@ the mechanism. This is the conduct contract for implementing the reviewed
 plan. The conductor owns these documents and the release record; builders
 own only their assigned code, tests, CLI guide and product README changes.
 
-**Where we are:** phases 1–2 are CLOSED (12 Sep 2026); phases 3–5 are NOT STARTED.
-Canvas-groups phase 3 is next: transforms, frame fitting and label-safe layout.
-Shared operations and membership on both clients have passed the conductor's
-HTTP, persistence, real CLI and browser proofs. No phase waits on another
-project's implementation or on a person.
+**Where we are:** phases 1–2 are CLOSED (12 Sep 2026) and phase 3 is CLOSED
+(13 Sep 2026); phases 4–5 are NOT STARTED.
+Canvas-groups phase 4 is next: frozen group context and lifecycle coverage.
+Shared membership, transforms, insertion and protected label layout have passed
+real CLI, HTTP, persistence and browser verification, including a 1,000-item
+nested canvas. No phase waits on another project or on a person.
 
 **Rules for every phase.** Work on main. Every structural act is atomic,
 undoable and shared by both surfaces; a log undo label is not atomicity.
@@ -103,7 +104,7 @@ are assigned explicitly by the conductor to avoid overlapping ownership.
 
 ## Phase 3 — Transforms, frame fitting and label-safe layout
 
-**Status: NOT STARTED (2026-09-12).** Nothing built.
+**Status: CLOSED (2026-09-13).** Transforms, insertion and label layout passed the full suite, typecheck, independent HTTP/CLI walks and real browser ordering, cancellation and large-canvas proofs.
 
 Closes journey 2 and the remaining insertion/gesture parts of journeys 3 and
 6. Mechanisms: design Moving/resizing and Layout sections, existing-command
@@ -140,6 +141,12 @@ path, not by gesture, so no two own ItemView or main.ts concurrently.
 **Trajectory:**
 
 - **2026-09-12** — Atomic insertion and brief/header edits need effects beyond phase 1's geometry-only writes. Phase 3 explicitly extends that bounded schema and requires canvas-groups-v2; a v1-only reader cannot be promised support for records its reducer rejects.
+
+- **2026-09-12** — Dense historical v1 grids preserve their saved geometry and named bands. Only rendered inter-cell gaps compress, with a needs-room disclosure; new requests enforce full clearance. A real inspector/rendering probe exposed the negative-cell case, so replay is not used as a migration.
+- **2026-09-12** — Receipt completion, queue retirement and gesture cleanup need canvas and gesture ownership. Real delayed HTTP/echo ordering and navigation walks exposed double-fold and stale-completion risks; resumed offline writes and late uploads now preserve their original canvas without altering the newly opened one.
+- **2026-09-12** — The 1,000-item browser gate required a rendering change beyond faster core geometry. Unreadable document previews stand down, image faces remain visible, and an absent sprint starts no item clock. Final seeding caught up in 47 ms; measured pointer updates remain roughly 80–125 ms.
+
+- **2026-09-13** — Terminal access decisions outlive pending requests. Upstream operator controls exposed a same-canvas network failure overwriting the refusal page; both queue entry paths now preserve the terminal state. Real browser transport ordering and persisted-queue regressions bind later context and lifecycle requests.
 
 ## Phase 4 — Group context and lifecycle
 

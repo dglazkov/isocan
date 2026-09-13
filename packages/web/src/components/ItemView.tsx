@@ -1,5 +1,5 @@
-import { groupContentBox, groupChildren, groupAncestors, groupScopedRoot, isGroupItem } from "@isocan/core";
-import { enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
+import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, groupAncestors, groupScopedRoot, groupDropTarget, groupDropPolicy, groupTransformClosure, isGroupItem } from "@isocan/core";
+import { groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
@@ -52,7 +52,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
+import { counterScale, hasRoomForChrome, itemPreviewVisible, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 /**
@@ -70,6 +70,7 @@ import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
 import { useOnWall, useSprint, useVotesHiddenOn, voteMark } from "../lib/sprint.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
+import { beginGroupGesture } from "../lib/groupgestures.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
 import { useCanEdit } from "../lib/capability.ts";
 
@@ -153,6 +154,8 @@ function ItemViewInner({
   );
   const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
+  const groupBox = useUiStore((s) => s.groupPreview?.boxes.get(item.id));
+  const dropTarget = useUiStore((s) => s.groupDropTargetId === item.id);
   const entered = useUiStore((s) => s.enteredItemId === item.id);
   const renaming = useUiStore((s) => s.renamingItemId === item.id);
   const peeked = useUiStore((s) => s.peekedItemId === item.id);
@@ -177,11 +180,12 @@ function ItemViewInner({
   // When the label was last pressed, for spotting a double-press on it.
   const labelPress = useRef(0);
 
-  const x = (drag ? item.x + drag.dx : item.x) + (resize?.dx ?? 0);
-  const y = (drag ? item.y + drag.dy : item.y) + (resize?.dy ?? 0);
-  const width = resize?.width ?? item.width;
-  const height = resize?.height ?? item.height;
+  const x = groupBox?.x ?? (drag ? item.x + drag.dx : item.x) + (resize?.dx ?? 0);
+  const y = groupBox?.y ?? (drag ? item.y + drag.dy : item.y) + (resize?.dy ?? 0);
+  const width = groupBox?.width ?? resize?.width ?? item.width;
+  const height = groupBox?.height ?? resize?.height ?? item.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
+  const visual = visualFaceOf(current);
   const stackDepth = Math.min(item.versions.length - 1, 2);
   // An item's chrome — its name and its version count — is UI, not content:
   // it should stay the size of a label however far out you zoom, the way the
@@ -315,16 +319,6 @@ function ItemViewInner({
   // node IS its words, so a card around them would be a card around a
   // sentence somebody typed onto a canvas.
   const isText = isTextItem(item);
-  /**
-   * The kinds whose body is a real document rather than drawn markup — the
-   * ones worth standing down when they are nowhere near the window. `liveDoc`
-   * joins them: a Google Doc shown live is somebody else's page in a frame.
-   *
-   * Off `kind` above rather than a second `itemKind` call, which also means a
-   * module whose icon is a screen stands down too — conservative in the
-   * direction that costs a reload rather than a gigabyte.
-   */
-  const heavy = kind === "screen" || kind === "site" || kind === "canvas" || liveDoc;
   // A speaker note names its slide on the canvas (core/slides.ts).
   const noteTargetId = noteTarget(item);
   const noteSlideTitle = useCanvasStore((s) => (noteTargetId ? (s.canvas?.items[noteTargetId]?.title ?? "a slide") : null));
@@ -335,7 +329,8 @@ function ItemViewInner({
   // tool used inside it still reaches the canvas. See `core/area.ts`.
   const isCanvasGroup = isGroupItem(item);
   const isAreaItem = isArea(item) || isCanvasGroup;
-  const groupContent = isCanvasGroup ? groupContentBox(item) : null;
+  const displayedGroup = { ...item, x, y, width, height };
+  const groupContent = isCanvasGroup ? groupContentBox(displayedGroup) : null;
   const memberCount = useCanvasStore((s) => s.canvas && isCanvasGroup ? groupChildren(s.canvas, item.id).length : 0);
   const groupDepth = useCanvasStore((s) => s.canvas ? groupAncestors(s.canvas, item.id).length : 0);
   /** See `picture` above: the mark appears once the chrome has gone, and only
@@ -500,7 +495,8 @@ function ItemViewInner({
     // An area carries what is on it, the way it carries its annotations: the
     // sheet is the handle for everything placed there, and membership is
     // read off geometry at the moment of the grab (`core/area.ts`).
-    const dragIds = canvasNow
+    const semantic = groupsEnabled() ? beginGroupGesture(chosen) : null;
+    const dragIds = semantic ? groupTransformClosure(semantic.start.canvas, semantic.roots) : canvasNow
       ? [
           ...new Set(
             chosen.flatMap((id) => {
@@ -520,9 +516,14 @@ function ItemViewInner({
     frame.setPointerCapture(e.pointerId);
     const start = { x: e.clientX, y: e.clientY };
     let moved = false;
+    const draggingIds = new Set(dragIds);
+    const capturedItems = semantic?.start.canvas.items;
+    const capturedMoving = capturedItems ? unionBox(dragIds.map((id) => capturedItems[id]).filter((one) => one !== undefined)) : null;
+    const capturedOthers = capturedItems ? Object.values(capturedItems).filter((other) => !draggingIds.has(other.id)) : null;
 
     function onMove(ev: PointerEvent) {
       const ui = useUiStore.getState();
+      if (semantic && !semantic.active()) return;
       const scale = ui.viewport.scale;
       if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_SLOP) return;
       moved = true;
@@ -532,18 +533,25 @@ function ItemViewInner({
       // Align to what is already on the canvas. Shift is read from the MOVE,
       // not the press — a shift-press is "add to selection", so the magnet has
       // to be something you reach for mid-gesture.
-      const items = useCanvasStore.getState().canvas?.items ?? {};
-      const dragging = dragIds.map((id) => items[id]).filter((one) => one !== undefined);
-      const moving = unionBox(dragging);
+      const items = capturedItems ?? useCanvasStore.getState().canvas?.items ?? {};
+      const moving = semantic ? capturedMoving : unionBox(dragIds.map((id) => items[id]).filter((one) => one !== undefined));
       if (moving) {
-        const others = Object.values(items).filter((other) => !dragIds.includes(other.id));
+        const others = capturedOthers ?? Object.values(items).filter((other) => !draggingIds.has(other.id));
         const threshold = (ev.shiftKey ? SNAP_PX_MAGNETIC : SNAP_PX) / scale;
         const snap = snapBox({ ...moving, x: moving.x + dx, y: moving.y + dy }, others, threshold);
         dx += snap.dx;
         dy += snap.dy;
         ui.setGuides(snap.guides, snap.spacing);
       }
-      ui.setDrag({ itemIds: dragIds, dx, dy, moved });
+      if (semantic) {
+        const point = screenToWorldPoint(ev.clientX, ev.clientY);
+        const target = ev.altKey ? null : groupDropTarget(semantic.start.canvas, point, semantic.roots);
+        // Staying outside the current parent grows it; only a named different
+        // destination deliberately changes the relationship.
+        const destination = target && semantic.roots.some((id) => semantic.start.canvas.items[id]?.containerId !== target.id) ? target : null;
+        ui.setGroupDropTarget(destination?.id ?? null);
+        semantic.move(dx, dy, destination?.id, destination ? groupDropPolicy(destination, point) : undefined);
+      } else ui.setDrag({ itemIds: dragIds, dx, dy, moved });
     }
     function onUp(ev: PointerEvent) {
       if (frame.hasPointerCapture(ev.pointerId)) frame.releasePointerCapture(ev.pointerId);
@@ -551,6 +559,12 @@ function ItemViewInner({
       frame.removeEventListener("pointerup", onUp);
       frame.removeEventListener("pointercancel", onUp);
       const state = useUiStore.getState();
+      if (semantic) {
+        if (ev.type === "pointercancel" || !moved) semantic.cancel();
+        else void semantic.commit(canvasId, actor);
+        return;
+      }
+      if (ev.type === "pointercancel") { state.setDrag(null); state.setGuides([]); return; }
       state.setGuides([]); // the lines belong to the gesture, not the canvas
       const final = state.drag;
       if (!moved || !final) {
@@ -597,6 +611,30 @@ function ItemViewInner({
     e.stopPropagation();
     const handle = e.currentTarget as HTMLElement;
     handle.setPointerCapture(e.pointerId);
+    const semantic = groupsEnabled() ? beginGroupGesture([item.id]) : null;
+    if (semantic) {
+      const startPoint = { x: e.clientX, y: e.clientY };
+      const original = semantic.start.canvas.items[item.id]!;
+      const sx = corner.includes("w") ? -1 : 1;
+      const sy = corner.includes("n") ? -1 : 1;
+      const anchor = ({ nw: "se", ne: "sw", sw: "ne", se: "nw" } as const)[corner];
+      function move(ev: PointerEvent) {
+        const scale = useUiStore.getState().viewport.scale;
+        semantic!.resize(item.id, original.width + (ev.clientX - startPoint.x) / scale * sx, original.height + (ev.clientY - startPoint.y) / scale * sy, anchor, ev.shiftKey);
+      }
+      function finish(ev: PointerEvent) {
+        if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", finish);
+        handle.removeEventListener("pointercancel", finish);
+        if (ev.type === "pointercancel") semantic!.cancel();
+        else void semantic!.commit(canvasId, actor);
+      }
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", finish);
+      handle.addEventListener("pointercancel", finish);
+      return;
+    }
     const start = { x: e.clientX, y: e.clientY, width: item.width, height: item.height };
     // Sign multipliers: which way the pointer delta affects width/height.
     const sx = corner === "nw" || corner === "sw" ? -1 : 1;
@@ -615,12 +653,13 @@ function ItemViewInner({
       useUiStore.getState().setResize({ itemId: item.id, width: newW, height: newH, dx, dy });
     }
     function onUp(ev: PointerEvent) {
-      handle.releasePointerCapture(ev.pointerId);
+      if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
+      handle.removeEventListener("pointercancel", onUp);
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
       const state = useUiStore.getState();
       const final = state.resize;
-      if (final && (final.width !== item.width || final.height !== item.height)) {
+      if (ev.type !== "pointercancel" && final && (final.width !== item.width || final.height !== item.height)) {
         const resizeOp = {
           type: "item.resize",
           itemId: item.id,
@@ -643,6 +682,7 @@ function ItemViewInner({
     }
     handle.addEventListener("pointermove", onMove);
     handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
   }
 
   /**
@@ -744,7 +784,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? " canvas-group" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? " canvas-group" : ""}${dropTarget ? " group-drop-target" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       data-group-id={isCanvasGroup ? item.id : undefined}
       /* One id in the store rather than a flag per item: moving the pointer
@@ -848,8 +888,10 @@ function ItemViewInner({
         </div>
       )}
       {isCanvasGroup && <>
+        {dropTarget && <span className="group-drop-label" role="status">Add to {item.title}</span>}
+        <GroupGrid item={displayedGroup} />
         <span className="group-border north" /><span className="group-border south" /><span className="group-border east" /><span className="group-border west" />
-        {(item.groupLayout?.briefHeight ?? 0) > 0 && <div className="group-brief" style={{ top: item.groupLayout?.titleHeight ?? 56, height: item.groupLayout?.briefHeight, left: groupContent!.x - item.x, right: item.groupLayout?.inset ?? 24 }}><GroupBrief canvasId={canvasId} blobHash={current.blobHash} /></div>}
+        {(item.groupLayout?.briefHeight ?? 0) > 0 && <div className="group-brief" style={{ top: item.groupLayout?.titleHeight ?? 56, height: item.groupLayout?.briefHeight, left: groupContent!.x - x, right: item.groupLayout?.inset ?? 24 }}><GroupBrief canvasId={canvasId} blobHash={current.blobHash} /></div>}
       </>}
       {mark !== null && reactionPointsOf(item, mark).length > 0 && (
         /* The heat map: the mark, drawn where each person put it. Under the
@@ -1077,20 +1119,18 @@ function ItemViewInner({
           >
             T
           </span>
-        ) : heavy && !nearWindow ? (
+        ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !itemPreviewVisible(width, height, scale, nearWindow, entered) ? (
           /**
            * Far away, or the tab is in the background: the box stays exactly
            * where it is and what it holds stands down.
            *
-           * Only the three kinds that mount a REAL document — a screen, a
-           * framed site, a canvas on a canvas. Markdown, images and text are
-           * left alone deliberately: they cost little, the browser already
-           * manages decoded images for us, and tearing them down on every pan
-           * would trade a memory problem for a flicker one.
+           * This includes Markdown: a thousand tiny cards previously mounted
+           * a thousand parsers and attention trees. The shell, title, marks
+           * and pointer handlers remain; readable nearby content mounts as
+           * the camera approaches. The observer's margin/grace avoids churn.
            */
           <span className="item-standby" aria-hidden="true" />
         ) : (() => {
-          const visual = visualFaceOf(current);
           return (
             <VersionContent
               canvasId={canvasId}
@@ -1851,4 +1891,33 @@ function GroupBrief({ canvasId, blobHash }: { canvasId: string; blobHash: string
     return () => { live = false; };
   }, [canvasId, blobHash]);
   return <>{text}</>;
+}
+
+/** Saved grid gutters use the same cell boxes as placement; labels never cover cell contents. */
+function GroupGrid({ item }: { item: Item }) {
+  const layout = item.groupLayout;
+  const rows = layout?.rowCount ?? layout?.rows?.length ?? 1;
+  const columns = layout?.columnCount ?? layout?.columns?.length ?? 1;
+  if (!layout || (rows === 1 && columns === 1 && !layout.rows?.length && !layout.columns?.length)) return null;
+  // Historical snapshots can predate the writer's grid-size constraint.
+  // Keep the frame reachable for repair instead of crashing the canvas.
+  try { groupCellBox(item, 1, 1); }
+  catch { return <span className="group-drop-label">Grid needs more room</span>; }
+  return <>
+    {groupGridNeedsRoom(item) && <span className="group-drop-label">Grid needs more room</span>}
+    <div className="area-grid group-grid" aria-hidden>
+    {Array.from({ length: columns }, (_, index) => {
+      const cell = groupCellBox(item, 1, index + 1);
+      return <span key={`column-${index}`} className="group-column-label" style={{ left: cell.x - item.x, top: cell.y - item.y - (layout.columnGutter ?? 32), width: cell.width, height: layout.columnGutter ?? 32 }}>{layout.columns?.[index] ?? ""}</span>;
+    })}
+    {Array.from({ length: rows }, (_, index) => {
+      const cell = groupCellBox(item, index + 1, 1);
+      return <span key={`row-${index}`} className="group-row-label" style={{ left: cell.x - item.x - (layout.rowGutter ?? 120), top: cell.y - item.y, width: layout.rowGutter ?? 120, height: cell.height }}>{layout.rows?.[index] ?? ""}</span>;
+    })}
+    {Array.from({ length: rows * columns }, (_, index) => {
+      const cell = groupCellBox(item, Math.floor(index / columns) + 1, index % columns + 1);
+      return <span className="group-grid-cell" key={index} style={{ left: cell.x - item.x, top: cell.y - item.y, width: cell.width, height: cell.height }} />;
+    })}
+    </div>
+  </>;
 }

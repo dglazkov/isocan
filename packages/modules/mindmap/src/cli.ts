@@ -95,7 +95,7 @@ async function addMapNode(
   const { width, height } = host.sizeFor(undefined, textBox(words, "body"));
   const itemId = newItemId();
   const at = parent ? mapNodeSpot(snapshot, mapId, parent) : { x: 0, y: 0 };
-  await host.sendOp(ctx, canvasId, {
+  const result = await host.sendOp(ctx, canvasId, {
     type: "item.add",
     itemId,
     version: {
@@ -108,6 +108,7 @@ async function addMapNode(
     width,
     height,
     placement: at,
+    ...(snapshot.project.groupMode === "groups" && parent ? { containerId: parent.containerId ?? null, groupPlacement: "auto" as const } : {}),
     title: textTitle(words),
     properties: {
       ...TEXT_PROPERTIES,
@@ -115,7 +116,7 @@ async function addMapNode(
       ...(parent ? { [MAP_PARENT_PROP]: parent.id } : {}),
     },
   });
-  return { itemId, ...at };
+  return { itemId, ...host.insertionReceiptPlacement(result.envelope.op, itemId) };
 }
 
 function register(host: CliHost): void {
@@ -127,8 +128,10 @@ function register(host: CliHost): void {
     .description("Start a map with a root node")
     .option("--canvas <canvas>")
     .option("--at <x,y>", "place the root at world coordinates")
+    .option("--in <group>", "insert the root into a canvas group")
+    .option("--cell <row,column>", "insert in a 1-based grid cell; requires --in")
     .action(
-      run(async (words: string[], opts: { at?: string }, cmd: Command) => {
+      run(async (words: string[], opts: { at?: string; in?: string; cell?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);

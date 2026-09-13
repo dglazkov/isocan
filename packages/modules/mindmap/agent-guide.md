@@ -28,3 +28,7 @@ a `.md`, and the human can drag any node anywhere. The lines are worked out
 from where the nodes ARE, so they follow a drag rather than needing to be
 redrawn. Mind maps are a module (`@isocan/mindmap`): a home without it still
 shows the nodes as text, and only the lines and these verbs are gone.
+
+`map new` accepts `--in <group>` and `--cell row,column` on group-enabled
+canvases. New child nodes inherit their map parent's canvas group; the map's
+graph parent and the canvas container remain separate relations.

@@ -39,7 +39,7 @@ import {
 const DRAG_MIME = "application/vnd.isocan.sticker-id";
 
 /** One item, made from one sticker, at a point. The whole write, as data. */
-function placeSticker(blobHash: string, size: number, sticker: StickerDef, at: { x: number; y: number }): Operation {
+function placeSticker(blobHash: string, size: number, sticker: StickerDef, at: { x: number; y: number }, containerId?: string | null): Operation {
   return {
     type: "item.add",
     itemId: newItemId(),
@@ -47,6 +47,7 @@ function placeSticker(blobHash: string, size: number, sticker: StickerDef, at: {
     width: STICKER_SIZE.width,
     height: STICKER_SIZE.height,
     placement: { x: Math.round(at.x - STICKER_SIZE.width / 2), y: Math.round(at.y - STICKER_SIZE.height / 2) },
+    ...(containerId !== undefined ? { containerId, groupPlacement: "auto" as const } : {}),
     // The thing `dropFile` had nowhere to put: a name a person reads in the
     // files panel, in search, and in a comment that mentions it.
     title: sticker.name,
@@ -161,13 +162,13 @@ export const stickersWeb: WebModule<never, typeof StickerView, typeof StickerIns
        * one `dropFile`, and the second step is where the title, the size and
        * the placement live — none of which a host helper could have known.
        */
-      run: async ({ data, at, host }: DropFacts) => {
+      run: async ({ data, at, host, containerId }: DropFacts) => {
         const sticker = findSticker(data);
         if (!sticker) return; // a claim on a mime is not a promise about its payload
         const file = stickerFile(sticker);
         const blob = new Blob([file.body], { type: STICKER_MIME });
         const put = await host.putBlob(blob, file.filename);
-        return [placeSticker(put.blobHash, put.size, sticker, at)];
+        return [placeSticker(put.blobHash, put.size, sticker, at, containerId)];
       },
     },
   ],

@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { CanvasSnapshotResponse } from "@isocan/core";
-import type { Canvas, CoreModule, Item, Operation } from "@isocan/core";
+import type { Canvas, CoreModule, GroupBox, Item, Operation, Placement } from "@isocan/core";
 import type { Ctx } from "./ctx.ts";
 import type { FencedRequest, FencedRun } from "./sandbox.ts";
 
@@ -24,6 +24,8 @@ export interface CliHost {
   resolveCanvas: (ctx: Ctx) => Promise<Canvas>;
   resolveItem: (snapshot: CanvasSnapshotResponse, ref: string) => Item;
   sendOp: (ctx: Ctx, canvasId: string | null, op: Operation, group?: string) => Promise<{ envelope: { op: Operation } }>;
+  /** Preserve ordinary placement JSON; group insertions report their accepted complete frame. */
+  insertionReceiptPlacement: (op: Operation, itemId: string) => GroupBox | Extract<Placement, { x: number }>;
   printJson: (value: unknown) => void;
   sizeFor: (spec: string | undefined, fallback: { width: number; height: number }) => { width: number; height: number };
   placementFor: (

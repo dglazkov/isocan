@@ -325,6 +325,8 @@ export interface OverlayFacts {
  * than adding one of its own.
  */
 export interface DropFacts {
+  /** Captured explicit destination; async module work must not reread changing UI scope. */
+  containerId?: string | null;
   canvasId: string;
   /** The dragged payload, by the mime this drop matched. */
   data: string;

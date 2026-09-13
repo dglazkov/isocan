@@ -22,6 +22,7 @@ import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { addFiles } from "../lib/upload.ts";
+import { creationDestination } from "../lib/groupplacement.ts";
 
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { goStage } from "../lib/goStage.ts";
@@ -117,6 +118,8 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
 
   async function add(entry: TreeEntry) {
     if (adding) return;
+    const destination = creationDestination();
+    const { viewport } = useUiStore.getState();
     setAdding(entry.path);
     try {
       const bytes = await readBoundFile(canvasId, entry.path).catch(() => null);
@@ -127,7 +130,6 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
       // back, instead of making the ＋ a button that does nothing twice.
       if (!bytes) return;
       const name = entry.path.split("/").pop()!;
-      const { viewport } = useUiStore.getState();
       // Not `chosen`: the middle of the window is a spot found FOR the file,
       // not one somebody pointed at, so the daemon may tidy it clear.
       const ids = await addFiles(
@@ -135,6 +137,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
         actor,
         [new File([bytes], name)],
         screenToWorld(viewport, window.innerWidth / 2, window.innerHeight / 2),
+        destination,
       );
       if (ids[0]) {
         /**
@@ -160,7 +163,7 @@ export function WbFiles({ canvasId, actor }: { canvasId: string; actor: Actor })
             patch: { properties: { [FILE_PROP]: where } },
           });
         }
-        goStage(navigate, workbenchItemPath(canvasId, ids[0]));
+        if (useCanvasStore.getState().canvasId === canvasId) goStage(navigate, workbenchItemPath(canvasId, ids[0]));
       }
     } finally {
       setAdding(null);

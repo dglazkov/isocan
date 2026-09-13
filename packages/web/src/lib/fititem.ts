@@ -1,7 +1,8 @@
 import type { Actor } from "@isocan/core";
-import { fitMoves } from "@isocan/core";
+import { groupFitAction, isGroupItem, fitMoves } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 
+import { changeCanvasGroup, groupsEnabled } from "./canvasgroups.ts";
 import { naturalSize } from "./measure.ts";
 
 /**
@@ -17,17 +18,24 @@ import { naturalSize } from "./measure.ts";
  */
 export async function fitToContent(canvasId: string, actor: Actor, itemIds: string[]): Promise<void> {
   const state = useCanvasStore.getState();
+  if (state.canvasId !== canvasId) return;
   const canvas = state.canvas;
   if (!canvas) return;
 
   const targets: { itemId: string; width: number; height: number }[] = [];
   for (const id of itemIds) {
     const item = canvas.items[id];
-    if (!item) continue;
+    if (!item || (groupsEnabled() && isGroupItem(item))) continue;
     const version = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
     if (!version) continue;
     const size = await naturalSize(canvasId, version.blobHash, version.mimeType);
     targets.push({ itemId: id, ...size });
+  }
+  if (useCanvasStore.getState().canvasId !== canvasId) return;
+  if (groupsEnabled()) {
+    const frames = itemIds.filter((id) => canvas.items[id] && isGroupItem(canvas.items[id]!)).map((itemId) => ({ itemId }));
+    if (frames.length || targets.length) await changeCanvasGroup(canvasId, actor, groupFitAction({ project: state.project!, canvas }, [...frames, ...targets]));
+    return;
   }
   if (targets.length === 0) return;
 

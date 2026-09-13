@@ -290,11 +290,31 @@
  *
  * Rounded to the next hundred, the margin is 51 bytes. GOAL remains 640,000;
  * JUMP remains 20,000. The next change still has to account for its own bytes.
+ *
+ * **702,400 → 719,900 on 12 Sep, after measuring and trimming group phase 3.**
+ * Captured source initially added 24,374 bytes, chiefly the v2 bounded effects,
+ * shared placement/replay, and gesture previews. No new third-party eager
+ * dependency was added. The same-source comparison deferred AddPopover until
+ * Add opens and content fitting until Shift+F: together they removed 11,474
+ * entry bytes. Final nudge timer ownership and cross-canvas upload correctness
+ * add 683 bytes to the preceding 718,468-byte build. Final queue ownership,
+ * preview and idle-clock gates add 724 more. The conductor's fresh
+ * 719,875-byte entry is a net 17,526 over phase 2. This explicitly reviewed
+ * cost leaves 25 bytes of margin; GOAL 640,000 and JUMP 20,000 stay unchanged.
+ *
+ * **719,900 → 721,200 on 13 Sep, after measuring the upstream operator merge.**
+ * The original phase-3 entry was 719,875 bytes. Upstream refusal handling added
+ * 5,367 and preserving terminal decisions during delayed writes added 125.
+ * Moving the shared REFUSED constant to the eager errors leaf, while keeping
+ * its public re-export, deferred the operator's CIDR and refusal helpers and
+ * removed 4,195 entry bytes. The measured result is 721,172: a net 1,297 over
+ * the original build, with no new eager dependency. The approved ceiling has
+ * 28 bytes of margin; GOAL 640,000 and JUMP 20,000 remain unchanged.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 702_400;
+export const CEILING = 721_200;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

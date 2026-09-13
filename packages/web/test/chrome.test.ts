@@ -13,6 +13,7 @@ import {
   ROW_END_ROOM,
   UNDER_ROW_PAD,
   hasRoomForChrome,
+  itemPreviewVisible,
   nameFits,
   nameRoom,
   titleRow,
@@ -760,5 +761,17 @@ describe("the editor's theme", () => {
     const bare = [...css.matchAll(/^\.cm-[\w-]+/gm)];
     expect(bare, "a .cm- rule outside .stage-editor-cm").toEqual([]);
     expect(css).toMatch(/\.stage-editor-cm \.cm-editor\s*\{/);
+  });
+});
+
+
+describe("document previews retain their shell without mounting unreadable contents", () => {
+  it("keeps all 1,000 overview cards below the document mounting threshold", () => {
+    expect(Array.from({ length: 1000 }, () => itemPreviewVisible(180, 120, 0.09, true, false)).filter(Boolean)).toHaveLength(0);
+  });
+  it("mounts readable nearby content and honors explicit entry", () => {
+    expect(itemPreviewVisible(180, 120, 1, true, false)).toBe(true);
+    expect(itemPreviewVisible(180, 120, 1, false, false)).toBe(false);
+    expect(itemPreviewVisible(180, 120, 0.09, false, true)).toBe(true);
   });
 });

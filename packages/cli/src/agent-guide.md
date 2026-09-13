@@ -2182,9 +2182,13 @@ anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 **Canvas membership on group-enabled canvases:** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
 `canvas group wrap <items...> --title <title> [--note text]`,
 `canvas group ls`, `canvas group show <group> [--recursive]`,
-`canvas group add <group> <items...> [--place]`,
+`canvas group add <group> <items...> [--place] [--cell r,c]`,
 `canvas group remove <items...> [--to-root]`, and
-`canvas group ungroup <groups...>`. Every mutation accepts `--dry-run`:
+`canvas group ungroup <groups...>`, `canvas group resize <group> WxH [--anchor nw|ne|sw|se]`,
+`canvas group frame <groups...> --fit` (or one group with `--size WxH`/`--at x,y`),
+`canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy]`,
+and `canvas group grid <group> RxC [--rows names] [--cols names] [--tidy]`.
+Grid labels are comma-separated; cells count from 1. Every mutation accepts `--dry-run`:
 it validates through the shared resolver and reports affected roots, parent
 changes, final boxes and frame adjustments without uploading note bytes or
 writing an operation. Every command supports `--json`. IDs are exact; title
@@ -2192,7 +2196,7 @@ and ID prefixes must be unique, and ambiguities list candidates.
 
 Wrapping preserves the arrangement and keeps nested groups intact. Add
 preserves positions and fits the destination frame; `--place` finds room
-below its current members. `mv <item> --in <group> [--dry-run]` uses that same
+below its current members. `mv <item> --in <group> [--cell r,c] [--dry-run]` uses that same
 atomic add-and-place operation. Remove promotes each item to its group's
 parent, or directly to the canvas with `--to-root`; it preserves geometry.
 Ungroup trashes the frames and preserves their children. These are single
@@ -2200,6 +2204,23 @@ undoable acts, including required ancestor frame changes. An overlapping
 item is not a member. `show --recursive --json` lists every descendant;
 ordinary `show` lists direct members and reports direct/total counts, parent,
 outer/content boxes and layout settings.
+
+On group canvases, `mv` and `set --size` transform descendants and attached ink once.
+The resize anchor names the fixed corner; `nw` is the default. **Fit frame**
+changes the group's border around the arrangement without scaling members.
+`fit`, `align`, `distribute` and `tidy` share the same placement-unit semantics
+and accept `--dry-run`; group-plus-child selections do not move a child twice.
+`tidy --in <group>` arranges direct members inside the saved label reservations.
+`ls --in <group>` reads direct membership; add `--recursive` for descendants.
+
+`add`, `text`, `browse`, `gdoc add`, `canvas place`, `map new` and `sticker drop`
+accept `--in <group>` and `--cell r,c`. A named cell either holds the whole
+placement unit or the request refuses. `--at` with `--in` retains the explicit
+parent and requests exact world placement. The writer creates the item and
+repairs containing frames in one operation; CLI output reports its final box.
+New annotated drawings inherit their target's group automatically. New sandbox
+transcripts inherit the program's group; later versions retain the transcript's
+own parent, even after it has been moved elsewhere.
 
 Attached ink follows its target's membership. To remove the ink independently,
 first use `set <ink> --rm-prop annotates --rm-prop region` to detach its

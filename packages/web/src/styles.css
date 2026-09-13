@@ -6638,6 +6638,11 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* Explicit groups keep their world-space header and leave interiors available to tools. */
 .item.canvas-group .area-title { color: var(--ink); }
+.item.group-drop-target { outline: 3px solid var(--accent); }
+.group-drop-label { position: absolute; right: 12px; top: 8px; padding: 4px 8px; background: var(--card); color: var(--accent-text); border: 1px solid var(--accent); border-radius: 6px; pointer-events: none; }
+.group-column-label, .group-row-label { position: absolute; padding: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); box-sizing: border-box; }
+.group-grid-cell { position: absolute; border: 1px dashed var(--line); box-sizing: border-box; }
+.text-composer-status { position: absolute; top: 100%; padding: 8px; background: var(--card); color: var(--ink); font-size: 13px; }
 .item.canvas-group:not(.renaming) .item-titlebar { display: none; }
 .item.canvas-group .group-border { position: absolute; pointer-events: auto; }
 .item.canvas-group .group-border.north, .item.canvas-group .group-border.south { left: 0; right: 0; height: calc(5px / var(--scale, 1)); }
@@ -6655,7 +6660,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .canvas-group-form > label { display: block; }
 .canvas-group-form input:not([type=checkbox]), .canvas-group-form select, .canvas-group-form textarea { display: block; margin-top: 6px; width: 100%; padding: 8px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
 .canvas-group-form textarea { min-height: 100px; }
-.canvas-group-form fieldset { max-height: 260px; overflow: auto; }
+.canvas-group-form > fieldset { max-height: 260px; overflow: auto; }
 .canvas-group-form fieldset label { display: flex; gap: 8px; padding: 5px; }
 .canvas-group-form li { display: flex; justify-content: space-between; padding: 5px; }
 .canvas-group-controls { display: flex; flex-wrap: wrap; gap: 8px; }

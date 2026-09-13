@@ -1,4 +1,4 @@
-import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, isGroupItem } from "@isocan/core";
 import { groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints } from "../lib/viewport.ts";
 import { moduleDropFor } from "../modules.ts";
+import { creationDestination, selectCreatedItems } from "../lib/groupplacement.ts";
 import { webHostFor } from "../lib/modulehost.ts";
 import { newGroupId } from "@isocan/core";
 import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
@@ -123,6 +124,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const fannedItemId = useUiStore((s) => s.fannedItemId);
   const ref = useRef<HTMLDivElement>(null);
   const [dropping, setDropping] = useState(false);
+  const [dropMessage, setDropMessage] = useState("Drop to add to the canvas");
   /**
    * The drop overlay dies of silence, never of bookkeeping.
    *
@@ -141,7 +143,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const dragAlive = () => {
     setDropping(true);
     if (droppingTimer.current) clearTimeout(droppingTimer.current);
-    droppingTimer.current = setTimeout(() => setDropping(false), 700);
+    droppingTimer.current = setTimeout(() => { setDropping(false); useUiStore.getState().setGroupDropTarget(null); }, 700);
   };
   // Mirrored into the store as well as kept locally: lane-follow stops
   // measuring while the canvas is moving, and only the store crosses
@@ -980,6 +982,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     const files = Array.from(e.dataTransfer.files);
     const ui = useUiStore.getState();
     const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    const target = !e.altKey && canvas && groupsEnabled() ? groupDropTarget(canvas, world, []) : null;
+    const destination = { ...creationDestination(target?.id ?? ui.activeGroupId), ...(target ? { groupPlacement: groupDropPolicy(target, world) } : {}) };
+    ui.setGroupDropTarget(null);
 
     /**
      * **A module's claim on a dragged mime, before the built-ins** (#156).
@@ -999,9 +1004,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       if (claim) {
         const data = e.dataTransfer.getData(claim.mimeType);
         try {
-          const host = webHostFor(canvasId, actor);
+          const host = webHostFor(canvasId, actor, destination);
           const ops = await claim.run({
             canvasId,
+            ...destination,
             data,
             mimeType: claim.mimeType,
             at: { x: Math.round(world.x), y: Math.round(world.y) },
@@ -1027,7 +1033,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         if (!/^https?:\/\//i.test(link)) return;
         const { addBrowserItem } = await import("../lib/upload.ts");
         try {
-          ui.select(await addBrowserItem(canvasId, actor, link, world));
+          selectCreatedItems(canvasId, [await addBrowserItem(canvasId, actor, link, world, destination)]);
         } catch (err) {
           setNotice(err instanceof Error && err.message ? err.message : "That site could not be added.");
         }
@@ -1036,11 +1042,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
 
     // Dropping a single file onto an existing item = new version of that item.
-    const targetItem = (e.target as HTMLElement).closest?.("[data-item-id]");
-    if (targetItem && files.length === 1) {
+    const versionTarget = reachableVersionTarget(e.target as HTMLElement);
+    if (versionTarget && files.length === 1) {
       const { addVersionFromFile } = await import("../lib/upload.ts");
       try {
-        await addVersionFromFile(canvasId, actor, targetItem.getAttribute("data-item-id")!, files[0]!);
+        await addVersionFromFile(canvasId, actor, versionTarget.id, files[0]!);
       } catch (err) {
         setNotice(
           `${files[0]!.name}: ${err instanceof Error && err.message ? err.message : "could not be added as a version"}`,
@@ -1053,7 +1059,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     // `uploadBlob` throws with the sentence that explains why.
     // Dropped AT the pointer: chosen, so the files stay where they were let
     // go rather than being tidied clear (`Placement.chosen`).
-    const ids = await addFiles(canvasId, actor, files, { ...world, chosen: true }).catch((err: unknown) => {
+    const ids = await addFiles(canvasId, actor, files, { ...world, chosen: true }, destination).catch((err: unknown) => {
       // "2 of 5 added — <why>", and the two are selected below (#51).
       const { landed, notice } = addFailure(err, files.length, "Those files could not be added.");
       setNotice(notice);
@@ -1061,8 +1067,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     });
     // The whole drop is selected, not just the last file — you dropped five
     // things and five things are what arrived.
-    if (ids.length > 0) {
-      useUiStore.getState().setSelection(ids);
+    if (ids.length > 0 && selectCreatedItems(canvasId, ids)) {
       const canvas = useCanvasStore.getState().canvas;
       const landed = canvas ? ids.map((id) => canvas.items[id]).filter(Boolean) : [];
       revealIfOffscreen(
@@ -1072,6 +1077,13 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         glideToBox,
       );
     }
+  }
+
+  function reachableVersionTarget(element: HTMLElement) {
+    const id = element.closest?.("[data-item-id]")?.getAttribute("data-item-id");
+    const item = id ? canvas?.items[id] : undefined;
+    if (!item || isGroupItem(item)) return null;
+    return !groupsEnabled() || (canvas && groupScopedRoot(canvas, item.id, useUiStore.getState().activeGroupId) === item.id) ? item : null;
   }
 
   // Areas first, so everything placed on a sheet paints over it: items are
@@ -1117,6 +1129,13 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       onDragOver={(e) => {
         e.preventDefault();
         dragAlive();
+        const ui = useUiStore.getState();
+        const target = !e.altKey && canvas && groupsEnabled() ? groupDropTarget(canvas, screenToWorld(ui.viewport, e.clientX, e.clientY), []) : null;
+        const fileCount = e.dataTransfer.files.length || Array.from(e.dataTransfer.items ?? []).filter((item) => item.kind === "file").length;
+        const version = fileCount === 1 ? reachableVersionTarget(e.target as HTMLElement) : null;
+        const destination = target ?? (ui.activeGroupId ? canvas?.items[ui.activeGroupId] : null);
+        ui.setGroupDropTarget(version ? null : destination?.id ?? null);
+        setDropMessage(version ? `Drop to add a version of ${version.title}` : destination ? `Drop to add to ${destination.title}` : "Drop to add to the canvas");
       }}
       onDrop={onDrop}
     >
@@ -1168,7 +1187,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       <GuideLines />
       <EdgeRadar canvasId={canvasId} />
       <SketchBar canvasId={canvasId} actor={actor} />
-      {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
+      {dropping && <div className="drop-overlay">{dropMessage}</div>}
       {menu && (
         <ContextMenu
           at={menu.at}
@@ -1257,4 +1276,3 @@ function MarqueeRect() {
     />
   );
 }
-

@@ -284,18 +284,16 @@ export class DaemonRoutes {
   /** Go to the door and keep what it hands over. Returns false if the door
    * itself refused, so a caller does not loop.
    *
-   * **One refusal is not silent: a metered door** (phase 13.7). The rest stay
-   * false and let the original refusal be the one reported — but a 429 must
-   * not, because the sentence the caller would otherwise print is the 401 this
-   * recovery was launched from: *"a badge is required — ask the door for
-   * one."* That is advice to repeat the thing that was just refused. Throwing
-   * the door's own words instead ends the command with what actually happened
-   * and how long to wait, in `{error, code}` an agent can read. */
+   * **A definitive door refusal is reported**: a metered door's 429 (phase
+   * 13.7) or an operator's network refusal, 403. Printing the original 401 —
+   * "a badge is required — ask the door for one" — would advise repeating
+   * the act the door just refused. Carry its status, code and words instead;
+   * other recovery failures leave the original answer intact. */
   private async reBadge(): Promise<boolean> {
     const answer = await askTheDoor(this.base);
     if ("refused" in answer) {
-      if (answer.refused.status === 429) {
-        throw new ApiError(429, answer.refused.error, answer.refused.code);
+      if (answer.refused.status === 403 || answer.refused.status === 429) {
+        throw new ApiError(answer.refused.status, answer.refused.error, answer.refused.code);
       }
       return false;
     }

@@ -37,6 +37,11 @@
 const MIN_CHROME_WIDTH = 56;
 const MIN_CHROME_HEIGHT = 40;
 
+/** Keep selectable shells at overview scale without mounting unreadable document trees. */
+export function itemPreviewVisible(width: number, height: number, scale: number, nearWindow: boolean, entered: boolean): boolean {
+  return entered || (nearWindow && hasRoomForChrome(width, height, scale));
+}
+
 /**
  * The transform that holds a piece of item chrome at a constant SCREEN size.
  *

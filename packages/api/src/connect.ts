@@ -36,7 +36,7 @@ import {
 import { matchRef, resolveCanvas, resolveCtx, type Ctx } from "./ctx.ts";
 import { noIdentityHere, type ExplicitIdentity } from "./identity.ts";
 import { ApiError, type DaemonRoutes } from "./routes.ts";
-import { CanvasGroups } from "./canvas-groups.ts";
+import { CanvasGroups, resolveCanvasGroupRef } from "./canvas-groups.ts";
 
 /**
  * **Unreachable is a typed refusal here, not a stack trace** (journey 1's
@@ -179,6 +179,11 @@ export interface AddSpec extends ContentSpec {
   at?: { x: number; y: number };
   size?: { width: number; height: number };
   properties?: Record<string, string>;
+  /** Explicit group ID or unique reference; insertion and any frame growth are one act. */
+  in?: string;
+  containerId?: string | null;
+  cell?: { row: number; column: number };
+  groupPlacement?: "auto" | "preserve" | "exact";
 }
 
 /** The metadata half of `isocan set`, sized to what a script reaches for. */
@@ -439,13 +444,16 @@ export class CanvasHandle {
    */
   async add(spec: AddSpec): Promise<Item> {
     return this.reach(async () => {
+      const snapshot = spec.in !== undefined ? await this.snapshot() : undefined;
+      const containerId = spec.in !== undefined ? resolveCanvasGroupRef(snapshot!.canvas, spec.in, true).id : spec.containerId;
+      if (spec.cell && !containerId) throw new Error("a cell requires a destination group");
       const data = typeof spec.content === "string" ? Buffer.from(spec.content) : spec.content;
       const filename = spec.filename ?? defaultFilename(spec.title, spec.mime);
       const upload = await this.ctx.client.uploadBlob(this.id, data, spec.mime, filename);
       const itemId = newItemId();
       const { width, height } = spec.size ?? DEFAULT_SIZE;
       const placement = spec.at ?? (await this.defaultPlacement());
-      await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+      const accepted = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
         type: "item.add",
         itemId,
         version: {
@@ -458,12 +466,19 @@ export class CanvasHandle {
         width,
         height,
         placement,
+        ...(containerId !== undefined ? { containerId, groupPlacement: spec.groupPlacement ?? (spec.at ? "exact" : "auto") } : {}),
+        ...(spec.cell ? { cell: spec.cell } : {}),
         ...(spec.title !== undefined ? { title: spec.title } : {}),
         ...(spec.description !== undefined ? { description: spec.description } : {}),
         ...(spec.properties && Object.keys(spec.properties).length > 0
           ? { properties: spec.properties }
           : {}),
       });
+      const written = accepted.envelope.op;
+      if (written.type === "group.change" && written.action.kind === "apply") {
+        const created = written.action.change.writes.find((write) => write.kind === "create" && write.item.id === itemId);
+        if (created?.kind === "create") return created.item;
+      }
       return this.item(itemId);
     });
   }
@@ -541,6 +556,12 @@ export class CanvasHandle {
     };
     let did = false;
     await this.reach(async () => {
+      if ((await this.snapshot()).project.groupMode === "groups") {
+        if (!Object.keys(meta).length && !patch.size) throw new Error("nothing to change");
+        await this.groups.update(itemId, { patch: meta, ...(patch.size ? { size: patch.size } : {}) });
+        did = true;
+        return;
+      }
       if (Object.keys(meta).length > 0) {
         await this.ctx.client.sendOp(this.id, this.ctx.actor, {
           type: "item.update",
@@ -566,7 +587,9 @@ export class CanvasHandle {
    * the CLI's `mv` and the web app's drag follow. */
   async move(itemId: string, x: number, y: number): Promise<void> {
     await this.reach(async () => {
-      const { canvas } = await this.snapshot();
+      const snapshot = await this.snapshot();
+      if (snapshot.project.groupMode === "groups") { await this.groups.move(itemId, { at: { x, y } }); return; }
+      const { canvas } = snapshot;
       const item = canvas.items[itemId];
       if (!item) throw new Error(`no item ${itemId} on ${this.record.title}`);
       const dx = x - item.x;

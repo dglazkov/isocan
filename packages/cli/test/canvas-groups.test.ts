@@ -18,10 +18,41 @@ function cli(f = groupFixture()) {
 }
 
 describe("the canonical canvas group CLI", () => {
+  it("parses resize anchors and frame fitting with exact geometry and no dry-run writes", async () => {
+    const c = cli(); c.f.card("a");
+    const group = (await c.f.api.wrap(["a"], "Acme Frame")).itemId!;
+    const count = c.f.writes.length;
+    const preview = JSON.parse(await c.run("--json", "canvas", "group", "resize", group, "336x396", "--anchor", "se", "--dry-run"));
+    expect(preview.changes.find((row: any) => row.itemId === "a").boxAfter).toEqual({ x: 212, y: 332, width: 288, height: 268 });
+    expect(c.f.writes).toHaveLength(count);
+    vi.restoreAllMocks(); const commit = cli(c.f);
+    await commit.run("canvas", "group", "resize", group, "336x396", "--anchor", "se");
+    expect(c.f.state.canvas.items.a).toMatchObject({ x: 212, y: 332, width: 288, height: 268 });
+    expect(c.f.writes).toHaveLength(count + 1);
+    await commit.run("canvas", "group", "frame", group, "--size", "600x700");
+    expect(c.f.state.canvas.items.a).toMatchObject({ x: 212, y: 332, width: 288, height: 268 });
+    // A fresh invocation does not retain the previous command's --size flag.
+    vi.restoreAllMocks(); const fit = cli(c.f);
+    await fit.run("canvas", "group", "frame", group, "--fit");
+    expect(c.f.state.canvas.items[group]).toMatchObject({ width: 336, height: 396 });
+  });
+
+  it("parses named grids and cell placement through the writer, refusing invalid cells atomically", async () => {
+    const c = cli(); c.f.card("a");
+    const group = (await c.f.api.new("Acme grid", { at: { x: 0, y: 0 }, size: { width: 1200, height: 1000 } })).itemId!;
+    await c.run("canvas", "group", "grid", group, "2x2", "--rows", "One,Two", "--cols", "A,B");
+    expect(c.f.state.canvas.items[group]?.groupLayout).toMatchObject({ rowCount: 2, columnCount: 2, rows: ["One", "Two"], columns: ["A", "B"] });
+    await c.run("canvas", "group", "add", group, "a", "--cell", "2,2");
+    expect(c.f.state.canvas.items.a).toMatchObject({ containerId: group, x: 620, y: 548 });
+    const count = c.f.writes.length;
+    await c.run("canvas", "group", "add", group, "a", "--cell", "0,2");
+    expect(c.errors).toHaveBeenCalledWith(expect.stringContaining("positive row,column"));
+    expect(c.f.writes).toHaveLength(count);
+  });
   it("registers and documents every actual family leaf without touching people-group or session-selection verbs", () => {
     const { program } = cli();
     const group = program.commands[0]!.commands[0]!;
-    expect(group.commands.map((cmd) => cmd.name())).toEqual(["new", "wrap", "ls", "show", "add", "remove", "ungroup"]);
+    expect(group.commands.map((cmd) => cmd.name())).toEqual(["new", "wrap", "ls", "show", "add", "remove", "ungroup", "resize", "frame", "layout", "grid"]);
     const guide = readFileSync(new URL("../src/agent-guide.md", import.meta.url), "utf8");
     for (const cmd of group.commands) expect(guide).toMatch(new RegExp("`canvas group " + cmd.name() + "(?:[ `])"));
     expect(group.helpInformation()).toContain("remove");

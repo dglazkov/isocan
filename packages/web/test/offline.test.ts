@@ -7,7 +7,7 @@ import type {
   CanvasState,
   ServerMessage,
 } from "@isocan/core";
-import { applyOperation, CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_PARAM } from "@isocan/core";
+import { applyOperation, CANVAS_GROUPS_FEATURE, captureGroupExpectations, CLIENT_FEATURES_PARAM, ENDED, REFUSED, TAKEN_DOWN, WS_NOT_ADMITTED, resolveCanvasGroupRequest } from "@isocan/core";
 import type { ReplicaStore, StoredReplica } from "../src/lib/replica.ts";
 
 /**
@@ -53,7 +53,7 @@ class FakeSocket {
   static live: FakeSocket[] = [];
 
   onmessage: ((event: { data: string }) => void) | null = null;
-  onclose: ((event: { code: number }) => void) | null = null;
+  onclose: ((event: { code: number; reason?: string }) => void) | null = null;
   readyState = FakeSocket.OPEN;
 
   constructor(readonly url: string) {
@@ -62,10 +62,10 @@ class FakeSocket {
     events.push(`dial:${url.replace(/^.*\/ws\?/, "")}`);
   }
   send(): void {}
-  close(): void {
+  close(code = 1006, reason = ""): void {
     if (this.readyState === FakeSocket.CLOSED) return;
     this.readyState = FakeSocket.CLOSED;
-    this.onclose?.({ code: 1006 });
+    this.onclose?.({ code, reason });
   }
   deliver(message: ServerMessage): void {
     this.onmessage?.({ data: JSON.stringify(message) });
@@ -439,6 +439,45 @@ describe("the crux", () => {
 });
 
 describe("a queued op the home refuses", () => {
+  it.each(["accepted", "refused", "offline"] as const)("navigation during an old %s flush drains the new canvas before its socket and keeps its replica clean", async (outcome) => {
+    const { sendOp } = await api();
+    const { useCanvasStore, connectToCanvas } = await store();
+    await connected(2);
+    await goOffline();
+    await sendOp("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 40, y: 50 });
+    const oldWrite = useCanvasStore.getState().queue[0]!;
+    const other = seed();
+    other.project = { ...other.project, id: "prj_2", title: "Acme second canvas" };
+    disk.set("prj_2", { canvasId: "prj_2", project: other.project, canvas: other.canvas, lastSeq: 2, queue: [{ opId: "op_other_pending", actor: priya, op: { type: "item.move", itemId: "itm_1", x: 80, y: 90 }, at: 1 }], savedAt: "2026-09-12T00:00:00Z" });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    vi.stubGlobal("fetch", async (url: string, init?: { body?: string }) => {
+      const body = init?.body ? JSON.parse(init.body) : null;
+      if (body?.opId === oldWrite.opId) {
+        await held;
+        if (outcome === "offline") throw new TypeError("Failed to fetch");
+        if (outcome === "refused") refusals.set(oldWrite.opId, { status: 409, error: "Acme old canvas changed", code: "group-conflict" });
+      }
+      return fakeFetch(url, init);
+    });
+    await comeBack();
+    connectToCanvas("prj_2", priya);
+    await settle();
+    expect(FakeSocket.opened.some((url) => url.includes("prj_2"))).toBe(false);
+    release(); await settle(); await settle();
+    const current = useCanvasStore.getState();
+    expect(current.canvasId).toBe("prj_2");
+    expect(current.refused).toEqual([]);
+    expect(current.connection).not.toBe("offline");
+    expect(current.canvas!.items.itm_1).toMatchObject({ x: 80, y: 90 });
+    expect(current.queue.map((write) => write.opId)).toEqual(["op_other_pending"]);
+    const post = events.indexOf("post:op_other_pending");
+    const dial = events.findIndex((event) => event.startsWith("dial:") && event.includes("prj_2"));
+    expect(post).toBeGreaterThanOrEqual(0); expect(dial).toBeGreaterThan(post);
+    expect(disk.get("prj_2")!.queue.map((write) => write.opId)).toEqual(["op_other_pending"]);
+    expect(disk.get("prj_1")!.queue.map((write) => write.opId)).toEqual([oldWrite.opId]);
+  });
+
   it("rolls back, says so, and does not strand what came after it", async () => {
     const { sendOp } = await api();
     const { useCanvasStore } = await store();
@@ -908,4 +947,91 @@ describe("a heartbeat that says the canvas has moved on", () => {
     expect(FakeSocket.opened.length).toBe(dialled);
     expect(useCanvasStore.getState().connection).toBe("live");
   });
+});
+
+// The socket event precedes a held HTTP response: drive actual confirm/retire,
+// rather than replacing the store or clearing its queue in a fixture helper.
+it.each(["insert", "brief"] as const)("retires an echo-first canonical group %s when its delayed receipt supplies the seq", async (kind) => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  await connected(2);
+  const source = seed();
+  source.project.groupMode = "groups";
+  const initial = applyOperation(source, envelope({ type: "group.change", action: { kind: "create", group: { id: "itm_group", title: "Acme group", version: { id: "ver_group", blobHash: "hash_group", filename: "group.md", mimeType: "text/markdown", size: 1 } }, itemIds: ["itm_1"] } }))!;
+  FakeSocket.last.deliver({ type: "snapshot", project: initial.project, canvas: initial.canvas, lastSeq: 3, colors: {}, names: {} });
+  await settle();
+  let accepted!: LogEntry;
+  let writer!: CanvasState;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    if (!String(url).endsWith("/api/ops")) return fakeFetch(String(url));
+    const request = JSON.parse(String(init?.body));
+    const env = envelope(request.op, priya, request.opId);
+    env.op = resolveCanvasGroupRequest(initial, env.op, { actor: env.actor, ts: env.ts, opId: env.id });
+    writer = applyOperation(initial, env)!;
+    accepted = { seq: 4, envelope: env, inverse: null };
+    await held;
+    return new Response(JSON.stringify({ seq: 4, envelope: env }), { status: 200 });
+  }) as typeof fetch;
+  const version = { id: "ver_new", blobHash: "hash_new", filename: "new.md", mimeType: "text/markdown", size: 10 };
+  const op: Operation = kind === "insert"
+    ? { type: "item.add", itemId: "itm_inserted", containerId: "itm_group", groupPlacement: "auto", version, width: 120, height: 100, placement: { x: 0, y: 0 } }
+    : { type: "item.addVersion", itemId: "itm_group", briefHeight: 180, version };
+  const promise = sendEchoedResult("prj_1", priya, op);
+  await settle();
+  expect(useCanvasStore.getState().queue).toHaveLength(1);
+  FakeSocket.last.deliver({ type: "op-applied", entry: accepted });
+  await settle();
+  expect(useCanvasStore.getState().lastSeq).toBe(4);
+  expect(useCanvasStore.getState().confirmed).toEqual(writer);
+  expect(useCanvasStore.getState().queue).toEqual([]);
+  release();
+  expect(await promise).toEqual({ status: "accepted" });
+  expect(useCanvasStore.getState().queue).toEqual([]);
+  expect(useCanvasStore.getState().canvas).toEqual(writer.canvas);
+});
+
+// A socket refusal is a final home decision, even when an older POST has not
+// reported its transport failure yet. Exercise both production queue doors.
+it.each([
+  ["echoed", REFUSED, "refused-here"], ["direct", REFUSED, "refused-here"],
+  ["echoed", ENDED, "ended"], ["direct", ENDED, "ended"],
+  ["echoed", TAKEN_DOWN, "taken-down"], ["direct", TAKEN_DOWN, "taken-down"],
+] as const)("keeps %s queued group work while preserving the socket's %s terminal decision", async (path, reason, expectedConnection) => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  const { sendOp } = await api();
+  await connected(2);
+  const source = seed();
+  source.project.groupMode = "groups";
+  const initial = applyOperation(source, envelope({ type: "group.change", action: { kind: "create", group: { id: "itm_group", title: "Acme group", version: { id: "ver_group", blobHash: "hash_group", filename: "group.md", mimeType: "text/markdown", size: 1 } }, itemIds: ["itm_1"] } }))!;
+  FakeSocket.last.deliver({ type: "snapshot", project: initial.project, canvas: initial.canvas, lastSeq: 3, colors: {}, names: {} });
+  await settle();
+  const op: Operation = { type: "group.change", action: { kind: "transform", itemIds: ["itm_group"], by: { x: 20, y: 10 }, expected: captureGroupExpectations(initial, ["itm_group"]) } };
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const attempts: Array<{ opId: string; op: Operation }> = [];
+  globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).endsWith("/api/ops")) {
+      attempts.push(JSON.parse(String(init?.body)));
+      await held;
+      throw new TypeError("Failed to fetch");
+    }
+    return new Response(JSON.stringify({ takedowns: [] }), { status: 200 });
+  }) as typeof fetch;
+  const pending = path === "echoed" ? sendEchoedResult("prj_1", priya, op) : sendOp("prj_1", priya, op);
+  await settle();
+  expect(attempts).toHaveLength(1);
+  FakeSocket.last.close(WS_NOT_ADMITTED, reason);
+  await settle();
+  expect(useCanvasStore.getState().connection).toBe(expectedConnection);
+  const sockets = FakeSocket.opened.length;
+  release();
+  expect(await pending).toEqual(path === "echoed" ? { status: "queued" } : null);
+  expect(useCanvasStore.getState().connection).toBe(expectedConnection);
+  expect(useCanvasStore.getState().confirmed).toEqual(initial);
+  expect(useCanvasStore.getState().queue.map((write) => write.opId)).toEqual([attempts[0]!.opId]);
+  expect(disk.get("prj_1")!.queue.map((write) => write.opId)).toEqual([attempts[0]!.opId]);
+  vi.advanceTimersByTime(60_000); await settle();
+  expect(FakeSocket.opened).toHaveLength(sockets);
+  expect(attempts).toHaveLength(1);
 });

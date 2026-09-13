@@ -7,7 +7,9 @@ import {
   newVersionId,
 } from "@isocan/core";
 import { readBlob, uploadBlob } from "./api.ts";
-import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+
+import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
 
 /**
  * **Copy and paste, including into a different canvas.**
@@ -41,6 +43,7 @@ export async function pasteInto(
   canvasId: string,
   actor: Actor,
   want?: { x: number; y: number },
+  destination = creationDestination(),
 ): Promise<string[]> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return [];
@@ -81,11 +84,12 @@ export async function pasteInto(
       blobHash = up.blobHash;
     }
     const itemId = newItemId();
-    await sendEchoed(
+    await sendCreatedItem(
       canvasId,
       actor,
       {
       type: "item.add",
+      ...destination,
       itemId,
       version: {
         id: newVersionId(),

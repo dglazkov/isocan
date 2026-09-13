@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import type { Actor, CanvasContents, CanvasSnapshotResponse, GroupAction, GroupBox, GroupChange, GroupCreation, Item, PostOpResponse } from "@isocan/core";
-import { atLeast, GROUP_DEFAULT_SIZE, groupChildren, groupContentBox, groupDescendants, groupRemoveAction, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation } from "@isocan/core";
+import type { Actor, CanvasContents, CanvasSnapshotResponse, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupCreation, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "@isocan/core";
+import { atLeast, captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation } from "@isocan/core";
 import type { DaemonRoutes } from "./routes.ts";
 
 type PublicAction = Exclude<GroupAction, { kind: "apply" }>;
@@ -37,6 +37,7 @@ export interface CanvasGroupCreateOptions {
   at?: { x: number; y: number };
   size?: { width: number; height: number };
   note?: string;
+  properties?: Record<string, string>;
   dryRun?: boolean;
 }
 
@@ -103,17 +104,73 @@ export class CanvasGroups {
     const content = Buffer.from(options.note?.trim() ? options.note : "\n", "utf8");
     const all = Object.values(state.canvas.items);
     const at = options.at ?? { x: all.length ? Math.max(...all.map((item) => item.x + item.width)) + PLACEMENT_GAP : 0, y: all.length ? Math.min(...all.map((item) => item.y)) : 0 };
-    const creation: GroupCreation = { id: newItemId(), title: title.trim(), description: options.note ?? "", version: { id: newVersionId(), blobHash: createHash("sha256").update(content).digest("hex"), mimeType: "text/markdown", filename: "group.md", size: content.length }, box: { ...at, ...GROUP_DEFAULT_SIZE, ...options.size }, layout: { briefHeight: options.note?.trim() ? 120 : 0 } };
+    const creation: GroupCreation = { id: newItemId(), title: title.trim(), description: options.note ?? "", version: { id: newVersionId(), blobHash: createHash("sha256").update(content).digest("hex"), mimeType: "text/markdown", filename: "group.md", size: content.length }, box: { ...at, ...GROUP_DEFAULT_SIZE, ...options.size }, layout: { briefHeight: options.note?.trim() ? 120 : 0 }, ...(options.properties ? { properties: options.properties } : {}) };
     const ids = refs.map((ref) => resolveCanvasGroupRef(state.canvas, ref).id);
     const action = ids.length ? groupWrapAction(state.canvas, creation, ids) : { kind: "create" as const, group: creation };
     return this.perform(state, action, !!options.dryRun, content);
   }
 
   /** Add and move-between-groups are one reparent intent, optionally placing the new members. */
-  async add(group: string, refs: string[], options: { place?: boolean; dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+  async add(group: string, refs: string[], options: { place?: boolean; dryRun?: boolean; cell?: GroupCell; groupPlacement?: GroupPlacementPolicy } = {}): Promise<CanvasGroupResult> {
     const state = await this.read(true);
     const parent = resolveCanvasGroupRef(state.canvas, group, true);
-    return this.perform(state, { kind: "reparent", containerId: parent.id, itemIds: refs.map((ref) => resolveCanvasGroupRef(state.canvas, ref).id), place: !!options.place }, !!options.dryRun);
+    return this.perform(state, { kind: "reparent", containerId: parent.id, itemIds: refs.map((ref) => resolveCanvasGroupRef(state.canvas, ref).id), place: !!options.place, ...(options.cell ? { cell: options.cell } : {}), ...(options.groupPlacement ? { groupPlacement: options.groupPlacement } : {}) }, !!options.dryRun);
+  }
+
+  /** Move one root and its placement unit, with the dependency capture made before the write. */
+  async move(ref: string, destination: { at: { x: number; y: number } } | { by: { x: number; y: number } }, options: { dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    const state = await this.read(true);
+    const item = resolveCanvasGroupRef(state.canvas, ref);
+    const by = "by" in destination ? destination.by : { x: destination.at.x - item.x, y: destination.at.y - item.y };
+    return this.perform(state, { kind: "transform", itemIds: [item.id], by, expected: captureGroupExpectations(state, [item.id]) }, !!options.dryRun);
+  }
+
+  /** Scale the group's native frames and attached marks, keeping the named corner fixed. */
+  async resize(ref: string, size: { width: number; height: number }, options: { anchor?: GroupAnchor; dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    const state = await this.read(true);
+    const item = resolveCanvasGroupRef(state.canvas, ref);
+    return this.perform(state, { kind: "transform", itemId: item.id, box: groupResizeBox(item, size, options.anchor), ...(options.anchor ? { anchor: options.anchor } : {}), expected: captureGroupExpectations(state, [item.id]) }, !!options.dryRun);
+  }
+
+  /** Frame edits never scale children. Fitting several groups still produces one record. */
+  async frame(refs: string | string[], options: { fit?: boolean; at?: { x: number; y: number }; size?: { width: number; height: number }; dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    const state = await this.read(true);
+    const items = (typeof refs === "string" ? [refs] : refs).map((ref) => resolveCanvasGroupRef(state.canvas, ref, true));
+    if (!items.length) throw new Error("frame needs at least one group");
+    if (options.fit && (options.at || options.size)) throw new Error("fit and an explicit frame are separate choices");
+    if (options.fit) return this.perform(state, { kind: "frame", itemIds: items.map((item) => item.id), fit: true }, !!options.dryRun);
+    if (items.length !== 1 || (!options.at && !options.size)) throw new Error("an explicit frame needs one group and --at or --size");
+    return this.perform(state, { kind: "frame", itemId: items[0]!.id, box: { ...box(items[0])!, ...options.at, ...options.size }, expected: captureGroupExpectations(state, [items[0]!.id]) }, !!options.dryRun);
+  }
+
+  async layout(ref: string, layout: GroupLayout, options: { tidy?: boolean; dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    const state = await this.read(true);
+    const item = resolveCanvasGroupRef(state.canvas, ref, true);
+    return this.perform(state, { kind: "layout", itemId: item.id, layout: { ...item.groupLayout, ...layout }, ...(options.tidy ? { tidy: true } : {}) }, !!options.dryRun);
+  }
+
+  /** Grid counts and optional names use the same saved layout as the browser. */
+  async grid(ref: string, counts: { rows: number; columns: number }, options: { rows?: string[]; columns?: string[]; tidy?: boolean; dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    return this.layout(ref, { rowCount: counts.rows, columnCount: counts.columns, ...(options.rows ? { rows: options.rows } : {}), ...(options.columns ? { columns: options.columns } : {}) }, options);
+  }
+
+  async arrange(refs: string[], arrangement: Parameters<typeof groupArrangeAction>[2], options: { dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    const state = await this.read(true);
+    const ids = refs.map((ref) => resolveCanvasGroupRef(state.canvas, ref).id);
+    return this.perform(state, groupArrangeAction(state, ids, arrangement), !!options.dryRun);
+  }
+
+  /** Sized content updates reserve headers and transform geometry in the same accepted record. */
+  async update(ref: string, update: Omit<Extract<Operation, { type: "item.update" }>, "type" | "itemId">, options: { dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    const state = await this.read(true);
+    const item = resolveCanvasGroupRef(state.canvas, ref);
+    return this.perform(state, { kind: "content", operation: { type: "item.update", itemId: item.id, ...update } }, !!options.dryRun);
+  }
+
+  /** Native leaf fitting and frame-only group fitting share one bounded writer act. */
+  async fit(targets: Array<{ itemId: string; width?: number; height?: number }>, options: { dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    const state = await this.read(true);
+    return this.perform(state, groupFitAction(state, targets.map((target) => ({ ...target, itemId: resolveCanvasGroupRef(state.canvas, target.itemId).id }))), !!options.dryRun);
   }
 
   /** Remove promotes each root one level; mixed-parent selections still use one undoable act. */
@@ -157,7 +214,7 @@ export class CanvasGroups {
       // dependency record includes newly encountered ancestors absent at read time.
       relation.items[row.itemId] = { ...state.canvas.items[row.itemId], id: row.itemId, ...before, properties: { ...(before.kind ? { kind: before.kind } : {}), ...(before.annotates ? { annotates: before.annotates } : {}) } } as unknown as Item;
     }
-    const inputIds = "itemIds" in action ? action.itemIds ?? [] : [];
+    const inputIds = "itemIds" in action ? action.itemIds ?? [] : "itemId" in action ? [action.itemId] : "moves" in action ? action.moves.map((move) => move.itemId) : "targets" in action ? action.targets.map((target) => target.itemId) : action.kind === "content" ? [action.operation.itemId] : [];
     const changes = change.writes.map((write) => {
       const id = write.kind === "create" ? write.item.id : write.itemId;
       const before = facts.get(id);

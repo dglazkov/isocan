@@ -14,7 +14,7 @@ export const DEFAULT_PORT = 4441;
 
 /** Reducer capability, independent of the caller's access-control rung. A
  * client advertises this before receiving explicit canvas-group state. */
-export const CANVAS_GROUPS_FEATURE = "canvas-groups-v1";
+export const CANVAS_GROUPS_FEATURE = "canvas-groups-v2";
 /** Shared spelling for HTTP clients and ingress checks; an upgraded replica
  * still preserves its original caller's declaration when forwarding writes. */
 export const CLIENT_FEATURES_HEADER = "x-isocan-features";
