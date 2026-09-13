@@ -1,36 +1,56 @@
-import { type CanvasTakedown, type TakedownNotice } from "../../core/src/index.js";
+import { type Attestation, type CanvasTakedown, type HomeRefusal, type RefusalNotice, type TakedownNotice } from "../../core/src/index.js";
 import type { Desk } from "./desk.js";
 /**
- * **What this home has stopped serving, in memory, read at the door** —
- * operator phase 2, and the shape `docs/projects/operator/design.md` gives
- * home-scope refusals one section later: *one list the operator writes, lifts
- * and reads, loaded into memory at boot on a single-instance home and re-read
- * on write, so the door's cost is a set lookup.*
+ * **What this home refuses, in memory, read at the door** — operator phase 2
+ * built it for takedowns, and operator phase 6 extends the SAME object to
+ * home-scope refusals rather than standing a second registry beside it. The
+ * design's own instruction, and the reason: the shape is one shape — *one
+ * list the operator writes, lifts and reads, loaded into memory at boot on a
+ * single-instance home and re-read on write, so the door's cost is a set
+ * lookup* — so `daemon.ts` wires exactly one.
  *
- * A takedown has to be read on the request path — every canvas route, every
- * socket, every signed content read — and a desk read per request would put a
- * Firestore round trip in front of every page this home serves for the sake of
- * a row that is empty on nearly every home. So it is held here, and the two
- * rules that make that honest are stated rather than assumed:
+ * Both halves are read on the request path — every canvas route, every
+ * socket, every signed content read, every mint, every attestation, every
+ * claim — and a desk read per request would put a Firestore round trip in
+ * front of every page this home serves for the sake of rows empty on nearly
+ * every home. So they are held here, and the rules that make that honest are
+ * stated rather than assumed:
  *
- * 1. **The store's flag is the truth, not this.** `load` refuses on
- *    `takenDownAt`, which is durable and is read from the backing every time a
- *    canvas is opened. This registry exists to produce the SENTENCE — to turn
- *    what would be a 404 into *this was removed, and here is who to ask*. A
- *    registry that lagged would mean a canvas correctly refused with the wrong
- *    words, never a canvas wrongly served.
- * 2. **It is written by the act, in the same process.** One writer: the
- *    takedown route, which writes the desk row, the store flag and this, in
- *    that order. A second instance during a rollout is not reached for the
- *    seconds both run — the same bound the sweep and the socket hub live with,
- *    named in the design's own table — and the instance that did not hear will
- *    still refuse the canvas, because its `load` reads the flag.
+ * 1. **For a takedown, the store's flag is the truth, not this.** `load`
+ *    refuses on `takenDownAt`, durable and read from the backing every time a
+ *    canvas is opened. The registry exists to produce the SENTENCE; a registry
+ *    that lagged would mean a canvas correctly refused with the wrong words,
+ *    never a canvas wrongly served.
+ * 2. **For a refusal, the registry IS the door's answer** — there is no store
+ *    flag underneath it — and the honesty comes from the other side: the act
+ *    that writes the desk row writes this in the same request, in this
+ *    process, and there is one writer. A second instance during a rollout is
+ *    not reached for the seconds both run, the same bound the sweep and the
+ *    socket hub live with, and it is closed at the next boot, which reads the
+ *    desk.
+ * 3. **The clock is handed in.** A refusal ends on its own (`expiresAt`), and
+ *    "in force" is judged here against `now` on every read, never by deleting
+ *    rows on a timer — so a `net:` block gone at `--for 10m` is one the door
+ *    stops honouring the moment the clock passes it, and a test moves the
+ *    clock rather than waiting.
  */
-export declare class Takedowns {
-    private rows;
-    /** Every takedown in force, at boot. Called once by `startDaemon`; a home
-     * that never calls it answers "nothing is down", which is the truth about a
-     * home that has never had an operator. */
+export declare class Refusals {
+    private takedownRows;
+    private refusalRows;
+    /** Parsed once per `net:` row, because the meter asks on every knock. */
+    private nets;
+    private readonly now;
+    constructor(options?: {
+        now?: () => number;
+    });
+    /** The clock this registry judges expiry against, in epoch ms. The refuse
+     * route derives a refusal's `at` and `expiresAt` from it, so the horizon it
+     * writes and the horizon the door reads are measured on one clock — which is
+     * what lets a test move `--for 10m` past its end without waiting. */
+    nowMs(): number;
+    /** Everything in force, at boot. Called once by `startDaemon`; a home that
+     * never calls it answers "nothing is down and nobody is refused", which is
+     * the truth about a home that has never had an operator. */
     load(desk: Desk): Promise<void>;
     /** The act, having written the desk and the store, says so here. */
     remember(row: CanvasTakedown): void;
@@ -43,32 +63,36 @@ export declare class Takedowns {
     all(): CanvasTakedown[];
     /** What a surface is handed for one canvas, or null. */
     notice(canvasId: string): TakedownNotice | null;
+    /** The act, having written the desk, says so here. A lifted row is
+     * forgotten; an in-force row (expiry in the future, or none) is held. The
+     * expiry is judged on every READ rather than here, so a row remembered
+     * before its horizon and asked after it answers correctly with no timer. */
+    rememberRefusal(row: HomeRefusal): void;
+    private remrefuse;
+    /** The refusal in force for one exact subject, or null. */
+    refusalOf(subject: string): HomeRefusal | null;
+    /**
+     * **The refusal that turns this badge away at the door** — the first of the
+     * badge's attestations that names a refused address, or null. The door hook
+     * and `/api/attest` both ask it: acting with a badge that proved a refused
+     * address, and proving it in the first place, are one fact from two sides.
+     */
+    refusingAttestation(attestations: readonly Attestation[]): HomeRefusal | null;
+    /** The refusal on one proved address, for `/api/attest`. */
+    refusingAddress(attribute: string): HomeRefusal | null;
+    /** The refusal on a name, for `actor.claim {as}` — `actor:<id>`. */
+    refusingActor(actorId: string): HomeRefusal | null;
+    /**
+     * **The refused network this address is inside, or null** — the mint
+     * meter's question. A walk over the `net:` rows, which are a handful; an
+     * expired row is skipped, which is how a `net:` block ends on its own.
+     */
+    refusingNet(address: string): HomeRefusal | null;
+    /** Every refusal in force right now, for a listing or a lift. */
+    allRefusals(): HomeRefusal[];
+    /** What a surface is handed for one subject, or null. */
+    refusalNotice(subject: string): RefusalNotice | null;
 }
-/**
- * **The refusal a canvas that was taken down gives**, and it is the whole
- * message (design, "The record").
- *
- * > Never silence, never *not found* for something that was taken down: the
- * > difference between *there is nothing here* and *this was removed, and here
- * > is who to ask* is the whole message.
- *
- * **403 and `not-admitted`, with a `reason` of `taken-down`** — deliberately
- * the shape `withdrawn` already has, rather than a new code. Three reasons,
- * each sufficient:
- *
- * - Every client in this repo already branches on `{code: NOT_ADMITTED, reason}`
- *   — the CLI's `wait`, the web store's socket close, the home link's redial.
- *   A new top-level code would be a refusal each of those met as "something
- *   else went wrong", which on the CLI's path means retrying forever.
- * - It is the truth: this home will not let anybody into that canvas, which is
- *   what `not-admitted` means. What is different is WHY, and why is what
- *   `reason` carries — the same distinction `withdrawn` was added to make.
- * - A 404 would be the lie the design names, and a 410 would say the bytes are
- *   gone, which is exactly what a takedown does not do.
- *
- * The `error` field is the sentence itself, because the CLI prints `error:
- * <message>` and nothing else, and because the words come from the home.
- */
 /**
  * **The url map the hosted home's edge is in front of** — `isocan-urlmap`,
  * from `infra/config.sh`, which is where the name is decided.
@@ -81,10 +105,42 @@ export declare class Takedowns {
  * override `infra/config.sh` honours is `ISOCAN_URLMAP_NAME`.
  */
 export declare const CDN_URL_MAP = "isocan-urlmap";
+/**
+ * **The refusal a canvas that was taken down gives**, and it is the whole
+ * message (design, "The record").
+ *
+ * **403 and `not-admitted`, with a `reason` of `taken-down`** — deliberately
+ * the shape `withdrawn` already has, rather than a new code. Every client in
+ * this repo already branches on `{code: NOT_ADMITTED, reason}`; it is the
+ * truth (this home will not let anybody into that canvas); and a 404 would be
+ * the *not found* the design names as the one thing a takedown must never
+ * produce. The `error` field is the sentence itself, because the words come
+ * from the home.
+ */
 export declare class TakenDownError extends Error {
     readonly row: CanvasTakedown;
     readonly code = "not-admitted";
     readonly reason = "taken-down";
     readonly status = 403;
     constructor(row: CanvasTakedown);
+}
+/**
+ * **The refusal a badge that proved a refused address, or knocked from a
+ * refused network, is given** (operator phase 6) — 403 and `not-admitted`
+ * with the reason `refused`, deliberately the shape `taken-down`, `withdrawn`
+ * and `ended` already have rather than a new top-level code.
+ *
+ * The same three reasons `TakenDownError` gives: every client already branches
+ * on `{code: NOT_ADMITTED, reason}`; it is the truth (this home will not admit
+ * this badge); and a fresh badge would be refused identically, so it must not
+ * be sent back to the door. The `error` is the sentence itself, from the home,
+ * and `notice` carries the thin shape a surface renders.
+ */
+export declare class RefusedError extends Error {
+    readonly row: HomeRefusal;
+    readonly code = "not-admitted";
+    readonly reason = "refused";
+    readonly status = 403;
+    readonly notice: RefusalNotice;
+    constructor(row: HomeRefusal);
 }

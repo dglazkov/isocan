@@ -122,6 +122,24 @@ describe("the real binary, in a summoned session", () => {
     expect(out.code).toBe(1);
     expect(out.stderr).toMatch(/operator acts need the person who runs this home/);
   }, 30_000);
+
+  it("refuses `operator refuse` in a session too (operator phase 6)", async () => {
+    const out = await run(["operator", "refuse", "email:sam@example.test", "--reason", "harassment"], {
+      ISOCAN_SESSION_ID: "Sonia",
+    });
+    expect(out.code).toBe(1);
+    expect(out.stderr).toMatch(/operator acts need the person who runs this home/);
+    expect(out.stdout).not.toContain(PROVE_PATH_PREFIX);
+  }, 30_000);
+
+  it("refuses a subject it cannot read before a browser opens (operator phase 6)", async () => {
+    // No session and no daemon: the subject pre-check must exit before `ctxOf`
+    // would spawn one, so a person who typed `net:garbage` reads why at once.
+    const out = await run(["operator", "refuse", "net:garbage", "--reason", "spam"]);
+    expect(out.code).toBe(1);
+    expect(out.stderr).toMatch(/not a network/);
+    expect(out.stdout).not.toContain(PROVE_PATH_PREFIX);
+  }, 30_000);
 });
 
 /**

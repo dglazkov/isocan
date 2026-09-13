@@ -12,7 +12,7 @@ export { FileDesk } from "./file-desk.js";
  * copy of it would be two rules.
  */
 export { admissionIn, liveAdmission, rungOfAdmission } from "./grants.js";
-export { Takedowns, TakenDownError } from "./takedowns.js";
+export { Refusals, TakenDownError, RefusedError } from "./takedowns.js";
 export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.js";
 export { DocRefusal, clearGoogleToken, driveAccount, driveModifiedTime, fetchGoogleDoc, googleTokenFile, readGoogleToken, writeGoogleToken, type FetchedDoc, type GoogleToken, } from "./google.js";
 export type { HomeConfig } from "./config.js";

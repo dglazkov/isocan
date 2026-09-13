@@ -1,4 +1,4 @@
-import type { Actor, ActorBindingRecord, ActorClaimOp, ActorColors, ActorJoinOp, ActorJoins, ActorMarks, ActorKinds, ActorNames, ActorSetColorOp, ActorSetMarkOp, CanvasSnapshotResponse, LogEntry, Operation, PresenceSession, Canvas, ServerMessage, SlashCommand, UploadTicket } from "../../core/src/index.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, ActorColors, ActorJoinOp, ActorJoins, ActorMarks, HomeRefusal, ActorKinds, ActorNames, ActorSetColorOp, ActorSetMarkOp, CanvasSnapshotResponse, LogEntry, Operation, PresenceSession, Canvas, ServerMessage, SlashCommand, UploadTicket } from "../../core/src/index.js";
 import type { BlobUploadRequest, Store } from "./store.js";
 import type { Desk } from "./desk.js";
 import type { HomeDirectory } from "./home-link.js";
@@ -25,6 +25,17 @@ interface EngineOptions {
     /** Who is visibly on a canvas right now — presence, which lives outside
      * the engine. Claims consult it so a live face holds its name. */
     liveness?: (canvasId: string) => PresenceSession[];
+    /**
+     * **The operator's refusal on a name, or null** (operator phase 6). Handed
+     * in rather than reached for, because the engine must not import the
+     * refusals registry — it is home-scope operator state, and the engine
+     * judges actors, never operator standing. When it answers with a row,
+     * `actor.claim {as}` for that name is refused with the home's sentence: the
+     * name stops coming back, which is the `actor:` subject's whole job and the
+     * enforcement operator phase 4 said would land here. Absent in a caller
+     * that wired the engine by hand — a home with no operator refuses nobody.
+     */
+    refusedActor?: (actorId: string) => HomeRefusal | null;
 }
 export declare class CanvasNotFoundError extends Error {
     constructor(id: string);

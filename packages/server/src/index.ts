@@ -19,7 +19,7 @@ export { FileDesk } from "./file-desk.ts";
  * copy of it would be two rules.
  */
 export { admissionIn, liveAdmission, rungOfAdmission } from "./grants.ts";
-export { Takedowns, TakenDownError } from "./takedowns.ts";
+export { Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
 export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
 export {
   DocRefusal,

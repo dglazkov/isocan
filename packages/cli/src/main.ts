@@ -75,6 +75,12 @@ import {
   // operator phase 5: a grant the operator turned off, and the sentence the
   // owner reads about it — on the row, rendered in core (`revoked.ts`).
   revokedSentence,
+  // operator phase 6: refuse at the door, and the honest limit the verb prints.
+  REFUSAL_LIMIT,
+  refusalSubjectOf,
+  refusalSubjectRefusal,
+  refusalUntil,
+  type OperatorRefuseResponse,
   type PurgeCounts,
   type EndedSurface,
   type OperatorEndReach,
@@ -4463,6 +4469,59 @@ operatorCommand
     ),
   );
 
+/**
+ * **`isocan operator refuse <email:…|repo:…|actor:…|net:…>`** (operator phase
+ * 6; journey 9): the home-scope refusal — the roles bar moved to home scope.
+ * Refusing an address ends every badge that proved it, in the same act; a
+ * name stops coming back; a network is refused at the mint meter and expires
+ * on its own. `--for` sets a horizon on any subject; `--lift` ends one early.
+ */
+operatorCommand
+  .command("refuse <subject>")
+  .description(
+    "Refuse a subject at the door: email:<address>, repo:<host>/<owner>/<name>, actor:<id> or " +
+      "net:<cidr>. Refusing an address ends every badge that proved it; --for expires it; --lift ends it",
+  )
+  .option("--reason <category>", `why, from: ${takedownReasonList()}`)
+  .option("--note <text>", "your own note — recorded, and shown to nobody")
+  .option("--for <duration>", "how long, like 10m, 24h or 7d (a network defaults to 24h)")
+  .option("--lift", "end a refusal that is in force")
+  .option("--home <url>", "the home to prove at; by default, this machine's")
+  .action(
+    run(
+      async (
+        subject: string,
+        opts: { reason?: string; note?: string; for?: string; lift?: boolean; home?: string },
+        cmd: Command,
+      ) => {
+        refuseInSession();
+        // Fail before a browser opens on a subject the home cannot parse: a
+        // person who typed `net:garbage` should read why here, not after
+        // signing in — the same reason the home refuses no operator up front.
+        if (!refusalSubjectOf(subject)) {
+          throw new Error(refusalSubjectRefusal(subject) ?? `not a refusal subject: ${subject}`);
+        }
+        const ctx = await ctxOf(cmd);
+        const home = await operatorHome(ctx, null, opts.home);
+        const client = clientAt(ctx, home);
+        const lifting = opts.lift === true;
+        const proof = await operatorProof(
+          client,
+          home,
+          lifting ? `lift the refusal on ${subject}` : `refuse ${subject}`,
+        );
+        const answer = await client.operatorRefuse(subject, proof, {
+          ...(opts.reason ? { reason: opts.reason } : {}),
+          ...(opts.note ? { note: opts.note } : {}),
+          ...(opts.for ? { for: opts.for } : {}),
+          ...(lifting ? { lift: true } : {}),
+        });
+        if (ctx.json) return printJson(answer);
+        printRefuse(answer, lifting);
+      },
+    ),
+  );
+
 operatorCommand
   .command("log")
   .description("This home's operator ledger, newest first — every act, with what proved it")
@@ -4523,6 +4582,44 @@ async function cellBadges(ctx: Ctx): Promise<Map<string, { agent: string; sheep:
  * cookie jar at the home's origin. */
 function surfaceKind(badge: BadgeSummary): string {
   return badge.kind === "cookie" ? "browser" : "machine";
+}
+
+/**
+ * **What a refusal reached, as counts** (operator phase 6) — the reach first,
+ * then the honest limit, in the words the design gives the verb. Refusing an
+ * address ends every badge that proved it; a name stops it coming back; a
+ * network is refused at the mint meter and ends on its own.
+ */
+function printRefuse(answer: OperatorRefuseResponse, lifting: boolean): void {
+  const { refusal, reach } = answer;
+  const shown = refusal.subject.replace(/^(email|repo|actor|net):/, "");
+  if (lifting) {
+    console.log(`${shown} is not refused any more. This home will admit it again.`);
+    console.log(
+      "\nEvery badge the refusal ended STAYS ended — a lift is not an un-end. Both acts are in\n" +
+        `the ledger — \`isocan operator log --target ${refusal.subject}\`.`,
+    );
+    return;
+  }
+  const pairs: Record<string, string> = { refused: refusal.subject, why: TAKEDOWN_REASONS[refusal.reason] };
+  if (reach.kind === "email" || reach.kind === "repo") {
+    pairs["badges ended"] = reach.ended.length === 0 ? "none had proved it" : reach.ended.join(", ");
+    pairs["tabs and daemons closed"] = `${reach.reached.sockets} here`;
+    pairs["waits ended"] = String(reach.reached.waits);
+    pairs["swept from their canvases"] = sweptLine(reach.swept);
+  } else if (reach.kind === "actor") {
+    pairs["holders now"] =
+      reach.holders === 0
+        ? "none — the name is free, and stays refused"
+        : `${reach.holders} — a refusal stops the name coming back; \`isocan operator end actor:${shown}\` ends these`;
+  } else {
+    pairs["refuses"] = "minting a badge from that network";
+  }
+  pairs["ends"] = refusal.expiresAt ? `on its own, ${refusalUntil(refusal.expiresAt)}` : "when you lift it";
+  printKeyValues(pairs);
+  if (answer.sentence) console.log(`\nThe person reads, from this home:\n  ${answer.sentence}`);
+  console.log(`\n${REFUSAL_LIMIT}`);
+  console.log(`\nThe record is in the ledger — \`isocan operator log --target ${refusal.subject}\`.`);
 }
 
 /** What a sweep did, in one line both this verb and `share` print. */

@@ -11,7 +11,12 @@ type OpErrorCode = "unknown-item" | "unknown-version" | "unknown-thread" | "unkn
 /** This daemon is no longer the writer for that canvas — another instance
  * already used the sequence number it tried to claim. Never retried by the
  * client: see `OplogFencedError`. */
- | "writer-fenced" | "group-conflict" | "bad-op";
+ | "writer-fenced" | "group-conflict"
+/** The operator of this home refused that name (operator phase 6): a
+ * claim `as` an actor on the refusal list. Its own code rather than
+ * `name-taken`, because the remedy differs — a pass will not help, and the
+ * message is the home's sentence, with the address to write to. */
+ | "refused" | "bad-op";
 export declare class OpValidationError extends Error {
     readonly code: OpErrorCode;
     constructor(code: OpErrorCode, message: string);

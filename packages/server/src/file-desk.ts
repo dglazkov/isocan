@@ -8,6 +8,7 @@ import type {
   Grant,
   GrantSubject,
   Group,
+  HomeRefusal,
   PurgeCounts,
   SeenMark,
   SeenMarks,
@@ -154,7 +155,16 @@ type DeskLogEntry =
    * refusal with no sentence is exactly the *not found* the design calls the
    * one thing a takedown must never look like.
    */
-  | { seq: number; type: "takedown"; row: CanvasTakedown; at: string };
+  | { seq: number; type: "takedown"; row: CanvasTakedown; at: string }
+  /**
+   * **A subject this home will not admit, and why** (operator phase 6).
+   *
+   * Logged rather than derived, for the takedown's reason: this row is what
+   * the refused person's sentence is rendered from, and a home that lost it
+   * would have no sentence to say — and, unlike a takedown, no store flag
+   * underneath it to keep refusing. The row IS the refusal.
+   */
+  | { seq: number; type: "refusal"; row: HomeRefusal; at: string };
 
 /** `Omit` over a union collapses it to the shared keys; this distributes. */
 type NewEntry<T> = T extends unknown ? Omit<T, "seq"> : never;
@@ -199,6 +209,10 @@ interface DeskSnapshot {
    * EMPTY: a home with no row has taken nothing down, which is true of every
    * home in this repo. */
   takedowns?: Record<string, CanvasTakedown>;
+  /** `refusals/{subject}` (operator phase 6), keyed by the normalized subject
+   * and holding lifted and expired rows too. Absent on every desk written
+   * before it, and correctly EMPTY: a home with no row refuses nobody. */
+  refusals?: Record<string, HomeRefusal>;
 }
 
 /** How stale `lastSeen` may get before a touch costs a snapshot rewrite. A
@@ -207,7 +221,7 @@ interface DeskSnapshot {
 const TOUCH_DEBOUNCE_MS = 60_000;
 
 export class FileDesk implements Desk {
-  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {}, spaces: {}, groups: {}, operator: {}, takedowns: {} };
+  private state: DeskSnapshot = { lastSeq: 0, badges: {}, shelf: {}, grants: {}, passes: {}, spaces: {}, groups: {}, operator: {}, takedowns: {}, refusals: {} };
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(readonly home: string) {}
@@ -245,6 +259,9 @@ export class FileDesk implements Desk {
       // Absent on every desk written before takedowns; empty means this home
       // has taken nothing down, which is the truth about all of them.
       takedowns: snapshot?.takedowns ?? {},
+      // Absent on every desk written before refusals; empty means this home
+      // refuses nobody, which is the truth about all of them.
+      refusals: snapshot?.refusals ?? {},
       // Absent until a hosted home first signs a content read. Undefined
       // means "none minted", never "sign with nothing".
       ...(snapshot?.contentKey ? { contentKey: snapshot.contentKey } : {}),
@@ -860,6 +877,43 @@ export class FileDesk implements Desk {
       .map((row) => ({ ...row }));
   }
 
+  // ---- refusals (operator phase 6) ----
+
+  async recordRefusal(row: HomeRefusal): Promise<void> {
+    await this.enqueue(async () => {
+      (this.state.refusals ??= {})[row.subject] = { ...row };
+      await this.append({ type: "refusal", row, at: row.at });
+    });
+  }
+
+  async liftRefusal(subject: string, lifted: { at: string; by: string; actId: string }): Promise<void> {
+    await this.enqueue(async () => {
+      const row = this.state.refusals?.[subject];
+      if (!row) return;
+      const next: HomeRefusal = {
+        ...row,
+        liftedAt: lifted.at,
+        liftedBy: lifted.by,
+        liftedActId: lifted.actId,
+      };
+      this.state.refusals![subject] = next;
+      await this.append({ type: "refusal", row: next, at: lifted.at });
+    });
+  }
+
+  async refusalFor(subject: string): Promise<HomeRefusal | null> {
+    const row = this.state.refusals?.[subject];
+    return row ? { ...row } : null;
+  }
+
+  /** Not lifted — expired rows included, because the desk keeps no clock
+   * and the registry is the one reader that judges expiry (see `Desk`). */
+  async refusals(): Promise<HomeRefusal[]> {
+    return Object.values(this.state.refusals ?? {})
+      .filter((row) => row.liftedAt === undefined)
+      .map((row) => ({ ...row }));
+  }
+
   // ---- internals ----
 
   /**
@@ -1002,6 +1056,13 @@ export class FileDesk implements Desk {
         // recover a lifted canvas as still down — the one direction this
         // mistake must never go.
         (this.state.takedowns ??= {})[entry.row.canvasId] = { ...entry.row };
+        return;
+      }
+      case "refusal": {
+        // A replacement, for `takedown`'s reason: a lift is a REWRITE of the
+        // one row, and a replay that kept the first would recover a lifted
+        // subject as still refused.
+        (this.state.refusals ??= {})[entry.row.subject] = { ...entry.row };
         return;
       }
       case "contentkey": {

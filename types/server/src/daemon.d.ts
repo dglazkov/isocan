@@ -163,6 +163,14 @@ export interface DaemonOptions {
      * wrong for no decision anybody wants to make.
      */
     gcFirstSweepMs?: number;
+    /**
+     * **The clock the refusals registry judges expiry against** (operator phase
+     * 6). A `DaemonOptions` field for `gcIntervalMs`'s reason: the acceptance is
+     * a `net:` refusal *gone on its own* at `--for 10m`, and a proof of that
+     * cannot wait ten minutes — it hands the registry a clock and advances it.
+     * The daemon uses the wall when this is absent, which is every real home.
+     */
+    refusalsNow?: () => number;
 }
 export interface RunDaemonOptions extends DaemonOptions {
     /** Stop whatever daemon is already there and take the port. What `npm run

@@ -67,6 +67,7 @@ export * from "./takedown.js";
 export * from "./purge.js";
 export * from "./ended.js";
 export * from "./revoked.js";
+export * from "./refusal.js";
 export * from "./lane.js";
 export * from "./frameable.js";
 export * from "./modules.js";

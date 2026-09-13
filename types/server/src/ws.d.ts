@@ -4,7 +4,7 @@ import type { Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
 import { type RcHolds } from "./rc-holds.js";
 import type { SweepHub } from "./sweep.js";
-import type { Takedowns } from "./takedowns.js";
+import type { Refusals } from "./takedowns.js";
 /**
  * Per-canvas rooms. Server→client: snapshot on connect, op-applied per
  * mutation, presence rosters. Client→server (web only): presence updates —
@@ -60,12 +60,15 @@ interface WebSocketOptions {
      */
     census?: SocketCensus;
     /**
-     * **What this home has stopped serving** (operator phase 2), read on every
-     * upgrade. Absent means nothing is down, which is the truth about every home
-     * that has no operator — and the truth a test that attaches sockets without
-     * a daemon should get.
+     * **What this home refuses at the door** — takedowns (operator phase 2) and
+     * home-scope refusals (operator phase 6), one registry read on every
+     * upgrade. A socket on a canvas this home took down is closed `taken-down`,
+     * and one from a badge that proved a refused address `refused`, both before
+     * the door's admission check — a member is admitted and would short-circuit
+     * past it. Absent in a test that attaches sockets without a daemon, and then
+     * nothing is down and nobody is refused, which is that test's truth.
      */
-    takedowns?: Takedowns;
+    refusals?: Refusals;
 }
 /**
  * **How many sockets are open on one canvas, at THIS instance.**

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { Engine } from "./engine.js";
 import { type AuthConfig, type SigningKeys } from "./attest.js";
-import { Takedowns } from "./takedowns.js";
+import { Refusals } from "./takedowns.js";
 import type { SocketCensus } from "./ws.js";
 import { SweepHub } from "./sweep.js";
 import type { Store } from "./store.js";
@@ -161,15 +161,17 @@ interface RouteOptions {
      */
     rc?: RcHolds;
     /**
-     * **What this home has taken down** (operator phase 2), in memory, read at
-     * the door on every canvas-scoped request.
+     * **What this home refuses at the door** — takedowns (operator phase 2) and
+     * home-scope refusals (operator phase 6), in one registry read on every
+     * canvas-scoped request, every upgrade, and every mint.
      *
-     * Shared with the WS layer, which asks the same question on every upgrade,
-     * so the daemon supplies one instance. A caller that wires routes by hand
-     * gets a private, empty one — nothing is down, which is the truth about a
-     * home that has no operator to take anything down.
+     * Shared with the WS layer and the mint meter, so the daemon supplies one
+     * instance and three readers of one list cannot come to three answers. A
+     * caller that wires routes by hand gets a private, empty one — nothing is
+     * down and nobody is refused, which is the truth about a home that has no
+     * operator.
      */
-    takedowns?: Takedowns;
+    refusals?: Refusals;
 }
 export declare function registerRoutes(app: FastifyInstance, engine: Engine, store: Store, desk: Desk, presence: PresenceHub, options?: RouteOptions): void;
 /** The header a replica names its home in — a machine-readable copy of what

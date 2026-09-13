@@ -51,6 +51,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
   // The home's own sentence about a canvas it took down (operator phase 2).
   const takenDown = useCanvasStore((s) => s.takenDown);
   const ended = useCanvasStore((s) => s.ended);
+  const refusedHere = useCanvasStore((s) => s.refusedHere);
 
   // The stranger path connects here (no actor — nobody to announce); the
   // CanvasPage path arrives already connected, and reconnecting would drop a
@@ -119,6 +120,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
     connection === "gone" ||
     connection === "taken-down" ||
     connection === "ended" ||
+    connection === "refused-here" ||
     connection === "absent"
   ) {
     return (
@@ -139,7 +141,12 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
                 // own sentence, off the 401, or the short version.
                 connection === "ended"
                 ? (ended?.sentence ?? "This surface was ended.")
-                : "This canvas will not have you."}
+                : // The operator refuses the address this badge proved
+                  // (operator phase 6): the home's sentence, off the 403.
+                  connection === "refused-here"
+                  ? (refusedHere?.sentence ??
+                    "This home will not admit the address this browser proved.")
+                  : "This canvas will not have you."}
       </div>
     );
   }

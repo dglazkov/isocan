@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct, OperatorEnd, OperatorRevocation } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, HomeRefusal, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct, OperatorEnd, OperatorRevocation } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
@@ -129,6 +129,16 @@ export declare class FileDesk implements Desk {
      * the set the door and the canvas list act on. `takedownFor` is where the
      * history is read. */
     takedowns(): Promise<CanvasTakedown[]>;
+    recordRefusal(row: HomeRefusal): Promise<void>;
+    liftRefusal(subject: string, lifted: {
+        at: string;
+        by: string;
+        actId: string;
+    }): Promise<void>;
+    refusalFor(subject: string): Promise<HomeRefusal | null>;
+    /** Not lifted — expired rows included, because the desk keeps no clock
+     * and the registry is the one reader that judges expiry (see `Desk`). */
+    refusals(): Promise<HomeRefusal[]>;
     /**
      * The badge behind an id, **or nothing if it was killed** — the one lookup
      * every method here goes through, so "a killed badge is a badge nobody

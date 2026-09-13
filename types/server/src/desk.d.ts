@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, BadgeKind, CanvasTakedown, Capability, Grant, GrantSubject, Group, OperatorAct, OperatorEnd, OperatorRevocation, Pass, PurgeCounts, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, BadgeKind, CanvasTakedown, Capability, Grant, GrantSubject, Group, HomeRefusal, OperatorAct, OperatorEnd, OperatorRevocation, Pass, PurgeCounts, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
  * `BadgeSummary` puts it on the wire — see `core/badge.ts`. */
@@ -762,4 +762,24 @@ export interface Desk {
      * acted, and a home with a hundred of them has a different problem.
      */
     takedowns(): Promise<CanvasTakedown[]>;
+    /** Write the row. A lift is {@link liftRefusal}, never a second row here.
+     * Refusing a subject again after a lift REWRITES the row — the lifted
+     * history lives in the ledger, where both acts are. */
+    recordRefusal(row: HomeRefusal): Promise<void>;
+    /**
+     * Mark the row lifted, keeping it. Silent when there is no row, for
+     * `liftTakedown`'s reason: the route has already refused a lift of nothing,
+     * and a throw here would turn a settled act into a failure.
+     */
+    liftRefusal(subject: string, lifted: {
+        at: string;
+        by: string;
+        actId: string;
+    }): Promise<void>;
+    /** The row for one subject, lifted or not — null when there has never
+     * been one. */
+    refusalFor(subject: string): Promise<HomeRefusal | null>;
+    /** Every row not lifted — expired ones included, for the reason above.
+     * What the registry is loaded from at boot. */
+    refusals(): Promise<HomeRefusal[]>;
 }

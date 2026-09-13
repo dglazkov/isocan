@@ -203,6 +203,21 @@ import {
   type OperatorRevocation,
   type OperatorRevokeRequest,
   type OperatorRevokeResponse,
+  // operator phase 6: refuse at the door.
+  OPERATOR_REFUSE_ROUTE,
+  NOT_ADMITTED,
+  REFUSED,
+  NET_REFUSAL_DEFAULT_MS,
+  parseRefusalDuration,
+  refusalNoticeOf,
+  refusalSentence,
+  refusalSubjectOf,
+  refusalSubjectRefusal,
+  type HomeRefusal,
+  type OperatorRefuseRequest,
+  type OperatorRefuseResponse,
+  type RefusalKind,
+  type RefusalReach,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
@@ -219,7 +234,7 @@ import {
 } from "./attest.ts";
 import { gcCanvases } from "./gc.ts";
 import { contentTtl } from "./content-auth.ts";
-import { CDN_URL_MAP, Takedowns, TakenDownError } from "./takedowns.ts";
+import { CDN_URL_MAP, Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
 import {
   admissionIn,
   admittingGrant,
@@ -580,15 +595,17 @@ interface RouteOptions {
    */
   rc?: RcHolds;
   /**
-   * **What this home has taken down** (operator phase 2), in memory, read at
-   * the door on every canvas-scoped request.
+   * **What this home refuses at the door** — takedowns (operator phase 2) and
+   * home-scope refusals (operator phase 6), in one registry read on every
+   * canvas-scoped request, every upgrade, and every mint.
    *
-   * Shared with the WS layer, which asks the same question on every upgrade,
-   * so the daemon supplies one instance. A caller that wires routes by hand
-   * gets a private, empty one — nothing is down, which is the truth about a
-   * home that has no operator to take anything down.
+   * Shared with the WS layer and the mint meter, so the daemon supplies one
+   * instance and three readers of one list cannot come to three answers. A
+   * caller that wires routes by hand gets a private, empty one — nothing is
+   * down and nobody is refused, which is the truth about a home that has no
+   * operator.
    */
-  takedowns?: Takedowns;
+  refusals?: Refusals;
 }
 
 export function registerRoutes(
@@ -638,10 +655,10 @@ export function registerRoutes(
    * would invite somebody to make it a lookup that can fail halfway through
    * an act. */
   const operators = options.operators ?? [];
-  /** The takedowns in force, for the door and the list. Private and empty when
-   * the caller wired no registry, which is the honest answer for a home that
-   * has taken nothing down. */
-  const takedowns = options.takedowns ?? new Takedowns();
+  /** The one door registry — takedowns and refusals both (operator phases 2
+   * and 6). Private and empty when the caller wired none, the honest answer
+   * for a home that has taken nothing down and refused nobody. */
+  const refusals = options.refusals ?? new Refusals();
 
   /**
    * **Who is parked on `/api/oplog/watch` right now**, so a takedown can wake
@@ -736,6 +753,18 @@ export function registerRoutes(
     mintMeter.take(clientAddress(req.headers, req.ip, { loopback: loopbackBound(app) }));
 
   /**
+   * **The network this knock came from, when the operator refused it**
+   * (operator phase 6) — the mint meter's home-scope refusal, read on the
+   * same key the meter buckets on so the two agree about whose address this
+   * is. `net:` refuses MINTING a badge, which is exactly what both mint paths
+   * are about to do; a caller that already holds a badge never reaches either,
+   * so a refusal never touches somebody already inside. Shared with the page
+   * fallback, which withholds the badge on it as it does on a metered knock.
+   */
+  const refusedNet = (req: FastifyRequest): HomeRefusal | null =>
+    refusals.refusingNet(clientAddress(req.headers, req.ip, { loopback: loopbackBound(app) }));
+
+  /**
    * What a refused mint is written down as, for the reader who is neither the
    * caller nor in the room: the key it was charged to, the chain that key was
    * read out of, and how many distinct keys the meter holds.
@@ -805,6 +834,18 @@ export function registerRoutes(
       return reply
         .status(err.status)
         .send({ error: err.message, code: err.code, reason: err.reason });
+    }
+    /**
+     * **Refused at the door** (operator phase 6): a badge that proved an
+     * address this home refuses. The same 403 and `not-admitted` as the two
+     * above — every client that reads a `reason` reads this one, and a fresh
+     * badge is not attempted — with the reason `refused` and the sentence the
+     * home wrote, carrying the date, the category and the address to write to.
+     */
+    if (err instanceof RefusedError) {
+      return reply
+        .status(err.status)
+        .send({ error: err.message, code: err.code, reason: err.reason, refusal: err.notice });
     }
     /**
      * **A parked wait whose badge was ended** (operator phase 4): the same
@@ -1079,8 +1120,19 @@ export function registerRoutes(
          * whole message, and this is the line that makes it so on the HTTP
          * surface.
          */
-        const down = takedowns.of(canvasId);
+        const down = refusals.of(canvasId);
         if (down) throw new TakenDownError(down);
+        /**
+         * **A badge that proved a refused address is turned away from every
+         * canvas** (operator phase 6; design's table: *every canvas and every
+         * create, for any badge that proved it*). In the hook, before the
+         * door, for the takedown's second reason: a refused person is often a
+         * member, and a member short-circuits the admission check — so this
+         * has to run before it, with the home's sentence rather than the door's
+         * bare *not admitted*.
+         */
+        const refused = refusals.refusingAttestation(req.badge?.attestations ?? []);
+        if (refused) throw new RefusedError(refused);
         await admit(req, canvasId);
         // Blob renderers do not carry reducer state. Every other canvas
         // route is gated, including newly added mutation routes.
@@ -1194,6 +1246,20 @@ export function registerRoutes(
    */
   app.post(DOOR_ROUTE, async (req, reply) => {
     if (req.badge) return { badgeId: req.badge.badgeId } satisfies DoorResponse;
+    /**
+     * **A knock from a refused network is turned away with the sentence**
+     * (operator phase 6; journey 9 step 3). Before the meter, because this is
+     * a standing refusal rather than a rate — a flood the operator named does
+     * not get to spend its twenty first — and 403 rather than 429, because a
+     * refused network is not told to wait: the refusal ends on its own when
+     * `--for` expires, not sooner. The words are the home's.
+     */
+    const netRefused = refusedNet(req);
+    if (netRefused) {
+      return reply
+        .status(403)
+        .send({ error: refusalSentence(netRefused), code: NOT_ADMITTED, reason: REFUSED, refusal: refusalNoticeOf(netRefused) });
+    }
     const refusal = mayMint(req);
     if (refusal) {
       logRefusal(req, "the door refused a mint: metered", refusal);
@@ -1476,8 +1542,14 @@ export function registerRoutes(
        * opening the owner's canvas list in a browser and looking at the Delete
        * button still sitting on the greyed card.
        */
-      const down = takedowns.of(body.canvasId);
+      const down = refusals.of(body.canvasId);
       if (down) throw new TakenDownError(down);
+      // And a refused badge, at the one route the hook cannot cover — a
+      // create (`project.create`) or any op carries its canvas in the BODY,
+      // and *every create* is what the design's table refuses (operator phase
+      // 6). The same omission twice if this line is not here.
+      const refusedOp = refusals.refusingAttestation(req.badge?.attestations ?? []);
+      if (refusedOp) throw new RefusedError(refusedOp);
       await admit(req, body.canvasId);
       // The capability check, at the one mutating route the hook cannot cover
       // (#88). BEFORE the submit for the door's own reason: a refusal that
@@ -3302,6 +3374,22 @@ export function registerRoutes(
     // No special case for an empty token: `verifyIdToken` refuses it as "not a
     // JWT", which is what it is, in the same voice as every other refusal.
     const attestation = await verifyIdToken(idToken, auth, await signingKeys());
+    /**
+     * **Proving a refused address is refused too** (operator phase 6; journey
+     * 9 step 2: *Proving it is refused too, so he cannot attest into it*).
+     * After the token verifies — a refusal names an address, and there is no
+     * address until the token proves one — and before the row is written, so a
+     * refused address never becomes an attestation the door would then have to
+     * catch on every request. 403 and the reason `refused`, the shape the door
+     * gives; the verify dialog already renders the error, so this arrives as
+     * the home's sentence in the dialog rather than a broken write.
+     */
+    const refused = refusals.refusingAddress(attestation.attribute);
+    if (refused) {
+      return reply
+        .status(403)
+        .send({ error: refusalSentence(refused), code: NOT_ADMITTED, reason: REFUSED, refusal: refusalNoticeOf(refused) });
+    }
     await desk.attest(req.badge!.badgeId, attestation);
     // Read back through the desk rather than assumed: the answer a surface
     // renders is what was WRITTEN, which is the discipline the sweep report
@@ -3687,7 +3775,7 @@ export function registerRoutes(
       return reply.status(status).send({ error, code });
     };
 
-    const standing = takedowns.of(id);
+    const standing = refusals.of(id);
     if (lifting) {
       if (!standing) {
         return refuse(
@@ -3718,7 +3806,7 @@ export function registerRoutes(
       // answers. Replicas come back on their own — the home link re-dials a
       // refused canvas at the slowest backoff, which is journey 5 step 2.
       const row = (await desk.takedownFor(id))!;
-      takedowns.remember(row);
+      refusals.remember(row);
       const answer: OperatorTakedownResponse = {
         takedown: row,
         reach: { sockets: 0, waits: 0, holds: 0, relays: 0, files: 0, bytes: 0 },
@@ -3764,7 +3852,7 @@ export function registerRoutes(
     };
     await desk.recordTakedown(row);
     await store.setTakenDown(id, row.at);
-    takedowns.remember(row);
+    refusals.remember(row);
     engine.drop(id);
     const sockets = options.sockets?.close(id, WS_NOT_ADMITTED, TAKEN_DOWN) ?? 0;
     const holds = options.rc?.endCanvas(id) ?? 0;
@@ -3849,7 +3937,7 @@ export function registerRoutes(
           "`--force`.",
       );
     }
-    const standing = takedowns.of(id);
+    const standing = refusals.of(id);
     if (!standing) return refuse("not-taken-down", purgeNeedsTakedown(id), 409);
     if (standing.purgedAt) {
       return refuse(
@@ -3865,7 +3953,7 @@ export function registerRoutes(
     const at = new Date().toISOString();
     await desk.markPurged(id, { at, actId: proven.id, counts: erased });
     const row = (await desk.takedownFor(id))!;
-    takedowns.remember(row);
+    refusals.remember(row);
     const answer: OperatorPurgeResponse = {
       takedown: row,
       erased,
@@ -4220,6 +4308,168 @@ export function registerRoutes(
   });
 
   /**
+   * **`isocan operator refuse` and `--lift`** (operator phase 6; design,
+   * "Refuse at the door"; journey 9).
+   *
+   * The roles bar moved to home scope: one desk row the operator writes,
+   * lifts and reads, loaded into the door's registry and re-read on write. It
+   * shares everything with the phase-2 takedown — the proof, the ledger row
+   * before anything, the same preflight — and the two things that are its own:
+   *
+   * - **Refusing an address ends every badge that proved it, in the same act**
+   *   (journey 9 step 1). `killAndSweep` per badge, phase 4's machinery, with
+   *   the operator's half of the tombstone so each ended person reads the
+   *   *ended* sentence, not silence. A name and a network end no badge — a
+   *   name refusal stops it coming BACK, and a network is not a badge.
+   * - **A network refusal expires by default** (journey 9 step 3), a day, so
+   *   the row carries `expiresAt`; `--for` sets it on any subject.
+   *
+   * Never forwarded, like every operator act: a replica says so. A refusal is
+   * a home fact, and `net:` in particular is about knocks THIS home's meter
+   * sees.
+   */
+  app.post(OPERATOR_REFUSE_ROUTE, async (req, reply) => {
+    const { subject: raw } = req.params as { subject: string };
+    const body = (req.body ?? {}) as OperatorRefuseRequest;
+    const lifting = body.lift === true;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    const proven = await proveAct(req, reply, {
+      act: "refuse",
+      target: raw,
+      ...(reason ? { reason } : {}),
+      ...(note ? { note } : {}),
+    });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+
+    const parsed = refusalSubjectOf(raw);
+    if (!parsed) return refuse("bad-subject", refusalSubjectRefusal(raw)!);
+    const { subject, kind } = parsed;
+    // The registry's clock, so the horizon this act WRITES and the horizon the
+    // door READS are one clock — the acceptance's movable `--for 10m`.
+    const nowMs = refusals.nowMs();
+    const now = new Date(nowMs).toISOString();
+
+    /**
+     * **The lift** — a rewrite of the one row, never a second. It does NOT
+     * un-end the badges an address refusal ended: ending is `killAndSweep`,
+     * and a lifted refusal means the address may prove again and be admitted,
+     * not that the surfaces ended by the refusal come back. The verb says so.
+     */
+    if (lifting) {
+      const standing = refusals.refusalOf(subject);
+      if (!standing) {
+        return refuse(
+          "nothing-to-lift",
+          `${raw} is not refused at this home — it was never refused, or the refusal is already ` +
+            `gone. \`isocan operator log --target ${raw}\` says which.`,
+          409,
+        );
+      }
+      await desk.liftRefusal(subject, { at: now, by: proven.proof.attribute, actId: proven.id });
+      const lifted = await desk.refusalFor(subject);
+      if (lifted) refusals.rememberRefusal(lifted);
+      const answer: OperatorRefuseResponse = {
+        refusal: lifted ?? standing,
+        reach: { kind, ended: [], reached: { sockets: 0, waits: 0 }, swept: { expelled: 0, rerooted: 0 }, holders: 0 },
+        sentence: null,
+      };
+      await desk.settleOperatorAct(proven.id, "done", { subject, lifted: true });
+      return answer;
+    }
+
+    if (!reason || !isTakedownReason(reason)) {
+      return refuse(
+        "no-reason",
+        `a refusal needs a reason from this list, because the reason is what the person is shown: ` +
+          `${takedownReasonList()}. The --note is yours and nobody else's.`,
+      );
+    }
+    const category: TakedownReason = reason;
+
+    /** `--for`, or a day for a network, or nothing. */
+    let expiresAt: string | undefined;
+    if (typeof body.for === "string" && body.for.trim()) {
+      const ms = parseRefusalDuration(body.for.trim());
+      if (ms === null) {
+        return refuse("bad-duration", `not a duration: \`${body.for}\` — say 10m, 24h or 7d.`);
+      }
+      expiresAt = new Date(nowMs + ms).toISOString();
+    } else if (kind === "net") {
+      expiresAt = new Date(nowMs + NET_REFUSAL_DEFAULT_MS).toISOString();
+    }
+
+    const row: HomeRefusal = {
+      subject,
+      kind,
+      at: now,
+      reason: category,
+      ...(note ? { note } : {}),
+      by: proven.proof.attribute,
+      actId: proven.id,
+      ...(expiresAt ? { expiresAt } : {}),
+    };
+    await desk.recordRefusal(row);
+    refusals.rememberRefusal(row);
+
+    /**
+     * **Ending every badge that proved the address** (journey 9 step 1). Only
+     * for `email:`/`repo:`, which a badge can attest; a name and a network end
+     * nothing here. `killAndSweep` reaches the dead badge's own sockets and
+     * parked waits (phase 4) and sweeps its rooms, so the ended people read
+     * the *ended* sentence and the enrolments are handled as they always are.
+     */
+    const ended: string[] = [];
+    const reached = { sockets: 0, waits: 0 };
+    const swept = { expelled: 0, rerooted: 0 };
+    let holders = 0;
+    if (kind === "email" || kind === "repo") {
+      const end: OperatorEnd = { reason: category, by: proven.proof.attribute, actId: proven.id };
+      for (const badge of await desk.badgesAttesting(subject)) {
+        const outcome = await killAndSweep(
+          desk,
+          badge.badgeId,
+          req.badge!.badgeId,
+          now,
+          (canvasId) => engine.getSnapshot(canvasId).then((s) => s.project.createdBy.id, () => null),
+          sweeps.report,
+          sweeps.ended,
+          end,
+        );
+        if (!outcome) continue;
+        ended.push(badge.badgeId);
+        reached.sockets += outcome.reached.sockets;
+        reached.waits += outcome.reached.waits;
+        swept.expelled += outcome.swept.expelled;
+        swept.rerooted += outcome.swept.rerooted;
+      }
+    } else if (kind === "actor") {
+      // A name refusal stops the name coming back; the badges holding it now
+      // are `isocan operator end`'s to end. The verb prints this count so the
+      // operator sees what a refusal did NOT do.
+      const joins = await engine.actorJoins();
+      for (const alias of actorAliases(joins, resolveActor(joins, subject.slice("actor:".length)))) {
+        for (const holder of await desk.claimants(alias)) {
+          if (holder.badgeId !== SHELF) holders += 1;
+        }
+      }
+    }
+
+    const reach: RefusalReach = { kind, ended, reached, swept, holders };
+    const answer: OperatorRefuseResponse = {
+      refusal: row,
+      reach,
+      sentence: refusalSentence(row),
+    };
+    await desk.settleOperatorAct(proven.id, "done", { subject, ended, reached, swept, holders });
+    return answer;
+  });
+
+  /**
    * **Where the affected people read the sentence** (design, "The record").
    *
    * Not an operator route, and the only route in this phase that is not: the
@@ -4239,14 +4489,14 @@ export function registerRoutes(
     const query = (req.query ?? {}) as Record<string, string | undefined>;
     const one = query[TAKEDOWNS_CANVAS_PARAM];
     if (one) {
-      const notice = takedowns.notice(one);
+      const notice = refusals.notice(one);
       return { takedowns: notice ? [notice] : [] } satisfies TakedownsResponse;
     }
     const badge = req.badge;
     if (!badge) return { takedowns: [] } satisfies TakedownsResponse;
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const mine: TakedownNotice[] = [];
-    for (const row of takedowns.all()) {
+    for (const row of refusals.all()) {
       if (admitted.has(row.canvasId)) {
         mine.push(noticeOf(row));
         continue;
@@ -4639,7 +4889,7 @@ export function registerRoutes(
        * reason: the people parked on a canvas are its members, and a member is
        * admitted.
        */
-      const down = takedowns.of(canvas.id);
+      const down = refusals.of(canvas.id);
       if (down) {
         if (only?.has(canvas.id)) throw new TakenDownError(down);
         return false;
@@ -5745,7 +5995,7 @@ export function registerRoutes(
   // The one-origin rule, per canvas since phase 10.3. See `registerPages`.
   // The meter travels with it: the SPA fallback is the second mint path, and
   // it draws on the same bucket the door does (phase 13.7).
-  registerPages(app, desk, store, options, { mayMint, logRefusal });
+  registerPages(app, desk, store, options, { mayMint, logRefusal, refusedNet });
 }
 
 /**
@@ -5976,6 +6226,11 @@ function registerPages(
   meter: {
     mayMint: (req: FastifyRequest) => MintRefusal | null;
     logRefusal: (req: FastifyRequest, what: string, refusal: MintRefusal) => void;
+    /** The operator's network refusal on this knock, or null (operator phase
+     * 6). The page path withholds the badge on it, as it does on a metered
+     * knock — the page is served, and a browser that arrives badge-less takes
+     * `api.ts`'s recover route, which meets the door's 403 and the sentence. */
+    refusedNet: (req: FastifyRequest) => HomeRefusal | null;
   },
 ): void {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -6171,7 +6426,10 @@ function registerPages(
     // being told to wait, answers 429 instead. Same accounting, two refusals,
     // because they are two different asks.
     if (!req.badge) {
-      const refusal = meter.mayMint(req);
+      // A refused network gets the page and no badge (operator phase 6), the
+      // same softest refusal a metered knock gets: the badge-less browser
+      // recovers through the door, which answers 403 with the sentence.
+      const refusal = meter.refusedNet(req) ? { retryAfter: 0 } : meter.mayMint(req);
       if (refusal) {
         meter.logRefusal(req, "served a page without minting: metered", refusal);
       } else {

@@ -18,6 +18,7 @@ import {
   WITHDRAWN,
   TAKEN_DOWN,
   ENDED,
+  REFUSED,
 } from "@isocan/core";
 import { Engine, CanvasNotFoundError } from "./engine.ts";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
@@ -34,7 +35,7 @@ import { isContentRequest } from "./content.ts";
 import { PresenceHub } from "./presence.ts";
 import { type RcHolds, rcPoliciesOf } from "./rc-holds.ts";
 import type { SweepHub } from "./sweep.ts";
-import type { Takedowns } from "./takedowns.ts";
+import type { Refusals } from "./takedowns.ts";
 
 /**
  * Per-canvas rooms. Server→client: snapshot on connect, op-applied per
@@ -91,12 +92,15 @@ interface WebSocketOptions {
    */
   census?: SocketCensus;
   /**
-   * **What this home has stopped serving** (operator phase 2), read on every
-   * upgrade. Absent means nothing is down, which is the truth about every home
-   * that has no operator — and the truth a test that attaches sockets without
-   * a daemon should get.
+   * **What this home refuses at the door** — takedowns (operator phase 2) and
+   * home-scope refusals (operator phase 6), one registry read on every
+   * upgrade. A socket on a canvas this home took down is closed `taken-down`,
+   * and one from a badge that proved a refused address `refused`, both before
+   * the door's admission check — a member is admitted and would short-circuit
+   * past it. Absent in a test that attaches sockets without a daemon, and then
+   * nothing is down and nobody is refused, which is that test's truth.
    */
-  takedowns?: Takedowns;
+  refusals?: Refusals;
 }
 
 /**
@@ -563,8 +567,18 @@ export function attachWebSockets(
      * which throws rather than truncating — so the word travels here and the
      * sentence is fetched by whoever wants to render it.
      */
-    if (canvasId && options.takedowns?.has(canvasId)) {
+    if (canvasId && options.refusals?.has(canvasId)) {
       return { code: WS_NOT_ADMITTED, reason: TAKEN_DOWN };
+    }
+    /**
+     * **A badge that proved a refused address is turned away here** (operator
+     * phase 6), with `refused` and before the door — a refused member is
+     * admitted, and the whole point is that this home will not admit them.
+     * The word travels on the close; the sentence is read off the 403 the
+     * next HTTP request gets, the same way `taken-down` and `ended` are.
+     */
+    if (options.refusals?.refusingAttestation(badge.attestations ?? [])) {
+      return { code: WS_NOT_ADMITTED, reason: REFUSED };
     }
     let capability: Capability = "edit";
     if (canvasId && !admissionIn(badge, canvasId)) {

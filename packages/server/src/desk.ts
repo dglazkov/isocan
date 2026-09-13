@@ -7,6 +7,7 @@ import type {
   Grant,
   GrantSubject,
   Group,
+  HomeRefusal,
   OperatorAct,
   OperatorEnd,
   OperatorRevocation,
@@ -890,4 +891,39 @@ export interface Desk {
    * acted, and a home with a hundred of them has a different problem.
    */
   takedowns(): Promise<CanvasTakedown[]>;
+
+  // ---- refusals (operator phase 6) ----
+  //
+  // **One row per subject, on the desk, beside the takedowns** — the roles
+  // bar moved to home scope (design, "Refuse at the door"). The same
+  // reasoning keeps it a row and keeps it here: standing state rather than
+  // an act, rewritten by a lift rather than added to, loaded into the one
+  // registry at boot and re-read on write. The refuse act and the lift act
+  // are both in the ledger, each with its proof; this is what they leave
+  // behind, and what every affected person's sentence is rendered from.
+  //
+  // The desk keeps no clock. A row with `expiresAt` in the past is still
+  // answered by `refusals()`; the REGISTRY judges expiry, because it is the
+  // one reader with a clock it can be handed, and two readers judging it
+  // would be two answers.
+
+  /** Write the row. A lift is {@link liftRefusal}, never a second row here.
+   * Refusing a subject again after a lift REWRITES the row — the lifted
+   * history lives in the ledger, where both acts are. */
+  recordRefusal(row: HomeRefusal): Promise<void>;
+
+  /**
+   * Mark the row lifted, keeping it. Silent when there is no row, for
+   * `liftTakedown`'s reason: the route has already refused a lift of nothing,
+   * and a throw here would turn a settled act into a failure.
+   */
+  liftRefusal(subject: string, lifted: { at: string; by: string; actId: string }): Promise<void>;
+
+  /** The row for one subject, lifted or not — null when there has never
+   * been one. */
+  refusalFor(subject: string): Promise<HomeRefusal | null>;
+
+  /** Every row not lifted — expired ones included, for the reason above.
+   * What the registry is loaded from at boot. */
+  refusals(): Promise<HomeRefusal[]>;
 }
