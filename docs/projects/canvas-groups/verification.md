@@ -104,3 +104,15 @@ stays inside operator purge's deletion boundary; context selection preserves
 the owner-only summon policy; and the operation-count instrument must see
 every new union member and an explicitly justified vocabulary bound. Existing
 area geometry, reducer and Undo/Redo assumptions remain accurate on main.
+
+## Phase 1 — verification in progress
+
+Builder ownership is split between core geometry/membership and daemon/API/
+protocol integration, with a third subagent reviewing without editing.
+The conductor's first independent production-helper probe wrapped one
+400×400 Markdown card at (100, 200), obtaining a 448×528 group at (76, 120).
+Requesting 336×396 initially yielded 336×528 and a 288×400 card: the fixed
+external label prevented vertical shrink. This exposed a design equation
+error, not a passing acceptance result. The design now scales the frame plus
+label reservation and names the required 288×268 card result. Implementation
+and the independent regression are pending; phase 1 is not closed.

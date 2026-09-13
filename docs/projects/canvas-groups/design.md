@@ -174,13 +174,25 @@ outer aspect ratio. CLI accepts a destination size and anchor corner; the
 op records the complete destination box, including x/y.
 
 For an old content box `(cx, cy, cw, ch)` and new content box
-`(nx, ny, nw, nh)`, transform each direct child with:
+`(nx, ny, nw, nh)`, transform each direct child's frame together with its
+persistent external label reservation `L` (24 units for labelled cards,
+zero for text, ink and groups):
 
 ```text
 sx = nw / cw                         sy = nh / ch
 x' = nx + (x - cx) * sx             y' = ny + (y - cy) * sy
-w' = w * sx                        h' = h * sy
+w' = w * sx                        h' = (h + L) * sy - L
 ```
+
+The label keeps its world-space height inside the transformed placement
+footprint. Scaling only the native frame while reserving an unscaled label
+afterward prevents a fitted group from shrinking at all: the bottom card
+would always hit the label boundary. Minimum constraints therefore compare
+`minimumHeight + L` with `height + L`. Attached ink overhang remains governed
+by the target-box rule above, not by an additional label-footprint transform.
+For example, a single 400×400 labelled card produces a default 448×528 fitted
+group; resizing that group to 336×396 produces a 288×268 card, preserving the
+56-unit title, 24-unit insets and 24-unit external card label.
 
 Nested groups receive a destination outer box from their parent, then apply
 the same rule to their own content boxes. Do not additionally apply the outer

@@ -63,7 +63,7 @@ for an explicit, justified vocabulary-bound adjustment, if required.
 
 **Trajectory:**
 
-*nothing yet — the phase has not started.*
+- **2026-09-12** — Resize scales the native frame plus its fixed external label reservation, then subtracts that reservation. A conductor probe showed that scaling the native frame alone made a fitted 400×400 card unable to shrink vertically; the corrected numeric case binds geometry tests.
 
 ## Phase 2 — Membership on both surfaces
 
