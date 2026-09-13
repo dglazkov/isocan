@@ -95,3 +95,11 @@ only the personal portion that implementation did not claim to provide.
   both birth and linking. A mixed replica can otherwise create one personal
   canvas locally and link another remotely; standalone CLI status/ensure
   retains its explicit connected-home or `--home` choice.
+- **2026-09-13** — A replica's automatic link migration cannot infer private
+  birth from an ordinary snapshot. It retains only verified source/home
+  classification before adoption, separately from ownership and consent.
+  The web's existing redirect to the authoritative home remains its entry.
+- **2026-09-13** — Ordinary teleport transfers log and blobs, not a home's
+  private ownership and consent. Personal sources refuse that move before
+  source reads or destination writes. Explicit owner export remains available;
+  a custody-preserving move needs a separate contract.

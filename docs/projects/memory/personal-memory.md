@@ -57,6 +57,18 @@ and preserved alias bindings retain trusted personal-source classification; a
 join cannot make a previously private birth eligible for automatic link/space
 migration.
 
+A replica also retains a narrow private classification marker: source id and
+authoritative home, learned from that configured home before adoption. This
+marker carries no owner, binding or delegation authority and never travels as
+an Operation. Automatic local link/space migration consults it as well as the
+home's primary and preserved personal records; adopting a private source must
+not create a local link grant. Source reads still ask the authority, and an
+unreachable home remains a refusal rather than permission to use the replica.
+Ordinary teleport cannot transfer this home-owned binding and consent. It
+refuses a personal source before reading its log/blobs or creating destination
+state; preserving private custody across a move needs a separate design.
+Deliberate owner export remains available and does not retarget the binding.
+
 ## Explicit consent, independent of a browser heartbeat
 
 An owner's enabled link means personal memory is present on that project. This
@@ -188,6 +200,10 @@ home connection, including on a daemon holding projects from several homes.
 It never births locally and then links a different personal source remotely,
 and the browser does not send local cookies directly to an arbitrary home.
 An explicit home that disagrees with the destination is refused visibly.
+The existing web entry rule still redirects a remote canvas to its home before
+Context renders. Personal memory introduces no replica-render exception or
+browser credential bridge; the browser claims and opens its canvas at that
+authority through the ordinary entry flow.
 The general context command prints the third heading for an authorized caller.
 
 Private results are cleared synchronously on observed actor, target/home, link
