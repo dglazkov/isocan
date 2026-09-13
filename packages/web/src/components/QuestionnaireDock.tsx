@@ -47,39 +47,13 @@ export function parseQuestionPayload(body: string): QuestionContextPayload | nul
   if (!raw.startsWith("{") || !raw.endsWith("}")) return null;
   try {
     const data = JSON.parse(raw);
-    if (data && typeof data === "object") {
-      let questions = Array.isArray(data.questions) ? data.questions : [];
-      if (questions.length === 0) {
-        // Provide default clarifying questions if the model provided only a headline/inferredAnswers
-        questions = [
-          {
-            id: "primaryFocus",
-            title: "What is the primary focus of this application?",
-            description: "Clarify the target audience and core value proposition.",
-            renderer: "choice-list",
-            options: [
-              { id: "consumer", title: "Consumer Experience", body: "Engaging, visual, rich interactions and high polish." },
-              { id: "productivity", title: "Productivity & Utility", body: "Fast, density-optimized workflows, data tables, and shortcuts." },
-              { id: "dashboard", title: "Overview & Analytics", body: "Clean metrics, charts, status cards, and high-level health." },
-            ],
-          },
-          {
-            id: "vibe",
-            title: "What visual vibe best matches your vision?",
-            description: "Choose an aesthetic tone and color palette.",
-            renderer: "visual-cards",
-            options: [
-              { id: "clean-light", title: "Clean Light", eyebrow: "Minimalist", colors: ["#ffffff", "#3b82f6", "#0f172a"] },
-              { id: "sleek-dark", title: "Sleek Dark", eyebrow: "Modern", colors: ["#0f172a", "#38bdf8", "#f8fafc"] },
-              { id: "warm-editorial", title: "Warm Editorial", eyebrow: "Refined", colors: ["#fef3c7", "#d97706", "#78350f"] },
-            ],
-          },
-        ];
-      }
-      return {
-        ...data,
-        questions,
-      } as QuestionContextPayload;
+    if (
+      data &&
+      typeof data === "object" &&
+      Array.isArray(data.questions) &&
+      data.questions.length > 0
+    ) {
+      return data as QuestionContextPayload;
     }
   } catch {
     return null;
