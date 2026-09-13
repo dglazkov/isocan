@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents, embed, public
-note: phases 0–4 and all four journeys are verified on CLI, browser and real MCP transport, 13 Sep. Private current context requires concrete consent and explicit caller authority. Recap-head and pin-from-source remain the next engineering phases
+note: phases 0–4 and the four personal-memory scenes are verified, 13 Sep. Phase 5 adds bounded inherited recap heads under Journey 5; pin-from-source remains the following engineering contract
 ---
 # Memory — bring a source, see where it came from
 
@@ -59,6 +59,27 @@ local, inherited and personal layers consistently for their selected caller.
 An unclaimed or ambient MCP call cannot silently borrow Maya's personal layer.
 A frozen request still includes only the shared project's own context.
 
+## Journey 5: Catch up on the shared source
+
+Theo opens Acme Onboarding's Context after the team has worked on its shared
+Design System canvas. Beside its design and pins, Recent work says what range
+it covers, who has been active and which current items changed most. The
+source name stays beside the reading. Rowan sees the same bounded facts in
+`isocan context` and through MCP; the project's local design still governs.
+
+A busy source says that earlier activity and less-active rows remain outside
+the head. It does not paste the team's conversation or revive the title of an
+item they removed or excluded. Archiving old operations and restarting the
+home leave the same recent record visible. If that record is incomplete or
+the home is unavailable, Context says why; the design and pins remain when
+they can still be read.
+
+Maya's personal card contributes only its permitted current preferences.
+Relabelling or copying that card does not make her private history eligible
+for Recent work. Reading the shared source changes neither it nor the project,
+and a saved request keeps exactly the context its sender chose.
+
+
 ## What these scenes force
 
 Canvases remain the memory record. Ordinary inheritance is shared; personal
@@ -68,5 +89,6 @@ private source read, and the response carries provenance. No vendor index,
 paid run, cloud resource or live personal data is required to prove this work.
 
 See design.md for the existing layered mechanism and personal-memory.md for
-the precise personal birth, consent and reading contract. Browser closure is
+the precise personal birth, consent and reading contract; inherited-recap.md
+defines the bounded recent-work contribution. Browser closure is
 not revocation; unlink and explicit delegate removal are the deliberate acts.

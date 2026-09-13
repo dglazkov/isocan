@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents
-note: phases 0–4 and all four journeys are verified on CLI, browser and real MCP transport, 13 Sep. Private current context requires concrete consent and explicit caller authority. Recap-head and pin-from-source remain the next engineering phases
+note: phases 0–4 are verified on CLI, browser and real MCP transport. Phase 5 next adds bounded inherited recap heads under inherited-recap.md; pin-from-source remains the following engineering contract
 ---
 # Memory, in layers you can see
 
@@ -70,8 +70,8 @@ designs — an ordinary item pointing at another canvas — wearing one more
 property: `memory=inherit`. A linked canvas contributes its *context pieces*
 here, read-only: its design system (if this canvas has none of its own, the
 linked one governs; if both, this canvas's wins and the panel says so), its
-pinned items, and eventually its recap's head. Recap-head contribution is
-separate remaining work, not part of the personal-memory continuation. The
+pinned items, and its bounded recap head under
+[inherited-recap.md](inherited-recap.md), the next build in memory phase 5. The
 link contributes neither Chat nor items wholesale: context is what somebody
 decided matters, and the link inherits exactly that decision. Several links compose in the order they sit on the canvas, top to
 bottom, left to right, because that is the order the room reads.
@@ -170,8 +170,9 @@ shipped, no vendor named in core.
 
 ## The acceptance suite
 
-[journey.md](journey.md) holds the four scenes: inherit a shared system,
-bring a private source, export deliberately, and read the visible corner.
+[journey.md](journey.md) holds the verified personal-memory scenes and the
+next recent-work scene: inherit a shared system, bring a private source,
+export deliberately, read the visible corner, and catch up on its shared source.
 The personal scene uses explicit consent and delegation on one authoritative
 home. [phases.md](phases.md) records the build and independently verified proof.
 
@@ -181,7 +182,7 @@ home. [phases.md](phases.md) records the build and independently verified proof.
    source canvas even when there is one — the seam the rest lands in.
 1. **Inherited memory** (needs inception phase 0): `memory=inherit` on a
    canvas item; its design system and pins join Context read-only, with
-   provenance and the override rule. Recap-head contribution remains unbuilt.
+   provenance and the override rule. Phase 5 completes recap-head contribution.
 2. **The person's canvas**: idempotent private birth on first personal use;
    a *Your canvas* link/unlink switch; source-bound consent and explicit
    agent delegation, with current authorized pieces on both clients.
@@ -193,6 +194,9 @@ home. [phases.md](phases.md) records the build and independently verified proof.
    personal sources, and `read_personal_context` reads current private pieces
    for an explicitly claimed owner or delegated session. Real stdio acceptance
    verifies the three layers without changing frozen request semantics.*
+5. **Inherited recap head:** bounded recent-work metadata from a coherent
+   authoritative record, on existing Context surfaces. The mechanism and
+   refusal boundary are in inherited-recap.md; Journey 5 is its acceptance.
 
 **Zero new op types** again: visible links use the existing canvas operation
 vocabulary. Personal birth, consent and delegation use the private Desk and
