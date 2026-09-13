@@ -19,6 +19,8 @@ import type {
   BadgeEnd,
 } from "@isocan/core";
 import {
+  CANVAS_GROUPS_FEATURE,
+  CLIENT_FEATURES_PARAM,
   applyOperation,
   newOpId,
   WS_BEHIND,
@@ -566,13 +568,18 @@ function flushPresence(): void {
  * at once — folded like every other write, invisible to the unsynced count,
  * never re-posted by a flush, retired by `seq` like the rest.
  */
-export async function sendEchoed(
+export async function sendEchoed(canvasId: string, actor: Actor, op: Operation, group?: string): Promise<void> {
+  await sendEchoedResult(canvasId, actor, op, group);
+}
+
+/** Forms need the home’s receipt before announcing completion; ordinary gestures keep their existing void contract. */
+export async function sendEchoedResult(
   canvasId: string,
   actor: Actor,
   op: Operation,
   /** One gesture, one undo — carried so a flush re-sends the same grouping. */
   group?: string,
-): Promise<void> {
+): Promise<{ status: "accepted" | "queued" | "refused"; message?: string }> {
   /**
    * **The past does not take writes.** The scrubber is a way of looking, not a
    * branch: there is no operation that means "and from here it went
@@ -583,13 +590,13 @@ export async function sendEchoed(
    */
   if (useCanvasStore.getState().past) {
     flashNotice("this is the canvas as it was — return to now to change it");
-    return;
+    return { status: "refused", message: "Return to now before changing this canvas." };
   }
   const { confirmed } = useCanvasStore.getState();
   // No confirmed state means no queue to join — nothing has been folded yet.
   if (!confirmed) {
-    await sendOp(canvasId, actor, op, group);
-    return;
+    const answer = await sendOp(canvasId, actor, op, group);
+    return { status: answer ? "accepted" : "queued" };
   }
   const opId = newOpId();
   const write: QueuedWrite = { ...newWrite(opId, actor, op, group), inflight: true };
@@ -606,13 +613,14 @@ export async function sendEchoed(
         .queue.map((other) => (other.opId === opId ? { ...other, seq: answer.seq } : other)),
     });
     persist();
+    return { status: "accepted" };
   } catch (err) {
     if (err instanceof ApiError && homeAnswered(err)) {
       // The home said no to something the person already saw happen.
       refuse(write, err);
       render();
       persist();
-      return;
+      return { status: "refused", message: err.message };
     }
     // The home never answered. It stops being in-flight and starts being
     // work this tab is holding — which is the moment "not synced" is true.
@@ -624,6 +632,7 @@ export async function sendEchoed(
     });
     render();
     persist();
+    return { status: "queued" };
   }
 }
 
@@ -826,7 +835,7 @@ function wsUrl(canvasId: string, since: number): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   // `since=0` is "no cursor" on the wire and the daemon reads it as such, so
   // a fresh connect says the same thing whether it says it or stays silent.
-  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}`;
+  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`;
 }
 
 /**

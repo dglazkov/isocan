@@ -17,6 +17,7 @@
  * the CLI, which consumes the same resolution and adds argv.
  */
 export * from "./connect.ts";
+export * from "./canvas-groups.ts";
 export * from "./routes.ts";
 export * from "./client.ts";
 export * from "./ctx.ts";

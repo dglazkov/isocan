@@ -1,6 +1,7 @@
 import type { CanvasState } from "./model.ts";
 import type { MetaPatch, NewVersion, Operation } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
+import { invertGroupChange } from "./canvas-groups.ts";
 
 /**
  * Compute the inverse of an operation against the state it is ABOUT to be
@@ -31,6 +32,9 @@ export function invertOperation(
   };
 
   switch (op.type) {
+    case "group.change":
+      if (op.action.kind !== "apply") throw new OpValidationError("bad-op", "resolve group intent before inversion");
+      return { type: "group.change", action: { kind: "apply", change: invertGroupChange(stateBefore, op.action.change) } };
     case "actor.claim":
     case "actor.setColor":
     case "actor.setMark":

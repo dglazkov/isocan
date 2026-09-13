@@ -26,6 +26,7 @@ type OpErrorCode =
    * already used the sequence number it tried to claim. Never retried by the
    * client: see `OplogFencedError`. */
   | "writer-fenced"
+  | "group-conflict"
   | "bad-op";
 
 export class OpValidationError extends Error {
@@ -35,6 +36,14 @@ export class OpValidationError extends Error {
   ) {
     super(message);
     this.name = "OpValidationError";
+  }
+}
+
+/** Structural undo conflicts must not be discarded or fall through to older work. */
+export class GroupConflictError extends OpValidationError {
+  constructor(message: string) {
+    super("group-conflict", message);
+    this.name = "GroupConflictError";
   }
 }
 

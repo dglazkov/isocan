@@ -50,6 +50,8 @@ import type {
   GroupsResponse,
 } from "@isocan/core";
 import {
+  CANVAS_GROUPS_FEATURE,
+  CLIENT_FEATURES_HEADER,
   ATTEST_ROUTE,
   groupActingRoute,
   groupMemberRoute,
@@ -210,8 +212,9 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   const send = () =>
     fetch(url, {
       method,
+      headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
       ...(body !== undefined
-        ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        ? { body: JSON.stringify(body) }
         : {}),
     });
   let res = await send();

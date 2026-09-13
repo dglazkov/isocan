@@ -5,10 +5,11 @@ the mechanism. This is the conduct contract for implementing the reviewed
 plan. The conductor owns these documents and the release record; builders
 own only their assigned code, tests, CLI guide and product README changes.
 
-**Where we are:** all five phases are NOT STARTED (12 Sep 2026). Canvas-groups
-phase 1 is next: shared membership, operations and exact inverses. The
-reviewed design has been reconciled with the current main checkout before
-briefing. No phase waits on another project's implementation or on a person.
+**Where we are:** phases 1–2 are CLOSED (12 Sep 2026); phases 3–5 are NOT STARTED.
+Canvas-groups phase 3 is next: transforms, frame fitting and label-safe layout.
+Shared operations and membership on both clients have passed the conductor's
+HTTP, persistence, real CLI and browser proofs. No phase waits on another
+project's implementation or on a person.
 
 **Rules for every phase.** Work on main. Every structural act is atomic,
 undoable and shared by both surfaces; a log undo label is not atomicity.
@@ -36,7 +37,7 @@ synthetic local daemon, never the user's existing canvas daemon.
 
 ## Phase 1 — Shared membership and atomic operations
 
-**Status: NOT STARTED (2026-09-12).** Nothing built.
+**Status: CLOSED (2026-09-12).** Shared membership and atomic operations passed focused, full-suite, typecheck and independent real HTTP proofs; creation remains explicitly gated until phase 5.
 
 Establishes the mechanism of journeys 1, 2, 5 and 6; the pointer walks close
 in later phases. Mechanisms: design sections Membership, Moving and resizing,
@@ -63,18 +64,23 @@ for an explicit, justified vocabulary-bound adjustment, if required.
 
 **Trajectory:**
 
-*nothing yet — the phase has not started.*
+- **2026-09-12** — Resize scales the native frame plus its fixed external label reservation, then subtracts that reservation. A conductor probe showed that scaling the native frame alone made a fitted 400×400 card unable to shrink vertically; the corrected numeric case binds geometry tests.
+- **2026-09-12** — One closed `group.change` action union records bounded structural writes, with public intent resolved only at the writer. Ordinary new geometry requests normalize through it; historical replay does not. The visible operation count rises from 33 to 34 rather than hiding members from the instrument.
+- **2026-09-12** — A deletion cohort needs a durable roster beyond its surviving trash entries. `canvas.groupCohorts` preserves original membership through partial restores, both storage backends and native backup; later lifecycle surfaces can report skipped members without reclaiming independently restored or re-deleted items.
 
 ## Phase 2 — Membership on both surfaces
 
-**Status: NOT STARTED (2026-09-12).** Nothing built.
+**Status: CLOSED (2026-09-12).** CLI/API membership and real browser creation, scope, menus, detach and undo are independently verified.
 
 Closes journey 1 and the membership/navigation parts of journey 3. Mechanisms:
 design sections Joining/moving/leaving, Selecting a group, CLI/API surface,
 and UI entry points. Geometry preview and smart placement close in phase 3.
 
 **Work:** `isocan canvas group` new/wrap/ls/show/add/remove/ungroup, API helpers,
-JSON/dry-run/unique-ref behavior; browser create/wrap/add/remove/ungroup,
+JSON/dry-run/unique-ref behavior, and the existing `mv --in` spelling for
+atomic membership transfer and placement. Add one closed `remove` action
+inside `group.change` for selections whose roots have different destination
+parents; never approximate it with a loop of reparent requests. Browser create/wrap/add/remove/ungroup,
 activeGroupId, scoped click/marquee/Enter/Escape, group/ink/member menus,
 shortcuts and inspector/navigation. Retain sharing-group and text-selection
 verbs. Document every registered command in agent-guide quick reference and
@@ -88,7 +94,12 @@ are assigned explicitly by the conductor to avoid overlapping ownership.
 
 **Trajectory:**
 
-*nothing yet — the phase has not started.*
+- **2026-09-12** — Removing roots from different groups can require different destination parents. Phase 2 adds one closed `remove` intent within `group.change`, resolving all destinations from the starting relation. Its membership walk also requires `mv --in` now; phase 3 retains broader geometry dispatch.
+- **2026-09-12** — Public `remove` resolves to the existing canonical `reparent` intent. Review found that recording a new intent value under `canvas-groups-v1` would admit phase 1 readers whose reducer rejects it; preserving the replay shape keeps that capability truthful without a version bump.
+
+- **2026-09-12** — Accepted receipts describe the writer's resolved facts, not a replay against the caller's earlier snapshot. A real intervening HTTP move exposed a false client failure after successful Add; phase 3 must preserve this distinction for transform receipts and previews.
+
+- **2026-09-12** — Web structural calls distinguish accepted, queued and refused outcomes. Creation forms keep queued/refused work visible instead of selecting a nonexistent frame; phase 3 must apply the same outcome contract when clearing gesture previews.
 
 ## Phase 3 — Transforms, frame fitting and label-safe layout
 

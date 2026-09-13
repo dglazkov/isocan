@@ -106,6 +106,9 @@ interface UiStore {
   /** Item whose content owns the pointer (entered by double-click): an HTML
    * document or a projected browser item. */
   enteredItemId: string | null;
+  /** Membership scope; separate from an embedded document owning the pointer. */
+  activeGroupId: string | null;
+  groupDialog: { kind: "create" | "add" | "inspect"; itemIds: string[]; groupId?: string; at?: { x: number; y: number } } | null;
   /** Item whose name is being edited in place — double-clicking the label, or
    * F2 on the selection. */
   renamingItemId: string | null;
@@ -292,6 +295,8 @@ interface UiStore {
   setMarquee: (marquee: MarqueeState | null) => void;
   setGuides: (guides: Guide[], spacing?: SpacingGuide[]) => void;
   setEntered: (itemId: string | null) => void;
+  setActiveGroup: (itemId: string | null) => void;
+  setGroupDialog: (dialog: UiStore["groupDialog"]) => void;
   setRenaming: (itemId: string | null) => void;
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
@@ -611,6 +616,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     guides: [],
     spacing: [],
     enteredItemId: null,
+    activeGroupId: null,
+    groupDialog: null,
     renamingItemId: null,
     openThreadId: null,
     pendingComment: null,
@@ -683,6 +690,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     setMarquee: (marquee) => set({ marquee }),
     setGuides: (guides, spacing = []) => set({ guides, spacing }),
     setEntered: (enteredItemId) => set({ enteredItemId }),
+    setActiveGroup: (activeGroupId) => set({ activeGroupId, enteredItemId: null, selectedItemIds: [] }),
+    setGroupDialog: (groupDialog) => set({ groupDialog }),
     setRenaming: (renamingItemId) => set({ renamingItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),

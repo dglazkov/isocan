@@ -45,6 +45,7 @@ import type {
  */
 
 interface CanvasSnapshotFile {
+  groupCohorts?: CanvasState["canvas"]["groupCohorts"];
   lastSeq: number;
   items: CanvasState["canvas"]["items"];
   threads: CanvasState["canvas"]["threads"];
@@ -183,7 +184,7 @@ export class FileStore implements Store {
     let state: CanvasState = {
       project: record,
       canvas: snapshot
-        ? { items: snapshot.items, threads: snapshot.threads, trash, agents: snapshot.agents ?? {} }
+        ? { items: snapshot.items, threads: snapshot.threads, trash, agents: snapshot.agents ?? {}, ...(snapshot.groupCohorts ? { groupCohorts: snapshot.groupCohorts } : {}) }
         : { ...emptyCanvas(), trash },
     };
     let lastSeq = snapshot?.lastSeq ?? 0;
@@ -252,6 +253,7 @@ export class FileStore implements Store {
 
   async saveSnapshot(id: string, state: CanvasState, lastSeq: number): Promise<void> {
     const snapshot: CanvasSnapshotFile = {
+      ...(state.canvas.groupCohorts ? { groupCohorts: state.canvas.groupCohorts } : {}),
       lastSeq,
       items: state.canvas.items,
       threads: state.canvas.threads,

@@ -1,4 +1,6 @@
 import { textAttention } from "@isocan/core";
+import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError } from "@isocan/core";
+import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { createReadStream, existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { createHash } from "node:crypto";
@@ -751,6 +753,12 @@ export function registerRoutes(
   };
 
   app.setErrorHandler((err, _req, reply) => {
+    if (err instanceof CanvasGroupsClientError) {
+      return reply.status(426).send({ error: err.message, code: err.code });
+    }
+    if (err instanceof GroupConflictError) {
+      return reply.status(409).send({ error: err.message, code: err.code });
+    }
     if (err instanceof OpValidationError) {
       return reply.status(400).send({ error: err.message, code: err.code });
     }
@@ -1067,6 +1075,12 @@ export function registerRoutes(
         const down = takedowns.of(canvasId);
         if (down) throw new TakenDownError(down);
         await admit(req, canvasId);
+        // Blob renderers do not carry reducer state. Every other canvas
+        // route is gated, including newly added mutation routes.
+        if (!pathname.includes("/blobs") && !supportsCanvasGroups(req.headers[CLIENT_FEATURES_HEADER])) {
+          const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
+          if (snapshot) requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.project);
+        }
         /**
          * The capability check, method-keyed and in the SAME hook (#88): an
          * admission below `edit` (`view`, `read`) reads everything and
@@ -1324,6 +1338,12 @@ export function registerRoutes(
 
   app.post("/api/ops", async (req, reply) => {
     const body = req.body as PostOpRequest;
+    const clientFeatures = body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? "");
+    if (body.op && groupOperation(body.op) && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
+    if (body.canvasId && !supportsCanvasGroups(clientFeatures)) {
+      const snapshot = await engine.getSnapshot(body.canvasId).catch(() => null);
+      if (snapshot) requireGroupClient(clientFeatures, snapshot.project);
+    }
     /**
      * The idempotency key, shape-checked before it can reach the oplog
      * (phase 10). A caller that sends one gets exactly-once for this op; a
@@ -1482,6 +1502,7 @@ export function registerRoutes(
     }
     const entry = await engine.submit({
       ...(body as PostOpRequest & { actor: Actor }),
+      clientFeatures,
       badgeId: req.badge!.badgeId,
       ...(bornInto ? { withoutLinkGrant: true } : {}),
     });
@@ -4349,6 +4370,7 @@ export function registerRoutes(
     // No `admit` here any more: the hook took the door's test on the way in,
     // for this route and every other one shaped like it.
     const snapshot = await engine.getSnapshot(id);
+    requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.project);
     // The one fact about the READER that rides on the read (#88): a client
     // whose admission is not edit learns its rung here, with the canvas,
     // instead of discovering it as a refusal per gesture. Absent means edit,
@@ -4386,6 +4408,7 @@ export function registerRoutes(
       });
       entries = await engine.getLog(id, sinceSeq);
     }
+    requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
     return entries;
   });
 
@@ -4398,7 +4421,9 @@ export function registerRoutes(
    */
   app.get("/api/projects/:id/oplog/archive", async (req) => {
     const { id } = req.params as { id: string };
-    return engine.getArchivedLog(id);
+    const entries = await engine.getArchivedLog(id);
+    requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
+    return entries;
   });
 
   /**
@@ -4486,9 +4511,14 @@ export function registerRoutes(
       for (const canvas of await engine.listCanvases()) {
         if (only && !only.has(canvas.id)) continue;
         if (!(await mayHear(canvas))) continue;
+        if (canvas.groupMode === "groups" && !supportsCanvasGroups(req.headers[CLIENT_FEATURES_HEADER])) {
+          if (only?.has(canvas.id)) throw new CanvasGroupsClientError();
+          continue;
+        }
         const since = cursors?.[canvas.id] ?? 0;
         // Seeding (no cursors at all) means "from now on" — tips, no entries.
         const log = cursors ? await engine.getLog(canvas.id, since) : [];
+        requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], canvas, log);
         const lastSeq = cursors
           ? (log[log.length - 1]?.seq ?? since)
           : (await engine.getSnapshot(canvas.id)).lastSeq;
@@ -4744,13 +4774,13 @@ export function registerRoutes(
   app.post("/api/projects/:id/undo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.undo(id, body.actor, req.badge!.badgeId, body.clientId);
+    return engine.undo(id, body.actor, req.badge!.badgeId, body.clientId, body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? ""));
   });
 
   app.post("/api/projects/:id/redo", async (req) => {
     const { id } = req.params as { id: string };
     const body = req.body as UndoRedoRequest;
-    return engine.redo(id, body.actor, req.badge!.badgeId, body.clientId);
+    return engine.redo(id, body.actor, req.badge!.badgeId, body.clientId, body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? ""));
   });
 
   // ---- presence sessions (ephemeral plane — no oplog, no storage) ----
@@ -4895,6 +4925,7 @@ export function registerRoutes(
     if (!Array.isArray(body.entries)) {
       return { error: "adopt takes the canvas's entries", code: "bad-op" };
     }
+    requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, body.entries);
     const made = await engine.adopt(id, body.entries);
     // Both arrivals need this: a teleport's bytes follow the log, and a
     // restored backup is otherwise a canvas nobody could enter. See above.

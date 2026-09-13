@@ -2,7 +2,8 @@
 
 This records work that was actually checked. The acceptance gates in
 [`design.md`](design.md) describe future feature verification; they are not
-completed checks. No group implementation has started.
+completed checks. Phase records below distinguish built mechanisms from the
+client interactions and release gates still to be walked.
 
 ## 12 September 2026: independent review of the plan
 
@@ -104,3 +105,182 @@ stays inside operator purge's deletion boundary; context selection preserves
 the owner-only summon policy; and the operation-count instrument must see
 every new union member and an explicitly justified vocabulary bound. Existing
 area geometry, reducer and Undo/Redo assumptions remain accurate on main.
+
+## Phase 1 — CLOSED, 12 September 2026
+
+Builder ownership is split between core geometry/membership and daemon/API/
+protocol integration, with a third subagent reviewing without editing.
+The conductor's first independent production-helper probe wrapped one
+400×400 Markdown card at (100, 200), obtaining a 448×528 group at (76, 120).
+Requesting 336×396 initially yielded 336×528 and a 288×400 card: the fixed
+external label prevented vertical shrink. This exposed a design equation
+error, not a passing acceptance result. The design now scales the frame plus
+label reservation and names the required 288×268 card result. Both the
+production regression and the independent HTTP walk now produce that result.
+
+The core builder owned core membership, geometry, bounded operation writes
+and consumers; the daemon builder owned API/writer, Undo/Redo, persistence
+and protocol capability plumbing, including minimal web negotiation. The
+read-only reviewer checked the actual writer, raw JSON refusal paths and
+storage boundaries and approved the corrected phase. The conductor read the
+diff and tests, ran all socket/emulator proofs centrally, and wrote this record.
+
+The first complete suite found five old web protocol assertions that omitted
+the new capability header/query, and two export guards. The web tests now
+assert the feature while retaining bodyless-delete and queue-order checks.
+The export instrument reads tracked files: staging the six new files exposed
+their actual consumers and unused exports. Builders kept eleven internal
+helpers/types private and documented the public contracts. The unused and
+undocumented export bounds remain 39 and 331. The separately justified
+operation vocabulary bound is 34, accounting for `group.change`.
+
+During final integration, upstream operator phase 4 added badge-ending paths.
+Rebasing onto `13f009ce` produced one API import conflict; its builder retained
+both features and reviewed the HTTP, socket and web queue merges. The
+following checks ran on that combined implementation tree:
+
+| Conductor command from the repository root | Observed result |
+| --- | --- |
+| `npm test -- packages/core/test/canvas-groups.test.ts packages/server/test/canvas-groups.test.ts` | Exit 0; 60 tests passed in two files. |
+| `FIRESTORE_EMULATOR_HOST=127.0.0.1:19099 ISOCAN_REQUIRE_EMULATOR=1 npm test` | Exit 0; 4,557 passed, four skipped, 442 files passed; 145.55 seconds. Local FileStore and real Firestore-emulator paths both ran. |
+| `npm run typecheck` | Exit 0 across all workspaces. |
+| `npm test -- test/roadmap.test.ts test/changelog.test.ts` | Exit 0; 11 tests passed after updating the record. The initial sandbox run could not open the CLI daemon log; the unrestricted rerun passed. |
+| `node --import tsx /tmp/isocan-canvas-groups-phase1-walk.mts` | Exit 0; independent fresh-daemon HTTP walk passed all ten recorded checks. |
+| `git diff --check` | Exit 0. |
+
+The full suite's four skips were the existing dispatch/ACP cases (three) and
+the bundle-size check because the built web assets predated the source. No
+group persistence test was skipped. Phase 2 requires a fresh build and a
+real browser walk. The emulator used synthetic local data, without a cloud
+account or provisioned resource.
+
+The independent HTTP walk uploaded and retrieved real blob bytes, wrapped a
+card while leaving an overlapping non-member outside, and observed one log
+entry. It resized 448×528 to 336×396 through the ordinary resize API and read
+the 288×268 child. Group-plus-child movement translated once, a same-key retry
+returned the same receipt with one entry, undo retained another actor's title
+edit, and a stale membership expectation returned 409 with an identical
+snapshot and log tip. Focused engine cases additionally verified a conflicting
+undo candidate is retained, a mixed undo-label batch is preflighted, creation
+redo preserves IDs/authorship, malformed snapshots never replace storage,
+and cohort persistence survives restart and native export/import.
+
+Both-surface obligations: the operation vocabulary and shared core helpers
+changed, with API and protocol integration and production tests. CLI verbs,
+the agent guide, product README and feature UI are deliberately phase 2;
+WHATSNEW is untouched because this foundation exposes no normal creation
+path. No pointer walk or completed user journey is claimed for phase 1.
+
+## Phase 2 — CLOSED, 12 September 2026
+
+The semantic builder owned the API, CLI, public Remove resolution and command
+documentation; the UI builder owned browser membership, navigation and menus.
+A third subagent reviewed source without editing. The conductor read their
+diffs/tests, ran the writer and browser independently, and returned failures
+to the owners. All data in the two browser homes was synthetic.
+
+Two contract corrections landed before implementation: mixed-parent Remove
+is one public action, and it canonicalizes to the existing v1 reparent intent.
+The independent HTTP/API walk loaded the actual phase-1 reducer from
+`dec07903`, replayed the accepted removal, and compared the resulting canvas.
+One undo restored both different parent destinations. Creation/add/remove/
+ungroup dry runs left state, log and blob inventory unchanged. An intervening
+HTTP move before API Add showed why receipts must describe the accepted
+writer facts: replaying the receipt against the caller's earlier snapshot
+could throw after a successful write. The API now returns the actual accepted
+positions and sequence.
+
+The conductor's real browser walks used freshly built `packages/web/dist`,
+a fresh local daemon, separate legitimate browser/CLI/seed identities, and
+hit-tested CDP mouse, keyboard and touch input. CLI checks launched the actual
+`packages/cli/bin/isocan.js`, reading the same live home. The observations:
+
+- Selected three 240×180 cards, wrapped by context menu and by Cmd+G, and
+  inspected the same three IDs with `canvas group ls/show`. The overlapping
+  fourth card remained unrelated. Saved card positions stayed fixed; a brief
+  reserved its own band. The final screenshot showed a readable title/count
+  and brief above the first row at 112% zoom, with the frame visible.
+- Enter selected the group's scope; clicking then reached a direct child.
+  Shift+F10, arrow keys and Enter removed a child. CLI inspection showed the
+  changed relation, and browser Cmd+Z restored it without moving the child.
+  Add items via the picker enlarged the frame in one change; undo restored
+  its prior frame. CLI `mv --in` moved and reparented an overlapping card,
+  and CLI undo restored its original relationship and geometry.
+- Cmd+G created a nested frame; Enter/Escape navigated both levels.
+  Cmd+Shift+G dissolved the nested frame and promoted children without moving
+  them; undo recovered its identity. CLI Add, Remove and Ungroup produced
+  the same relationships while the browser was watching. Toolbar Groups →
+  New group produced an empty frame, and CLI Show reported zero members.
+- An independently selected annotation refused Remove. The ink menu's
+  Detach cleared annotates and region in one act, preserving its 280×220
+  box at (180,180) and parent. Remove then succeeded; two undos restored the
+  membership and both attachment fields. The real CLI repeated detach,
+  remove and both undos using `set --rm-prop` and the group command.
+- Lowering the actual link grant to read removed editing menu entries.
+  Readers could enter, select contents and inspect a read-only name without
+  a Save button. Restoring edit access restored editing. The legacy canvas
+  refused group creation with an explicit not-enabled explanation. People
+  group help and `session select --help` kept their existing meanings;
+  ambiguous group prefixes listed candidates and refused to guess.
+- Deleting a selected card through the real API while the form was open
+  produced a disabled form with a missing-selection explanation. Holding
+  its actual blob upload, deleting the selected card, and releasing the
+  upload also yielded a settled unknown-item refusal in the form, with no
+  partial frame. Browser runtime-error collection remained empty.
+- A real Shift-marquee starting outside an entered group exposed a stale
+  child selection at root scope. The fix clears the old scope before the
+  additive base is captured; repeating the drag selected only the outsider.
+  An outside touch tap now exits scope through the same boundary decision.
+- At a 760px viewport height, End scrolled the last menu action into view.
+  ArrowRight on Delete did nothing. A submenu initially opened before React
+  could focus its child; the fix moves focus after commit. The final walk
+  used Right → Down → Left → Right → Enter, observed Left/Center/Align focus
+  as expected, and confirmed the resulting alignment and undo with the CLI.
+
+The browser found two presentation defects: the header could start above the
+viewport and inherited a dark paper-ink color on the dark canvas. Accepted
+creation now reveals the complete frame by changing only the camera, and
+group titles use theme text colors. Groups no longer mount irrelevant
+Markdown reader/fullscreen card chrome; Open brief is explicit. The group
+menu also omits the fullscreen row whose Enter hint contradicted Enter group.
+
+The first full suites caught API root-entry exports and old source assertions,
+not just new feature tests. The owners fixed the API export, retained legacy
+area branches, and updated touch/menu guards to preserve their intent.
+
+The fresh build also made phase 1's previously unmeasured entry cost visible.
+Same-machine in-memory builds measured 667,692 bytes before phase 1, 691,309
+at phase 1, and 702,349 after phase 2. There are no new third-party entry
+modules. Deferring the Toolbar menu saved 1,725 bytes in a controlled
+comparison; the final keyboard-focus correction added 328 bytes. The shared
+resolver remains synchronous because optimistic replay uses it. The explicit
+ceiling is now 702,400; the 640,000 goal and 20,000 jump gate are unchanged.
+This is a measured feature cost, not a hidden library import.
+
+| Conductor command | Observed result |
+| --- | --- |
+| `npm test -- packages/cli/test/canvas-groups.test.ts packages/web/test/canvas-groups.test.ts packages/cli/test/surface.test.ts` | Exit 0; 21 tests passed in three files. |
+| `FIRESTORE_EMULATOR_HOST=127.0.0.1:19099 ISOCAN_REQUIRE_EMULATOR=1 npm test` | Exit 0; 4,579 passed, three existing ACP/dispatch skips, 445 files passed; 148.68 seconds. |
+| `npm run typecheck` | Exit 0 across all workspaces. |
+| `npm run build` | Exit 0; final entry 702,349 bytes. |
+| `node --import tsx /tmp/isocan-canvas-groups-phase2-api-walk.mts` | Exit 0; real HTTP race, actual v1 replay, atomic mixed-parent undo and dry-run inventory checks passed. |
+| `node --import tsx /tmp/isocan-canvas-groups-browser-driver.mts` | Real two-home browser/CLI walks above; final interaction checks passed and runtime errors were empty. |
+| `git diff --check` and conduct status lint | Exit 0 / clean. |
+
+The scratch browser command/observation record is
+`/tmp/isocan-canvas-groups-browser-walk.jsonl`; representative screenshots are
+`/tmp/isocan-groups-phase2-final-wrap.png` and
+`/tmp/isocan-groups-phase2-scroll-menu.png`. These are observed evidence,
+not a fixture standing in for a browser. A wrong scratch selector and an
+attempt to use native Select All without CDP keycodes were harness errors;
+triple-click name replacement and the correct DOM selectors were used in the
+subsequent walks.
+
+All six surface obligations were touched: the existing operation union gained
+public Remove with compatible canonical replay; CLI membership verbs and
+`mv --in` call API helpers; the guide quick reference and README describe
+both surfaces; shared traversal/receipt logic lives in core/API; meaningful
+logic tests and actual browser interaction proofs ran. Group mode remains
+opt-in until phase 5. Complete gesture previews, all insertion producers and
+atomic brief/header edits belong to phase 3; context and migration remain
+phases 4 and 5. No external provisioning or human-only step is pending.

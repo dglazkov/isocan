@@ -3,6 +3,7 @@ import { type ActivityEntry } from "../../core/src/index.js";
 import { type Ctx } from "./ctx.js";
 import { type ExplicitIdentity } from "./identity.js";
 import { type DaemonRoutes } from "./routes.js";
+import { CanvasGroups } from "./canvas-groups.js";
 /**
  * **`connect()` — the API's front door** (iso-api phase 2, journey 1).
  *
@@ -150,6 +151,8 @@ export declare class CanvasHandle {
     constructor(ctx: Ctx, record: Canvas);
     get id(): string;
     get title(): string;
+    /** Membership verbs share the CLI's typed canvas-group helper and atomic writer boundary. */
+    get groups(): CanvasGroups;
     private snapshot;
     /** Every network act on this handle throws `ApiError` — see {@link reaching}. */
     private reach;

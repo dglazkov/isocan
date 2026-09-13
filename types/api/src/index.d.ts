@@ -17,6 +17,7 @@
  * the CLI, which consumes the same resolution and adds argv.
  */
 export * from "./connect.js";
+export * from "./canvas-groups.js";
 export * from "./routes.js";
 export * from "./client.js";
 export * from "./ctx.js";

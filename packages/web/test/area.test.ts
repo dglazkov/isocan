@@ -19,7 +19,12 @@ const cli = read("../../cli/src/main.ts");
  */
 describe("an area lies behind everything", () => {
   it("is rendered first, so items placed on it paint over it", () => {
-    expect(viewport).toContain("sort((a, b) => Number(isArea(b)) - Number(isArea(a)))");
+    // Both container kinds sort before ordinary cards; the area predicate
+    // remains present so enabling explicit groups cannot lift legacy sheets.
+    expect(viewport).toContain("Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a))");
+    // Nested group backgrounds follow their ancestors, preserving each
+    // child's visible label while keeping all backgrounds behind cards.
+    expect(viewport).toContain("groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length");
   });
 
   it("wears no shadow and only a dashed hairline — a sheet, not a card", () => {
@@ -39,11 +44,11 @@ describe("an area lets tools through, and is grabbed by its name", () => {
   });
 
   it("draws the title strip as the handle, sized in world units from core", () => {
-    const strip = view.slice(view.indexOf('className="area-title"'), view.indexOf('className="area-title"') + 200);
-    expect(strip).toContain("height: AREA_TITLE_HEIGHT");
+    const strip = view.slice(view.indexOf('className="area-title"'), view.indexOf('className="area-title"') + 360);
+    expect(strip).toContain("height: isCanvasGroup ? (item.groupLayout?.titleHeight ?? 56) : AREA_TITLE_HEIGHT");
     // The label's size comes from the same constant, per item — never a
     // step in the stylesheet's type scale (scale.test.ts holds the count).
-    expect(strip).toContain("fontSize: Math.round(AREA_TITLE_HEIGHT * 0.6)");
+    expect(strip).toContain("fontSize: isCanvasGroup ? 24 : Math.round(AREA_TITLE_HEIGHT * 0.6)");
     expect(css).not.toMatch(/\.area-title \{[^}]*font-size/);
   });
 

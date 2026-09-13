@@ -1,3 +1,5 @@
+import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
@@ -497,7 +499,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     const canvas = useCanvasStore.getState().canvas;
     if (!canvas) return;
     const target = (e.target as HTMLElement).closest?.("[data-item-id]");
-    const itemId = target?.getAttribute("data-item-id") ?? null;
+    const rawItemId = target?.getAttribute("data-item-id") ?? null;
+    const itemId = rawItemId ? scopedHit(rawItemId) : null;
     e.preventDefault();
 
     if (itemId) {
@@ -857,7 +860,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       // A press that never moved is a TAP, and on a coarse pointer this
       // gesture replaced the marquee — so it owes the marquee's answer to
       // "I pressed nothing".
-      if (!moved && opts.tapClears) clearBackgroundFocus();
+      if (!moved && opts.tapClears && ev.type !== "pointercancel") {
+        leaveGroupAtPoint(screenToWorld(useUiStore.getState().viewport, ev.clientX, ev.clientY));
+        clearBackgroundFocus();
+      }
       const v = moved ? flickVelocity(samples, performance.now()) : null;
       if (v) startCoast(v);
     }
@@ -923,8 +929,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     el.setPointerCapture(e.pointerId);
     const ui = useUiStore.getState();
     const additive = e.shiftKey;
-    const baseSelection = additive ? ui.selectedItemIds : [];
     const startWorld = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    leaveGroupAtPoint(startWorld);
+    // Leaving scope clears its child selection before Shift captures a base.
+    const baseSelection = additive ? useUiStore.getState().selectedItemIds : [];
+
     let moved = false;
 
     function onMove(ev: PointerEvent) {
@@ -938,8 +947,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       const maxX = Math.max(startWorld.x, current.x);
       const minY = Math.min(startWorld.y, current.y);
       const maxY = Math.max(startWorld.y, current.y);
-      const items = useCanvasStore.getState().canvas?.items ?? {};
-      const hit = Object.values(items)
+      const currentCanvas = useCanvasStore.getState().canvas;
+      const eligible = currentCanvas && groupsEnabled() ? groupScopeRoots(currentCanvas, state.activeGroupId) : Object.values(currentCanvas?.items ?? {});
+      const hit = eligible
         .filter(
           (item) =>
             item.x < maxX && item.x + item.width > minX && item.y < maxY && item.y + item.height > minY,
@@ -1068,7 +1078,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   // siblings at one z-index, and DOM order is the only order there is. A
   // stable sort keeps the rest as they were.
   const items = canvas
-    ? Object.values(canvas.items).sort((a, b) => Number(isArea(b)) - Number(isArea(a)))
+    ? Object.values(canvas.items).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
     : [];
 
   return (

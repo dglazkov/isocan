@@ -3,6 +3,8 @@ import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { Actor, Capability, ClientMessage, PresenceSession, RcPolicy, ServerMessage } from "@isocan/core";
 import {
+  CLIENT_FEATURES_PARAM,
+  supportsCanvasGroups,
   atLeast,
   narrowed,
   newId,
@@ -18,6 +20,7 @@ import {
   ENDED,
 } from "@isocan/core";
 import { Engine, CanvasNotFoundError } from "./engine.ts";
+import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import type { Desk } from "./desk.ts";
 import { admissionIn, admittingGrant, heldCapability } from "./grants.ts";
 import {
@@ -159,6 +162,7 @@ export class SocketCensus {
  * that is the whole index a rung change needs to find its person.
  */
 interface Member {
+  groupCapable: boolean;
   badgeId: string;
   /** Tell this connection its rung changed. */
   standing: (capability: Capability) => void;
@@ -294,8 +298,15 @@ export function attachWebSockets(
     const room = rooms.get(canvasId);
     if (!room) return;
     const payload = JSON.stringify(message);
-    for (const socket of room.keys()) {
-      if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+    for (const [socket, member] of room) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      // Cutover also reaches clients which connected before the feature
+      // existed. Never send the first unknown operation before closing.
+      if (!member.groupCapable && message.type === "op-applied" && groupOperation(message.entry.envelope.op)) {
+        socket.close(WS_STALE_CLIENT, "Canvas groups require an updated isocan client");
+        continue;
+      }
+      socket.send(payload);
     }
   }
 
@@ -473,7 +484,7 @@ export function attachWebSockets(
           ws.close(badge.code, badge.reason);
           return;
         }
-        void handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer, badge.capability);
+        void handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer, badge.capability, url.searchParams.get(CLIENT_FEATURES_PARAM));
       });
     })();
   });
@@ -594,6 +605,7 @@ export function attachWebSockets(
     since: number,
     bearer: boolean,
     admittedAt: Capability,
+    features: string | null,
   ): Promise<void> {
     /**
      * What this connection may do. Set by the admission on the way in and
@@ -612,6 +624,7 @@ export function attachWebSockets(
     }
     try {
       const snapshot = await engine.getSnapshot(canvasId);
+      requireGroupClient(features, snapshot.project);
       /**
        * "I have through N" — the lid-close beat, and the reason this is worth
        * a branch at all: a tab (and, from phase 6, a local daemon's home
@@ -627,6 +640,7 @@ export function attachWebSockets(
        * the room has broadcast since".
        */
       const tail = since > 0 ? await engine.getLog(canvasId, since) : [];
+      requireGroupClient(features, snapshot.project, tail);
       /**
        * Four ways this is not servable, all of them ordinary rather than
        * exceptional:
@@ -697,7 +711,8 @@ export function attachWebSockets(
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
-      ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
+      if (err instanceof CanvasGroupsClientError) ws.close(WS_STALE_CLIENT, "Canvas groups require an updated isocan client");
+      else ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
       return;
     }
     // This connection's presence session, created lazily on its first
@@ -711,6 +726,7 @@ export function attachWebSockets(
       rooms.set(canvasId, room);
     }
     room.set(ws, {
+      groupCapable: supportsCanvasGroups(features),
       badgeId,
       standing: (next) => {
         if (next === capability) return;

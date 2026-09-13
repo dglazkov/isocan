@@ -1,4 +1,5 @@
 import type { TextAnchor } from "./text-anchor.js";
+import type { GroupAction } from "./canvas-group-types.js";
 import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.js";
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
@@ -184,6 +185,7 @@ export type Operation = {
 } | {
     type: "project.create";
     canvasId: string;
+    groupMode?: "groups" | "legacy";
     title: string;
     description?: string;
     properties?: Record<string, string>;
@@ -192,6 +194,9 @@ export type Operation = {
     patch: MetaPatch;
 } | {
     type: "project.delete";
+} | {
+    type: "group.change";
+    action: GroupAction;
 } | {
     type: "item.add";
     itemId: string;

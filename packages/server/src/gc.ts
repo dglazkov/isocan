@@ -73,6 +73,11 @@ export function chooseRetained(entries: LogEntry[], keepOps: number): LogEntry[]
 /** Every blobHash an operation can (re-)introduce. */
 function hashesInOperation(op: Operation): string[] {
   switch (op.type) {
+    case "group.change": {
+      const versions = op.action.kind === "create" ? [op.action.group.version]
+        : op.action.kind === "apply" ? op.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions : []) : [];
+      return versions.flatMap((version) => [version.blobHash, ...(version.visual ? [version.visual.blobHash] : [])]);
+    }
     case "item.add":
     case "item.addVersion":
     case "item.restoreVersion": {

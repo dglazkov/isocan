@@ -11,10 +11,14 @@ type OpErrorCode = "unknown-item" | "unknown-version" | "unknown-thread" | "unkn
 /** This daemon is no longer the writer for that canvas — another instance
  * already used the sequence number it tried to claim. Never retried by the
  * client: see `OplogFencedError`. */
- | "writer-fenced" | "bad-op";
+ | "writer-fenced" | "group-conflict" | "bad-op";
 export declare class OpValidationError extends Error {
     readonly code: OpErrorCode;
     constructor(code: OpErrorCode, message: string);
+}
+/** Structural undo conflicts must not be discarded or fall through to older work. */
+export declare class GroupConflictError extends OpValidationError {
+    constructor(message: string);
 }
 /**
  * Two writers reached for one sequence number and this one lost.

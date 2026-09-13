@@ -254,11 +254,47 @@
  * the clock-free "has anything happened" comparison belongs to #147 step 3's
  * panel, and a function shipped ahead of its caller is bytes every first visit
  * downloads to reach nothing.
+ *
+ * **661,500 → 702,400 on 12 Sep, after measuring both canvas-group phases.**
+ * The jump stopped the suite and prompted a dependency investigation before
+ * this number moved. Same-machine Vite builds, kept in memory so the active
+ * browser walkthrough's dist stayed untouched, separated three costs:
+ *
+ *   6,192  already above the agreed ceiling before groups: the phase-1 parent
+ *          69211254 builds to 667,692 bytes, including intervening operator work
+ *  23,617  phase 1's shared group reducer, geometry, structural validation and
+ *          protocol: dec07903 builds to 691,309 bytes
+ *  10,712  phase 2's membership/navigation surfaces and helpers, after the
+ *          menu deferral below: the measured entry is 702,021 bytes
+ *
+ * No new third-party module entered the entry chunk. The large core step is
+ * shared synchronous behavior: queued public intents need the same resolver
+ * for optimistic rendering that the writer uses, and replay must validate the
+ * canonical effects. Removing that dependency would change offline recovery
+ * and optimism, not merely postpone an unused page. That measured cost was
+ * accepted explicitly after the investigation, rather than hidden by a test
+ * skip or a larger JUMP.
+ *
+ * **What was avoidable was deferred first.** Toolbar eagerly imported every
+ * group-menu row for a button whose handler runs only on click. It now loads
+ * those rows on that click, matching the existing lazy item-menu boundary.
+ * Building the same captured source tree with that import eager and lazy
+ * measured 703,746 → 702,021: **1,725 bytes removed from first paint**, with a
+ * 2,090-byte menu chunk fetched on demand. The group dialog was already lazy.
+ *
+ * The final keyboard walkthrough added 328 bytes to focus a submenu after
+ * React commits its contents; focusing before commit left keyboard navigation
+ * behind the visible menu. The conductor's fresh entry is 702,349 bytes.
+ * This final fix is separate from the captured 1,725-byte deferral comparison
+ * above, and makes phase 2's net contribution 11,040 bytes.
+ *
+ * Rounded to the next hundred, the margin is 51 bytes. GOAL remains 640,000;
+ * JUMP remains 20,000. The next change still has to account for its own bytes.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 661_500;
+export const CEILING = 702_400;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

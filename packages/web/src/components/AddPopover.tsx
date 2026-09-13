@@ -1,3 +1,4 @@
+import { groupsEnabled, openGroupCreation } from "../lib/canvasgroups.ts";
 import { useEffect, useId, useMemo, useState } from "react";
 import type { Actor, Canvas, AddKind, Addable, Item, Placement } from "@isocan/core";
 import {
@@ -291,6 +292,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
               </button>
             ))}
           </div>
+          <button type="button" className="btn" disabled={!groupsEnabled()} title={groupsEnabled() ? "Create an empty group" : "Groups are not enabled on this canvas yet"} onClick={() => { setAdding(null); openGroupCreation(); }}>New group</button>
           {(pinned.kind === "canvas" || pinned.kind === "search" || adding === "canvas") && (
             <label className="add-inherit">
               <input type="checkbox" checked={inherit} onChange={(e) => setInherit(e.target.checked)} />

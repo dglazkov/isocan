@@ -1,4 +1,5 @@
 import type { TextAnchor } from "./text-anchor.js";
+import type { GroupLayout, GroupDeletionCohort, GroupCohortRecord } from "./canvas-group-types.js";
 /**
  * The shared state model. Both the daemon (authoritative) and the web client
  * (live replica) hold this shape; the CLI reads it through queries.
@@ -31,6 +32,8 @@ export declare const SYSTEM_ACTOR: Actor;
 export declare function isSystemActor(actorId: string): boolean;
 export interface Canvas {
     id: string;
+    /** Opt-in until canvas-group migration/release. Missing is historical area mode. */
+    groupMode?: "groups" | "legacy";
     title: string;
     description: string;
     properties: Record<string, string>;
@@ -114,6 +117,9 @@ export declare function sourceFaceOf(version: ItemVersion): {
 export declare function hasDistinctVisualFace(version: ItemVersion): boolean;
 export interface Item {
     id: string;
+    /** Explicit canvas membership; coordinates remain in world space. */
+    containerId?: string;
+    groupLayout?: GroupLayout;
     /** World coordinates, top-left corner. */
     x: number;
     y: number;
@@ -204,6 +210,8 @@ export interface TrashEntry {
     item: Item;
     deletedAt: string;
     deletedBy: Actor;
+    /** Captured deletion act; subtree restore never steals another act's trash. */
+    cohort?: GroupDeletionCohort;
 }
 /**
  * An agent with standing to answer on this canvas — the enrolment record's
@@ -240,6 +248,8 @@ export interface CanvasContents {
     items: Record<string, Item>;
     threads: Record<string, CommentThread>;
     trash: TrashEntry[];
+    /** One O(n) capture per deletion, retained while members may be restored. */
+    groupCohorts?: Record<string, GroupCohortRecord>;
     /** Standing agents by actor id. Optional because snapshots older than the
      * field exist on disk; read it through `?? {}`. */
     agents?: Record<string, EnrolledAgent>;

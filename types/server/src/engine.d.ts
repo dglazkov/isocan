@@ -33,6 +33,7 @@ export declare class NothingToUndoError extends Error {
     constructor(kind: "undo" | "redo", actorName?: string);
 }
 interface SubmitRequest {
+    clientFeatures?: string;
     canvasId: string | null;
     actor: Actor;
     clientId?: string;
@@ -643,8 +644,8 @@ export declare class Engine {
      * changed); inverses invalidated by other actors' ops are repaired (batch
      * ops shrink to their surviving members) or skipped entirely.
      */
-    undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry>;
-    redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry>;
+    undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string): Promise<LogEntry>;
+    redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string): Promise<LogEntry>;
     /**
      * Blob garbage collection: compact the oplog to an undo horizon (dropped
      * entries go to the archive), then sweep blobs unreachable from live state,

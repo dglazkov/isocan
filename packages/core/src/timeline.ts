@@ -2,6 +2,7 @@ import type { LogEntry, Operation } from "./ops.ts";
 import { opWords } from "./opwords.ts";
 import type { CanvasState } from "./model.ts";
 import { applyOperation } from "./reducer.ts";
+import { groupChangeItemIds } from "./canvas-groups.ts";
 
 /**
  * **Where the seams are in a canvas's history.**
@@ -56,6 +57,11 @@ const WEIGHT: Record<string, number> = {
 
 /** What one entry is worth. */
 export function weightOf(entry: LogEntry): number {
+  const op = entry.envelope.op;
+  if (op.type === "group.change") {
+    const intent = op.action.kind === "apply" ? op.action.change.intent : op.action.kind;
+    return intent === "transform" || intent === "frame" ? 0.4 : 5;
+  }
   return WEIGHT[entry.envelope.op.type] ?? 0;
 }
 
@@ -103,6 +109,13 @@ function aboutOf(op: Operation): string | null {
   };
   const o = op as unknown as Record<string, any>;
   switch (op.type) {
+    case "group.change":
+      if (op.action.kind === "create") return firstLine(op.action.group.title);
+      if (op.action.kind === "apply") {
+        const creation = op.action.change.writes.find((write) => write.kind === "create");
+        return creation?.kind === "create" ? firstLine(creation.item.title) : firstLine(op.action.change.intent);
+      }
+      return firstLine(op.action.kind);
     case "item.add":
       return firstLine(o.title) ?? firstLine(o.version?.filename);
     case "item.addVersion":
@@ -135,7 +148,9 @@ export function majors(entries: readonly LogEntry[], minWeight = 4): Major[] {
     if (entry.cause) continue;
     const weight = weightOf(entry);
     if (weight < minWeight) continue;
-    const op = entry.envelope.op as { itemId?: unknown };
+    const actual = entry.envelope.op;
+    const creation = actual.type === "group.change" && actual.action.kind === "apply" ? actual.action.change.writes.find((write) => write.kind === "create") : undefined;
+    const op = (actual.type === "group.change" ? { itemId: creation?.kind === "create" ? creation.item.id : groupChangeItemIds(actual)[0] } : actual) as { itemId?: unknown };
     out.push({
       seq: entry.seq,
       ts: entry.envelope.ts,

@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-09-12
 see: sprint, context, mindmap, 2026-08-28-op-grouping.md
-note: proposed conversion of areas into canvas groups with explicit membership, shared transforms, group context and protected label space; implementation has not started
+note: phases 1–2 verify shared operations and membership on both surfaces; gesture/layout completion, context and migration remain in phases 3–5
 ---
 # From areas to groups
 
@@ -11,8 +11,9 @@ that mismatch: a **group is an item with explicit members**, and working on
 that item acts on the things it contains. Membership, movement, resizing,
 context and layout must mean the same thing in the browser and the CLI.
 
-This is a proposal, not a record of implemented commands. The implementation
-starts with phase 1 below. The initial review used `main` at `ed1520a6`;
+The shared foundation and membership clients are implemented and verified in
+phases 1–2. The remaining experience below is the implementation contract.
+The initial review used `main` at `ed1520a6`;
 the checkout was subsequently updated to `19355501` on 12 September 2026.
 The conduct contract is now [phases.md](phases.md), with the user-visible
 acceptance in [journey.md](journey.md). The phase contract carries current
@@ -118,7 +119,9 @@ source frame keeps its size until explicitly fitted.
 
 **Remove from group** reparents a selected child to its current group's
 parent, preserving its entire subtree and world position. `--to-root` offers
-the canvas itself when the group is nested. **Ungroup** reparents all direct
+the canvas itself when the group is nested. A mixed selection can have several
+destination parents: resolve them from one starting state in one `remove`
+intent, rather than issuing a reparent request per destination. **Ungroup** reparents all direct
 children to the dissolved group's parent, keeping nested groups intact.
 The frame goes to trash, with its own card, versions and comments recoverable.
 Marks attached to that frame go to trash with it; marks attached to promoted
@@ -174,13 +177,25 @@ outer aspect ratio. CLI accepts a destination size and anchor corner; the
 op records the complete destination box, including x/y.
 
 For an old content box `(cx, cy, cw, ch)` and new content box
-`(nx, ny, nw, nh)`, transform each direct child with:
+`(nx, ny, nw, nh)`, transform each direct child's frame together with its
+persistent external label reservation `L` (24 units for labelled cards,
+zero for text, ink and groups):
 
 ```text
 sx = nw / cw                         sy = nh / ch
 x' = nx + (x - cx) * sx             y' = ny + (y - cy) * sy
-w' = w * sx                        h' = h * sy
+w' = w * sx                        h' = (h + L) * sy - L
 ```
+
+The label keeps its world-space height inside the transformed placement
+footprint. Scaling only the native frame while reserving an unscaled label
+afterward prevents a fitted group from shrinking at all: the bottom card
+would always hit the label boundary. Minimum constraints therefore compare
+`minimumHeight + L` with `height + L`. Attached ink overhang remains governed
+by the target-box rule above, not by an additional label-footprint transform.
+For example, a single 400×400 labelled card produces a default 448×528 fitted
+group; resizing that group to 336×396 produces a 288×268 card, preserving the
+56-unit title, 24-unit insets and 24-unit external card label.
 
 Nested groups receive a destination outer box from their parent, then apply
 the same rule to their own content boxes. Do not additionally apply the outer
@@ -341,7 +356,20 @@ require a browser selection or a write to presence.
 
 ## Operations and consistency
 
-Proposed public operation families (exact TypeScript shapes are phase 1):
+Phase 1 uses one `group.change` operation with a closed, typed action union.
+Public actions are `create`, `reparent`, `ungroup`, `transform`, `frame`,
+`layout`, `delete` and `restore`; a writer-only `apply` action carries resolved
+structural facts and bounded field writes. The shared writer resolver handles
+new ordinary geometry/lifecycle requests on group canvases through this same
+boundary. Public callers cannot submit a resolved patch.
+
+Phase 2 adds `remove` to this same closed action union. Unlike `reparent`,
+which names one destination, removal derives each selected root's destination
+from its current parent (or the explicit canvas-root option). It still emits
+one bounded resolved change and one exact inverse for a mixed selection.
+The recorded change keeps the existing canonical `reparent` intent: phase 1
+readers already advertising `canvas-groups-v1` accept that value but reject a
+new `remove` value. The public spelling does not require a new replay shape.
 
 Keep operation members directly discoverable by `scripts/isomorphism.mjs`.
 Any vocabulary-bound adjustment must name the semantic acts it accounts for;
@@ -349,12 +377,13 @@ type aliases that hide operation members would defeat that instrument.
 
 | Intent | Operation / shared behavior |
 | --- | --- |
-| Make a group, optionally wrapping roots | `group.create`: new group item, membership changes and enclosing frame as one change. |
-| Add, transfer, remove one or several nodes | `group.reparent`: roots, destination group or canvas root, placement policy and required frame adjustments. |
-| Dissolve a group | `group.ungroup`: promote children and trash the frame, preserving its recoverable contents. |
-| Move or resize | `group.transform`: normalized roots, move delta or destination box, expected affected geometry/membership, and resolved changes. |
-| Fit or resize frame only | `group.frame`: frame policy/box and ancestor frame changes; member geometry is unchanged. |
-| Tidy, change grid or reserve header/gutters | `group.layout`: layout configuration and resulting geometry together. |
+| Make a group, optionally wrapping roots | `create`: new group item, membership changes and enclosing frame as one change. |
+| Add or transfer one or several nodes | `reparent`: roots, destination group or canvas root, placement policy and required frame adjustments. |
+| Remove one or several nodes from their current groups | `remove`: normalized roots and optional canvas-root policy; derive each destination from the same starting relation, preserving geometry in one change. |
+| Dissolve a group | `ungroup`: promote children and trash the frame, preserving its recoverable contents. |
+| Move or resize | `transform`: normalized roots, move delta or destination box, expected affected geometry/membership, and resolved changes. |
+| Fit or resize frame only | `frame`: frame policy/box and ancestor frame changes; member geometry is unchanged. |
+| Tidy, change grid or reserve header/gutters | `layout`: layout configuration and resulting geometry together. |
 | Create a normal item inside a group | Extend `item.add` with typed destination/placement intent; adding, attaching and growing frames is one operation. |
 | Rename, tint, replace the brief | Existing item metadata/version verbs, with header geometry changes compiled into the same atomic change when needed. |
 | Delete/restore, copy/paste | Extend the existing intents to understand normalized subtrees, producing an atomic resolved change when membership is affected. |
@@ -420,7 +449,7 @@ Use **`isocan canvas group`** as the canonical namespace. The browser says
 groups once migration is enabled. Do not dispatch the same command based on
 whether its operands look like email addresses or item names.
 
-All commands below are proposed. IDs are stable; title prefixes must be
+The phase contract records which commands below have shipped. IDs are stable; title prefixes must be
 unique and ambiguous names list candidates instead of choosing the first.
 
 | Command | Browser equivalent |
@@ -506,7 +535,11 @@ export-only projection and reports any hierarchy it cannot retain.
 
 Persist a deletion-cohort ID on each affected trash entry, derived from the
 deleting operation ID, with the deleted roots and captured membership
-available to subtree restore. Restoring a group selects only entries still
+available to subtree restore. `canvas.groupCohorts` stores that immutable
+deletion roster once, including original parents and attachment targets;
+it is history, not a second source of live membership. Both storage backends,
+snapshots and native export/adoption preserve it, including after a member
+has independently left trash. Restoring a group selects only entries still
 in that same cohort. A child independently restored, moved elsewhere or
 deleted again under a newer cohort is left alone; report skipped IDs rather
 than stealing it back. Restore required ancestor frames first in one atomic
@@ -696,5 +729,5 @@ Run `npm test` and `npm run typecheck`, including the CLI guide/surface guard.
 Report actual browser actions and observed results separately from unit
 coverage. The feature completion report must name all six repo obligations:
 operation vocabulary, CLI verbs, agent guide, shared core helpers, README and
-tests. This planning change touches documentation only; it makes no claim
-that group behavior or browser acceptance has been implemented.
+tests. The initial plan review was documentation only; the phase records now name
+the implemented behavior and actual browser acceptance separately.

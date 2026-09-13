@@ -1,4 +1,6 @@
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
+import { CanvasGroups } from "@isocan/api";
+import { registerCanvasGroups } from "./canvas-groups.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
@@ -5366,6 +5368,8 @@ const canvas = program
   // scripted breaks, and the help and the agent guide advertise `canvas` only.
   .alias("project");
 
+registerCanvasGroups(canvas, ctxOf);
+
 /**
  * **A canvas placed on a canvas** (`docs/projects/inception/design.md`,
  * phase 0). An ordinary item whose blob is the other canvas's address and
@@ -7737,7 +7741,8 @@ program
   .command("mv <item> [x] [y]")
   .description("Move an item — to x y, or by a delta with --by")
   .option("--by <dx,dy>", "move relative to where it is now, e.g. --by 0,-40")
-  .option("--in <area>", "move it into this area, at the first clear spot")
+  .option("--in <group>", "move into a canvas group atomically, or into an area on a legacy canvas")
+  .option("--dry-run", "with group --in: report resolved membership and placement without writing")
   .option("--cell <row,col>", "with --in: into one cell of the sheet's grid, counted from 1")
   .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
@@ -7746,11 +7751,20 @@ program
         ref: string,
         x: string | undefined,
         y: string | undefined,
-        opts: { by?: string; in?: string; cell?: string },
+        opts: { by?: string; in?: string; cell?: string; dryRun?: boolean },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        if (opts.in !== undefined && snapshot.project.groupMode === "groups") {
+          if (opts.cell) throw new Error("group grid-cell placement is not available in this build; use canvas group add --place");
+          if (opts.by !== undefined || x !== undefined || y !== undefined) throw new Error("--in chooses placement; omit coordinates and --by");
+          const result = await new CanvasGroups(ctx.client, p.id, () => ctx.actor).add(opts.in, [ref], { place: true, dryRun: !!opts.dryRun });
+          if (ctx.json) return printJson(result);
+          console.log(`${result.dryRun ? "preview" : "moved"} ${result.affectedRoots.join(", ")} into ${opts.in}; ${result.changes.length} items affected`);
+          return;
+        }
+        if (opts.dryRun) throw new Error("mv --dry-run currently requires --in on a group-enabled canvas");
         const item = resolveItem(snapshot, ref);
         // `--in`: the sheet's first clear spot, the search not counting the
         // item itself as in the way.

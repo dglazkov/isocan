@@ -36,6 +36,7 @@ import {
 import { matchRef, resolveCanvas, resolveCtx, type Ctx } from "./ctx.ts";
 import { noIdentityHere, type ExplicitIdentity } from "./identity.ts";
 import { ApiError, type DaemonRoutes } from "./routes.ts";
+import { CanvasGroups } from "./canvas-groups.ts";
 
 /**
  * **Unreachable is a typed refusal here, not a stack trace** (journey 1's
@@ -284,6 +285,9 @@ export class CanvasHandle {
   get title(): string {
     return this.record.title;
   }
+
+  /** Membership verbs share the CLI's typed canvas-group helper and atomic writer boundary. */
+  get groups(): CanvasGroups { return new CanvasGroups(this.ctx.client, this.id, () => this.ctx.actor); }
 
   private snapshot(): Promise<CanvasSnapshotResponse> {
     return this.reach(() => this.ctx.client.snapshot(this.id));

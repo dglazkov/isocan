@@ -281,6 +281,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   (`isocan area grid Test 5x15`). See
   [the research](docs/research/2026-09-01-design-sprint.md) and
   [the journey](docs/projects/sprint/journey.md).
+- **Canvas groups** (on explicitly enabled canvases): wrap selected items with
+  **Group selection** (⌘/Ctrl+G), enter the group to work on direct children,
+  add or remove members, and ungroup while preserving their positions.
+  Membership is explicit: overlapping cards stay independent, nested groups
+  keep their identity, and each structural act is one undo. The matching CLI
+  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup`; mutations
+  support an actual `--dry-run`, all commands support `--json`, and
+  `mv <item> --in <group>` transfers membership and places the item atomically.
+  `show --recursive` inspects the full hierarchy. Existing canvases keep their
+  area behavior until conversion is available. Top-level `isocan group`
+  continues to manage people and sharing.
 - **Areas**: a titled sheet things are placed on — `isocan area new "Sketches"`,
   then `--in Sketches` on `text`, `add` and `mv`, `isocan ls --in` to read it
   back, `isocan format --in` to tidy within it. A sheet lies behind everything,

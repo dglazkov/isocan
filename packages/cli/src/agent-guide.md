@@ -2179,6 +2179,41 @@ anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 
 ## Quick reference of the whole surface
 
+**Canvas membership on group-enabled canvases:** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
+`canvas group wrap <items...> --title <title> [--note text]`,
+`canvas group ls`, `canvas group show <group> [--recursive]`,
+`canvas group add <group> <items...> [--place]`,
+`canvas group remove <items...> [--to-root]`, and
+`canvas group ungroup <groups...>`. Every mutation accepts `--dry-run`:
+it validates through the shared resolver and reports affected roots, parent
+changes, final boxes and frame adjustments without uploading note bytes or
+writing an operation. Every command supports `--json`. IDs are exact; title
+and ID prefixes must be unique, and ambiguities list candidates.
+
+Wrapping preserves the arrangement and keeps nested groups intact. Add
+preserves positions and fits the destination frame; `--place` finds room
+below its current members. `mv <item> --in <group> [--dry-run]` uses that same
+atomic add-and-place operation. Remove promotes each item to its group's
+parent, or directly to the canvas with `--to-root`; it preserves geometry.
+Ungroup trashes the frames and preserves their children. These are single
+undoable acts, including required ancestor frame changes. An overlapping
+item is not a member. `show --recursive --json` lists every descendant;
+ordinary `show` lists direct members and reports direct/total counts, parent,
+outer/content boxes and layout settings.
+
+Attached ink follows its target's membership. To remove the ink independently,
+first use `set <ink> --rm-prop annotates --rm-prop region` to detach its
+annotation relationship in one undoable operation, then remove it from the
+group. In the browser, use **Detach from annotated item**, then **Remove from
+group**. Enter a group to edit its direct children; Escape returns to its
+parent. **Group selection** is ⌘/Ctrl+G, **Ungroup** is ⌘/Ctrl+Shift+G, and
+Shift+F10 or the Menu key opens the selection menu.
+
+Group creation currently requires an explicitly enabled canvas; a legacy
+canvas gives a useful refusal and keeps its `area` commands. Conversion and
+grid-cell placement are not available yet. Top-level `group new|list|add|remove|delete`
+still manages people and access. `session select` still shares quoted text.
+
 `isocan --help` covers everything; the commands you'll live in:
 `comment list|add|reply|anchor|main|rm`,
 `session start|on|work|say|point|select|end|move`,

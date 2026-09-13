@@ -7,7 +7,7 @@ import type {
   CanvasState,
   ServerMessage,
 } from "@isocan/core";
-import { applyOperation } from "@isocan/core";
+import { applyOperation, CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_PARAM } from "@isocan/core";
 import type { ReplicaStore, StoredReplica } from "../src/lib/replica.ts";
 
 /**
@@ -368,9 +368,9 @@ describe("the crux", () => {
     // swapped — right up until somebody else's op is in the tail, which is the
     // next assertion.
     expect(events).toEqual([
-      "dial:canvasId=prj_1&since=0",
+      `dial:canvasId=prj_1&since=0&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`,
       "post:" + posted[0].opId,
-      "dial:canvasId=prj_1&since=2",
+      `dial:canvasId=prj_1&since=2&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`,
     ]);
 
     FakeSocket.last.deliver({ type: "resumed", from: 2, lastSeq: 4, colors: {}, names: {} });

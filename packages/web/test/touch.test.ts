@@ -42,7 +42,12 @@ describe("one finger moves the canvas", () => {
        there is no way to deselect. One function, called from both, so a tap
        and a click cannot drift apart. */
     expect(bare).toContain("function clearBackgroundFocus()");
-    expect(bare).toMatch(/if \(!moved && opts\.tapClears\) clearBackgroundFocus\(\);/);
+    // A cancelled touch is not a tap. A completed tap first applies the
+    // same group boundary as mouse selection, then shares the deselection.
+    expect(bare).toMatch(/if \(!moved && opts\.tapClears && ev\.type !== "pointercancel"\) \{\s*leaveGroupAtPoint\(screenToWorld\(useUiStore\.getState\(\)\.viewport, ev\.clientX, ev\.clientY\)\);\s*clearBackgroundFocus\(\);\s*\}/);
+    const marquee = bare.slice(bare.indexOf("function startMarquee"));
+    expect(marquee.indexOf("leaveGroupAtPoint(startWorld)")).toBeGreaterThanOrEqual(0);
+    expect(marquee.indexOf("leaveGroupAtPoint(startWorld)")).toBeLessThan(marquee.indexOf("const baseSelection"));
     expect(bare).toMatch(/if \(!moved && !additive\) clearBackgroundFocus\(\);/);
   });
 

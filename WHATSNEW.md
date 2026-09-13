@@ -23,6 +23,8 @@ second week.
 
 ## 12 September 2026
 
+- On canvases with groups enabled, Group selection puts cards together without moving them. Enter works inside the group; Remove lets a card leave, and Ungroup keeps the cards while removing the frame. The Groups menu, keyboard shortcuts and `isocan canvas group` commands work on the same membership, with undo. Titles and briefs have space above the cards. Existing canvases keep areas until conversion is available.
+
 - An agent in a cell shows its work as it happens. With `--harness sheep`, the rc reads the turn from the one `sheep attach` it holds: each tool call reaches the agent's face on the thread as it lands, and nothing else runs beside it. While a fresh container sets up, the rc says *setup running* with the time, from the sheep home itself, instead of guessing from the clock. The agent's sign-in now lives in a home directory the sheep home keeps across containers; a sheep home deployed before this week keeps the old arrangement, and the rc knows which it has.
 
 ## 11 September 2026

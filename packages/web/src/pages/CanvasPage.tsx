@@ -1,3 +1,7 @@
+import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask } from "../lib/canvasgroups.ts";
+import { CanvasGroupScope } from "../components/CanvasGroupScope.tsx";
+const CanvasGroupPanel = lazy(() => import("../components/CanvasGroupPanel.tsx").then((m) => ({ default: m.CanvasGroupPanel })));
 import { type CSSProperties, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
@@ -128,7 +132,7 @@ const NUDGE_BIG = 10;
 function writesByKey(e: KeyboardEvent): boolean {
   const meta = e.metaKey || e.ctrlKey;
   const key = e.key.toLowerCase();
-  if (meta) return key === "v" || key === "z";
+  if (meta) return key === "v" || key === "z" || key === "g";
   if (e.key === "Delete" || e.key === "Backspace" || e.key === "F2") return true;
   if (NUDGES[e.key]) return true;
   if (e.shiftKey) return key === "c" || key === "f";
@@ -217,6 +221,7 @@ function CanvasSurface({
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
+  const groupDialogOpen = useUiStore((s) => s.groupDialog !== null);
   // The canvas's own title, for the tab. Subscribed separately from the
   // contents so a rename repaints the tab and an item move does not.
   const canvasTitle = useCanvasStore((s) => s.project?.title ?? null);
@@ -276,6 +281,8 @@ function CanvasSurface({
   useEffect(() => {
     if (!canvasId) return;
     didFit.current = false;
+    useUiStore.getState().setActiveGroup(null);
+    useUiStore.getState().setGroupDialog(null);
     restoreReactionBar(canvasId);
     connectToCanvas(canvasId, actorRef.current);
     // What this machine's disk says about the canvas's backed items. Asked
@@ -283,6 +290,23 @@ function CanvasSurface({
     void loadBacking(canvasId);
     return disconnect;
   }, [canvasId]);
+
+  // Repair a remotely removed scope using its previously known ancestry.
+  const scopeAncestry = useRef<string[]>([]);
+  useEffect(() => useCanvasStore.subscribe((next, previous) => {
+    const ui = useUiStore.getState();
+    const active = ui.activeGroupId;
+    if (!active || !next.canvas) return;
+    if (next.canvas.items[active] && isGroupItem(next.canvas.items[active]!)) return;
+    const old = previous.canvas;
+    const parents = old?.items[active] ? groupAncestors(old, active).map((item) => item.id) : scopeAncestry.current;
+    const parent = parents.find((id) => next.canvas?.items[id] && isGroupItem(next.canvas.items[id]!)) ?? null;
+    useUiStore.setState({ activeGroupId: parent, selectedItemIds: ui.selectedItemIds.filter((id) => !!next.canvas?.items[id]), enteredItemId: null });
+  }), []);
+  useEffect(() => useUiStore.subscribe((ui, prev) => {
+    const current = useCanvasStore.getState().canvas;
+    if (ui.activeGroupId !== prev.activeGroupId && current && ui.activeGroupId) scopeAncestry.current = groupAncestors(current, ui.activeGroupId).map((item) => item.id);
+  }), []);
 
   // Becoming someone else does NOT drop the socket. The tab keeps its session
   // and simply asserts the new actor on the next presence beat, which the
@@ -454,7 +478,7 @@ function CanvasSurface({
       const ui = useUiStore.getState();
       const canvas = useCanvasStore.getState().canvas;
       if (!canvas) return;
-      const all = Object.values(canvas.items);
+      const all = groupsEnabled() ? groupScopeRoots(canvas, ui.activeGroupId) : Object.values(canvas.items);
       if (all.length === 0) return;
       const selected = ui.selectedItemIds;
 
@@ -512,6 +536,7 @@ function CanvasSurface({
       // looked at (Delete deleted it). Only what crossesCover says may pass;
       // Esc is the cover's own, bound in capture phase.
       if ((itemId || onWorkbench) && !crossesCover(e)) return;
+      if (useUiStore.getState().contextMenu || useUiStore.getState().groupDialog) return;
       // ⌘K is global — the lane to your emissary opens from anywhere, even
       // mid-typing in another field.
       /**
@@ -655,7 +680,23 @@ function CanvasSurface({
       // whatever a missed key reaches.
       if (!canEditNow() && writesByKey(e)) return;
       const ui = useUiStore.getState();
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+        e.preventDefault();
+        const canvas = useCanvasStore.getState().canvas;
+        if (!canvas) return;
+        const items = ui.selectedItemIds.map((id) => canvas.items[id]).filter((item) => !!item);
+        const at = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        const world = screenToWorld(ui.viewport, at.x, at.y);
+        void import("../lib/menuentries.tsx").then(({ itemMenu, canvasMenu }) => ui.setContextMenu({ at, entries: items.length ? itemMenu(items, { canvasId: canvasId!, actor, world, navigate }) : canvasMenu({ canvasId: canvasId!, actor, world, navigate }) }));
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          const groups = ui.selectedItemIds.filter((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); });
+          if (groups.length) groupTask(() => changeCanvasGroup(canvasId!, actor, { kind: "ungroup", itemIds: groups }));
+          else setNotice("Select a group to ungroup.");
+        } else if (ui.selectedItemIds.length) openGroupCreation(ui.selectedItemIds);
+        else setNotice("Select items to group first.");
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         // Ink that has not settled yet undoes locally, one stroke at a time:
         // it is not in the oplog, so the daemon has nothing to reverse. A
@@ -718,7 +759,9 @@ function CanvasSurface({
         // mode flag: the address bar ends up holding the screen you are
         // looking at, so Back leaves it and the link is sendable.
         e.preventDefault();
-        navigate(itemPath(canvasId!, ui.selectedItemIds[0]!));
+        const chosen = useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!];
+        if (chosen && isGroupItem(chosen)) enterCanvasGroup(chosen.id);
+        else navigate(itemPath(canvasId!, ui.selectedItemIds[0]!));
       } else if (e.key.toLowerCase() === "w" && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         // W flips to the workbench — the agent room. A navigation for Enter's
         // reason, and it carries a single selection along as the stage's
@@ -731,7 +774,8 @@ function CanvasSurface({
         // Watching is the outermost mode: Esc hands the camera back first.
         // A mark being placed is the innermost: it is the thing under the
         // pointer right now.
-        if (ui.stamp) ui.setStamp(null);
+        if (ui.drag || ui.resize) { ui.setDrag(null); ui.setResize(null); ui.setGuides([]); }
+        else if (ui.stamp) ui.setStamp(null);
         else if (ui.renamingItemId) ui.setRenaming(null);
         else if (ui.followSessionId) ui.setFollow(null);
         else if (ui.pendingText) ui.setPendingText(null);
@@ -741,6 +785,7 @@ function CanvasSurface({
         else if (ui.activeTool !== "select") ui.setActiveTool("select");
         else if (ui.fannedItemId) ui.setFanned(null);
         else if (ui.enteredItemId) ui.setEntered(null);
+        else if (ui.activeGroupId) leaveCanvasGroup();
         else ui.select(null);
       } else if (e.shiftKey && e.code === "Digit0") {
         e.preventDefault();
@@ -1006,6 +1051,8 @@ function CanvasSurface({
           screen without covering the controls the app promises. */}
       <ModuleOverlays canvasId={canvasId!} actor={actor} />
       <Toolbar actor={actor} onIdentity={onIdentity} />
+      <CanvasGroupScope />
+      {groupDialogOpen && <Suspense fallback={null}><CanvasGroupPanel canvasId={canvasId} actor={actor} /></Suspense>}
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}
       <SprintChip lowered={Boolean(outdated) || Boolean(followedLabel)} canvasId={canvasId!} actor={actor} />

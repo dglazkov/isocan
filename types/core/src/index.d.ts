@@ -14,6 +14,8 @@ export * from "./claims.js";
 export * from "./invert.js";
 export * from "./placement.js";
 export * from "./area.js";
+export * from "./canvas-group-types.js";
+export * from "./canvas-groups.js";
 export * from "./canvasitem.js";
 export * from "./googledoc.js";
 export * from "./addable.js";

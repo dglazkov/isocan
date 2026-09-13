@@ -57,7 +57,11 @@ import {
   positionIsMeaningful,
   resolvePlacement,
   SHELF,
+  GroupConflictError,
+  resolveCanvasGroupRequest,
+  validateGroupForest,
 } from "@isocan/core";
+import { requireGroupClient } from "./canvas-groups.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
 import { admittingGrant, ensureHomeLinkGrant, ensureLinkGrant } from "./grants.ts";
@@ -171,6 +175,7 @@ export class NothingToUndoError extends Error {
 }
 
 interface SubmitRequest {
+  clientFeatures?: string;
   canvasId: string | null;
   actor: Actor;
   clientId?: string;
@@ -964,6 +969,15 @@ export class Engine {
 
   submit(request: SubmitRequest): Promise<LogEntry> {
     return this.enqueue(async () => {
+      if (request.op.type === "project.create" && request.op.groupMode !== undefined &&
+          request.op.groupMode !== "groups" && request.op.groupMode !== "legacy") {
+        throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
+      }
+      // Canonical records are writer/undo output, never a public patch API.
+      // Check before forwarding AND before looking up an idempotent receipt.
+      if (request.op.type === "group.change" && request.op.action?.kind === "apply") {
+        throw new OpValidationError("internal-op", "resolved group changes cannot be issued directly");
+      }
       // Mechanism 5's local half, and it runs on a replica exactly as it runs
       // on a home: THIS daemon is the only one that can tell one process on
       // this machine from another, so it checks session-level before anything
@@ -1441,7 +1455,7 @@ export class Engine {
    * changed); inverses invalidated by other actors' ops are repaired (batch
    * ops shrink to their surviving members) or skipped entirely.
    */
-  undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
+  undo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
       // Checked here as well as on `submit`, and for a reason of its own:
       // undo is actor-scoped, so naming somebody else is not a slip, it is
@@ -1459,11 +1473,13 @@ export class Engine {
           canvasId,
           await home.undo(canvasId, {
             actor,
+            ...(clientFeatures !== undefined ? { clientFeatures } : {}),
             ...(clientId !== undefined ? { clientId } : {}),
           }),
         );
       }
       const runtime = await this.runtime(canvasId);
+      if (clientFeatures !== undefined) requireGroupClient(clientFeatures, runtime.state.project);
       /**
        * **One ⌘Z reverses one GESTURE**, which is usually one op and is
        * sometimes eight — see `LogEntry.group`.
@@ -1490,6 +1506,7 @@ export class Engine {
           throw new NothingToUndoError("undo", actor.name);
         }
         const targetSeq = group[0]!;
+        preflightGroupHistory(runtime.state, group.map((seq) => runtime.entries.find((entry) => entry.seq === seq)!.inverse!), actor);
         const target = runtime.entries.find((entry) => entry.seq === targetSeq)!;
         const op = repairInverse(runtime.state, target.inverse!);
         if (op !== null) {
@@ -1503,6 +1520,7 @@ export class Engine {
             if (group.length === 1) return written;
             continue;
           } catch (err) {
+            if (op.type === "group.change" || err instanceof GroupConflictError) throw err;
             if (!(err instanceof OpValidationError)) throw err;
           }
         }
@@ -1513,7 +1531,7 @@ export class Engine {
     });
   }
 
-  redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string): Promise<LogEntry> {
+  redo(canvasId: string, actor: Actor, badgeId: string, clientId?: string, clientFeatures?: string): Promise<LogEntry> {
     return this.enqueue(async () => {
       await this.requireActor(badgeId, actor.id);
       // This canvas's home; see `undo` above.
@@ -1523,11 +1541,13 @@ export class Engine {
           canvasId,
           await home.redo(canvasId, {
             actor,
+            ...(clientFeatures !== undefined ? { clientFeatures } : {}),
             ...(clientId !== undefined ? { clientId } : {}),
           }),
         );
       }
       const runtime = await this.runtime(canvasId);
+      if (clientFeatures !== undefined) requireGroupClient(clientFeatures, runtime.state.project);
       // The mirror of `undo` above, member for member: a gesture redone is a
       // gesture, and in the order it was originally written.
       const person = actorAliases((await this.actors()).registry.joined, actor.id);
@@ -1539,6 +1559,10 @@ export class Engine {
           throw new NothingToUndoError("redo", actor.name);
         }
         const next = group[0]!;
+        preflightGroupHistory(runtime.state, group.map((candidate) => redoOpFor(
+          runtime.entries.find((entry) => entry.seq === candidate.targetSeq)!,
+          runtime.entries.find((entry) => entry.seq === candidate.undoSeq)!,
+        )), actor);
         const target = runtime.entries.find((entry) => entry.seq === next.targetSeq)!;
         const undoEntry = runtime.entries.find((entry) => entry.seq === next.undoSeq)!;
         const op = repairInverse(runtime.state, redoOpFor(target, undoEntry));
@@ -1551,6 +1575,7 @@ export class Engine {
             if (group.length === 1) return redone;
             continue;
           } catch (err) {
+            if (op.type === "group.change" || err instanceof GroupConflictError) throw err;
             if (!(err instanceof OpValidationError)) throw err;
           }
         }
@@ -1679,6 +1704,11 @@ export class Engine {
   adoptRemoteSnapshot(canvasId: string, snapshot: CanvasSnapshotResponse): Promise<void> {
     return this.enqueue(async () => {
       const state: CanvasState = { project: snapshot.project, canvas: snapshot.canvas };
+      if (state.project.id !== canvasId) throw new OpValidationError("bad-op", "snapshot belongs to another canvas");
+      if (state.project.groupMode !== undefined && state.project.groupMode !== "groups" && state.project.groupMode !== "legacy") {
+        throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
+      }
+      validateGroupForest(state);
       let held: LogEntry[] = [];
       if (await this.store.canvasExists(canvasId)) {
         const runtime = await this.runtime(canvasId).catch(() => null);
@@ -1839,6 +1869,7 @@ export class Engine {
    * on. */
   private async forwardSubmit(home: HomeConnection, request: SubmitRequest): Promise<LogEntry> {
     const answer = await home.submitOp({
+      ...(request.clientFeatures !== undefined ? { clientFeatures: request.clientFeatures } : {}),
       canvasId: request.canvasId,
       actor: request.actor,
       op: request.op,
@@ -2378,6 +2409,8 @@ export class Engine {
     }
     const runtime = await this.runtime(canvasId);
 
+    if (request.clientFeatures !== undefined) requireGroupClient(request.clientFeatures, runtime.state.project);
+
     // Normalize placement so the logged op never references ephemeral client
     // state — and so it records where the item ACTUALLY went.
     //
@@ -2392,7 +2425,7 @@ export class Engine {
     // is what makes the reducer's own call a no-op on the way back: any
     // correct search returns a free spot unchanged, so the layout survives the
     // algorithm changing.
-    const normalizedOp: Operation =
+    let normalizedOp: Operation =
       op.type === "item.add"
         ? {
             ...op,
@@ -2413,6 +2446,17 @@ export class Engine {
         : op;
 
     const envelope = this.envelope(request, normalizedOp);
+    if (cause === undefined) {
+      // New group fields cannot enter a legacy canvas through generic item
+      // APIs. Validate new writes here; old records still replay unchanged.
+      if (runtime.state.project.groupMode !== "groups") {
+        const introducesGroup = op.type === "item.add" ? op.properties?.kind === "group" || "containerId" in op || "groupLayout" in op
+          : op.type === "item.update" ? op.patch.properties?.kind === "group" || "containerId" in op.patch || "groupLayout" in op.patch : false;
+        if (introducesGroup) throw new OpValidationError("bad-op", "canvas groups require an explicitly enabled group canvas");
+      }
+      normalizedOp = resolveCanvasGroupRequest(runtime.state, normalizedOp, { actor: envelope.actor, ts: envelope.ts, opId: envelope.id });
+      envelope.op = normalizedOp;
+    }
     const inverse = invertOperation(runtime.state, normalizedOp);
     const nextState = applyOperation(runtime.state, envelope);
     const seq = runtime.lastSeq + 1;
@@ -2587,6 +2631,7 @@ function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
     case "item.addVersion": // restoreVersion keeps original authorship
     case "thread.create": // thread.restore keeps replies added before the undo
     case "thread.reply": // comment.restore keeps author + timestamp
+    case "group.change": // exact structural preconditions and restore-based creation redo
       return undoEntry.inverse!;
     default:
       return target.envelope.op;
@@ -2620,5 +2665,24 @@ function repairInverse(state: CanvasState, op: Operation): Operation | null {
     }
     default:
       return op;
+  }
+}
+
+/** A label may include ordinary ops beside one atomic structural change.
+ * Check the whole gesture first so a later group conflict cannot leave its
+ * earlier ordinary members already undone. Ordinary repair still skips the
+ * same invalidated items it did before groups existed. */
+function preflightGroupHistory(state: CanvasState, ops: Operation[], actor: Actor): void {
+  if (!ops.some((op) => op.type === "group.change")) return;
+  let preview = state;
+  for (const candidate of ops) {
+    const op = repairInverse(preview, candidate);
+    if (!op) continue;
+    try {
+      const next = applyOperation(preview, { id: "op_preflight", canvasId: state.project.id, actor, ts: new Date().toISOString(), op });
+      if (next) preview = next;
+    } catch (err) {
+      if (op.type === "group.change" || !(err instanceof OpValidationError)) throw err;
+    }
   }
 }
