@@ -215,6 +215,43 @@ function builtEntry(): string | null {
   return found ? path.join(repo, "packages/web/dist/assets", found[1]) : null;
 }
 
+/**
+ * **The ceiling a nightly report quotes is the ceiling this suite enforces.**
+ *
+ * `bytes past the last size somebody agreed to` is bounded `at most 0` by
+ * construction, so a report of it says nothing about WHICH size unless it
+ * names one — and until 13 Sep 2026 it named none, which let an answer given at
+ * 641,100 go on covering creep measured against 721,200
+ * (`test/review-queue.test.ts`). The persona quotes it now, through
+ * `against: node scripts/bundle-ceiling.mjs`.
+ *
+ * Unlike a `measured by`, that command has no `--selftest`: there is nothing to
+ * break in a number somebody wrote down, and the only failure available to it
+ * is drifting from the number the gate above enforces. That is what this holds.
+ */
+describe("the agreed size, quoted", () => {
+  it("prints the same number it exports, so a report cannot name a different one", () => {
+    const printed = execFileSync("node", [path.join(repo, "scripts/bundle-ceiling.mjs")], {
+      cwd: repo,
+      encoding: "utf8",
+      timeout: 30_000,
+    }).trim();
+    expect(Number(printed)).toBe(CEILING);
+  });
+
+  it("is what the performance persona declares it measures against", async () => {
+    // Not a string this test invents: the goal that carries the debt has to be
+    // the one pointing at the command, or the report goes back to naming
+    // nothing and nothing here would notice.
+    const { parsePersona } = await import("@isocan/core");
+    const file = path.join(repo, ".agents/personas/performance.md");
+    const persona = parsePersona(readFileSync(file, "utf8"), "performance.md");
+    const debt = persona?.goals.find((g) => g.measuredBy.includes("bundle-over-ceiling"));
+    expect(debt?.bound).toEqual({ kind: "at most", value: 0 });
+    expect(debt?.against).toBe("node scripts/bundle-ceiling.mjs");
+  });
+});
+
 describe("what a first visit downloads", () => {
   it(
     "is no bigger than the last number somebody agreed to",

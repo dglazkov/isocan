@@ -98,11 +98,29 @@ function take(goal) {
   return { value };
 }
 
+/**
+ * **What the number is measured against, when it is a debt rather than a size.**
+ *
+ * Read through the same `take`, so a goal's `against` is as honest as its
+ * `measured by`: a command that will not run reports a BROKEN INSTRUMENT
+ * rather than a missing basis, because a report that quietly drops which
+ * ceiling it is 0-past is the report `scripts/reviews.mjs` could not tell
+ * apart from the night before.
+ */
+function basisOf(goal) {
+  if (!goal.against) return {};
+  const got = take({ measuredBy: goal.against });
+  return got.broken ? { broken: `\`${goal.against}\` — ${got.broken}` } : { basis: got.value };
+}
+
 const met = (goal, value) =>
   goal.bound.kind === "at most" ? value <= goal.bound.value : value >= goal.bound.value;
 
 function runOne(persona) {
-  const readings = persona.goals.map((goal) => ({ goal, ...take(goal) }));
+  const readings = persona.goals.map((goal) => {
+    const reading = { goal, ...take(goal) };
+    return reading.broken ? reading : { ...reading, ...basisOf(goal) };
+  });
   const broken = readings.filter((r) => r.broken);
   const missed = readings.filter((r) => !r.broken && !met(r.goal, r.value));
   const lines = [`# ${persona.name} — ${day}`, ""];
@@ -121,7 +139,11 @@ function runOne(persona) {
     lines.push("| Goal | Target | Now | Verdict |", "| --- | --- | --- | --- |");
     for (const r of readings) {
       const unit = r.goal.unit ?? "";
-      const target = `${r.goal.bound.kind} ${r.goal.bound.value}${unit}`;
+      // `at most 0 of 721200` — a bound of 0 on a DEBT says nothing about which
+      // number the debt is against, and the whole reading is that number.
+      const target =
+        `${r.goal.bound.kind} ${r.goal.bound.value}${unit}` +
+        (r.basis === undefined ? "" : ` of ${r.basis}${unit}`);
       if (r.broken) {
         lines.push(`| ${r.goal.name} | ${target} | — | **instrument broken** |`);
       } else {
@@ -154,7 +176,18 @@ function runOne(persona) {
     "| Finding | Outcome |",
     "| --- | --- |",
     ...(missed.length
-      ? missed.map((r) => `| ${r.goal.name} is ${r.value}${r.goal.unit ?? ""}, past ${r.goal.bound.value}${r.goal.unit ?? ""} | unanswered |`)
+      ? missed.map(
+          (r) =>
+            `| ${r.goal.name} is ${r.value}${r.goal.unit ?? ""}, ` +
+            `past ${r.goal.bound.value}${r.goal.unit ?? ""}` +
+            // The number the bound is relative to, when it has one. It is not
+            // decoration: `scripts/reviews.mjs` reads it to decide whether an
+            // answer given at one ceiling still covers a night at another, and
+            // without it a bound of 0 makes every night's overshoot look like
+            // the same question at the same number forever.
+            (r.basis === undefined ? "" : ` of ${r.basis}${r.goal.unit ?? ""}`) +
+            " | unanswered |",
+        )
       : ["| — | — |"]),
     "",
     `\`unanswered\` until somebody writes \`accepted\` or \`rejected\`. **After ${ANSWER_DAYS} days`,
