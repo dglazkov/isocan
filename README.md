@@ -25,7 +25,9 @@ to the same engine.
 else — the shortest path to a canvas with an agent on it. (No, you do not
 need Claude Code; any agent that reads `.agents/skills/` works.)
 [`docs/how-to.md`](docs/how-to.md) is the five-minute version of actually
-using it. What follows is the developer's route into the same thing.
+using it. [`docs/sheep.md`](docs/sheep.md) is the one for running an agent's
+sessions in a cell on your own Cloudflare account instead of on your laptop.
+What follows is the developer's route into the same thing.
 
 **Rather see it than read it?** isocan explains itself on isocan, and each of
 these is open to anyone with the address (they wear an `[isocan]` prefix so
