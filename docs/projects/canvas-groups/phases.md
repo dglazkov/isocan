@@ -163,6 +163,11 @@ trash-cohort restore, native backup and JSON Canvas projection, deck/sprint/
 memory/module consumer coverage. Do not add MCP writes or JSON Canvas import.
 Retained context stays inside operator purge's deletion boundary; new reads
 honor takedown/purge and requests retain the existing summon authority policy.
+Frozen comment provenance requires canvas-groups-v3, because v2 reducers drop
+it. Preserve v1/v2 historical replay and gate group state, writes and existing
+subscriptions accordingly. Legacy comments retain their historical behavior.
+Copy uses one bounded public intent and existing canonical creation effects;
+prepare all source/visual content before applying the complete subtree.
 
 **Ownership:** relevant context/model/ops/GC/export helpers in core/server,
 API/CLI/MCP context and lifecycle clients, web composer/item actions, and
@@ -172,7 +177,7 @@ affected module consumers with non-overlapping builder assignments.
 
 **Trajectory:**
 
-*nothing yet — the phase has not started.*
+- **2026-09-13** — Frozen comment provenance needs a v3 reader boundary. Contract review found that literal v2 reducers discard the new context record, so additive fields alone cannot preserve request scope or GC retention. Legacy comments and actual v1/v2 replay remain unchanged.
 
 ## Phase 5 — Legacy conversion and release
 

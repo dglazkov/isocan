@@ -369,6 +369,35 @@ first items fit the model budget. CLI scoped context and the read-only MCP
 surface expose the same manifest and retrieval path. Context reads do not
 require a browser selection or a write to presence.
 
+Phase 4 makes that boundary concrete. A caller supplies `contextRequest`
+with `rootIds`, `includeExcluded` and an optional `expectedRevision`. The
+writer resolves it into `Comment.context`: canvas/revision, the actual
+selected roots, deduplicated expanded IDs, and ordered entries with identity,
+parent/depth, exclusion/unavailability reasons, current version metadata and
+discussion references. Selecting a group and child preserves both selected
+IDs as provenance while including the child's content once. Source and visual
+references carry filename, MIME type and size, including inherited visual
+metadata. Callers cannot supply authoritative frozen version/blob records.
+An unchanged-context comment edit preserves its previous manifest; an explicit
+new context request replaces it at one writer revision.
+
+The browser sends its preview revision. A changed revision refuses the send
+and refreshes the preview instead of silently sending a different set. CLI
+callers may omit that expectation to resolve at the current writer revision.
+Live context reads expose a complete manifest and revision-bound paging;
+saved-message reads and their content pages use the frozen comment record,
+never today's membership. Excluded entries remain visible in the manifest,
+with no content returned unless that request explicitly included them.
+Missing bytes and budget omissions have reasons and counts.
+
+These records require **canvas-groups-v3**: a literal v2 reducer discards the
+new comment provenance, losing both frozen scope and retention. Upgraded
+clients still replay v1/v2 history. During phase 4, group canvases require v3
+before serving state or accepting writes, including existing subscriptions
+and forwarded callers. New frozen context writes are restricted to that
+declared mode; legacy ordinary comments keep their historical behavior.
+No new operation type or general transaction is introduced.
+
 ## Operations and consistency
 
 Phase 1 uses one `group.change` operation with a closed, typed action union.
@@ -562,6 +591,19 @@ child coordinates as intentional: per-item collision searches must not
 scatter overlaps already present within the group. Native backup export/import
 and deck extraction must use explicit membership; JSON Canvas remains an
 export-only projection and reports any hierarchy it cannot retain.
+
+The bounded `copy` intent carries copied item records with fresh item/current-
+version IDs, internal references already remapped and one destination policy.
+The writer supplies authorship and resolves one aggregate placement, recording
+the existing canonical `create` intent with multiple typed creation effects.
+It copies current versions, matching the existing copy policy. Prepare every
+required source and visual blob before applying; missing content refuses the
+whole copy rather than creating a partial subtree. Internal annotations follow
+their copied targets. An external annotation link may remain only within the
+same canvas when its target shares the resolved destination parent; otherwise
+detach `annotates` and `region` while retaining copied geometry. Cross-canvas
+copy never retains a source annotation target ID. Existing lineage/reference
+policy remains separate from ownership and never expands the copied subtree.
 
 Persist a deletion-cohort ID on each affected trash entry, derived from the
 deleting operation ID, with the deleted roots and captured membership
