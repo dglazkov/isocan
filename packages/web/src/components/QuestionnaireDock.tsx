@@ -78,16 +78,17 @@ export function activeQuestion(thread: CommentThread | null): {
       const answered = thread.comments
         .slice(i + 1)
         .some((later) => {
-          const body = later.body.trim();
-          // Did the user answer or skip?
-          if (body.startsWith("[Questionnaire Answer]") || body.startsWith("[Questionnaire Skipped]")) {
-            return true;
+          // A system actor report does not answer the questionnaire
+          if (isSystemActor(later.author.id)) {
+            return false;
           }
-          // Is it an agent/bot comment?
-          const authorName = later.author.name.toLowerCase();
-          const isAgent = authorName.includes("hiro") || isSystemActor(later.author.id);
-          // Only a human message after the question counts as closing it
-          return !isAgent;
+          const questionAuthorId = comment.author.id;
+          // Followup comments from the question author (the agent) do not close the questionnaire
+          if (later.author.id === questionAuthorId) {
+            return false;
+          }
+          // Any reply from another participant (the user) answers or dismisses the questionnaire
+          return true;
         });
       return answered ? null : { payload, comment };
     }
@@ -147,7 +148,7 @@ export function QuestionnaireDock({ payload, onAnswer, onDismiss }: Questionnair
   }
 
   async function finish(finalAnswers: Record<string, any>) {
-    // Build human-readable formatted markdown reply for Hiro
+    // Build human-readable formatted markdown reply for the asking agent
     const lines: string[] = [];
     lines.push("Here are my answers to shape the project:\n");
 
@@ -251,7 +252,7 @@ export function QuestionnaireDock({ payload, onAnswer, onDismiss }: Questionnair
                 <button
                   key={opt.id}
                   type="button"
-                  className={`q-choice-card ${selected ? "selected" : ""}`}
+                  className={`q-card-base q-choice-card ${selected ? "selected" : ""}`}
                   onClick={() => handleSelectOption(opt.id)}
                 >
                   <span className="q-opt-num">{i + 1}</span>
@@ -281,7 +282,7 @@ export function QuestionnaireDock({ payload, onAnswer, onDismiss }: Questionnair
                 <button
                   key={opt.id}
                   type="button"
-                  className={`q-visual-card ${selected ? "selected" : ""}`}
+                  className={`q-card-base q-visual-card ${selected ? "selected" : ""}`}
                   onClick={() => handleSelectOption(opt.id)}
                 >
                   <div className="q-swatch-box">

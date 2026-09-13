@@ -185,8 +185,9 @@ describe("spacing", () => {
     // by the count above, and should not be — but a jump in declarations with
     // no jump in steps is exactly the shape of healthy growth, so it is worth
     // being able to see. Generous bounds; this is a trip-wire, not a budget.
+    // Raised 900 -> 950 when the questionnaire dock (.q-*) landed.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(900);
+    expect(spacing.length).toBeLessThan(950);
   });
 });
 
