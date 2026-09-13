@@ -23,6 +23,13 @@ second week.
 
 ## 13 September 2026
 
+- Make a canvas findable on its home. With a Canvas Viewer or Presentation
+  Viewer link, turn on **Public on this home** in Share. People can browse
+  **Public canvases** without signing in; opening one uses its existing
+  viewing access. Unlisting keeps the link working. Disabling or changing the
+  link requires an explicit publication again. From a terminal, use
+  `isocan share --public on|off` and `isocan canvas list --public --home <url>`.
+
 - Choose rival design approaches from Chat with `/design-competition`, or
   from ⌘K. The picker lays their lanes together; your local rc runs the
   fighters, people vote, and a winner can become the next version of your

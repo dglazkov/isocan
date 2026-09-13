@@ -11,7 +11,7 @@ export { FileDesk } from "./file-desk.js";
  * replaced, not kept" is one rule, and two backings that each had their own
  * copy of it would be two rules.
  */
-export { admissionIn, liveAdmission, rungOfAdmission } from "./grants.js";
+export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.js";
 export { Refusals, TakenDownError, RefusedError } from "./takedowns.js";
 export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.js";
 export { DocRefusal, clearGoogleToken, driveAccount, driveModifiedTime, fetchGoogleDoc, googleTokenFile, readGoogleToken, writeGoogleToken, type FetchedDoc, type GoogleToken, } from "./google.js";

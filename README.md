@@ -417,6 +417,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   everyone on the canvas — live people and agents in their identity color,
   plus anyone who left an unread comment behind, dimmed. A face badged with a
   count takes you to that comment; a live face takes you to their cursor.
+- **Public canvases**: an owner can separately advertise an existing Canvas
+  Viewer or Presentation Viewer link with **Public on this home** in Share.
+  The home's Public catalogue lists titles and viewing access without loading
+  previews or adding canvases to your Inbox. Browse it without signing in at
+  `/public`, or use `isocan canvas list --public --home <url>`.
+  `isocan share --public on|off` controls publication; unlisting keeps the link
+  working, while replacing or disabling the link clears publication.
 - **Sharing**: **Share** sits beside the facepile, because the pile is *who's
   here* and Share is *who may be here*. It hands you the canvas's address with
   a copy button — that is the whole invitation, and it carries no installation
@@ -658,6 +665,8 @@ isocan home [<url>|--clear]        # where each canvas here lives; set where
 isocan share [<email>] [--as own|edit|read|view] [--link on|off|edit|read|view]
              [--revoke <email> [--bar]] [--bar <email>] [--unbar <email>]
                                    # the address, and who may enter this canvas
+isocan share --public on|off
+isocan canvas list --public [--home <url>]
 isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
 isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
@@ -737,8 +746,10 @@ and asks for `/` gets a front page — the idea in two sentences, the three step
 that get you onto a canvas with the install line ready to copy, one screenshot
 of a real canvas with four cursors on it, and the ledger that is the whole
 argument: a gesture on the left, the command that performs the identical
-operation on the right. Every other address still asks who you are, so a share
-link is unchanged. This used to be a separate static site under `marketing/`,
+operation on the right. `/public` is also identity-independent and shows only
+explicitly listed entry metadata. Canvas entry keeps its existing door: a
+presentation can open anonymously, while reading the canvas asks for a name.
+This used to be a separate static site under `marketing/`,
 which nothing served and which drifted from the app the day it was written; it
 was folded into `packages/web` and the directory deleted, because two front
 doors is one too many.

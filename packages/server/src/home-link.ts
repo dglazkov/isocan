@@ -65,6 +65,7 @@ import {
   FREE_NAME_ROUTE,
   grantRevokeRoute,
   grantsRoute,
+  publicListingRoute,
   healthPath,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
@@ -263,6 +264,7 @@ export interface HomeConnection {
    * one — after the claim goes up, as it does before a forwarded op.
    */
   grants(canvasId: string): Promise<GrantsResponse>;
+  setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse>;
   createGrant(
     canvasId: string,
     subject: GrantSubject,
@@ -1811,6 +1813,13 @@ export class HomeLink implements HomeConnection {
    * a grant is about badges, never about actors. */
   grants(canvasId: string): Promise<GrantsResponse> {
     return this.api<GrantsResponse>("GET", grantsRoute(canvasId));
+  }
+
+  async setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse> {
+    if (actor) await this.ensureClaim(actor);
+    return this.api<GrantResponse>("PUT", publicListingRoute(canvasId, grantId), {
+      listed, ...(actor ? { actorId: actor.id } : {}),
+    });
   }
 
   async createGrant(

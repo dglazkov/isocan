@@ -6,6 +6,7 @@ import type {
   CanvasTakedown,
   Capability,
   Grant,
+  GrantListingDecision,
   GrantSubject,
   Group,
   HomeRefusal,
@@ -19,6 +20,8 @@ import type {
 } from "@isocan/core";
 import {
   advanceSeen,
+  canListGrant,
+  isListedGrant,
   groupSubject,
   inForce,
   isGroupLive,
@@ -32,7 +35,7 @@ import {
 } from "@isocan/core";
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
-import { liveAdmission } from "./grants.ts";
+import { keepsAdmission } from "./grants.ts";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./desk.ts";
 
 /**
@@ -96,6 +99,7 @@ type DeskLogEntry =
   | { seq: number; type: "shelve"; rows: Record<string, ActorClaim>; at: string }
   | { seq: number; type: "adopt"; sessionKey: string; badgeId: string; at: string }
   | { seq: number; type: "grant"; grant: Grant; at: string }
+  | { seq: number; type: "listing"; grantId: string; listing: GrantListingDecision; at: string }
   | { seq: number; type: "revoke"; grantId: string; by: string; at: string; via?: OperatorRevocation }
   | { seq: number; type: "pass"; pass: PassRecord; at: string }
   | { seq: number; type: "redeem"; passId: string; by: string; at: string }
@@ -373,36 +377,38 @@ export class FileDesk implements Desk {
     provenance: Provenance,
     capability?: Capability,
   ): Promise<void> {
-    const badge = this.live(badgeId);
-    if (!badge) return;
-    /**
-     * **An admission that has RUN OUT is replaced, not kept** (operator phase
-     * 2).
-     *
-     * This used to be `some(a => a.canvasId === canvasId)`, which was exactly
-     * right while every admission was live until somebody revoked it. The
-     * operator's look is the first that ends on its own, and with the old line
-     * a second look at the same canvas from the same browser would be written
-     * nowhere and refused at the door — a verb that answered "done" and did
-     * nothing. Replacing is also what makes a re-entry by a GRANT possible
-     * after a look has expired.
-     */
-    const existing = badge.admissions.find((a) => a.canvasId === canvasId);
-    if (existing && liveAdmission(existing)) return;
-    const admission: Admission = {
-      canvasId,
-      provenance,
-      at: new Date().toISOString(),
-      // Stored whenever it is not edit (`narrowed`, the one place that
-      // decides): absent has meant "edit" since before the field existed, and
-      // both backings keep that reading.
-      ...(narrowed(capability) ? { capability } : {}),
-    };
-    badge.admissions = [
-      ...badge.admissions.filter((a) => a.canvasId !== canvasId),
-      admission,
-    ];
-    await this.enqueue(() => this.writeSnapshot());
+    await this.enqueue(async () => {
+      const badge = this.live(badgeId);
+      if (!badge) return;
+      /**
+       * **An admission that has RUN OUT is replaced, not kept** (operator phase
+       * 2).
+       *
+       * This used to be `some(a => a.canvasId === canvasId)`, which was exactly
+       * right while every admission was live until somebody revoked it. The
+       * operator's look is the first that ends on its own, and with the old line
+       * a second look at the same canvas from the same browser would be written
+       * nowhere and refused at the door — a verb that answered "done" and did
+       * nothing. Replacing is also what makes a re-entry by a GRANT possible
+       * after a look has expired.
+       */
+      const existing = badge.admissions.find((a) => a.canvasId === canvasId);
+      if (keepsAdmission(existing, provenance, capability)) return;
+      const admission: Admission = {
+        canvasId,
+        provenance,
+        at: new Date().toISOString(),
+        // Stored whenever it is not edit (`narrowed`, the one place that
+        // decides): absent has meant "edit" since before the field existed, and
+        // both backings keep that reading.
+        ...(narrowed(capability) ? { capability } : {}),
+      };
+      badge.admissions = [
+        ...badge.admissions.filter((a) => a.canvasId !== canvasId),
+        admission,
+      ];
+      await this.writeSnapshot();
+    });
   }
 
   // ---- the sweep, and kill-a-badge ----
@@ -511,7 +517,7 @@ export class FileDesk implements Desk {
     // `where("canvasId", "==", …)` and an index rather than a scan.
     return Object.values(this.state.grants)
       .filter((grant) => !isSpaceGrant(grant) && grant.canvasId === canvasId)
-      .map((grant) => ({ ...grant }));
+      .map((grant) => structuredClone(grant));
   }
 
   async grantsForSpace(spaceId: string): Promise<Grant[]> {
@@ -519,7 +525,7 @@ export class FileDesk implements Desk {
     // with `where("spaceId", "==", …)`.
     return Object.values(this.state.grants)
       .filter((grant) => isSpaceGrant(grant) && grant.spaceId === spaceId)
-      .map((grant) => ({ ...grant }));
+      .map((grant) => structuredClone(grant));
   }
 
   // ---- spaces (roles phase 4) ----
@@ -649,7 +655,7 @@ export class FileDesk implements Desk {
     // serves it with `where("subject", "==", …)`.
     return Object.values(this.state.grants)
       .filter((grant) => isLive(grant) && grant.subject === subject)
-      .map((grant) => ({ ...grant }));
+      .map((grant) => structuredClone(grant));
   }
 
   /** The groups ledger, which a desk from before roles phase 5 lacks. */
@@ -657,9 +663,24 @@ export class FileDesk implements Desk {
     return (this.state.groups ??= {});
   }
 
+  async listedGrants(): Promise<Grant[]> {
+    return Object.values(this.state.grants).filter(isListedGrant).map((grant) => structuredClone(grant));
+  }
+
+  async setPublicListing(canvasId: string, grantId: string, listed: boolean, at: string, by: string): Promise<Grant | null> {
+    return this.enqueue(async () => {
+      const grant = this.state.grants[grantId];
+      if (!grant || !canListGrant(grant) || grant.canvasId !== canvasId) return null;
+      const listing = { listed, at, by };
+      grant.listing = listing;
+      await this.append({ type: "listing", grantId, listing, at });
+      return structuredClone(grant);
+    });
+  }
+
   async putGrant(grant: Grant): Promise<void> {
     await this.enqueue(async () => {
-      this.state.grants[grant.id] = { ...grant };
+      this.state.grants[grant.id] = structuredClone(grant);
       await this.append({ type: "grant", grant, at: grant.at });
     });
   }
@@ -670,9 +691,10 @@ export class FileDesk implements Desk {
       if (!grant) return null;
       // Idempotent: the first revocation's stamp stands, so two people
       // turning the link off at once do not argue about when it went off.
-      if (grant.revokedAt !== undefined) return { ...grant };
+      if (grant.revokedAt !== undefined) return structuredClone(grant);
       grant.revokedAt = at;
       grant.revokedBy = by;
+      if (grant.listing !== undefined) grant.listing = { listed: false, at, by };
       // The operator's half rides on the same line (operator phase 5), so
       // a replay rebuilds the tombstone the surfaces read, not a plainer one.
       if (via) {
@@ -680,7 +702,7 @@ export class FileDesk implements Desk {
         grant.revocation = { ...via };
       }
       await this.append({ type: "revoke", grantId, by, at, ...(via ? { via } : {}) });
-      return { ...grant };
+      return structuredClone(grant);
     });
   }
 
@@ -985,11 +1007,17 @@ export class FileDesk implements Desk {
         this.state.grants[entry.grant.id] ??= { ...entry.grant };
         return;
       }
+      case "listing": {
+        const grant = this.state.grants[entry.grantId];
+        if (grant && canListGrant(grant)) grant.listing = { ...entry.listing };
+        return;
+      }
       case "revoke": {
         const grant = this.state.grants[entry.grantId];
         if (!grant || grant.revokedAt !== undefined) return;
         grant.revokedAt = entry.at;
         grant.revokedBy = entry.by;
+        if (grant.listing !== undefined) grant.listing = { listed: false, at: entry.at, by: entry.by };
         if (entry.via) {
           grant.revokedVia = "operator";
           grant.revocation = { ...entry.via };

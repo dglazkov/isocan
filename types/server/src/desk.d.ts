@@ -341,7 +341,8 @@ export interface Desk {
      * from phase 7 the door decides whether this is called at all, and the
      * provenance it passes is what phase 9's sweep grips. `capability` is
      * stored whenever it is not edit (`narrowed`, #88 widened by the roles
-     * ladder); omitted means edit. */
+     * ladder); omitted means edit. A stronger pass replaces a weaker ordinary
+     * admission atomically, preserving equal/stronger standing and active looks. */
     admit(badgeId: string, canvasId: string, provenance: Provenance, capability?: Capability): Promise<void>;
     /**
      * **Every live badge admitted to one canvas** — the population the sweep
@@ -468,6 +469,11 @@ export interface Desk {
      * No fallback, per the rule above: a canvas with no rows admits nobody.
      */
     grantsFor(canvasId: string): Promise<Grant[]>;
+    /** Indexed publication candidates, validated again at the authoritative home. */
+    listedGrants(): Promise<Grant[]>;
+    /** Change the latest decision only if this concrete grant still belongs to
+     * the canvas and is a live read/view link. Null refuses without a write. */
+    setPublicListing(canvasId: string, grantId: string, listed: boolean, at: string, by: string): Promise<Grant | null>;
     /** Write one. Used at birth (the standing link grant), by the migration, and
      * by the grant API. A grant id is minted by the caller, so this is a plain
      * document write. */

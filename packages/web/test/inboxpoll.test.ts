@@ -56,6 +56,6 @@ describe("the one visible-tab inbox poll", () => {
   });
   it("offers exactly the actions home and lens can execute, even with stale canvas selection", () => {
     const actions = availableActions({ canvasId: null, actor: { id: "u", name: "Acme" }, selection: ["stale-item"], navigate: () => {} });
-    expect(actions.map((action) => action.id)).toEqual(["open-lens", "switch-canvas", "open-canvases"]);
+    expect(actions.map((action) => action.id)).toEqual(["open-lens", "switch-canvas", "open-canvases", "open-public"]);
   });
 });

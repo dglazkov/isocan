@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, Canvas, Capability, Grant, GrantSubject, GroupView, Space, SpaceLinkResponse, SweepReport } from "@isocan/core";
-import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, ownsSpace, collectCanvasActors, grantSubjectOf, groupIdOf, groupSubject, isBar, LINK, revokedSentence, roster, faceMark, RUNGS, sameGroupName } from "@isocan/core";
+import { atLeast, canListGrant, isListedGrant, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, ownsSpace, collectCanvasActors, grantSubjectOf, groupIdOf, groupSubject, isBar, LINK, revokedSentence, roster, faceMark, RUNGS, sameGroupName } from "@isocan/core";
 import type { PresenceSession, RowState } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
@@ -16,6 +16,7 @@ import {
   revokeGrant,
   revokeSpaceGrant,
   setSpaceLink,
+  setPublicListing,
   ApiError,
 } from "../lib/api.ts";
 import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
@@ -283,6 +284,19 @@ export function ShareDialog({
   const keptOut = (grants ?? []).filter(isBar);
   /** The title on a control somebody below `own` cannot press. */
   const ownerTitle = owned ? undefined : ownerNote;
+  const publicOn = !!link && isListedGrant(link);
+
+  async function togglePublic(): Promise<void> {
+    if (!canvasId || !link || busy || !owned || !canListGrant(link)) return;
+    setBusy(true); setError(null);
+    try {
+      const answer = await setPublicListing(canvasId, link.id, !publicOn, actor.id);
+      // The accepted concrete row is authoritative even if the refresh fails.
+      setGrants((rows) => (rows ?? []).map((row) => row.id === answer.grant.id ? answer.grant : row));
+      await refreshGrants();
+    } catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
+  }
 
   async function toggleLink(): Promise<void> {
     if (!canvasId || busy) return;
@@ -581,6 +595,18 @@ export function ShareDialog({
           Made by {made ? "you" : ownerName}
         </p>
       )}
+
+      {owned && <button className={`share-link-row${publicOn ? " on" : ""}`} role="switch" aria-label="Public on this home" aria-checked={publicOn}
+        disabled={busy || !link || !canListGrant(link)} onClick={() => void togglePublic()}>
+        <span className={`share-switch${publicOn ? " on" : ""}`} aria-hidden="true"><span className="share-knob" /></span>
+        <span className="share-link-text"><b>Public on this home</b><span className="share-link-note">
+          {!link || !canListGrant(link)
+            ? "First choose a Canvas Viewer or Presentation Viewer link. Publishing does not change access."
+            : publicOn
+              ? "Anyone who can reach this home can find its title and open it. Unlisting keeps the link working."
+              : "List its title on this home using the link's existing viewing access. Changing or disabling the link clears publication."}
+        </span></span>
+      </button>}
 
       {error && <div className="identity-warning">{error}</div>}
 

@@ -9,6 +9,7 @@ export * from "./ops.ts";
 export { applyOperation } from "./reducer.ts";
 export * from "./badge.ts";
 export * from "./grants.ts";
+export * from "./public.ts";
 export * from "./passes.ts";
 export * from "./address.ts";
 export * from "./emoji.ts";

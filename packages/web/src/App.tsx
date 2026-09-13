@@ -10,7 +10,7 @@ import { readIdentity } from "./lib/identity.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
 import type { SignIn, SignInLanding } from "./lib/signin.ts";
 import { adoptIdentity } from "./lib/identity.ts";
-import { faceFor } from "./lib/faces.ts";
+import { faceFor, PUBLIC_PATH } from "./lib/faces.ts";
 import { IdentityDialog } from "./components/IdentityDialog.tsx";
 import { CanvasPage } from "./pages/CanvasPage.tsx";
 import { FrontPage } from "./pages/FrontPage.tsx";
@@ -49,6 +49,7 @@ const CanvasListPage = lazy(() =>
   import("./pages/CanvasListPage.tsx").then((m) => ({ default: m.CanvasListPage })),
 );
 const NotHerePage = lazy(() => import("./pages/NotHerePage.tsx").then((m) => ({ default: m.NotHerePage })));
+const PublicPage = lazy(() => import("./pages/PublicPage.tsx").then((m) => ({ default: m.PublicPage })));
 /**
  * **The operator's prove page, behind the same boundary** (operator phase 1).
  *
@@ -146,6 +147,7 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
           <Suspense fallback={null}>
           <Routes>
             <Route path="/" element={<CanvasListPage actor={who} onIdentity={setActor} />} />
+            <Route path={PUBLIC_PATH} element={<PublicPage />} />
             {/* The canvas's address, built from core's one spelling of it — see
                 `address.ts` for why that is worth a module. */}
             <Route path={CANVAS_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
@@ -236,6 +238,7 @@ export function Doorway({
   // same document for a stranger, for somebody with a badge, and for an agent
   // (phase 13.7).
   if (face === "terms") return <TermsPage />;
+  if (face === "public") return <Suspense fallback={<div className="page-note">Loading public canvases…</div>}><PublicPage /></Suspense>;
   /**
    * Beside the terms and above the actor branch, for the same reason: a
    * terminal opens this in whatever browser the person uses, and asking them

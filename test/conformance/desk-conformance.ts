@@ -194,6 +194,42 @@ export function deskConformance(
     );
 
     test(
+      "a stronger pass raises an existing admission without weakening standing or an operator look",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_pass_reader"));
+        const reader = { root: "grant" as const, grantId: "gnt_read" };
+        await desk.admit("bdg_pass_reader", "prj_a", reader, "read");
+        await desk.admit("bdg_pass_reader", "prj_a", { root: "grant", grantId: "gnt_edit" }, "edit");
+        expect((await desk.badge("bdg_pass_reader"))!.admissions[0]!.capability).toBe("read");
+        const pass = { root: "pass" as const, badgeId: "bdg_owner" };
+        await desk.admit("bdg_pass_reader", "prj_a", pass, "own");
+        const elevated = (await desk.badge("bdg_pass_reader"))!.admissions[0]!;
+        expect(elevated).toMatchObject({ provenance: pass, capability: "own" });
+        await desk.admit("bdg_pass_reader", "prj_a", { root: "pass", badgeId: "bdg_equal" }, "own");
+        await desk.admit("bdg_pass_reader", "prj_a", { root: "pass", badgeId: "bdg_weaker" }, "edit");
+        expect((await desk.badge("bdg_pass_reader"))!.admissions[0]).toEqual(elevated);
+        await desk.put(mint("bdg_look"));
+        const look = { root: "operator" as const, until: new Date(Date.now() + 60_000).toISOString() };
+        await desk.admit("bdg_look", "prj_a", look, "view");
+        await desk.admit("bdg_look", "prj_a", pass, "own");
+        expect((await desk.badge("bdg_look"))!.admissions[0]).toMatchObject({ provenance: look, capability: "view" });
+      }),
+    );
+
+    test(
+      "concurrent higher passes cannot overwrite the stronger accepted standing",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_pass_race"));
+        await desk.admit("bdg_pass_race", "prj_a", { root: "grant", grantId: "gnt_read" }, "read");
+        await Promise.all([
+          desk.admit("bdg_pass_race", "prj_a", { root: "pass", badgeId: "bdg_editor" }, "edit"),
+          desk.admit("bdg_pass_race", "prj_a", { root: "pass", badgeId: "bdg_owner" }, "own"),
+        ]);
+        expect((await desk.badge("bdg_pass_race"))!.admissions[0]).toMatchObject({ provenance: { root: "pass", badgeId: "bdg_owner" }, capability: "own" });
+      }),
+    );
+
+    test(
       "every rung that is not edit round-trips on an admission (roles phase 1)",
       withDesk(async ({ desk }) => {
         // The rule is "written whenever it is not edit", not "written when it
@@ -294,6 +330,56 @@ export function deskConformance(
         expect(await desk.revokeGrant("gnt_nope", at, "bdg_1")).toBeNull();
       }),
     );
+
+    test("listing decisions round-trip and unlisting leaves the link live", withDesk(async ({ desk }) => {
+      const row: Grant = { ...grant("gnt_public", "prj_public", "bdg_owner"), capability: "read" };
+      await desk.putGrant(row);
+      expect(await desk.listedGrants()).toEqual([]);
+      const at = "2026-09-13T01:00:00Z";
+      const listed = await desk.setPublicListing("prj_public", row.id, true, at, "bdg_owner");
+      expect(listed?.listing).toEqual({ listed: true, at, by: "bdg_owner" });
+      expect((await desk.listedGrants()).map((g) => g.id)).toEqual([row.id]);
+      listed!.listing!.listed = false; // a returned record must not mutate storage
+      expect((await desk.grantsFor("prj_public"))[0]!.listing!.listed).toBe(true);
+      const off = await desk.setPublicListing("prj_public", row.id, false, "2026-09-13T02:00:00Z", "bdg_other_owner");
+      expect(off).toMatchObject({ capability: "read", listing: { listed: false, by: "bdg_other_owner" } });
+      expect(off!.revokedAt).toBeUndefined();
+      expect(await desk.listedGrants()).toEqual([]);
+    }));
+
+    test("listing refuses stale, wrong-canvas and ineligible grant ids without changing them", withDesk(async ({ desk }) => {
+      const base = grant("gnt_public", "prj_public", "bdg_owner");
+      const variants: Grant[] = [base, { ...base, id: "own", capability: "own" }, { ...base, id: "space", spaceId: "spc_one", capability: "read" },
+        { ...base, id: "email", subject: "email:acme@example.test", capability: "read" }, { ...base, id: "bar", capability: "read", bars: true },
+        { ...base, id: "revoked", capability: "read", revokedAt: "2026-09-13T00:00:00Z" }];
+      for (const row of variants) {
+        await desk.putGrant(row);
+        expect(await desk.setPublicListing("prj_public", row.id, true, "2026-09-13T01:00:00Z", "bdg_owner")).toBeNull();
+      }
+      const eligible: Grant = { ...base, id: "eligible", capability: "view" };
+      await desk.putGrant(eligible);
+      expect(await desk.setPublicListing("prj_wrong", eligible.id, true, "2026-09-13T01:00:00Z", "bdg_owner")).toBeNull();
+      expect(await desk.setPublicListing("prj_public", "missing", true, "2026-09-13T01:00:00Z", "bdg_owner")).toBeNull();
+      expect(await desk.listedGrants()).toEqual([]);
+      expect((await desk.grantsFor("prj_public")).every((g) => g.listing === undefined)).toBe(true);
+    }));
+
+    test("revocation clears consent atomically even against a concurrent publication", withDesk(async ({ desk }) => {
+      for (let i = 0; i < 6; i++) {
+        const row: Grant = { ...grant(`gnt_race_${i}`, "prj_race", "bdg_owner"), capability: "read" };
+        await desk.putGrant(row);
+        await Promise.all([
+          desk.setPublicListing("prj_race", row.id, true, "2026-09-13T01:00:00Z", "bdg_owner"),
+          desk.revokeGrant(row.id, "2026-09-13T02:00:00Z", "bdg_revoker"),
+        ]);
+        const stored = (await desk.grantsFor("prj_race")).find((g) => g.id === row.id)!;
+        expect(stored.revokedAt).toBe("2026-09-13T02:00:00Z");
+        expect(stored.listing?.listed ?? false).toBe(false);
+        expect(await desk.setPublicListing("prj_race", row.id, true, "2026-09-13T03:00:00Z", "bdg_stale")).toBeNull();
+      }
+      await desk.putGrant({ ...grant("gnt_replacement", "prj_race", "bdg_owner"), capability: "read" });
+      expect(await desk.listedGrants()).toEqual([]);
+    }));
 
     // ---- operator phase 5: the operator's revoke keeps its half on the tombstone ----
 

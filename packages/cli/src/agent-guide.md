@@ -1488,7 +1488,8 @@ isocan export --to ./backup --git <owner/repo>           # commit the export and
 `--commit` commits into the repository at `--to` (making one if there is
 none); `--git <remote>` does that and pushes. Only what the export wrote is
 staged, so `--to .` inside a project never sweeps other work into a backup
-commit. A canvas is not public until you push it somewhere public — use a
+commit. Pushing an export can disclose its contents independently of the
+canvas's sharing settings — use a
 PRIVATE repository, and never one whose address a pass or a share link is
 also posted in.
 
@@ -1535,6 +1536,22 @@ in the web app drives:
   The address is the whole invitation: hand it to a person and they land on
   the canvas in a browser with nothing installed. Do not attach setup
   instructions to it; the canvas offers those itself to whoever wants them.
+- `isocan share --public on` — explicitly list the canvas's title on its home.
+  First choose an existing `--link read` or `--link view` in a separate command.
+  Publication is an owner's act and never changes access. `--public` cannot
+  combine with spaces, invitations or any other sharing mutation.
+- `isocan share --public off` — unlist it while keeping the known link working.
+  Turning the link off, replacing it or moving it to Editor clears publication;
+  restoring a viewing link does not republish. `share` reports publication
+  separately from access, including a `public` boolean in JSON.
+- `isocan canvas list --public [--home https://home.example]` — browse one home's
+  separate public catalogue: only id, title, home and read/view access. Without
+  `--home`, it asks this daemon's own catalogue, including on a replica. It
+  ignores directory bindings and never adds entries to your working list,
+  Inbox or parked agents. It cannot combine with ordinary list scope, sort or
+  filter flags. Browsing does not admit you; opening an address uses the normal
+  door. Public catalogue and entry pages ask crawlers not to index them; that
+  instruction is not a confidentiality boundary or a crawler guarantee.
 - `isocan share --link off` — new arrivals are turned away **and the people
   who got in on that link are expelled**. It prints how many. Anyone another
   grant still covers stays, which is why the line can say "3 expelled, 1 kept
@@ -1618,8 +1635,8 @@ floor its canvases can only add to, never a ceiling.
   you to own the canvas AND the space; removing, the space. A canvas moved in
   keeps its own rows and the space's apply to it from then on; one moved out
   keeps its own rows and the space's stop reaching it.
-- `isocan share --space <name>` — the space's share: every `share` flag
-  applies to every canvas in it. `--link off|edit|read|view` is **every
+- `isocan share --space <name>` — the space's share: invitation and link flags
+  apply to every canvas in it. `--link off|edit|read|view` is **every
   canvas in this space**: each canvas's own link row is set in one gesture
   and the verb prints how many canvases it reached; each canvas's own link
   can be set again afterwards (`isocan share --link view` on one canvas
@@ -2422,7 +2439,9 @@ Canvas file instead, which is a format, not a backup),
 `import <dir> [--to <home>] [--only <id>]`
 (restore a backup, seqs and timestamps intact; creates, never merges),
 `use`, `canvas`,
-`share`, `share --space <name>` (the space's rows, and `--link` on every
+`share` (`--public on|off` explicitly lists/unlists a read/view link),
+`canvas list --public [--home <url>]` (one home's metadata-only catalogue),
+`share --space <name>` (the space's rows, and `--link` on every
 canvas in it), `share group:<name>` (a row naming a group),
 `space new|list|add|remove|delete` (a named set of canvases access is set on
 once), `group new|list|add|remove|delete` (a named set of people access is

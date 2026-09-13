@@ -51,7 +51,15 @@ The catalogue is on the home being queried. CLI supports an explicit home
 address for browsing a hosted home from a replica; default browsing means
 the connected daemon's own catalogue. A remote mutation follows the existing
 authenticated home connection, with no local success before the home answers.
-Unknown routes on older homes fail visibly.
+A person who entered through a read link and subsequently redeems an owner
+pass must regain that owner standing before generic write gating. Admission
+is idempotent only when the incoming credential does not prove a higher rung;
+a pass upgrades a weaker ordinary admission and preserves a stronger one. An
+active operator look remains a ceiling until it ends. Unknown routes on older homes
+fail visibly. The exact public page is exempt
+from a pure replica's page signpost. Existing built static files are served
+before page redirects so that this local catalogue can actually boot; other
+pages retain their home redirects.
 
 ## Both surfaces
 

@@ -60,6 +60,8 @@ export function fetchGroupMigration(canvasId: string): Promise<CanvasGroupMigrat
   return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/groups/migration`);
 }
 import {
+  PUBLIC_CANVASES_ROUTE,
+  publicListingRoute,
   CANVAS_GROUPS_FEATURE,
   CLIENT_FEATURES_HEADER,
   CANVAS_GROUPS_REQUIRED,
@@ -984,6 +986,17 @@ export function writeItem(
  * the present. */
 export function listGrants(canvasId: string): Promise<GrantsResponse> {
   return request("GET", grantsRoute(canvasId));
+}
+
+/** Catalogue browsing needs a badge at most, never an actor or canvas admission. */
+export function publicCanvases(signal?: AbortSignal): Promise<import("@isocan/core").PublicCanvasesResponse> {
+  return request("GET", PUBLIC_CANVASES_ROUTE, undefined, signal, "badge");
+}
+
+/** Capture the reviewed link's id so a stale Share toggle cannot publish its
+ * replacement; the home checks ownership and eligibility before accepting. */
+export function setPublicListing(canvasId: string, grantId: string, listed: boolean, actorId: string): Promise<GrantResponse> {
+  return request("PUT", publicListingRoute(canvasId, grantId), { listed, actorId });
 }
 
 /** Share it. `link` needs no attester; `email:` and `repo:` need one this home

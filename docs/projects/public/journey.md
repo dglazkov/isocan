@@ -1,9 +1,9 @@
 ---
-status: designed
+status: partial
 since: 2026-09-13
 issue: 292
 see: hosted-sharing, roles, operator, memory
-note: owner-controlled publication into a separate home catalogue. Ordinary working lists stay private; public entries use an existing read/view link. Design and acceptance defined 13 Sep; implementation is next
+note: phases 1–2 closed 13 Sep; owner publication and both catalogue surfaces built and locally verified with the Firestore emulator required. Phase 3 retains the repeatable browser proof and verifies CI before closing lifecycle acceptance
 ---
 
 # Public — deliberately findable

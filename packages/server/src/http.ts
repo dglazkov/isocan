@@ -1,10 +1,11 @@
+import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type SetPublicListingRequest } from "@isocan/core";
 import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
 import { collectInbox, sequenceInbox } from "./inbox.ts";
 import { textAttention } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { registerCanvasGroupContext } from "./canvas-group-context.ts";
-import { createReadStream, existsSync, promises as fs } from "node:fs";
+import { createReadStream, existsSync, statSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -485,6 +486,7 @@ function isOpen(method: string, pathname: string): boolean {
   // Release notes. Nothing here is not already public, and a "what's new"
   // that needs a badge is one nobody reads on the day they most want to.
   if (method === "GET" && pathname === NEWS_ROUTE) return true;
+  if ((method === "GET" || method === "HEAD") && pathname === PUBLIC_CANVASES_ROUTE) return true;
   return false;
 }
 
@@ -1050,6 +1052,12 @@ export function registerRoutes(
 
   app.addHook("onRequest", async (req, reply) => {
     const pathname = (req.url ?? "/").split("?")[0]!;
+    if (pathname === PUBLIC_CANVASES_ROUTE || pathname === "/public" || pathname === "/public/") {
+      reply.header("X-Robots-Tag", "noindex, nofollow");
+      reply.header("Cache-Control", "no-store");
+    } else if (canvasIdIn(pathname) !== null) {
+      reply.header("X-Robots-Tag", "noindex");
+    }
 
     /**
      * **The content origin's door, which is that it has none** — stage 4b of
@@ -1185,7 +1193,9 @@ export function registerRoutes(
       }
       return;
     }
-    if (isOpen(req.method, pathname)) return;
+    // Public browsing needs no identity, but a supplied ended credential
+    // still receives its own refusal instead of silently becoming anonymous.
+    if (isOpen(req.method, pathname) && !(pathname === PUBLIC_CANVASES_ROUTE && presented)) return;
     if (!presented) {
       return reply
         .status(401)
@@ -1904,6 +1914,30 @@ export function registerRoutes(
     };
   };
 
+  /** Explicit publication only. This aggregate route has no canvas hook:
+   * current refusals, locality and lifecycle are checked before projection. */
+  app.get(PUBLIC_CANVASES_ROUTE, async (req) => {
+    const refused = refusedNet(req) ?? refusals.refusingAttestation(req.badge?.attestations ?? []);
+    if (refused) throw new RefusedError(refused);
+    const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
+    const home = new URL(`${secure ? "https" : "http"}://${req.headers.host}`).origin;
+    const canvases: PublicCanvasesResponse["canvases"] = [];
+    const seen = new Set<string>();
+    for (const grant of await desk.listedGrants()) {
+      if (!isListedGrant(grant) || seen.has(grant.canvasId) || (options.homes?.homeOf(grant.canvasId) ?? null) !== null) continue;
+      if (refusals.of(grant.canvasId)) continue;
+      const canvas = await store.canvasRecord(grant.canvasId);
+      if (!canvas) continue;
+      // A known badge's bars still apply. This asks the door without writing
+      // an admission; an anonymous browser only receives published metadata.
+      if (req.badge && !await admittingGrant(desk, canvas.id, req.badge, canvas.createdBy.id)) continue;
+      seen.add(canvas.id);
+      canvases.push({ id: canvas.id, title: canvas.title, home, capability: grant.capability });
+    }
+    canvases.sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+    return { canvases } satisfies PublicCanvasesResponse;
+  });
+
   app.get("/api/projects", async (req) => {
     const query = (req.query ?? {}) as Record<string, string | undefined>;
     const reach = query[CANVASES_REACH_PARAM];
@@ -2092,6 +2126,24 @@ export function registerRoutes(
     const off = operatorTurnedOff(rows);
     return { grants: liveGrants(rows), ...(off.length > 0 ? { turnedOff: off } : {}) };
   };
+
+  /** Publication changes only discovery, under the same owner's authority
+   * as sharing. The concrete grant is rechecked inside the Desk transaction. */
+  app.put("/api/projects/:id/grants/:grantId/listing", async (req, reply) => {
+    const { id, grantId } = req.params as { id: string; grantId: string };
+    const body = (req.body ?? {}) as Partial<SetPublicListingRequest>;
+    if (typeof body.listed !== "boolean") return reply.status(400).send({ error: "listed must be true or false", code: "bad-listing" });
+    const actorId = await actingActor(req, body.actorId);
+    const home = options.homes?.for(id) ?? null;
+    if (home) return home.setPublicListing(id, grantId, body.listed, await actorNamed(actorId));
+    const snapshot = await engine.getSnapshot(id);
+    if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null, await engine.actorJoins()), "own")) {
+      return reply.status(403).send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER });
+    }
+    const grant = await desk.setPublicListing(id, grantId, body.listed, new Date().toISOString(), req.badge!.badgeId);
+    if (!grant) return reply.status(409).send({ error: "this link is no longer eligible: publish a current Canvas Viewer or Presentation Viewer link", code: "listing-ineligible" });
+    return { grant } satisfies GrantResponse;
+  });
 
   /**
    * Share it. **Two refusals, and they are different questions on purpose.**
@@ -6392,7 +6444,7 @@ function registerPages(
     return (await pureReplica()) ? (options.birthHome ?? null) : null;
   };
 
-  const send = (reply: { header: Function; send: Function; type: Function }, file: string) => {
+  const send = (reply: FastifyReply, file: string) => {
     const types = STATIC_TYPES;
     /**
      * **An unknown extension falls through to `application/octet-stream`, and
@@ -6452,7 +6504,9 @@ function registerPages(
     const font = path.extname(file) === ".woff2";
     reply.header(
       "Cache-Control",
-      hashed
+      reply.getHeader("Cache-Control") === "no-store"
+        ? "no-store"
+        : hashed
         ? "public, max-age=31536000, immutable"
         : font
           ? "public, max-age=86400"
@@ -6473,7 +6527,12 @@ function registerPages(
     // be the cheerful wrong address again, in HTML this time.
     if (`/${url}`.startsWith("/api/")) return apiNotFound(reply, req.method, `/${url}`);
 
-    const home = await elsewhere(pathname);
+    // Built app files contain no canvas data. Serve them on a pure replica
+    // too, so its explicitly local /public page can load its own app code.
+    const resolved = path.resolve(dist, url);
+    const staticFile = built && resolved.startsWith(`${dist}${path.sep}`) && url && existsSync(resolved) && statSync(resolved).isFile();
+    if (staticFile && resolved !== path.join(dist, "index.html")) return send(reply, resolved);
+    const home = pathname === "/public" || pathname === "/public/" ? null : await elsewhere(pathname);
     if (home !== null) return signpost(reply, req.headers.accept, home);
 
     // Nothing built to serve. A daemon with no `packages/web/dist` has always
@@ -6483,10 +6542,7 @@ function registerPages(
       return reply.status(404).send({ error: `not found: ${req.method} ${pathname}` });
     }
 
-    const resolved = path.resolve(dist, url);
-    if (resolved.startsWith(dist) && url && existsSync(resolved)) {
-      return send(reply, resolved);
-    }
+    if (staticFile) return send(reply, resolved);
     // The browser is badged on the PAGE LOAD, not on a round trip — the
     // desk's Scene 3 diagram is literal about it: `GET /p/7f3a… → web app +
     // Set-Cookie`. So the app is badged before its first fetch, and the

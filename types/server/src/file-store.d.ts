@@ -9,6 +9,7 @@ export declare class FileStore implements Store {
      * exists for the backing that does hold something open. */
     close(): Promise<void>;
     listCanvases(): Promise<Canvas[]>;
+    canvasRecord(id: string): Promise<Canvas | null>;
     createCanvasDir(id: string): Promise<void>;
     canvasExists(id: string): Promise<boolean>;
     takenDownAt(id: string): Promise<string | null>;

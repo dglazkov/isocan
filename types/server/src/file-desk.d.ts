@@ -60,6 +60,8 @@ export declare class FileDesk implements Desk {
     grantsBySubject(subject: GrantSubject): Promise<Grant[]>;
     /** The groups ledger, which a desk from before roles phase 5 lacks. */
     private groups;
+    listedGrants(): Promise<Grant[]>;
+    setPublicListing(canvasId: string, grantId: string, listed: boolean, at: string, by: string): Promise<Grant | null>;
     putGrant(grant: Grant): Promise<void>;
     revokeGrant(grantId: string, at: string, by: string, via?: OperatorRevocation): Promise<Grant | null>;
     putPass(pass: PassRecord): Promise<void>;

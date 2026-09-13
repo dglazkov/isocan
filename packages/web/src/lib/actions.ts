@@ -242,6 +242,13 @@ export const ACTIONS: readonly Action[] = [
     run: (ctx) => ctx.navigate("/"),
   },
   {
+    id: "open-public",
+    name: "Public canvases",
+    hint: "canvases their owners listed on this home",
+    group: "Open",
+    run: (ctx) => ctx.navigate("/public"),
+  },
+  {
     id: "open-help",
     name: "Keyboard shortcuts",
     keys: "?",
@@ -457,7 +464,7 @@ async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<vo
 /** What can be run right now, in the order the groups are declared. On the
  * read-only canvas the actions that write are not in the list at all. */
 export function availableActions(ctx: ActionContext): Action[] {
-  if (!ctx.canvasId) return ACTIONS.filter((action) => ["open-lens", "switch-canvas", "open-canvases"].includes(action.id));
+  if (!ctx.canvasId) return ACTIONS.filter((action) => ["open-lens", "switch-canvas", "open-canvases", "open-public"].includes(action.id));
   // The module actions are read live, so a runtime module's arrive without a
   // reload; the build-time ones are already in ACTIONS and are not doubled.
   const live = moduleActions();

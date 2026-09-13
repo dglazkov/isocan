@@ -72,6 +72,7 @@ export interface HomeConnection {
      * one — after the claim goes up, as it does before a forwarded op.
      */
     grants(canvasId: string): Promise<GrantsResponse>;
+    setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse>;
     createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, 
     /** A bar rather than an invitation (roles phase 3): carried up as
      * `bars: true`, the way the rung is carried only when it narrows. */
@@ -662,6 +663,7 @@ export declare class HomeLink implements HomeConnection {
     /** Who may enter this canvas, as the HOME has it. No claim goes up first:
      * a grant is about badges, never about actors. */
     grants(canvasId: string): Promise<GrantsResponse>;
+    setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse>;
     createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, bars?: boolean): Promise<GrantResponse>;
     revokeGrant(canvasId: string, grantId: string, actor?: Actor, bar?: boolean): Promise<GrantResponse>;
     /** Your surfaces AT THE HOME. This daemon's own badge there is one of them

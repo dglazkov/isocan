@@ -10,7 +10,7 @@ import {
   type CopyState,
 } from "../lib/copy.ts";
 import { IdentityDialog } from "../components/IdentityDialog.tsx";
-import { TERMS_PATH } from "../lib/faces.ts";
+import { PUBLIC_PATH, TERMS_PATH } from "../lib/faces.ts";
 import { LEDGER } from "../lib/ledger.ts";
 import { CANVAS_SHOT } from "../lib/shot.ts";
 
@@ -75,6 +75,8 @@ export function FrontPage({ onIdentity }: { onIdentity: (actor: Actor) => void }
           live canvas, and you both watch it happen.
         </p>
       </header>
+
+      <p><Link className="btn quiet" to={PUBLIC_PATH}>Browse public canvases</Link></p>
 
       <ol className="front-steps">
         <li className="front-step">

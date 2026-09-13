@@ -95,6 +95,8 @@ import {
   atLeast,
   capabilityOf,
   capabilityWord,
+  canListGrant,
+  isListedGrant,
   isBar,
   isCapability,
   normalizeSubject,
@@ -444,6 +446,7 @@ import {
   type HomeRecord,
   type ResolveOptions,
   baseForCwd,
+  resolveBase,
   ensureDirBinding,
   homeAddressOf,
   readHomeRecord,
@@ -2841,17 +2844,24 @@ program
       "writes the bar directly. They are refused at the door whatever the link allows, until --unbar",
   )
   .option("--unbar <who>", "let somebody back in — lift the bar; the link or an invitation then decides")
+  .option("--public <on|off>", "list or unlist this canvas on its home; requires an existing read/view link, changes no access")
   .option(
     "--space <name>",
-    "the SPACE's share rather than this canvas's: every flag above applies to every canvas in it, " +
+    "the SPACE's share rather than this canvas's: invitation and link flags apply to every canvas in it, " +
       "and --link sets each canvas's link in one gesture (roles phase 4)",
   )
   .action(
     run(async (
       who: string | undefined,
-      opts: { link?: string; as?: string; revoke?: string; bar?: string | boolean; unbar?: string; space?: string },
+      opts: { link?: string; as?: string; revoke?: string; bar?: string | boolean; unbar?: string; space?: string; public?: string },
       cmd: Command,
     ) => {
+      if (opts.public !== undefined) {
+        if (opts.public !== "on" && opts.public !== "off") throw new Error("--public wants on or off");
+        if (who !== undefined || [opts.link, opts.as, opts.revoke, opts.bar, opts.unbar, opts.space].some((value) => value !== undefined)) {
+          throw new Error("--public is a separate canvas act; do not combine it with invitations, --link, --as, --revoke, --bar, --unbar or --space");
+        }
+      }
       const ctx = await ctxOf(cmd);
       if (opts.space !== undefined) return shareSpace(ctx, await resolveSpace(ctx, opts.space), who, opts);
       const canvas = await resolveCanvas(ctx);
@@ -2863,6 +2873,11 @@ program
       // right: a daemon-wide value here would send a stranger to a home that
       // has never heard of this canvas.
       const address = canvasUrl((await ctx.homeOf(canvas.id)) ?? ctx.client.base, canvas.id);
+      if (opts.public !== undefined) {
+        const live = (await ctx.client.grants(canvas.id)).grants.find((grant) => grant.subject === LINK);
+        if (!live || !canListGrant(live)) throw new Error("--public needs a current Canvas Viewer or Presentation Viewer link; choose --link read or --link view first");
+        await ctx.client.setPublicListing(canvas.id, live.id, opts.public === "on", ctx.actor.id);
+      }
       /**
        * What the sweeps this invocation ran did, added up.
        *
@@ -2946,6 +2961,7 @@ program
         return printJson({
           address,
           owner: canvas.createdBy,
+          public: !!link && isListedGrant(link),
           grants,
           ...(turnedOff.length > 0 ? { turnedOff } : {}),
           ...(holder ? { space: holder, spaceGrants: spaceRows } : {}),
@@ -2958,6 +2974,9 @@ program
         // gets from anybody else, so it belongs beside the link rather than
         // only in the error.
         owner,
+        public: link && isListedGrant(link)
+          ? "on — listed on this home; unlisting keeps the link working"
+          : "off — not listed on this home; the link setting separately controls access",
         link: link
           ? linkLine(capabilityOf(link), link.at)
           : linkOff
@@ -5771,10 +5790,29 @@ canvas
   .option("--all", "every canvas in the home, not just this directory's")
   .option("--archived", "the ones put away, instead of the ones in the list")
   .option("--with-archived", "both, with a column saying which")
+  .option("--public", "this daemon's separate public catalogue, even in a bound directory; no working-canvas reads")
+  .option("--home <url>", "with --public, ask this home's catalogue directly instead of this daemon")
   .option("--sort <order>", "recent (default), name, or created")
   .option("--filter <text>", "only canvases whose title or description matches every word")
   .action(
-    run(async (opts: { all?: boolean; sort?: string; filter?: string; archived?: boolean; withArchived?: boolean }, cmd: Command) => {
+    run(async (opts: { all?: boolean; sort?: string; filter?: string; archived?: boolean; withArchived?: boolean; public?: boolean; home?: string }, cmd: Command) => {
+      if (opts.home !== undefined && !opts.public) throw new Error("--home is for canvas list --public");
+      if (opts.public) {
+        if (opts.all || opts.archived || opts.withArchived || opts.sort !== undefined || opts.filter !== undefined) {
+          throw new Error("--public lists a separate catalogue; do not combine it with --all, --archived, --with-archived, --sort or --filter");
+        }
+        // No context resolution: a catalogue reads no binding, actor or working list.
+        const home = paths.isocanHome();
+        const resolved = opts.home !== undefined
+          ? { base: normalizeHomeUrl(opts.home), direct: true }
+          : await resolveBase(home, daemonPort(cmd), null);
+        const client = new DaemonClient(resolved.base, home);
+        if (!resolved.direct) await client.ensureDaemon();
+        const { canvases } = await client.publicCanvases();
+        if (cmd.optsWithGlobals().json) return printJson(canvases);
+        if (canvases.length === 0) return console.log(`No publicly listed canvases on ${resolved.base}.`);
+        return printTable(canvases.map((row) => ({ id: row.id, title: row.title, home: row.home, access: capabilityWord.dialog[row.capability], address: canvasUrl(row.home, row.id) })));
+      }
       const ctx = await ctxOf(cmd);
       const allEverything = await ctx.client.listCanvases();
       // A bound directory shows its own canvas: an agent that landed here

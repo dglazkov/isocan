@@ -23,6 +23,8 @@ import { proveSegmentIn } from "@isocan/core";
  * whether the browser is anybody yet.
  */
 export type Face =
+  /** The home catalogue can be browsed without choosing a name. */
+  | "public"
   /** Nobody here yet, and standing at the origin itself: the front page. */
   | "front-page"
   /**
@@ -61,6 +63,9 @@ export type Face =
  * the origin serves it the same way it serves a canvas.
  */
 export const TERMS_PATH = "/terms";
+/** A separate doorway lets strangers browse declared metadata without
+ * choosing an actor or expanding their ordinary working-canvas discovery. */
+export const PUBLIC_PATH = "/public";
 
 /**
  * Which face this browser meets, at this address, being who it is.
@@ -92,5 +97,6 @@ export function faceFor(pathname: string, actor: Actor | null): Face {
    */
   if (proveSegmentIn(pathname) !== null) return "operator-prove";
   if (actor) return "here";
+  if (at === PUBLIC_PATH) return "public";
   return at === "" ? "front-page" : "door";
 }

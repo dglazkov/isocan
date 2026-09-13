@@ -236,12 +236,23 @@ A log line and not a throw — the other canvases at that home are
 innocent.
 
 Hosted discovery now includes admissions, named canvas/group/space grants
-and creator floors. Link grants answer a known address and never supply a
-hosted directory, including explicit `?reach=admissible` requests. The same
+and creator floors. Link grants answer a known address and never supply an
+ordinary hosted working directory, including explicit `?reach=admissible`
+requests. The same
 boundary governs homes, presence whereabouts, takedown lists and unscoped
 oplog watches. Named watch targets retain the entry door. Link candidates
 are excluded before choosing a discovery grant, so a stronger link cannot
 hide a valid named invitation.
+
+Public is a separate home catalogue (`GET /api/public`), not a discovery
+scope on that working list. A concrete canvas link at read/view carries an
+optional latest listing decision `{listed, at, by}`. FileDesk journals its
+atomic change; CloudDesk transacts the grant row. Revocation clears consent,
+replacement starts unlisted, and indexed grant candidates are rechecked
+against metadata-only `Store.canvasRecord`, home authority and refusals.
+Catalogue reads admit nobody and read no snapshots, blobs or thumbnails.
+The unsigned `/public` page and signed-in home section render the same narrow
+DTO; public responses and canvas entry HTML send noindex instructions.
 
 A loopback-bound daemon retains its local shelf: a local browser sees what
 its own machine holds, including a canvas the CLI created under a different

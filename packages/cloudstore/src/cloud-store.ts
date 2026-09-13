@@ -198,6 +198,13 @@ export class CloudStore implements Store {
     return canvases;
   }
 
+  async canvasRecord(id: string): Promise<Canvas | null> {
+    const doc = await this.db.doc(canvasDoc(id)).get();
+    const data = doc.data();
+    if (!data || data["deleted"] === true || typeof data["takenDownAt"] === "string" || typeof data["purgedAt"] === "string") return null;
+    return (data["project"] as Canvas | undefined) ?? null;
+  }
+
   /** A bucket has no directories and Firestore has no schema, so there is
    * nothing to make. The name is a filesystem word for "make room for a
    * canvas" and it stays — renaming it would churn the engine and its tests

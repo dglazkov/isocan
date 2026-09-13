@@ -357,6 +357,14 @@ export function liveAdmission(admission: Admission, nowMs: number = Date.now()):
   return Number.isFinite(until) && nowMs < until;
 }
 
+/** Ordinary arrival keeps a live admission. A redeemed pass may replace a
+ * weaker one, under the backing's mutation lock; equal/stronger standing and
+ * an active operator look keep their provenance and capability. */
+export function keepsAdmission(existing: Admission | undefined, provenance: Provenance, capability?: Capability): boolean {
+  return existing !== undefined && liveAdmission(existing) &&
+    (provenance.root !== "pass" || existing.provenance.root === "operator" || atLeast(rungOfAdmission(existing), capability ?? "edit"));
+}
+
 /** The admission this badge holds here and may still use, or undefined. One
  * spelling of "look it up", so nothing finds an expired one by accident. */
 export function admissionIn(
@@ -547,6 +555,8 @@ export async function heldCapability(
 ): Promise<Capability | null> {
   const held = capabilityIn(badge, canvasId);
   if (held === null || atLeast(held, "edit")) return held;
+  // A look is a ceiling until expiry, even when a pass later adds a claim.
+  if (admissionIn(badge, canvasId)?.provenance.root === "operator") return held;
   const answer = await admittingGrant(desk, canvasId, badge, creator);
   if (!answer || answer.capability === held) return held;
   await desk.reroot(badge.badgeId, canvasId, answer.provenance, answer.capability);

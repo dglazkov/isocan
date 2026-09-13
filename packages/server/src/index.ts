@@ -18,7 +18,7 @@ export { FileDesk } from "./file-desk.ts";
  * replaced, not kept" is one rule, and two backings that each had their own
  * copy of it would be two rules.
  */
-export { admissionIn, liveAdmission, rungOfAdmission } from "./grants.ts";
+export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.ts";
 export { Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
 export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
 export {

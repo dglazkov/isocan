@@ -1,9 +1,9 @@
 # Public — the walk
 
-**Where we are:** phase 1's contract is defined. Phase 2 is next: implement
-publication and the catalogue on both clients. Phase 3 independently proves
-the lifecycle, storage, privacy and actual browser journeys. No live canvas
-is published as part of this work.
+**Where we are:** phases 1 and 2 are closed. Public is implemented on both
+clients. Phase 3 is next: retain the repeatable browser proof and independently
+verify the integrated lifecycle, privacy and required-emulator CI. No live
+canvas was published as part of this work.
 
 ## Phase 1 — Define deliberate publication
 
@@ -21,13 +21,29 @@ cards and the unsigned FrontPage's identity gate. The design addresses each.
 
 ## Phase 2 — Publish and browse on both surfaces
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 13 September 2026 — explicit owner publication and the
+separate catalogue work on CLI and web, backed by both durable desks.
 
 **Proof:** real CLI calls on synthetic home/replica daemons publish, inspect,
 list and unlist a read/view canvas. Owner and invalid-rung checks hold at the
 API; legacy grants remain unlisted; both backings retain decisions. The web
 has Share, home and unsigned-public doors using the same policy and metadata.
 Run full tests, workspace typecheck and build; preserve the entry ceiling.
+
+**Verification:** the conductor ran actual CLI publication, inspection and
+anonymous listing against synthetic daemons, then drove the built app as an
+owner and fresh stranger. Editor publication was disabled; Canvas Viewer
+asked for a name and Presentation Viewer opened its actual slide unnamed.
+Catalogue focus/hover produced no canvas content reads, admission or writes.
+Unlisting retained the same grant and known-address read. Home/replica and
+FileDesk/CloudDesk lifecycle and pass proofs passed in the full required-
+emulator suite: 5,054 tests passed. Three existing ACP/dispatch skips
+remained; a stale-build bundle skip was then closed by rebuilding and rerunning all three budget
+checks successfully.
+Typecheck and build exited 0; entry 730,722 bytes, ceiling 734,200 unchanged.
+The first full run exposed two missing export comments and a three-route
+owner guard made stale by the fourth route; both were corrected without
+relaxing the ownership or documentation limits.
 
 ## Phase 3 — Prove the public lifecycle
 
@@ -51,3 +67,11 @@ journeys, and inspect CI with the Firestore emulator required.
 - **2026-09-13** — Listing is tied to a concrete link grant. A transactional
   decision cannot resurrect its revoked row; replacing a grant starts with
   no publication consent. Sharing remains home-owned desk state.
+- **2026-09-13** — The read-before-owner-pass walk exposed an admission
+  that treated every live root as equivalent. Both backing mutations now
+  admit a stronger proven pass over a weaker ordinary root, while preserving
+  stronger standing and the active operator look ceiling on refresh.
+- **2026-09-13** — A replica's public page cannot boot if its own built
+  assets are redirected to another home. Existing static files load before
+  page signposting; only the exact catalogue page is exempt from that
+  signpost. Ordinary replica page destinations retain their behavior.

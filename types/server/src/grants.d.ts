@@ -168,6 +168,10 @@ export declare function rungOfAdmission(admission: Admission): Capability;
  * looking.
  */
 export declare function liveAdmission(admission: Admission, nowMs?: number): boolean;
+/** Ordinary arrival keeps a live admission. A redeemed pass may replace a
+ * weaker one, under the backing's mutation lock; equal/stronger standing and
+ * an active operator look keep their provenance and capability. */
+export declare function keepsAdmission(existing: Admission | undefined, provenance: Provenance, capability?: Capability): boolean;
 /** The admission this badge holds here and may still use, or undefined. One
  * spelling of "look it up", so nothing finds an expired one by accident. */
 export declare function admissionIn(badge: BadgeRecord, canvasId: string, nowMs?: number): Admission | undefined;

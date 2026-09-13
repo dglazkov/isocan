@@ -19,6 +19,9 @@ import type {
 } from "@isocan/core";
 import {
   advanceSeen,
+  canListGrant,
+  isListedGrant,
+  isGrantListingDecision,
   groupSubject,
   isCapability,
   isGroupLive,
@@ -28,7 +31,7 @@ import {
   SHELF,
   upsertAttestation,
 } from "@isocan/core";
-import { liveAdmission } from "@isocan/server";
+import { keepsAdmission } from "@isocan/server";
 import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
@@ -372,7 +375,7 @@ export class CloudDesk implements Desk {
       // comment says why, and the two backings must answer this identically or
       // a look behaves differently on a laptop and on the hosted home.
       const existing = badge.admissions.find((a) => a.canvasId === canvasId);
-      if (existing && liveAdmission(existing)) return null;
+      if (keepsAdmission(existing, provenance, capability)) return null;
       // Spread-in whenever it is not edit (`narrowed`): absent means edit
       // everywhere, and Firestore refuses an explicit `undefined` besides.
       const admission: Admission = {
@@ -536,6 +539,24 @@ export class CloudDesk implements Desk {
     return found.docs.map((doc) => toGrant(doc.data()));
   }
 
+  async listedGrants(): Promise<Grant[]> {
+    const found = await this.db.collection(GRANTS).where("listing.listed", "==", true).get();
+    return found.docs.map((doc) => toGrant(doc.data())).filter(isListedGrant);
+  }
+
+  async setPublicListing(canvasId: string, grantId: string, listed: boolean, at: string, by: string): Promise<Grant | null> {
+    const ref = this.db.collection(GRANTS).doc(grantId);
+    return this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return null;
+      const grant = toGrant(doc.data()!);
+      if (!canListGrant(grant) || grant.canvasId !== canvasId) return null;
+      const changed: Grant = { ...grant, listing: { listed, at, by } };
+      tx.set(ref, jsonSafe(changed));
+      return changed;
+    });
+  }
+
   async putGrant(grant: Grant): Promise<void> {
     await this.db.collection(GRANTS).doc(grant.id).set(jsonSafe(grant));
   }
@@ -678,6 +699,7 @@ export class CloudDesk implements Desk {
         ...grant,
         revokedAt: at,
         revokedBy: by,
+        ...(grant.listing !== undefined ? { listing: { listed: false, at, by } } : {}),
         ...(via ? { revokedVia: "operator" as const, revocation: { ...via } } : {}),
       };
       tx.set(ref, jsonSafe(revoked));
@@ -1094,6 +1116,7 @@ function toGrant(data: DocumentData): Grant {
       : { canvasId: data["canvasId"] as string }),
     subject: data["subject"] as Grant["subject"],
     grantedBy: data["grantedBy"] as string,
+    ...(isGrantListingDecision(data["listing"]) ? { listing: { ...data["listing"] } } : {}),
     at: data["at"] as string,
     ...(typeof data["revokedAt"] === "string" ? { revokedAt: data["revokedAt"] } : {}),
     ...(typeof data["revokedBy"] === "string" ? { revokedBy: data["revokedBy"] } : {}),

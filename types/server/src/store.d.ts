@@ -83,6 +83,9 @@ export interface Store {
      * without which the process simply never exits. */
     close(): Promise<void>;
     listCanvases(): Promise<Canvas[]>;
+    /** Current metadata only, with no logs or snapshots read. Null for absent,
+     * deleted, taken-down or purged canvases, including retained tombstones. */
+    canvasRecord(id: string): Promise<Canvas | null>;
     createCanvasDir(id: string): Promise<void>;
     canvasExists(id: string): Promise<boolean>;
     load(id: string): Promise<LoadedCanvas | null>;

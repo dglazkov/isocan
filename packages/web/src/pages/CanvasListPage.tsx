@@ -38,6 +38,7 @@ import {
 const ShareDialog = lazy(() =>
   import("../components/ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })),
 );
+const PublicCatalogue = lazy(() => import("../components/PublicCatalogue.tsx").then((m) => ({ default: m.PublicCatalogue })));
 import { GroupsPanel } from "../components/GroupsPanel.tsx";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
@@ -899,6 +900,7 @@ export function CanvasListPage({
        * answer.
        */}
       <Inbox actor={actor} />
+      <h2 className="working-canvases-head">Your canvases</h2>
       {(browsing || hasShelf) && (
         <div className="canvas-browse">
           {browsing && (
@@ -1104,6 +1106,7 @@ export function CanvasListPage({
       {canvases === null && <p className="canvases-loading">Loading…</p>}
       {/* An unreadable list is not an empty one, and must not render as one. */}
       {listError && <p className="canvases-error">{listError}</p>}
+      <Suspense fallback={<p>Loading public canvases…</p>}><PublicCatalogue /></Suspense>
     </div>
   );
 }

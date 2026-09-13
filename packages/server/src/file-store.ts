@@ -94,6 +94,11 @@ export class FileStore implements Store {
     return sortCanvases(canvases, "recent");
   }
 
+  async canvasRecord(id: string): Promise<Canvas | null> {
+    if (await this.takenDownAt(id) || await this.purgedAt(id)) return null;
+    return readJson<Canvas>(p.canvasMetaFile(this.home, id));
+  }
+
   async createCanvasDir(id: string): Promise<void> {
     await fs.mkdir(p.blobsDir(this.home, id), { recursive: true });
   }

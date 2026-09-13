@@ -79,6 +79,28 @@ export function storeConformance(
       }),
     );
 
+    test("reads only current live canvas metadata for catalogue candidates", withStore(async ({ store }) => {
+      expect(await store.canvasRecord("prj_missing")).toBeNull();
+      const state = await seed(store);
+      expect(await store.canvasRecord("prj_1")).toEqual(state.project);
+      await store.saveCanvas({ ...state.project, title: "Acme published title" });
+      expect((await store.canvasRecord("prj_1"))?.title).toBe("Acme published title");
+      await store.setTakenDown("prj_1", "2026-09-13T01:00:00Z");
+      expect(await store.canvasRecord("prj_1")).toBeNull();
+      await store.setTakenDown("prj_1", null);
+      expect(await store.canvasRecord("prj_1")).not.toBeNull();
+      await store.setTakenDown("prj_1", "2026-09-13T02:00:00Z");
+      await store.purgeCanvas("prj_1");
+      await store.setTakenDown("prj_1", null);
+      expect(await store.canvasRecord("prj_1")).toBeNull();
+    }));
+
+    test("a soft-deleted canvas is not live catalogue metadata", withStore(async ({ store }) => {
+      await seed(store);
+      await store.softDeleteCanvas("prj_1");
+      expect(await store.canvasRecord("prj_1")).toBeNull();
+    }));
+
     test(
       "survives a restart: what close() flushed, a fresh store reads back",
       withStore(async (fixture) => {

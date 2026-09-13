@@ -101,6 +101,10 @@ export interface Store {
 
   listCanvases(): Promise<Canvas[]>;
 
+  /** Current metadata only, with no logs or snapshots read. Null for absent,
+   * deleted, taken-down or purged canvases, including retained tombstones. */
+  canvasRecord(id: string): Promise<Canvas | null>;
+
   createCanvasDir(id: string): Promise<void>;
 
   canvasExists(id: string): Promise<boolean>;

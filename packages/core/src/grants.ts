@@ -294,9 +294,20 @@ export function isSpaceGrant(grant: GrantScope): grant is { spaceId: string } {
  */
 export type Grant = GrantBase & GrantScope;
 
+/** Latest public-listing decision, attributed to the acting badge. This is
+ * current home-local policy, not a cross-backing audit-history promise. */
+export interface GrantListingDecision {
+  listed: boolean;
+  at: string;
+  by: string;
+}
+
 export interface GrantBase {
   id: string;
   subject: GrantSubject;
+  /** Explicit publication belongs to this concrete link grant. Absent or
+   * malformed decisions are unlisted; a replacement never inherits one. */
+  listing?: GrantListingDecision;
   /**
    * Who granted it: the badge id that asked for the row, or one of the two
    * sentinels below for rows nobody asked for.

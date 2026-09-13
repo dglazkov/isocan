@@ -16,6 +16,7 @@ import type {
   GcRequest,
   HomeGcReport,
   GrantResponse,
+  PublicCanvasesResponse,
   GrantsResponse,
   GrantSubject,
   HomesResponse,
@@ -74,6 +75,8 @@ import type {
 } from "@isocan/core";
 import {
   BADGE_ENDED,
+  PUBLIC_CANVASES_ROUTE,
+  publicListingRoute,
   CANVAS_GROUPS_FEATURE,
   CLIENT_FEATURES_HEADER,
   canvasContextRoute,
@@ -608,6 +611,18 @@ export class DaemonRoutes {
   // enough that neither surface spells a URL. On a replica the daemon forwards
   // all three to the home, because the row that decides who may enter lives
   // there; nothing here has to know that.
+
+  /** The connected home's catalogue, without canvas admission or identity claims. */
+  publicCanvases(): Promise<PublicCanvasesResponse> {
+    return this.request("GET", PUBLIC_CANVASES_ROUTE);
+  }
+
+  /** Publish or unlist the concrete link an owner inspected. */
+  setPublicListing(canvasId: string, grantId: string, listed: boolean, actorId?: string): Promise<GrantResponse> {
+    return this.request("PUT", publicListingRoute(canvasId, grantId), {
+      listed, ...(actorId ? { actorId } : {}),
+    });
+  }
 
   grants(canvasId: string): Promise<GrantsResponse> {
     return this.request("GET", grantsRoute(canvasId));
