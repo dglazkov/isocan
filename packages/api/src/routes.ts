@@ -58,9 +58,12 @@ import type {
   OperatorShowResponse,
   OperatorTakedownRequest,
   OperatorTakedownResponse,
+  OperatorEndRequest,
+  OperatorEndResponse,
   TakedownsResponse,
 } from "@isocan/core";
 import {
+  BADGE_ENDED,
   encodeFilename,
   groupActingRoute,
   groupMemberRoute,
@@ -228,6 +231,24 @@ export class DaemonRoutes {
     };
     let res = await send();
     let json = (await res.json().catch(() => null)) as any;
+    /**
+     * **An end by the operator is not recovered from** (operator phase 4;
+     * journey 7 step 4: *Sam's CLI does not quietly knock for a new badge and
+     * speak as his old name. It prints the sentence and stops.*).
+     *
+     * The 401 carries the tombstone's reason. `holder` — a sign-out, a lost
+     * laptop ended from the phone — keeps the quiet re-badge below, which is
+     * what lost-badge recovery is: knock, re-claim, replay, nobody told. But a
+     * re-badge after the OPERATOR ended this surface would reclaim the same
+     * actor under a fresh badge a second later, and the engine's vouch would
+     * allow it, because no live badge holds the name any more. So the
+     * sentence is thrown as the answer, in the home's own words. The person
+     * can still knock as a stranger by choosing to — ending is not refusing,
+     * and the verb that ended them said so.
+     */
+    if (res.status === 401 && json?.code === BADGE_ENDED && json?.reason === "operator") {
+      throw new ApiError(401, json.error, BADGE_ENDED, "operator");
+    }
     const recovered =
       res.status === 401
         ? await this.reBadge()
@@ -1028,6 +1049,26 @@ export class DaemonRoutes {
     return this.request(
       "POST",
       `/api/operator/canvases/${encodeURIComponent(canvasId)}/takedown`,
+      request,
+      undefined,
+      { [OPERATOR_PROOF_HEADER]: proof },
+    );
+  }
+
+  /**
+   * **End a surface** (operator phase 4) — by badge id, actor id or
+   * `email:` address, which is the id a report names. Sent twice by the verb:
+   * once with `preview` to read the reach, once to act on it. Same header,
+   * same proof, same shape as the takedown.
+   */
+  async operatorEnd(
+    target: string,
+    proof: string,
+    request: OperatorEndRequest,
+  ): Promise<OperatorEndResponse> {
+    return this.request(
+      "POST",
+      `/api/operator/end/${encodeURIComponent(target)}`,
       request,
       undefined,
       { [OPERATOR_PROOF_HEADER]: proof },

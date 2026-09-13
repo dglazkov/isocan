@@ -122,7 +122,7 @@ export async function resolveEnded(
 /** The notice for a tombstone — `killedAt` is set on every record this is
  * handed, by construction of `resolveEnded` and `endedBadge`. */
 export function endOf(record: BadgeRecord): BadgeEnd {
-  return badgeEndNotice(record.badgeId, record.killedAt ?? record.lastSeen, null);
+  return badgeEndNotice(record.badgeId, record.killedAt ?? record.lastSeen, record.end ?? null);
 }
 
 /**

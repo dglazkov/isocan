@@ -9,6 +9,7 @@ import type {
   GrantSubject,
   Group,
   OperatorAct,
+  OperatorEnd,
   PurgeCounts,
   SeenMark,
   SeenMarks,
@@ -427,14 +428,19 @@ export class CloudDesk implements Desk {
    * It cannot go through `mutate`, which refuses to touch a killed badge —
    * this is the one write that reads the tombstone rather than obeying it.
    */
-  async killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null> {
+  async killBadge(
+    badgeId: string,
+    at: string,
+    by: string,
+    end?: OperatorEnd,
+  ): Promise<BadgeRecord | null> {
     const ref = this.db.collection(BADGES).doc(badgeId);
     return this.db.runTransaction(async (tx) => {
       const doc = await tx.get(ref);
       if (!doc.exists) return null;
       const badge = toRecord(doc.data()!);
       if (badge.killedAt !== undefined) return null;
-      tx.set(ref, denormalize({ ...badge, killedAt: at, killedBy: by }));
+      tx.set(ref, denormalize({ ...badge, killedAt: at, killedBy: by, ...(end ? { end } : {}) }));
       // The record as it was ALIVE: the caller sweeps these admissions and
       // names these actors. Ending the badge is not forgetting where it was.
       return badge;
@@ -656,6 +662,13 @@ export class CloudDesk implements Desk {
   async pass(passId: string): Promise<PassRecord | null> {
     const doc = await this.db.collection(PASSES).doc(passId).get();
     return doc.exists ? toPass(doc.data()!) : null;
+  }
+
+  /** `where("mintedBy", "==", badgeId)` — single-field, so the automatic
+   * index serves it and `firestore.indexes.json` needs nothing. */
+  async passesMintedBy(badgeId: string): Promise<PassRecord[]> {
+    const found = await this.db.collection(PASSES).where("mintedBy", "==", badgeId).get();
+    return found.docs.map((doc) => toPass(doc.data()));
   }
 
   /**
@@ -992,6 +1005,11 @@ function toRecord(data: DocumentData): BadgeRecord {
       : {}),
     ...(typeof data["killedAt"] === "string" ? { killedAt: data["killedAt"] } : {}),
     ...(typeof data["killedBy"] === "string" ? { killedBy: data["killedBy"] } : {}),
+    // The operator's half of a tombstone (operator phase 4). It MUST come
+    // back, for `capability`'s reason below: a field the write kept and every
+    // read dropped would turn an end by the operator into one by the holder
+    // — the sentence without the address, and a CLI that quietly re-badged.
+    ...(data["end"] && typeof data["end"] === "object" ? { end: data["end"] as OperatorEnd } : {}),
   };
 }
 

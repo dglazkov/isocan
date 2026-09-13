@@ -1,4 +1,4 @@
-import type { BadgeEnd, Capability, EndReach, Grant, SweepReport } from "@isocan/core";
+import type { BadgeEnd, Capability, EndReach, Grant, OperatorEnd, SweepReport } from "@isocan/core";
 import { endOf } from "./badges.ts";
 import { admittingGrant, rungOfAdmission } from "./grants.ts";
 import type { Admission, BadgeRecord, Desk, Provenance } from "./desk.ts";
@@ -548,10 +548,18 @@ export async function killAndSweep(
   report: SweepListener = () => {},
   /** Hears the end itself, and says what it reached — `SweepHub.ended`. */
   tell: (badgeId: string, end: BadgeEnd) => EndReach = () => ({ sockets: 0, waits: 0 }),
+  /** The operator's half of the tombstone, when the operator is the hand
+   * (operator phase 4): written onto the record, and what turns the sentence
+   * from *from another of its holder's surfaces* into the reason and the
+   * address. Absent for the owner's own path. */
+  end?: OperatorEnd,
 ): Promise<{ killed: BadgeRecord; swept: SweepReport; reached: EndReach } | null> {
-  const killed = await desk.killBadge(badgeId, now, by);
+  const killed = await desk.killBadge(badgeId, now, by, end);
   if (!killed) return null;
-  const reached = tell(badgeId, endOf({ ...killed, killedAt: now, killedBy: by }));
+  const reached = tell(
+    badgeId,
+    endOf({ ...killed, killedAt: now, killedBy: by, ...(end ? { end } : {}) }),
+  );
   let expelled = 0;
   let rerooted = 0;
   for (const admission of killed.admissions) {

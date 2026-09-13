@@ -13,6 +13,7 @@ import type {
   SeenMarks,
   Space,
   OperatorAct,
+  OperatorEnd,
 } from "@isocan/core";
 import {
   advanceSeen,
@@ -97,7 +98,10 @@ type DeskLogEntry =
   | { seq: number; type: "pass"; pass: PassRecord; at: string }
   | { seq: number; type: "redeem"; passId: string; by: string; at: string }
   | { seq: number; type: "attest"; badgeId: string; attestation: Attestation; at: string }
-  | { seq: number; type: "kill"; badgeId: string; by: string; at: string }
+  /** A badge ended — by its holder's other surface, or, with `end`, by the
+   * operator (operator phase 4): the reason, the address and the act, which
+   * the tombstone's sentence is rendered from. */
+  | { seq: number; type: "kill"; badgeId: string; by: string; at: string; end?: OperatorEnd }
   /** A space, WHOLE, on every write (roles phase 4): creation, a canvas added
    * or removed, the tombstone. Replayed as a replacement, not a `??=`, because
    * the latest write is the row. Losing one would quietly widen or narrow who
@@ -430,19 +434,25 @@ export class FileDesk implements Desk {
     });
   }
 
-  async killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null> {
+  async killBadge(
+    badgeId: string,
+    at: string,
+    by: string,
+    end?: OperatorEnd,
+  ): Promise<BadgeRecord | null> {
     return this.enqueue(async () => {
       const badge = this.state.badges[badgeId];
       // Already dead is not an error and is not a second kill: the caller
       // wanted this holder gone and it is, so hand back nothing to sweep.
       if (!badge || badge.killedAt !== undefined) return null;
-      badge.killedAt = at;
-      badge.killedBy = by;
       // The record as it was ALIVE — admissions and claims intact — because
       // the caller sweeps those canvases and names those actors. Killing the
       // badge is not forgetting where it had been.
       const wasAlive: BadgeRecord = { ...badge };
-      await this.append({ type: "kill", badgeId, by, at });
+      badge.killedAt = at;
+      badge.killedBy = by;
+      if (end) badge.end = end;
+      await this.append({ type: "kill", badgeId, by, at, ...(end ? { end } : {}) });
       return wasAlive;
     });
   }
@@ -662,6 +672,14 @@ export class FileDesk implements Desk {
   async pass(passId: string): Promise<PassRecord | null> {
     const found = this.state.passes[passId];
     return found ? { ...found } : null;
+  }
+
+  async passesMintedBy(badgeId: string): Promise<PassRecord[]> {
+    // A walk, for `grantsFor`'s reason: the SEAM is the query, and the cloud
+    // backing serves it with an index.
+    return Object.values(this.state.passes)
+      .filter((pass) => pass.mintedBy === badgeId)
+      .map((pass) => ({ ...pass }));
   }
 
   /**
@@ -939,6 +957,7 @@ export class FileDesk implements Desk {
         if (!badge || badge.killedAt !== undefined) return;
         badge.killedAt = entry.at;
         badge.killedBy = entry.by;
+        if (entry.end) badge.end = entry.end;
         return;
       }
       case "space": {

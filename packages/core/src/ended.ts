@@ -170,3 +170,85 @@ export function endedSentence(end: {
 function addressOf(attribute: string): string {
   return attribute.replace(/^email:/, "");
 }
+
+// ---- what the operator's verb sends and is answered ----
+
+/**
+ * `POST /api/operator/end/:target` — a badge id, an actor id, or an address
+ * (`email:…`), which is the id a report names (design, "End a badge").
+ *
+ * **Deliberately not a listing.** The target is resolved to the badges it
+ * reaches, and only those are described; there is no shape of this route
+ * that enumerates the home, for the reason `http.ts` gives about badges: a
+ * listing would be a roster of people to end.
+ */
+export const OPERATOR_END_ROUTE = "/api/operator/end/:target";
+
+/** What `isocan operator end` sends — twice: once to read the reach, once to
+ * act on it. */
+export interface OperatorEndRequest {
+  /** Why, from {@link TAKEDOWN_REASONS}: the category the ended person is
+   * shown. Required to act; the preview records it too. */
+  reason?: string;
+  /** The operator's own note — recorded, shown to nobody. */
+  note?: string;
+  /**
+   * **Read the reach and act on nothing** (journey 7 step 2: *the terminal
+   * lists what that address reaches before it acts*). A preview is still an
+   * act in the ledger — somebody with a proof asked this home what an address
+   * reaches — and settles as `previewed`.
+   */
+  preview?: boolean;
+  /** End the enrolments too: the badges the target's own passes let in, which
+   * would otherwise outlive it (innkeeper.md; journey 7 step 2's question). */
+  withEnrolments?: boolean;
+}
+
+/** One surface the target reaches, as the verb prints it. Thin, like
+ * `BadgeSummary`, and for the same reason: a count of rooms, not the rooms. */
+export interface EndedSurface {
+  badgeId: string;
+  kind: string;
+  /** Who it may speak as — the names, because the operator is reading a
+   * report that names a person. */
+  actors: { id: string; name: string }[];
+  canvases: number;
+  lastSeen: string;
+}
+
+/**
+ * **What the target reaches, listed before the act** (design, "End a
+ * badge": *the verb lists what the target reaches before it acts, including
+ * the registrations and enrolments a badge created*).
+ *
+ * `registrations` is deliberately absent: Scene 7's dispatch registrations
+ * are not built in this tree, and a field that is always empty would be a
+ * seam somebody eventually fills in. When they exist, they belong here.
+ */
+export interface OperatorEndReach {
+  /** How the target was read: by badge id, by actor (folded identities
+   * resolved through `actor.join`), or by proved address. */
+  target: { kind: "badge" | "actor" | "address"; id: string };
+  /** The live badges the target names. */
+  badges: EndedSurface[];
+  /** The live badges those badges enrolled by pass, which outlive them
+   * unless `withEnrolments` says otherwise. */
+  enrolments: EndedSurface[];
+  /** Passes minted by the target badges that are unspent and unexpired —
+   * each one refused from the moment of the act. */
+  passes: number;
+}
+
+/** What the route answers: the reach it read, and — unless previewing —
+ * what it did. */
+export interface OperatorEndResponse {
+  reach: OperatorEndReach;
+  /** The badge ids ended by this act. Empty on a preview. */
+  ended: string[];
+  /** The sockets closed and waits woken, summed over every badge ended. */
+  reached: EndReach;
+  /** What the sweeps of their rooms did to everybody else. */
+  swept: { expelled: number; rerooted: number };
+  /** The sentence the ended people read, or null on a preview. */
+  sentence: string | null;
+}

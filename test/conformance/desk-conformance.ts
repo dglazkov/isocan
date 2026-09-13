@@ -788,6 +788,36 @@ export function deskConformance(
     );
 
     /**
+     * **The operator's half of the tombstone** (operator phase 4): written in
+     * the same write as the stamp, read back whole, and absent — not empty —
+     * on an end by the holder, because the sentence and the CLI's re-badge
+     * both branch on that absence.
+     */
+    test(
+      "killBadge keeps the operator's end on the tombstone, and passesMintedBy finds what a badge left",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        await desk.put(mint("bdg_2"));
+        await desk.putPass(pass("pss_1", "prj_a", "bdg_1"));
+        await desk.putPass(pass("pss_2", "prj_b", "bdg_1", "usr_jordan"));
+        await desk.putPass(pass("pss_3", "prj_a", "bdg_2"));
+        expect((await desk.passesMintedBy("bdg_1")).map((p) => p.id).sort()).toEqual(["pss_1", "pss_2"]);
+        expect((await desk.passesMintedBy("bdg_2")).map((p) => p.id)).toEqual(["pss_3"]);
+        expect(await desk.passesMintedBy("bdg_nope")).toEqual([]);
+
+        const end = { reason: "harassment" as const, by: "email:olu@example.test", actId: "opr_1" };
+        await desk.killBadge("bdg_1", "2026-02-01T00:00:00.000Z", "bdg_opr", end);
+        expect((await desk.endedBadge("bdg_1"))!.end).toEqual(end);
+        // The holder's own end carries no operator half.
+        await desk.killBadge("bdg_2", "2026-02-01T00:00:00.000Z", "bdg_2");
+        expect((await desk.endedBadge("bdg_2"))!.end).toBeUndefined();
+        // The first stamp stands: a second kill, even an operator's, writes nothing.
+        await desk.killBadge("bdg_2", "2026-03-01T00:00:00.000Z", "bdg_opr", end);
+        expect((await desk.endedBadge("bdg_2"))!.end).toBeUndefined();
+      }),
+    );
+
+    /**
      * **The content-signing key** (`content-read-auth.md`, option A): minted
      * on first ask and the same one ever after.
      *

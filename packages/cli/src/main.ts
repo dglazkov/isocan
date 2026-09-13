@@ -64,12 +64,15 @@ import {
   TAKEN_DOWN,
   // operator phase 4: a badge that was ended, and the sentence it reads.
   ENDED,
+  BADGE_ENDED,
   inForce,
   operatorLookUrl,
   takedownDateShort,
   takedownReasonList,
   takedownSentence,
   type PurgeCounts,
+  type EndedSurface,
+  type OperatorEndReach,
   passExpired,
   grantSubjectOf,
   atLeast,
@@ -623,6 +626,21 @@ function run(fn: (...args: any[]) => Promise<void>) {
       await fn(...args);
     } catch (err) {
       console.error(`error: ${(err as Error).message}`);
+      /**
+       * **Ended by the operator: the sentence, and a stop** (operator phase
+       * 4; journey 7 step 4). `DaemonRoutes.request` refused to re-badge and
+       * threw the home's own words; this adds the one line the home cannot
+       * say for this machine — that it will not knock again under this name
+       * on its own — so the person reads what happened and what they can do,
+       * rather than a bare 401 they might retry.
+       */
+      if (err instanceof ApiError && err.code === BADGE_ENDED) {
+        console.error(
+          "This machine's badge was ended by the operator of that home, so it will not knock " +
+            "for a new one under your name. You can still open the home as a stranger; " +
+            "write to the address above about the rest.",
+        );
+      }
       process.exitCode = 1;
     }
   };
@@ -4218,6 +4236,116 @@ operatorCommand
           `record stays — \`isocan operator log --target ${canvasId}\`. There is no --lift.`,
       );
     }),
+  );
+
+/**
+ * **The reach of an end, as lines** — printed before the act and again after
+ * it, because the verb lists what the id reaches before it acts (journey 7
+ * step 2) and the same lines are what the operator pastes into the reply.
+ */
+function printEndReach(reach: OperatorEndReach): void {
+  const line = (s: EndedSurface) =>
+    `${s.badgeId} (${s.kind}) — ${s.actors.map((a) => a.name || a.id).join(", ") || "speaks as nobody"}` +
+    `, in ${s.canvases} ${s.canvases === 1 ? "canvas" : "canvases"}, seen ${s.lastSeen.slice(0, 10)}`;
+  printKeyValues({
+    target: `${reach.target.id} (by ${reach.target.kind})`,
+    badges: reach.badges.length === 0 ? "none live" : String(reach.badges.length),
+  });
+  for (const s of reach.badges) console.log(`  ${line(s)}`);
+  console.log(`enrolments: ${reach.enrolments.length === 0 ? "none" : String(reach.enrolments.length)}`);
+  for (const s of reach.enrolments) console.log(`  ${line(s)}`);
+  console.log(`passes outstanding: ${reach.passes}`);
+}
+
+operatorCommand
+  .command("end <target>")
+  .description(
+    "End a surface, and mean it: a badge id, an actor id, or email:<address>. Lists what the " +
+      "id reaches before acting; the person can still knock again as a stranger",
+  )
+  .option("--reason <category>", `why, from: ${takedownReasonList()}`)
+  .option("--note <text>", "your own note — recorded, and shown to nobody")
+  .option(
+    "--with-enrolments",
+    "also end the badges those surfaces enrolled by pass, which would otherwise outlive them",
+  )
+  .option("--yes", "act without asking (the enrolments are left unless --with-enrolments)")
+  .option("--home <url>", "the home to prove at; by default, this machine's")
+  .action(
+    run(
+      async (
+        target: string,
+        opts: { reason?: string; note?: string; withEnrolments?: boolean; yes?: boolean; home?: string },
+        cmd: Command,
+      ) => {
+        refuseInSession();
+        const ctx = await ctxOf(cmd);
+        const home = await operatorHome(ctx, null, opts.home);
+        const client = clientAt(ctx, home);
+        const proof = await operatorProof(client, home, `end ${target}`);
+        const request = {
+          ...(opts.reason ? { reason: opts.reason } : {}),
+          ...(opts.note ? { note: opts.note } : {}),
+        };
+        /**
+         * **The reach first, then the question, then the act** (journey 7
+         * step 2). One proof, two requests: the preview is an act in the
+         * ledger too — somebody with a proof asked what an address reaches —
+         * and the second request is the one that ends anything.
+         */
+        const preview = await client.operatorEnd(target, proof, { ...request, preview: true });
+        if (!ctx.json) {
+          printEndReach(preview.reach);
+          console.log();
+        }
+        if (preview.reach.badges.length === 0) {
+          throw new Error(
+            `${target} names no live badge at ${home} — it was never here, or it is already ended. ` +
+              `\`isocan operator log --target ${target}\` says which.`,
+          );
+        }
+        let withEnrolments = opts.withEnrolments === true;
+        if (
+          !withEnrolments &&
+          preview.reach.enrolments.length > 0 &&
+          !opts.yes &&
+          !ctx.json &&
+          process.stdin.isTTY &&
+          process.stdout.isTTY
+        ) {
+          const readline = await import("node:readline/promises");
+          const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+          try {
+            const answer = await rl.question(
+              `End the ${preview.reach.enrolments.length} enrolment(s) too? They outlive their ` +
+                "creating badge otherwise. [y/N] ",
+            );
+            withEnrolments = /^y(es)?$/i.test(answer.trim());
+          } finally {
+            rl.close();
+          }
+        }
+        const answer = await client.operatorEnd(target, proof, { ...request, withEnrolments });
+        if (ctx.json) return printJson(answer);
+        printKeyValues({
+          ended: answer.ended.length === 0 ? "nothing" : answer.ended.join(", "),
+          "tabs and daemons closed": `${answer.reached.sockets} here`,
+          "waits ended": String(answer.reached.waits),
+          "swept from their canvases": sweptLine(answer.swept),
+          "passes refused from now": String(answer.reach.passes),
+          enrolments: withEnrolments
+            ? "ended with them"
+            : preview.reach.enrolments.length === 0
+              ? "none"
+              : `${preview.reach.enrolments.length} left standing — \`--with-enrolments\` ends them`,
+        });
+        if (answer.sentence) console.log(`\nThe people on them read, from this home:\n  ${answer.sentence}`);
+        console.log(
+          "\nEnding is not refusing: they can knock again and be a stranger, with none of these\n" +
+            `claims. The record is in the ledger — \`isocan operator log --target ${target}\`.`,
+        );
+      },
+    ),
   );
 
 operatorCommand

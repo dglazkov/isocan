@@ -8,6 +8,7 @@ import type {
   GrantSubject,
   Group,
   OperatorAct,
+  OperatorEnd,
   Pass,
   PurgeCounts,
   SeenMark,
@@ -253,6 +254,14 @@ export interface BadgeRecord {
   killedAt?: string;
   /** Which badge ended it. The holder itself, for a plain sign-out. */
   killedBy?: string;
+  /**
+   * **The operator's half of the tombstone** (operator phase 4), present
+   * only when the operator ended it: the reason category the person is
+   * shown, the address that acted, and the ledger row that did it. Absent
+   * on every end by the holder, and absent means exactly that — the sentence
+   * the 401 carries branches on it, and so does the CLI's re-badge.
+   */
+  end?: OperatorEnd;
 }
 
 /**
@@ -422,8 +431,12 @@ export interface Desk {
    *
    * Idempotent for the same reason `revokeGrant` is: the first stamp stands,
    * so two people ending one stolen laptop do not argue about when it went.
+   *
+   * `end` is the operator's half (operator phase 4), written onto the
+   * tombstone beside the stamp when the operator is the hand; absent for
+   * the holder's own end, and read back by `endedBadge`.
    */
-  killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null>;
+  killBadge(badgeId: string, at: string, by: string, end?: OperatorEnd): Promise<BadgeRecord | null>;
 
   /**
    * **The tombstone behind an id, or null** (operator phase 4) — the one read
@@ -630,6 +643,17 @@ export interface Desk {
    * The desk seam's no-fallback rule in its plainest form: an unknown pass
    * answers nothing, and the route turns that into `unknown-pass`. */
   pass(passId: string): Promise<PassRecord | null>;
+
+  /**
+   * **Every pass one badge minted** (operator phase 4), spent and unspent —
+   * the caller judges expiry and redemption, for `redeemPass`'s reason. The
+   * one question asked of a pass by anything but its id, and it is asked by
+   * the operator's `end` alone: *what did this badge leave outstanding* is
+   * the count the verb prints beside the enrolments. Firestore:
+   * `where("mintedBy", "==", badgeId)`, a single-field query the automatic
+   * index serves.
+   */
+  passesMintedBy(badgeId: string): Promise<PassRecord[]>;
 
   /**
    * **Spend a pass, at most once, ever.**
