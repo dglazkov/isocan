@@ -39,6 +39,24 @@ interface PersonaGoal {
   measuredBy: string;
   /** The unit, when there is one — "ms", "%", left off for a plain count. */
   unit?: string;
+  /**
+   * **When the number is a debt rather than a size, the command that prints
+   * what it is a debt against.**
+   *
+   * One goal needs this and the reason generalises. "Bytes past the last size
+   * somebody agreed to" is bounded `at most 0` by construction — it measures
+   * the OVERSHOOT of a ceiling, so its bound cannot move and a report of it
+   * cannot say which ceiling. Two nights reading 1,200 are then the same
+   * sentence about two different worlds, and `scripts/reviews.mjs` let an
+   * answer given in one cover the other.
+   *
+   * A command, not a number: the ceiling has one home (`bundle-ceiling.mjs`)
+   * and this quotes it. Unlike `measured by` it is not an instrument and has no
+   * selftest — there is nothing to break in a number somebody wrote down. What
+   * `test/bundle-budget.test.ts` holds instead is that it prints the same
+   * number the gate enforces.
+   */
+  against?: string;
   /** What it measured when the baseline was taken, and when. */
   baseline?: { value: number; at: string; commit?: string };
 }
@@ -162,6 +180,7 @@ function readGoals(lines: string[]): PersonaGoal[] {
         bound: parsed.bound,
         measuredBy,
         ...(parsed.unit ? { unit: parsed.unit } : {}),
+        ...(current["against"] ? { against: current["against"]! } : {}),
         ...(current["baseline"]
           ? (() => {
               const [value, at, commit] = current["baseline"]!.split(/\s*,\s*/);
@@ -249,7 +268,12 @@ export function parsePersona(text: string, filename: string): Persona | null {
  */
 export function goalLine(goal: PersonaGoal): string {
   const unit = goal.unit ?? "";
-  const target = `${goal.bound.kind} ${goal.bound.value}${unit}`;
+  // A bound of 0 on a DEBT is a bound against a number that moves, and a line
+  // that prints the 0 alone reads as an absolute. Say what it is 0 past —
+  // the command, because the number is not knowable from here.
+  const target =
+    `${goal.bound.kind} ${goal.bound.value}${unit}` +
+    (goal.against ? ` of what \`${goal.against}\` prints` : "");
   if (!goal.baseline) return `${goal.name} — ${target}, never measured`;
   const met = goal.bound.kind === "at most"
     ? goal.baseline.value <= goal.bound.value

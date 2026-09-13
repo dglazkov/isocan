@@ -174,10 +174,21 @@ export const ANSWER_DAYS = 3;
  *
  * Returns null for anything a person wrote in their own words, which has no
  * identity beyond itself and is asked once.
+ *
+ * **`basis` is a reading, not an identity.** A goal whose bound is relative to
+ * a number that moves says so — `past 0 of 721200` — and that trailing number
+ * is what the night's value was measured AGAINST. It stays out of `goal|bound`
+ * on purpose: the treadmill this index exists to show, for the one goal that
+ * has a basis, IS the basis moving, and splitting the count by ceiling would
+ * turn five nights of one question into five questions asked once. It belongs
+ * beside `value`, because it is half of what the value means, and
+ * `findUnanswered` weighs it exactly where it already weighs the value.
  */
 export function findingKey(what) {
-  const m = /^(.*) is (-?[\d.]+)\S* , ?past (-?[\d.]+)/.exec(what.replace(/,\s*past/, " , past"));
-  return m ? { goal: m[1].trim(), bound: m[3], value: Number(m[2]) } : null;
+  const m = /^(.*) is (-?[\d.]+)\S* , ?past (-?[\d.]+)(?:\S*\s+of\s+(-?[\d.]+))?/.exec(
+    what.replace(/,\s*past/, " , past"),
+  );
+  return m ? { goal: m[1].trim(), bound: m[3], value: Number(m[2]), basis: m[4] ?? null } : null;
 }
 
 /**
@@ -326,18 +337,39 @@ export function trustRows(pages = reviewPages()) {
  */
 export function findUnanswered(pages, days = ANSWER_DAYS, today = new Date()) {
   /**
-   * Every answered bound-finding, by identity, remembering the SMALLEST value
-   * anybody said yes to. Smallest rather than latest: the question a person
-   * answered was about the number in front of them, and drift is measured from
-   * there rather than from whatever it has since become.
+   * Every answered bound-finding, by identity AND by the number it was
+   * measured against, remembering the SMALLEST value anybody said yes to.
+   * Smallest rather than latest: the question a person answered was about the
+   * number in front of them, and drift is measured from there rather than from
+   * whatever it has since become.
+   *
+   * **Why the basis is part of this key and not part of the identity.** For
+   * every goal but one, the bound is a line in the persona file, so tightening
+   * it writes a new `goal|bound` and the question is asked again — which is
+   * what makes tightening a bound an act with a consequence. The performance
+   * persona's *bytes past the last size somebody agreed to* cannot do that: its
+   * bound is the constant 0 by construction, because the number is the
+   * OVERSHOOT of `CEILING` in `scripts/bundle-ceiling.mjs` rather than a size.
+   * Raising that ceiling is the entire content of the decision — and until this
+   * line existed it moved nothing, so an answer given at one ceiling went on
+   * covering creep against every later one.
+   *
+   * Measured against the real queue on 12 Sep 2026: four answered nights at
+   * 3899, 1169, 4706 and 5799 made 1169 × 1.1 = 1285 the covered window, and a
+   * night reporting 1,200 bytes past a ceiling 12,306 bytes HIGHER was silently
+   * inside it. Twelve kilobytes of agreed growth, and the queue could not tell.
+   *
+   * A finding whose goal names no basis has `null` on both sides and matches
+   * itself, so nothing else in the queue changes.
    */
   const settled = new Map();
+  const covers = (key) => `${key.goal}|${key.bound}|${key.basis ?? ""}`;
   for (const page of pages) {
     for (const finding of page.findings) {
       if (!isAnswered(finding.outcome)) continue;
       const key = findingKey(finding.what);
       if (key === null) continue;
-      const id = `${key.goal}|${key.bound}`;
+      const id = covers(key);
       const seen = settled.get(id);
       if (seen === undefined || key.value < seen) settled.set(id, key.value);
     }
@@ -354,9 +386,10 @@ export function findUnanswered(pages, days = ANSWER_DAYS, today = new Date()) {
       if (isAnswered(finding.outcome)) continue;
       const key = findingKey(finding.what);
       if (key !== null) {
-        const answeredAt = settled.get(`${key.goal}|${key.bound}`);
-        // Somebody has already answered this question at this bound, and the
-        // number has not got materially worse since. The answer stands.
+        const answeredAt = settled.get(covers(key));
+        // Somebody has already answered this question at this bound, against
+        // this same agreed number, and it has not got materially worse since.
+        // The answer stands.
         if (answeredAt !== undefined && key.value <= answeredAt * (1 + WORSE_BY)) continue;
       }
       late.push({ file: page.file, persona: page.persona, date: page.date, what: finding.what, age });

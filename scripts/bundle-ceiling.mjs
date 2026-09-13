@@ -316,6 +316,21 @@
  *  the reason in that answer — not quietly in a diff. */
 export const CEILING = 721_200;
 
+/**
+ * **Run as a program it prints that number**, so the performance persona's
+ * `against:` can name it (`.agents/personas/performance.md`) and every nightly
+ * finding can say which ceiling it is 0-past.
+ *
+ * A command rather than a copy: the debt goal's bound is 0 by construction, so
+ * the only thing that distinguishes one night's overshoot from another's is
+ * the number it was measured against, and a second spelling of that number
+ * anywhere is the drift `docs/reviews/lessons.md` #5 is about. This file owns
+ * it; this is the file saying it out loud.
+ */
+if (process.argv[1] && process.argv[1].endsWith("bundle-ceiling.mjs")) {
+  console.log(CEILING);
+}
+
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.
  *  That file is where it is decided. */

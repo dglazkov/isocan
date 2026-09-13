@@ -48,6 +48,22 @@ describe("a persona run changes nothing", () => {
     expect(runner).toContain("expected a number on stdout");
   });
 
+  it("writes which number a debt is a debt against, through the same instrument", () => {
+    /**
+     * A goal bounded `at most 0` on an overshoot cannot say which ceiling it
+     * overshot, and `scripts/reviews.mjs` read two nights at two ceilings as
+     * one question with one answer standing. The finding carries the basis now.
+     *
+     * Taken through `take` rather than run loose: a basis that could not be
+     * read is a BROKEN INSTRUMENT like any other, because a report that
+     * silently drops which ceiling it is 0-past is exactly the report that was
+     * indistinguishable from the night before.
+     */
+    expect(runner).toContain("basisOf");
+    expect(runner).toMatch(/take\(\{ measuredBy: goal\.against \}\)/);
+    expect(runner).toMatch(/\$\{r\.basis\}/);
+  });
+
   it("fails on a broken instrument and NOT on a missed goal", () => {
     // A page that goes red every morning trains everybody to stop looking, so
     // a missed goal is news. A number nobody could take is different: it must

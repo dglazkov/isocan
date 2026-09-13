@@ -216,6 +216,83 @@ describe("an answer covers the nights that repeat it", () => {
     ];
     expect(findUnanswered(pages, ANSWER_DAYS, now)).toHaveLength(1);
   });
+
+  /**
+   * **And asks again when somebody RAISES the size the bound is measured
+   * against** — the case above, for the one goal that could not reach it.
+   *
+   * The performance persona's *bytes past the last size somebody agreed to* is
+   * bounded `at most 0` by construction: it measures the overshoot of `CEILING`
+   * in `scripts/bundle-ceiling.mjs`, not a size. So its bound cannot be
+   * tightened, and raising the ceiling — which is the entire content of
+   * answering one of these — moved nothing the queue could see. An answer given
+   * at one ceiling went on covering creep against every later one.
+   *
+   * Measured against the real queue on 12 Sep 2026: the four answered nights on
+   * `docs/reviews/2026-09-0{8,9,10,11}-performance.md` read 3899, 1169, 4706 and
+   * 5799, so the smallest yes was 1169 and the covered window 1169 × 1.1 = 1285.
+   * A night reporting 1,200 bytes past a ceiling **12,306 bytes higher** sat
+   * inside it and never reached the queue.
+   *
+   * The report says which ceiling now (`against:` in the persona, written by
+   * `scripts/persona-run.mjs`), and `findingKey` reads it. It is weighed where
+   * the VALUE is weighed and not where the identity is decided — see the last
+   * case below, which is the half that would otherwise quietly go missing.
+   */
+  const over = (n: number, ceiling: number) =>
+    `bytes past the last size somebody agreed to is ${n}, past 0 of ${ceiling}`;
+
+  it("reads the agreed size a debt was measured against", () => {
+    expect(findingKey(over(1200, 721200))).toMatchObject({
+      goal: "bytes past the last size somebody agreed to",
+      bound: "0",
+      value: 1200,
+      basis: "721200",
+    });
+    // A goal whose bound is a line in the persona file names nothing, and says
+    // so rather than guessing.
+    expect(findingKey(chunk(700000))?.basis).toBeNull();
+  });
+
+  it("asks again when somebody raises the size the bound is measured against", () => {
+    const pages = [
+      page("2026-09-09", over(1169, 641100), "accepted — CEILING raised to 653,500, with the reason"),
+      page("2026-09-14", over(1200, 721200), "unanswered"),
+    ];
+    const late = findUnanswered(pages, ANSWER_DAYS, now);
+    expect(late).toHaveLength(1);
+    // 1200 is inside 1169 × 1.1; what puts it in the queue is the ceiling.
+    expect(late[0].what).toContain("721200");
+  });
+
+  it("still lets one answer stand while the agreed size has not moved", () => {
+    // The other half, and the one that keeps the guard from nagging: nights at
+    // the same ceiling are the same question with the same answer standing.
+    const pages = [
+      page("2026-09-09", over(1169, 641100), "accepted"),
+      page("2026-09-10", over(1200, 641100), "unanswered"),
+      page("2026-09-11", over(1270, 641100), "unanswered"),
+    ];
+    expect(findUnanswered(pages, ANSWER_DAYS, now)).toEqual([]);
+  });
+
+  it("counts a ceiling that keeps moving as one question, not one per ceiling", () => {
+    /**
+     * The reason the agreed size is NOT in `findingKey`'s identity. For this
+     * goal the treadmill IS the ceiling moving — four nights running is what
+     * produced the 11 Sep raise — and folding the basis into `goal|bound` would
+     * read those nights as separate questions each asked once, deleting the
+     * only signal that says a bound wants enforcing rather than another answer.
+     */
+    const raised = [
+      page("2026-09-01", over(3899, 641100), "accepted"),
+      page("2026-09-02", over(1169, 653500), "accepted"),
+      page("2026-09-03", over(4706, 702400), "accepted"),
+    ];
+    expect(askedAgain(raised, REPEAT_FROM)).toHaveLength(1);
+    expect(askedAgain(raised, REPEAT_FROM)[0].runs).toBe(3);
+    expect(askedAgain(raised, REPEAT_FROM)[0].bound).toBe("0");
+  });
 });
 
 /**
