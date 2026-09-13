@@ -5,11 +5,11 @@ the mechanism. This is the conduct contract for implementing the reviewed
 plan. The conductor owns these documents and the release record; builders
 own only their assigned code, tests, CLI guide and product README changes.
 
-**Where we are:** phase 1 is CLOSED (12 Sep 2026); phases 2–5 are NOT STARTED.
-Canvas-groups phase 2 is next: membership on the CLI and in the browser.
-Shared structural operations, geometry, exact inverses and protocol gating
-have passed the conductor's core, HTTP and persistence proofs. No phase
-waits on another project's implementation or on a person.
+**Where we are:** phases 1–2 are CLOSED (12 Sep 2026); phases 3–5 are NOT STARTED.
+Canvas-groups phase 3 is next: transforms, frame fitting and label-safe layout.
+Shared operations and membership on both clients have passed the conductor's
+HTTP, persistence, real CLI and browser proofs. No phase waits on another
+project's implementation or on a person.
 
 **Rules for every phase.** Work on main. Every structural act is atomic,
 undoable and shared by both surfaces; a log undo label is not atomicity.
@@ -70,7 +70,7 @@ for an explicit, justified vocabulary-bound adjustment, if required.
 
 ## Phase 2 — Membership on both surfaces
 
-**Status: NOT STARTED (2026-09-12).** Nothing built.
+**Status: CLOSED (2026-09-12).** CLI/API membership and real browser creation, scope, menus, detach and undo are independently verified.
 
 Closes journey 1 and the membership/navigation parts of journey 3. Mechanisms:
 design sections Joining/moving/leaving, Selecting a group, CLI/API surface,
@@ -96,6 +96,10 @@ are assigned explicitly by the conductor to avoid overlapping ownership.
 
 - **2026-09-12** — Removing roots from different groups can require different destination parents. Phase 2 adds one closed `remove` intent within `group.change`, resolving all destinations from the starting relation. Its membership walk also requires `mv --in` now; phase 3 retains broader geometry dispatch.
 - **2026-09-12** — Public `remove` resolves to the existing canonical `reparent` intent. Review found that recording a new intent value under `canvas-groups-v1` would admit phase 1 readers whose reducer rejects it; preserving the replay shape keeps that capability truthful without a version bump.
+
+- **2026-09-12** — Accepted receipts describe the writer's resolved facts, not a replay against the caller's earlier snapshot. A real intervening HTTP move exposed a false client failure after successful Add; phase 3 must preserve this distinction for transform receipts and previews.
+
+- **2026-09-12** — Web structural calls distinguish accepted, queued and refused outcomes. Creation forms keep queued/refused work visible instead of selecting a nonexistent frame; phase 3 must apply the same outcome contract when clearing gesture previews.
 
 ## Phase 3 — Transforms, frame fitting and label-safe layout
 

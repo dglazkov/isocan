@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyOperation, applyGroupChange, blobsNamedBy, buildRecap, captureGroupExpectations, GroupConflictError, groupChildren, groupContentBox, groupDescendants, groupFitBox, groupResizeBox, groupSelectionRoots, groupTransform, groupTransformClosure, invertOperation, itemsTouchedBy, majors, resolveCanvasGroupRequest, resolveGroupOperation, validateGroupForest, weightOf } from "../src/index.ts";
+import { applyOperation, applyGroupChange, blobsNamedBy, buildRecap, captureGroupExpectations, GroupConflictError, groupAncestors, groupChildren, groupContentBox, groupDescendants, groupFitBox, groupRemoveAction, groupResizeBox, groupScopedRoot, groupScopeRoots, groupSelectionRoots, groupTransform, groupTransformClosure, groupWrapAction, invertOperation, itemsTouchedBy, majors, resolveCanvasGroupRequest, resolveGroupOperation, validateGroupForest, weightOf } from "../src/index.ts";
 import type { CanvasState, GroupAction, GroupBox, GroupChange, GroupOperation, LogEntry, Operation } from "../src/index.ts";
 
 const actor = { id: "usr_test", name: "Test" };
@@ -25,6 +25,38 @@ function request(state: CanvasState, itemId: string, box: GroupBox): Extract<Gro
 function boxes(state: CanvasState): Record<string, GroupBox> { return Object.fromEntries(Object.values(state.canvas.items).map(({ id, x, y, width, height }) => [id, { x, y, width, height }])); }
 
 describe("explicit canvas-group forest", () => {
+  it("scopes clicks and traversal without geometric fallback, and wraps mixed roots at their common parent", () => {
+    let state = wrap(wrap(card(), "inner", ["a"]).state, "outer", ["inner"]).state;
+    state = ordinary(state, "overlap", { x: 100, y: 200, width: 100, height: 100 });
+    expect(groupScopedRoot(state.canvas, "a", null)).toBe("outer");
+    expect(groupScopedRoot(state.canvas, "a", "outer")).toBe("inner");
+    expect(groupScopedRoot(state.canvas, "a", "inner")).toBe("a");
+    expect(groupScopedRoot(state.canvas, "outer", "outer")).toBeNull();
+    expect(groupScopedRoot(state.canvas, "overlap", "outer")).toBeNull();
+    expect(groupAncestors(state.canvas, "a").map((item) => item.id)).toEqual(["inner", "outer"]);
+    expect(groupScopeRoots(state.canvas, "outer").map((item) => item.id)).toEqual(["inner"]);
+    const action = groupWrapAction(state.canvas, { id: "mixed", title: "Acme Mixed", version: version("mixed") }, ["a", "overlap"]);
+    const made = change(state, action).state;
+    expect(made.canvas.items.mixed?.containerId).toBeUndefined();
+    expect(made.canvas.items.a?.containerId).toBe("mixed");
+    expect(made.canvas.items.inner?.containerId).toBe("outer");
+    expect(made.canvas.items.a).toMatchObject({ x: 100, y: 200 });
+  });
+
+  it("removes mixed-parent roots atomically using the backwards-compatible canonical reparent intent", () => {
+    let state = wrap(wrap(card(), "left", ["a"]).state, "outer", ["left"]).state;
+    state = wrap(ordinary(state, "b", { x: 900, y: 200, width: 400, height: 400 }), "right", ["b"]).state;
+    const before = state;
+    const removed = change(state, groupRemoveAction(state.canvas, ["a", "b"]));
+    expect(removed.op.action).toMatchObject({ kind: "apply", change: { intent: "reparent" } });
+    expect(removed.state.canvas.items.a?.containerId).toBe("outer");
+    expect(removed.state.canvas.items.b?.containerId).toBeUndefined();
+    expect(boxes(removed.state)).toEqual(boxes(before));
+    expect(undo(removed.state, removed.inverse).canvas.items).toEqual(before.canvas.items);
+    expect(change(before, groupRemoveAction(before.canvas, ["a"], true)).state.canvas.items.a?.containerId).toBeUndefined();
+    expect(() => change(before, { kind: "remove", itemIds: ["a", "outer"] })).toThrow(/already at the canvas root/);
+    expect(() => change(before, { kind: "remove", itemIds: ["a"], toRoot: "yes" } as unknown as GroupAction)).toThrow(/boolean/);
+  });
   it("wraps without moving cards, ignores geometric non-members, detaches in place", () => {
     const original = ordinary(card(), "outside", { x: 110, y: 210, width: 200, height: 200 });
     const made = wrap(original, "g", ["a"]);

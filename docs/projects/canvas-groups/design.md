@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-12
 see: sprint, context, mindmap, 2026-08-28-op-grouping.md
-note: phase 1 has verified explicit membership, shared transforms, exact inverses and protocol gating; client surfaces, context and migration remain in phases 2–5
+note: phases 1–2 verify shared operations and membership on both surfaces; gesture/layout completion, context and migration remain in phases 3–5
 ---
 # From areas to groups
 
@@ -11,8 +11,8 @@ that mismatch: a **group is an item with explicit members**, and working on
 that item acts on the things it contains. Membership, movement, resizing,
 context and layout must mean the same thing in the browser and the CLI.
 
-The shared foundation is implemented and verified in phase 1; the client
-commands and complete experience below remain the implementation contract.
+The shared foundation and membership clients are implemented and verified in
+phases 1–2. The remaining experience below is the implementation contract.
 The initial review used `main` at `ed1520a6`;
 the checkout was subsequently updated to `19355501` on 12 September 2026.
 The conduct contract is now [phases.md](phases.md), with the user-visible
@@ -449,7 +449,7 @@ Use **`isocan canvas group`** as the canonical namespace. The browser says
 groups once migration is enabled. Do not dispatch the same command based on
 whether its operands look like email addresses or item names.
 
-All commands below are proposed. IDs are stable; title prefixes must be
+The phase contract records which commands below have shipped. IDs are stable; title prefixes must be
 unique and ambiguous names list candidates instead of choosing the first.
 
 | Command | Browser equivalent |
@@ -729,5 +729,5 @@ Run `npm test` and `npm run typecheck`, including the CLI guide/surface guard.
 Report actual browser actions and observed results separately from unit
 coverage. The feature completion report must name all six repo obligations:
 operation vocabulary, CLI verbs, agent guide, shared core helpers, README and
-tests. This planning change touches documentation only; it makes no claim
-that group behavior or browser acceptance has been implemented.
+tests. The initial plan review was documentation only; the phase records now name
+the implemented behavior and actual browser acceptance separately.

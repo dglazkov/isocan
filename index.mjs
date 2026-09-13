@@ -33,6 +33,9 @@ export const {
   CanvasHandle,
   activityRows,
   buildComment,
+  // canvas-groups.ts — explicit membership and resolved dry-run reports
+  CanvasGroups,
+  resolveCanvasGroupRef,
   // routes.ts / client.ts — the typed routes and the daemon lifecycle
   ApiError,
   DaemonClient,

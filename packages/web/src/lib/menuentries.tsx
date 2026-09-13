@@ -1,5 +1,5 @@
 import type { Actor, CanvasCursor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
-import { CURSORS, cursorLabel, contextMark, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
+import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -24,6 +24,8 @@ import { glideToBox, revealItem } from "./zoomactions.ts";
 import { addSpeakerNote, noteStarter } from "./notes.ts";
 import { handIn, handable } from "./sprint.ts";
 import { canEditNow } from "./capability.ts";
+import { canvasGroupEntries, groupDeleteLabel } from "./canvasgroupmenus.ts";
+import { openGroupCreation, groupsEnabled } from "./canvasgroups.ts";
 
 /**
  * **What the right-click menu offers, and why each thing is on it.**
@@ -73,6 +75,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
   const version = one?.versions.find((v) => v.id === one.currentVersionId) ?? null;
 
   return offered([
+    ...canvasGroupEntries(items, ctx),
     {
       label: many ? `Copy ${items.length} items` : "Copy",
       shortcutFor: "Copy the selection",
@@ -159,12 +162,12 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       })),
     },
     { separator: "" },
-    {
+    ...(!one || !isGroupItem(one) ? [{
       label: "Open full screen",
       shortcutFor: "Open the selection full screen",
       disabled: !one,
       run: () => one && ctx.navigate(itemPath(ctx.canvasId, one.id)),
-    },
+    }] : []),
     {
       label: "Open in the workbench",
       disabled: !one,
@@ -362,7 +365,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
     ...sprintHandIn(items, ctx),
     { separator: "" },
     {
-      label: many ? `Delete ${items.length} items` : "Delete",
+      label: groupDeleteLabel(items) ?? (many ? `Delete ${items.length} items` : "Delete"),
       shortcutFor: "Move the selection to the trash",
       danger: true,
       writes: true,
@@ -419,6 +422,7 @@ function sprintHandIn(items: readonly Item[], ctx: MenuContext): MenuEntry[] {
 export function canvasMenu(ctx: MenuContext): MenuEntry[] {
   const held = useUiStore.getState().clipboard;
   return offered([
+    { label: "New group", writes: true, disabled: !groupsEnabled(), ...(!groupsEnabled() ? { value: "Not enabled on this canvas" } : {}), run: () => openGroupCreation([], ctx.world) },
     {
       label: held ? `Paste ${held.items.length} item${held.items.length === 1 ? "" : "s"}` : "Paste",
       shortcutFor: "Paste",

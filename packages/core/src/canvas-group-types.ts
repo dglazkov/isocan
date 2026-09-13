@@ -19,7 +19,7 @@ export type GroupAnchor = "nw" | "ne" | "sw" | "se";
 /** Writer-owned authorship and cohort identity; intent cannot supply a replacement stamp. */
 export interface GroupStamp { actor: Actor; ts: string; opId: string }
 /** Creation carries source metadata so canonical replay and backups retain its blob references. */
-interface GroupCreation {
+export interface GroupCreation {
   id: string;
   title: string;
   version: NewVersion;
@@ -33,6 +33,7 @@ interface GroupCreation {
 export type GroupAction =
   | { kind: "create"; group: GroupCreation; itemIds?: string[]; containerId?: string | null }
   | { kind: "reparent"; itemIds: string[]; containerId: string | null; place?: boolean }
+  | { kind: "remove"; itemIds: string[]; toRoot?: boolean }
   | { kind: "ungroup"; itemIds: string[] }
   | { kind: "transform"; itemIds: string[]; by: { x: number; y: number }; expected: GroupExpectation[] }
   | { kind: "transform"; moves: Array<{ itemId: string; x: number; y: number }>; expected: GroupExpectation[] }
@@ -83,7 +84,7 @@ export type GroupWrite =
 /** Concrete record: no placement search or intent resolution during replay. */
 export interface GroupChange {
   canvasId: string;
-  intent: Exclude<GroupAction["kind"], "apply">;
+  intent: Exclude<GroupAction["kind"], "apply" | "remove">;
   expected: GroupExpectation[];
   writes: GroupWrite[];
   cohorts?: Record<string, GroupCohortRecord>;

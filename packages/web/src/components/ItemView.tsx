@@ -1,3 +1,5 @@
+import { groupContentBox, groupChildren, groupAncestors, groupScopedRoot, isGroupItem } from "@isocan/core";
+import { enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
@@ -331,7 +333,11 @@ function ItemViewInner({
   // An area is a sheet things are placed ON: drawn behind everything, and
   // transparent to the pointer except for its title strip and handles, so a
   // tool used inside it still reaches the canvas. See `core/area.ts`.
-  const isAreaItem = isArea(item);
+  const isCanvasGroup = isGroupItem(item);
+  const isAreaItem = isArea(item) || isCanvasGroup;
+  const groupContent = isCanvasGroup ? groupContentBox(item) : null;
+  const memberCount = useCanvasStore((s) => s.canvas && isCanvasGroup ? groupChildren(s.canvas, item.id).length : 0);
+  const groupDepth = useCanvasStore((s) => s.canvas ? groupAncestors(s.canvas, item.id).length : 0);
   /** See `picture` above: the mark appears once the chrome has gone, and only
    *  for the kinds whose small form no longer says what they are. A sheet is
    *  excluded because it is a place rather than a thing, and it keeps its own
@@ -449,6 +455,8 @@ function ItemViewInner({
     // The count is kept by hand: a pointerdown carries no click count (detail
     // is 0 on pointer events), so the pair has to be recognized by the clock.
     if (canEdit && target.closest(".item-titlebar")) {
+      const labelCanvas = useCanvasStore.getState().canvas;
+      if (!labelCanvas || groupScopedRoot(labelCanvas, item.id, ui.activeGroupId) === item.id) {
       const now = Date.now();
       if (now - labelPress.current < DOUBLE_PRESS_MS) {
         labelPress.current = 0;
@@ -460,33 +468,26 @@ function ItemViewInner({
         return;
       }
       labelPress.current = now;
+      }
     }
 
+    const stackCanvas = useCanvasStore.getState().canvas;
+    const stackScope = ui.activeGroupId;
+    const stack = e.altKey && stackCanvas ? [...new Set(itemsUnder(e.clientX, e.clientY).map((id) => groupScopedRoot(stackCanvas, id, stackScope)).filter((id): id is string => id !== null))] : [];
+    if (e.altKey && stackCanvas && stack.length === 0) return;
+    const selectionId = e.altKey ? (stack[0] ?? item.id) : scopedHit(item.id);
+    const from = stack.findIndex((id) => ui.selectedItemIds.includes(id));
+    const targetId = stack.length > 1 ? stack[(from + 1) % stack.length]! : selectionId;
     if (e.shiftKey) {
-      // Shift-click toggles membership; no drag from a shift press.
-      ui.toggleSelect(item.id);
+      ui.toggleSelect(targetId);
       return;
     }
-
     if (!canEdit) {
       // A reader selects; nothing moves under their hand. Selection stays
-      // because it is how the context panel, the versions and full screen
-      // are reached, and none of those write.
-      ui.select(item.id);
+      // available for context, navigation and group inspection.
+      ui.select(targetId);
       return;
     }
-
-    // ⌥-click reaches past whatever is on top. It matters most for drawings:
-    // a chromeless sketch is a big invisible rectangle, so a stack of them
-    // (or ink laid over a note) would otherwise hand every click to the same
-    // topmost box. Each ⌥-click steps one layer deeper, then wraps around.
-    const stack = e.altKey ? itemsUnder(e.clientX, e.clientY) : [];
-    // Step from whatever is selected, not from the item that caught the event:
-    // selecting raises an item's z-index, so paint order would ping-pong
-    // between the top two and never reach the third.
-    const from = stack.findIndex((id) => ui.selectedItemIds.includes(id));
-    const anchor = from >= 0 ? from : stack.indexOf(item.id);
-    const targetId = stack.length > 1 ? stack[(anchor + 1) % stack.length]! : item.id;
 
     // Dragging a selected item moves the whole selection; dragging an
     // unselected one selects it alone first.
@@ -684,13 +685,16 @@ function ItemViewInner({
     });
   }
 
-  function onDoubleClick() {
+  function onDoubleClick(e: React.MouseEvent) {
     const ui = useUiStore.getState();
     // Two quick dots from the Pen are ink, not a request to enter the item.
     if (ui.activeTool === "pen") return;
     // The pointer capture above hands us the label's double-click too; naming
     // a thing is not the same as stepping inside it.
     if (ui.renamingItemId === item.id) return;
+    const hitId = scopedHit(item.id);
+    const hit = useCanvasStore.getState().canvas?.items[hitId];
+    if (hit && isGroupItem(hit)) { enterCanvasGroup(hit.id); e.stopPropagation(); return; }
     // A canvas is a place you go, not a thing you step inside of: the same
     // gesture opens it in a tab. Never in place — a canvas inside a canvas
     // inside a canvas is a maze, and a tab is where a place belongs.
@@ -740,8 +744,9 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? " canvas-group" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
+      data-group-id={isCanvasGroup ? item.id : undefined}
       /* One id in the store rather than a flag per item: moving the pointer
          across a canvas re-renders the two items whose state changed, not
          every item on screen. */
@@ -752,6 +757,7 @@ function ItemViewInner({
         )
       }
       style={{
+        ...(isCanvasGroup ? { zIndex: -10000 + groupDepth } : {}),
         left: x,
         top: y,
         width,
@@ -789,7 +795,7 @@ function ItemViewInner({
           ×{item.versions.length}
         </button>
       )}
-      {isAreaItem && grid && (
+      {isAreaItem && !isCanvasGroup && grid && (
         /* The grid (sprint phase 5): guides between cells and a name per row
            and column, in world units inside the sheet's inner region — the
            storyboard's fifteen frames, the test wall's people × frames. No
@@ -835,12 +841,16 @@ function ItemViewInner({
            while the sheet itself lets tools through to the canvas. */
         <div
           className="area-title"
-          style={{ height: AREA_TITLE_HEIGHT, fontSize: Math.round(AREA_TITLE_HEIGHT * 0.6) }}
+          style={{ height: isCanvasGroup ? (item.groupLayout?.titleHeight ?? 56) : AREA_TITLE_HEIGHT, fontSize: isCanvasGroup ? 24 : Math.round(AREA_TITLE_HEIGHT * 0.6) }}
           title={item.title}
         >
-          {item.title}
+          {item.title}{isCanvasGroup && <small className="group-member-count">{memberCount} items</small>}
         </div>
       )}
+      {isCanvasGroup && <>
+        <span className="group-border north" /><span className="group-border south" /><span className="group-border east" /><span className="group-border west" />
+        {(item.groupLayout?.briefHeight ?? 0) > 0 && <div className="group-brief" style={{ top: item.groupLayout?.titleHeight ?? 56, height: item.groupLayout?.briefHeight, left: groupContent!.x - item.x, right: item.groupLayout?.inset ?? 24 }}><GroupBrief canvasId={canvasId} blobHash={current.blobHash} /></div>}
+      </>}
       {mark !== null && reactionPointsOf(item, mark).length > 0 && (
         /* The heat map: the mark, drawn where each person put it. Under the
            curtain only YOUR dot shows — you may see where you voted, not
@@ -1042,13 +1052,13 @@ function ItemViewInner({
           {SLIDE_EMOJI} Notes for {noteSlideTitle}
         </span>
       )}
-      {["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
+      {!isCanvasGroup && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
         <button type="button" className="btn item-read" aria-label={entered ? "Done reading" : `Read ${item.title} and select text`}
           onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
           {entered ? "Done reading" : "Read / select text"}
         </button>
       )}
-      <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
+      {!isCanvasGroup && <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
         {/**
          * Too far away to read: draw the mark, not the words.
          *
@@ -1117,7 +1127,7 @@ function ItemViewInner({
           </span>
         )}
         {worker && <div className="work-sheen" />}
-      </div>
+      </div>}
       {/* ONE row under the item, and everything that wants to be there.
           
           Marks, the `+`, the full-screen button and the size all live on this
@@ -1171,7 +1181,7 @@ function ItemViewInner({
                   Not while a corner is being dragged: your pointer is busy,
                   the button would be under it, and the number beside it is the
                   thing you are actually reading. */}
-              {!resize && (
+              {!resize && !isCanvasGroup && (
                 <button
                   className={`fullscreen-btn${spellItOut ? "" : " compact"}`}
                   // The tooltip is the label, and it is drawn rather than
@@ -1831,3 +1841,14 @@ export const ItemView = memo(ItemViewInner);
  * A p90 hid that; the worst frame is what showed it.
  */
 const MarkdownView = memo(MarkdownViewInner);
+
+/** The saved current brief is the one source for CLI, canvas preview and full-screen editing. */
+function GroupBrief({ canvasId, blobHash }: { canvasId: string; blobHash: string }) {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    let live = true;
+    fetchBlobText(canvasId, blobHash).then((text) => { if (live) setText(text); }).catch(() => { if (live) setText("Brief unavailable"); });
+    return () => { live = false; };
+  }, [canvasId, blobHash]);
+  return <>{text}</>;
+}

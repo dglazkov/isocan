@@ -1,3 +1,5 @@
+import { isGroupItem, keyFor } from "@isocan/core";
+import { changeCanvasGroup, enterCanvasGroup, groupTask, openGroupCreation, selectParentGroup } from "./canvasgroups.ts";
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor, AlignEdge } from "@isocan/core";
 import { alignMoves, canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
@@ -65,6 +67,14 @@ const withSelection = (ctx: ActionContext) => ctx.selection.length > 0;
 
 /** Everything the launcher can do, grouped in the order it shows them. */
 export const ACTIONS: readonly Action[] = [
+  { id: "group-selection", name: "Group selection", keys: keyFor("Group selection") ?? "", group: "Canvas", writes: true, available: (ctx) => onCanvas(ctx) && withSelection(ctx), run: (ctx) => openGroupCreation([...ctx.selection]) },
+  { id: "new-canvas-group", name: "New group", group: "Canvas", writes: true, available: onCanvas, run: () => openGroupCreation() },
+  { id: "ungroup-selection", name: "Ungroup", keys: keyFor("Ungroup") ?? "", group: "Canvas", writes: true, available: (ctx) => ctx.selection.some((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); }), run: (ctx) => groupTask(() => changeCanvasGroup(ctx.canvasId!, ctx.actor, { kind: "ungroup", itemIds: ctx.selection.filter((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); }) })) },
+  { id: "enter-group", name: "Enter group", group: "Open", available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!] && isGroupItem(useCanvasStore.getState().canvas!.items[ctx.selection[0]!]!), run: (ctx) => enterCanvasGroup(ctx.selection[0]!) },
+  { id: "parent-group", name: "Select parent group", group: "Open", available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!]?.containerId, run: (ctx) => selectParentGroup(ctx.selection[0]!) },
+  { id: "add-to-group", name: "Add to group…", group: "Canvas", writes: true, available: (ctx) => onCanvas(ctx) && withSelection(ctx), run: (ctx) => useUiStore.getState().setGroupDialog({ kind: "add", itemIds: [...ctx.selection] }) },
+  { id: "fit-group", name: "Fit frame to contents", group: "Canvas", writes: true, available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!] && isGroupItem(useCanvasStore.getState().canvas!.items[ctx.selection[0]!]!), run: (ctx) => groupTask(() => changeCanvasGroup(ctx.canvasId!, ctx.actor, { kind: "frame", itemId: ctx.selection[0]!, fit: true })) },
+
   {
     id: "add",
     name: "Add…",

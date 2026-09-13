@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-12
 see: sprint, context, design-competition
-note: phase 1 has verified shared membership, atomic operations and persistence; phase 2 builds both client surfaces, with browser journeys, context and migration still ahead
+note: phases 1–2 verify the shared foundation and CLI/browser membership journeys; phase 3 adds gesture previews and complete placement, with context and migration still ahead
 ---
 # Canvas groups — the experience
 

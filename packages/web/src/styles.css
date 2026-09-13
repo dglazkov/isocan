@@ -5472,7 +5472,7 @@ button.mt-card:hover { border-color: var(--accent); }
      one thing nothing else outranks, and a right-click menu floating over the
      who-are-you dialog would be that reservation spent for nothing. */
   position: fixed; z-index: var(--z-popover);
-  min-width: 208px; padding: 5px;
+  min-width: 208px; padding: 5px; max-height: calc(100vh - 16px); overflow-y: auto; box-sizing: border-box;
   /**
    * **A menu carries its own ground** (8 Sep 2026).
    *
@@ -5524,7 +5524,7 @@ button.mt-card:hover { border-color: var(--accent); }
    children a row has. */
 .context-item {
   display: flex; align-items: center; justify-content: flex-start; gap: 8px;
-  width: 100%; padding: 6px 9px; border: none; border-radius: 6px;
+  width: 100%; padding: 6px 9px; border: none; border-radius: 6px; flex-shrink: 0;
   background: transparent; color: var(--ink);
   font: inherit; font-size: 12.5px; line-height: 1.2; text-align: left;
   cursor: pointer;
@@ -5537,13 +5537,13 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* **A row whose children open beside it** (7 Sep). The first nested menu here.
 
-   `position: relative` on the wrapper and absolute on the panel, so the
-   children hang off the row rather than off the menu — a submenu anchored to
-   the menu would sit at the wrong height for every row but the first. */
-.context-sub { position: relative; display: flex; }
+   The trigger anchors a fixed panel in viewport coordinates. Fixed positioning
+   lets children escape the parent menu's scrolling clip; the component
+   repositions them when their trigger scrolls. */
+.context-sub { position: relative; display: flex; flex-shrink: 0; }
 .context-sub > .context-item { width: 100%; }
 .context-submenu {
-  position: absolute; left: calc(100% + 4px); top: -5px;
+  position: fixed;
   /* Nothing else in a menu overlaps a menu, so this is the one place a
      stacking order inside `--z-popover` has to be stated. */
   z-index: 1;
@@ -6635,3 +6635,28 @@ button.mt-card:hover { border-color: var(--accent); }
 .text-comment-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; position: sticky; top: 0; z-index: 2; background: var(--card); padding: 4px; }
 .fullscreen-stage .md-view { padding-top: 96px; scroll-padding-top: 96px; }
 .fullscreen-stage .text-comment-actions { top: 64px; }
+
+/* Explicit groups keep their world-space header and leave interiors available to tools. */
+.item.canvas-group .area-title { color: var(--ink); }
+.item.canvas-group:not(.renaming) .item-titlebar { display: none; }
+.item.canvas-group .group-border { position: absolute; pointer-events: auto; }
+.item.canvas-group .group-border.north, .item.canvas-group .group-border.south { left: 0; right: 0; height: calc(5px / var(--scale, 1)); }
+.item.canvas-group .group-border.north { top: 0; }
+.item.canvas-group .group-border.south { bottom: 0; }
+.item.canvas-group .group-border.east, .item.canvas-group .group-border.west { top: 0; bottom: 0; width: calc(5px / var(--scale, 1)); }
+.item.canvas-group .group-border.east { right: 0; }
+.item.canvas-group .group-border.west { left: 0; }
+.item.canvas-group .group-brief { position: absolute; box-sizing: border-box; white-space: pre-wrap; overflow: hidden; font-size: 16px; line-height: 1.4; padding: 8px 0; pointer-events: auto; }
+.group-member-count { flex-shrink: 0; margin-left: auto; padding-left: 16px; font-size: 14px; font-weight: 400; }
+.canvas-group-scope { position: absolute; top: 62px; left: 16px; z-index: var(--z-bar); display: flex; align-items: center; padding: 6px; gap: 5px; max-width: calc(100% - 100px); overflow-x: auto; }
+.canvas-group-scope button { white-space: nowrap; border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 6px 9px; }
+.canvas-group-scope button[aria-current] { font-weight: 700; color: var(--accent-text); }
+.canvas-group-form { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+.canvas-group-form > label { display: block; }
+.canvas-group-form input:not([type=checkbox]), .canvas-group-form select, .canvas-group-form textarea { display: block; margin-top: 6px; width: 100%; padding: 8px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+.canvas-group-form textarea { min-height: 100px; }
+.canvas-group-form fieldset { max-height: 260px; overflow: auto; }
+.canvas-group-form fieldset label { display: flex; gap: 8px; padding: 5px; }
+.canvas-group-form li { display: flex; justify-content: space-between; padding: 5px; }
+.canvas-group-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.context-item:focus-visible { background: var(--chip-hover); outline: 2px solid var(--accent); outline-offset: -2px; }

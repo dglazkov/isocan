@@ -76,7 +76,8 @@ export function documentedVerbs(markdown: string): Set<string> {
   for (const span of markdown.matchAll(/`([^`\n]+)`/g)) {
     // `isocan comment main <thread>` and `comment main <thread>` name the
     // same verbs; the first two words are where a command name can be.
-    const words = span[1]!.trim().replace(/^isocan\s+/, "").split(/\s+/).slice(0, 2);
+    const path = span[1]!.trim().replace(/^isocan\s+/, "").split(/\s+/);
+    const words = path.slice(0, path[0] === "canvas" && path[1] === "group" ? 3 : 2);
     for (const word of words) {
       for (const alt of word.split("|")) {
         // Only bare lowercase words: `--dry-run`, `<item>` and `[--css]` are
@@ -105,6 +106,7 @@ function moduleDirs(): string[] {
 function registeredCommands(): string[] {
   const sources = [
     path.join(repo, "packages/cli/src/main.ts"),
+    path.join(repo, "packages/cli/src/canvas-groups.ts"),
     ...moduleDirs().map((dir) => path.join(dir, "src/cli.ts")).filter((f) => existsSync(f)),
   ];
   const names = new Set<string>();

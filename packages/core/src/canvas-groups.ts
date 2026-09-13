@@ -9,7 +9,8 @@ import type { Operation } from "./ops.ts";
 const GROUP_KIND = "group";
 const GROUP_LIMIT = 10000;
 const GROUP_MIN_SIZE = { width: 160, height: 160 };
-const GROUP_DEFAULT_SIZE = { width: 1600, height: 1000 };
+/** Empty frames have one shared initial size on the CLI and browser shelf. */
+export const GROUP_DEFAULT_SIZE = { width: 1600, height: 1000 };
 const GROUP_LABEL_HEIGHT = 24;
 const fields = ["x", "y", "width", "height", "containerId", "groupLayout"] as const;
 const own = (value: object, key: PropertyKey): boolean => Object.prototype.hasOwnProperty.call(value, key);
@@ -63,7 +64,7 @@ function groupIn(canvas: CanvasContents, id: string): Item {
   return item;
 }
 /** Kind is explicit: visual overlap never turns an ordinary card into a container. */
-function isGroupItem(item: Item): boolean { return item.properties.kind === GROUP_KIND; }
+export function isGroupItem(item: Item): boolean { return item.properties.kind === GROUP_KIND; }
 /** Missing mode preserves historical area replay until a canvas opts into groups. */
 function hasCanvasGroups(state: CanvasState): boolean { return state.project.groupMode === "groups"; }
 
@@ -81,6 +82,30 @@ function groupIndex(canvas: CanvasContents): Map<string | null, Item[]> {
 }
 /** Direct membership, with null addressing the canvas root instead of an enclosing frame. */
 export function groupChildren(canvas: CanvasContents, groupId: string | null): Item[] { return groupIndex(canvas).get(groupId) ?? []; }
+/** Breadcrumb order starts at the immediate parent and ends at the canvas root. */
+export function groupAncestors(canvas: CanvasContents, itemId: string): Item[] {
+  return ancestors(canvas, itemIn(canvas, itemId)).map((id) => itemIn(canvas, id));
+}
+/** Root-scope clicks reach the outermost group; inside a group they reach direct children. */
+export function groupScopedRoot(canvas: CanvasContents, itemId: string, activeGroupId: string | null): string | null {
+  if (!canvas.items[itemId] || itemId === activeGroupId) return null;
+  const chain = [itemIn(canvas, itemId), ...groupAncestors(canvas, itemId)];
+  return chain.find((item) => (item.containerId ?? null) === activeGroupId)?.id ?? null;
+}
+/** The same direct-child boundary drives marquee selection and the group navigator. */
+export function groupScopeRoots(canvas: CanvasContents, activeGroupId: string | null): Item[] {
+  return groupChildren(canvas, activeGroupId);
+}
+/** Wrapping normalizes selected roots; the writer assigns their lowest common parent. */
+export function groupWrapAction(canvas: CanvasContents, creation: import("./canvas-group-types.ts").GroupCreation, itemIds: readonly string[]): Extract<GroupAction, { kind: "create" }> {
+  idList(itemIds);
+  return { kind: "create", group: creation, itemIds: groupSelectionRoots(canvas, itemIds) };
+}
+/** Each selected root leaves one level, even when roots start under different parents. */
+export function groupRemoveAction(canvas: CanvasContents, itemIds: readonly string[], toRoot = false): Extract<GroupAction, { kind: "remove" }> {
+  idList(itemIds);
+  return { kind: "remove", itemIds: groupSelectionRoots(canvas, itemIds), toRoot };
+}
 /** Deterministic subtree order gives clients the same recursive selection and context. */
 export function groupDescendants(canvas: CanvasContents, groupId: string): Item[] {
   const index = groupIndex(canvas);
@@ -306,12 +331,12 @@ function checkExpectations(state: CanvasState, expected: GroupExpectation[]): vo
 function validateGroupRequest(action: GroupAction): void {
   if (!record(action) || typeof action.kind !== "string") fail("invalid action");
   const allowed: Record<string, string[]> = {
-    create: ["kind", "group", "itemIds", "containerId"], reparent: ["kind", "itemIds", "containerId", "place"], ungroup: ["kind", "itemIds"], transform: "by" in action ? ["kind", "itemIds", "by", "expected"] : "moves" in action ? ["kind", "moves", "expected"] : ["kind", "itemId", "box", "anchor", "expected"], frame: ["kind", "itemId", "box", "fit"], layout: ["kind", "itemId", "layout", "tidy"], delete: ["kind", "itemIds"], restore: ["kind", "itemIds"],
+    create: ["kind", "group", "itemIds", "containerId"], reparent: ["kind", "itemIds", "containerId", "place"], remove: ["kind", "itemIds", "toRoot"], ungroup: ["kind", "itemIds"], transform: "by" in action ? ["kind", "itemIds", "by", "expected"] : "moves" in action ? ["kind", "moves", "expected"] : ["kind", "itemId", "box", "anchor", "expected"], frame: ["kind", "itemId", "box", "fit"], layout: ["kind", "itemId", "layout", "tidy"], delete: ["kind", "itemIds"], restore: ["kind", "itemIds"],
   };
   if (!own(allowed, action.kind)) fail("resolved group changes are writer-only");
   exactKeys(action, allowed[action.kind]!, "action");
-  for (const flag of ["place", "fit", "tidy"] as const) if (own(action, flag) && typeof (action as unknown as Record<string, unknown>)[flag] !== "boolean") fail(`${flag} must be a boolean`);
-  if (["reparent", "ungroup", "delete", "restore"].includes(action.kind)) idList((action as { itemIds?: unknown }).itemIds);
+  for (const flag of ["place", "fit", "tidy", "toRoot"] as const) if (own(action, flag) && typeof (action as unknown as Record<string, unknown>)[flag] !== "boolean") fail(`${flag} must be a boolean`);
+  if (["reparent", "remove", "ungroup", "delete", "restore"].includes(action.kind)) idList((action as { itemIds?: unknown }).itemIds);
   if (["frame", "layout"].includes(action.kind) && typeof (action as { itemId?: unknown }).itemId !== "string") fail("item ID required");
   if (action.kind === "reparent" && !own(action, "containerId")) fail("destination group required");
   if ("itemIds" in action) idList(action.itemIds, action.kind === "create");
@@ -555,6 +580,16 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
         adjustFrame(action.containerId, groupFitBox(canvas, action.containerId));
         fitAncestors([action.containerId]);
       }
+    } else if (action.kind === "remove") {
+      // Resolve every destination against the starting relation. Earlier
+      // roots in the same act must not change where a later root is promoted.
+      const destinations = roots.map((id) => {
+        const parent = itemIn(original, id).containerId;
+        if (!parent) fail(`${id} is already at the canvas root`);
+        return { id, parent: action.toRoot ? null : itemIn(original, parent).containerId ?? null };
+      });
+      for (const destination of destinations) reparent([destination.id], destination.parent);
+      fitAncestors(roots);
     } else if (action.kind === "ungroup") {
       for (const id of roots) {
         const group = groupIn(canvas, id);
@@ -599,7 +634,9 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     if (Object.keys(patch).length) writes.push({ kind: "patch", itemId: id, fields: patch });
   }
   const cohorts = deletions.size ? { [stamp.opId]: { rootIds: roots, members: sorted(deletions).map((id) => ({ itemId: id, containerId: original.items[id]!.containerId ?? null, annotates: annotationTarget(original.items[id]!) })) } } : undefined;
-  const change: GroupChange = { canvasId: state.project.id, intent: action.kind, expected: sorted(dependencies).map((id) => expectation(state, id)), writes, ...(cohorts ? { cohorts } : {}), ...(skipped.size ? { skippedIds: sorted(skipped) } : {}) };
+  // Remove is derived reparenting, so its canonical form remains readable
+  // by the first canvas-groups-v1 reducer as well as this richer request API.
+  const change: GroupChange = { canvasId: state.project.id, intent: action.kind === "remove" ? "reparent" : action.kind, expected: sorted(dependencies).map((id) => expectation(state, id)), writes, ...(cohorts ? { cohorts } : {}), ...(skipped.size ? { skippedIds: sorted(skipped) } : {}) };
   applyGroupChange(state, change, stamp.actor, stamp.ts);
   return { type: "group.change", action: { kind: "apply", change } };
 }

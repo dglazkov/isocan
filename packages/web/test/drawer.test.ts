@@ -192,7 +192,8 @@ describe("the drawer holds everything it took", () => {
     expect(sub, "on both axes").toContain("window.innerHeight");
     // Flips rather than slides horizontally: a submenu that slid would cover
     // the row it hangs off, and leaving it would cross the parent and reopen.
-    expect(sub).toContain('el.style.right = "calc(100% + 4px)"');
+    expect(sub).toContain("anchor.right + 4 : anchor.left - bounds.width - 4");
+    expect(sub).toContain('document.addEventListener("scroll", position, true)');
   });
 
   it("no longer keeps those in the bar", () => {
