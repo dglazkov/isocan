@@ -20,6 +20,7 @@ import type { OperationType } from "./ops.ts";
  * differently — the web through an actor map, the CLI through its own.
  */
 const OP_WORDS: Partial<Record<OperationType, string>> = {
+  "group.change": "changed a canvas group",
   "project.create": "made the canvas",
   "project.update": "renamed the canvas",
   "item.add": "added something",

@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-09-12
 see: sprint, context, design-competition
-note: canvas groups are designed; phase 1 builds the shared membership and operation foundation before both client surfaces, context and migration
+note: phase 1 has verified shared membership, atomic operations and persistence; phase 2 builds both client surfaces, with browser journeys, context and migration still ahead
 ---
 # Canvas groups — the experience
 

@@ -144,6 +144,7 @@ export async function exportCanvases(
           items: snapshot.canvas.items,
           threads: snapshot.canvas.threads,
           agents: snapshot.canvas.agents ?? {},
+          ...(snapshot.canvas.groupCohorts ? { groupCohorts: snapshot.canvas.groupCohorts } : {}),
         }),
         written,
       );

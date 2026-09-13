@@ -170,6 +170,16 @@ export function blobsNamedBy(
           size: typeof record.size === "number" ? record.size : 0,
         });
       }
+      // Visual faces may omit filename/size and inherit the source metadata.
+      // Resolve that inheritance while the containing version is still here,
+      // including versions embedded in an atomic canvas-group creation.
+      const visual = record.visual;
+      if (visual !== null && typeof visual === "object" && !Array.isArray(visual)) {
+        const face = visual as Record<string, unknown>;
+        if (typeof face.blobHash === "string" && typeof face.mimeType === "string" && !found.has(face.blobHash)) {
+          found.set(face.blobHash, { mimeType: face.mimeType, filename: typeof face.filename === "string" ? face.filename : record.filename, size: typeof face.size === "number" ? face.size : typeof record.size === "number" ? record.size : 0 });
+        }
+      }
     }
     for (const v of Object.values(record)) visit(v);
   };

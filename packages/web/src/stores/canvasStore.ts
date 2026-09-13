@@ -19,6 +19,8 @@ import type {
   BadgeEnd,
 } from "@isocan/core";
 import {
+  CANVAS_GROUPS_FEATURE,
+  CLIENT_FEATURES_PARAM,
   applyOperation,
   newOpId,
   WS_BEHIND,
@@ -826,7 +828,7 @@ function wsUrl(canvasId: string, since: number): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   // `since=0` is "no cursor" on the wire and the daemon reads it as such, so
   // a fresh connect says the same thing whether it says it or stays silent.
-  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}`;
+  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`;
 }
 
 /**

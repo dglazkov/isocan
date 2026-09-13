@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-09-12
 see: sprint, context, mindmap, 2026-08-28-op-grouping.md
-note: proposed conversion of areas into canvas groups with explicit membership, shared transforms, group context and protected label space; implementation has not started
+note: phase 1 has verified explicit membership, shared transforms, exact inverses and protocol gating; client surfaces, context and migration remain in phases 2–5
 ---
 # From areas to groups
 
@@ -11,8 +11,9 @@ that mismatch: a **group is an item with explicit members**, and working on
 that item acts on the things it contains. Membership, movement, resizing,
 context and layout must mean the same thing in the browser and the CLI.
 
-This is a proposal, not a record of implemented commands. The implementation
-starts with phase 1 below. The initial review used `main` at `ed1520a6`;
+The shared foundation is implemented and verified in phase 1; the client
+commands and complete experience below remain the implementation contract.
+The initial review used `main` at `ed1520a6`;
 the checkout was subsequently updated to `19355501` on 12 September 2026.
 The conduct contract is now [phases.md](phases.md), with the user-visible
 acceptance in [journey.md](journey.md). The phase contract carries current
@@ -353,7 +354,12 @@ require a browser selection or a write to presence.
 
 ## Operations and consistency
 
-Proposed public operation families (exact TypeScript shapes are phase 1):
+Phase 1 uses one `group.change` operation with a closed, typed action union.
+Public actions are `create`, `reparent`, `ungroup`, `transform`, `frame`,
+`layout`, `delete` and `restore`; a writer-only `apply` action carries resolved
+structural facts and bounded field writes. The shared writer resolver handles
+new ordinary geometry/lifecycle requests on group canvases through this same
+boundary. Public callers cannot submit a resolved patch.
 
 Keep operation members directly discoverable by `scripts/isomorphism.mjs`.
 Any vocabulary-bound adjustment must name the semantic acts it accounts for;
@@ -361,12 +367,12 @@ type aliases that hide operation members would defeat that instrument.
 
 | Intent | Operation / shared behavior |
 | --- | --- |
-| Make a group, optionally wrapping roots | `group.create`: new group item, membership changes and enclosing frame as one change. |
-| Add, transfer, remove one or several nodes | `group.reparent`: roots, destination group or canvas root, placement policy and required frame adjustments. |
-| Dissolve a group | `group.ungroup`: promote children and trash the frame, preserving its recoverable contents. |
-| Move or resize | `group.transform`: normalized roots, move delta or destination box, expected affected geometry/membership, and resolved changes. |
-| Fit or resize frame only | `group.frame`: frame policy/box and ancestor frame changes; member geometry is unchanged. |
-| Tidy, change grid or reserve header/gutters | `group.layout`: layout configuration and resulting geometry together. |
+| Make a group, optionally wrapping roots | `create`: new group item, membership changes and enclosing frame as one change. |
+| Add, transfer, remove one or several nodes | `reparent`: roots, destination group or canvas root, placement policy and required frame adjustments. |
+| Dissolve a group | `ungroup`: promote children and trash the frame, preserving its recoverable contents. |
+| Move or resize | `transform`: normalized roots, move delta or destination box, expected affected geometry/membership, and resolved changes. |
+| Fit or resize frame only | `frame`: frame policy/box and ancestor frame changes; member geometry is unchanged. |
+| Tidy, change grid or reserve header/gutters | `layout`: layout configuration and resulting geometry together. |
 | Create a normal item inside a group | Extend `item.add` with typed destination/placement intent; adding, attaching and growing frames is one operation. |
 | Rename, tint, replace the brief | Existing item metadata/version verbs, with header geometry changes compiled into the same atomic change when needed. |
 | Delete/restore, copy/paste | Extend the existing intents to understand normalized subtrees, producing an atomic resolved change when membership is affected. |
@@ -518,7 +524,11 @@ export-only projection and reports any hierarchy it cannot retain.
 
 Persist a deletion-cohort ID on each affected trash entry, derived from the
 deleting operation ID, with the deleted roots and captured membership
-available to subtree restore. Restoring a group selects only entries still
+available to subtree restore. `canvas.groupCohorts` stores that immutable
+deletion roster once, including original parents and attachment targets;
+it is history, not a second source of live membership. Both storage backends,
+snapshots and native export/adoption preserve it, including after a member
+has independently left trash. Restoring a group selects only entries still
 in that same cohort. A child independently restored, moved elsewhere or
 deleted again under a newer cohort is left alone; report skipped IDs rather
 than stealing it back. Restore required ancestor frames first in one atomic

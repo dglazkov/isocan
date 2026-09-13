@@ -2,7 +2,8 @@
 
 This records work that was actually checked. The acceptance gates in
 [`design.md`](design.md) describe future feature verification; they are not
-completed checks. No group implementation has started.
+completed checks. Phase records below distinguish built mechanisms from the
+client interactions and release gates still to be walked.
 
 ## 12 September 2026: independent review of the plan
 
@@ -105,7 +106,7 @@ the owner-only summon policy; and the operation-count instrument must see
 every new union member and an explicitly justified vocabulary bound. Existing
 area geometry, reducer and Undo/Redo assumptions remain accurate on main.
 
-## Phase 1 — verification in progress
+## Phase 1 — CLOSED, 12 September 2026
 
 Builder ownership is split between core geometry/membership and daemon/API/
 protocol integration, with a third subagent reviewing without editing.
@@ -114,5 +115,58 @@ The conductor's first independent production-helper probe wrapped one
 Requesting 336×396 initially yielded 336×528 and a 288×400 card: the fixed
 external label prevented vertical shrink. This exposed a design equation
 error, not a passing acceptance result. The design now scales the frame plus
-label reservation and names the required 288×268 card result. Implementation
-and the independent regression are pending; phase 1 is not closed.
+label reservation and names the required 288×268 card result. Both the
+production regression and the independent HTTP walk now produce that result.
+
+The core builder owned core membership, geometry, bounded operation writes
+and consumers; the daemon builder owned API/writer, Undo/Redo, persistence
+and protocol capability plumbing, including minimal web negotiation. The
+read-only reviewer checked the actual writer, raw JSON refusal paths and
+storage boundaries and approved the corrected phase. The conductor read the
+diff and tests, ran all socket/emulator proofs centrally, and wrote this record.
+
+The first complete suite found five old web protocol assertions that omitted
+the new capability header/query, and two export guards. The web tests now
+assert the feature while retaining bodyless-delete and queue-order checks.
+The export instrument reads tracked files: staging the six new files exposed
+their actual consumers and unused exports. Builders kept eleven internal
+helpers/types private and documented the public contracts. The unused and
+undocumented export bounds remain 39 and 331. The separately justified
+operation vocabulary bound is 34, accounting for `group.change`.
+
+During final integration, upstream operator phase 4 added badge-ending paths.
+Rebasing onto `13f009ce` produced one API import conflict; its builder retained
+both features and reviewed the HTTP, socket and web queue merges. The
+following checks ran on that combined implementation tree:
+
+| Conductor command from the repository root | Observed result |
+| --- | --- |
+| `npm test -- packages/core/test/canvas-groups.test.ts packages/server/test/canvas-groups.test.ts` | Exit 0; 60 tests passed in two files. |
+| `FIRESTORE_EMULATOR_HOST=127.0.0.1:19099 ISOCAN_REQUIRE_EMULATOR=1 npm test` | Exit 0; 4,557 passed, four skipped, 442 files passed; 145.55 seconds. Local FileStore and real Firestore-emulator paths both ran. |
+| `npm run typecheck` | Exit 0 across all workspaces. |
+| `npm test -- test/roadmap.test.ts test/changelog.test.ts` | Exit 0; 11 tests passed after updating the record. The initial sandbox run could not open the CLI daemon log; the unrestricted rerun passed. |
+| `node --import tsx /tmp/isocan-canvas-groups-phase1-walk.mts` | Exit 0; independent fresh-daemon HTTP walk passed all ten recorded checks. |
+| `git diff --check` | Exit 0. |
+
+The full suite's four skips were the existing dispatch/ACP cases (three) and
+the bundle-size check because the built web assets predated the source. No
+group persistence test was skipped. Phase 2 requires a fresh build and a
+real browser walk. The emulator used synthetic local data, without a cloud
+account or provisioned resource.
+
+The independent HTTP walk uploaded and retrieved real blob bytes, wrapped a
+card while leaving an overlapping non-member outside, and observed one log
+entry. It resized 448×528 to 336×396 through the ordinary resize API and read
+the 288×268 child. Group-plus-child movement translated once, a same-key retry
+returned the same receipt with one entry, undo retained another actor's title
+edit, and a stale membership expectation returned 409 with an identical
+snapshot and log tip. Focused engine cases additionally verified a conflicting
+undo candidate is retained, a mixed undo-label batch is preflighted, creation
+redo preserves IDs/authorship, malformed snapshots never replace storage,
+and cohort persistence survives restart and native export/import.
+
+Both-surface obligations: the operation vocabulary and shared core helpers
+changed, with API and protocol integration and production tests. CLI verbs,
+the agent guide, product README and feature UI are deliberately phase 2;
+WHATSNEW is untouched because this foundation exposes no normal creation
+path. No pointer walk or completed user journey is claimed for phase 1.

@@ -49,6 +49,7 @@ import type {
   SeenMarksResponse,
   SeenResponse,
   GroupResponse,
+  GroupAction,
   GroupsResponse,
   OperatorLogResponse,
   OperatorLookRequest,
@@ -64,6 +65,8 @@ import type {
 } from "@isocan/core";
 import {
   BADGE_ENDED,
+  CANVAS_GROUPS_FEATURE,
+  CLIENT_FEATURES_HEADER,
   encodeFilename,
   groupActingRoute,
   groupMemberRoute,
@@ -220,7 +223,7 @@ export class DaemonRoutes {
     extra?: Record<string, string>,
   ): Promise<T> {
     const send = async () => {
-      const headers: Record<string, string> = { ...(await this.authHeader()), ...extra };
+      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extra };
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return fetch(`${this.base}${url}`, {
         method,
@@ -442,6 +445,17 @@ export class DaemonRoutes {
   }
 
   // ---- presence sessions ----
+
+  /** Semantic group request; canonical resolved patches belong to the
+   * authoritative writer. Pass a stable opId when retrying one intent. */
+  changeGroup(
+    canvasId: string,
+    actor: Actor,
+    action: Exclude<GroupAction, { kind: "apply" }>,
+    opId?: string,
+  ): Promise<PostOpResponse> {
+    return this.request("POST", "/api/ops", { canvasId, actor, op: { type: "group.change", action }, ...(opId ? { opId } : {}) });
+  }
 
   createSession(
     canvasId: string,

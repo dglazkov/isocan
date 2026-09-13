@@ -5,10 +5,11 @@ the mechanism. This is the conduct contract for implementing the reviewed
 plan. The conductor owns these documents and the release record; builders
 own only their assigned code, tests, CLI guide and product README changes.
 
-**Where we are:** all five phases are NOT STARTED (12 Sep 2026). Canvas-groups
-phase 1 is next: shared membership, operations and exact inverses. The
-reviewed design has been reconciled with the current main checkout before
-briefing. No phase waits on another project's implementation or on a person.
+**Where we are:** phase 1 is CLOSED (12 Sep 2026); phases 2–5 are NOT STARTED.
+Canvas-groups phase 2 is next: membership on the CLI and in the browser.
+Shared structural operations, geometry, exact inverses and protocol gating
+have passed the conductor's core, HTTP and persistence proofs. No phase
+waits on another project's implementation or on a person.
 
 **Rules for every phase.** Work on main. Every structural act is atomic,
 undoable and shared by both surfaces; a log undo label is not atomicity.
@@ -36,7 +37,7 @@ synthetic local daemon, never the user's existing canvas daemon.
 
 ## Phase 1 — Shared membership and atomic operations
 
-**Status: NOT STARTED (2026-09-12).** Nothing built.
+**Status: CLOSED (2026-09-12).** Shared membership and atomic operations passed focused, full-suite, typecheck and independent real HTTP proofs; creation remains explicitly gated until phase 5.
 
 Establishes the mechanism of journeys 1, 2, 5 and 6; the pointer walks close
 in later phases. Mechanisms: design sections Membership, Moving and resizing,
@@ -64,6 +65,8 @@ for an explicit, justified vocabulary-bound adjustment, if required.
 **Trajectory:**
 
 - **2026-09-12** — Resize scales the native frame plus its fixed external label reservation, then subtracts that reservation. A conductor probe showed that scaling the native frame alone made a fitted 400×400 card unable to shrink vertically; the corrected numeric case binds geometry tests.
+- **2026-09-12** — One closed `group.change` action union records bounded structural writes, with public intent resolved only at the writer. Ordinary new geometry requests normalize through it; historical replay does not. The visible operation count rises from 33 to 34 rather than hiding members from the instrument.
+- **2026-09-12** — A deletion cohort needs a durable roster beyond its surviving trash entries. `canvas.groupCohorts` preserves original membership through partial restores, both storage backends and native backup; later lifecycle surfaces can report skipped members without reclaiming independently restored or re-deleted items.
 
 ## Phase 2 — Membership on both surfaces
 

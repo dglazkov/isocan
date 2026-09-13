@@ -14,6 +14,8 @@ export * from "./claims.ts";
 export * from "./invert.ts";
 export * from "./placement.ts";
 export * from "./area.ts";
+export * from "./canvas-group-types.ts";
+export * from "./canvas-groups.ts";
 export * from "./canvasitem.ts";
 export * from "./googledoc.ts";
 export * from "./addable.ts";

@@ -38,6 +38,9 @@ import type {
   UndoRedoRequest,
 } from "@isocan/core";
 import {
+  CANVAS_GROUPS_FEATURE,
+  CLIENT_FEATURES_HEADER,
+  CLIENT_FEATURES_PARAM,
   ATTEST_ROUTE,
   narrowed,
   groupActingRoute,
@@ -1066,7 +1069,7 @@ export class HomeLink implements HomeConnection {
     const since = await this.localSeq(link.canvasId);
     if (link.dialSeq !== attempt) return;
     const wsBase = this.homeUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-    const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}`;
+    const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`;
     let socket: WebSocket;
     try {
       socket = new WebSocket(url, { headers: bearerHeader(badge) });
@@ -2227,6 +2230,7 @@ export class HomeLink implements HomeConnection {
       this.fetchHome(path, {
         method,
         headers: {
+          [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE,
           ...bearerHeader(held),
           ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
         },

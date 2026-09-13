@@ -1,4 +1,5 @@
 import type { TextAnchor } from "./text-anchor.ts";
+import type { GroupAction } from "./canvas-group-types.ts";
 import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.ts";
 
 /**
@@ -197,6 +198,7 @@ export type Operation =
   | {
       type: "project.create";
       canvasId: string;
+      groupMode?: "groups" | "legacy";
       title: string;
       description?: string;
       properties?: Record<string, string>;
@@ -204,6 +206,7 @@ export type Operation =
   | { type: "project.update"; patch: MetaPatch }
   | { type: "project.delete" } // soft: dir moved aside; NOT undoable
   // ---- items ----
+  | { type: "group.change"; action: GroupAction }
   | {
       type: "item.add";
       itemId: string;

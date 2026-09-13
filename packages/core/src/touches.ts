@@ -12,6 +12,7 @@
 
 import type { CanvasContents } from "./model.ts";
 import type { Operation, OperationType } from "./ops.ts";
+import { groupChangeItemIds } from "./canvas-groups.ts";
 
 /**
  * Every item id this op is about. Comment ops count: a comment ON an item is
@@ -26,6 +27,8 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
   };
 
   switch (op.type) {
+    case "group.change":
+      return groupChangeItemIds(op);
     case "item.add":
     case "item.move":
     case "item.resize":

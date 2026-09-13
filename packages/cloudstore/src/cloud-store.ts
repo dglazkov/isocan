@@ -96,6 +96,7 @@ interface PendingSnapshot {
 }
 
 interface SnapshotObject {
+  groupCohorts?: CanvasState["canvas"]["groupCohorts"];
   lastSeq: number;
   items: CanvasState["canvas"]["items"];
   threads: CanvasState["canvas"]["threads"];
@@ -349,6 +350,7 @@ export class CloudStore implements Store {
             threads: snapshot.threads,
             trash: snapshot.trash,
             agents: snapshot.agents ?? {},
+            ...(snapshot.groupCohorts ? { groupCohorts: snapshot.groupCohorts } : {}),
           }
         : { ...emptyCanvas(), trash: [] },
     };
@@ -832,6 +834,7 @@ export class CloudStore implements Store {
 
   private async writeSnapshot(id: string, state: CanvasState, lastSeq: number): Promise<void> {
     const snapshot: SnapshotObject = {
+      ...(state.canvas.groupCohorts ? { groupCohorts: state.canvas.groupCohorts } : {}),
       lastSeq,
       items: state.canvas.items,
       threads: state.canvas.threads,

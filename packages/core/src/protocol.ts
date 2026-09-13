@@ -12,6 +12,25 @@ import type { LogEntry, OpEnvelope, Operation } from "./ops.ts";
 /** Default daemon port, localhost only. */
 export const DEFAULT_PORT = 4441;
 
+/** Reducer capability, independent of the caller's access-control rung. A
+ * client advertises this before receiving explicit canvas-group state. */
+export const CANVAS_GROUPS_FEATURE = "canvas-groups-v1";
+/** Shared spelling for HTTP clients and ingress checks; an upgraded replica
+ * still preserves its original caller's declaration when forwarding writes. */
+export const CLIENT_FEATURES_HEADER = "x-isocan-features";
+/** Browser WebSockets cannot set headers, so their upgrade URL carries the
+ * same reducer feature list that HTTP clients put in the feature header. */
+export const CLIENT_FEATURES_PARAM = "features";
+/** Distinguishes an unsupported reducer from an access refusal or network
+ * outage: refreshing credentials or retrying the same client cannot help. */
+export const CANVAS_GROUPS_REQUIRED = "canvas-groups-required";
+
+/** Parse both transport spellings identically. Missing or malformed input
+ * never promises reducer support, and future unrelated features may coexist. */
+export function supportsCanvasGroups(value: unknown): boolean {
+  return typeof value === "string" && value.split(",").some((part) => part.trim() === CANVAS_GROUPS_FEATURE);
+}
+
 // ---- WebSocket ----
 
 /** Everything the socket pushes DOWN to a connected tab or park. The
@@ -722,6 +741,9 @@ export function staleClientRefusal(
 /** An operation on its way up. Carries no timestamp on purpose — the home
  *  stamps it, so a client cannot lie about when something happened. */
 export interface PostOpRequest {
+  /** Original caller's reducer features, preserved by forwarding replicas.
+   * Absent on a direct request: use its transport declaration. */
+  clientFeatures?: string;
   /** null only for project.create and actor.claim. */
   canvasId: string | null;
   /** **One gesture, one undo** — see `LogEntry.group`. Ops sent under the
@@ -826,6 +848,7 @@ export interface PostOpResponse {
 /** Whose stack to walk. Undo is per ACTOR, so two people working at once
  *  never take back each other's work. */
 export interface UndoRedoRequest {
+  clientFeatures?: string;
   actor: Actor;
   clientId?: string;
 }

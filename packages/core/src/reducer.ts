@@ -12,6 +12,7 @@ import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
 import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
+import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
 
 /**
  * The shared pure reducer. The daemon runs it authoritatively; the web client
@@ -27,6 +28,14 @@ export function applyOperation(
   state: CanvasState | null,
   envelope: OpEnvelope,
 ): CanvasState | null {
+  const next = reduceOperation(state, envelope);
+  // Historical area canvases keep their original reduction. Explicit group
+  // state is validated after EVERY operation, including ordinary inverses.
+  if (next?.project.groupMode === "groups") validateGroupForest(next);
+  return next;
+}
+
+function reduceOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
   const { op, actor, ts } = envelope;
 
   if (op.type === "project.create") {
@@ -38,6 +47,7 @@ export function applyOperation(
       title: op.title,
       description: op.description ?? "",
       properties: { ...op.properties },
+      ...(op.groupMode !== undefined ? { groupMode: op.groupMode } : {}),
       createdAt: ts,
       createdBy: actor,
       updatedAt: ts,
@@ -93,6 +103,11 @@ export function applyOperation(
   };
 
   switch (op.type) {
+    case "group.change": {
+      const resolved = op.action.kind === "apply" ? op : resolveGroupOperation(state, op, { actor, ts, opId: envelope.id });
+      if (resolved.action.kind !== "apply") throw new OpValidationError("bad-op", "unresolved group operation");
+      return applyGroupChange(state, resolved.action.change, actor, ts);
+    }
     case "actor.claim":
     case "actor.setColor":
     case "actor.setMark":
@@ -337,8 +352,12 @@ export function applyOperation(
       });
     }
 
-    case "trash.empty":
-      return withCanvas({ ...canvas, trash: [] });
+    case "trash.empty": {
+      // The capture describes restorable trash, never a second archive after
+      // the person has explicitly emptied it. Historical area shapes stay put.
+      const { groupCohorts: _dropCohorts, ...remaining } = canvas;
+      return withCanvas({ ...remaining, trash: [] });
+    }
 
     case "thread.create": {
       if (canvas.threads[op.threadId]) {

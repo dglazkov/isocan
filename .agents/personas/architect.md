@@ -70,8 +70,11 @@ goal:
   # The isomorphism is untouched: both surfaces call one route and merge with
   # one function in `core/seen.ts`. If this bound ever rises for read state,
   # that note is the thing to argue with.
+  # Canvas groups add one atomic structural act (group.change), with a closed
+  # intent union and exact inverse, instead of loops of per-item operations.
+  # See docs/projects/canvas-groups/design.md; the parser counts it directly.
   - name: operations in the vocabulary
-    at most: 33
+    at most: 34
     measured by: node scripts/measure.mjs op-types
     baseline: 33, 2026-09-01, baac5a4
 runs: docs/reviews/

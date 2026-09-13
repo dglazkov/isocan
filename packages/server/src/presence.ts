@@ -6,7 +6,7 @@ import type {
   PresenceActivity,
   PresenceSession,
 } from "@isocan/core";
-import { narrowed, newId, textAttention } from "@isocan/core";
+import { groupChangeItemIds, narrowed, newId, textAttention } from "@isocan/core";
 
 /**
  * The ephemeral plane. Presence lives in daemon memory and WS fan-out only —
@@ -411,6 +411,10 @@ export function opLocus(op: Operation, canvas: CanvasContents): { x: number; y: 
     return item ? { x: item.x + item.width / 2, y: item.y + item.height / 2 } : null;
   };
   switch (op.type) {
+    case "group.change": {
+      const first = groupChangeItemIds(op)[0];
+      return first ? itemCenter(first) : null;
+    }
     case "item.add":
     case "item.move":
     case "item.resize":
