@@ -61,6 +61,8 @@ import type {
   OperatorTakedownResponse,
   OperatorEndRequest,
   OperatorEndResponse,
+  OperatorRevokeRequest,
+  OperatorRevokeResponse,
   TakedownsResponse,
 } from "@isocan/core";
 import {
@@ -1083,6 +1085,25 @@ export class DaemonRoutes {
     return this.request(
       "POST",
       `/api/operator/end/${encodeURIComponent(target)}`,
+      request,
+      undefined,
+      { [OPERATOR_PROOF_HEADER]: proof },
+    );
+  }
+
+  /**
+   * **Turn off a grant** (operator phase 5) — on a canvas or a space, by the
+   * subject a report names, with `bar` to keep them out as the owner's
+   * `?bar=1` does. Same header, same proof, same shape as the takedown.
+   */
+  async operatorRevoke(
+    target: string,
+    proof: string,
+    request: OperatorRevokeRequest,
+  ): Promise<OperatorRevokeResponse> {
+    return this.request(
+      "POST",
+      `/api/operator/revoke/${encodeURIComponent(target)}`,
       request,
       undefined,
       { [OPERATOR_PROOF_HEADER]: proof },

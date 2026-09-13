@@ -14,6 +14,7 @@ import type {
   Space,
   OperatorAct,
   OperatorEnd,
+  OperatorRevocation,
 } from "@isocan/core";
 import {
   advanceSeen,
@@ -94,7 +95,7 @@ type DeskLogEntry =
   | { seq: number; type: "shelve"; rows: Record<string, ActorClaim>; at: string }
   | { seq: number; type: "adopt"; sessionKey: string; badgeId: string; at: string }
   | { seq: number; type: "grant"; grant: Grant; at: string }
-  | { seq: number; type: "revoke"; grantId: string; by: string; at: string }
+  | { seq: number; type: "revoke"; grantId: string; by: string; at: string; via?: OperatorRevocation }
   | { seq: number; type: "pass"; pass: PassRecord; at: string }
   | { seq: number; type: "redeem"; passId: string; by: string; at: string }
   | { seq: number; type: "attest"; badgeId: string; attestation: Attestation; at: string }
@@ -646,7 +647,7 @@ export class FileDesk implements Desk {
     });
   }
 
-  async revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null> {
+  async revokeGrant(grantId: string, at: string, by: string, via?: OperatorRevocation): Promise<Grant | null> {
     return this.enqueue(async () => {
       const grant = this.state.grants[grantId];
       if (!grant) return null;
@@ -655,7 +656,13 @@ export class FileDesk implements Desk {
       if (grant.revokedAt !== undefined) return { ...grant };
       grant.revokedAt = at;
       grant.revokedBy = by;
-      await this.append({ type: "revoke", grantId, by, at });
+      // The operator's half rides on the same line (operator phase 5), so
+      // a replay rebuilds the tombstone the surfaces read, not a plainer one.
+      if (via) {
+        grant.revokedVia = "operator";
+        grant.revocation = { ...via };
+      }
+      await this.append({ type: "revoke", grantId, by, at, ...(via ? { via } : {}) });
       return { ...grant };
     });
   }
@@ -929,6 +936,10 @@ export class FileDesk implements Desk {
         if (!grant || grant.revokedAt !== undefined) return;
         grant.revokedAt = entry.at;
         grant.revokedBy = entry.by;
+        if (entry.via) {
+          grant.revokedVia = "operator";
+          grant.revocation = { ...entry.via };
+        }
         return;
       }
       case "pass": {

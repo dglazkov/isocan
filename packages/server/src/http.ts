@@ -196,6 +196,13 @@ import {
   replicasHorizon,
   type OperatorPurgeRequest,
   type OperatorPurgeResponse,
+  // operator phase 5: the operator's revoke, and the tombstone both surfaces read.
+  OPERATOR_REVOKE_ROUTE,
+  operatorTurnedOff,
+  revokedSentence,
+  type OperatorRevocation,
+  type OperatorRevokeRequest,
+  type OperatorRevokeResponse,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
@@ -2002,8 +2009,19 @@ export function registerRoutes(
     const home = options.homes?.for(id) ?? null;
     if (home) return home.grants(id);
     await engine.getSnapshot(id); // 404 for unknown canvases, like every route here
-    return { grants: liveGrants(await desk.grantsFor(id)) } satisfies GrantsResponse;
+    return grantsAnswer(await desk.grantsFor(id));
   });
+
+  /**
+   * **The live rows, and what the operator turned off** (operator phase 5).
+   * `turnedOff` is written only when there is something in it, so a home
+   * that has never turned anything off answers exactly as it did before —
+   * and the owner's own tombstones never appear, because they are hers.
+   */
+  const grantsAnswer = (rows: Grant[]): GrantsResponse => {
+    const off = operatorTurnedOff(rows);
+    return { grants: liveGrants(rows), ...(off.length > 0 ? { turnedOff: off } : {}) };
+  };
 
   /**
    * Share it. **Two refusals, and they are different questions on purpose.**
@@ -2774,7 +2792,7 @@ export function registerRoutes(
     if (home) return home.spaceGrants(id);
     const space = await visibleSpace(req, id);
     if (!space) return spaceNotFound(reply, id);
-    return { grants: liveGrants(await desk.grantsForSpace(id)) } satisfies GrantsResponse;
+    return grantsAnswer(await desk.grantsForSpace(id));
   });
 
   /**
@@ -4044,6 +4062,160 @@ export function registerRoutes(
       sentence: endOf({ ...targets[0]!, killedAt: now, killedBy: req.badge!.badgeId, end }).sentence,
     };
     await desk.settleOperatorAct(proven.id, "done", { ended, reached, swept, reach });
+    return answer;
+  });
+
+  /**
+   * **`isocan operator revoke`** (operator phase 5; design, "Turn off a
+   * grant"; journey 8).
+   *
+   * The owner's revoke with `own` replaced by the proof: the same
+   * `desk.revokeGrant`, the same sweep of the canvas — or of every canvas in
+   * the space — and the same `?bar=1`, reached through the owner's own route
+   * helpers rather than a second path, so what the operator can turn off is
+   * exactly what an owner can, one scope at a time, by the subject a report
+   * names. The target is the id the report names too: a canvas or a space,
+   * told apart by their prefixes, because the ledger's `target` column is
+   * what `isocan operator log --target` is asked about afterwards.
+   *
+   * **What is different is the tombstone.** The row gains `revokedVia:
+   * "operator"` and the operator's half — reason, address, act id — in the
+   * same desk write as the stamp, so the Share dialog and `isocan share`
+   * render *turned off by the operator of this home on <date>: <reason>*
+   * instead of a badge id. The socket the sweep closes still reads
+   * `withdrawn`, deliberately: the person inside lost their access, which is
+   * what `withdrawn` has meant since roles phase 2, and the owner's Share is
+   * where the account of why lives. `taken-down` stays the canvas's word.
+   *
+   * **The owner can turn it back on**, and this route does nothing to stop
+   * her: her re-grant is `POST …/grants`, an ordinary owner's write with no
+   * proof, no ledger row and a new row on the desk. The operator's row stays
+   * a tombstone under it, which is why `operatorTurnedOff` stops showing the
+   * sentence the moment a live row names the subject again.
+   *
+   * The same proof, the same ledger row before anything, the same preflight
+   * and the same replica refusal as phases 1–4. A bar the operator lifted
+   * would be a grant of access, so a bar is refused as a target.
+   */
+  app.post(OPERATOR_REVOKE_ROUTE, async (req, reply) => {
+    const { target } = req.params as { target: string };
+    const kind: OperatorRevokeResponse["target"]["kind"] = target.startsWith("spc_") ? "space" : "canvas";
+    if (kind === "canvas") {
+      if (refuseIfReplica(target, reply)) return;
+    } else {
+      // A space's rows live at the home the space routes forward to; an
+      // operator act is never forwarded (phase 1), so a replica says so.
+      const elsewhere = options.homes?.homeScoped()?.homeUrl ?? null;
+      if (elsewhere) {
+        return reply.status(409).send({
+          error:
+            `this daemon forwards its spaces to ${elsewhere}, and an operator proof is made at one ` +
+            `home and honoured by that home only. Ask ${elsewhere}.`,
+          code: "not-this-home",
+        });
+      }
+    }
+    const body = (req.body ?? {}) as Partial<OperatorRevokeRequest>;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const note = typeof body.note === "string" ? body.note.trim() : "";
+    const bar = body.bar === true;
+    const proven = await proveAct(req, reply, {
+      act: "revoke",
+      target,
+      ...(reason ? { reason } : {}),
+      ...(note ? { note } : {}),
+    });
+    if (!proven) return;
+    const refuse = async (code: string, error: string, status = 400) => {
+      await desk.settleOperatorAct(proven.id, code);
+      return reply.status(status).send({ error, code });
+    };
+
+    const badSubject = grantSubjectRefusal(body.subject);
+    if (badSubject) return refuse("bad-grant", badSubject);
+    const subject = normalizeSubject(body.subject as GrantSubject);
+
+    /** The scope's creator, for the bar's refusal and the sweep's floor. */
+    let creator: string;
+    if (kind === "space") {
+      const space = await desk.space(target);
+      if (!space) return refuse("unknown-space", `no space ${target} at this home.`, 404);
+      creator = space.createdBy;
+    } else {
+      const project =
+        (await engine
+          .getSnapshot(target)
+          .then((loaded) => loaded.project)
+          .catch(() => null)) ??
+        (await store.listCanvases()).find((canvas) => canvas.id === target) ??
+        null;
+      if (!project) return refuse("unknown-canvas", `no canvas ${target} at this home.`, 404);
+      creator = project.createdBy.id;
+    }
+    const rows = kind === "space" ? await desk.grantsForSpace(target) : await desk.grantsFor(target);
+    const live = liveGrants(rows).find((row) => row.subject === subject);
+    if (!live) {
+      return refuse(
+        "nothing-to-revoke",
+        `${subject} has no live row on ${target} — it was never granted there, or it is already off. ` +
+          "`isocan operator log --target " + target + "` says which.",
+        404,
+      );
+    }
+    if (isBar(live)) {
+      return refuse(
+        "is-a-bar",
+        `${subject} is kept out of ${target}, not let in: that row is a bar, and revoking it would ` +
+          "let them back in, which is the owner's to do.",
+        409,
+      );
+    }
+    if (!reason || !isTakedownReason(reason)) {
+      return refuse(
+        "no-reason",
+        `a revoke needs a reason from this list, because the reason is what the owner is shown: ` +
+          `${takedownReasonList()}. The --note is yours and nobody else's.`,
+      );
+    }
+    if (bar) {
+      const refusal = barSubjectRefusal(subject);
+      if (refusal) return refuse("bad-grant", refusal);
+      if (await namesTheCreator(subject, { createdBy: { id: creator } })) {
+        return refuse("bad-grant", `${subject} is the creator's own address — the creator cannot be kept out`);
+      }
+    }
+
+    const category: TakedownReason = reason;
+    const now = new Date().toISOString();
+    const via: OperatorRevocation = { reason: category, by: proven.proof.attribute, actId: proven.id };
+    const revoked = (await desk.revokeGrant(live.id, now, req.badge!.badgeId, via)) ?? live;
+    // The bar goes on the desk before the sweep, for the owner's route's
+    // reason: the sweep re-runs the door, and the door has to meet the bar.
+    const written: Grant | null = bar
+      ? kind === "canvas"
+        ? barRow(target, subject, req.badge!.badgeId)
+        : { id: newId("gnt"), spaceId: target, subject, grantedBy: req.badge!.badgeId, at: now, bars: true }
+      : null;
+    if (written) await desk.putGrant(written);
+    const swept =
+      kind === "canvas"
+        ? { ...(await sweepCanvas(desk, target, creator, sweeps.report)), reached: 1 }
+        : await sweepSpace(desk, target, creatorOf, sweeps.report);
+    const answer: OperatorRevokeResponse = {
+      target: { kind, id: target },
+      grant: revoked,
+      ...(written ? { bar: written } : {}),
+      reached: swept.reached,
+      swept: { expelled: swept.expelled, rerooted: swept.rerooted },
+      sentence: revokedSentence(revoked) ?? "",
+    };
+    await desk.settleOperatorAct(proven.id, "done", {
+      subject,
+      grantId: live.id,
+      ...(written ? { bar: written.id } : {}),
+      reached: swept.reached,
+      swept: answer.swept,
+    });
     return answer;
   });
 

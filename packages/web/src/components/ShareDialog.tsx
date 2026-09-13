@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer, Canvas, Capability, Grant, GrantSubject, GroupView, Space, SpaceLinkResponse, SweepReport } from "@isocan/core";
-import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, ownsSpace, collectCanvasActors, grantSubjectOf, groupIdOf, groupSubject, isBar, LINK, roster, faceMark, RUNGS, sameGroupName } from "@isocan/core";
+import { atLeast, canvasUrl, capabilityOf, capabilityWord, ownsCanvas, ownsSpace, collectCanvasActors, grantSubjectOf, groupIdOf, groupSubject, isBar, LINK, revokedSentence, roster, faceMark, RUNGS, sameGroupName } from "@isocan/core";
 import type { PresenceSession, RowState } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
@@ -174,13 +174,36 @@ export function ShareDialog({
    * never `group:ppl_…`. */
   const views = useGroupViews([...(grants ?? []), ...(fromSpace?.grants ?? [])]);
 
+  /**
+   * **Rows the operator of this home turned off, and nothing has replaced**
+   * (operator phase 5; journey 8 step 3). Read beside the live rows, never
+   * derived from them: the home decides which tombstones are the operator's,
+   * and the owner's own revokes are never among them. Empty on a home from
+   * before the phase.
+   */
+  const [turnedOff, setTurnedOff] = useState<Grant[]>([]);
+
   const canvasId = record?.id ?? null;
+
+  /** Re-read the rows after a write: the row that comes back is the desk's,
+   * not one this dialog imagined — and the operator's notice goes with it
+   * the moment a live row names the subject again. */
+  const refreshGrants = async (): Promise<void> => {
+    if (!canvasId) return;
+    const answer = await listGrants(canvasId);
+    setGrants(answer.grants);
+    setTurnedOff(answer.turnedOff ?? []);
+  };
 
   useEffect(() => {
     if (!canvasId || space) return;
     let cancelled = false;
     listGrants(canvasId)
-      .then((res) => !cancelled && setGrants(res.grants))
+      .then((res) => {
+        if (cancelled) return;
+        setGrants(res.grants);
+        setTurnedOff(res.turnedOff ?? []);
+      })
       .catch((err: Error) => !cancelled && setError(err.message));
     attesterOffer()
       .then((answer) => !cancelled && setOffer(answer))
@@ -234,6 +257,10 @@ export function ShareDialog({
   const address = canvasUrl(location.origin, record.id);
   const link = grants?.find((g) => g.subject === LINK) ?? null;
   const linkOn = link !== null;
+  /** The link, when the operator turned it off and the owner has not turned
+   * it back on — the row whose sentence sits under the toggle. */
+  const linkOff = turnedOff.find((g) => g.subject === LINK) ?? null;
+  const namedOff = turnedOff.filter((g) => g.subject !== LINK);
   const linkRung: Capability = link ? capabilityOf(link) : "edit";
   const linkReads = !atLeast(linkRung, "edit");
   // Whoever made the canvas owns it — a fact it has carried since it was
@@ -276,7 +303,7 @@ export function ShareDialog({
         await createGrant(canvasId, LINK, undefined, actor.id);
         setSwept(null);
       }
-      setGrants((await listGrants(canvasId)).grants);
+      await refreshGrants();
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === "not-admitted"
@@ -317,7 +344,7 @@ export function ShareDialog({
     try {
       const answer = await createGrant(canvasId, LINK, capability, actor.id);
       if (answer.swept) setSwept({ what: "link", report: answer.swept });
-      setGrants((await listGrants(canvasId)).grants);
+      await refreshGrants();
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === "not-admitted"
@@ -336,7 +363,7 @@ export function ShareDialog({
     try {
       await createGrant(canvasId, inviteSubject(who, groups), inviteRung, actor.id);
       setWho("");
-      setGrants((await listGrants(canvasId)).grants);
+      await refreshGrants();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -379,7 +406,7 @@ export function ShareDialog({
       );
       setStillIn(answer.stillAdmittedBy && !isBar(grant) ? { subject: grant.subject, by: answer.stillAdmittedBy } : null);
       setGrants((current) => (current ?? []).filter((row) => row.id !== grant.id));
-      setGrants((await listGrants(canvasId)).grants);
+      await refreshGrants();
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === "not-admitted"
@@ -407,7 +434,7 @@ export function ShareDialog({
       const answer = await createBar(canvasId, subject, actor.id);
       if (answer.swept) setSwept({ what: subject, report: answer.swept });
       setStillIn(null);
-      setGrants((await listGrants(canvasId)).grants);
+      await refreshGrants();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -428,7 +455,7 @@ export function ShareDialog({
     try {
       const answer = await createGrant(canvasId, grant.subject, rung, actor.id);
       if (answer.swept) setSwept({ what: grant.subject, report: answer.swept });
-      setGrants((await listGrants(canvasId)).grants);
+      await refreshGrants();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -501,12 +528,19 @@ export function ShareDialog({
                   linkReads
                   ? `anyone who has the address can ${linkRung === "view" ? "look at the deck" : "see the canvas"}, and change nothing. Turning it off removes everyone who came in that way.`
                   : "anyone who has the address can open this canvas. Turning it off removes everyone who came in that way — including you, unless you made this canvas."
-                : // Say what revocation actually did — and since phase 9 it
-                  // does expel, so the count is read off the answer rather
-                  // than asserted. `swept` is null when the link was already
-                  // off before this dialog was opened, and there is nothing
-                  // to report about a gesture nobody made.
-                  sweptNote(swept?.what === "link" ? swept.report : null)}
+                : linkOff
+                  ? // The operator of this home turned it off (operator phase
+                    // 5; journey 8 step 3). The sentence is the row's, rendered
+                    // in core so the terminal says the same words — and the
+                    // toggle above it is live, because the owner can turn it
+                    // back on: a revoke she can undo is a request.
+                    `${revokedSentence(linkOff)} You can turn it back on.`
+                  : // Say what revocation actually did — and since phase 9 it
+                    // does expel, so the count is read off the answer rather
+                    // than asserted. `swept` is null when the link was already
+                    // off before this dialog was opened, and there is nothing
+                    // to report about a gesture nobody made.
+                    sweptNote(swept?.what === "link" ? swept.report : null)}
           </span>
         </span>
       </button>
@@ -802,6 +836,12 @@ export function ShareDialog({
               </div>
             </>
           )}
+          {/* Named rows the operator of this home turned off (operator phase
+              5), which no live row has replaced. Not rows any more, so no
+              picker and no Remove: the sentence says why, and the invite
+              field above is how the owner turns one back on — an ordinary
+              grant, no proof, nothing in the operator's ledger. */}
+          {namedOff.length > 0 && <TurnedOffRows rows={namedOff} views={views} />}
         </>
       )}
 
@@ -846,6 +886,32 @@ const RUNG_HINT: Record<Capability, string> = {
   read: "Anyone with the link can see the canvas, and change nothing",
   view: "Anyone with the link can look at the deck, and change nothing",
 };
+
+/**
+ * **Turned off by the operator of this home** (operator phase 5; journey 8
+ * step 3): the named rows the home turned off and the owner has not replaced,
+ * each with the sentence the row carries. Shown to everybody for the
+ * invitations' reason — who may not be here is worth knowing whoever you are
+ * — and with no control, because the way back on is the ordinary invite: an
+ * owner's write, no proof, nothing in the operator's ledger.
+ */
+function TurnedOffRows({ rows, views }: { rows: readonly Grant[]; views: ReadonlyMap<string, GroupView> }) {
+  return (
+    <>
+      <div className="identity-menu-head">Turned off by the operator</div>
+      <div className="share-roster">
+        {rows.map((grant) => (
+          <div key={grant.id} className="surface-row share-invited">
+            <span className="surface-what">
+              <b>{subjectLabel(grant.subject, views)}</b>
+              <span className="share-roster-kind">{revokedSentence(grant)} Inviting them again turns it back on.</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
 
 /**
  * What turning the link off did, in the dialog's own voice.
@@ -937,10 +1003,15 @@ function SpaceShare({
    * every-canvas link's current reading. */
   const [rowsOf, setRowsOf] = useState<Map<string, Grant[]>>(new Map());
   const [groups, setGroups] = useState<GroupView[]>([]);
-  const views = useGroupViews(grants ?? []);
+  /** The space's rows the operator turned off (operator phase 5) — read
+   * beside the live rows, as the canvas dialog reads its own. */
+  const [turnedOff, setTurnedOff] = useState<Grant[]>([]);
+  const views = useGroupViews([...(grants ?? []), ...turnedOff]);
 
   const reload = async (): Promise<void> => {
-    setGrants((await listSpaceGrants(space.id)).grants);
+    const answer = await listSpaceGrants(space.id);
+    setGrants(answer.grants);
+    setTurnedOff(answer.turnedOff ?? []);
     const found = new Map<string, Grant[]>();
     await Promise.all(
       space.canvasIds.map(async (canvasId) => {
@@ -958,7 +1029,11 @@ function SpaceShare({
   useEffect(() => {
     let cancelled = false;
     void listSpaceGrants(space.id)
-      .then((res) => !cancelled && setGrants(res.grants))
+      .then((res) => {
+        if (cancelled) return;
+        setGrants(res.grants);
+        setTurnedOff(res.turnedOff ?? []);
+      })
       .catch((err: Error) => !cancelled && setError(err.message));
     attesterOffer()
       .then((answer) => !cancelled && setOffer(answer))
@@ -1246,6 +1321,7 @@ function SpaceShare({
               </div>
             </>
           )}
+          {turnedOff.length > 0 && <TurnedOffRows rows={turnedOff} views={views} />}
         </>
       )}
 
