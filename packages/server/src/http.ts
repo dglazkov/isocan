@@ -168,6 +168,8 @@ import {
   TAKEN_DOWN,
   takedownReasonList,
   WS_NOT_ADMITTED,
+  BADGE_ENDED,
+  type BadgeEnd,
   type CanvasTakedown,
   type CdnPurge,
   type OperatorLookResponse,
@@ -227,12 +229,15 @@ import type { BlobUploadRequest, Store } from "./store.ts";
 import type { BadgeRecord, Desk, Provenance } from "./desk.ts";
 import {
   badgeCookie,
+  BadgeEndedError,
+  endOf,
   framedRequest,
   isSecureRequest,
   mintBadge,
   originAllowed,
   presentedBadge,
   resolveBadge,
+  resolveEnded,
 } from "./badges.ts";
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildRoot, buildStamp } from "./build.ts";
@@ -777,6 +782,17 @@ export function registerRoutes(
         .status(err.status)
         .send({ error: err.message, code: err.code, reason: err.reason });
     }
+    /**
+     * **A parked wait whose badge was ended** (operator phase 4): the same
+     * 403 and `not-admitted` as the two above, with the reason `ended` and the
+     * tombstone's sentence — see `BadgeEndedError` for why a park is refused
+     * this way when every other request from a dead badge meets a 401.
+     */
+    if (err instanceof BadgeEndedError) {
+      return reply
+        .status(err.status)
+        .send({ error: err.message, code: err.code, reason: err.reason, ended: err.end });
+    }
     // 403 like `not-admitted`, one notch further in (#88): badged, admitted,
     // and the ledger says look-don't-touch. Its own code because the remedy is
     // different again — not the door, not the link, but being shared with for
@@ -1064,13 +1080,35 @@ export function registerRoutes(
       return;
     }
     if (isOpen(req.method, pathname)) return;
-    return presented
-      ? reply
-          .status(401)
-          .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" })
-      : reply
-          .status(401)
-          .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+    if (!presented) {
+      return reply
+        .status(401)
+        .send({ error: `a badge is required — ask the door for one (POST ${DOOR_ROUTE}); ${BADGE_RESTART_HINT}`, code: "no-badge" });
+    }
+    /**
+     * **The 401 carries the tombstone's reason** (operator phase 4; design,
+     * "End a badge"). `bad-badge` is what a wiped home says, and it is the
+     * right thing to say to a credential from nowhere: throw it away and
+     * knock. A badge this home ENDED is one it has a record about, and the
+     * record is the whole message — *this surface was ended, on this date,
+     * by this hand*. Still a 401, because the credential is finished; a
+     * different code and a `reason` of `holder` or `operator`, because the
+     * client's one recovery per request branches on it: an end by the holder
+     * keeps the quiet re-badge that lost-badge recovery is made of, and an end
+     * by the operator prints the sentence and stops. The secret was checked
+     * against the tombstone, so a caller that can only spell the id reads
+     * `bad-badge` as before.
+     */
+    const gone = await resolveEnded(desk, presented);
+    if (gone) {
+      const ended = endOf(gone);
+      return reply
+        .status(401)
+        .send({ error: ended.sentence, code: BADGE_ENDED, reason: ended.by, ended });
+    }
+    return reply
+      .status(401)
+      .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" });
   });
 
   /**
@@ -3124,13 +3162,20 @@ export function registerRoutes(
           () => null,
         ),
       sweeps.report,
+      // The dead badge's own sockets and parks (operator phase 4): closed and
+      // woken through the hub, and counted for the verb.
+      sweeps.ended,
     );
     if (!outcome) {
       return reply
         .status(404)
         .send({ error: `${badgeId} is already ended`, code: "unknown-badge" });
     }
-    return { killed: target, swept: outcome.swept } satisfies KillBadgeResponse;
+    return {
+      killed: target,
+      swept: outcome.swept,
+      reached: outcome.reached,
+    } satisfies KillBadgeResponse;
   });
 
   // ---- attestations: what this holder has PROVED (identity desk, mech 3+6) ----
@@ -4225,7 +4270,18 @@ export function registerRoutes(
       return allowed;
     };
 
+    /**
+     * **This poll's badge was ended while it was parked** (operator phase 4),
+     * set by the end listener below and raised at the top of the next
+     * collection — before any canvas is asked, because there is no canvas
+     * this badge may still hear. Whatever the poll named, or if it named
+     * nothing: an end is per badge, not per room, which is the one way this
+     * differs from `withdrawn` two branches down.
+     */
+    let ended: BadgeEnd | null = null;
+
     const collect = async (): Promise<import("@isocan/core").WatchLogResponse> => {
+      if (ended) throw new BadgeEndedError(ended);
       const entries: import("@isocan/core").WatchedLogEntry[] = [];
       const next: Record<string, number> = {};
       for (const canvas of await engine.listCanvases()) {
@@ -4288,6 +4344,20 @@ export function registerRoutes(
       landed = true;
       wake?.();
     });
+    /**
+     * **And on this badge's own end** (operator phase 4): the parked agent is
+     * told within the kill, not at the end of its poll window, and told the
+     * tombstone's sentence rather than hearing silence. Answers `waits: 1` so
+     * the kill can say how many parks it ended — counted at the moment of
+     * acting, as the takedown counts.
+     */
+    const unsubscribeEnds = sweeps.onEnded((badgeId, end) => {
+      if (badgeId !== badge.badgeId) return;
+      ended = end;
+      landed = true;
+      wake?.();
+      return { waits: 1 };
+    });
     try {
       let result = await collect();
       const holdMs = Math.min(Number(body.waitMs) || 0, 55_000);
@@ -4309,6 +4379,7 @@ export function registerRoutes(
     } finally {
       unsubscribe();
       unsubscribeSweeps();
+      unsubscribeEnds();
       unregisterWatch();
     }
   });

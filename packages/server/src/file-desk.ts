@@ -447,6 +447,14 @@ export class FileDesk implements Desk {
     });
   }
 
+  async endedBadge(badgeId: string): Promise<BadgeRecord | null> {
+    // The raw record, not `live`: this is the one read that WANTS the
+    // tombstone. A copy, as every read here hands back.
+    const badge = this.state.badges[badgeId];
+    if (!badge || badge.killedAt === undefined) return null;
+    return { ...badge };
+  }
+
   async attest(badgeId: string, attestation: Attestation): Promise<void> {
     await this.enqueue(async () => {
       const badge = this.live(badgeId);

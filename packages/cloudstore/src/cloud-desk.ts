@@ -441,6 +441,19 @@ export class CloudDesk implements Desk {
     });
   }
 
+  /**
+   * The tombstone, read straight off the document — the second of the two
+   * reads that want it (`killBadge` is the other). `badge()` above answers
+   * null for exactly this record, and `mutate` refuses to touch it; this is
+   * the read that turns *nobody holds it* into *here is when and by whom*.
+   */
+  async endedBadge(badgeId: string): Promise<BadgeRecord | null> {
+    const doc = await this.db.collection(BADGES).doc(badgeId).get();
+    if (!doc.exists) return null;
+    const record = toRecord(doc.data()!);
+    return record.killedAt === undefined ? null : record;
+  }
+
   async attest(badgeId: string, attestation: Attestation): Promise<void> {
     await this.mutate(badgeId, (badge) => ({
       ...badge,

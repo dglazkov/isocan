@@ -755,6 +755,39 @@ export function deskConformance(
     );
 
     /**
+     * **The tombstone is readable** (operator phase 4). `badge()` refuses a
+     * killed badge and every query drops it — that is the rule — but the
+     * record was written for a reason, and until this read the 401 a dead
+     * badge met could not say when or by whom, and a pass a dead badge had
+     * minted was judged without asking whether its minter lived.
+     */
+    test(
+      "endedBadge answers the tombstone, whole, and nothing for a badge that lives or never was",
+      withDesk(async ({ desk }) => {
+        await desk.put(mint("bdg_1"));
+        await desk.setClaims("bdg_1", [claim("usr_ada", "cli:ada")]);
+        await desk.admit("bdg_1", "prj_a", { root: "created" });
+        expect(await desk.endedBadge("bdg_1"), "alive").toBeNull();
+        expect(await desk.endedBadge("bdg_nope"), "never was").toBeNull();
+
+        await desk.killBadge("bdg_1", "2026-02-01T00:00:00.000Z", "bdg_2");
+        const gone = await desk.endedBadge("bdg_1");
+        expect(gone).toMatchObject({
+          badgeId: "bdg_1",
+          secretHash: "hash_bdg_1",
+          killedAt: "2026-02-01T00:00:00.000Z",
+          killedBy: "bdg_2",
+        });
+        // The record as it was, claims and admissions intact: what the
+        // operator reads about what a compromised badge had been.
+        expect(gone!.claims.map((c) => c.actorId)).toEqual(["usr_ada"]);
+        expect(gone!.admissions.map((a) => a.canvasId)).toEqual(["prj_a"]);
+        // And still nobody holds it.
+        expect(await desk.badge("bdg_1")).toBeNull();
+      }),
+    );
+
+    /**
      * **The content-signing key** (`content-read-auth.md`, option A): minted
      * on first ask and the same one ever after.
      *

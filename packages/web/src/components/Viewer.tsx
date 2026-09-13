@@ -50,6 +50,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
   const connection = useCanvasStore((s) => s.connection);
   // The home's own sentence about a canvas it took down (operator phase 2).
   const takenDown = useCanvasStore((s) => s.takenDown);
+  const ended = useCanvasStore((s) => s.ended);
 
   // The stranger path connects here (no actor — nobody to announce); the
   // CanvasPage path arrives already connected, and reconnecting would drop a
@@ -117,6 +118,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
     connection === "withdrawn" ||
     connection === "gone" ||
     connection === "taken-down" ||
+    connection === "ended" ||
     connection === "absent"
   ) {
     return (
@@ -133,7 +135,11 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
               connection === "taken-down"
               ? (takenDown?.sentence ??
                 "This canvas was taken down by the operator of this home.")
-              : "This canvas will not have you."}
+              : // This badge was ended (operator phase 4): the tombstone's
+                // own sentence, off the 401, or the short version.
+                connection === "ended"
+                ? (ended?.sentence ?? "This surface was ended.")
+                : "This canvas will not have you."}
       </div>
     );
   }

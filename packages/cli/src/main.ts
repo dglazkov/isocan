@@ -62,6 +62,8 @@ import {
   // thing (`takedown.ts`).
   TAKEDOWN_REASONS,
   TAKEN_DOWN,
+  // operator phase 4: a badge that was ended, and the sentence it reads.
+  ENDED,
   inForce,
   operatorLookUrl,
   takedownDateShort,
@@ -3771,14 +3773,23 @@ and withdrawing the agent (\`isocan rc remove\`) ends it with the sheep.`,
         return cell ? `cell (${cell.agent}'s sheep)` : surfaceKind(badge);
       };
       if (opts.kill !== undefined) {
-        const { killed, swept } = await ctx.client.killBadge(opts.kill);
-        if (ctx.json) return printJson({ killed, swept });
+        const { killed, swept, reached } = await ctx.client.killBadge(opts.kill);
+        if (ctx.json) return printJson({ killed, swept, ...(reached ? { reached } : {}) });
         printKeyValues({
           ended: `${killed.badgeId} (${what(killed)})`,
           identity:
             killed.actors.map((a) => a.name || a.id).join(", ") ||
             "none — it spoke as nobody",
           canvases: `${killed.canvases} — ${sweptLine(swept)}`,
+          // What the end reached at the moment it happened (operator phase 4):
+          // the counts a person can check, not "it has been handled". Absent
+          // from a home older than this CLI, and then not printed as zero.
+          ...(reached
+            ? {
+                "tabs and daemons closed": `${reached.sockets} here`,
+                "waits ended": String(reached.waits),
+              }
+            : {}),
         });
         console.log(
           "\nThat holder is not recognised here any more. It composes with the link:\n" +
@@ -11829,6 +11840,27 @@ command or reply. No \`session start\` needed after a wake.`,
                     "is lost, and do not park on this canvas again.",
                 );
                 if (ctx.json) printJson({ reason: TAKEN_DOWN, canvasId: p.id, error: err.message });
+                process.exitCode = 4;
+                return;
+              }
+              /**
+               * **This badge was ended while it was parked** (operator phase
+               * 4; journey 7 step 3: *his parked wait exits*). The same shape
+               * and the same exit code as the two above, for the same reason:
+               * this park is over and the agent must not come back on its
+               * own. The message is the home's — the tombstone's sentence,
+               * with the date and, when the operator ended it, the reason and
+               * the address to write to. Not `withdrawn`: nobody removed this
+               * badge from a canvas, it was ended everywhere at once, and the
+               * next command this machine runs meets the 401 that says so.
+               */
+              if (err.code === NOT_ADMITTED && err.reason === ENDED) {
+                if (upgraded) console.error(upgraded);
+                console.error(
+                  `wait: ${ENDED} — ${err.message} This park is over; this badge is not ` +
+                    "recognised here any more.",
+                );
+                if (ctx.json) printJson({ reason: ENDED, canvasId: p.id, error: err.message });
                 process.exitCode = 4;
                 return;
               }

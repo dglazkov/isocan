@@ -288,7 +288,27 @@ export interface RedeemPassResponse {
  * the button again. One collapsed refusal would send all three to the same
  * useless place.
  */
-export type PassRefusal = typeof PASS_UNKNOWN | typeof PASS_SPENT | typeof PASS_EXPIRED;
+export type PassRefusal =
+  | typeof PASS_UNKNOWN
+  | typeof PASS_SPENT
+  | typeof PASS_EXPIRED
+  | typeof PASS_MINTER_ENDED;
+
+/**
+ * **The surface that minted it has since been ended** (operator phase 4).
+ *
+ * A pass is the minter's standing, handed on: redemption writes `{root:
+ * "pass", badgeId: minter}` at the minter's rung. A minter that is dead has no
+ * standing to hand on, and the sweep would unstand the admission at the next
+ * pass anyway — but *would be expelled later* is not *was refused*, and the
+ * hour between is exactly the window a stolen laptop's outstanding pass was
+ * good for. So it is refused at the gate, with the tombstone's sentence, and
+ * the pass is left unspent: there is nothing to spend it on.
+ *
+ * 410 like `pass-expired`: it existed and is gone, and the remedy is the same
+ * shape — ask a surface that is still recognised for another.
+ */
+export const PASS_MINTER_ENDED = "pass-minter-ended";
 
 /**
  * No such pass — or the secret does not match one that exists.

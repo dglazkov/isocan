@@ -425,6 +425,24 @@ export interface Desk {
    */
   killBadge(badgeId: string, at: string, by: string): Promise<BadgeRecord | null>;
 
+  /**
+   * **The tombstone behind an id, or null** (operator phase 4) — the one read
+   * that answers about a badge nobody holds.
+   *
+   * `badge()` refuses a killed badge on purpose, and every query drops it, so
+   * until this method the tombstone was written and never read back: the 401
+   * a dead badge met said *this home does not know that badge*, which is what
+   * a wiped home says too, and a pass the dead badge had minted was judged
+   * without asking whether its minter lived. Both questions are this one:
+   * *was this ended, when, and by whom* — with the operator's reason beside
+   * it when there is one.
+   *
+   * Null for a badge that is alive, and null for one this home never had.
+   * Those two answer alike because the caller has already asked `badge()`,
+   * which told them apart; this is asked only after that came back empty.
+   */
+  endedBadge(badgeId: string): Promise<BadgeRecord | null>;
+
   // ---- attestations: what a holder has proved (mechanism 3) ----
 
   /**
