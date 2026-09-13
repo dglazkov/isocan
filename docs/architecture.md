@@ -212,18 +212,33 @@ because the loser's copy is overwritten with nothing anywhere saying so.
 A log line and not a throw — the other canvases at that home are
 innocent.
 
-The listing route still answers the WIDE question by default, because a
-browser asks a different question on the same route — "what can I open
-from here", which on a solo home includes the canvas a CLI just made
-under a badge the tab has never carried — and the caller states which,
-never the route sniffing who called. Phase 10.3 added a third question to
-the same route for the same reason: `?reach=here`, the canvases this
-daemon is the home of, which is what the web app's canvas list asks,
-because its links are client-side navigations that never reach the
-per-canvas page guard and the local origin would otherwise render a
-replica of a canvas that lives at dev. Enumerate-and-mirror was the
-easiest thing that worked while a home had one member; it is how a
-stranger's canvas landed on a laptop the moment a link grant was on. An
+The listing route answered the WIDE question by default until **13
+September**, because a browser asks a different question on the same
+route — "what can I open from here", which on a solo home includes the
+canvas a CLI just made under a badge the tab has never carried. That
+default was measured on isocan.io and withdrawn: a window admitted to ONE
+canvas listed 35, belonging to 22 different people, because every canvas
+is born with a live link grant and the door says yes to a link without
+asking who is knocking. **The link model says the address is the secret,
+and a list that enumerates the addresses is that model refuting itself.**
+
+So the default is now **admissions, plus the rows that NAME you** — an
+address, a group, a row on a space you are in, your own floor as creator
+— and a canvas carrying only a link row is entered, never listed. The
+browser's question is answered by a second rule instead: a daemon
+**answering only its own machine** (bound to loopback, asked from that
+machine) shows that machine everything it holds, so a laptop's list does
+not change at all. The bug was a hosted one and the fix is scoped to it.
+`?reach=admissible` is the old wide answer, kept for a caller that asks
+by name, and the caller still states which question it means, never the
+route sniffing who called. Phase 10.3 added a third for the same reason:
+`?reach=here`, the canvases this daemon is the home of, which is what the
+web app's canvas list asks, because its links are client-side navigations
+that never reach the per-canvas page guard and the local origin would
+otherwise render a replica of a canvas that lives at dev. Enumerate-and-
+mirror was the easiest thing that worked while a home had one member; it
+is how a stranger's canvas landed on a laptop the moment a link grant was
+on. An
 arrival that
 holds only an ADDRESS — a cloned `.isocan/project.json`, a pass-less
 `isocan setup` — asks for that one canvas by name (`POST

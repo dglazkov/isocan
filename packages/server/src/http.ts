@@ -512,6 +512,18 @@ interface RouteOptions {
    */
   modulesHome?: string;
   /**
+   * **Does this daemon serve the world?** What the bind says, stated rather
+   * than sniffed: `daemon.ts` derives it from the address it was told to listen
+   * on, and absent it the socket is read (`loopbackBound`).
+   *
+   * It decides one thing — whether `GET /api/projects` shows a local caller
+   * the whole shelf — and it exists as an option because a test cannot bind
+   * `0.0.0.0` to find out. Binding wide from a test opens a port to the
+   * network, and with `SO_REUSEADDR` it can be handed a port another suite
+   * already holds on `127.0.0.1`, after which the two daemons trade requests.
+   */
+  servesWorld?: boolean;
+  /**
    * The content origin's base URL, or null/absent when none exists — which
    * is every daemon at stage 1 of the content-origin plan. The daemon sets
    * this from the content listener it actually started (stage 2), never from
@@ -1830,24 +1842,39 @@ export function registerRoutes(
    * instead of being SHOWN what exists. The narrowing that broke replicas in
    * phase 7 is the right answer for a replica in phase 8.
    *
-   * **But it is still the wrong answer for a browser**, which is why this
-   * route did not simply narrow. See {@link CanvasesReach}: two callers ask
-   * two questions here, the caller states which, and the wide answer stays
-   * the default so that a person opening `/` on their own home still sees the
-   * canvas their CLI just made under a different badge. A route that guessed
-   * from the carrier would be sniffing, which this codebase refuses.
+   * **And the wide answer was the wrong default, measured on isocan.io
+   * (13 Sep).** It was defended here as "for a person browsing their own home
+   * 'the ones you may enter' IS the home" — true on a laptop, and false the
+   * moment a home has more than one person in it. A window admitted to ONE
+   * canvas at isocan.io listed 35, belonging to 22 different people, because
+   * every canvas is born with a live link grant (`ensureLinkGrant`) and the
+   * door says yes to a link without asking who is knocking. The link model
+   * says the address is the secret; a list that enumerates the addresses is
+   * that model refuting itself.
    *
-   * **What the narrow answer closes.** A replica asking `?reach=admitted`
-   * mirrors what it was let into and nothing else: a canvas whose link grant
-   * is merely ON no longer lands on a machine nobody handed it, which is the
-   * last gap phase 7 left open and could not close. The wide answer still
-   * lists a link-granted canvas to anyone, and that is not a bug in it — a
-   * link grant says "anyone presenting the address may enter", so for a
-   * person browsing their own home "the ones you may enter" IS the home.
+   * **The rule now: admissions, what somebody shared with you by name, and
+   * the shelf.** Everybody sees what they were admitted to, plus any canvas
+   * whose row NAMES them — an address, a group, a row on a space they are in,
+   * or their own floor as its creator — because that is somebody sharing a
+   * canvas with a person, and it should be on their front page before they
+   * open it. What no longer lists is a canvas carrying only a `link` row: that
+   * row names nobody, and turning it into a directory entry is what made the
+   * address stop being a secret. A daemon answering only its own machine —
+   * bound to loopback, asked from that machine — additionally shows everything
+   * it holds, which is what keeps a laptop's list exactly as it was: a canvas
+   * an agent made here, or one your CLI made under its own badge, is on your
+   * shelf before you have opened it. An admission is written when a badge
+   * ENTERS, so without that half your own front page would hide your own work.
    *
-   * The cost of the wide answer is one grant query per canvas the badge has
-   * not been in; the narrow answer costs none at all, because admissions are
-   * on the badge record the request already resolved.
+   * **What each caller asks.** A replica asks `?reach=admitted` and mirrors
+   * what it was let into. The web's canvas list asks `?reach=here` and gets
+   * the shelf (or its admissions) narrowed to the canvases this daemon is the
+   * home of. `?reach=admissible` is the old wide answer, kept as a question
+   * somebody can still ask on purpose rather than one they get by default.
+   *
+   * The cost: admissions are on the badge record the request already resolved,
+   * and the shelf is one small file read plus the joins the engine caches. Only
+   * `admissible` pays a grant query per canvas the badge has not been in.
    */
   app.get("/api/projects", async (req) => {
     const badge = req.badge!;
@@ -1858,6 +1885,13 @@ export function registerRoutes(
     // (`canvasesRoute`) so that a caller cannot arrive here with a near-miss.
     const reach = query[CANVASES_REACH_PARAM];
     const narrow = reach === "admitted";
+    /**
+     * The old wide answer, now only when asked for by name. A near-miss
+     * (`?reach=admissable`) falls to the default, which is the narrow side —
+     * a typo that widens what a stranger can see is the one direction this
+     * must not fail in.
+     */
+    const admissible = reach === "admissible";
     /**
      * `?reach=here` — of the ones this badge may see, the canvases **this
      * daemon is the home of** (phase 10.3). What the web app's canvas list
@@ -1874,6 +1908,39 @@ export function registerRoutes(
     const hereOnly = reach === "here";
     const admitted = new Set(badge.admissions.map((a) => a.canvasId));
     const visible: Canvas[] = [];
+    /**
+     * **Is this a machine answering only itself?** The same two facts
+     * `treeGate` already asks, for the same reason: this daemon is bound to
+     * loopback, and the request came from the machine it is bound to. A laptop
+     * says yes and keeps the list it has always had; a home serving the world
+     * says no, whatever it is asked, because `ISOCAN_BIND=0.0.0.0` is what the
+     * hosted image sets and mechanism 5's localhost clause is off there
+     * already.
+     *
+     * **What this deliberately does not do** is ask WHO is holding the badge.
+     * A stricter rule — the actor `identity.json` names, or the badge this
+     * machine holds for itself — was built and taken out again: an agent
+     * running the CLI on your machine uses that badge and reads `~/.isocan`
+     * even when `isocan rc --sandbox` fences it, so the check excluded a fresh
+     * browser tab and your own terminal before it had claimed anybody, while
+     * excluding no agent. Keeping local trust exactly where the codebase
+     * already keeps it means a laptop's list does not change at all, which is
+     * the whole point: the bug being fixed is a hosted one. Narrowing what one
+     * machine shows its own processes is a separate argument, with the
+     * sandbox's own threat model, and belongs in its own change.
+     *
+     * Not asked at all for `admitted` — that is the replica's question, and a
+     * replica must mirror what it was told it holds, never what the machine it
+     * runs on happens to have.
+     */
+    const from = req.ip;
+    const answersOnlyThisMachine =
+      options.servesWorld === undefined ? loopbackBound(app) : !options.servesWorld;
+    const shelf =
+      narrow || admissible
+        ? false
+        : answersOnlyThisMachine &&
+          (from === "127.0.0.1" || from === "::1" || from === "::ffff:127.0.0.1");
     /**
      * **The door's space reads, memoized for the wide list** (roles design,
      * "The door reads both"). One `spacesFor(badge)` — the bounded queries —
@@ -1919,9 +1986,23 @@ export function registerRoutes(
     };
     for (const canvas of await engine.listCanvases()) {
       if (hereOnly && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
-      if (admitted.has(canvas.id)) visible.push(canvas);
-      else if (!narrow && (await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id, via))) {
-        visible.push(canvas);
+      if (admitted.has(canvas.id) || shelf) visible.push(canvas);
+      else if (!narrow) {
+        /**
+         * **Named rows still list; a bare link no longer does.** Being invited
+         * by address, through a group, or by a row on a space you are in is
+         * somebody having shared this canvas WITH YOU, and it belongs on your
+         * front page before you have opened it — that is `shared with me`, and
+         * `spaces.test.ts`'s "a row on the space admits to every canvas in it"
+         * is the case. A `link` row names nobody: it says whoever holds the
+         * address may enter, which is an answer to a knock and not a reason to
+         * put the address in somebody's list. The floors (`created`, a space's
+         * creator) carry `grant: null` and always list — they are yours.
+         */
+        const answer = await admittingGrant(desk, canvas.id, badge, canvas.createdBy.id, via);
+        if (answer !== null && (admissible || answer.grant === null || answer.grant.subject !== LINK)) {
+          visible.push(canvas);
+        }
       }
     }
     return visible;

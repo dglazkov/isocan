@@ -54,6 +54,18 @@ export interface DaemonOptions {
    */
   host?: string;
   /**
+   * **A home that serves the world, said outright — tests only.** Production
+   * derives this from `host` just below, and that is the only thing that sets
+   * it in a running daemon.
+   *
+   * It exists because the behaviour it gates (`GET /api/projects` showing a
+   * local caller everything this machine holds) is the difference between a
+   * laptop and isocan.io, and a test cannot bind `0.0.0.0` to stand on the
+   * other side of it: binding wide from a test opens a port to the network,
+   * and `127.0.0.2` is not an address every machine has.
+   */
+  servesWorld?: boolean;
+  /**
    * The content listener's port: a number pins it, `0` asks for an ephemeral
    * one, `"off"` disables it. Absent, `ISOCAN_CONTENT_PORT` is read, and
    * unset means the default plan — the main port's neighbour, then ephemeral
@@ -519,6 +531,10 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     park: new ParkCursors(home),
     // This machine's runtime modules, read per request (modules phase 3).
     modulesHome: home,
+    // What the bind means, said once here rather than read off the socket at
+    // every listing: anything but the loopback address is a daemon other
+    // machines can reach, and the shelf is off there.
+    servesWorld: options.servesWorld ?? !(host === "127.0.0.1" || host === "::1" || host === "localhost"),
     rc,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
   };

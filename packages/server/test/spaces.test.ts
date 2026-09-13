@@ -58,6 +58,23 @@ async function boot(): Promise<void> {
     home,
     birthHome: null,
     auth: { project: "acme-test", apiKey: "test-key" },
+    /**
+     * **A home with several people in it**, which is what a space is for — and
+     * since 13 Sep that is a different daemon from a laptop. `GET
+     * /api/projects` shows a machine answering only itself everything it
+     * holds, and a home serving the world admissions and the rows that NAME
+     * you. Journey 5's acceptance line below — a stranger's list is the one
+     * canvas whose link they hold — is a sentence about the second kind, and
+     * on a loopback daemon it would pass for the wrong reason.
+     *
+     * Said rather than bound: this still listens on loopback like every other
+     * suite. Binding `0.0.0.0` from a test opens a port to the network and,
+     * with `SO_REUSEADDR` on by default, can be handed a port another suite
+     * already holds on `127.0.0.1` — after which the two daemons trade
+     * requests under parallel load, which cost an afternoon to find.
+     * `127.0.0.2` is not an address macOS has at all.
+     */
+    servesWorld: true,
   });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
