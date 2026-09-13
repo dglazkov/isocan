@@ -56,14 +56,13 @@ describe("a lazy() call sits below the import that names it", () => {
   });
 
   it("would catch the shape it exists for", () => {
-    const broken = [
-      `const Panel = lazy(() => import("./Panel.tsx"));`,
-      `import { lazy } from "react";`,
-    ];
+    const call = `const Panel = lazy(() => import("./Panel.tsx"));`;
+    const imports = `import { lazy } from "react";`;
+    const broken = [call, imports];
     const importedAt = broken.findIndex((line) => /^\s*import\s.*\blazy\b.*from\s+"react"/.test(line));
     expect(callLine(broken)).toBeLessThan(importedAt);
 
-    const fixed = [broken[1]!, broken[0]!];
+    const fixed = [imports, call];
     const fixedImport = fixed.findIndex((line) => /^\s*import\s.*\blazy\b.*from\s+"react"/.test(line));
     expect(callLine(fixed)).toBeGreaterThan(fixedImport);
   });

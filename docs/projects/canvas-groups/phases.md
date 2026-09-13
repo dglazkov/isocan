@@ -199,6 +199,11 @@ already-connected old-client/replica and queued-write handling; enable normal
 creation on capable canvases, area compatibility aliases, legacy consumers,
 examples/README/guide and release notes. Never reinterpret historical ops or
 discard post-boundary trash/redo state to force migration rollback.
+Require canvas-groups-v4 for the bounded mode/boundary and legacy-trash
+migration effects; preserve literal v1–v3 historical replay. Preserve the
+originating mode on queued writes through persistence and forwarding, so even
+a v4 client cannot silently reinterpret work queued before conversion.
+Default new public births at the writer, without changing historical replay.
 
 **Ownership:** core/server migration and protocol tests, API/CLI migration
 surface, web migration/compatibility feedback and all remaining area consumers.
@@ -208,4 +213,6 @@ The conductor updates project/release/changelog records after verification.
 
 **Trajectory:**
 
-*nothing yet — the phase has not started.*
+- **2026-09-13** — Migration needs a v4 replay boundary and queued-write origin. Literal v3 cannot apply mode/boundary or legacy-trash effects, and a v4 client can still hold a legacy request. The contract now names both gates before implementation.
+
+- **2026-09-13** — Literal v3 browser code retries an unrecognized upgrade close code; a new release cannot remotely add its terminal UI. The writer must withhold unsupported state on every retry, and current clients show upgrade guidance. Rollback also counts saved group-dependent undo candidates as history debt.
