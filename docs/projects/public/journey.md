@@ -1,9 +1,9 @@
 ---
-status: partial
+status: built
 since: 2026-09-13
 issue: 292
 see: hosted-sharing, roles, operator, memory
-note: phases 1–2 closed 13 Sep; owner publication and both catalogue surfaces built and locally verified with the Firestore emulator required. Phase 3 retains the repeatable browser proof and verifies CI before closing lifecycle acceptance
+note: all three phases closed 13 Sep. Explicit owner read/view publication, CLI and web catalogue doors, both durable backings, lifecycle/refusal privacy and actual browser journeys are verified; source CI passed with Firestore and bundle required. No live canvas was published
 ---
 
 # Public — deliberately findable

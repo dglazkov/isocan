@@ -1,9 +1,10 @@
 # Public — the walk
 
-**Where we are:** phases 1 and 2 are closed. Public is implemented on both
-clients. Phase 3 is next: retain the repeatable browser proof and independently
-verify the integrated lifecycle, privacy and required-emulator CI. No live
-canvas was published as part of this work.
+**Where we are:** all three phases are closed, 13 September 2026. Explicit
+owner publication, both catalogue surfaces, lifecycle and browser privacy
+are independently verified. Source commit 3e4e2bf7 passed CI with Firestore
+and the bundle required. No live canvas was published. Personal memory is
+the next project in the requested continuation.
 
 ## Phase 1 — Define deliberate publication
 
@@ -47,7 +48,8 @@ relaxing the ownership or documentation limits.
 
 ## Phase 3 — Prove the public lifecycle
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 13 September 2026 — the actual browser, authoritative
+lifecycle, both backing implementations and required-emulator CI held.
 
 **Proof:** drive the actual browser as owner and fresh stranger. Public browse
 fetches no canvas snapshot, history, blob, thumbnail, admission or seen-mark;
@@ -57,6 +59,25 @@ with revocation; restart both backings; test foreign replicas, refusals,
 takedown/lift and purge. Check noindex responses and unchanged ordinary
 discovery/Inbox/watch scope. Run full tests, typecheck and the built-browser
 journeys, and inspect CI with the Firestore emulator required.
+
+**Verification:** `node scripts/public-journeys.mjs` now retains the real
+CLI/browser walk in the repository. The conductor ran it with two fresh
+Chrome profiles: pointer publication, anonymous catalogue hover/focus, zero
+private canvas requests before entry, actual unnamed slide rendering and
+named read-only entry. A viewer write returned 403 with project, canvas and
+operation head unchanged. Unlisting retained known-address access; off/on
+stayed unlisted. Request evidence and screenshots were inspected.
+
+The conductor also ran all ten standard built-browser journeys (zero failing),
+the deliberately failing journey selftest, all seven grader selftests and
+all fourteen metric selftests. Full integrated tests, with both emulator and
+bundle required: 5,055 passed across 505 files, three existing ACP/dispatch
+skips, exit 0. Workspace typecheck exited 0. The existing lifecycle and
+operator tests cover revocation races, fresh backing instances, retained
+replicas, takedown/lift, purge, bars, ended and refused callers. Release CI
+[34779381108](https://github.com/dglazkov/isocan/actions/runs/34779381108)
+passed on source commit 3e4e2bf7 and advanced the generated refs; the final
+proof-support scripts additionally passed the same local suite and graders.
 
 ## Trajectory
 
