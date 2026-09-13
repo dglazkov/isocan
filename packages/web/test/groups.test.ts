@@ -151,8 +151,10 @@ describe("the Share dialog", () => {
     expect(source).toMatch(/readGroup\(id\)/);
     expect(source).toContain("· group of ${view.size}");
     // Every row's subject goes through the one label: the space's rows on
-    // a canvas, the invitations, the bars, and the space's own rows.
-    expect(source.match(/<b>\{subjectLabel\(grant\.subject, views\)\}<\/b>/g)).toHaveLength(5);
+    // a canvas, the invitations, the bars, the space's own rows — and the
+    // rows the operator turned off (operator phase 5), which are one list
+    // rendered for both scopes.
+    expect(source.match(/<b>\{subjectLabel\(grant\.subject, views\)\}<\/b>/g)).toHaveLength(6);
     expect(source).not.toMatch(/<b>\{grant\.subject\.replace/);
   });
 });

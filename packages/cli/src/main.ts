@@ -72,6 +72,9 @@ import {
   takedownDateShort,
   takedownReasonList,
   takedownSentence,
+  // operator phase 5: a grant the operator turned off, and the sentence the
+  // owner reads about it — on the row, rendered in core (`revoked.ts`).
+  revokedSentence,
   type PurgeCounts,
   type EndedSurface,
   type OperatorEndReach,
@@ -2903,8 +2906,12 @@ program
       // are one function for a canvas and for a space (`shareRows`).
       await shareRows(ctx, canvasScope(ctx, canvas), who, opts, sweepAlso);
 
-      const { grants } = await ctx.client.grants(canvas.id);
+      // `turnedOff` (operator phase 5): the rows the operator of this home
+      // turned off and nothing has replaced — absent from a home that has
+      // turned nothing off, and from one from before the phase.
+      const { grants, turnedOff = [] } = await ctx.client.grants(canvas.id);
       const link = grants.find((g) => g.subject === LINK) ?? null;
+      const linkOff = turnedOff.find((g) => g.subject === LINK) ?? null;
       // Just the names, not a whole snapshot: this command needs one string,
       // and the registry is what a rename reaches.
       const names = await ctx.client.actorNames();
@@ -2925,6 +2932,7 @@ program
           address,
           owner: canvas.createdBy,
           grants,
+          ...(turnedOff.length > 0 ? { turnedOff } : {}),
           ...(holder ? { space: holder, spaceGrants: spaceRows } : {}),
           ...(swept ? { swept } : {}),
         });
@@ -2937,12 +2945,17 @@ program
         owner,
         link: link
           ? linkLine(capabilityOf(link), link.at)
-          : // Phase 7's line here read "people already on this canvas keep
-            // their access", and phase 9 made that false. Worse, with the
-            // sweep's own count printed beside it the two lines contradicted
-            // each other in one screen — which a walk against a real daemon
-            // caught and no test would have.
-            "off — new arrivals are turned away, and the badges that came in on it were expelled",
+          : linkOff
+            ? // The operator turned it off (operator phase 5; journey 8 step
+              // 3): the sentence is the row's, rendered in core, and the
+              // owner is told in the same line that it is theirs to undo.
+              `off — ${revokedSentence(linkOff)} You can turn it back on: \`isocan share --link on\``
+            : // Phase 7's line here read "people already on this canvas keep
+              // their access", and phase 9 made that false. Worse, with the
+              // sweep's own count printed beside it the two lines contradicted
+              // each other in one screen — which a walk against a real daemon
+              // caught and no test would have.
+              "off — new arrivals are turned away, and the badges that came in on it were expelled",
         ...(holder
           ? {
               space:
@@ -2960,7 +2973,7 @@ program
       };
       // A group row prints as `group <name> (<size>)` (roles phase 5): the
       // home answers name and size to anybody a row lets see the group.
-      const label = await groupLabels(ctx, [...others, ...spaceRows]);
+      const label = await groupLabels(ctx, [...others, ...spaceRows, ...turnedOff]);
       printTable([
         // The creator, first: their standing is the floor and not a row, so
         // the table says so where the Share dialog's first row does.
@@ -2996,8 +3009,38 @@ program
           };
         }),
       ]);
+      // Named rows the operator turned off (operator phase 5), under the
+      // table because they are not rows any more: each says why, and that
+      // inviting them again is one ordinary `isocan share <who>`.
+      printTurnedOff(
+        turnedOff.filter((g) => g.subject !== LINK),
+        label,
+        (who) => `isocan share ${who}`,
+      );
     }),
   );
+
+/**
+ * **What the operator of this home turned off, and nothing has replaced**
+ * (operator phase 5) — one line per subject, the sentence from the row. The
+ * owner's own revokes never reach here: the home hands over only the rows
+ * with `revokedVia: "operator"`, because the owner's act is the owner's.
+ * `invite` spells the gesture that turns it back on, for this scope.
+ */
+function printTurnedOff(
+  rows: readonly Grant[],
+  label: (subject: string) => string,
+  invite: (who: string) => string,
+): void {
+  if (rows.length === 0) return;
+  console.log("\nTurned off by the operator of this home:");
+  for (const row of rows) {
+    console.log(
+      `  ${label(row.subject)} — ${revokedSentence(row)} ` +
+        `\`${invite(row.subject.replace(/^email:/, ""))}\` invites them again.`,
+    );
+  }
+}
 
 /**
  * **One scope for the four row gestures** (roles phase 4): a canvas's rows
@@ -3217,10 +3260,18 @@ async function shareSpace(
   }
   await shareRows(ctx, spaceScope(ctx, space), who, opts, sweepAlso);
 
-  const { grants } = await ctx.client.spaceGrants(space.id);
+  const { grants, turnedOff = [] } = await ctx.client.spaceGrants(space.id);
   const names = await ctx.client.actorNames();
   const owner = actorNameIn(names, { id: space.createdBy, name: space.createdBy });
-  if (ctx.json) return printJson({ space, owner: space.createdBy, grants, ...(swept ? { swept } : {}) });
+  if (ctx.json) {
+    return printJson({
+      space,
+      owner: space.createdBy,
+      grants,
+      ...(turnedOff.length > 0 ? { turnedOff } : {}),
+      ...(swept ? { swept } : {}),
+    });
+  }
   printKeyValues({
     space: `${space.name} (${space.id})`,
     owner,
@@ -3228,7 +3279,7 @@ async function shareSpace(
     link: "a space has no link of its own — `--link` sets every canvas's",
   });
   if (swept) console.log(sweptLine(swept));
-  const label = await groupLabels(ctx, grants);
+  const label = await groupLabels(ctx, [...grants, ...turnedOff]);
   printTable([
     { subject: owner, rung: "owner, made this", granted: space.at.slice(0, 10), by: "" },
     ...[...grants.filter((g) => !isBar(g)), ...grants.filter(isBar)].map((g) => ({
@@ -3238,6 +3289,7 @@ async function shareSpace(
       by: g.grantedBy,
     })),
   ]);
+  printTurnedOff(turnedOff, label, (who) => `isocan share --space ${space.name} ${who}`);
 }
 
 /**
@@ -4345,6 +4397,67 @@ operatorCommand
         console.log(
           "\nEnding is not refusing: they can knock again and be a stranger, with none of these\n" +
             `claims. The record is in the ledger — \`isocan operator log --target ${target}\`.`,
+        );
+      },
+    ),
+  );
+
+/**
+ * **`isocan operator revoke <canvas|space> <subject>`** (operator phase 5;
+ * journey 8): the owner's `isocan share --revoke` and `--link off` with the
+ * proof in place of `own`. The subject is spelled as `share` spells it —
+ * `link`, an address, `repo:…`, or `group:<id>` — so the two verbs cannot
+ * disagree about what a row is called. The reach is the answer's: which
+ * scope, how many canvases the sweep walked, and who lost the canvas.
+ */
+operatorCommand
+  .command("revoke <target> <subject>")
+  .description(
+    "Turn off one grant on a canvas or a space: `link`, an email, `repo:…` or `group:<id>`. " +
+      "The owner is shown why, and can turn it back on; --bar keeps the subject out as well",
+  )
+  .option("--reason <category>", `why, from: ${takedownReasonList()}`)
+  .option("--note <text>", "your own note — recorded, and shown to nobody")
+  .option("--bar", "write a bar too: refused at the door whatever the link allows, until an owner lifts it")
+  .option("--home <url>", "the home to prove at; by default, where that canvas lives")
+  .action(
+    run(
+      async (
+        target: string,
+        who: string,
+        opts: { reason?: string; note?: string; bar?: boolean; home?: string },
+        cmd: Command,
+      ) => {
+        refuseInSession();
+        const ctx = await ctxOf(cmd);
+        const isSpace = target.startsWith("spc_");
+        const home = await operatorHome(ctx, isSpace ? null : target, opts.home);
+        const client = clientAt(ctx, home);
+        // `link` is a subject, not an address: `grantSubjectOf` would read it
+        // as a repo. Groups go by id here — the operator is reading a report,
+        // and a name is unique only among one owner's groups.
+        const subject = who.trim() === LINK ? LINK : normalizeSubject(grantSubjectOf(who));
+        const proof = await operatorProof(client, home, `turn off ${subject} on ${target}`);
+        const answer = await client.operatorRevoke(target, proof, {
+          subject,
+          ...(opts.reason ? { reason: opts.reason } : {}),
+          ...(opts.note ? { note: opts.note } : {}),
+          ...(opts.bar ? { bar: true } : {}),
+        });
+        if (ctx.json) return printJson(answer);
+        printKeyValues({
+          [answer.target.kind]: answer.target.id,
+          subject,
+          "was granted": `${answer.grant.at.slice(0, 10)} by ${answer.grant.grantedBy}`,
+          reached: answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`,
+          swept: sweptLine(answer.swept),
+          "kept out": answer.bar ? `yes — until an owner lifts it (${answer.bar.id})` : "no — `--bar` would",
+        });
+        console.log(`\nThe owner reads, in Share and in \`isocan share\`:\n  ${answer.sentence}`);
+        console.log(
+          "\nThe owner can turn it back on — a revoke they can undo is a request. If it has to\n" +
+            `stay off, the order is \`isocan operator takedown\`. The record is in the ledger — ` +
+            `\`isocan operator log --target ${target}\`.`,
         );
       },
     ),

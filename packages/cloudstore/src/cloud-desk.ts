@@ -10,6 +10,7 @@ import type {
   Group,
   OperatorAct,
   OperatorEnd,
+  OperatorRevocation,
   PurgeCounts,
   SeenMark,
   SeenMarks,
@@ -640,14 +641,22 @@ export class CloudDesk implements Desk {
    * first stamp must stand — the same read-modify-write discipline `mutate`
    * gives a badge, on a document that answers the door.
    */
-  async revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null> {
+  async revokeGrant(grantId: string, at: string, by: string, via?: OperatorRevocation): Promise<Grant | null> {
     const ref = this.db.collection(GRANTS).doc(grantId);
     return this.db.runTransaction(async (tx) => {
       const doc = await tx.get(ref);
       if (!doc.exists) return null;
       const grant = toGrant(doc.data()!);
       if (grant.revokedAt !== undefined) return grant;
-      const revoked: Grant = { ...grant, revokedAt: at, revokedBy: by };
+      // The operator's half goes in the same write as the stamp (operator
+      // phase 5), so no reader can meet a row that is off with nobody to
+      // say why.
+      const revoked: Grant = {
+        ...grant,
+        revokedAt: at,
+        revokedBy: by,
+        ...(via ? { revokedVia: "operator" as const, revocation: { ...via } } : {}),
+      };
       tx.set(ref, jsonSafe(revoked));
       return revoked;
     });
@@ -1031,6 +1040,13 @@ function toGrant(data: DocumentData): Grant {
     at: data["at"] as string,
     ...(typeof data["revokedAt"] === "string" ? { revokedAt: data["revokedAt"] } : {}),
     ...(typeof data["revokedBy"] === "string" ? { revokedBy: data["revokedBy"] } : {}),
+    // The operator's half (operator phase 5): the same field-picking trap
+    // as `capability` and `bars` below. A rebuild that dropped it would turn
+    // "turned off by the operator" into a row the Share dialog shows as an
+    // owner's own revoke — the sentence gone, the ledger row orphaned.
+    ...(data["revokedVia"] === "operator" && isRevocation(data["revocation"])
+      ? { revokedVia: "operator" as const, revocation: { ...data["revocation"] } }
+      : {}),
     // Written whenever it is not edit (#88, `narrowed`), and it MUST come
     // back: this field-picking rebuild is exactly where a stored `view`
     // silently became `edit` on the hosted home — the write kept it, every
@@ -1046,6 +1062,14 @@ function toGrant(data: DocumentData): Grant {
     // reads as an edit invitation. `true` or absent, nothing else.
     ...(data["bars"] === true ? { bars: true as const } : {}),
   };
+}
+
+/** The operator's half of a grant tombstone, whole or not at all: three
+ * strings, and the reason is checked at the route before it is written. */
+function isRevocation(value: unknown): value is OperatorRevocation {
+  if (!value || typeof value !== "object") return false;
+  const { reason, by, actId } = value as Record<string, unknown>;
+  return typeof reason === "string" && typeof by === "string" && typeof actId === "string";
 }
 
 /** A pass document, back as a record. Nothing is derived here either: a pass

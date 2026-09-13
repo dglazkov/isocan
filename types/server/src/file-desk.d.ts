@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct, OperatorEnd } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct, OperatorEnd, OperatorRevocation } from "../../core/src/index.js";
 import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
@@ -61,7 +61,7 @@ export declare class FileDesk implements Desk {
     /** The groups ledger, which a desk from before roles phase 5 lacks. */
     private groups;
     putGrant(grant: Grant): Promise<void>;
-    revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null>;
+    revokeGrant(grantId: string, at: string, by: string, via?: OperatorRevocation): Promise<Grant | null>;
     putPass(pass: PassRecord): Promise<void>;
     pass(passId: string): Promise<PassRecord | null>;
     passesMintedBy(badgeId: string): Promise<PassRecord[]>;

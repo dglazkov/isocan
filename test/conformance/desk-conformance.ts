@@ -295,6 +295,35 @@ export function deskConformance(
       }),
     );
 
+    // ---- operator phase 5: the operator's revoke keeps its half on the tombstone ----
+
+    test(
+      "the operator's revoke carries revokedVia and the operator's half; the owner's carries neither",
+      withDesk(async ({ desk }) => {
+        await desk.putGrant(grant("gnt_op", "prj_a", "bdg_1"));
+        await desk.putGrant({ ...grant("gnt_own", "prj_a", "bdg_1"), subject: "email:jordan@acme.test" });
+        const at = "2026-09-12T12:00:00.000Z";
+        const via = { reason: "spam" as const, by: "email:olu@example.test", actId: "opr_1" };
+        const revoked = await desk.revokeGrant("gnt_op", at, "bdg_desk", via);
+        // The row says the home turned it off, and the account of why is on it
+        // — reason, address, ledger act — in the same write as the stamp, so
+        // no reader meets a row that is off with nobody to say why.
+        expect(revoked).toMatchObject({ revokedAt: at, revokedBy: "bdg_desk", revokedVia: "operator", revocation: via });
+        // It reads back the same, on both backings: a rebuild that dropped it
+        // would turn "turned off by the operator" into an owner's own revoke.
+        const rows = await desk.grantsFor("prj_a");
+        expect(rows.find((row) => row.id === "gnt_op")).toMatchObject({ revokedVia: "operator", revocation: via });
+        // The owner's act is the owner's: no `via`, no field.
+        const owners = await desk.revokeGrant("gnt_own", at, "bdg_priya");
+        expect(owners!.revokedVia).toBeUndefined();
+        expect(owners!.revocation).toBeUndefined();
+        // Idempotent, the operator's half included: a second stamp — an
+        // owner's, arriving late — does not overwrite whose act it was.
+        const again = await desk.revokeGrant("gnt_op", "2026-09-12T13:00:00.000Z", "bdg_priya");
+        expect(again).toMatchObject({ revokedAt: at, revokedBy: "bdg_desk", revokedVia: "operator" });
+      }),
+    );
+
     // ---- roles phase 4: the space, and the other arm of a grant's scope ----
 
     test(

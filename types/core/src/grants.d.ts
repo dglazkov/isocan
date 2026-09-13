@@ -16,6 +16,7 @@
  */
 import { type ActorJoins } from "./identity.js";
 import type { Attestation, SweepReport } from "./badge.js";
+import type { OperatorRevocation } from "./revoked.js";
 /**
  * What a grant binds to — a **provable attribute**, per the design's "borrow,
  * never mint": isocan holds no passwords and no user table, so a subject is
@@ -255,6 +256,17 @@ export interface GrantBase {
      */
     revokedAt?: string;
     revokedBy?: string;
+    /**
+     * **Set when the operator of this home turned it off** (operator phase 5).
+     * `revokedBy` still names the badge the request carried, as every desk
+     * write does; this says the act was the home's rather than an owner's, so
+     * the Share dialog and `isocan share` render {@link revokedSentence}
+     * instead of a badge id. Absent on an owner's own revoke, which is the
+     * owner's and reads as it always did. `revocation` carries the operator's
+     * half — the reason category, the address that acted, the ledger act.
+     */
+    revokedVia?: "operator";
+    revocation?: OperatorRevocation;
     /** What this row admits its holder to do. Written whenever it is not
      * `edit` (see `narrowed`); absent is `edit` — see {@link Capability}. A
      * bar (below) has none. */
@@ -441,6 +453,15 @@ export interface CreateGrantRequest {
 }
 export interface GrantsResponse {
     grants: Grant[];
+    /**
+     * **Rows the operator of this home turned off, which no live row has since
+     * replaced** (operator phase 5) — `operatorTurnedOff` over every row,
+     * tombstones included. Present only when there is something to say, and
+     * absent from a home from before the phase, so both surfaces read it as
+     * "nothing was turned off by the home". The owner's own revokes are never
+     * here: the owner's act is the owner's.
+     */
+    turnedOff?: Grant[];
 }
 /** What creating or revoking one answers with: the row itself, so a caller
  * knows the id it must keep to revoke later. */

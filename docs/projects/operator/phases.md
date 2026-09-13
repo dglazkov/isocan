@@ -16,19 +16,21 @@ after, because a takedown answers every one of those reports on its own,
 more bluntly. The words on `/terms` come first of all, because they are
 untrue today and fixing them costs nothing.
 
-**Where we are:** phases 1 to 4 are PART-DONE (12 Sep 2026): the operator
+**Where we are:** phases 1 to 5 are PART-DONE (12 Sep 2026): the operator
 is proved per act and refused in words; a look admits for an hour and is not
 in presence; a takedown stops the home serving a canvas and lifts; a purge
-erases the bytes and keeps the tombstone; ending a badge now reaches what it
-held — sockets, the parked wait, outstanding passes — for everyone, and the
-operator can end by badge, actor or address with the reach shown first; every
+erases the bytes and keeps the tombstone; ending a badge reaches what it held,
+for everyone, and the operator can end by badge, actor or address; the
+operator can turn off a grant on a canvas or a space, the owner's Share says
+so and how to turn it back on, and the owner's re-grant is hers alone; every
 act writes its ledger row before it answers. All of it green here with the
 cloud halves against the Firestore emulator, walked by hand against local
-daemons; none of it walked on dev. Phase 0 still waits on Dion's call on the
-wording. The dev walks for 1–4 wait on a person: `ISOCAN_OPERATORS` on
-dev.isocan.io, a sign-in, a second account, a third browser, a phone — and a
-decision about journey 1 step 3, which says Google where this app has only an
-emailed link. Phase 5 (turn off a grant) is next, and needs none of that.
+daemons and, for the Share dialog, in a real browser; none of it walked on
+dev. Phase 0 still waits on Dion's call on the wording. The dev walks for 1–5
+wait on a person: `ISOCAN_OPERATORS` on dev.isocan.io, a sign-in, a second
+account, a third browser, a phone — and a decision about journey 1 step 3,
+which says Google where this app has only an emailed link. Phase 6 (refuse
+at the door) is next, and needs none of that.
 
 **Sizes.** S is a day's work with its tests. M is two or three. L would be a
 week; nothing here is one.
@@ -273,7 +275,13 @@ steps 1 to 5.
 
 ## Phase 5 — Turn off a grant (S)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE (2026-09-12).** Built and proved here: `revoke` on a canvas
+or a space, any subject, `--bar`; the row carrying `revokedVia: "operator"` and
+the reason; the Share dialog and `isocan share` reading it and saying how to
+turn it back on; the socket inside closed `withdrawn`; the owner's re-grant
+needing no proof and leaving no ledger row. Walked in a real browser against a
+local daemon. Journey 8 on dev — a real sign-in, strangers in real tabs, a
+space on a hosted home — waits on a person.
 
 Closes journey 8.
 
@@ -283,6 +291,29 @@ Closes journey 8.
 **Acceptance:** journey 8 on dev, including the owner turning the link back
 on, and the ledger holding the operator's row but not the owner's — the
 owner's act is the owner's.
+
+**Trajectory:**
+
+- **2026-09-12** — The owner never sees a revoked row: `GET …/grants` answers
+  live rows only, so the operator's tombstone crosses the wire as `turnedOff`,
+  chosen at the home by whose tombstone is newest. The owner's own revokes
+  never leave the desk, which is what keeps her act hers.
+- **2026-09-12** — A revoke's close reason stays `withdrawn`, not a third word:
+  the person inside lost access exactly as under an owner's revoke, and the
+  account of why lives in the owner's Share. `taken-down` remains the canvas's.
+- **2026-09-12** — A bar is refused as a revoke target: revoking one lets
+  somebody in, which is a grant and the owner's to make. This phase only turns
+  access off.
+- **2026-09-12** — Open: the walk on dev — a real sign-in, `ISOCAN_OPERATORS`,
+  strangers in real tabs shown out `withdrawn`, a space on a hosted home, the
+  space-target replica 409. Waits on Dion.
+- **2026-09-12** — Open: the operator's `--bar` is written as the owner's would
+  be, `grantedBy` a badge id, so the Kept-out row names a badge and not the
+  home. Whether a bar carries provenance is a later call.
+- **2026-09-12** — Found by walking, outside this project: vite dev mode on
+  main has been broken since canvas-groups phase 2 — a `lazy()` above its
+  import, which the production bundle hoists and the dev transform does not.
+  Flagged, not fixed here.
 
 ## Phase 6 — Refuse at the door (M)
 

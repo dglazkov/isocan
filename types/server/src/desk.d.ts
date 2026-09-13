@@ -1,4 +1,4 @@
-import type { ActorClaim, Attestation, BadgeKind, CanvasTakedown, Capability, Grant, GrantSubject, Group, OperatorAct, OperatorEnd, Pass, PurgeCounts, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
+import type { ActorClaim, Attestation, BadgeKind, CanvasTakedown, Capability, Grant, GrantSubject, Group, OperatorAct, OperatorEnd, OperatorRevocation, Pass, PurgeCounts, SeenMark, SeenMarks, Space } from "../../core/src/index.js";
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
  * `BadgeSummary` puts it on the wire — see `core/badge.ts`. */
@@ -479,8 +479,14 @@ export interface Desk {
      * gesture is idempotent because a Share dialog and a CLI verb can both be
      * pointed at the same row by two people at once, and "the link is off" is
      * the same answer either way.
+     *
+     * `via` is the operator's half (operator phase 5): when present the
+     * tombstone gains `revokedVia: "operator"` and carries it, so the row says
+     * the home turned it off rather than an owner. Absent on every owner's
+     * revoke, which is the owner's. Idempotence stands: a row already revoked
+     * keeps its first stamp, the operator's included.
      */
-    revokeGrant(grantId: string, at: string, by: string): Promise<Grant | null>;
+    revokeGrant(grantId: string, at: string, by: string, via?: OperatorRevocation): Promise<Grant | null>;
     /**
      * Every grant on one SPACE, revoked rows included — `grantsFor`'s twin over
      * the other arm of `GrantScope` (roles phase 4). `where("spaceId", "==",
