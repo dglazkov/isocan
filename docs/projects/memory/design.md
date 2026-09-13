@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents
-note: designed 2 Sep — memory as three layers of canvases (this canvas, canvases it links, the person's own), every layer a directory of files anyone can read and any repo can hold, shown in one Context view with provenance; Honcho stays an index over it, never the record. Phases 0–1 built 4 Sep — the Context view and `isocan context` in layers with a heading per source, and `memory=inherit` on a canvas card bringing the linked canvas's design system, pins and size in read-only with provenance and the override rule; `design check` reads the governing one. Phase 3 the same day — the Context sheet a first link lays and lands on, and the memory mark on the card as the switch. Phases 2 and 4 not built
+note: phases 0–1 and 3 built 4 Sep — layered Context, linked inheritance with provenance and the override rule, and the Context sheet. Phase 4 partly built 13 Sep through embed phase 2 — MCP reads the existing local/inherited layers and current Context resources, with exclusion and admission proofs. Phase 2 personal memory remains unbuilt, so the promised three-layer acceptance is still open. No external index was installed
 ---
 # Memory, in layers you can see
 
@@ -204,8 +204,12 @@ a settings page.
    only by the person's own actors while present.
 3. **The Context sheet** convention, laid on first link; the memory mark on
    the card.
-4. **MCP read surface** over the three layers, the context project's unbuilt
-   stage, so any index can index this.
+4. **MCP read surface** over the three layers, so any index can index this.
+   *Partly built 13 Sep through [embed phase 2](../embed/phases.md):
+   `read_context_summary` and Context resources expose the existing local
+   and inherited layers. The personal layer still depends on phase 2; its
+   creation, ownership and three-layer acceptance are not implied by the
+   new read surface.*
 
 **Zero new op types** again: two property values on an item kind another
 project defines, and a canvas born the way desks are born. **Both surfaces**

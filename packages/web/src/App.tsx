@@ -43,6 +43,7 @@ import { TermsPage } from "./pages/TermsPage.tsx";
  * `fallback={null}` for the frame the chunk takes, the way `CanvasPage`
  * already loads its palette and its workbench.
  */
+const Navigation = lazy(() => import("./components/Navigation.tsx").then((m) => ({ default: m.Navigation })));
 const LensPage = lazy(() => import("./pages/LensPage.tsx").then((m) => ({ default: m.LensPage })));
 const CanvasListPage = lazy(() =>
   import("./pages/CanvasListPage.tsx").then((m) => ({ default: m.CanvasListPage })),
@@ -140,6 +141,8 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
     <BrowserRouter>
       <Doorway actor={actor} onIdentity={setActor}>
         {(who) => (
+          <>
+          <Suspense fallback={null}><Navigation key={who.id} actor={who} /></Suspense>
           <Suspense fallback={null}>
           <Routes>
             <Route path="/" element={<CanvasListPage actor={who} onIdentity={setActor} />} />
@@ -171,6 +174,7 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
             <Route path="*" element={<NotHerePage />} />
           </Routes>
           </Suspense>
+          </>
         )}
       </Doorway>
       {/* Over whatever face you landed on, because a refused pass is about how

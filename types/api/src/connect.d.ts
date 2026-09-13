@@ -2,6 +2,8 @@ import type { Actor, Canvas, CanvasSnapshotResponse, ContextManifest, ContextCon
 import { type ActivityEntry } from "../../core/src/index.js";
 import { type Ctx } from "./ctx.js";
 import { type ExplicitIdentity } from "./identity.js";
+import { type FeedbackOptions, type FeedbackResult } from "./feedback.js";
+import type { ContextExtras, ContextLayer } from "../../core/src/index.js";
 import { type DaemonRoutes } from "./routes.js";
 import { CanvasGroups, type CanvasGroupCopyOptions, type CanvasGroupResult } from "./canvas-groups.js";
 import { type CommentContextOptions, type ContextReadOptions, type ContextPageOptions, type ContextBytesOptions, type ContextItemContent } from "./canvas-context.js";
@@ -40,8 +42,15 @@ export interface ConnectOptions {
     identity?: ExplicitIdentity;
     /** The daemon port, when it is not `ISOCAN_PORT`/the default. */
     port?: number;
+    /** Optional lifetime for this connection, including identity and admission IO. */
+    signal?: AbortSignal;
 }
 export declare function connect(options?: ConnectOptions): Promise<Home>;
+/** Deliberately claim a stable caller session without changing process-wide identity. */
+export declare function claimSession(options: ConnectOptions & {
+    identity: ExplicitIdentity;
+    name: string;
+}): Promise<Actor>;
 /**
  * **A home handle, not only a directory handle** — what journey 1 forces: the
  * board cannot be written against "this directory's canvas" alone. The
@@ -183,6 +192,10 @@ export declare class CanvasHandle {
     /** Complete current hierarchy at one revision; omission reads ambient pins. */
     context(options?: ContextReadOptions): Promise<ContextManifest>;
     contextOfComment(threadId: string, commentId: string): Promise<ContextManifest>;
+    /** Live ambient layers, distinct from a current item manifest or saved request. */
+    contextSummary(extras?: ContextExtras): Promise<ContextLayer[]>;
+    /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */
+    waitForFeedback(options?: FeedbackOptions): Promise<FeedbackResult>;
     contextPage(options: ContextPageOptions): Promise<ContextContentPage>;
     contextItem(threadId: string, commentId: string, itemId: string, options?: ContextBytesOptions): Promise<ContextItemContent>;
     /** One item, by exact id, fresh from the store. */

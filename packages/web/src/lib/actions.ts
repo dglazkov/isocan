@@ -229,7 +229,6 @@ export const ACTIONS: readonly Action[] = [
     hint: "the ones you were on lately first; type to find any",
     keys: "⌘O",
     group: "Open",
-    available: onCanvas,
     /* The palette handles this one itself — it flips the window to the
        switcher rather than closing it — so `run` is what a caller OUTSIDE the
        palette gets: the same window, opened on that face. */
@@ -342,7 +341,21 @@ function moduleActions(): Action[] {
   );
   return pages.concat(modules().flatMap((m) =>
     (m.actions ?? []).map(
-      (a): Action => ({
+      (a): Action =>
+        // An action that OPENS a dialog is a door, not a write (proposed:
+        // `dialogs`): offered on a read-only canvas too, and the dialog says
+        // what it cannot do there.
+        a.opens !== undefined ? {
+        id: a.id,
+        name: a.name,
+        ...(a.hint ? { hint: a.hint } : {}),
+        group: "Canvas",
+        available: (ctx) => {
+          const canvas = useCanvasStore.getState().canvas;
+          return onCanvas(ctx) && canvas !== null && (a.available?.({ canvas, selection: ctx.selection }) ?? true);
+        },
+        run: () => useUiStore.getState().openModuleDialog(a.opens!),
+      } : ({
         id: a.id,
         name: a.name,
         ...(a.hint ? { hint: a.hint } : {}),
@@ -355,7 +368,7 @@ function moduleActions(): Action[] {
         run: async (ctx) => {
           const canvas = useCanvasStore.getState().canvas;
           if (!canvas || !ctx.canvasId) return;
-          for (const op of a.run({ canvas, selection: ctx.selection }) ?? []) {
+          for (const op of a.run?.({ canvas, selection: ctx.selection }) ?? []) {
             await sendEchoed(ctx.canvasId, ctx.actor, op);
           }
         },
@@ -444,6 +457,7 @@ async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<vo
 /** What can be run right now, in the order the groups are declared. On the
  * read-only canvas the actions that write are not in the list at all. */
 export function availableActions(ctx: ActionContext): Action[] {
+  if (!ctx.canvasId) return ACTIONS.filter((action) => ["open-lens", "switch-canvas", "open-canvases"].includes(action.id));
   // The module actions are read live, so a runtime module's arrive without a
   // reload; the build-time ones are already in ACTIONS and are not doubled.
   const live = moduleActions();

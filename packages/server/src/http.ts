@@ -1,3 +1,5 @@
+import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
+import { collectInbox, sequenceInbox } from "./inbox.ts";
 import { textAttention } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
@@ -118,6 +120,7 @@ import {
   NO_RC_CODE,
   NOT_YOUR_RC_CODE,
   sameActor,
+  askTemplate,
   NOT_YOUR_BADGE,
   OplogFencedError,
   OpValidationError,
@@ -359,6 +362,11 @@ export const STATIC_TYPES: Record<string, string> = {
   ".js": "text/javascript",
   ".css": "text/css",
   ".svg": "image/svg+xml",
+  // A module's assets (proposed: `assets`, 11 Sep 2026): its DESIGN.md files
+  // and its data were served as octet-stream and fetched by type-blind code;
+  // naming them costs nothing and lets a browser show one if you open it.
+  ".md": "text/markdown; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".webp": "image/webp",
   // The painted grounds (#195's art, 8 Sep 2026). Four tiles under
@@ -481,6 +489,9 @@ function isOpen(method: string, pathname: string): boolean {
 }
 
 interface RouteOptions {
+  /** Local setup persists its pass-returned person in the same process as
+   * home badge writes. The route guards local custody before spending a pass. */
+  adoptIdentity?: (actor: Actor) => Promise<{ actor: Actor; adopted: boolean }>;
   /**
    * Where a sweep's per-badge outcomes go (roles design, "Reaching an open
    * socket"): the daemon hands the same hub to `ws.ts`, which tells the
@@ -2582,12 +2593,68 @@ export function registerRoutes(
     } satisfies GrantResponse;
   });
 
+  /** One person's inbox. Remote entries and marks are read at their actual
+   * home, never from an offline replica whose access may have been withdrawn. */
+  app.get(INBOX_ROUTE, async (req, reply) => {
+    const query = req.query as { actorId?: unknown; canvasId?: unknown; label?: unknown };
+    const actorId = await actingActor(req, query.actorId);
+    if (!actorId) return reply.status(400).send({ error: "an inbox needs an actorId claimed by this badge", code: "bad-op" });
+    const actor = (await actorNamed(actorId))!;
+    const label = typeof query.label === "string" ? query.label.slice(0, 200) : undefined;
+    const only = typeof query.canvasId === "string" ? query.canvasId : undefined;
+    const aborter = new AbortController();
+    const cancel = () => { if (!reply.raw.writableEnded) aborter.abort(); };
+    reply.raw.on("close", cancel);
+    try {
+      let canvases = await engine.listCanvases();
+      if (only !== undefined) {
+        canvases = canvases.filter((canvas) => canvas.id === only);
+        if (canvases.length === 0) return reply.status(404).send({ error: "canvas not found", code: "not-found" });
+      } else {
+        const mayDiscover = canvasDiscovery(req, { shelf: true });
+        const visible: Canvas[] = [];
+        for (const canvas of canvases) if (await mayDiscover(canvas)) visible.push(canvas);
+        canvases = visible;
+      }
+      // Read this person's joined ledgers once, even on a home with many
+      // canvases. No other actor's marks can enter this assembly.
+      let localMarks: Promise<import("@isocan/core").SeenMarks> | undefined;
+      const readMarks = () => localMarks ??= (async () => {
+        const joins = await engine.actorJoins();
+        const ids = actorAliases(joins, resolveActor(joins, actor.id));
+        return mergeSeen(...await Promise.all(ids.map((id) => desk.seenOf(id))));
+      })();
+      return await collectInbox(canvases, async (canvas, signal): Promise<InboxResponse> => {
+        const remote = options.homes?.for(canvas.id) ?? null;
+        if (remote) {
+          const result = await remote.inbox(canvas.id, actor, label, AbortSignal.any([signal, AbortSignal.timeout(8000)]));
+          return { ...result, homes: { ...result.homes, [canvas.id]: options.homes!.homeOf(canvas.id) } };
+        }
+        const down = refusals.of(canvas.id);
+        if (down) throw new TakenDownError(down);
+        // Assembly sits outside the canvas route hook, so it must repeat the
+        // same refusal before an existing admission can short-circuit it.
+        const refused = refusals.refusingAttestation(req.badge!.attestations ?? []);
+        if (refused) throw new RefusedError(refused);
+        await admit(req, canvas.id);
+        const snapshot = await engine.getSnapshot(canvas.id);
+        const marks = await readMarks();
+        return {
+          entries: sequenceInbox(inboxOn(snapshot.canvas, actor, namesFor(actor, label), canvas.id, canvas.title, snapshot.joined), (await engine.getLog(canvas.id)).filter((entry) => entry.seq <= snapshot.lastSeq)),
+          marks: marks[canvas.id] ? { [canvas.id]: marks[canvas.id]! } : {},
+          homes: { [canvas.id]: null },
+          unavailable: [],
+        };
+      }, aborter.signal);
+    } finally { reply.raw.off("close", cancel); }
+  });
+
   // ---- seen-marks: what one person has already looked at (#147, #134) ----
   //
   // `docs/research/2026-09-12-seen-marks.md`. Desk state, so a replica
-  // forwards both routes through `homeScoped()` for the space routes' reason
-  // — the row lives at the home, and the whole promise of the feature is that
-  // your other machine finds what this one saw.
+  // reads the home-scoped ledger, while a mark or targeted prior-read names
+  // its canvas and forwards to that canvas's home. Even on a mixed rig, the inbox
+  // reads it at the same authoritative home.
   //
   // **Not canvas-scoped, deliberately, and this is the roles half of the
   // design.** `PUT /api/seen/:canvasId` names a canvas but is not a write TO
@@ -2603,11 +2670,37 @@ export function registerRoutes(
 
   /** Your own marks, every canvas, one read — what the inbox and the
    *  switcher's "lately" both start from. */
-  app.get(SEEN_ROUTE, async (req) => {
-    const query = req.query as { actorId?: unknown };
+  app.get(SEEN_ROUTE, async (req, reply) => {
+    const query = req.query as { actorId?: unknown; canvasId?: unknown };
     const actorId = await actingActor(req, query.actorId);
-    const home = options.homes?.homeScoped() ?? null;
-    if (home) return home.seen(await actorNamed(actorId));
+    const canvasId = typeof query.canvasId === "string" ? query.canvasId : undefined;
+    if (canvasId !== undefined && !actorId) {
+      return reply.status(400).send({ error: "a canvas seen-read needs an actorId claimed by this badge", code: "bad-op" });
+    }
+    const home = canvasId === undefined ? options.homes?.homeScoped() : options.homes?.for(canvasId);
+    if (home) {
+      const aborter = new AbortController();
+      const cancel = () => { if (!reply.raw.writableEnded) aborter.abort(); };
+      reply.raw.on("close", cancel);
+      const signal = AbortSignal.any([aborter.signal, AbortSignal.timeout(8000)]);
+      try {
+        return await home.seen(await actorNamed(actorId), canvasId, signal);
+      } catch (error) {
+        if (aborter.signal.aborted) return reply; // the caller left; there is nobody to answer
+        if (signal.aborted) throw new HomeUnreachableError(home.homeUrl, "seen read timed out");
+        throw error;
+      } finally {
+        reply.raw.off("close", cancel);
+      }
+    }
+    if (canvasId !== undefined) {
+      // The targeted prior-visit read uses the same joined person's ledger
+      // that the authoritative inbox compares against its comment sequences.
+      const joins = await engine.actorJoins();
+      const ids = actorAliases(joins, resolveActor(joins, actorId!));
+      const marks = mergeSeen(...await Promise.all(ids.map((id) => desk.seenOf(id))));
+      return { marks: marks[canvasId] ? { [canvasId]: marks[canvasId]! } : {} } satisfies SeenMarksResponse;
+    }
     // Every actor this badge claims, merged: a person who was two actors and
     // folded them (`actor.join`) holds two ledgers of marks for one person,
     // and a badge that claims both is precisely what the fold required of it.
@@ -2643,7 +2736,7 @@ export function registerRoutes(
         .send({ error: "`seq` is the canvas's oplog head you had in front of you", code: "bad-op" });
     }
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = options.homes?.for(canvasId) ?? null;
     if (home) return home.markSeen(canvasId, seq, await actorNamed(actorId));
     if (!actorId) {
       return reply.status(400).send({
@@ -4647,6 +4740,23 @@ export function registerRoutes(
    */
   app.post(PASS_REDEEM_ROUTE, async (req, reply) => {
     const body = (req.body ?? {}) as Partial<RedeemPassRequest>;
+    if (body.adoptIdentity !== undefined && typeof body.adoptIdentity !== "boolean") {
+      return reply.status(400).send({ error: "adoptIdentity must be a boolean", code: "bad-request" });
+    }
+    const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+    if (
+      body.adoptIdentity &&
+      (options.servesWorld === true || !loopbackBound(app) || !local || !options.adoptIdentity)
+    ) {
+      return reply.status(403).send({
+        error: "saving a machine's person is available only through its local daemon",
+        code: "not-local-setup",
+      });
+    }
+    const finish = async (answer: RedeemPassResponse): Promise<RedeemPassResponse> => {
+      if (!body.adoptIdentity || !answer.actor) return answer;
+      return { ...answer, identity: await options.adoptIdentity!(answer.actor) };
+    };
     // No special case for a missing token: `redeemPass` parses it, and an
     // empty string is not a pass in exactly the way a mangled one is not.
     const token = typeof body.token === "string" ? body.token : "";
@@ -4686,7 +4796,7 @@ export function registerRoutes(
     if (home) {
       const answer = await home.redeemPass(token);
       if (answer.actor) await engine.endowClaim(badge.badgeId, answer.actor, answer.canvasId);
-      return answer;
+      return finish(answer);
     }
     const pass = await redeemPass(desk, token, badge);
     if (pass.actorId === undefined) {
@@ -4698,7 +4808,7 @@ export function registerRoutes(
     const names = await engine.actorNames();
     const actor: Actor = { id: pass.actorId, name: names[pass.actorId] ?? "" };
     await engine.endowClaim(badge.badgeId, actor, pass.canvasId);
-    return { canvasId: pass.canvasId, actor } satisfies RedeemPassResponse;
+    return finish({ canvasId: pass.canvasId, actor });
   });
 
   /**
@@ -4842,7 +4952,7 @@ export function registerRoutes(
    * and may therefore use their link grants. Neither read writes admissions.
    * A canvas shared by name while the watcher waits is heard from its birth.
    */
-  app.post("/api/oplog/watch", async (req) => {
+  app.post("/api/oplog/watch", async (req, reply) => {
     const body = (req.body ?? {}) as import("@isocan/core").WatchLogRequest;
     const { cursors } = body;
     const only = body.only ? new Set(body.only) : null;
@@ -4991,17 +5101,19 @@ export function registerRoutes(
     try {
       let result = await collect();
       const holdMs = Math.min(Number(body.waitMs) || 0, 55_000);
-      if (result.entries.length === 0 && !landed && holdMs > 0) {
+      if (result.entries.length === 0 && !landed && holdMs > 0 && !reply.raw.destroyed) {
         await new Promise<void>((resolve) => {
           const done = () => {
             clearTimeout(timer);
             wake = null;
-            req.raw.off("close", done);
+            reply.raw.off("close", done);
             resolve();
           };
           const timer = setTimeout(done, holdMs);
           wake = done;
-          req.raw.on("close", done);
+          // IncomingMessage may already have closed when its body was read.
+          // The response closes when a caller cancels a held watch.
+          reply.raw.on("close", done);
         });
         result = await collect();
       }
@@ -5145,7 +5257,11 @@ export function registerRoutes(
     } catch {
       return reply.code(403).send({ error: `this badge may not speak as ${body.from.id}` });
     }
-    const ask = { askId: newId("ask"), name, from: body.from };
+    // A template is an id and some strings (proposed: `templates`): read here,
+    // once, so every hop below carries only what `askTemplate` let through.
+    const template = askTemplate(body);
+    if ("error" in template) return reply.code(400).send({ error: template.error });
+    const ask = { askId: newId("ask"), name, from: body.from, ...template };
     // Owner-only: an rc takes an ask from its owner — or anybody joined with
     // them, which is why the comparison is made here, with the registry.
     const joined = await engine.actorJoins();

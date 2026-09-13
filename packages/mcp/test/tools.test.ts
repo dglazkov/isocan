@@ -112,13 +112,20 @@ describe("what a host can see", () => {
     const client = await host();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      "claim_agent",
+      "create_item",
+      "edit_item",
       "list_canvases",
+      "post_comment",
       "read_activity",
       "read_canvas",
       "read_context",
       "read_context_content",
+      "read_context_summary",
       "read_item",
       "read_threads",
+      "reply_comment",
+      "wait_for_feedback",
       "who",
     ]);
     // A tool with no description is a tool a model will not call, or will
@@ -129,18 +136,10 @@ describe("what a host can see", () => {
     }
   });
 
-  it("is read-only — phase 2 ships no verb that changes a canvas", async () => {
-    // The gate is deliberate and named in phases.md: an agent over MCP is the
-    // machine's PERSON by default, and writing as them would put a person's
-    // face on an agent's work. This holds the boundary until that is settled,
-    // so a write verb cannot arrive by extension without somebody deleting a
-    // test that says why.
+  it("keeps session selection per call and exposes no arbitrary operation tool", async () => {
     const { tools } = await host().then((c) => c.listTools());
-    for (const tool of tools) {
-      expect(tool.name, `${tool.name} sounds like a write`).not.toMatch(
-        /^(add|edit|remove|set|move|comment|reply|notify|create|delete|update)/,
-      );
-    }
+    for (const tool of tools) expect(tool.inputSchema.properties).toHaveProperty("session");
+    expect(tools.map((tool) => tool.name)).not.toContain("send_op");
   });
 });
 

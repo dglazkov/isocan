@@ -1,3 +1,4 @@
+import { type InboxResponse } from "../../core/src/index.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
 import type { UpgradeVerdict } from "../../core/src/index.js";
 import type { BuildStamp } from "../../server/src/index.js";
@@ -69,6 +70,8 @@ export declare const platformFetch: typeof fetch;
 export declare class DaemonRoutes {
     readonly base: string;
     readonly home: string;
+    /** Optional lifetime of a per-call connection, including its identity setup. */
+    protected readonly lifetime?: AbortSignal | undefined;
     /** Loaded once per process, from `identity.json`'s `auth` block. */
     private badge;
     /**
@@ -91,7 +94,9 @@ export declare class DaemonRoutes {
     /** The last observed mode is captured into each request body before retries.
      * Callers holding an older placement preview pass its mode explicitly. */
     private observedGroupModes;
-    constructor(base: string, home: string);
+    constructor(base: string, home: string, 
+    /** Optional lifetime of a per-call connection, including its identity setup. */
+    lifetime?: AbortSignal | undefined);
     /**
      * **The fetch this surface makes its requests with**, so that the half of
      * the client which is allowed to know about Node can bound them.
@@ -231,10 +236,15 @@ export declare class DaemonRoutes {
     endActorSessions(actorId: string, kind?: "web" | "cli"): Promise<{
         ended: number;
     }>;
+    /** Authoritative inbox entries and seen marks across the canvases held here. */
+    inbox(actorId: string, options?: {
+        canvasId?: string;
+        label?: string;
+    }): Promise<InboxResponse>;
     listCanvases(): Promise<Canvas[]>;
-    /** Your own marks, every canvas, one read. There is deliberately no way to
-     *  ask for anybody else's. */
-    seen(actorId?: string): Promise<SeenMarksResponse>;
+    /** Your own marks, or one canvas's prior mark at its authoritative home.
+     *  There is deliberately no way to ask for anybody else's. */
+    seen(actorId?: string, canvasId?: string): Promise<SeenMarksResponse>;
     /** Move the mark for one canvas to the head you had in front of you. The
      *  answer may be AHEAD of what you sent: another machine of yours may have
      *  got further, and the merge never goes backwards. */
@@ -297,10 +307,11 @@ export declare class DaemonRoutes {
      * row carries no session key by design, and `GET /api/actors` is keyed by
      * session key — so a caller that throws this response away cannot ask for
      * it again, and the identity the pass endowed becomes unreachable from this
-     * machine even though the badge still holds it. `isocan setup` writes it
-     * into `identity.json` for exactly that reason.
+     * machine even though the badge still holds it. Replica setup opts into
+     * local adoption so the daemon saves it alongside its badge writes. Direct
+     * setup leaves the remote machine alone and saves it in the CLI process.
      */
-    redeemPass(token: string, home?: string): Promise<RedeemPassResponse>;
+    redeemPass(token: string, home?: string, adoptIdentity?: boolean): Promise<RedeemPassResponse>;
     /**
      * Ask this daemon to fetch one canvas from its home — the arrival that
      * carries an ADDRESS and no admission (a cloned marker, a pass-less
@@ -333,7 +344,7 @@ export declare class DaemonRoutes {
     /** Frozen provenance belongs to the saved comment, not today's membership. */
     commentContext(canvasId: string, threadId: string, commentId: string): Promise<ContextManifest>;
     contextContentPage(canvasId: string, options: ContextPageOptions): Promise<ContextContentPage>;
-    snapshot(canvasId: string): Promise<CanvasSnapshotResponse>;
+    snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
     /** How this home serves — today, only whether a content origin exists. */
     serving(): Promise<ServingResponse>;
     /** The name each actor goes by now. A snapshot already carries this; it is

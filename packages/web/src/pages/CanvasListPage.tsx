@@ -1,3 +1,4 @@
+import { Inbox } from "../components/Inbox.tsx";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Canvas, Space } from "@isocan/core";
@@ -897,6 +898,7 @@ export function CanvasListPage({
        * nesting the two made the smaller question inherit the larger one's
        * answer.
        */}
+      <Inbox actor={actor} />
       {(browsing || hasShelf) && (
         <div className="canvas-browse">
           {browsing && (

@@ -498,6 +498,8 @@ function matchSlashCommands(commands: SlashCommand[], query: string): MenuOption
     foot:
       command.local === true
         ? "answered here · nothing is posted"
+        : command.source === "module" && command.opens
+          ? "opens here · an agent reading it uses the verbs"
         : command.source === "home"
           ? `yours · ~/.isocan/commands/${command.name}.md`
           : "posted as a comment · an agent does it",

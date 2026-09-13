@@ -45,8 +45,8 @@ export function setRailWidth(width: number): void {
  * It is a parameter rather than a check inside here because "is this the
  * first render" is not a thing this function can honestly know.
  */
-export function openPanel(canvasId: string, panel: Panel | null, pan = true): void {
-  for (const which of ["main", "files", "agents", "context", "personas"] as const) {
+export function openPanel(canvasId: string, panel: Panel | null, pan = true, remember = true): void {
+  if (remember) for (const which of ["main", "files", "agents", "context", "personas"] as const) {
     try {
       localStorage.setItem(KEY[which](canvasId), panel === which ? "open" : "closed");
     } catch {

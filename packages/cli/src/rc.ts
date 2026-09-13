@@ -1,5 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { ApiError } from "@isocan/api";
 import type { SheepPlace } from "./sheep.ts";
 
 /**
@@ -34,6 +36,8 @@ export interface RcAgentRow {
   cwd: string;
   /** The ACP resume handle, once phase 3 mints one. Null until then. */
   sessionId: string | null;
+  /** Private compare-and-restore token while enrolment is being published. */
+  preparationId?: string;
   /** For the sheep harness, where `sessionId` lives: the kennel and the
    * home it named at birth. Carried so a summons from any directory
    * resumes the same sheep, and so a kennel re-pointed since is refused
@@ -60,16 +64,81 @@ export async function readRcAgents(home: string): Promise<RcAgentRow[]> {
   }
 }
 
-async function writeRcAgents(home: string, rows: RcAgentRow[]): Promise<void> {
-  await fs.writeFile(rcAgentsFile(home), `${JSON.stringify(rows, null, 2)}\n`);
+/** Serialize every local read/modify/write across CLI and parked rc processes.
+ * Atomic replacement also keeps readers from observing a half-written JSON file.
+ * A crashed writer leaves a visible lock rather than silently risking lost rows. */
+async function updateRcAgents<T>(home: string, change: (rows: RcAgentRow[]) => T): Promise<T> {
+  await fs.mkdir(home, { recursive: true });
+  const lock = `${rcAgentsFile(home)}.lock`;
+  const until = Date.now() + 5000;
+  for (;;) {
+    try { await fs.symlink(String(process.pid), lock); break; }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (Date.now() >= until) throw new Error(`rc agent records are busy: ${lock}. If its writer has exited, remove that lock and retry.`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  const temporary = `${rcAgentsFile(home)}.${randomUUID()}.tmp`;
+  try {
+    const rows = await readRcAgents(home);
+    const result = change(rows);
+    await fs.writeFile(temporary, `${JSON.stringify(rows, null, 2)}\n`);
+    await fs.rename(temporary, rcAgentsFile(home));
+    return result;
+  } finally {
+    await fs.rm(temporary, { force: true });
+    await fs.unlink(lock);
+  }
+}
+
+function replaceRow(rows: RcAgentRow[], row: RcAgentRow): void {
+  const index = rows.findIndex((r) => r.canvasId === row.canvasId && r.actorId === row.actorId);
+  if (index < 0) rows.push(row);
+  else rows[index] = row;
 }
 
 /** Add or update the row for (canvasId, actorId) — re-enrolment updates. */
 export async function upsertRcAgent(home: string, row: RcAgentRow): Promise<void> {
-  const rows = await readRcAgents(home);
-  const kept = rows.filter((r) => !(r.canvasId === row.canvasId && r.actorId === row.actorId));
-  kept.push(row);
-  await writeRcAgents(home, kept);
+  await updateRcAgents(home, (rows) => {
+    const next = { ...row };
+    delete next.preparationId;
+    replaceRow(rows, next);
+  });
+}
+
+/** Prepare the machine half before publishing enrolment can wake the rc.
+ * A definitive daemon refusal restores the previous row only while our token still
+ * owns it. All later local writes clear that token, under the same lock, so
+ * rollback cannot replace another command's configuration or session. Lost
+ * receipts retain the prepared row: the actor may already have been enrolled. */
+export async function withPreparedRcAgent<T>(home: string, row: RcAgentRow, publish: () => Promise<T>): Promise<T> {
+  const preparationId = randomUUID();
+  const previous = await updateRcAgents(home, (rows) => {
+    const old = rows.find((r) => r.canvasId === row.canvasId && r.actorId === row.actorId);
+    replaceRow(rows, { ...row, preparationId });
+    return old;
+  });
+  let refused = false;
+  try {
+    const result = await publish();
+    return result;
+  } catch (error) {
+    // A missing receipt or server failure can follow acceptance. Retain the
+    // prepared configuration unless the daemon definitively refused it.
+    // A 409 may be the local replica failing to append an already accepted
+    // remote op (writer fencing); treat every conflict as uncertain here.
+    refused = error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 409;
+    throw error;
+  } finally {
+    await updateRcAgents(home, (rows) => {
+      const index = rows.findIndex((r) => r.canvasId === row.canvasId && r.actorId === row.actorId && r.preparationId === preparationId);
+      if (index < 0) return;
+      if (!refused) delete rows[index]!.preparationId;
+      else if (previous) rows[index] = previous;
+      else rows.splice(index, 1);
+    });
+  }
 }
 
 /**
@@ -153,11 +222,11 @@ export function gateTurn(
  * about a no-op.
  */
 export async function adoptRcAgent(home: string, row: RcAgentRow): Promise<boolean> {
-  const rows = await readRcAgents(home);
-  if (rows.some((r) => r.canvasId === row.canvasId && r.actorId === row.actorId)) return false;
-  rows.push(row);
-  await writeRcAgents(home, rows);
-  return true;
+  return updateRcAgents(home, (rows) => {
+    if (rows.some((r) => r.canvasId === row.canvasId && r.actorId === row.actorId)) return false;
+    rows.push(row);
+    return true;
+  });
 }
 
 /** The resume handle, once a session exists (phase 3). Best-effort by the
@@ -175,15 +244,16 @@ export async function setRcSessionId(
   sheep?: SheepPlace,
   cellPass?: RcAgentRow["cellPass"],
 ): Promise<boolean> {
-  const rows = await readRcAgents(home);
-  const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
-  if (!row) return false;
-  if (cellPass) row.cellPass = cellPass;
-  else if (row.sessionId !== sessionId) delete row.cellPass;
-  row.sessionId = sessionId;
-  if (sheep) row.sheep = sheep;
-  await writeRcAgents(home, rows);
-  return true;
+  return updateRcAgents(home, (rows) => {
+    const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
+    if (!row) return false;
+    delete row.preparationId;
+    if (cellPass) row.cellPass = cellPass;
+    else if (row.sessionId !== sessionId) delete row.cellPass;
+    row.sessionId = sessionId;
+    if (sheep) row.sheep = sheep;
+    return true;
+  });
 }
 
 /** Hand a sheep's pass to another row naming the same sheep — the survivor,
@@ -194,11 +264,12 @@ export async function setRcCellPass(
   actorId: string,
   cellPass: NonNullable<RcAgentRow["cellPass"]>,
 ): Promise<void> {
-  const rows = await readRcAgents(home);
-  const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
-  if (!row) return;
-  row.cellPass = cellPass;
-  await writeRcAgents(home, rows);
+  return updateRcAgents(home, (rows) => {
+    const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
+    if (!row) return;
+    delete row.preparationId;
+    row.cellPass = cellPass;
+  });
 }
 
 /** Withdrawal takes the rc half with it; the oplog keeps the history. */
@@ -207,9 +278,8 @@ export async function removeRcAgent(
   canvasId: string,
   actorId: string,
 ): Promise<void> {
-  const rows = await readRcAgents(home);
-  await writeRcAgents(
-    home,
-    rows.filter((r) => !(r.canvasId === canvasId && r.actorId === actorId)),
-  );
+  await updateRcAgents(home, (rows) => {
+    const index = rows.findIndex((r) => r.canvasId === canvasId && r.actorId === actorId);
+    if (index >= 0) rows.splice(index, 1);
+  });
 }

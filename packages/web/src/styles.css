@@ -726,10 +726,22 @@ img { height: auto; }
 .share-link-text { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
 /* The link's capability, indented under the toggle it qualifies: it is a
    property of the link, not a fourth sharing control. */
-/* Three rungs in a 340px popover: the row wraps rather than running past
-   the panel's edge, and each radio keeps its whole label on one line. */
-.share-link-mode { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 8px; }
-.share-link-mode .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; font-size: 12px; padding: 5px 10px; }
+/* Three rungs in a 340px popover. The three labels want 309px and the row has
+   306, so a wrapping row put "Presentation Viewer" on a line of its own —
+   two rungs above one, which reads as a group and an afterthought rather than
+   three positions of one control. So the row never wraps: the rungs share it
+   and shrink, and a label with nowhere left to go wraps INSIDE its own box.
+   Three cells of equal height either way, whatever a machine's font measures. */
+.share-link-mode { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 5px; padding-left: 8px; }
+.share-link-mode .btn {
+  /* `block`, not the `.btn` inline-flex: a flex item's anonymous text box has
+     an automatic minimum size and would spill out of a narrowed rung rather
+     than wrap inside it. `1 1 auto` shares the row out by how long each label
+     is, so the shortest rung is not handed a third of a row it does not need. */
+  display: block; flex: 1 1 auto; min-width: 0;
+  text-align: center; white-space: normal;
+  font-size: 12px; padding: 5px 8px;
+}
 /* Who made the canvas — the answer to "why can I not change that", and on a
    shared canvas simply useful. Quiet: it is a fact, not a control. */
 .share-owner { margin: 0; font-size: 11.5px; color: var(--ink-muted); }
@@ -6678,3 +6690,28 @@ button.mt-card:hover { border-color: var(--accent); }
 .group-migration li { margin-block: 10px; overflow-wrap: anywhere; }
 .group-migration nav { display: flex; align-items: center; gap: 12px; }
 .group-migration > .btn { margin-inline-end: 8px; margin-block: 8px; }
+
+/* The home and the in-app notification read one inbox, with explicit partial
+   failure and ordinary links to conversations at their actual homes. */
+.home-inbox { margin: 24px 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.inbox-heading { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.inbox-heading h2 { margin: 0; font-size: 16px; flex: 1; }
+.inbox-heading label { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+.inbox-tally, .inbox-note { color: var(--ink-soft); font-size: 13px; }
+.inbox-unavailable { font-size: 13px; color: var(--ink); }
+.inbox-entries { max-height: 300px; overflow: auto; }
+.inbox-entry { display: block; padding: 12px 0; color: var(--ink); text-decoration: none; border-top: 1px solid var(--line); }
+.inbox-entry:hover { background: var(--chip); }
+.inbox-entry-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; font-size: 12px; color: var(--ink-soft); }
+.inbox-entry-meta strong { color: var(--ink); }
+.inbox-reason { margin-left: auto; }
+.inbox-body { display: block; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.inbox-home { display: block; color: var(--ink-soft); font-size: 11px; margin-top: 4px; }
+.navigation-inbox { position: fixed; right: 16px; bottom: 16px; z-index: var(--z-float); background: var(--card); box-shadow: var(--shadow-card); }
+.navigation-inbox-panel { position: fixed; right: 16px; bottom: 62px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 100px); overflow: auto; z-index: var(--z-popover); background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-pop); }
+.navigation-inbox-panel .home-inbox { margin: 0; border: 0; }
+.inbox-close { display: block; margin: 10px 10px 0 auto; }
+
+/* Clear the existing bottom-right zoom row when the canvas is open. */
+.navigation-inbox.on-canvas { bottom: calc(var(--edge) + var(--zoom-row) + 8px); }
+.navigation-inbox-panel.on-canvas { bottom: calc(var(--edge) + var(--zoom-row) + 54px); }

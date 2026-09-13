@@ -1,3 +1,4 @@
+import { inboxRoute, type InboxResponse } from "@isocan/core";
 import { Readable } from "node:stream";
 import { WebSocket } from "ws";
 import type {
@@ -42,6 +43,7 @@ import {
   CLIENT_FEATURES_HEADER,
   CLIENT_FEATURES_PARAM,
   ATTEST_ROUTE,
+  askTemplate,
   narrowed,
   groupActingRoute,
   groupMemberRoute,
@@ -54,7 +56,7 @@ import {
   spaceLinkRoute,
   spaceRoute,
   SPACES_ROUTE,
-  SEEN_ROUTE,
+  seenMarksRoute,
   seenRoute,
   BADGES_ROUTE,
   badgeRoute,
@@ -307,7 +309,8 @@ export interface HomeConnection {
    * hand back this laptop's marks, which is short, plausible and exactly the
    * per-browser answer seen-marks exist to replace.
    */
-  seen(actor?: Actor): Promise<SeenMarksResponse>;
+  inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse>;
+  seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse>;
   markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
   spaces(): Promise<SpacesResponse>;
   createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
@@ -1314,6 +1317,11 @@ export class HomeLink implements HomeConnection {
             askId: message.askId,
             name: message.name,
             from: message.from,
+            // Re-read, not trusted: the home that relayed it read it once too.
+            ...(() => {
+              const t = askTemplate(message);
+              return "error" in t ? {} : t;
+            })(),
           });
         }
         return;
@@ -1867,12 +1875,18 @@ export class HomeLink implements HomeConnection {
   // that has never introduced this person up there would be handed an empty
   // ledger rather than theirs.
 
-  async seen(actor?: Actor): Promise<SeenMarksResponse> {
-    if (actor) await this.ensureClaim(actor);
-    return this.api<SeenMarksResponse>(
-      "GET",
-      actor ? `${SEEN_ROUTE}?actorId=${encodeURIComponent(actor.id)}` : SEEN_ROUTE,
-    );
+  async inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse> {
+    signal?.throwIfAborted();
+    await abortable(this.ensureClaim(actor), signal);
+    signal?.throwIfAborted();
+    return abortable(this.api<InboxResponse>("GET", inboxRoute(actor.id, { canvasId, ...(label !== undefined ? { label } : {}) }), undefined, signal), signal);
+  }
+
+  async seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse> {
+    signal?.throwIfAborted();
+    if (actor) await abortable(this.ensureClaim(actor), signal);
+    signal?.throwIfAborted();
+    return abortable(this.api<SeenMarksResponse>("GET", seenMarksRoute(actor?.id, canvasId), undefined, signal), signal);
   }
 
   async markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse> {
@@ -2228,12 +2242,13 @@ export class HomeLink implements HomeConnection {
    * answers to "which credential is in that file" on one machine is the
    * divergence house rule 4 forbids.
    */
-  private async api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async api<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const badge = await this.ensureBadge();
     if (!badge) throw new HomeUnreachableError(this.homeUrl, "the door did not answer");
     const send = async (held: StoredBadge) =>
       this.fetchHome(path, {
         method,
+        ...(signal ? { signal } : {}),
         headers: {
           [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE,
           ...bearerHeader(held),
@@ -2268,7 +2283,7 @@ export class HomeLink implements HomeConnection {
     try {
       return await fetch(`${this.homeUrl}${path}`, {
         ...init,
-        signal: AbortSignal.any([this.aborter.signal, AbortSignal.timeout(30_000)]),
+        signal: AbortSignal.any([this.aborter.signal, AbortSignal.timeout(30_000), ...(init.signal ? [init.signal] : [])]),
       });
     } catch (err) {
       throw new HomeUnreachableError(this.homeUrl, (err as Error).message);
@@ -2340,4 +2355,15 @@ export class HomeLink implements HomeConnection {
       return false;
     }
   }
+}
+
+/** Let a caller leave shared badge/claim preparation without cancelling other callers. */
+function abortable<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return work;
+  return new Promise((resolve, reject) => {
+    const cancel = () => reject(signal.reason);
+    if (signal.aborted) cancel();
+    else signal.addEventListener("abort", cancel, { once: true });
+    work.then(resolve, reject).finally(() => signal.removeEventListener("abort", cancel));
+  });
 }

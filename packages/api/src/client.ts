@@ -90,6 +90,7 @@ function boundedFetch(base: string): typeof fetch {
   return async (input, init) => {
     const started = Date.now();
     for (let attempt = 0; ; attempt++) {
+      init?.signal?.throwIfAborted();
       try {
         return (await undiciFetch(input as Parameters<typeof undiciFetch>[0], {
           ...(init as Parameters<typeof undiciFetch>[1]),
@@ -172,9 +173,12 @@ export class DaemonClient extends DaemonRoutes {
 
   /** Start the daemon detached if it isn't answering, then wait for healthz. */
   async ensureDaemon(): Promise<void> {
+    this.lifetime?.throwIfAborted();
     if (await this.health()) return;
+    this.lifetime?.throwIfAborted();
     const cliBin = this.daemonBin();
     await fs.mkdir(this.home, { recursive: true });
+    this.lifetime?.throwIfAborted();
     const log = openSync(paths.daemonLogFile(this.home), "a");
     const port = new URL(this.base).port;
     spawn(process.execPath, [cliBin, "serve", "--foreground"], {
@@ -204,6 +208,7 @@ export class DaemonClient extends DaemonRoutes {
      */
     const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
+      this.lifetime?.throwIfAborted();
       if (await this.health(1000)) return;
       await new Promise((r) => setTimeout(r, 150));
     }

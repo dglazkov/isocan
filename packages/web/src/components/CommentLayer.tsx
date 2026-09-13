@@ -329,13 +329,17 @@ function ThreadPin({
   );
 }
 
-function ThreadPopover({
+export function ThreadPopover({
   thread,
+  embedded = false,
+  onOpenItem,
   screen,
   canvasId,
   actor,
 }: {
   thread: CommentThread;
+  embedded?: boolean;
+  onOpenItem?: (id: string) => void;
   screen: { x: number; y: number };
   canvasId: string;
   actor: Actor;
@@ -366,18 +370,18 @@ function ThreadPopover({
     <div
       ref={ref}
       className="thread-popover"
-      style={style}
+      style={embedded ? undefined : style}
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div
         className="thread-comments"
         onClick={(e) => {
           const itemId = chipTarget(e);
-          if (itemId) catapultToItem(itemId);
+          if (itemId) (onOpenItem ?? catapultToItem)(itemId);
         }}
         onKeyDown={(e) => {
           const itemId = e.key === "Enter" ? chipTarget(e) : null;
-          if (itemId) catapultToItem(itemId);
+          if (itemId) (onOpenItem ?? catapultToItem)(itemId);
         }}
       >
         {thread.textAnchor && <div className="thread-text-anchor">
@@ -470,7 +474,7 @@ function ThreadPopover({
         </button>
       </form>
       )}
-      <div className="thread-actions">
+      {canEdit && !embedded && <div className="thread-actions">
         <button
           className="promote"
           title="This conversation becomes the canvas's Chat: docked on the left, heard by every agent without an @-mention. A canvas has one Chat, so whichever conversation holds it now becomes a pin on the canvas instead — nothing is deleted."
@@ -490,7 +494,7 @@ function ThreadPopover({
         >
           Delete comment
         </button>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -503,14 +507,18 @@ function withAbout(comment: NewComment, aboutItemId?: string): NewComment {
   return { ...comment, items };
 }
 
-function ComposePopover({
+export function ComposePopover({
   canvasId,
   actor,
   pending,
+  embedded = false,
+  onSent,
 }: {
   canvasId: string;
   actor: Actor;
   pending: PendingComment;
+  embedded?: boolean;
+  onSent?: () => void;
 }) {
   const viewport = useUiStore((s) => s.viewport);
   const canvas = useCanvasStore((s) => s.canvas);
@@ -536,7 +544,7 @@ function ComposePopover({
     <div
       ref={ref}
       className="thread-popover compose-popover"
-      style={style}
+      style={embedded ? undefined : style}
       onPointerDown={(e) => e.stopPropagation()}
     >
       <form
@@ -553,7 +561,7 @@ function ComposePopover({
             anchorItemId: pending.anchorItemId,
             ...(pending.textAnchor ? { textAnchor: pending.textAnchor } : {}),
             comment: withMessageContext(withAbout(makeComment(trimmed), pending.aboutItemId), context.request),
-          }), () => { if (useUiStore.getState().pendingComment === pending) useUiStore.getState().setPendingComment(null); });
+          }), () => { onSent?.(); if (useUiStore.getState().pendingComment === pending) useUiStore.getState().setPendingComment(null); });
         }}
         style={{ display: "block" }}
       >

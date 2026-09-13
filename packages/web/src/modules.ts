@@ -1,9 +1,11 @@
-import type { ComponentType } from "react";
+import { lazy, type ComponentType } from "react";
 import {
   moduleSlug,
   registerModule,
+  type DialogFacts,
   type InspectorFacts,
   type ModuleInspector,
+  type ModuleDialog,
   type ModuleDrop,
   type ModulePage,
   type OverlayFacts,
@@ -16,6 +18,7 @@ import { mindmapWeb } from "@isocan/mindmap/web";
 import { mermaidWeb } from "@isocan/mermaid/web";
 import { documentsWeb } from "@isocan/documents/web";
 import { sandboxWeb } from "@isocan/sandbox/web";
+import { competitionActivation } from "@isocan/design-competition/activation";
 import { useUiStore } from "./stores/uiStore.ts";
 import { experimentOn } from "./lib/experiments.ts";
 
@@ -41,7 +44,8 @@ export type ShellModule = WebModule<
   ComponentType<RendererFacts>,
   ComponentType<InspectorFacts>,
   ComponentType<PageFacts>,
-  ComponentType<OverlayFacts>
+  ComponentType<OverlayFacts>,
+  ComponentType<DialogFacts>
 >;
 
 const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb];
@@ -78,6 +82,32 @@ const BEHIND_EXPERIMENT: Record<string, string> = {
 const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>> = {
   "modules.stickers": () => import("@isocan/stickers/web") as Promise<{ default: ShellModule }>,
 };
+
+/** Lightweight slots load their module only when a picker or card is rendered. */
+function deferredModule(activation: { core: ShellModule["core"]; actions: ShellModule["actions"]; dialogs: Omit<ModuleDialog<ComponentType<DialogFacts>>, "component">[]; renderers: { mimes: string[] }[] }, load: () => Promise<{ default: ShellModule }>): ShellModule {
+  let pending: Promise<ShellModule> | undefined;
+  const ensure = () => pending ??= load().then(({ default: full }) => {
+    const index = LIST.findIndex((record) => record.core.name === full.core.name);
+    if (index >= 0) LIST[index] = full;
+    else LIST.push(full);
+    registerModule(full.core);
+    useUiStore.getState().bumpModules();
+    return full;
+  }).catch((error) => { pending = undefined; throw error; });
+  return {
+    core: activation.core, ...(activation.actions ? { actions: activation.actions } : {}),
+    dialogs: activation.dialogs.map((dialog) => ({ ...dialog, component: lazy(async () => {
+      const full = await ensure();
+      return { default: full.dialogs!.find((entry) => entry.id === dialog.id)!.component };
+    }) })),
+    renderers: activation.renderers.map((renderer) => ({ ...renderer, component: lazy(async () => {
+      const full = await ensure();
+      return { default: full.renderers!.find((entry) => entry.mimes.some((mime) => renderer.mimes.includes(mime)))!.component };
+    }) })),
+  };
+}
+
+LIST.push(deferredModule(competitionActivation, () => import("@isocan/design-competition/web") as Promise<{ default: ShellModule }>));
 
 const fetched = new Set<string>();
 
@@ -137,6 +167,13 @@ export function addModule(record: ShellModule): boolean {
   return true;
 }
 
+/** Core's registry changed without a web half arriving — a data-only
+ *  module's contributions, read from its manifest — so the slots that read
+ *  contributions draw again. */
+export function noteRegistryChanged(): void {
+  useUiStore.getState().bumpModules();
+}
+
 /** The renderer a loaded module claims for a mime, ahead of the built-in chain. */
 export function moduleRendererFor(mimeType: string): ComponentType<RendererFacts> | null {
   for (const m of live()) {
@@ -177,4 +214,17 @@ export function modulePages(): ModulePage<ComponentType<PageFacts>>[] {
 /** The page at a segment, or null: a segment nobody owns is a plain 404. */
 export function modulePage(segment: string): ModulePage<ComponentType<PageFacts>> | null {
   return modulePages().find((p) => p.segment === segment) ?? null;
+}
+
+/**
+ * The dialog an `opens` names, or null (proposed: `dialogs`). Ids are unique
+ * within a module and a guard holds them unique across the build, so the
+ * first match in module order is the only match.
+ */
+export function moduleDialog(id: string): ModuleDialog<ComponentType<DialogFacts>> | null {
+  for (const m of live()) {
+    const hit = (m.dialogs ?? []).find((d) => d.id === id);
+    if (hit) return hit;
+  }
+  return null;
 }

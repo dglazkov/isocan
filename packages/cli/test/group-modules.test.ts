@@ -28,6 +28,8 @@ function moduleCommands(f: ReturnType<typeof groupFixture>) {
       return { x: 0, y: 0 };
     },
     truncate: (text, max) => text.slice(0, max),
+    enrol: async () => { throw new Error("these modules do not enrol agents"); },
+    withdraw: async () => { throw new Error("these modules do not withdraw agents"); },
     runFenced: async () => { throw new Error("these modules do not run programs"); },
   };
   stickersCli.register(host); mindmapCli.register(host);

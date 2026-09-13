@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-09
 issue: 220
 see: harnesses, context, memory, iso-api
-note: isocan inside an agent manager or IDE. Phase 1 built 9 Sep, and the guide doctrine corrected the same day — "the canvas is the only channel" had a precondition that expires inside a manager, where the terminal is a watched window — the framed badge is partitioned (SameSite=None; Secure; Partitioned) so a pane can keep the badge it is handed, and `isocan embed` prints the pass-bearing address to paste into one. Phase 2 read half built the same day — @isocan/mcp, six read tools over @isocan/api, isocan mcp as the command a manager spawns, identity = whoever the machine already is (the person by default, which reverses this doc first answer); its write half waits on addressability rather than permission. Phase 3 (MCP Apps) unbuilt; phase 4 is a decision, not work — no per-IDE extension, which is the harnesses constraint inverted
+note: phases 1 and 2 built. The framed pane keeps its own badge over HTTPS. MCP now has fifteen tools, current canvas and layered Context resources, explicit durable agent sessions, attributed item/comment writes and cancellable feedback waits; the machine's ambient identity remains the default. Real stdio overlap, restart, frozen content and admission proofs passed 13 Sep. Phase 3 MCP Apps remains unbuilt and outside this continuation; phase 4 retains the decision against per-IDE extensions
 ---
 
 # Embed: isocan in somebody else's window
@@ -20,11 +20,17 @@ inside C, and A is what C falls back to on a host that does not speak it.
 
 ## Where we are
 
-**Phase 1 is closed. Phase 2 has eight read tools, including current and frozen item context; layered Context summaries, MCP resources and addressable writes remain.** The 13 September continuation is specified in [context-and-sessions.md](context-and-sessions.md). Existing `read_context` and `read_context_content` keep their request-manifest meanings.
+**Where we are:** phases 1 and 2 are closed. Embed phase 3, MCP Apps, is next
+and outside the 13 September continuation. The server now exposes fifteen tools and two
+resource templates. [context-and-sessions.md](context-and-sessions.md) is the
+contract; existing `read_context` and `read_context_content` keep their
+request-manifest meanings. No external memory index was installed.
 
 ---
 
 ## Phase 1 — make door A honest · **built 9 Sep 2026**
+
+**Status: CLOSED.** 2026-09-09 — the isolated-daemon framed and top-level cookie walk below held.
 
 The pane worked, and it worked by luck: Chrome still sends third-party cookies
 after Google's April 2025 reversal, and the whole of isocan's browser
@@ -107,7 +113,46 @@ it becomes a decision.
 What does not change is the loop. You still park; being talked to directly is
 not being sent home.
 
-## Phase 2 — the MCP server · **read half built 9 Sep 2026**
+## Phase 2 — the MCP server · **completed 13 Sep 2026**
+
+**Status: CLOSED.** 2026-09-13 — real stdio reads, resources, concurrent agent sessions, writes, feedback and restart preserve admission and attribution.
+
+### The completed feedback loop · 13 Sep 2026
+
+`read_context_summary` shares the API's layered assembly with `isocan context`:
+local and inherited pieces keep exclusion, override, stale and unavailable
+reasons. `isocan://canvas/{id}` and `isocan://canvas/{id}/context` expose JSON
+resources. Listing uses discovery; reading a known address still goes through
+admission. Resource reads use the ambient identity.
+
+`claim_agent` takes a stable caller-supplied session key and a name. Calls that
+select that key use its durable `mcp:` claim; a missing claim refuses. No call
+changes a process-wide actor. `create_item`, `edit_item`, `post_comment`,
+`reply_comment` and `wait_for_feedback` use the existing API and operations.
+The feedback wait shares CLI addressing, returns a resumable cursor, and
+bounds work to 1–60,000 ms. Neither reads nor waits write seen-marks or presence.
+
+**Proof:** `packages/mcp/test/stdio-sessions.test.ts` runs a real SDK host
+against a source CLI process and daemon. Two overlapping waits receive their
+own mentions and participating replies; distinct writes retain their authors;
+concurrent reclaim and process restart keep identities. Edits leave saved
+request bytes frozen. Cancellation releases the daemon subscription to zero.
+Context/resource tests use a separate badge's closed canvas to prove refusal
+without leaking its title or pins. The conductor independently ran these tests.
+An additional spawned stdio proof holds identity and known-ID admission HTTP:
+timeouts and cancellations close all four held requests, start no watch and
+leave presence and seen-marks untouched. Shared client lifetime tests cover
+health probes and door recovery too. An excluded inheritance edge is checked
+before fetching its source, including exclusion inherited from a parent group.
+
+**Trajectory**
+
+- **2026-09-13** — A cancelled stdio call exposed an existing daemon watch leak: request-close watched an already consumed request. Response-close and an already-destroyed check now release the subscription; the original protocol probe failed before that correction.
+- **2026-09-13** — Discovery is not the known-address door. Tightening canvas lists exposed API resolution that only searched those lists. Exact IDs now ask the snapshot/admission route, including saved defaults and project markers; names still use discovery and conflicting homes still refuse.
+- **2026-09-13** — Independent review held connection setup open and found that the feedback timer began only after it. One deadline now covers resolution, admission and the wait; cancellation reaches the held HTTP rather than merely returning early. The before-fix stdio probe exceeded its identity deadline.
+- **2026-09-13** — An inherited Context link inside an excluded group still fetched its source. The shared memory-edge selector now applies ancestor exclusion before any source read; the failing-first summary proof checks both the absent read and the absent pin name. Explicitly saved request bytes keep their separate meaning.
+
+### The first read slice · historical record, 9 Sep 2026
 
 **What shipped.** `@isocan/mcp` — six read tools over `@isocan/api`, and
 `isocan mcp` as the command an agent manager spawns. Paste this into a
@@ -140,8 +185,8 @@ broken. And every tool returns its refusal as an `isError` result carrying the
 API's own typed sentence — a tool that throws hands the model a stack trace; a
 tool that answers hands it something to act on.
 
-**Read-only, and a test holds it there.** The write verbs are a few lines away
-in `@isocan/api`; what they wait on is below.
+**That first slice was read-only.** Its write continuation is recorded above;
+the addressability question below explains why it needed an explicit claim.
 
 ### Who is an agent that arrives over MCP — settled
 
@@ -157,7 +202,7 @@ one surface.
 So: **the person by default**, and Dion's reading is the right one — an MCP
 client is somebody driving a tool.
 
-What the write half still needs is not permission but **addressability**, and
+What the write half needed was not permission but **addressability**, and
 it is narrower than a gate. `isocan wait` routes on identity: a comment wakes
 an agent that is @-mentioned or that wrote in the thread. An agent writing as
 the person cannot be addressed, cannot be woken, and its `/ask` reads as the
@@ -168,22 +213,22 @@ So the write half wants a tool that is the MCP spelling of `isocan identity
 anything per-conversation to hang it on automatically (`clientInfo` on
 `initialize` is per-application, not per-thread).
 
-### What the read half still owes
+### What the original read half owed — completed 13 Sep
 
 The reading surface the [context](../context/design.md) project's stage 3
 specified is the layered summary shown by `isocan context`. Canvas-groups
 subsequently added `read_context` and `read_context_content` for current item
 manifests and frozen request content. Those names are no longer missing, and
 must not be reused for a different response. The continuation adds the
-summary separately, as [context-and-sessions.md](context-and-sessions.md)
-specifies.
+summary separately as `read_context_summary`, as
+[context-and-sessions.md](context-and-sessions.md) specifies.
 
-MCP **resources** are also unbuilt. Tools are what every host supports, so
-they came first; a canvas exposed as a resource is what lets a host attach it
+MCP **resources** now expose current canvas and Context JSON. Tools came
+first; a canvas exposed as a resource is what lets a host attach it
 without a model deciding to call anything, and it is the piece an external
 memory index would actually read.
 
-## Phase 2 — the original plan, kept for the reasoning
+## The original phase 2 plan, kept for the reasoning
 
 A pane is a surface for a **person**. It gives the manager's **agent**
 nothing: an agent in Jetski or Antigravity looking at a canvas in the next tab
@@ -214,6 +259,8 @@ everything on it has a face. Settle it before the write verbs, not during.
 
 ## Phase 3 — MCP Apps
 
+**Status: NOT STARTED.** 2026-09-13 — deferred beyond the authorized context and session continuation.
+
 The same server's second face. MCP Apps (SEP-1865) went stable 26 January 2026
 and folded into the extensions framework in the 2026-07-28 spec: a `ui://`
 resource typed `text/html;profile=mcp-app`, attached to a tool through
@@ -229,6 +276,8 @@ screenshot's arrangement — a human in a pane, an agent in the next tab — int
 one conversation rather than two transcripts.
 
 ## Phase 4 — no per-IDE extension
+
+**Status: RETIRED.** 2026-09-09 — this is the retained decision against owning an adapter per IDE.
 
 Not work; a decision, recorded so it is not re-made quarterly. "Integrate with
 Antigravity" now means four things (the IDE, the desktop manager, the CLI, and

@@ -582,3 +582,10 @@ export function cloudAgentInstructions(origin: string, canvasId: string, token?:
     "Then run `isocan --agent-help` and follow its instructions.",
   ].join("\n");
 }
+
+/** A comment conversation on its canvas, shared by inbox links and the reader. */
+export const THREAD_QUERY = "thread";
+/** An inbox link carries the conversation without changing the canvas address. */
+export function threadPath(canvasId: string, threadId: string): string {
+  return `${canvasPath(canvasId)}?${new URLSearchParams({ [THREAD_QUERY]: threadId })}`;
+}

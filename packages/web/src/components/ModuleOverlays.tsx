@@ -1,9 +1,8 @@
-import { useMemo } from "react";
 import type { Actor, OverlayRegion } from "@isocan/core";
 import { modules } from "../modules.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { webHostFor } from "../lib/modulehost.ts";
+import { useWebHost } from "../lib/modulehost.ts";
 
 /**
  * **Screen-space chrome a module contributes** (#156, 9 Sep 2026).
@@ -38,7 +37,7 @@ export function ModuleOverlays({ canvasId, actor }: { canvasId: string; actor: A
   // switched on — `modules()` is a function for exactly these two reasons.
   useUiStore((s) => s.modulesGeneration);
   useUiStore((s) => s.experiments);
-  const host = useMemo(() => webHostFor(canvasId, actor), [canvasId, actor]);
+  const host = useWebHost(canvasId, actor);
   if (!canvas) return null;
 
   const regions: OverlayRegion[] = ["left", "right"];

@@ -67,8 +67,10 @@ export function AgentRowView({
   onDismiss,
   viewer,
   onListen,
+  onOpenItem,
 }: {
   canvasId: string;
+  onOpenItem?: (id: string) => void;
   row: AgentRow;
   open: boolean;
   focused: string | null;
@@ -402,7 +404,7 @@ export function AgentRowView({
             <button
               className="wb-thumb"
               title={`Put ${canvas.items[workingOn]!.title} on the stage`}
-              onClick={() => goStage(navigate, workbenchItemPath(canvasId, workingOn))}
+              onClick={() => onOpenItem ? onOpenItem(workingOn) : goStage(navigate, workbenchItemPath(canvasId, workingOn))}
             >
               <ItemThumb canvasId={canvasId} itemId={workingOn} width={200} height={92} />
               <span>{canvas.items[workingOn]!.title}</span>
@@ -414,7 +416,7 @@ export function AgentRowView({
                 {act.itemId && canvas.items[act.itemId] ? (
                   <button
                     className={`wb-act${focused === act.itemId ? " here" : ""}`}
-                    onClick={() => goStage(navigate, workbenchItemPath(canvasId, act.itemId!))}
+                    onClick={() => onOpenItem ? onOpenItem(act.itemId!) : goStage(navigate, workbenchItemPath(canvasId, act.itemId!))}
                   >
                     {describeAct(act.kind, act.subject)}
                   </button>

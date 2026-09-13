@@ -382,8 +382,31 @@ itemId, { face: "source", offset: 0, limit: 16384 })` reads saved byte pages.
 `canvas.contextPage(...)` pages reference metadata, with a required
 `expectedRevision` for live paging. `canvas.copy([groupId], { to: canvasId,
 in: destinationId, dryRun: true })` uses the same graph planner as the CLI.
-Read-only MCP provides `read_context` and `read_context_content` with the same
-frozen-version contract; it adds no message or mutation tools.
+MCP keeps `read_context` and `read_context_content` for that same manifest and
+frozen-version contract. `read_context_summary` separately reads the live
+layered Context view: local and inherited sources, exclusions, overrides,
+staleness and reasons a source could not be read. JSON resources at
+`isocan://canvas/{id}` and `isocan://canvas/{id}/context` expose the current
+canvas and summary; resource listing includes only discoverable canvases,
+and every read uses ordinary admission.
+
+For collaboration over `isocan mcp`, call `claim_agent` with a name and a
+stable conversation `session` key, then supply that key on **each tool call**.
+The durable claim survives restarting MCP. Two conversations sharing one
+server keep separate identities; an unclaimed explicit key is an error.
+Omitting `session` uses the CLI/API ambient identity, and **resources always
+use ambient identity**; they do not inherit the previous tool's session.
+`clientInfo` identifies the manager application, not a conversation.
+
+`create_item` and `edit_item` write attributed versions. `post_comment` posts
+on an item or in Chat; `reply_comment` replies to a thread. These use the
+same mention resolution and saved-context rules as API comments. After doing
+work, call `wait_for_feedback` with the session, canvas, and your last returned
+`cursor`. It waits at most 60 seconds for addressed feedback. Omit the cursor
+to start from now. A timeout returns an empty result and the cursor through
+all inspected traffic, including irrelevant operations; resume from that
+cursor. MCP cancellation ends the watch. Polling marks nothing seen and
+advertises no presence; claiming a name is not announcing a live session.
 
 The reference is the types themselves: the package is TypeScript source, so
 your editor answers what `connect()` returns straight from the install, and
@@ -903,6 +926,10 @@ feature and a worse one to discover by accident.
 `isocan inbox` lists every comment addressed to you across every canvas here —
 newest first, with the command to reply to each. `--mentions` narrows it to
 where somebody actually named you, rather than the Chat being busy.
+
+The daemon assembles the inbox at each canvas’s home, using the same routing
+and seen marks as the web inbox. A failed or withdrawn home is reported as
+unavailable. Reading the inbox never marks a canvas seen.
 
 **It is the same rule `isocan wait` parks on** — one function, `reasonFor`
 in core, that both call: a comment
@@ -1897,6 +1924,15 @@ isocan fit <items...>                  # grow items to the size their content wa
   tokens nobody kept, values that are not colours, contrast that fails. Run it
   before you grade a screen against it, and before you hand a system back.
 
+  **A design system can govern one group rather than the canvas.** A DESIGN.md
+  that belongs to a group governs its direct and nested members — three lanes
+  can hold three philosophies while the canvas keeps its own. Add
+  `--in <group>` to `isocan design`, `check`, `set`, `import` and `audit`
+  (`isocan design --css --in "Road Signs"`); a screen you add is scored against
+  the system that governs its membership. The order is the nearest group,
+  its ancestors, then the canvas and a linked canvas's. Legacy canvases retain
+  their geometric area scope.
+
   `isocan design audit` says whether the SCREENS hold up: which values each one
   uses that the system never named, worst screen first. It is the arithmetic
   half of `/design-audit` and nothing more — a colour is in the palette or it is
@@ -2132,7 +2168,10 @@ isocan fit <items...>                  # grow items to the size their content wa
   ```
 
   `--item` takes any item ref (repeatable), `--op` takes a type or a family
-  (`item.*`). A summons still wakes you through any filter — being told to stop
+  (`item.*`), and `--in <area>` narrows to what happens inside an area — an
+  item whose centre is there, or a thread pinned there — which is how an agent
+  working in one lane of a board parks on that lane alone
+  (`isocan wait --in "Sketches" --json --timeout 900`). A summons still wakes you through any filter — being told to stop
   is never the noise you asked to be spared — and the JSON says which it was:
   `reason: "summons"` or `"change"`. Your own ops never wake you, so writing
   the thing you were watching for does not wake you again.

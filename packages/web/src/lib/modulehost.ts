@@ -1,8 +1,11 @@
-import type { Actor, Operation, WebHost } from "@isocan/core";
-import { uploadBlob } from "./api.ts";
-import { canEditNow } from "./capability.ts";
-import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
-import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { useMemo } from "react";
+import { useUiStore } from "../stores/uiStore.ts";
+import type { Actor, EnrolAsk, Operation, WebHost } from "@isocan/core";
+import { askEnrolAgent, uploadBlob } from "./api.ts";
+import { canEditNow, useCanEdit } from "./capability.ts";
+import { creationDestination, QueuedItemError, sendCreatedItem } from "./groupplacement.ts";
+import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { glideToBox } from "./zoomactions.ts";
 
 /**
  * **The web half's host object** (#156, 9 Sep 2026).
@@ -31,13 +34,12 @@ import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts"
  * moves before the round trip. A component's write must feel the same or the
  * tray will seem slower than the menu that does the same thing.
  */
-export function webHostFor(canvasId: string, actor: Actor, destination = creationDestination()): WebHost {
-  const couldEdit = canEditNow();
+export function webHostFor(canvasId: string, actor: Actor, destination = creationDestination(), couldEdit = canEditNow()): WebHost {
   return {
     async send(ops: readonly Operation[], group?: string): Promise<void> {
       if (!couldEdit || (useCanvasStore.getState().canvasId === canvasId && !canEditNow())) {
         setNotice("You are reading this canvas — that change was not sent.");
-        return;
+        throw new Error("You are reading this canvas — that change was not sent.");
       }
       /* `sendEchoed`, not `sendOp` plus an echo of our own: there is one door
          for a write to the open canvas and `writes.test.ts` holds every caller
@@ -46,7 +48,11 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
          scrubber's refusal. Caught by that guard on the first run. */
       for (const op of ops) {
         if (op.type === "item.add") await sendCreatedItem(canvasId, actor, { ...op, ...(op.containerId === undefined ? destination : {}), originGroupMode: destination.originGroupMode }, group);
-        else await sendEchoed(canvasId, actor, op, group, destination.originGroupMode);
+        else {
+          const result = await sendEchoedResult(canvasId, actor, op, group, destination.originGroupMode);
+          if (result.status === "refused") throw new Error(result.message || "This change could not be made.");
+          if (result.status === "queued") throw new QueuedItemError();
+        }
       }
     },
     async putBlob(bytes: Blob, filename: string): Promise<{ blobHash: string; size: number }> {
@@ -61,5 +67,63 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
       const upload = await uploadBlob(canvasId, bytes, filename);
       return { blobHash: upload.blobHash, size: upload.size };
     },
+    /**
+     * **The parked rc enrols; this asks** (proposed: `templates`). The same
+     * doorbell `AddAgent` rings — never an `agent.enroll` of our own, because
+     * the actor is born first-claim on the machine that answers for it — and
+     * it resolves the way that dialog does: when the enrol op for the name
+     * lands in the replica. A refusal on the rc (a name already worn, a
+     * template that machine does not have) is narrated there and arrives here
+     * as the patience running out, said in words.
+     */
+    async enrol(ask: EnrolAsk): Promise<{ actorId: string }> {
+      if (!canEditNow()) throw new Error("You are reading this canvas — nobody can be enrolled from here.");
+      const standing = () =>
+        Object.values(useCanvasStore.getState().canvas?.agents ?? {}).find(
+          (a) => a.actor.name.toLowerCase() === ask.name.toLowerCase(),
+        );
+      const already = standing();
+      if (already) return { actorId: already.actor.id };
+      await askEnrolAgent(canvasId, {
+        name: ask.name,
+        from: actor,
+        ...(ask.template ? { template: ask.template } : {}),
+        ...(ask.args ? { args: { ...ask.args } } : {}),
+      });
+      const until = Date.now() + ENROL_PATIENCE_MS;
+      while (Date.now() < until) {
+        const row = standing();
+        if (row) return { actorId: row.actor.id };
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      throw new Error(`the rc did not enrol ${ask.name} — its terminal says why`);
+    },
+    viewer: { id: actor.id, name: actor.name },
+    reveal(itemIds: readonly string[]): void {
+      const items = itemIds
+        .map((id) => useCanvasStore.getState().canvas?.items[id])
+        .filter((item): item is NonNullable<typeof item> => item !== undefined);
+      if (items.length === 0) return;
+      glideToBox({
+        minX: Math.min(...items.map((i) => i.x)),
+        minY: Math.min(...items.map((i) => i.y)),
+        maxX: Math.max(...items.map((i) => i.x + i.width)),
+        maxY: Math.max(...items.map((i) => i.y + i.height)),
+      });
+    },
   };
+}
+
+/** How long an enrol waits for the op to land — `AddAgent`'s own patience. */
+const ENROL_PATIENCE_MS = 25_000;
+
+/** Refresh mount-time hosts when the snapshot, admission or active scope arrives.
+ * An ongoing handler retains its original host and captured destination. */
+export function useWebHost(canvasId: string, actor: Actor): WebHost {
+  const mode = useCanvasStore((state) => state.project?.groupMode ?? "legacy");
+  const parent = useUiStore((state) => state.activeGroupId);
+  const canEdit = useCanEdit();
+  return useMemo(() => webHostFor(canvasId, actor, {
+    originGroupMode: mode, ...(mode === "groups" ? { containerId: parent, groupPlacement: "auto" as const } : {}),
+  }, canEdit), [canvasId, actor, mode, parent, canEdit]);
 }

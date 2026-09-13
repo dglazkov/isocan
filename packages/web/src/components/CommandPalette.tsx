@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Actor, Canvas, SlashCommand } from "@isocan/core";
-import { ago, isShelved, keyFor, litRuns, rankCanvases, type ShelfScope, type SwitchRow } from "@isocan/core";
+import type { Actor, Canvas, SlashCommand, Space } from "@isocan/core";
+import { ago, groupSwitchRows, isShelved, keyFor, litRuns, rankCanvases, type ShelfScope, type SwitchRow } from "@isocan/core";
 import { useUiStore, type PaletteMode } from "../stores/uiStore.ts";
 import { useCommands } from "../lib/commands.ts";
 import { availableActions, type Action, type ActionContext } from "../lib/actions.ts";
 import { useCanEdit } from "../lib/capability.ts";
-import { listCanvases } from "../lib/api.ts";
+import { listCanvases, listSpaces } from "../lib/api.ts";
 import { readRecents } from "../lib/recents.ts";
 import { latelyIds } from "../lib/lately.ts";
+import { useInboxStore } from "../stores/inboxStore.ts";
+import { loadSeen } from "../lib/seen.ts";
 import { switchCanvas } from "../lib/canvasswitch.ts";
 
 /**
@@ -88,7 +90,17 @@ export function CommandPalette({
    * canvases at the top, and a person whose daemon is down still finds the
    * ones they were just on.
    */
-  const recents = useMemo(() => latelyIds(actor.id), [actor.id]);
+  const inboxMarks = useInboxStore((s) => s.actorId === actor.id ? s.data?.marks : undefined);
+  const [seenLoaded, setSeenLoaded] = useState(false);
+  useEffect(() => { let live = true; void loadSeen(actor.id).then(() => live && setSeenLoaded(true)); return () => { live = false; }; }, [actor.id]);
+  const recents = useMemo(() => {
+    // The ledger is cached outside React; these two arrivals invalidate its
+    // ordering without making a fresh array on every palette render.
+    void inboxMarks;
+    void seenLoaded;
+    return latelyIds(actor.id);
+  }, [actor.id, inboxMarks, seenLoaded]);
+  const spaces = useSpaces(mode === "canvases");
 
   /**
    * **Which canvases this window searches: the list, or the list and the
@@ -120,7 +132,7 @@ export function CommandPalette({
   };
 
   const ctx: ActionContext = useMemo(
-    () => ({ canvasId, actor, navigate, selection }),
+    () => ({ canvasId, actor, navigate, selection: canvasId ? selection : [] }),
     [canvasId, actor, navigate, selection],
   );
 
@@ -136,9 +148,9 @@ export function CommandPalette({
    */
   const rows = useMemo((): Row[] => {
     if (mode === "canvases") {
-      return rankCanvases(canvases, query, recents, canvasId, scope).map((row) => ({
+      return groupSwitchRows(rankCanvases(canvases, query, recents, canvasId, scope), spaces, query).map((grouped) => ({
         kind: "canvas" as const,
-        row,
+        ...grouped,
       }));
     }
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -161,7 +173,7 @@ export function CommandPalette({
       ...asks.map((command) => ({ kind: "ask" as const, command })),
       ...jumps.map((row) => ({ kind: "canvas" as const, row })),
     ];
-  }, [mode, query, ctx, commands, canvasId, canEdit, canvases, recents, scope]);
+  }, [mode, query, ctx, commands, canvasId, canEdit, canvases, recents, scope, spaces]);
 
   /**
    * **What the list scope is hiding from this query**, so a default that is
@@ -311,9 +323,10 @@ export function CommandPalette({
             const group = groupOf(row, mode, ranked);
             const previous = rows[i - 1];
             const lastGroup = previous === undefined ? null : groupOf(previous, mode, ranked);
+            const sameGroup = previous?.kind === "canvas" && row.kind === "canvas" && previous.groupId !== row.groupId ? false : group === lastGroup;
             return (
               <div key={keyOf(row)}>
-                {group !== lastGroup && <div className="palette-group">{group}</div>}
+                {!sameGroup && <div className="palette-group">{group}</div>}
                 <button
                   className={`palette-row${i === at ? " at" : ""}`}
                   data-at={i === at ? "1" : undefined}
@@ -377,7 +390,7 @@ const INLINE_JUMPS = 5;
 type Row =
   | { kind: "action"; action: Action }
   | { kind: "ask"; command: SlashCommand }
-  | { kind: "canvas"; row: SwitchRow };
+  | { kind: "canvas"; row: SwitchRow; group?: string | null; groupId?: string | null };
 
 function keyOf(row: Row): string {
   if (row.kind === "action") return row.action.id;
@@ -399,7 +412,7 @@ function groupOf(row: Row, mode: PaletteMode, ranked: boolean): string | null {
   if (row.kind === "ask") return "Ask an agent";
   if (mode === "commands") return "Switch to";
   if (ranked) return null;
-  return row.row.recent ? "Recent" : "Everything else";
+  return row.group ?? (row.row.recent ? "Recent" : "No space");
 }
 
 /**
@@ -483,3 +496,16 @@ function openChat(canvasId: string): void {
 }
 
 export type { SlashCommand };
+
+/** Spaces are only needed by the unranked switcher; a failed read retains the
+ * useful flat fallback without pretending the browser owns a space ledger. */
+function useSpaces(wanted: boolean): Space[] {
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  useEffect(() => {
+    if (!wanted) return;
+    let live = true;
+    void listSpaces().then(({ spaces }) => { if (live) setSpaces(spaces); }, () => {});
+    return () => { live = false; };
+  }, [wanted]);
+  return spaces;
+}

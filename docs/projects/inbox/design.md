@@ -1,9 +1,9 @@
 ---
-status: partial
+status: built
 since: 2026-09-13
 issue: 147
 see: switcher, roles, multiuser
-note: CLI routing and private seen-marks already exist; finish the home panel and slow in-app notification with authoritative cross-home reads. Polls never write seen-marks
+note: all four phases built and independently verified 13 Sep. CLI, home panel and in-app notification read each canvas through its authoritative home, including refusals and unavailable homes. Visible polls never write seen-marks; accepted visits advance only their captured boundary
 ---
 
 # Inbox — one answer across homes
@@ -16,9 +16,9 @@ the home panel and notification while somebody is on another canvas.
 ## Read the home that owns the fact
 
 A replica may retain a canvas after the home withdraws access. Its local
-snapshot and marks therefore cannot supply a current inbox answer. Add one
-shared `GET /api/inbox` assembly, reached through typed routes by both CLI
-and web. It uses core `inboxOn` and `newSince`, never another definition of
+snapshot and marks therefore cannot supply a current inbox answer. The
+shared `GET /api/inbox` assembly serves both CLI and web through typed
+routes. It uses core `inboxOn` and `newSince`, never another definition of
 who a comment addresses.
 
 The request names the actor, optionally one known canvas and an addressable
@@ -35,6 +35,11 @@ unavailable row, never a successful empty result or a stale local answer.
 Four reads may run concurrently. Cancellation and upstream deadlines bound
 the work, including a home that does not answer.
 
+The aggregate route is still a canvas read: apply operator attestation
+refusals as well as admission and takedown before exposing local content.
+A new URL outside the usual per-canvas route hook does not inherit those
+checks automatically. Forwarded reads receive the same checks at their home.
+
 ## Looking is not visiting
 
 The home panel and a small in-app Inbox control share a visibility-aware
@@ -43,6 +48,21 @@ old response overwrite the current person's answer. Polling writes no mark.
 An inbox row opens its canvas at its own home and selects its thread; the
 ordinary visit path owns the seen write. No browser push permission,
 notification socket or separate notification store is needed.
+
+On a mixed-home replica, a mark names one canvas and therefore one home.
+`seen --mark` forwards to that canvas's actual home, rather than choosing a
+single default for the whole daemon or writing a replica-local substitute.
+The existing read-before-write claim repair remains ordered. Its initial
+seen read must also be bounded and cancellable; a home that never answers
+cannot leave the inbox permanently loading with an inert Refresh control.
+
+An accepted visit updates this tab's count immediately, but only through its
+captured arrival head. Each entry carries its originating sequence when that
+operation remains in the authoritative home's retained log; `newSince`
+compares it with the accepted mark's sequence. Legacy or compacted entries
+retain the timestamp fallback. A later comment must remain new even when its
+timestamp precedes a delayed visit acknowledgment. One retained log read per
+canvas supplies this boundary; inbox polling never reads archived history.
 
 ## Navigation everywhere
 

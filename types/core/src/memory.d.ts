@@ -28,6 +28,7 @@ export declare function memoryOf(item: Item): MemoryLink | null;
  * The canvases this one inherits from, **in the order the room reads them**:
  * top to bottom, then left to right. Several links compose in that order,
  * so the first design system found governs when this canvas has none.
+ * An excluded card or ancestor removes that edge before any source is read.
  */
 export declare function memoryLinks(canvas: CanvasContents): Item[];
 /** The patch that sets or clears the link — one spelling for both surfaces,
@@ -74,11 +75,18 @@ export declare function inheritedPieces(linked: CanvasContents, from: {
  */
 export declare function contextLayers(canvas: CanvasContents, linked: LinkedCanvas[], extras?: ContextExtras, nowMs?: number): ContextLayer[];
 /**
- * The design system that governs here: this canvas's own, else the first a
- * linked canvas contributes, in reading order. `design check` on a canvas
- * with none of its own checks against the inherited one, and says whose.
+ * The design system that governs here: the area's own when `at` names a place
+ * in one (scoped design systems, 11 Sep 2026), else this canvas's own, else
+ * the first a linked canvas contributes, in reading order — **area → canvas →
+ * linked**. `design check` on a canvas with none of its own checks against the
+ * inherited one, and says whose.
  */
-export declare function governingDesign(canvas: CanvasContents, linked: LinkedCanvas[]): {
+export declare function governingDesign(canvas: CanvasContents, linked: LinkedCanvas[], opts?: {
+    at?: {
+        x: number;
+        y: number;
+    } | Item;
+}): {
     item: Item;
     from: {
         canvasId: string;

@@ -17,6 +17,8 @@
  * the CLI, which consumes the same resolution and adds argv.
  */
 export * from "./connect.js";
+export * from "./context-summary.js";
+export * from "./feedback.js";
 export * from "./canvas-groups.js";
 export type { ContextReadOptions, CommentContextOptions, ContextPageOptions, ContextBytesOptions, ContextItemContent } from "./canvas-context.js";
 export type { CanvasGroupCopyOptions } from "./canvas-groups.js";

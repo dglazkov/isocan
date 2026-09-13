@@ -17,18 +17,16 @@ import type { InboxEntry } from "./inbox.js";
  * Both, because they answer different questions and neither can do the other's
  * job (D2):
  *
- * - **`at` is what everything reads today.** It says which comment is new
- *   (`newSince`), because a `Comment` carries `createdAt` and not the seq of
- *   the op that wrote it; and it is the only half comparable ACROSS canvases,
- *   which is what "lately" is ordered by.
- * - **`seq` is the clock-free half, and it is load-bearing in the MERGE.**
- *   Two machines' marks converge on the further-along reading position
- *   whatever their clocks say to each other, so a fast clock cannot claim you
- *   had read further than you had. It is also the exact answer to *has
- *   anything happened here at all* — one integer against a snapshot's
- *   `lastSeq`, no clock and no scan — which is what #147 step 3's home panel
- *   will ask. Nothing asks it yet; `movedSince` reads the canvas row instead,
- *   because a `Canvas` carries no head.
+ * - **`at` orders visits across canvases.** It is what "lately" reads, and
+ *   the fallback for older/imported comments whose originating sequence is
+ *   unavailable. `movedSince` also compares it with the canvas row's update
+ *   time, because that row carries no oplog head.
+ * - **`seq` compares reading position within a canvas.** `newSince` uses
+ *   the comment's originating operation sequence when the home supplies it,
+ *   so a comment after the visited snapshot remains new even if the mark
+ *   request arrives later. Comparing it with a snapshot's `lastSeq` also
+ *   answers whether anything happened since the visit. Two machines' marks
+ *   merge to the further-along reading position regardless of their clocks.
  *
  * **Where it lives is the decision, and it is not here.** A seen-mark is DESK
  * state at the home — the private ledger beside grants, passes and spaces —
@@ -62,6 +60,9 @@ export type SeenMarks = Record<string, SeenMark>;
  *  actors the presenting badge claims, and there is deliberately no way to
  *  ask for anybody else's. `PUT /api/seen/:canvasId` moves one. */
 export declare const SEEN_ROUTE = "/api/seen";
+/** Private ledger read. A canvas selector asks its authoritative home for
+ * only that canvas; absence keeps the existing home-scoped ledger read. */
+export declare function seenMarksRoute(actorId?: string, canvasId?: string): string;
 /** The route for one canvas's mark. Built here rather than spelled at each
  *  caller, for `grantsRoute`'s reason: the one place a route is written is
  *  the one place it can be got wrong. */
@@ -119,13 +120,10 @@ export declare function mergeSeen(...sources: readonly SeenMarks[]): SeenMarks;
  * whose last write is newer than your mark has moved. Unmarked means yes — a
  * canvas you have never opened has everything new in it.
  *
- * **The seq would be the better test and has no caller for it yet.** A
- * comparison against a snapshot's `lastSeq` is clock-free where this is not,
- * and it is what #147 step 3's home panel will ask; a `Canvas` row carries no
- * head, so asking it here would mean a snapshot per canvas. The seq is not
- * idle in the meantime — it is the clock-free half of the merge, which is what
- * stops a machine with a fast clock from claiming you had read further than
- * you had.
+ * A comparison against a snapshot's `lastSeq` is clock-free, but a `Canvas`
+ * row carries no head. This list-only check uses the row already available;
+ * readers holding a snapshot or an originating comment sequence can compare
+ * their sequence directly with the mark instead.
  */
 export declare function movedSince(mark: SeenMark | undefined, canvas: Canvas): boolean;
 /**
@@ -136,7 +134,10 @@ export declare function movedSince(mark: SeenMark | undefined, canvas: Canvas): 
  * not become a second one. This takes entries the rule already produced and
  * asks a different question of them, which is *have I looked since*.
  *
- * Compared on `createdAt` against the mark's `at`, both stamped by the home
+ * Prefer the originating operation sequence when the home supplies it: a
+ * comment arriving after the visited snapshot stays new even if the mark
+ * request reaches the home later. Older/imported comments fall back to
+ * `createdAt` against the mark's `at`, both stamped by the home
  * that holds that canvas, so the two sides of the comparison come from one
  * clock. A canvas with no mark is entirely new, which is exactly what an inbox
  * should say about a canvas you have never opened — the case the browser's

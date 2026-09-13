@@ -16,6 +16,8 @@ import {
   grantRevokeRoute,
   grantsRoute,
   takedownSentence,
+  inboxRoute,
+  type InboxResponse,
   type GrantsResponse,
   type OperatorAct,
   type OperatorLogResponse,
@@ -392,6 +394,17 @@ describe("taking down is not deleting", () => {
       expect(body.error).toContain(OLU);
       expect(body.error, "not a delete, and not a withdrawal").not.toMatch(/not found|withdrawn/);
     }
+  });
+
+  it("reports the known canvas unavailable in its inbox, with no retained comments or marks", async () => {
+    await takedown();
+    const response = await fetch(`${base}${inboxRoute("usr_priya", { canvasId })}`, { headers: owner.headers });
+    expect(response.status).toBe(200);
+    const result = await response.json() as InboxResponse;
+    expect(result.entries).toEqual([]);
+    expect(result.marks).toEqual({});
+    expect(result.unavailable).toHaveLength(1);
+    expect(result.unavailable[0]!.error).toMatch(/taken down/);
   });
 
   it("refuses the OWNER too — this is the home's act, not a change to her access", async () => {

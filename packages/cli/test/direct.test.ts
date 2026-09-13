@@ -214,6 +214,34 @@ describe("declaring the mode", () => {
 });
 
 describe("arriving on a pass, the way the cloud dialog sends you", () => {
+  it("saves a named pass on the direct machine and leaves the remote machine's identity alone", async () => {
+    const person = { id: "usr_priya", name: "Priya" };
+    await badge.speakAs(person);
+    await fetch(`${homeUrl}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        canvasId: null, actor: person,
+        op: { type: "project.create", canvasId: "prj_acme", title: "Acme redesign" },
+      }),
+    });
+    const { token } = await fetch(`${homeUrl}/api/projects/prj_acme/passes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({ actorId: person.id }),
+    }).then((r) => r.json()) as { token: string };
+    const remoteFile = path.join(homeStore, "identity.json");
+    const before = await fs.readFile(remoteFile, "utf8").catch(() => null);
+    const arrived = await isocan(["setup", `${homeUrl}/p/prj_acme#${token}`, "--direct", "--no-install", "--no-open"]);
+    expect(arrived.code, arrived.stderr).toBe(0);
+    expect(JSON.parse(await fs.readFile(path.join(machine, "identity.json"), "utf8"))).toMatchObject(person);
+    expect(await fs.readFile(remoteFile, "utf8").catch(() => null)).toBe(before);
+    const minted = await isocan(["pass", "--json"], { CLAUDE_CODE_SESSION_ID: "" });
+    expect(minted.code, minted.stderr).toBe(0);
+    expect(JSON.parse(minted.stdout).actor).toMatchObject(person);
+    expect(await daemonStarted()).toBe(false);
+  });
+
   /**
    * **The bug this file did not catch, and why.**
    *

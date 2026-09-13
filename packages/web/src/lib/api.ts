@@ -1,3 +1,4 @@
+import { inboxRoute, type InboxResponse } from "@isocan/core";
 import type {
   CanvasGroupMigrationPreview,
   Actor,
@@ -72,7 +73,7 @@ import {
   spaceGrantRevokeRoute,
   spaceGrantsRoute,
   spaceLinkRoute,
-  SEEN_ROUTE,
+  seenMarksRoute,
   seenRoute,
   spaceRoute,
   SPACES_ROUTE,
@@ -186,7 +187,7 @@ export function homeAnswered(err: unknown): err is ApiError {
  * — a hook keeps the dependency pointing one way.
  */
 let reclaim: (() => Promise<unknown>) | null = null;
-let reclaiming = false;
+let reclaiming: Promise<boolean> | null = null;
 
 export function onReBadge(fn: () => Promise<unknown>): void {
   reclaim = fn;
@@ -235,7 +236,7 @@ let lastDoorRefusal: { message: string; refusal?: RefusalNotice } | null = null;
  * recovery is a 401 followed by a `not-your-actor` on the first action after
  * it — the canvas would flinch, once, for good.
  */
-export async function knockOnDoor(): Promise<boolean> {
+export async function knockOnDoor(claimIdentity = true): Promise<boolean> {
   try {
     const res = await fetch(DOOR_ROUTE, {
       method: "POST",
@@ -262,17 +263,23 @@ export async function knockOnDoor(): Promise<boolean> {
       return false;
     }
     lastDoorRefusal = null;
-    await reclaimNow();
+    // An actor.claim can need a new badge too, but must not wait on the
+    // identity recovery promise that is waiting for this very claim.
+    if (claimIdentity) await reclaimNow();
     return true;
   } catch {
     return false;
   }
 }
 
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+async function request<T>(
+  method: string, url: string, body?: unknown, signal?: AbortSignal,
+  recovery: "identity" | "badge" = "identity",
+): Promise<T> {
   const send = () =>
     fetch(url, {
       method,
+      ...(signal ? { signal } : {}),
       headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
       ...(body !== undefined
         ? { body: JSON.stringify(body) }
@@ -284,11 +291,13 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   // door (which re-claims on the way back); a `not-your-actor` means the
   // badge is fine and the CLAIM is gone — a tab whose persona the desk no
   // longer remembers — so it claims and comes straight back.
+  signal?.throwIfAborted();
   const recovered =
     res.status === 401
-      ? await knockOnDoor()
-      : json?.code === "not-your-actor" && (await reclaimNow());
+      ? await knockOnDoor(recovery === "identity")
+      : recovery === "identity" && json?.code === "not-your-actor" && (await reclaimNow());
   if (recovered) {
+    signal?.throwIfAborted();
     res = await send();
     json = (await res.json().catch(() => null)) as any;
   } else if (res.status === 401 && lastDoorRefusal) {
@@ -304,23 +313,24 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 }
 
 async function reclaimNow(): Promise<boolean> {
-  if (!reclaim || reclaiming) return false;
-  reclaiming = true;
-  try {
-    await reclaim();
-    return true;
-  } catch {
-    return false; // somebody else is that persona now; the replay says so
-  } finally {
-    reclaiming = false;
-  }
+  if (!reclaim) return false;
+  if (reclaiming) return reclaiming;
+  // Distinct inbox/visit scopes still share one identity claim. A second
+  // request waits for it, then gets its own single replay and cancellation.
+  const claim = reclaim;
+  const shared = Promise.resolve().then(claim).then(() => true, () => false)
+    .finally(() => { if (reclaiming === shared) reclaiming = null; });
+  reclaiming = shared;
+  return shared;
 }
 
 /** Name (or resume) this browser's actor — the one op sent without an
  * actor: the claim resolves who is speaking, and the response envelope
  * carries the answer. */
 export function claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
-  return request("POST", "/api/ops", { canvasId: null, clientId: CLIENT_ID, op });
+  // A refused claim is final for this identity attempt. It may recover a
+  // missing badge once, but cannot re-enter (or join) its own claim recovery.
+  return request("POST", "/api/ops", { canvasId: null, clientId: CLIENT_ID, op }, undefined, "badge");
 }
 
 /**
@@ -563,10 +573,11 @@ export async function fetchRefused(canvasId: string): Promise<RefusalNotice | nu
  * **What you have already seen** (#147, #134) — your own marks, every canvas,
  * one read. Desk state at the home, so this is asked rather than remembered:
  * the point of the feature is that your other machine finds what this one
- * saw. There is deliberately no way to ask for anybody else's.
+ * saw. A canvas selector asks that canvas's home for only its prior mark.
+ * There is deliberately no way to ask for anybody else's.
  */
-export function fetchSeen(actorId: string): Promise<SeenMarksResponse> {
-  return request("GET", `${SEEN_ROUTE}?actorId=${encodeURIComponent(actorId)}`);
+export function fetchSeen(actorId: string, signal?: AbortSignal, canvasId?: string): Promise<SeenMarksResponse> {
+  return request("GET", seenMarksRoute(actorId, canvasId), undefined, signal);
 }
 
 /** Move the mark for one canvas to the head you had in front of you. Called
@@ -653,8 +664,8 @@ export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
  * `since=0` because every caller wants the whole log; a caller that wants a
  * tail can pass one.
  */
-export function getOplog(canvasId: string, since = 0): Promise<LogEntry[]> {
-  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/oplog?since=${since}`);
+export function getOplog(canvasId: string, since = 0, signal?: AbortSignal): Promise<LogEntry[]> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/oplog?since=${since}`, undefined, signal);
 }
 
 /**
@@ -1360,4 +1371,9 @@ export async function checkFrameable(
   } catch {
     return { ok: true };
   }
+}
+
+/** One authoritative read, including remote homes; polling never writes marks. */
+export function fetchInbox(actorId: string, signal?: AbortSignal): Promise<InboxResponse> {
+  return request("GET", inboxRoute(actorId), undefined, signal);
 }

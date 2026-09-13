@@ -1,9 +1,9 @@
 ---
 status: partial
-since: 2026-09-06
+since: 2026-09-13
 issue: 134
 see: ui-refresh, roles, standing-agents, 2026-09-06-project-and-canvas.md
-note: phase 1 built 6 Sep — ⌘O, ⌘K → Switch canvas…, and the same row in the bar's ··· menu (which replaced the caret beside the name that evening) open one window that leads with the canvases this browser was on lately, finds one from a few letters, and moves you there; recents on the home screen and in the lens, spaces as headings and the project › canvas row are open. Step 4 built 12 Sep — a shared "lately" is the home's seen-marks, designed with the inbox's step 2 in `docs/research/2026-09-12-seen-marks.md` and needing no new op
+note: steps 1–4 built. The palette now works on home, lens and canvas, with Recent first and visible spaces as headings before search; queries retain one ranked list. The conductor independently walked home Mod+O and lens Mod+K, filtering and Enter, on 13 Sep. Shared lately uses the home's private seen-marks. Step 5, the project › canvas row, remains future work
 ---
 # The switcher
 
@@ -216,16 +216,16 @@ scope and has no box of its own: the switcher is one row away.
    2026.* `core/canvasswitch.ts`, `web/lib/recents.ts`,
    `web/lib/canvasswitch.ts`, the palette's second face, ⌘O, the caret, the
    `?` panel row, the `switcher` journey.
-2. **Everywhere a person stands.** The palette is mounted on `CanvasPage`
-   only, so ⌘K and ⌘O do nothing on the home screen and on the lens. The
-   home screen's filter is a field already; the lens is a list of canvases
-   already. Mount the same window on both — the commands face has three
-   actions that mean something off a canvas, and the switcher means the
-   same thing everywhere.
-3. **Spaces as headings.** Roles phase 4 gave a home spaces (`Space`,
-   `listSpaces()`), and the home screen draws a heading per space. With no
-   query the switcher should too, under Recent: a person who works in a
-   space thinks in it. With a query, one ranked list, as now.
+2. **Everywhere a person stands.** *Built 13 Sep 2026.* One lazy authenticated
+   navigation host owns the palette and keyboard binding on home, lens and
+   canvas. A route still loading, refused or showing a viewer does not offer
+   hidden canvas mutations. The conductor drove actual home ⌘O and lens ⌘K
+   through filtering and Enter to the intended canvas.
+3. **Spaces as headings.** *Built 13 Sep 2026.* Empty search shows Recent,
+   then remaining canvases under visible space headings without duplicates.
+   Search returns the existing ranked flat list. The actual browser exposed
+   a repeated-initial failure in a full title: matching the complete query
+   contiguously now precedes the existing word-start abbreviation fallback.
 4. **A shared "lately".** *Built 12 Sep 2026.* A per-actor visit mark IS
    desk state at the home, decided once for both features in
    [seen-marks](../../research/2026-09-12-seen-marks.md) — and it is the same
@@ -245,7 +245,8 @@ scope and has no box of its own: the switcher is one row away.
 
 ## Steps 2–3 continuation — 13 September 2026
 
-The [inbox continuation](../inbox/design.md#navigation-everywhere) specifies
-one lazy navigation host for home, lens and canvas, with Recent followed by
-space headings. It retains existing search ranking and archive behavior; the
-new inbox API independently supplies authoritative cross-home feedback.
+The [inbox continuation](../inbox/design.md#navigation-everywhere) owns the
+shared navigation host and independently supplies cross-home feedback. The
+browser proof used two synthetic homes and two profiles; it verified the
+headings, exact title search and actual keyboard navigation, with no browser
+exceptions. These navigation steps do not claim step 5's project hierarchy.

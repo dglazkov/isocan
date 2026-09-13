@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { canvasPath, deckStep, itemPath, isFramedItem, noteFor } from "@isocan/core";
+import { canvasPath, deckStep, itemPath, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { readBlobText } from "../lib/api.ts";
 import { Markdown } from "../lib/markdown.tsx";
+import { VersionContent } from "./ItemView.tsx";
 import { ArtifactStage } from "./ArtifactStage.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
@@ -16,6 +17,12 @@ import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
 
 const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+
+import { usePhone } from "../lib/phone.ts";
+import { useTouchNavigation } from "../lib/touchnavigation.ts";
+import "./presentation.css";
+import "./mobile-navigation.css";
+const PresentationNotes = lazy(() => import("./PresentationNotes.tsx").then((m) => ({ default: m.PresentationNotes })));
 
 /** Bare keys that flip the deck (#87). Forward and back each answer to three
  * keys because a presenter's clicker sends Page Up/Down, and because "left/
@@ -65,6 +72,15 @@ export function FullScreen({
   onIdentity: (actor: Actor | null) => void;
 }) {
   const navigate = useNavigate();
+  const phone = usePhone();
+  const [phoneNotes, setPhoneNotes] = useState(false);
+  const gestures = useTouchNavigation((direction) => {
+    const canvas = useCanvasStore.getState().canvas;
+    if (!canvas || !itemId) return;
+    const next = deckStep(canvas, itemId, direction === "ArrowRight" ? 1 : -1);
+    if (next) navigate(itemPath(canvasId, next.id));
+  }, undefined, true);
+
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
 
   const back = () => navigate(canvasPath(canvasId));
@@ -114,7 +130,7 @@ export function FullScreen({
         e.preventDefault();
         e.stopPropagation();
         const ui = useUiStore.getState();
-        ui.setPresenterNotes(!ui.presenterNotes);
+        if (phone) setPhoneNotes(!phoneNotes); else ui.setPresenterNotes(!ui.presenterNotes);
         return;
       }
       // Bare arrows flip the deck (#87): the items marked as slides, in
@@ -161,7 +177,8 @@ export function FullScreen({
    * the stage as markdown. Nothing here writes; the note is edited where
    * every text node is.
    */
-  const presenterNotes = useUiStore((s) => s.presenterNotes);
+  const keptNotes = useUiStore((s) => s.presenterNotes);
+  const presenterNotes = !phone && keptNotes;
   const note = useCanvasStore((s) => (s.canvas ? noteFor(s.canvas, itemId) : null));
   const noteHash = note ? (note.versions.find((v) => v.id === note.currentVersionId) ?? note.versions[0])?.blobHash ?? null : null;
   const [noteText, setNoteText] = useState<string | null>(null);
@@ -237,7 +254,12 @@ export function FullScreen({
   // like (see ArtifactStage). The bar renders either way: the way back must
   // not depend on the item existing.
   return (
-    <div className={`fullscreen${resting ? " resting" : ""}`}>
+    <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
+      {phone ? <div className="fs-bar mobile-presentation-bar">
+        <button onClick={() => back()} aria-label="Exit presentation">Back</button>
+        <strong>{item?.title ?? "Presentation"}</strong>
+        <button onClick={() => setPhoneNotes(!phoneNotes)} aria-pressed={phoneNotes}>Notes</button>
+      </div> : <>
       <div className="fs-bar">
         {/* The way back, and it says where back IS. An arrow alone would be a
             guess; "Canvas" is the answer to "where am I". */}
@@ -274,8 +296,14 @@ export function FullScreen({
           <CanvasPresence actor={actor} onIdentity={onIdentity} />
         </div>
       </div>
-      <div className={`fullscreen-stage${presenterNotes ? " with-notes" : ""}`}>
-        <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />
+      </>}
+      <div className={`fullscreen-stage${presenterNotes ? " with-notes" : ""}`} {...gestures}>
+        {phone && item ? (() => {
+          const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
+          if (!current) return <p>This item has no preview.</p>;
+          const visual = visualFaceOf(current);
+          return <VersionContent canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} />;
+        })() : <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />}
       </div>
       {/* Under the stage, never over it: the audience's picture keeps its
           frame and the presenter reads below it. A slide with no note says
@@ -291,6 +319,7 @@ export function FullScreen({
           )}
         </aside>
       )}
+      {phone && phoneNotes && <Suspense><PresentationNotes canvasId={canvasId} itemId={itemId} onClose={() => setPhoneNotes(false)} /></Suspense>}
     </div>
   );
 }

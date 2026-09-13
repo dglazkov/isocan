@@ -6,7 +6,7 @@ import type { RcPolicy } from "./protocol.ts";
 import { extractMentions } from "./mentions.ts";
 import { sameActor } from "./identity.ts";
 import { isSystemActor } from "./model.ts";
-import { opMatchesFilters } from "./touches.ts";
+import { opMatchesFilters, opTouchesAreas } from "./touches.ts";
 
 /**
  * **What is addressed to you, wherever it landed.**
@@ -49,6 +49,9 @@ export interface InboxEntry {
   threadId: string;
   comment: Comment;
   reason: InboxReason;
+  /** The originating comment operation, supplied by an authoritative home
+   * while its log retains it. Older or imported comments may omit this. */
+  seq?: number;
 }
 
 /**
@@ -179,6 +182,14 @@ export interface AgentRules {
    * that quietly matches nobody.
    */
   listen?: ListenEntry[];
+  /**
+   * **Only what happens inside these areas** — area item ids (`wait --in`,
+   * 11 Sep 2026). A narrowing like `items`, by geometry rather than by name:
+   * an op touching an item whose centre is in the area, or a thread pinned
+   * there. Composes with `ops` (both must hold) and pierces nothing: a
+   * mention still wakes the agent wherever it is.
+   */
+  areas?: string[];
 }
 
 /** The `listen` spelling for "anyone" — `ops`'s idiom, one definition. */
@@ -394,10 +405,12 @@ export function rulesOf(raw: unknown): AgentRules {
   const items = strings((raw as { items?: unknown }).items);
   const ops = strings((raw as { ops?: unknown }).ops);
   const listen = entries((raw as { listen?: unknown }).listen);
+  const areas = strings((raw as { areas?: unknown }).areas);
   return {
     ...(items ? { items } : {}),
     ...(ops ? { ops } : {}),
     ...(listen ? { listen } : {}),
+    ...(areas ? { areas } : {}),
   };
 }
 
@@ -817,8 +830,12 @@ export function dispatchReason(
   if (!rules) return null;
   const items = rules.items ?? [];
   const ops = rules.ops ?? [];
-  if (items.length === 0 && ops.length === 0) return null; // comments only
-  return opMatchesFilters(op, { items, types: ops }, canvas ?? null) ? "change" : null;
+  const areas = rules.areas ?? [];
+  if (items.length === 0 && ops.length === 0 && areas.length === 0) return null; // comments only
+  if (!opMatchesFilters(op, { items, types: ops }, canvas ?? null)) return null;
+  // An area narrows what the other two let through, by where it happened.
+  if (areas.length > 0 && !opTouchesAreas(op, areas, canvas ?? null)) return null;
+  return "change";
 }
 
 export function inboxOn(

@@ -84,6 +84,20 @@ describe("the link is one property on a canvas card", () => {
     ]);
     expect(memoryLinks(c).map((i) => i.id)).toEqual(["left", "right", "below"]);
   });
+
+  it("excludes inheritance edges by their own or an ancestor's ambient policy", () => {
+    const parent = item("parent", { properties: { kind: "group", context: "excluded" } });
+    const nested = item("nested", { containerId: parent.id, properties: { kind: "group" } });
+    const child = { ...card("child", "prj_child", "inherit"), containerId: nested.id };
+    const direct = card("direct", "prj_direct", "inherit");
+    direct.properties.context = "excluded";
+    const visible = card("visible", "prj_visible", "inherit");
+    const c = canvas([parent, nested, child, direct, visible]);
+    expect(memoryLinks(c).map((one) => one.id)).toEqual([visible.id]);
+    delete parent.properties.context;
+    expect(memoryLinks(c).map((one) => one.id)).toEqual([child.id, visible.id]);
+    expect(memoryOf(child)).toBe("inherit");
+  });
 });
 
 describe("what a linked canvas contributes", () => {

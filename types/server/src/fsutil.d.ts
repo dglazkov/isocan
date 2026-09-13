@@ -1,8 +1,9 @@
 /**
  * Crash-safe write: temp file in the same directory, fsync, rename over the
  * target. Readers see either the old or the new content, never a torn write.
+ * Credential callers supply a mode to preserve the replaced file's access.
  */
-export declare function writeFileAtomic(filePath: string, data: string | Buffer): Promise<void>;
+export declare function writeFileAtomic(filePath: string, data: string | Buffer, mode?: number): Promise<void>;
 /** Append one line with fsync — the oplog's durability guarantee. */
 export declare function appendLineDurable(filePath: string, line: string): Promise<void>;
 export declare function readJson<T>(filePath: string): Promise<T | null>;

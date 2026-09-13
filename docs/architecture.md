@@ -43,6 +43,29 @@ one that has to stay exact.
 
 ## The stack
 
+The web and CLI use the same daemon/API vocabulary. `@isocan/mcp` adapts that
+API to stdio tools and current canvas/Context resources; it owns no canvas
+state. Explicit per-call session keys select durable `mcp:` agent claims,
+and calls without them retain ambient identity. A known canvas ID goes to
+admission directly; discovery controls lists rather than removing the
+known-address door. Shared context assembly and feedback addressing remain
+in API/core. A feedback call's deadline covers connection setup, admission
+and polling, and its cancellation reaches HTTP as well as held daemon watches.
+
+Inbox assembly also belongs to the daemon. CLI and web ask the same route;
+each remote canvas is read through its authoritative home connection with
+that home's admission and operator checks. The response includes private
+visit marks and explicit unavailable canvases. A visible browser polls every
+30 seconds without writing marks. Marking a visit routes by that canvas's
+home, independently of the other homes the replica happens to hold.
+
+Modules also remain clients. They can carry bounded assets, declare validated
+data contributions, fill dialogs and ask the person's rc for installed
+templates. The template's directory and rc configuration exist before
+enrolment is published. Arena creation uses core's explicit prepared forest
+and one bounded group operation; removing the module leaves ordinary files,
+properties and reactions in the log.
+
 | layer | choice |
 | --- | --- |
 | language / runtime | TypeScript on Node 22, run with `tsx` as today — the container pins the toolchain, and an always-on instance makes cold-start economics moot |

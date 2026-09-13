@@ -236,6 +236,9 @@ export interface RedeemPassRequest {
      * dialled itself would be its own replica.
      */
     home?: string;
+    /** Setup on a local daemon also saves the pass-returned actor as its
+     * machine's person. Never forwarded; refused on a hosted/non-local door. */
+    adoptIdentity?: boolean;
 }
 export interface RedeemPassResponse {
     /** The canvas the redeeming badge is now admitted to. */
@@ -245,6 +248,12 @@ export interface RedeemPassResponse {
      * redemption rather than frozen at mint, so a person who renamed herself in
      * between is handed the name she goes by now. */
     actor?: Actor;
+    /** The local machine's default after requested adoption; a different held
+     * person remains default. Absent when no adoption or identity was requested. */
+    identity?: {
+        actor: Actor;
+        adopted: boolean;
+    };
 }
 /**
  * Why a redemption was refused, as `ApiError.code`, and each one is a

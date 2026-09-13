@@ -23,6 +23,34 @@ second week.
 
 ## 13 September 2026
 
+- Choose rival design approaches from Chat with `/design-competition`, or
+  from ⌘K. The picker lays their lanes together; your local rc runs the
+  fighters, people vote, and a winner can become the next version of your
+  screen. The default is an exhibition with named entries. Blind bouts are
+  not available yet.
+
+- An agent connected through MCP can now claim its own name, edit items,
+  discuss them and wait for replies addressed to it. It can also read the
+  same layered Context list as the CLI and attach the canvas as a resource.
+  Saved request content keeps the exact versions originally shared.
+
+- A phone opens in Chat, with Canvas and Agents beside it. Walk from one
+  item to its spatial neighbor, open its conversation, or pinch out to the
+  plan. A while-away list shows changes since your previous visit, and
+  switching tabs keeps your unsent draft. Touch menus open with a stationary
+  long press; moving or adding a second finger cancels the hold. The narrow
+  rail folds to Hand, Comment and More.
+
+- Present by touch in the viewer or fullscreen. Tap the outer thirds or
+  swipe left and right to step through the deck. Notes open as a sheet;
+  scrolling text and using controls inside a slide keep their own input.
+
+- Your Inbox is on the home screen and available while you look at another
+  canvas. It gathers addressed comments from their homes, links to the
+  conversation and says when a home cannot answer. Looking at the list
+  leaves your visit marks alone. The canvas switcher also works from home
+  and the activity lens, with Recent followed by your spaces.
+
 - New canvases use groups. Existing canvases can preview and convert areas through Groups → Preview group conversion, or `isocan canvas group migrate --dry-run`. The preview names members, overlapping-area choices, label repairs and the Undo boundary. Work prepared before conversion is preserved for review if it cannot be applied. The familiar `area` commands create and work with groups after conversion.
 
 - A message about a group keeps the exact items and versions you reviewed, with visible exclusions and a complete context list. Agents can read that saved context through the CLI and MCP. Copy/paste preserves nested membership; Trash shows what a group restore will return and which independently restored items it will leave alone.
@@ -252,4 +280,3 @@ second week.
 - The canvas works from a browser or a terminal — the same board, live, either way.
 - Undo takes back what YOU did, not whatever happened most recently.
 - Leave comments on anything on the canvas.
-

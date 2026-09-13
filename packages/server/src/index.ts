@@ -34,7 +34,7 @@ export {
   type GoogleToken,
 } from "./google.ts";
 export type { HomeConfig } from "./config.ts";
-export { askTheDoor, bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
+export { adoptIdentity, askTheDoor, bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
 export type { DoorAnswer, StoredBadge } from "./badge-store.ts";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.ts";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.ts";

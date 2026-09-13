@@ -1,9 +1,9 @@
 ---
-status: designed
+status: partial
 since: 2026-09-11
 issue: 250
 see: sprint, modules, personas, on-demand, standing-agents, evals
-note: designed 11 Sep 2026 from the ask and the research note; nothing built. The competition is a sprint with one phase, cast by a picker — areas, desks, the curtain, placed dots, the split tally, hand-in and the rc's message-wake already exist. What does not is the module-system half, and it is the other half of the point — packs as module content, a dialog slot, assets on both surfaces, a scoped design system, and a way for a module to cast agents. Decided the same day: principle-first names (the agent is *Less but Better*, after Dieter Rams), exhibition as the default bout, and shipping on isocan.io as a build-time module, lazy-loaded. Phase 0 (a bout by hand, no module) is next
+note: technical integration built 13 Sep on explicit groups, with nine packs, CLI workflow, lazy picker, scoped systems, templates, data contributions and winner versioning. Independent CLI/browser and source/runtime removal proofs passed. Phase 0 human distinctiveness/cost, real fighters, hosted dev/prod and container-image removal remain; blind is deferred and refused
 ---
 # The design competition journey
 

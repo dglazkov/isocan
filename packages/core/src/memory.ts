@@ -4,7 +4,7 @@ import { areasOf } from "./area.ts";
 import { isGroupItem } from "./canvas-groups.ts";
 import { PLACEMENT_GAP } from "./placement.ts";
 import { designSystem } from "./designsystem.ts";
-import { ambientContextItems } from "./canvas-group-context.ts";
+import { ambientContextItems, excludedInAmbient } from "./canvas-group-context.ts";
 import { type ContextExtras, type ContextPiece, contextPieces } from "./context.ts";
 
 /**
@@ -43,10 +43,11 @@ export function memoryOf(item: Item): MemoryLink | null {
  * The canvases this one inherits from, **in the order the room reads them**:
  * top to bottom, then left to right. Several links compose in that order,
  * so the first design system found governs when this canvas has none.
+ * An excluded card or ancestor removes that edge before any source is read.
  */
 export function memoryLinks(canvas: CanvasContents): Item[] {
   return Object.values(canvas.items)
-    .filter((item) => memoryOf(item) === MEMORY_INHERIT)
+    .filter((item) => memoryOf(item) === MEMORY_INHERIT && !excludedInAmbient(canvas, item))
     .sort((a, b) => a.y - b.y || a.x - b.x);
 }
 
@@ -92,7 +93,9 @@ export function inheritedPieces(
   localHasDesign: boolean,
 ): ContextPiece[] {
   const pieces: ContextPiece[] = [];
+  const ownPieces = contextPieces(linked);
   const design = designSystem(linked);
+  const designPiece = ownPieces.find((piece) => piece.name === "Design system");
   if (design) {
     pieces.push({
       name: "Design system",
@@ -101,6 +104,7 @@ export function inheritedPieces(
       size: `v${design.versions.length}`,
       updatedAt: design.updatedAt,
       from,
+      ...(designPiece?.stale ? { stale: designPiece.stale, ...(designPiece.fix ? { fix: designPiece.fix } : {}) } : {}),
       ...(localHasDesign ? { overridden: "this canvas's wins" } : {}),
     });
   }
@@ -115,6 +119,8 @@ export function inheritedPieces(
     });
   }
   const items = Object.values(linked.items);
+  const excluded = ownPieces.find((piece) => piece.name === "Excluded items");
+  if (excluded) pieces.push({ ...excluded, from });
   pieces.push({
     name: "The canvas",
     source: "canvas",
@@ -160,15 +166,18 @@ export function contextLayers(
 }
 
 /**
- * The design system that governs here: this canvas's own, else the first a
- * linked canvas contributes, in reading order. `design check` on a canvas
- * with none of its own checks against the inherited one, and says whose.
+ * The design system that governs here: the area's own when `at` names a place
+ * in one (scoped design systems, 11 Sep 2026), else this canvas's own, else
+ * the first a linked canvas contributes, in reading order — **area → canvas →
+ * linked**. `design check` on a canvas with none of its own checks against the
+ * inherited one, and says whose.
  */
 export function governingDesign(
   canvas: CanvasContents,
   linked: LinkedCanvas[],
+  opts?: { at?: { x: number; y: number } | Item },
 ): { item: Item; from: { canvasId: string; title: string } | null } | null {
-  const own = designSystem(canvas);
+  const own = designSystem(canvas, opts);
   if (own) return { item: own, from: null };
   for (const link of linked) {
     if (!link.canvas) continue;

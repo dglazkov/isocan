@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-13
 issue: 182
 see: workbench, multi-identity, inbox
-note: stage 0 already pans and pinches; the continuation finishes touch controls, a Chat-first phone face and presentation gestures. Physical-phone keyboard, Safari and gesture feel remain acceptance work; handoff and install/share targets are later stages
+note: stages 0–2 are technically built and independently verified with actual browser touch input on 13 Sep, including Chat-first navigation, reference cards, prior-visit digest and presentation. Physical-phone keyboard, Safari and gesture feel remain acceptance work; true causal output links are separate work, and handoff and install/share targets are later stages
 ---
 
 # Mobile — talk, look, present
@@ -35,6 +35,11 @@ composer or editing action that it cannot use.
 Chat carries cards for items that the existing request/output relationship
 actually connects to a message. Tapping a card enters that node. No geometry
 or author/time guess may claim that a message produced an unrelated item.
+The current record contains explicit item references and saved request
+context, but no general causal output link. Those references may appear as
+“Linked in this message” or “Request context”; inferred author/time lanes must
+not be relabelled as produced work. A true output-provenance link remains
+separate work if the record cannot supply it.
 At entry, a while-away digest uses the prior authoritative seen-mark before
 the ordinary visit advances it. Rows open the items or threads they name;
 unavailable history is stated, not filled with made-up changes or attendance.

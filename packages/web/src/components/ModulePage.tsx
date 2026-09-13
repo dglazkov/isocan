@@ -1,7 +1,6 @@
 import { useEffect } from "react";
-import { useMemo } from "react";
 import type { Actor } from "@isocan/core";
-import { webHostFor } from "../lib/modulehost.ts";
+import { useWebHost } from "../lib/modulehost.ts";
 import { useNavigate } from "react-router-dom";
 import { canvasPath } from "@isocan/core";
 import { modulePage } from "../modules.ts";
@@ -23,7 +22,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 export function ModulePage({ canvasId, segment, actor }: { canvasId: string; segment: string; actor: Actor }) {
   /* One host per mount, memoised: a new object every render would remount a
      page that took it as a prop and lose whatever it was holding. */
-  const host = useMemo(() => webHostFor(canvasId, actor), [canvasId, actor]);
+  const host = useWebHost(canvasId, actor);
   const navigate = useNavigate();
   const canvas = useCanvasStore((s) => s.canvas);
   // A runtime module's page may arrive after first paint.

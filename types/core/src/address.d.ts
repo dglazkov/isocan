@@ -372,3 +372,7 @@ export declare function localAgentInstructions(origin: string, canvasId: string,
  * for every other reader of it.
  */
 export declare function cloudAgentInstructions(origin: string, canvasId: string, token?: string): string;
+/** A comment conversation on its canvas, shared by inbox links and the reader. */
+export declare const THREAD_QUERY = "thread";
+/** An inbox link carries the conversation without changing the canvas address. */
+export declare function threadPath(canvasId: string, threadId: string): string;

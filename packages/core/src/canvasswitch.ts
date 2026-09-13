@@ -64,8 +64,16 @@ export function fuzzyMatch(query: string, text: string): { score: number; positi
   const needle = query.replace(/\s+/g, "").toLowerCase();
   if (needle.length === 0) return { score: 0, positions: [] };
   const hay = text.toLowerCase();
+  // A contiguous query already has an unambiguous reading. Letting the
+  // word-start fallback jump into a later word can strand its remaining
+  // letters, even when somebody typed the exact title ("Bramble remote").
+  const literal = query.trim().toLowerCase();
+  const exact = needle.length > 1 ? hay.indexOf(literal) : -1;
+  if (exact >= 0) {
+    const positions = Array.from({ length: literal.length }, (_, i) => exact + i).filter((i) => !/\s/.test(hay[i]!));
+    return { score: matchScore(hay, positions), positions };
+  }
   const positions: number[] = [];
-  let score = 0;
   let from = 0;
   for (const ch of needle) {
     const at = hay.indexOf(ch, from);
@@ -83,19 +91,27 @@ export function fuzzyMatch(query: string, text: string): { score: number; positi
         }
       }
     }
-    const previous = positions[positions.length - 1];
-    if (previous !== undefined && pick === previous + 1) score += 4; // together
-    else if (startsWord(hay, pick)) score += 3; // starts a word
-    else score += 1; // present, at least
-    score -= (pick - from) * 0.1; // each letter skipped costs a little
     positions.push(pick);
     from = pick + 1;
   }
-  // A prefix match is what most people mean by "starts typing the name".
+  return { score: matchScore(hay, positions), positions };
+}
+
+/** One scoring rule for the literal reading and the existing abbreviation
+ * fallback. Only the chosen positions differ. */
+function matchScore(hay: string, positions: readonly number[]): number {
+  let score = 0;
+  let from = 0;
+  for (const [i, pick] of positions.entries()) {
+    const previous = positions[i - 1];
+    if (previous !== undefined && pick === previous + 1) score += 4;
+    else if (startsWord(hay, pick)) score += 3;
+    else score += 1;
+    score -= (pick - from) * 0.1;
+    from = pick + 1;
+  }
   if (positions[0] === 0) score += 2;
-  // Shorter titles that fit the same letters are the tighter reading.
-  score -= hay.length * 0.01;
-  return { score, positions };
+  return score - hay.length * 0.01;
 }
 
 function startsWord(text: string, at: number): boolean {
@@ -215,4 +231,32 @@ export function litRuns(text: string, positions: readonly number[]): Array<[stri
     else runs.push([text[i]!, on]);
   }
   return runs;
+}
+
+/** Keep Recent intact, then group the remaining unranked rows by visible
+ * space. Membership is a visible space's fact, never a creator-only filter.
+ * Search stays one ranked list. Headings are labels; space ids keep equal
+ * names and a real space named Recent distinct. */
+export function groupSwitchRows(
+  rows: readonly SwitchRow[], spaces: readonly import("./grants.ts").Space[], query: string,
+): Array<{ row: SwitchRow; group: string | null; groupId: string | null }> {
+  if (query.trim()) return rows.map((row) => ({ row, group: null, groupId: null }));
+  const membership = new Map<string, { name: string; id: string }>();
+  for (const space of spaces) {
+    if (space.deletedAt) continue;
+    for (const id of space.canvasIds) membership.set(id, space);
+  }
+  const recent = rows.filter((row) => row.recent).map((row) => ({ row, group: "Recent", groupId: "recent" }));
+  const groups = new Map<string, { name: string; rows: SwitchRow[] }>();
+  for (const row of rows) {
+    if (row.recent) continue;
+    const space = membership.get(row.canvas.id);
+    const id = space?.id ?? "unfiled";
+    const group = groups.get(id) ?? { name: space?.name ?? "No space", rows: [] };
+    group.rows.push(row);
+    groups.set(id, group);
+  }
+  return [...recent, ...[...groups].sort(([a, av], [b, bv]) =>
+    a === "unfiled" ? 1 : b === "unfiled" ? -1 : av.name.localeCompare(bv.name) || a.localeCompare(b),
+  ).flatMap(([groupId, group]) => group.rows.map((row) => ({ row, group: group.name, groupId })))];
 }

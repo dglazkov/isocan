@@ -5,12 +5,14 @@ import { randomBytes } from "node:crypto";
 /**
  * Crash-safe write: temp file in the same directory, fsync, rename over the
  * target. Readers see either the old or the new content, never a torn write.
+ * Credential callers supply a mode to preserve the replaced file's access.
  */
-export async function writeFileAtomic(filePath: string, data: string | Buffer): Promise<void> {
+export async function writeFileAtomic(filePath: string, data: string | Buffer, mode?: number): Promise<void> {
   const dir = path.dirname(filePath);
   const tmp = path.join(dir, `.tmp-${randomBytes(6).toString("hex")}`);
-  const handle = await fs.open(tmp, "w");
+  const handle = await fs.open(tmp, "w", mode);
   try {
+    if (mode !== undefined) await handle.chmod(mode);
     await handle.writeFile(data);
     await handle.sync();
   } finally {

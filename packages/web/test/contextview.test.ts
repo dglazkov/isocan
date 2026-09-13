@@ -20,7 +20,9 @@ describe("the Context view", () => {
       fileURLToPath(new URL("../../cli/src/main.ts", import.meta.url)),
       "utf8",
     );
-    expect(cli).toMatch(/contextLayers\(snapshot\.canvas/);
+    expect(cli).toMatch(/new CanvasHandle\(ctx, p\)\.contextSummary\(/);
+    const api = readFileSync(fileURLToPath(new URL("../../api/src/context-summary.ts", import.meta.url)), "utf8");
+    expect(api).toMatch(/contextLayers\(snapshot\.canvas/);
   });
 
   it("stores nothing, which is why this stage came first", () => {

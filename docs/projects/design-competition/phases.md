@@ -7,12 +7,19 @@ before any module**, because the thing nobody knows yet is whether a
 not, the picker is a costume shop. Then the platform changes that are useful
 without the competition, then the module on the terminal, then the picker.
 
-**Where we are:** designed 11 Sep 2026. Nothing built. Phase 0 is next.
-PR #264 contains an unmerged implementation. Its integration into main must
-follow [groups-integration.md](groups-integration.md), recorded 13 Sep: new
-arenas use explicit groups and one bounded creation, while legacy canvases
-retain their historical behavior. Phase 0's human measurement remains owed;
-technical integration can proceed while that session is arranged.
+**Where we are:** technical integration from PR #264 is built on main,
+13 September 2026. Phases 1 and 2 are CLOSED. The local mechanics of phases
+3–7 are implemented, including the lazy picker and runtime packaging, but
+those phases retain the real-fighter, human or hosted acceptances below.
+Phase 8 passes source/runtime removal and restoration; its image walk remains.
+**Design-competition phase 0 is next:** the human measurement is still owed.
+Technical work proceeded in parallel at Dion's request; synthetic entries do
+not settle distinctiveness or cost. Blind bouts remain deferred and refused.
+
+The [integration contract](groups-integration.md) governs new arenas:
+explicit groups, one bounded creation and preserved legacy behavior.
+[The verification record](verification-2026-09-13.md) distinguishes the real
+CLI/browser checks from the remaining human, hosted and image walks.
 
 Decided the same day: principle-first names (*Less but Better*, after Dieter
 Rams), exhibition as the default bout, and shipping on isocan.io — which is
@@ -22,6 +29,8 @@ The epic is [#250](https://github.com/dglazkov/isocan/issues/250); each phase
 names its issue.
 
 ## Phase 0 — a bout by hand, and two numbers
+
+**Status: NOT STARTED.** 2026-09-13 — the human distinctiveness and real-model cost measurement remains the next acceptance.
 
 *No module, no new code.* Three packs written by hand from
 [`packs.md`](packs.md) — Kare, Rams, Linear — each a directory with an
@@ -52,6 +61,8 @@ the three briefs, and what changed in the packs because of them.
 
 ## Phase 1 — the platform changes nothing else needs to wait for
 
+**Status: CLOSED.** 2026-09-13 — the conductor’s real CLI probe returned distinct root/A/B systems and only lane A’s comment from a wait scoped to A.
+
 *Core and CLI only. Useful without the competition.*
 
 - **The scoped design system** ([§4](module-gaps.md#4-a-design-system-scoped-to-an-area),
@@ -67,6 +78,8 @@ the three briefs, and what changed in the packs because of them.
 an agent parked with `wait --in A` is not woken by a comment in B.
 
 ## Phase 2 — packs and assets: the module exists, on the terminal
+
+**Status: CLOSED.** 2026-09-13 — real CLI arena creation, explicit membership, runtime assets and browser fighter rendering passed.
 
 - **Module assets** ([§1](module-gaps.md#1-assets), #251): the `assets/`
   convention, `module-build.mjs` copying it, the manifest listing it, the
@@ -90,6 +103,8 @@ build of the module carries its avatars and they draw from
 
 ## Phase 3 — casting: the fighters walk in
 
+**Status: PART-DONE.** 2026-09-13 — casting/templates, hand-in and bell are verified with synthetic entries; actual model-built entries remain.
+
 - **Templates and `enrol`** ([§5](module-gaps.md#5-casting-agents), #255):
   `CliModule.templates`, `CliHost.enrol`/`withdraw` promoted from `rc add` and
   `rc rm`, the rc honouring template ids from installed modules only.
@@ -106,6 +121,8 @@ lanes, three entries stamped at the bell, the floor under each.
 
 ## Phase 4 — the vote and the result
 
+**Status: PART-DONE.** 2026-09-13 — CLI voting, split tally, self-rank refusal and withdrawal pass; the real room’s bout remains.
+
 - **The curtain's `rounds`** ([§6](module-gaps.md#6-smaller-a-curtain-that-is-not-the-sprints-and-wait---in),
   #256): the sprint becomes the curtain's first caller, the competition its
   second.
@@ -121,6 +138,8 @@ by the verb and dropped by the tally with a sentence.
 
 ## Phase 5 — the picker
 
+**Status: PART-DONE.** 2026-09-13 — Chat and keyboard palette open the same lazy picker and lay a native arena; the measured cost and live fighter walk remain.
+
 - **The dialog slot** ([§3](module-gaps.md#3-a-dialog-slot), #254):
   `WebModule.dialogs`, `DialogFacts`, `opens` on actions and module commands,
   the shell's `Modal` as the box.
@@ -135,6 +154,8 @@ by the verb and dropped by the tally with a sentence.
 module's and disappears when the module is removed.
 
 ## Phase 5.5 — on isocan.io
+
+**Status: PART-DONE.** 2026-09-13 — build lists, assets, lazy loading and the unchanged bundle ceiling pass locally; the dev/prod bout remains.
 
 *Decided 11 Sep 2026: it ships on the hosted home.* The first phase in which
 anybody who is not on this repo can play a bout, so it waits for the picker —
@@ -163,6 +184,8 @@ unchanged within the ratchet.
 
 ## Phase 6 — bring your own fighter
 
+**Status: PART-DONE.** 2026-09-13 — data contributions and BYO commands pass synthetic runtime checks; a teammate’s actual pack fighting from a git install remains.
+
 - **Contribution points and data-only modules** ([§2](module-gaps.md#2-contribution-points),
   #252): `points`, `contributes`, `contributions()`, manifests carrying data,
   `module add` saying *data only — runs nothing*.
@@ -175,6 +198,8 @@ unchanged within the ratchet.
 tenth portrait and fights.
 
 ## Phase 7 — blind bouts, the converge half, and standings
+
+**Status: PART-DONE.** 2026-09-13 — take/remix/rematch and standings pass synthetic CLI checks; blind remains outside this continuation and explicitly refuses.
 
 - **Blind** (#262): fighters on desks (`sprint desk`), shuffled hand-in to a
   Wall area as *Entry A, B, C*, coaching refused with a sentence, names on the
@@ -189,6 +214,8 @@ tenth portrait and fights.
 
 ## Phase 8 — take it away
 
+**Status: PART-DONE.** 2026-09-13 — removing and restoring the source/runtime module leaves the snapshot and log intact; the required container-image walk remains.
+
 The removal proof, for the largest module yet, by hand and recorded here —
 on a build of the hosted home's own image, since that is where it ships: a
 home with three finished arenas; the module removed from both lists and the
@@ -199,3 +226,27 @@ the runtime build added back with `isocan module add`, and everything draws
 again.
 
 **Acceptance:** Scene 7's second half, played and written down.
+
+## Trajectory and remaining hands
+
+- **2026-09-13** — The current canvas model makes the arena an explicit
+  forest, not a geometric stack of areas. Shared preparation uses the existing
+  bounded group resolver so CLI and picker create one undoable act.
+- **2026-09-13** — Enrolment publishes work another process can immediately
+  start. Prepare the directory and rc configuration before that publication;
+  a preparation token and serialized file writes protect refusal rollback.
+- **2026-09-13** — A host captured before its first snapshot can retain a
+  false legacy mode. Refresh the host when mode or admission changes, while
+  each pending action retains the destination it captured before awaiting IO.
+- **2026-09-13** — Open: phase 0 needs three people, three briefs, real
+  fighter runs and measured token/turn costs. No paid fighter run was started.
+  Pack tuning and the picker’s honest measured-cost line depend on this.
+- **2026-09-13** — Open: phases 3–6 and the non-blind part of phase 7 need
+  the actual fighter/teammate room walk. Phase 5.5 additionally needs a parked
+  laptop rc against dev, two browser voters, winner versioning, then prod.
+- **2026-09-13** — Open: blind bouts are deferred beyond the authorized
+  integration. They need their own implementation and desk/shuffle proof;
+  the current verb refuses rather than simulating anonymity.
+- **2026-09-13** — Open: phase 8 requires a working container engine.
+  Docker Desktop’s local administrator setup prevented the image walk here;
+  the source/runtime removal proof cannot close that named requirement.

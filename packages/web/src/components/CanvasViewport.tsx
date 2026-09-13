@@ -11,7 +11,6 @@ import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints } from "../lib/viewport.ts";
 import { moduleDropFor } from "../modules.ts";
 import { creationDestination, selectCreatedItems } from "../lib/groupplacement.ts";
-import { webHostFor } from "../lib/modulehost.ts";
 import { newGroupId } from "@isocan/core";
 import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
@@ -20,6 +19,7 @@ import { placeSketch } from "../lib/sketch.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
+import { longPress } from "../lib/longpress.ts";
 import { isTyping } from "../lib/keys.ts";
 import { TextComposer } from "./TextComposer.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
@@ -85,7 +85,7 @@ const INK_WIDTH = 3;
 const INK_MIN_STEP = 2;
 
 
-export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { canvasId: string; actor: Actor; onPlanItem?: (id: string) => void; currentNode?: string | undefined }) {
   /**
    * **The past wins when there is one.** The scrubber folds a moment with
    * core's `at` and parks it beside the live replica (`canvasStore.past`);
@@ -123,6 +123,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const navigate = useNavigate();
   const fannedItemId = useUiStore((s) => s.fannedItemId);
   const ref = useRef<HTMLDivElement>(null);
+  const planPress = useRef<{ id: string; x: number; y: number } | null>(null);
   const [dropping, setDropping] = useState(false);
   const [dropMessage, setDropMessage] = useState("Drop to add to the canvas");
   /**
@@ -497,14 +498,19 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * means the five you had.
    */
   function onContextMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    // Native touch menus bypass the motion/second-finger cancellation below.
+    if ((e.nativeEvent as PointerEvent).pointerType === "touch") return;
+    showContextMenu(e.target, e.clientX, e.clientY);
+  }
+
+  function showContextMenu(origin: EventTarget | null, x: number, y: number, current = () => true) {
     const ui = useUiStore.getState();
     const canvas = useCanvasStore.getState().canvas;
     if (!canvas) return;
-    const target = (e.target as HTMLElement).closest?.("[data-item-id]");
+    const target = (origin as HTMLElement)?.closest?.("[data-item-id]");
     const rawItemId = target?.getAttribute("data-item-id") ?? null;
     const itemId = rawItemId ? scopedHit(rawItemId) : null;
-    e.preventDefault();
-
     if (itemId) {
       const within = ui.selectedItemIds.includes(itemId);
       const ids = within && ui.selectedItemIds.length > 1 ? ui.selectedItemIds : [itemId];
@@ -513,17 +519,17 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         .map((id) => canvas.items[id])
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
       if (items.length === 0) return;
-      const at = { x: e.clientX, y: e.clientY };
-      const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+      const at = { x: x, y: y };
+      const world = screenToWorld(ui.viewport, x, y);
       void menus().then(({ itemMenu }) =>
-        openContextMenu(at, itemMenu(items, { canvasId, actor, world, navigate })),
+        current() && openContextMenu(at, itemMenu(items, { canvasId, actor, world, navigate })),
       );
       return;
     }
-    const at = { x: e.clientX, y: e.clientY };
-    const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    const at = { x: x, y: y };
+    const world = screenToWorld(ui.viewport, x, y);
     void menus().then(({ canvasMenu }) =>
-      openContextMenu(at, canvasMenu({ canvasId, actor, world, navigate })),
+      current() && openContextMenu(at, canvasMenu({ canvasId, actor, world, navigate })),
     );
   }
 
@@ -547,6 +553,16 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * pointer is treated as an addition.
    */
   const abandonGesture = useRef<(() => void) | null>(null);
+  const menuAction = useRef(showContextMenu);
+  menuAction.current = showContextMenu;
+  const hold = useRef<ReturnType<typeof longPress> | null>(null);
+  if (!hold.current) hold.current = longPress((point, current) => {
+    abandonGesture.current?.();
+    planPress.current = null;
+    menuAction.current(point.target, point.x, point.y, current);
+  });
+  useEffect(() => () => hold.current?.dispose(), []);
+
 
   /** The two fingers a pinch is about, oldest first so the pair is stable
    *  across a move — a third finger is ignored rather than joining. */
@@ -567,7 +583,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   }
 
   function onPointerDown(e: React.PointerEvent) {
-    const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
+    const isBackground = Boolean(onPlanItem) || e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
     // through activeTool too.) The Hand tool pans from anywhere — an item
     // yields its pointer when it is active — so it is not gated on background.
@@ -594,6 +610,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       if (fingers.current.size > 2) return;
     }
 
+    if (onPlanItem && (activeTool === "select" || activeTool === "hand")) { startPan(e); return; }
     const wantsPan = e.button === 1 || (activeTool === "hand" && e.button === 0);
 
     if (activeTool === "zoom" && e.button === 0) {
@@ -1004,7 +1021,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       if (claim) {
         const data = e.dataTransfer.getData(claim.mimeType);
         try {
-          const host = webHostFor(canvasId, actor, destination);
+          const couldEdit = canEditNow();
+          const { webHostFor } = await import("../lib/modulehost.ts");
+          const host = webHostFor(canvasId, actor, destination, couldEdit);
           const ops = await claim.run({
             canvasId,
             ...destination,
@@ -1096,6 +1115,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   return (
     <div
       ref={ref}
+      data-current-node={currentNode}
       className={`canvas-viewport${isPlace ? " themed" : ""}${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
         activeTool === "select" && !commentMode ? " own-cursor-on" : ""
       }`}
@@ -1103,6 +1123,25 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
       }}
+      onPointerDownCapture={(e) => {
+        if (onPlanItem) {
+          hold.current?.down(e);
+          const id = (e.target as HTMLElement).closest("[data-item-id]")?.getAttribute("data-item-id");
+          if (fingers.current.size) planPress.current = null;
+          else planPress.current = id ? { id, x: e.clientX, y: e.clientY } : null;
+          e.stopPropagation(); onPointerDown(e); return;
+        }
+        hold.current?.down(e);
+        if ((e.target as HTMLElement).closest("a, button, input, textarea, select, [contenteditable=true]")) hold.current?.cancel();
+      }}
+      onPointerMoveCapture={(e) => hold.current?.move(e)}
+      onPointerUpCapture={(e) => {
+        hold.current?.up(e.pointerId);
+        const pressed = planPress.current; planPress.current = null;
+        if (pressed && Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < 8) onPlanItem?.(pressed.id);
+      }}
+      onPointerCancelCapture={(e) => { planPress.current = null; hold.current?.up(e.pointerId); }}
+      onClickCapture={(e) => { if (hold.current?.consumeClick()) { e.preventDefault(); e.stopPropagation(); } }}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
       onPointerMove={(e) => {
@@ -1164,6 +1203,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
             map node is chromeless text, and a line over it strikes through
             the words. */}
         <ModuleUnderlays />
+        {currentNode && canvas?.items[currentNode] && <div className="phone-current-node" aria-label="Current node" style={{ left: canvas.items[currentNode]!.x, top: canvas.items[currentNode]!.y, width: canvas.items[currentNode]!.width, height: canvas.items[currentNode]!.height }} />}
+
         {items.map((item) => (
           <ItemView
             key={item.id}

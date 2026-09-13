@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Canvas } from "../src/model.ts";
-import { fuzzyMatch, litRuns, rankCanvases } from "../src/canvasswitch.ts";
+import { groupSwitchRows, fuzzyMatch, litRuns, rankCanvases } from "../src/canvasswitch.ts";
 import { inScope, shelvePatch } from "../src/shelf.ts";
 
 /**
@@ -24,6 +24,12 @@ const canvas = (id: string, title: string, updated = "2026-01-01T00:00:00Z", des
 });
 
 describe("fuzzy matching a title", () => {
+  it("keeps an exact or contiguous title reading before repeated word starts", () => {
+    expect(fuzzyMatch("Bramble remote", "Bramble remote")?.positions).toEqual([0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13]);
+    expect(fuzzyMatch("Board board", "Acme Board board")?.positions).toEqual([5, 6, 7, 8, 9, 11, 12, 13, 14, 15]);
+    expect(fuzzyMatch("lkh", "Lake House")?.positions).toEqual([0, 2, 5]);
+    expect(fuzzyMatch("hs", "Home screen")?.positions).toEqual([0, 5]);
+  });
   it("takes the letters in order, from anywhere", () => {
     expect(fuzzyMatch("lkh", "Lake House")?.positions).toEqual([0, 2, 5]);
   });
@@ -209,5 +215,31 @@ describe("the highlight", () => {
 
   it("lights nothing with no positions", () => {
     expect(litRuns("Lake", [])).toEqual([["Lake", false]]);
+  });
+});
+
+
+describe("space headings in the unranked switcher", () => {
+  const spaces = [
+    { id: "spc_b", name: "Bramble", createdBy: "another-owner", at: "", canvasIds: ["b", "recent"] },
+    { id: "spc_a", name: "Acme", createdBy: "u", at: "", canvasIds: ["a", "archived"] },
+  ];
+  const canvases = [canvas("b", "Bramble board"), canvas("free", "Free board"), canvas("a", "Acme board"), canvas("recent", "Recent board"), { ...canvas("archived", "Archived board"), properties: shelvePatch("2026-01-01").properties! }];
+  it("keeps Recent first, includes granted spaces, preserves activity inside each space and archive scope", () => {
+    const result = groupSwitchRows(rankCanvases(canvases, "", ["recent"]), spaces, "");
+    expect(result.map((entry) => [entry.row.canvas.id, entry.group])).toEqual([
+      ["recent", "Recent"], ["a", "Acme"], ["b", "Bramble"], ["free", "No space"],
+    ]);
+    expect(groupSwitchRows(rankCanvases(canvases, "", [], null, "all"), spaces, "").find((entry) => entry.row.canvas.id === "archived")?.row.shelved).toBe(true);
+  });
+  it("leaves search in one flat ranked order", () => {
+    const ranked = rankCanvases(canvases, "board", ["recent"]);
+    const grouped = groupSwitchRows(ranked, spaces, "board");
+    expect(grouped.map((entry) => entry.row)).toEqual(ranked);
+    expect(grouped.every((entry) => entry.group === null)).toBe(true);
+  });
+  it("does not merge a real space named Recent or two spaces with equal names", () => {
+    const result = groupSwitchRows(rankCanvases(canvases, "", ["recent"]), spaces.map((space) => ({ ...space, name: "Recent" })), "");
+    expect(result.filter((entry) => entry.group === "Recent").map((entry) => entry.groupId)).toEqual(["recent", "spc_a", "spc_b"]);
   });
 });

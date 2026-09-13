@@ -171,7 +171,9 @@ describe("both surfaces ask the same question", () => {
 
   it("the inbox reads core's rule rather than restating it", () => {
     const cli = read("../../cli/src/main.ts");
-    expect(cli).toContain("inboxOn(");
+    expect(cli).toContain("ctx.client.inbox(");
+    const home = read("../../server/src/http.ts");
+    expect(home).toContain("inboxOn(");
     expect(cli).toContain("namesFor(");
   });
 

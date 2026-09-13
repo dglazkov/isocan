@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import net from "node:net";
 import Fastify, { type FastifyInstance } from "fastify";
-import { DEFAULT_PORT, healthPath } from "@isocan/core";
+import { DEFAULT_PORT, healthPath, type Actor } from "@isocan/core";
 import { Engine } from "./engine.ts";
 import { registerRoutes } from "./http.ts";
 import { ParkCursors } from "./park.ts";
@@ -26,6 +26,7 @@ import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
 import { HomeLinks } from "./home-links.ts";
 import { contentPorts, registerContentRoutes } from "./content.ts";
 import { contentTtl } from "./content-auth.ts";
+import { adoptIdentity } from "./badge-store.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -531,6 +532,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     park: new ParkCursors(home),
     // This machine's runtime modules, read per request (modules phase 3).
     modulesHome: home,
+    adoptIdentity: (actor: Actor) => adoptIdentity(home, actor),
     // What the bind means, said once here rather than read off the socket at
     // every listing: anything but the loopback address is a daemon other
     // machines can reach, and the shelf is off there.

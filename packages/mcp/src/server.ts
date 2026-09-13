@@ -1,6 +1,7 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { Home } from "@isocan/api";
+import { waitForResolvedFeedback, type CanvasHandle, type ExplicitIdentity, type Home } from "@isocan/api";
+import type { Actor } from "@isocan/core";
 
 /**
  * **The canvas, as tools an agent can call** (#220, phase 2).
@@ -22,14 +23,11 @@ import type { Home } from "@isocan/api";
  * building it: a surface two unrelated projects ask for independently is not
  * a feature, it is a missing edge of the isomorphism.
  *
- * **Read-only, on purpose, for now.** Every tool here answers a question and
- * changes nothing. The write verbs wait on nothing technical — `@isocan/api`
- * has `add`, `edit`, `reply` and the rest a few lines away — but on the thing
- * `phases.md` names: an agent that arrives over MCP is whoever the machine
- * already is, and by default that is the PERSON. Reading as the person costs
- * nothing and attributes nothing. Writing as them would put the person's face
- * on an agent's work, and the fix for that is addressability rather than a
- * refusal, so it is built deliberately rather than by extension.
+ * **Identity is per call.** Omitting a session keeps the API's ambient
+ * identity. A collaborating agent deliberately claims a stable session key
+ * and supplies it on subsequent calls. Resources use ambient identity; they
+ * never borrow the most recently used tool session. No process-global actor
+ * or environment switch exists here.
  *
  * **Errors are answers, not exceptions.** A tool that throws gives the calling
  * model a stack trace; a tool that returns `isError` with a sentence gives it
@@ -44,7 +42,10 @@ import type { Home } from "@isocan/api";
  * rather than held: a daemon that restarts under a long-lived MCP server must
  * not leave every tool broken until somebody notices. */
 export interface ServerDeps {
-  home: () => Promise<Home>;
+  /** A feedback call's signal must reach the connection's setup HTTP too. */
+  home: (identity?: ExplicitIdentity, signal?: AbortSignal) => Promise<Home>;
+  /** Explicit claim uses the same durable registry as CLI identity --session. */
+  claim?: (identity: ExplicitIdentity, name: string) => Promise<Actor>;
   /** Reported on `initialize`, so a host can say which build it is talking
    * to. */
   version?: string;
@@ -89,6 +90,7 @@ async function answering(body: () => Promise<unknown>) {
  * argument at all, which is the case worth making free.
  */
 const canvasArg = {
+  session: z.string().trim().min(1).max(256).optional().describe("An explicitly claimed caller session key. Omit to use the machine's ambient identity. Never inferred from clientInfo."),
   canvas: z
     .string()
     .optional()
@@ -96,6 +98,25 @@ const canvasArg = {
       "Canvas id or a unique title prefix. Omit for the canvas bound to the directory the server was started in.",
     ),
 };
+
+/** The same admitted canvas JSON through tools and resources. */
+async function canvasRead(handle: CanvasHandle, group?: string, recursive?: boolean) {
+  const items = await handle.items({ in: group, recursive });
+  return {
+    canvas: { id: handle.record.id, title: handle.record.title },
+    items: items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      kind: item.kind,
+      x: item.x,
+      y: item.y,
+      width: item.width,
+      height: item.height,
+      containerId: item.containerId ?? null,
+      ...(item.groupLayout ? { groupLayout: item.groupLayout } : {}),
+    })),
+  };
+}
 
 /**
  * Build the server, without attaching it to anything.
@@ -112,19 +133,20 @@ export function createServer(deps: ServerDeps): McpServer {
     version: deps.version ?? "0.1.0",
   });
 
-  const canvasOf = async (ref?: string) => (await deps.home()).canvas(ref);
+  const identityOf = (session?: string): ExplicitIdentity | undefined => session === undefined ? undefined : { session, harness: "mcp" };
+  const canvasOf = async (ref?: string, session?: string) => (await deps.home(identityOf(session))).canvas(ref);
 
   server.registerTool(
     "list_canvases",
     {
       title: "List canvases",
       description:
-        "Every canvas this home holds, with its id and title. Start here when you do not know which canvas the work is on.",
-      inputSchema: {},
+        "The canvases discoverable to this caller, with id and title. Start here when you do not know which canvas the work is on.",
+      inputSchema: { session: canvasArg.session },
     },
-    async () =>
+    async ({ session }) =>
       answering(async () => {
-        const home = await deps.home();
+        const home = await deps.home(identityOf(session));
         // `ctx` is the API's own public handle to the client; a listing is
         // the one read `Home` does not wrap, and reaching through it beats
         // widening the API surface for a single caller.
@@ -144,24 +166,10 @@ export function createServer(deps: ServerDeps): McpServer {
         "What is on a canvas: every item with its id, title, kind and position. The map, not the contents — use read_item for one item's text.",
       inputSchema: { ...canvasArg, in: z.string().optional().describe("Read direct members of this canvas group (or legacy sheet)."), recursive: z.boolean().optional().describe("Include nested descendants of the named group.") },
     },
-    async ({ canvas, in: group, recursive }) =>
+    async ({ canvas, session, in: group, recursive }) =>
       answering(async () => {
-        const handle = await canvasOf(canvas);
-        const items = await handle.items({ in: group, recursive });
-        return {
-          canvas: { id: handle.record.id, title: handle.record.title },
-          items: items.map((item) => ({
-            id: item.id,
-            title: item.title,
-            kind: item.kind,
-            x: item.x,
-            y: item.y,
-            width: item.width,
-            height: item.height,
-            containerId: item.containerId ?? null,
-            ...(item.groupLayout ? { groupLayout: item.groupLayout } : {}),
-          })),
-        };
+        const handle = await canvasOf(canvas, session);
+        return canvasRead(handle, group, recursive);
       }),
   );
 
@@ -170,8 +178,8 @@ export function createServer(deps: ServerDeps): McpServer {
     description: "The complete context manifest: hierarchy, original selected roots, included/excluded/unavailable counts and exact source/visual versions. Supply thread and comment to read a frozen request; otherwise read current roots or ambient pins. This never sends a message.",
     annotations: { readOnlyHint: true },
     inputSchema: { ...canvasArg, roots: z.array(z.string()).optional(), in: z.string().optional(), includeExcluded: z.boolean().optional(), thread: z.string().optional(), comment: z.string().optional() },
-  }, async ({ canvas, roots, in: group, includeExcluded, thread, comment }) => answering(async () => {
-    const handle = await canvasOf(canvas);
+  }, async ({ canvas, session, roots, in: group, includeExcluded, thread, comment }) => answering(async () => {
+    const handle = await canvasOf(canvas, session);
     if (thread !== undefined || comment !== undefined) {
       if (!thread || !comment) throw new Error("frozen context needs both thread and comment");
       if (roots !== undefined || group !== undefined || includeExcluded !== undefined) throw new Error("a saved request already fixes its roots and exclusion policy");
@@ -185,8 +193,8 @@ export function createServer(deps: ServerDeps): McpServer {
     description: "Read one exact version from a saved message's context, even after its live item changes or is deleted. Returns a bounded byte page with progress, exclusion/unavailability reasons, and UTF-8 or lossless base64. Follow nextOffset until null; source and visual are separate faces. Access refusal is an error, never reported as missing content.",
     annotations: { readOnlyHint: true },
     inputSchema: { ...canvasArg, thread: z.string(), comment: z.string(), item: z.string(), face: z.enum(["source", "visual"]).optional(), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(262144).optional() },
-  }, async ({ canvas, thread, comment, item, face, offset, limit }) => answering(async () => {
-    return (await canvasOf(canvas)).contextItem(thread, comment, item, { face, offset, limit });
+  }, async ({ canvas, session, thread, comment, item, face, offset, limit }) => answering(async () => {
+    return (await canvasOf(canvas, session)).contextItem(thread, comment, item, { face, offset, limit });
   }));
 
   server.registerTool(
@@ -197,9 +205,9 @@ export function createServer(deps: ServerDeps): McpServer {
         "One item's own content — the text of a note, the source of a document. Ids come from read_canvas.",
       inputSchema: { ...canvasArg, item: z.string().describe("The item id (itm_…).") },
     },
-    async ({ canvas, item }) =>
+    async ({ canvas, session, item }) =>
       answering(async () => {
-        const handle = await canvasOf(canvas);
+        const handle = await canvasOf(canvas, session);
         return handle.item(item);
       }),
   );
@@ -212,9 +220,9 @@ export function createServer(deps: ServerDeps): McpServer {
         "The comment threads on a canvas — what people and agents have said, and what is still unanswered. This is where the reasoning lives; the items are only what it produced.",
       inputSchema: canvasArg,
     },
-    async ({ canvas }) =>
+    async ({ canvas, session }) =>
       answering(async () => {
-        const handle = await canvasOf(canvas);
+        const handle = await canvasOf(canvas, session);
         return { threads: await handle.threads() };
       }),
   );
@@ -230,9 +238,9 @@ export function createServer(deps: ServerDeps): McpServer {
         limit: z.number().int().min(1).max(100).optional().describe("How many entries (default 10)."),
       },
     },
-    async ({ canvas, limit }) =>
+    async ({ canvas, session, limit }) =>
       answering(async () => {
-        const handle = await canvasOf(canvas);
+        const handle = await canvasOf(canvas, session);
         return { activity: await handle.activity(limit ?? 10) };
       }),
   );
@@ -245,12 +253,77 @@ export function createServer(deps: ServerDeps): McpServer {
         "The people and agents this canvas knows, and how to address them. Names here are what an @mention resolves against.",
       inputSchema: canvasArg,
     },
-    async ({ canvas }) =>
+    async ({ canvas, session }) =>
       answering(async () => {
-        const handle = await canvasOf(canvas);
+        const handle = await canvasOf(canvas, session);
         return { who: await handle.who() };
       }),
   );
 
+  const summary = async (handle: CanvasHandle) => ({ layers: await handle.contextSummary(deps.version ? { guideVersion: deps.version } : {}) });
+  server.registerTool("read_context_summary", {
+    title: "Read layered context",
+    description: "The live Context view: local and inherited sources, pins, exclusions, overrides, staleness and unavailable-source reasons. Distinct from item manifests and frozen request content; this poll marks nothing seen.",
+    annotations: { readOnlyHint: true }, inputSchema: canvasArg,
+  }, async ({ canvas, session }) => answering(async () => summary(await canvasOf(canvas, session))));
+
+  server.registerTool("claim_agent", {
+    title: "Claim an agent session",
+    description: "Deliberately claim a name under a stable caller-supplied session key. Use that key on later calls; restarting MCP preserves the claim. A missing claim never falls back to the person's identity.",
+    inputSchema: { session: canvasArg.session.unwrap(), name: z.string().trim().min(1).max(100) },
+  }, async ({ session, name }) => answering(async () => {
+    if (!deps.claim) throw new Error("This MCP connection does not support session claims.");
+    return { session, actor: await deps.claim(identityOf(session)!, name) };
+  }));
+  const content = z.string().max(1_048_576).describe("Text/source content for this item, at most 1,048,576 characters.");
+  const contextArgs = { roots: z.array(z.string()).optional(), in: z.string().optional(), includeExcluded: z.boolean().optional() };
+  server.registerTool("create_item", {
+    title: "Create an item",
+    description: "Create an attributed item from text or source content. Supply your claimed session to act as that agent; optional group insertion remains one atomic canvas act.",
+    inputSchema: { ...canvasArg, content, mime: z.string().min(1).default("text/markdown"), title: z.string().optional(), in: z.string().optional() },
+  }, async ({ canvas, session, content, mime, title, in: group }) => answering(async () => (await canvasOf(canvas, session)).add({ content, mime, ...(title === undefined ? {} : { title }), ...(group === undefined ? {} : { in: group }) })));
+  server.registerTool("edit_item", {
+    title: "Edit an item",
+    description: "Create a new attributed version of an existing item from text/source content. Prior versions remain available; supply your deliberate session key to write as that agent.",
+    inputSchema: { ...canvasArg, item: z.string(), content, mime: z.string().optional() },
+  }, async ({ canvas, session, item, content, mime }) => answering(async () => (await canvasOf(canvas, session)).edit(item, { content, ...(mime === undefined ? {} : { mime }) })));
+  server.registerTool("post_comment", {
+    title: "Post a comment",
+    description: "Post an attributed comment on an item, or in the canvas Chat when item is omitted. Mentions use the shared CLI address rules; roots can freeze exact context for the request.",
+    inputSchema: { ...canvasArg, ...contextArgs, item: z.string().optional(), message: z.string().min(1).max(65536) },
+  }, async ({ canvas, session, item, message, roots, in: group, includeExcluded }) => answering(async () => {
+    const handle = await canvasOf(canvas, session);
+    const options = { rootIds: roots, in: group, includeExcluded };
+    return item ? handle.comment(item, message, options) : handle.notify(message, options);
+  }));
+  server.registerTool("reply_comment", {
+    title: "Reply in a thread",
+    description: "Reply as the selected caller identity in an existing thread. Mentions and thread participation determine who receives feedback, using the same rules as CLI comments.",
+    inputSchema: { ...canvasArg, ...contextArgs, thread: z.string(), message: z.string().min(1).max(65536) },
+  }, async ({ canvas, session, thread, message, roots, in: group, includeExcluded }) => answering(async () => (await canvasOf(canvas, session)).reply(thread, message, { rootIds: roots, in: group, includeExcluded })));
+  server.registerTool("wait_for_feedback", {
+    title: "Wait for addressed feedback",
+    description: "Wait up to 60 seconds for mentions, Chat messages or participating-thread replies addressed to this identity. Return and resume the cursor, including irrelevant traffic; timeout/cancellation ends the poll. Marks nothing seen and advertises no presence.",
+    annotations: { readOnlyHint: true },
+    inputSchema: { ...canvasArg, cursor: z.number().int().nonnegative().optional(), timeoutMs: z.number().int().min(1).max(60000).default(30000) },
+  }, async ({ canvas, session, cursor, timeoutMs }, extra) => answering(() => waitForResolvedFeedback(async (signal) => {
+    const home = await deps.home(identityOf(session), signal);
+    signal.throwIfAborted();
+    const handle = await home.canvas(canvas);
+    signal.throwIfAborted();
+    return { client: handle.ctx.client, canvasId: handle.id, actor: handle.ctx.actor };
+  }, { ...(cursor === undefined ? {} : { since: cursor }), timeoutMs, signal: extra.signal })));
+
+  for (const kind of ["canvas", "context"] as const) {
+    const uriFor = (id: string) => `isocan://canvas/${encodeURIComponent(id)}${kind === "context" ? "/context" : ""}`;
+    server.registerResource(kind, new ResourceTemplate(`isocan://canvas/{id}${kind === "context" ? "/context" : ""}`, {
+      list: async () => ({ resources: (await (await deps.home()).ctx.client.listCanvases()).map((canvas) => ({ uri: uriFor(canvas.id), name: `${canvas.title} — ${kind}`, mimeType: "application/json" })) }),
+    }), { mimeType: "application/json", description: `Current ${kind} JSON using ambient identity and ordinary canvas admission; explicit agent sessions are selected per tool call.` }, async (uri, { id }) => {
+      if (typeof id !== "string") throw new Error("a single canvas id is required");
+      const handle = await canvasOf(id);
+      const value = kind === "context" ? await summary(handle) : await canvasRead(handle);
+      return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(value, null, 2) }] };
+    });
+  }
   return server;
 }

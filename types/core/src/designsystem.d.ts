@@ -7,11 +7,37 @@ export declare function designSystemProperties(): Record<string, string>;
 /** Is this item the design system — under either name it has been given? */
 export declare function isDesignSystem(item: Item): boolean;
 /**
- * The canvas's design system, if it has one. Most recently updated wins: two
- * are a mistake rather than a feature, and the newest is the likelier answer
- * to "which one is real".
+ * **The design system that governs a place on the canvas**, if there is one.
+ *
+ * With no `at`: the canvas's own — a design-system item in NO scope. Most
+ * recently updated wins: two at the same level are a mistake rather than a
+ * feature, and the newest is the likelier answer to "which one is real".
+ *
+ * With `at` (11 Sep 2026, `docs/projects/design-competition/module-gaps.md`
+ * §4): an item follows direct group membership and then its ancestors, else
+ * the canvas's own. Legacy items and point queries use geometric areas.
+ * Detaching a `DESIGN.md` from its group makes it the canvas's in one undo.
+ *
+ * **Why the canvas-wide pick now ignores scoped ones**: it did not, and
+ * "newest wins" over the whole canvas meant three lanes each holding a
+ * `DESIGN.md` silently replaced the canvas's own system with whichever lane
+ * was touched last — every later `design --css`, every audit on a screen's
+ * arrival, every nudge. That was not a missing feature; it was a bug waiting
+ * for the first canvas with two systems, and a canvas holding a marketing
+ * site and an admin app has always been one.
  */
-export declare function designSystem(canvas: CanvasContents): Item | null;
+export declare function designSystem(canvas: CanvasContents, opts?: {
+    at?: {
+        x: number;
+        y: number;
+    } | Item;
+}): Item | null;
+/** Every design system that governs an area rather than the canvas, with
+ *  the area it governs — what the Context view lists under each area. */
+export declare function scopedDesignSystems(canvas: CanvasContents): {
+    area: Item;
+    item: Item;
+}[];
 /**
  * **How many screens before a canvas should have written its style down.**
  *

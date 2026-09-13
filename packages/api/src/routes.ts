@@ -1,3 +1,4 @@
+import { inboxRoute, type InboxResponse } from "@isocan/core";
 import type {
   Actor,
   ActorBindingRecord,
@@ -91,7 +92,7 @@ import {
   spaceGrantRevokeRoute,
   spaceGrantsRoute,
   spaceLinkRoute,
-  SEEN_ROUTE,
+  seenMarksRoute,
   seenRoute,
   spaceRoute,
   SPACES_ROUTE,
@@ -216,6 +217,8 @@ export class DaemonRoutes {
   constructor(
     readonly base: string,
     readonly home: string,
+    /** Optional lifetime of a per-call connection, including its identity setup. */
+    protected readonly lifetime?: AbortSignal,
   ) {}
 
   /**
@@ -259,8 +262,11 @@ export class DaemonRoutes {
      */
     extra?: Record<string, string>,
   ): Promise<T> {
+    signal = this.lifetime ? AbortSignal.any([this.lifetime, ...(signal ? [signal] : [])]) : signal;
+    signal?.throwIfAborted();
     const send = async () => {
       const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extra };
+      signal?.throwIfAborted();
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url}`, {
         method,
@@ -271,6 +277,7 @@ export class DaemonRoutes {
     };
     let res = await send();
     let json = (await res.json().catch(() => null)) as any;
+    signal?.throwIfAborted();
     /**
      * **An end by the operator is not recovered from** (operator phase 4;
      * journey 7 step 4: *Sam's CLI does not quietly knock for a new badge and
@@ -291,12 +298,14 @@ export class DaemonRoutes {
     }
     const recovered =
       res.status === 401
-        ? await this.reBadge()
+        ? await this.reBadge(signal)
         : json?.code === "not-your-actor" && (await this.reclaimIdentity());
     if (recovered) {
+      signal?.throwIfAborted();
       res = await send();
       json = (await res.json().catch(() => null)) as any;
     }
+    signal?.throwIfAborted();
     if (!res.ok) {
       throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
     }
@@ -322,8 +331,10 @@ export class DaemonRoutes {
    * "a badge is required — ask the door for one" — would advise repeating
    * the act the door just refused. Carry its status, code and words instead;
    * other recovery failures leave the original answer intact. */
-  private async reBadge(): Promise<boolean> {
-    const answer = await askTheDoor(this.base);
+  private async reBadge(signal: AbortSignal | undefined = this.lifetime): Promise<boolean> {
+    signal?.throwIfAborted();
+    const answer = await askTheDoor(this.base, 10_000, signal);
+    signal?.throwIfAborted();
     if ("refused" in answer) {
       if (answer.refused.status === 403 || answer.refused.status === 429) {
         throw new ApiError(answer.refused.status, answer.refused.error, answer.refused.code);
@@ -333,6 +344,7 @@ export class DaemonRoutes {
     const badge = answer.badge;
     this.badge = badge;
     await writeBadge(this.home, this.base, badge);
+    signal?.throwIfAborted();
     // Re-claim, THEN replay. Without this the recovery path is a 401
     // followed by a `not-your-actor`: the door mints a badge whose claims
     // are empty while the client goes on asserting the actor it has held
@@ -416,6 +428,7 @@ export class DaemonRoutes {
    * dead. See `healthPath`. */
   async healthz(timeoutMs = 300): Promise<Health | null> {
     try {
+      this.lifetime?.throwIfAborted();
       // Deliberately NOT `this.fetcher`: this is the probe, and it already
       // carries the tighter bound. A connect deadline under a 300ms abort
       // could never fire, and a retry under it would only make `isocan
@@ -423,10 +436,11 @@ export class DaemonRoutes {
       // "nothing is there yet". The deadline is for the calls whose failure
       // reaches a person as an error.
       const res = await fetch(`${this.base}${healthPath(this.base)}`, {
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(this.lifetime ? [this.lifetime] : [])]),
       });
       return res.ok ? ((await res.json()) as Health) : null;
     } catch {
+      this.lifetime?.throwIfAborted();
       return null;
     }
   }
@@ -556,6 +570,11 @@ export class DaemonRoutes {
     return this.request("DELETE", `/api/presence/actors/${actorId}${query}`);
   }
 
+  /** Authoritative inbox entries and seen marks across the canvases held here. */
+  inbox(actorId: string, options: { canvasId?: string; label?: string } = {}): Promise<InboxResponse> {
+    return this.request("GET", inboxRoute(actorId, options));
+  }
+
   listCanvases(): Promise<Canvas[]> {
     return this.request("GET", "/api/projects");
   }
@@ -566,11 +585,10 @@ export class DaemonRoutes {
   // local record: the point of the feature is that your other machine finds
   // what this one saw. `docs/research/2026-09-12-seen-marks.md`.
 
-  /** Your own marks, every canvas, one read. There is deliberately no way to
-   *  ask for anybody else's. */
-  seen(actorId?: string): Promise<SeenMarksResponse> {
-    const query = actorId ? `?actorId=${encodeURIComponent(actorId)}` : "";
-    return this.request("GET", `${SEEN_ROUTE}${query}`);
+  /** Your own marks, or one canvas's prior mark at its authoritative home.
+   *  There is deliberately no way to ask for anybody else's. */
+  seen(actorId?: string, canvasId?: string): Promise<SeenMarksResponse> {
+    return this.request("GET", seenMarksRoute(actorId, canvasId));
   }
 
   /** Move the mark for one canvas to the head you had in front of you. The
@@ -804,10 +822,11 @@ export class DaemonRoutes {
    * row carries no session key by design, and `GET /api/actors` is keyed by
    * session key — so a caller that throws this response away cannot ask for
    * it again, and the identity the pass endowed becomes unreachable from this
-   * machine even though the badge still holds it. `isocan setup` writes it
-   * into `identity.json` for exactly that reason.
+   * machine even though the badge still holds it. Replica setup opts into
+   * local adoption so the daemon saves it alongside its badge writes. Direct
+   * setup leaves the remote machine alone and saves it in the CLI process.
    */
-  redeemPass(token: string, home?: string): Promise<RedeemPassResponse> {
+  redeemPass(token: string, home?: string, adoptIdentity = false): Promise<RedeemPassResponse> {
     /**
      * `home` is the address the pass was pasted with, and it is sent only when
      * it is not this daemon's own base — a daemon told to redeem a pass minted
@@ -820,6 +839,7 @@ export class DaemonRoutes {
       home !== undefined && normalizeHomeUrl(home) !== normalizeHomeUrl(this.base);
     return this.request("POST", PASS_REDEEM_ROUTE, {
       token,
+      ...(adoptIdentity ? { adoptIdentity: true } : {}),
       ...(elsewhere ? { home: normalizeHomeUrl(home!) } : {}),
     });
   }
@@ -890,8 +910,8 @@ export class DaemonRoutes {
     return this.request("GET", `${route}/content${query.size ? `?${query}` : ""}`);
   }
 
-  async snapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
-    const snapshot = await this.request<CanvasSnapshotResponse>("GET", `/api/projects/${canvasId}/canvas`);
+  async snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse> {
+    const snapshot = await this.request<CanvasSnapshotResponse>("GET", `/api/projects/${canvasId}/canvas`, undefined, signal);
     this.observedGroupModes.set(canvasId, snapshot.project.groupMode ?? "legacy");
     return snapshot;
   }
@@ -1262,28 +1282,37 @@ export class DaemonRoutes {
     // Blobs bypass `request` (raw bytes, no JSON), so they need the badge and
     // the recovery retry spelled out — easy to miss, and a 401 on an upload
     // would read as a broken drop.
-    const send = async () =>
-      this.fetcher(`${this.base}/api/projects/${canvasId}/blobs`, {
+    const send = async () => {
+      const auth = await this.authHeader();
+      this.lifetime?.throwIfAborted();
+      return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs`, {
         method: "POST",
         headers: {
-          ...(await this.authHeader()),
+          ...auth,
           "Content-Type": mimeType,
           [FILENAME_HEADER]: encodeFilename(filename),
         },
         body: new Uint8Array(data),
+        ...(this.lifetime ? { signal: this.lifetime } : {}),
       });
+    };
     let res = await send();
     if (res.status === 401 && (await this.reBadge())) res = await send();
     const json = (await res.json().catch(() => null)) as any;
+    this.lifetime?.throwIfAborted();
     if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code);
     return json as BlobUploadResponse;
   }
 
   async downloadBlob(canvasId: string, blobHash: string): Promise<Buffer> {
-    const send = async () =>
-      this.fetcher(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
-        headers: await this.authHeader(),
+    const send = async () => {
+      const headers = await this.authHeader();
+      this.lifetime?.throwIfAborted();
+      return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
+        headers,
+        ...(this.lifetime ? { signal: this.lifetime } : {}),
       });
+    };
     let res = await send();
     if (res.status === 401 && (await this.reBadge())) res = await send();
     if (!res.ok) {

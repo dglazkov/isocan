@@ -1,3 +1,4 @@
+import "./touch-controls.css";
 import { selectCreatedItems } from "../lib/groupplacement.ts";
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
@@ -151,6 +152,7 @@ const TOOLS: ToolDef[] = [
 ];
 
 export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const [more, setMore] = useState(false);
   const colors = useActorColors();
   const activeTool = useUiStore((s) => s.activeTool);
   const adding = useUiStore((s) => s.adding);
@@ -216,7 +218,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
 
   return (
     <div
-      className="tool-rail"
+      className={`tool-rail${more ? " tools-expanded" : ""}`}
       role="toolbar"
       aria-label="Canvas tools"
       aria-orientation="vertical"
@@ -225,7 +227,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       onContextMenu={(e) => showMenu(e, "the rail")}
     >
       {TOOLS.map((t) => (
-        <div key={t.tool} className="tool-slot">
+        <div key={t.tool} className="tool-slot" data-tool={t.tool}>
           <button
             className={`tool-btn${activeTool === t.tool ? " active" : ""}`}
             /* Drawn beside the button (`.tool-btn[data-tip]` in styles.css)
@@ -283,6 +285,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           )}
         </div>
       ))}
+      <button className="tool-btn tool-more" data-tip="More tools" aria-label="More tools" aria-expanded={more} onClick={() => setMore(!more)}>⋯</button>
       <div className="tool-sep" />
       <button
         className={`tool-btn${marksOpen ? " active" : ""}`}

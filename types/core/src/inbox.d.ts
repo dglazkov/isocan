@@ -42,6 +42,9 @@ export interface InboxEntry {
     threadId: string;
     comment: Comment;
     reason: InboxReason;
+    /** The originating comment operation, supplied by an authoritative home
+     * while its log retains it. Older or imported comments may omit this. */
+    seq?: number;
 }
 /**
  * The names you answer to. Your identity name, plus any session label you are
@@ -132,6 +135,14 @@ export interface AgentRules {
      * that quietly matches nobody.
      */
     listen?: ListenEntry[];
+    /**
+     * **Only what happens inside these areas** — area item ids (`wait --in`,
+     * 11 Sep 2026). A narrowing like `items`, by geometry rather than by name:
+     * an op touching an item whose centre is in the area, or a thread pinned
+     * there. Composes with `ops` (both must hold) and pierces nothing: a
+     * mention still wakes the agent wherever it is.
+     */
+    areas?: string[];
 }
 /** The `listen` spelling for "anyone" — `ops`'s idiom, one definition. */
 export declare const LISTEN_ANYONE = "*";

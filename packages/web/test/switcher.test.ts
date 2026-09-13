@@ -25,6 +25,7 @@ const bare = (src: string) =>
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
     .replace(/\/\/.*$/gm, "");
 const page = bare(read("../src/pages/CanvasPage.tsx"));
+const navigation = bare(read("../src/components/Navigation.tsx"));
 const palette = bare(read("../src/components/CommandPalette.tsx"));
 const crumb = bare(read("../src/components/CanvasCrumb.tsx"));
 const menuentries = bare(read("../src/lib/menuentries.tsx"));
@@ -92,7 +93,7 @@ describe("lately, shared across your machines", () => {
      * canvas opened after the first page load recorded nothing.
      */
     const seen = bare(read("../src/lib/seen.ts"));
-    expect(seen).toMatch(/loadSeen\(actorId\)\s*\.then\(\(\) => putSeen\(/);
+    expect(seen.indexOf("await loadSeen(actorId, { refresh: true })")).toBeLessThan(seen.indexOf("void putSeen("));
     expect(page, "and the page asks for one thing, not two in a row").not.toContain("loadSeen(");
   });
 
@@ -110,19 +111,19 @@ describe("lately, shared across your machines", () => {
 
 describe("the doors", () => {
   it("⌘O opens the switcher from the canvas, and crosses a cover like ⌘K", () => {
-    expect(page).toMatch(/e\.key\.toLowerCase\(\) === "o"/);
-    expect(page).toContain('setPaletteOpen(ui.paletteOpen === "canvases" ? null : "canvases")');
+    expect(navigation).toMatch(/e\.key\.toLowerCase\(\) === "o"/);
+    expect(navigation).toContain('setPaletteOpen(ui.paletteOpen === "canvases" ? null : "canvases")');
     expect(crossesCover({ key: "o", metaKey: true })).toBe(true);
     expect(crossesCover({ key: "O", ctrlKey: true })).toBe(true);
     // Not a bare o — that would be a letter somebody typed.
     expect(crossesCover({ key: "o" })).toBe(false);
   });
 
-  it("⌘K offers it as a row, on a canvas only", () => {
+  it("⌘K offers it as a row from every page", () => {
     const row = ACTIONS.find((a) => a.id === "switch-canvas");
     expect(row).toBeDefined();
     expect(row!.group).toBe("Open");
-    expect(availableActions(ctx({ canvasId: null })).some((a) => a.id === "switch-canvas")).toBe(false);
+    expect(availableActions(ctx({ canvasId: null })).some((a) => a.id === "switch-canvas")).toBe(true);
     expect(availableActions(ctx()).some((a) => a.id === "switch-canvas")).toBe(true);
   });
 

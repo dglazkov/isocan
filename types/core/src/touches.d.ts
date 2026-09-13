@@ -24,6 +24,18 @@ export declare function itemsTouchedBy(op: Operation, canvas?: CanvasContents | 
  * thinks about it. An empty list means "no filter", not "nothing".
  */
 export declare function opTypeMatches(type: OperationType, wanted: readonly string[]): boolean;
+/**
+ * **Does this op happen inside one of these areas?** (`wait --in`, 11 Sep
+ * 2026 — asked for by the sprint journey's Scene 4, and by a design
+ * competition's fighter parked on its own lane.) Geometry, like area
+ * membership everywhere: an item it touches whose centre is in the area, or a
+ * thread pinned to such an item, or a freestanding thread pinned inside it.
+ *
+ * Judged on the canvas as it is AFTER the op, which is the only canvas a
+ * waiter holds: a move out of the area reads by where the item went, and an
+ * item already gone is in no area. Both are the honest reading of "in".
+ */
+export declare function opTouchesAreas(op: Operation, areaIds: readonly string[], canvas?: CanvasContents | null): boolean;
 /** Does this op pass both filters? Items and types narrow independently: an op
  * has to touch one of the items AND be one of the types, when each is given. */
 export declare function opMatchesFilters(op: Operation, filters: {

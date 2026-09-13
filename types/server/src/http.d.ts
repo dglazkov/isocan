@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Actor } from "../../core/src/index.js";
 import { Engine } from "./engine.js";
 import { type AuthConfig, type SigningKeys } from "./attest.js";
 import { Refusals } from "./takedowns.js";
@@ -46,6 +47,12 @@ declare module "fastify" {
  */
 export declare const STATIC_TYPES: Record<string, string>;
 interface RouteOptions {
+    /** Local setup persists its pass-returned person in the same process as
+     * home badge writes. The route guards local custody before spending a pass. */
+    adoptIdentity?: (actor: Actor) => Promise<{
+        actor: Actor;
+        adopted: boolean;
+    }>;
     /**
      * Where a sweep's per-badge outcomes go (roles design, "Reaching an open
      * socket"): the daemon hands the same hub to `ws.ts`, which tells the

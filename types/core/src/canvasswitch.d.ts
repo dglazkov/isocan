@@ -111,3 +111,12 @@ export declare function rankCanvases(canvases: readonly Canvas[], query: string,
  * four. Pure so the web app's row and a test can agree on what lights up.
  */
 export declare function litRuns(text: string, positions: readonly number[]): Array<[string, boolean]>;
+/** Keep Recent intact, then group the remaining unranked rows by visible
+ * space. Membership is a visible space's fact, never a creator-only filter.
+ * Search stays one ranked list. Headings are labels; space ids keep equal
+ * names and a real space named Recent distinct. */
+export declare function groupSwitchRows(rows: readonly SwitchRow[], spaces: readonly import("./grants.js").Space[], query: string): Array<{
+    row: SwitchRow;
+    group: string | null;
+    groupId: string | null;
+}>;

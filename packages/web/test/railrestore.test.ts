@@ -24,8 +24,8 @@ describe("the rail comes back where it was, without travelling there", () => {
     // "open if this canvas already has a Chat" is a question about the canvas.
     const panel = read("components/MainThreadPanel.tsx");
     const layout = panel.slice(panel.indexOf("useLayoutEffect(()"), panel.indexOf("}, [canvasId]);"));
-    expect(layout, "the remembered choice must be applied in a layout effect").toMatch(
-      /openPanel\(canvasId, stored, false\)/,
+    expect(layout, "restore before paint, without panning or writing a preference on resize").toMatch(
+      /openPanel\(canvasId, stored, false, false\)/,
     );
     expect(layout, "and it must not depend on the canvas having loaded").not.toMatch(/!canvas/);
   });

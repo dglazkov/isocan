@@ -1,4 +1,5 @@
 export * from "./model.ts";
+export * from "./comment-references.ts";
 export * from "./errors.ts";
 export { contextClosure, ambientContextItems, validateContextManifest, canvasContextRoute, commentContextRoute, type ContextRequest, type ContextManifest, type ContextContentPage } from "./canvas-group-context.ts";
 export * from "./canvas-group-context-resolve.ts";
@@ -20,6 +21,8 @@ export * from "./placement.ts";
 export * from "./area.ts";
 export * from "./canvas-group-types.ts";
 export * from "./canvas-groups.ts";
+export * from "./canvas-scope.ts";
+export * from "./canvas-group-create.ts";
 export * from "./canvasitem.ts";
 export * from "./googledoc.ts";
 export * from "./addable.ts";
@@ -75,6 +78,7 @@ export * from "./refusal.ts";
 export * from "./lane.ts";
 export * from "./frameable.ts";
 export * from "./modules.ts";
+export * from "./moduleassets.ts";
 export * from "./designimport.ts";
 export * from "./context.ts";
 export * from "./memory.ts";
@@ -104,3 +108,5 @@ export * from "./text-attention.ts";
 
 export * from "./text-anchor.ts";
 export { markdownResource, SOURCE_PATH_PROP } from "./markdown-resources.ts";
+
+export * from "./inbox-api.ts";

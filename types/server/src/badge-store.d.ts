@@ -1,3 +1,4 @@
+import type { Actor } from "../../core/src/index.js";
 /**
  * How a bearer holder keeps the badge it was handed, and how it goes back to
  * the door for another.
@@ -54,13 +55,15 @@ export interface StoredBadge {
  * pair, holding the human's claim and each of its agents'.
  */
 export declare function readBadge(home: string, base: string): Promise<StoredBadge | null>;
-/** Read-merge, never clobber: `identity.json` also holds the human's name,
- * and a badge write that rewrote the file from scratch would delete it (and
- * the mirror bug — `isocan identity --name` deleting the badge — is why
- * `writeIdentity` merges too). The same argument now covers a second badge:
- * a daemon writing its home badge must not erase the CLI's local one, nor its
- * own badge at another home. */
+/** Merge a credential without dropping the person, other badges or private fields. */
 export declare function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void>;
+/** Persist only an actor returned by successful pass redemption. A different
+ * person already held by the machine remains its default. The choice and
+ * write share the badge queue, so neither can erase the other's fresh fields. */
+export declare function adoptIdentity(home: string, actor: Actor): Promise<{
+    actor: Actor;
+    adopted: boolean;
+}>;
 /**
  * Knock on the door at `base` and keep what it hands over. Null when the door
  * itself refused or could not be reached, so a caller does not loop.
@@ -97,7 +100,7 @@ export type DoorAnswer = {
         code?: string;
     };
 };
-export declare function askTheDoor(base: string, timeoutMs?: number): Promise<DoorAnswer>;
+export declare function askTheDoor(base: string, timeoutMs?: number, signal?: AbortSignal): Promise<DoorAnswer>;
 /** `Authorization: Bearer <badgeId>.<secret>` — the one place that spelling
  * is written, so a holder cannot get the separator wrong on its own. */
 export declare function bearerHeader(badge: StoredBadge): Record<string, string>;

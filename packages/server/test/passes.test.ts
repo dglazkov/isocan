@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -707,5 +707,75 @@ describe("on a replica", () => {
       await replica.close();
       await fs.rm(replicaDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
+  });
+});
+
+
+describe("local setup identity adoption", () => {
+  it("is opt-in and takes the pass actor, never an actor supplied by the caller", async () => {
+    const file = path.join(home, "identity.json");
+    const before = await fs.readFile(file, "utf8").catch(() => null);
+    const first = await body<MintPassResponse>(await mint(owner, priya.id));
+    const ordinary = await body<RedeemPassResponse>(await redeem(await fresh(), first.token));
+    expect(ordinary.identity).toBeUndefined();
+    expect(await fs.readFile(file, "utf8").catch(() => null)).toBe(before);
+
+    const second = await body<MintPassResponse>(await mint(owner, priya.id));
+    const adopted = await post(await fresh(), PASS_REDEEM_ROUTE, {
+      token: second.token, adoptIdentity: true, actor: jordan,
+    });
+    expect(adopted.status).toBe(200);
+    expect(await body<RedeemPassResponse>(adopted)).toMatchObject({
+      actor: priya, identity: { actor: priya, adopted: true },
+    });
+    expect(JSON.parse(await fs.readFile(file, "utf8"))).toMatchObject(priya);
+  });
+
+  it("preserves a different held person and all their private fields", async () => {
+    const file = path.join(home, "identity.json");
+    const saved = JSON.stringify({ ...jordan, createdAt: "2026-01-01", privatePreference: "acme" });
+    await fs.writeFile(file, saved);
+    const { token } = await body<MintPassResponse>(await mint(owner, priya.id));
+    const answer = await post(await fresh(), PASS_REDEEM_ROUTE, { token, adoptIdentity: true });
+    expect(answer.status).toBe(200);
+    expect(await body<RedeemPassResponse>(answer)).toMatchObject({
+      actor: priya, identity: { actor: jordan, adopted: false },
+    });
+    expect(await fs.readFile(file, "utf8")).toBe(saved);
+  });
+
+  it.each([
+    { label: "a non-loopback peer", remoteAddress: "203.0.113.10" },
+    { label: "a hosted daemon on loopback", servesWorld: true },
+    { label: "a daemon bound to all interfaces", boundWide: true },
+  ])("refuses $label before spending a pass", async ({ remoteAddress, servesWorld, boundWide }) => {
+    const { token, pass } = await body<MintPassResponse>(await mint(owner, priya.id));
+    const badge = await fresh();
+    if (servesWorld) {
+      await daemon.close();
+      daemon = await startDaemon({ port: 0, home, servesWorld });
+    }
+    // Model the socket boundary without opening a test port to the network.
+    const address = boundWide ? vi.spyOn(daemon.app.server, "address").mockReturnValue({ address: "0.0.0.0", family: "IPv4", port: 4441 }) : undefined;
+    const answer = await daemon.app.inject({
+      method: "POST", url: PASS_REDEEM_ROUTE, headers: badge.headers,
+      remoteAddress: remoteAddress ?? "127.0.0.1",
+      payload: { token, adoptIdentity: true },
+    });
+    address?.mockRestore();
+    expect(answer.statusCode).toBe(403);
+    expect(answer.json().code).toBe("not-local-setup");
+    const unspent = await daemon.desk.pass(pass.id);
+    expect(unspent).not.toBeNull();
+    expect(unspent?.redeemedAt).toBeUndefined();
+  });
+
+  it("rejects a malformed opt-in without spending a pass", async () => {
+    const { token, pass } = await body<MintPassResponse>(await mint(owner, priya.id));
+    const answer = await post(await fresh(), PASS_REDEEM_ROUTE, { token, adoptIdentity: "true" });
+    expect(answer.status).toBe(400);
+    const unspent = await daemon.desk.pass(pass.id);
+    expect(unspent).not.toBeNull();
+    expect(unspent?.redeemedAt).toBeUndefined();
   });
 });

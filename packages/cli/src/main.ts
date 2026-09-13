@@ -125,6 +125,9 @@ import {
   bySeverity,
   checkDesign,
   designSystem,
+  scopedDesignSystems,
+  canvasScopes,
+  inCanvasScope,
   designSystemProperties,
   readToolExtension,
   toolCapabilities,
@@ -151,6 +154,10 @@ import {
   MODULE_API_VERSION,
   PROPOSED,
   unknownProposals,
+  isDataOnly,
+  assetProblems,
+  refusedContributions,
+  type RefusedContribution,
   enginesSatisfied,
   moduleSlug,
   modulePageUrl,
@@ -257,6 +264,8 @@ import {
   sourceOf,
   areaInner,
   findArea,
+  inArea,
+  areaOf,
   freeSpotIn,
   areaEnclosing,
   itemsIn,
@@ -297,7 +306,6 @@ import {
   personaWarnings,
   runFindings,
   tallyOutcomes,
-  inboxOn,
   inboxNewestFirst,
   newSince,
   latelyOrder,
@@ -335,10 +343,8 @@ import {
   describeLosses,
   contextMark,
   markPatch,
-  contextLayers,
   layersReport,
   governingDesign,
-  memoryLinks,
   memoryOf,
   memoryPatch,
   contextSheet,
@@ -346,7 +352,6 @@ import {
   CONTEXT_SHEET_SIZE,
   CONTEXT_SHEET_TITLE,
   MEMORY_PROP,
-  type LinkedCanvas,
   type CanvasContents,
   type MetaPatch,
   canvasIdOf,
@@ -464,6 +469,7 @@ import {
   adoptIdentity,
   readIdentity,
   claimSessionIdentity,
+  linkedCanvasesOf,
   HOME_CLAIM_KEY,
   noIdentityHere,
   reclaimIdentity,
@@ -474,9 +480,9 @@ import {
 import { agentGuide } from "./agent-guide.ts";
 import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
-import type { CliHost } from "./modulehost.ts";
+import type { CliHost, EnrolTemplate } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
-import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
+import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
 import { openInBrowser, proveInBrowser, summonedRefusal } from "./operator.ts";
 import { SHEEP_HARNESS, SheepAgent, describePlace, endSheep, homeAddressForCell, loopbackFromCell, noSheepLine, placeLine, sheepPlaceFor } from "./sheep.ts";
@@ -1307,7 +1313,7 @@ program
 program
   .command("mcp")
   .description(
-    "Speak MCP on stdio, so an agent in another tool can read this canvas (spawned by an agent manager, not typed)",
+    "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)",
   )
   .action(
     run(async () => {
@@ -5319,7 +5325,9 @@ program
          * `identity.json`, this machine's person, which is the slot a human at
          * a fresh terminal resolves from before any daemon exists.
          *
-         * `adoptIdentity` refuses to overwrite a DIFFERENT person already on
+         * The local daemon persists the answer in its badge-write queue; direct
+         * setup uses the same helper in this process. `adoptIdentity` refuses
+         * to overwrite a DIFFERENT person already on
          * this machine, and setup says so rather than papering over it: a
          * command pasted out of a chat window is not the gesture that renames
          * the human who owns a laptop. The badge still holds the handed claim
@@ -5349,11 +5357,15 @@ program
             "machine is not admitted. Run `isocan setup` again with the same address.";
         }
         if (arrival?.pass && daemonUp) {
-          const answer = await client.redeemPass(arrival.pass, arrival.origin);
+          const answer = await client.redeemPass(arrival.pass, arrival.origin, !direct);
           if (!answer.actor) {
             report.identity = "admitted — this pass carried no identity, so name yourself here";
           } else {
-            const { actor, adopted } = await adoptIdentity(home, answer.actor);
+            // The daemon owns replica setup's identity write alongside its
+            // home badges. Direct setup's badge writer is this process.
+            const saved = direct ? await adoptIdentity(home, answer.actor) : answer.identity;
+            if (!saved) throw new Error("the daemon did not confirm saving the pass identity — restart it with this version of isocan");
+            const { actor, adopted } = saved;
             report.identity = adopted
               ? `${actor.name} (${actor.id}) — handed over by the pass, saved to ${paths.identityFile(home)}`
               : `this machine already answers to ${actor.name} (${actor.id}); the pass's ` +
@@ -6266,8 +6278,12 @@ async function scoreScreenOnArrival(
   if (ctx.json || mimeType !== "text/html") return;
   try {
     const snapshot = await ctx.client.snapshot(canvasId);
-    const system = designSystem(snapshot.canvas);
+    // The system that governs where the screen LANDED (scoped design
+    // systems): a lane's screen is scored against the lane's.
+    const landed = snapshot.canvas.items[itemId];
+    const system = designSystem(snapshot.canvas, landed ? { at: landed } : {});
     if (!system) return;
+    const lane = landed ? canvasScopes(snapshot.canvas, system)[0] : null;
     const version = system.versions.find((v) => v.id === system.currentVersionId) ?? system.versions[0];
     if (!version) return;
     const doc = parseDesign((await ctx.client.downloadBlob(canvasId, version.blobHash)).toString("utf8"));
@@ -6282,7 +6298,11 @@ async function scoreScreenOnArrival(
       console.error(`  ${off.value}  ${off.kind}, ${off.count}x, line ${off.line}`);
     }
     if (audit.offSystem.length > 4) console.error(`  …and ${audit.offSystem.length - 4} more`);
-    console.error(`  isocan design --css   the tokens to build against, ready to paste`);
+    console.error(
+      lane
+        ? `  isocan design --css --in "${lane.title}"   the tokens to build against, ready to paste`
+        : `  isocan design --css   the tokens to build against, ready to paste`,
+    );
     console.error(`  isocan get ${itemId} screen.html   to fix it in place`);
   } catch {
     // Scoring is a courtesy. It must never be the reason an add reports failure.
@@ -7093,7 +7113,65 @@ const moduleHost: CliHost = {
   // Fenced or refused; there is no third answer, and no flag that makes one
   // (`sandbox.ts`, "A program that came from a canvas").
   runFenced: (request) => runFenced(paths.isocanHome(), request),
+  /**
+   * `rc add`, promoted (proposed: `templates`): the claim, the enroll, the
+   * cursor and the rc row — with the template's directory as the row's cwd
+   * when one is named, so the agent's harness starts where its `AGENTS.md` is.
+   */
+  enrol: async (ctx, canvasId, ask) => {
+    const prepared = ask.template ? await prepareFromTemplate(ctx.home, canvasId, ask.name, ask.template, ask.args ?? {}) : null;
+    const harness = ask.harness ?? prepared?.harness ?? ctx.harness ?? null;
+    const agent = await mintAndEnrol(ctx, canvasId, ask.name, { cwd: prepared?.dir ?? process.cwd(), harness });
+    return { actorId: agent.id, dir: prepared?.dir ?? null };
+  },
+  /** `rc remove`, promoted: the standing goes, the history and the directory stay. */
+  withdraw: async (ctx, canvasId, actorId) => {
+    const rcRow = (await readRcAgents(ctx.home)).find((r) => r.canvasId === canvasId && r.actorId === actorId);
+    await ctx.client.sendOp(canvasId, ctx.actor, { type: "agent.withdraw", actorId });
+    await removeRcAgent(ctx.home, canvasId, actorId);
+    await withdrawSheep(ctx, rcRow, (line) => console.error(line));
+  },
 };
+
+/**
+ * **A template by id, from any module loaded on THIS machine** — build-time
+ * or runtime (proposed: `templates`). Read when asked rather than when the
+ * host is built, because runtime modules load after it.
+ */
+function enrolTemplate(id: string): EnrolTemplate | null {
+  for (const m of CLI_MODULES) {
+    const hit = m.templates?.find((t) => t.id === id);
+    if (hit) return hit;
+  }
+  for (const m of runtimeModules) {
+    const hit = m.templates?.find((t) => t.id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * **Where a template writes, and the writing** — one directory per template,
+ * canvas and agent, under the home: `~/.isocan/templates/<id>/<canvas>/<name>/`.
+ * The template does not choose where; it is handed the directory. A template
+ * this machine does not have is refused by id, which is the whole of the
+ * "only code a person installed runs" rule: the canvas can name a template,
+ * and only a module somebody added here can answer to the name.
+ */
+async function prepareFromTemplate(
+  home: string,
+  canvasId: string,
+  name: string,
+  id: string,
+  args: Readonly<Record<string, string>>,
+): Promise<{ dir: string; harness?: string }> {
+  const template = enrolTemplate(id);
+  if (!template) throw new Error(`no module on this machine offers the template ${id} — isocan module ls`);
+  const dir = path.join(home, "templates", id, canvasId, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent");
+  await fs.mkdir(dir, { recursive: true });
+  const out = await template.prepare(args, dir);
+  return { dir, ...(out?.harness ? { harness: out.harness } : {}) };
+}
 for (const m of CLI_MODULES) {
   registerModule(m.core);
   m.register(moduleHost);
@@ -9213,44 +9291,16 @@ program
   .action(
     run(async (opts: { canvas?: string; mentions?: boolean; new?: boolean; limit?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const canvases = opts.canvas
-        ? [await resolveCanvas({ ...ctx, canvasRef: opts.canvas })]
-        : await ctx.client.listCanvases();
-      /**
-       * The names you answer to include the label this session is wearing —
-       * an agent called "Percy" this run is @Percy to everybody on the canvas,
-       * and `wait` has always looked for both.
-       */
+      const target = ctx.canvasRef !== undefined ? await resolveCanvas(ctx) : null;
       const session = await readSessionFile(ctx.home, ctx.actor.id).catch(() => null);
-      const names = namesFor(ctx.actor, session?.label ?? null);
-      const entries: InboxEntry[] = [];
-      for (const canvas of canvases) {
-        // One canvas failing to answer must not silence the rest: an inbox
-        // that goes empty because a replica is unreachable is an inbox that
-        // lies in the only direction that matters.
-        const snapshot = await ctx.client.snapshot(canvas.id).catch(() => null);
-        if (!snapshot) continue;
-        entries.push(
-          ...inboxOn(snapshot.canvas, ctx.actor, names, canvas.id, canvas.title, snapshot.joined),
-        );
-      }
-      /**
-       * **What is NEW, from the mark the home keeps** (#147 step 2). A second
-       * function over the entries the routing rule already produced, never a
-       * second filter inside it: "is this for me" has one definition and this
-       * asks a different question — have I looked since. The marks are one
-       * read for every canvas, and a canvas with no mark is entirely new,
-       * which is exactly what an inbox should say about one you have never
-       * opened — the case a browser's `localStorage` could not see.
-       *
-       * Best-effort, for the same reason one unreachable canvas must not
-       * empty the list: a home that cannot answer leaves the marks empty, and
-       * an inbox that shows everything as new is honest, where one that went
-       * quiet would not be.
-       */
-      const { marks } = await ctx.client.seen(ctx.actor.id).catch(() => ({ marks: {} }));
+      const { entries, marks, unavailable } = await ctx.client.inbox(ctx.actor.id, {
+        ...(target ? { canvasId: target.id } : {}),
+        ...(session?.label ? { label: session.label } : {}),
+      });
+      for (const failed of unavailable) console.error(`${failed.canvasId} unavailable: ${failed.error}`);
       const byReason = opts.mentions ? entries.filter((e) => e.reason === "mentioned") : entries;
       const wanted = opts.new ? newSince(byReason, marks) : byReason;
+      if (entries.length === 0 && unavailable.length > 0) throw new Error("Inbox incomplete: some canvases could not be read.");
       const ordered = inboxNewestFirst(wanted).slice(0, Number(opts.limit ?? 20));
       if (ctx.json) return printJson(ordered);
       if (ordered.length === 0) {
@@ -9281,34 +9331,6 @@ program
       );
     }),
   );
-
-/**
- * **The canvases this one inherits from, as this machine can read them**
- * (memory phases 0–1). One snapshot per `memory=inherit` card, in reading
- * order; a card whose address names another home is not asked for — the
- * homes walk is a different verb — and a door that refuses is reported as
- * it said. Read here rather than in core because reading is a wire fact.
- */
-async function linkedCanvasesOf(ctx: Ctx, canvasId: string, snapshot: { canvas: CanvasContents }): Promise<LinkedCanvas[]> {
-  const home = (await ctx.homeOf(canvasId).catch(() => null)) ?? ctx.client.base;
-  const rows: LinkedCanvas[] = [];
-  for (const item of memoryLinks(snapshot.canvas)) {
-    const id = canvasIdOf(item)!;
-    const address = sourceOf(item);
-    const elsewhere = address ? parseCanvasAddress(address)?.origin : null;
-    if (elsewhere && elsewhere !== home) {
-      rows.push({ item, canvasId: id, title: item.title, canvas: null, refused: `lives at ${elsewhere} — not read from here` });
-      continue;
-    }
-    try {
-      const theirs = await ctx.client.snapshot(id);
-      rows.push({ item, canvasId: id, title: theirs.project.title, canvas: theirs.canvas });
-    } catch (err) {
-      rows.push({ item, canvasId: id, title: item.title, canvas: null, refused: (err as Error).message });
-    }
-  }
-  return rows;
-}
 
 const context = program
   .command("context")
@@ -9409,43 +9431,7 @@ context
       const options = cmd.optsWithGlobals() as { in?: string; includeExcluded?: boolean };
       if (options.in !== undefined) return reportContext(ctx, await new CanvasHandle(ctx, p).context(options));
       if (options.includeExcluded) throw new Error("--include-excluded requires --in <group>");
-      const snapshot = await ctx.client.snapshot(p.id);
-
-      /**
-       * **The design system's findings, read rather than assumed.**
-       *
-       * "Is there one" is a different question from "is it any good", and the
-       * view is worth much less if it answers only the first. This costs one
-       * blob fetch and turns "Design system v3" into "Design system v3, two
-       * findings" — which is the difference between a list and a report.
-       *
-       * A system that cannot be read is not a failure of this command: it is
-       * reported as present with no findings, because saying "0 problems"
-       * about something unparseable would be a false clean bill.
-       */
-      let designProblems: number | undefined;
-      const design = designSystem(snapshot.canvas);
-      if (design) {
-        try {
-          const current =
-            design.versions.find((v) => v.id === design.currentVersionId) ?? design.versions[0];
-          if (current) {
-            const blob = await ctx.client.downloadBlob(p.id, current.blobHash);
-            designProblems = checkDesign(parseDesign(blob.toString("utf8"))).length;
-          }
-        } catch {
-          // Unreadable: say nothing rather than something wrong.
-        }
-      }
-
-      // In layers: this canvas, then each canvas it inherits from, with a
-      // heading each — the seam memory phases 2–4 land in.
-      const layers = contextLayers(snapshot.canvas, await linkedCanvasesOf(ctx, p.id, snapshot), {
-        // The guide this BUILD ships, which is the one an agent here has read
-        // — not "the latest", which is a different machine's business.
-        guideVersion: describeBuild(buildStamp()),
-        ...(designProblems === undefined ? {} : { designProblems }),
-      });
+      const layers = await new CanvasHandle(ctx, p).contextSummary({ guideVersion: describeBuild(buildStamp()) });
       if (ctx.json) return printJson(layers);
       console.log(layersReport(layers, (pieces) => contextReport(pieces)));
     }),
@@ -10136,6 +10122,37 @@ sprintCmd
 
 // ---------- the design system ----------
 
+/**
+ * **Which design system a `--in <area>` means** (scoped design systems, 11 Sep
+ * 2026): the area, as the place core asks about — `designSystem(canvas, { at
+ * })` returns the area's own, else the canvas's. With no `--in`, no place: the
+ * canvas's own, exactly as before. An area nobody has is said, not guessed.
+ */
+function designScope(snapshot: CanvasSnapshotResponse, ref: string | undefined): { at?: Item } {
+  if (ref === undefined) return {};
+  const area = snapshot.project.groupMode === "groups" ? resolveCanvasGroupRef(snapshot.canvas, ref, true) : findArea(snapshot.canvas, ref);
+  if (!area) {
+    throw new Error(`no area called "${ref}" here — \`isocan area ls\` lists them`);
+  }
+  return { at: area };
+}
+
+/**
+ * The design system that belongs to exactly this level — the area's own with
+ * `--in`, the canvas's own without — which is what `set` and `import` version.
+ * Not the governing one: writing a lane's system must never add a version to
+ * the canvas's because the lane had none yet.
+ */
+function ownDesignSystem(snapshot: CanvasSnapshotResponse, ref: string | undefined): Item | null {
+  if (ref === undefined) return designSystem(snapshot.canvas);
+  const area = designScope(snapshot, ref).at!;
+  const mine = scopedDesignSystems(snapshot.canvas)
+    .filter((s) => s.area.id === area.id)
+    .map((s) => s.item)
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  return mine[0] ?? null;
+}
+
 const style = program
   .command("design")
   // What this was called for an afternoon. Muscle memory is cheap to keep and
@@ -10201,32 +10218,49 @@ somebody invented and imposed.`,
 style
   .command("audit")
   .description("Which values the screens here use that the design system never named")
+  .option("--in <area>", "only the screens in this area, against the system that governs it")
   .action(
-    run(async (_opts: unknown, cmd: Command) => {
+    run(async (opts: { in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const system = designSystem(snapshot.canvas);
+      const scope = designScope(snapshot, opts.in);
+      const system = designSystem(snapshot.canvas, scope);
       if (!system) {
         throw new Error(
           `${p.title} has no design system, so there is nothing to audit against — ` +
             "ask for /design-system, or `isocan design skip` if this canvas does not want one",
         );
       }
-      const current =
-        system.versions.find((v) => v.id === system.currentVersionId) ?? system.versions[0];
-      if (!current) throw new Error(`${system.title} has no current version`);
-      const doc = parseDesign((await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8"));
+      // Each screen against the system that governs WHERE IT SITS (scoped
+      // design systems, 11 Sep): a lane's screen against the lane's, the
+      // rest against the canvas's. One parse per system, not per screen.
+      const docs = new Map<string, ReturnType<typeof parseDesign>>();
+      const docOf = async (item: Item) => {
+        const hit = docs.get(item.id);
+        if (hit) return hit;
+        const v = item.versions.find((x) => x.id === item.currentVersionId) ?? item.versions[0];
+        if (!v) return null;
+        const parsed = parseDesign((await ctx.client.downloadBlob(p.id, v.blobHash)).toString("utf8"));
+        docs.set(item.id, parsed);
+        return parsed;
+      };
+      const doc = await docOf(system);
+      if (!doc) throw new Error(`${system.title} has no current version`);
 
+      const within = scope.at && "id" in scope.at ? scope.at : null;
       const screens = Object.values(snapshot.canvas.items).filter(
-        (item) => itemKind(item) === "screen",
+        (item) => itemKind(item) === "screen" && (!within || inCanvasScope(snapshot.canvas, within, item)),
       );
       const rows: { id: string; title: string; audit: ScreenAudit }[] = [];
       for (const screen of screens) {
         const version =
           screen.versions.find((v) => v.id === screen.currentVersionId) ?? screen.versions[0];
         if (!version) continue;
+        const governing = designSystem(snapshot.canvas, { at: screen });
+        const tokens = governing ? (await docOf(governing))?.tokens : undefined;
+        if (!tokens) continue;
         const html = (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8");
-        rows.push({ id: screen.id, title: screen.title, audit: auditScreen(html, doc.tokens) });
+        rows.push({ id: screen.id, title: screen.title, audit: auditScreen(html, tokens) });
       }
 
       const total = offSystemTotal(rows.map((r) => r.audit));
@@ -10289,11 +10323,12 @@ style
   .description("Print the design system (--css or --tokens for the machine-readable halves)")
   .option("--css", "custom properties, ready to paste into the screen you are building")
   .option("--tokens", "W3C design tokens (designtokens.org) — Figma, Style Dictionary, Tailwind")
+  .option("--in <area>", "the design system that governs this area — its own, else the canvas's")
   .action(
-    run(async (opts: { css?: boolean; tokens?: boolean }, cmd: Command) => {
+    run(async (opts: { css?: boolean; tokens?: boolean; in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const item = designSystem(snapshot.canvas);
+      const item = designSystem(snapshot.canvas, designScope(snapshot, opts.in));
       if (!item) {
         throw new Error(
           `${p.title} has no design system yet — write one with \`isocan design set DESIGN.md\`, ` +
@@ -10329,13 +10364,19 @@ style
 style
   .command("check")
   .description("Is the design system usable — references, colours, contrast, sections")
+  .option("--in <area>", "check the one that governs this area")
   .action(
-    run(async (_opts: unknown, cmd: Command) => {
+    run(async (opts: { in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      // The one that governs: this canvas's own, else the first a linked
-      // canvas contributes (memory phase 1) — and the check says whose.
-      const governing = governingDesign(snapshot.canvas, await linkedCanvasesOf(ctx, p.id, snapshot));
+      // The one that governs: the area's own (with --in), else this canvas's,
+      // else the first a linked canvas contributes (memory phase 1) — and the
+      // check says whose.
+      const governing = governingDesign(
+        snapshot.canvas,
+        await linkedCanvasesOf(ctx, p.id, snapshot),
+        designScope(snapshot, opts.in),
+      );
       if (!governing) {
         throw new Error(
           `${p.title} has no design system — isocan design set DESIGN.md, or ask for /design-system`,
@@ -10368,8 +10409,9 @@ style
   .description("Write the design system (a new version when one already exists)")
   .argument("<file>", "markdown or CSS describing the system")
   .option("--title <title>", "name for the item", "DESIGN.md")
+  .option("--in <area>", "the design system of this area only — scoped by where it sits")
   .action(
-    run(async (file: string, opts: { title: string }, cmd: Command) => {
+    run(async (file: string, opts: { title: string; in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       const data = await fs.readFile(file);
@@ -10383,7 +10425,7 @@ style
         filename,
         size: upload.size,
       };
-      const existing = designSystem(snapshot.canvas);
+      const existing = ownDesignSystem(snapshot, opts.in);
       if (existing) {
         // A version, never a replacement: the style you are moving away from
         // is the thing you will want to compare against tomorrow.
@@ -10398,11 +10440,11 @@ style
         version,
         width: 560,
         height: 720,
-        placement: placementFor(snapshot, {}),
+        placement: placementFor(snapshot, opts.in ? { in: opts.in } : {}),
         title: opts.title,
         properties: designSystemProperties(),
       });
-      console.error(`${itemId} — design system for ${p.title} (isocan design)`);
+      console.error(`${itemId} — design system for ${opts.in ? `${opts.in} on ` : ""}${p.title} (isocan design)`);
     }),
   );
 
@@ -10412,8 +10454,9 @@ style
   .argument("<file>", "a stylesheet of custom properties, or a W3C token JSON")
   .option("--dry-run", "read it and report, without writing anything")
   .option("--title <title>", "name for the item", "DESIGN.md")
+  .option("--in <area>", "the design system of this area only")
   .action(
-    run(async (file: string, opts: { dryRun?: boolean; title: string }, cmd: Command) => {
+    run(async (file: string, opts: { dryRun?: boolean; title: string; in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const text = await fs.readFile(file, "utf8");
       const { tokens, problems, format } = importDesign(text, path.basename(file));
@@ -10463,7 +10506,7 @@ style
         filename,
         size: upload.size,
       };
-      const existing = designSystem(snapshot.canvas);
+      const existing = ownDesignSystem(snapshot, opts.in);
       if (existing) {
         // A version, never a replacement — the same rule `design set` holds
         // to, and it matters more here: an import is exactly the moment
@@ -10482,7 +10525,7 @@ style
         version,
         width: 560,
         height: 720,
-        placement: placementFor(snapshot, {}),
+        placement: placementFor(snapshot, opts.in ? { in: opts.in } : {}),
         title: opts.title,
         properties: designSystemProperties(),
       });
@@ -10787,7 +10830,21 @@ function describeManifest(m: ModuleManifest, dir: string): string {
     lines.push(`  kind ${k.id}: ${k.mimes.join(", ")}${k.extensions?.length ? ` (.${k.extensions.join(", .")})` : ""} — ${k.label}`);
   }
   if (m.propertyKeys?.length) lines.push(`  property keys: ${m.propertyKeys.join(", ")}`);
-  lines.push(`  web half: ${m.web ? m.web : "none"} · cli half: ${m.cli ? m.cli : "none"} · guide: ${m.guide ? m.guide : "none"}`);
+  for (const [point, values] of Object.entries(m.contributes ?? {})) {
+    lines.push(`  adds ${values.length} to ${point}`);
+  }
+  if (isDataOnly(m)) {
+    // The third trust class (module-gaps §2): a manifest and some files. It
+    // runs nothing, and saying so is the most useful line in this print.
+    lines.push("  data only — runs nothing: no web half, no cli half");
+  } else {
+    lines.push(`  web half: ${m.web ? m.web : "none"} · cli half: ${m.cli ? m.cli : "none"} · guide: ${m.guide ? m.guide : "none"}`);
+  }
+  if (m.assets?.length) {
+    const total = m.assets.reduce((n, a) => n + a.size, 0);
+    lines.push(`  ${m.assets.length} asset${m.assets.length === 1 ? "" : "s"}, ${total} bytes:`);
+    for (const a of m.assets) lines.push(`    ${a.path} (${a.size} bytes)`);
+  }
   return lines.join("\n");
 }
 
@@ -10871,9 +10928,11 @@ async function addModuleFrom(dir: string, dirArg: string, opts: { yes?: boolean;
             `a module built on it will break. Add it with --proposed if you want it anyway.`,
         );
       }
-      for (const half of [manifest.web, manifest.cli, manifest.guide]) {
+      for (const half of [manifest.web, manifest.cli, manifest.guide, ...(manifest.assets ?? []).map((a) => a.path)]) {
         if (half && !existsSync(path.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
       }
+      const tooBig = assetProblems(manifest.assets);
+      if (tooBig.length > 0) throw new Error(`${manifest.name} refused: ${tooBig.join("; ")}`);
       const slug = moduleSlug(manifest.name);
       const target = path.join(modulesDir(paths.isocanHome()), slug);
       if (!opts.yes) {
@@ -10914,11 +10973,22 @@ moduleCmd
         ...CLI_MODULES.map((m) => ({ name: m.core.name, version: "built in", refused: null as string | null })),
         ...runtimeModules.map((m) => ({ name: m.name, version: m.version, refused: m.refused })),
       ];
-      if (globals.json) return printJson(rows);
+      // Contributions a point would not take, and ones to a point nobody
+      // declares — said here, where "why is my fighter missing" gets asked.
+      const refusedAdds: RefusedContribution[] = refusedContributions();
+      if (globals.json) {
+        return printJson(
+          rows.map((row) => {
+            const mine = refusedAdds.filter((r) => r.module === row.name);
+            return mine.length ? { ...row, refusedContributions: mine.map(({ point, problems }) => ({ point, problems })) } : row;
+          }),
+        );
+      }
       if (rows.length === 0) return console.log("no modules");
       for (const row of rows) {
         console.log(`${row.name.padEnd(28)} ${row.version.padEnd(10)} ${row.refused ? `refused — ${row.refused}` : "loaded"}`);
       }
+      for (const r of refusedAdds) console.log(`  ${r.module} → ${r.point}: ${r.problems.join("; ")}`);
     }),
   );
 
@@ -11817,6 +11887,12 @@ program
     (value: string, prev: string[]) => [...prev, value],
     [],
   )
+  .option(
+    "--in <area>",
+    "only wake on changes inside this area (repeatable) — an item there, or a thread pinned there; implies --all-ops",
+    (value: string, prev: string[]) => [...prev, value],
+    [],
+  )
   .option("--timeout <sec>", "give up after this many seconds (exit code 2)")
   .option(
     "--since <seq>",
@@ -11835,10 +11911,11 @@ in or were mentioned in. Everything else — including comments that mention
 nobody — is ether: visible in \`tail\`, but not actionable. --all-ops wakes
 on everything.
 
---item and --op narrow which CHANGES wake you, so a watcher does not spend a
-turn deciding it does not care:
+--item, --op and --in narrow which CHANGES wake you, so a watcher does not
+spend a turn deciding it does not care:
 
   isocan wait --item itm_abc --op item.addVersion --json --timeout 900
+  isocan wait --in "Sketches" --op "thread.*" --json --timeout 900
 
 A summons still wakes you through any filter. Being told to stop is not noise,
 and an agent you cannot reach is worse than one that wakes too often — the
@@ -11868,7 +11945,7 @@ command or reply. No \`session start\` needed after a wake.`,
   )
   .action(
     run(async (
-      opts: { allOps?: boolean; timeout?: string; since?: string; item: string[]; op: string[] },
+      opts: { allOps?: boolean; timeout?: string; since?: string; item: string[]; op: string[]; in: string[] },
       cmd: Command,
     ) => {
       const ctx = await ctxOf(cmd);
@@ -11887,7 +11964,14 @@ command or reply. No \`session start\` needed after a wake.`,
       const snapshot = await ctx.client.snapshot(p.id);
       const wantedItems = opts.item.map((ref) => resolveItem(snapshot, ref).id);
       const wantedTypes = opts.op;
-      const filtered = wantedItems.length > 0 || wantedTypes.length > 0;
+      // Areas by name, resolved once like items: a lane that does not exist is a
+      // typo, and finding out by waiting forever is the worst way to learn it.
+      const wantedAreas = opts.in.map((ref) => {
+        const area = snapshot.project.groupMode === "groups" ? resolveCanvasGroupRef(snapshot.canvas, ref, true) : findArea(snapshot.canvas, ref);
+        if (!area) throw new Error(`no area called "${ref}" here — \`isocan area ls\` lists them`);
+        return area.id;
+      });
+      const filtered = wantedItems.length > 0 || wantedTypes.length > 0 || wantedAreas.length > 0;
       const seeded = (await ctx.client.watchLog({ only: [p.id] })).cursors;
       /**
        * **The durable cursor** (on-demand phase 1). The daemon keeps one row
@@ -11984,7 +12068,7 @@ command or reply. No \`session start\` needed after a wake.`,
       // in-your-thread pierces any filter, your own ops never wake you, and
       // filters narrow the changes. `--all-ops` is the `["*"]` spelling.
       const waitRules: AgentRules | undefined = filtered
-        ? { items: wantedItems, ops: wantedTypes }
+        ? { items: wantedItems, ops: wantedTypes, ...(wantedAreas.length ? { areas: wantedAreas } : {}) }
         : opts.allOps
           ? { ops: ["*"] }
           : undefined;
@@ -12214,7 +12298,8 @@ command or reply. No \`session start\` needed after a wake.`,
             const needCanvas =
               op.type === "thread.create" ||
               op.type === "thread.reply" ||
-              (waitRules?.items?.length ?? 0) > 0;
+              (waitRules?.items?.length ?? 0) > 0 ||
+              (waitRules?.areas?.length ?? 0) > 0;
             const snapshot = needCanvas ? await snapOf(entry.canvasId)() : null;
             const reason = dispatchReason(
               op,
@@ -12456,8 +12541,8 @@ async function resolveListen(
 /**
  * The enrolment's two moves plus its records, shared by the verbs and the
  * rc's web-ask handler (agent-custody mechanism 2): claim the actor
- * first-claim on THIS machine's badge, enroll it, seed its cursor at the
- * enrolment op, write the rc half. Whoever calls this is the machine that
+ * first-claim on THIS machine's badge, prepare the rc half, enroll it, and
+ * seed its cursor at the enrolment op. Whoever calls this is the machine that
  * answers for the agent — which is the custody design in one sentence.
  */
 async function mintAndEnrol(
@@ -12482,26 +12567,23 @@ async function mintAndEnrol(
     name,
   });
   const agent = claimed.envelope.actor;
-  const enrolled = await ctx.client.sendOp(canvasId, ctx.actor, {
-    type: "agent.enroll",
-    agent,
-    ...(opts.rules !== undefined ? { rules: opts.rules } : {}),
-  });
-  // The cursor row is born WITH the standing (phase 4, journey 3): a
-  // comment landing five minutes after this — rc running or not — must
-  // reach the agent's first summons, so the row's floor is the enrolment
-  // op itself, never "whenever something first claimed".
-  await ctx.client
-    .parkClaim({ canvasId, actorId: agent.id, seedAt: enrolled.seq })
-    .catch(() => {});
-  await upsertRcAgent(ctx.home, {
+  const enrolled = await withPreparedRcAgent(ctx.home, {
     canvasId,
     actorId: agent.id,
     name: agent.name,
     harness: opts.harness,
     cwd: opts.cwd,
     sessionId: null,
-  });
+  }, () => ctx.client.sendOp(canvasId, ctx.actor, {
+    type: "agent.enroll",
+    agent,
+    ...(opts.rules !== undefined ? { rules: opts.rules } : {}),
+  }));
+  // Publishing can immediately wake the rc, so its configuration already
+  // exists. Seed the durable cursor at enrolment, as before.
+  await ctx.client
+    .parkClaim({ canvasId, actorId: agent.id, seedAt: enrolled.seq })
+    .catch(() => {});
   return agent;
 }
 
@@ -13826,9 +13908,16 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
               );
               continue;
             }
-            console.log(rcLine(tag, `${ask.from.name} asked from the canvas to add ${ask.name} — enrolling here`));
+            const via = ask.template ? ` from the template ${ask.template}` : "";
+            console.log(rcLine(tag, `${ask.from.name} asked from the canvas to add ${ask.name}${via} — enrolling here`));
             try {
-              await mintAndEnrol(ctx, p.id, ask.name, { cwd: rcCwd, harness: null });
+              // A template ask (proposed: `templates`) prepares the agent's
+              // directory first — a module loaded HERE answers to the id or
+              // the ask is refused by name — and that directory is the cwd.
+              const prepared = ask.template
+                ? await prepareFromTemplate(ctx.home, p.id, ask.name, ask.template, ask.args ?? {})
+                : null;
+              await mintAndEnrol(ctx, p.id, ask.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null });
             } catch (err) {
               console.log(rcLine(tag, `could not enrol ${ask.name} — ${(err as Error).message}`));
             }

@@ -202,3 +202,17 @@ describe("a person who was two actors", () => {
     expect(await daemon.desk.seenOf(ada.id)).toMatchObject({ [CANVAS]: { seq: 5 } });
   });
 });
+
+it("a targeted prior-read returns only that canvas and only a claimed person's marks", async () => {
+  const mine = await mintTestBadge(base);
+  await mine.speakAs(ada); await mine.speakAs(wasAda);
+  await daemon.desk.markSeen(ada.id, "prj_target", { seq: 2, at: "2026-09-13T00:00:00Z" });
+  await daemon.desk.markSeen(ada.id, "prj_other", { seq: 7, at: "2026-09-13T01:00:00Z" });
+  const target = await get<SeenMarksResponse>(mine, `${SEEN_ROUTE}?actorId=${ada.id}&canvasId=prj_target`);
+  expect(target.marks).toEqual({ prj_target: { seq: 2, at: "2026-09-13T00:00:00Z" } });
+  const stranger = await mintTestBadge(base);
+  const refused = await send(stranger, "GET", `${SEEN_ROUTE}?actorId=${ada.id}&canvasId=prj_target`);
+  expect(refused.status).toBe(400);
+  const unnamed = await send(mine, "GET", `${SEEN_ROUTE}?canvasId=prj_target`);
+  expect(unnamed.status).toBe(400); // two claims cannot choose a person implicitly
+});

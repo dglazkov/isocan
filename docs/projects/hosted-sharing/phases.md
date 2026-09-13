@@ -7,7 +7,8 @@ to the existing door and desk.
 **Where we are:** phase 1 is CLOSED and phase 2 is PART-DONE, 13 September
 2026. Discovery, CLI creation and built-browser submission/refusal are proved
 on synthetic hosted-shaped daemons. Phase 2's native select gesture remains
-to walk; headless Chrome did not consume injected native-selector keys.
+to walk: injected native-selector keys were not consumed, and the later
+native UI attempt found the Mac locked with no available browser surface.
 
 ## Phase 1 — Discovery honors deliberate sharing
 
@@ -67,7 +68,8 @@ interaction proof, with the native-select limit stated above.
 - **2026-09-13** — Narrowing the main list alone left four other address
   enumerators: homes, whereabouts, unscoped watches and takedowns. They now
   share the discovery boundary; explicit known-address reads keep the door.
-- **2026-09-13** — Open: walk the native Space selector in a browser whose
-  native popup accepts input. Both pointer and keyboard injection failed in
-  headless macOS Chrome; a DOM selection proves the submitted value and
-  refusal behavior, not that platform gesture.
+- **2026-09-13** — Open: native Space selection needs an unlocked Mac.
+  Pointer and keyboard injection did not exercise the native popup; the final
+  CUA inventory reported a locked Mac and no app/browser surfaces. No native
+  interaction followed. DOM selection plus actual submission proves the value
+  and refusal behavior, not that platform gesture.

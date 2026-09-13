@@ -253,6 +253,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   straight line. With nothing selected it starts from the item nearest the
   middle of the screen; the camera pans only as far as it must, so an item
   already on screen never moves the world.
+- **On a phone**: a canvas opens in Chat, with Canvas and Agents one tab away.
+  The Canvas tab walks spatial neighbors, opens their conversations, and
+  pinches out to a plan with the current node marked. A while-away digest
+  uses the previous visit mark. Message references and saved request roots
+  open labelled current previews while the disclosure keeps the saved versions.
+  Drafts survive tab changes, and widening the window restores the desktop's
+  saved panels. Touch menus use a stationary
+  long press; movement or a second finger cancels it. The narrow rail folds
+  to Hand, Comment and More with larger primary targets.
 - **Nudging**: arrow keys move the selection a world unit at a time, `⇧` ten.
 - **The slide deck** (#87): full screen (`Enter`) is the projector — bare
   arrows and a clicker's Page Up/Down flip from item to item, each filling
@@ -261,7 +270,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   stops only at those, in reading order — rows top to bottom, left to right;
   with none marked, everything is a slide. Marked items wear 🎬, and `isocan
   slides show` prints the running order plus the address to hand an audience:
-  the first slide's full-screen URL.
+  the first slide's full-screen URL. On a phone, tap the outer thirds or
+  swipe horizontally to step through the deck in the viewer or fullscreen.
+  Vertical scrolling and interactive content keep their own input; Notes
+  open as a sheet and Back leaves the presentation.
 - **The design sprint**: type `/sprint` in the Chat and an agent facilitates a
   Knapp-style sprint — people and agents sketch as peers, one person decides.
   The facilitator calls phases (`/sprint crazy8s 8m`), and a clock chip shows
@@ -281,6 +293,20 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   (`isocan area grid Test 5x15`). See
   [the research](docs/research/2026-09-01-design-sprint.md) and
   [the journey](docs/projects/sprint/journey.md).
+- **Design competitions**: `/design-competition` or ⌘K opens a lazy picker
+  with nine designer-inspired packs. Choose fighters and a brief to create
+  explicit lanes in one undoable act. `isocan competition` casts them through
+  your local rc, scopes their design systems, runs exhibition ballots, and
+  takes a winner as a new version. People and fighter votes stay separate.
+  Bring-your-own packs, remix, rematch and standings are available; blind
+  bouts remain deferred. [The phase record](docs/projects/design-competition/phases.md)
+  names the real-fighter, human and hosted walks still owed.
+- **MCP collaboration**: `isocan mcp` exposes fifteen tools plus current canvas
+  and layered Context resources. Read items, frozen request bytes and context;
+  claim an explicit durable agent session, create or edit items, post or reply
+  to comments, and wait for addressed feedback. Concurrent calls keep their
+  chosen identities; without a session the machine's ambient identity applies.
+  Reads and waits do not mark work seen or invent presence.
 - **Canvas groups**: wrap selected items with
   **Group selection** (⌘/Ctrl+G), enter the group to work on direct children,
   add or remove members, and ungroup while preserving their positions.
@@ -527,11 +553,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   agent, or just write in its main thread, and `wait` wakes, names the canvas
   that summoned it, and hands back a `--canvas` command that lands there.
 - **What is addressed to you**: `isocan inbox` lists every comment addressed to
-  you across every canvas at this home — named by somebody, in the Chat, or in
+  you across discoverable canvases at your homes — named by somebody, in the Chat, or in
   a thread you are already part of — newest first, with the command to reply to
   each. It is the same rule `isocan wait` parks on, one function in core, so a
   parked agent and the list can never disagree about what is for you.
-  `--mentions` narrows it to where somebody actually named you.
+  `--mentions` narrows it to where somebody actually named you. The home
+  screen and the in-app Inbox use the same answer, with links to each
+  conversation and visible unavailable homes. The visible page refreshes
+  slowly; reading the list never marks a canvas visited. The switcher works
+  from home, lens and canvas, with Recent followed by space headings.
 - **What is NEW, on every machine you work from** (#147, #134): a **seen-mark**
   — one row per person per canvas, the oplog head you had in front of you and
   when — kept by the home rather than by a browser. `isocan inbox --new` shows

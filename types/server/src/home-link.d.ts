@@ -1,3 +1,4 @@
+import { type InboxResponse } from "../../core/src/index.js";
 import { Readable } from "node:stream";
 import type { Actor, AttestOffer, AttestRequest, AttestResponse, BadgesResponse, BlobUploadResponse, Capability, CanvasLinkState, GrantResponse, GrantsResponse, GrantSubject, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, PostOpRequest, PostOpResponse, Canvas, RedeemPassResponse, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupsResponse, UndoRedoRequest } from "../../core/src/index.js";
 import type { Engine } from "./engine.js";
@@ -112,7 +113,8 @@ export interface HomeConnection {
      * hand back this laptop's marks, which is short, plausible and exactly the
      * per-browser answer seen-marks exist to replace.
      */
-    seen(actor?: Actor): Promise<SeenMarksResponse>;
+    inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse>;
+    seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse>;
     markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
     spaces(): Promise<SpacesResponse>;
     createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;
@@ -670,7 +672,8 @@ export declare class HomeLink implements HomeConnection {
     attest(body: AttestRequest): Promise<AttestResponse>;
     badges(): Promise<BadgesResponse>;
     killBadge(badgeId: string): Promise<KillBadgeResponse>;
-    seen(actor?: Actor): Promise<SeenMarksResponse>;
+    inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse>;
+    seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse>;
     markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
     spaces(): Promise<SpacesResponse>;
     createSpace(name: string, actor?: Actor): Promise<SpaceResponse>;

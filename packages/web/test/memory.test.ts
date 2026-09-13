@@ -78,6 +78,8 @@ describe("the link is one property on the card, set where the card is placed", (
     expect(cli).toContain('inheritVerb("inherit", "inherit"');
     expect(cli).toContain('inheritVerb("uninherit", null');
     expect(cli).toContain("layersReport(layers, (pieces) => contextReport(pieces))");
-    expect(cli).toContain("governingDesign(snapshot.canvas, await linkedCanvasesOf(ctx, p.id, snapshot))");
+    // With an area's scope as the third argument since scoped design systems
+    // (11 Sep): area, then this canvas, then the linked one.
+    expect(cli).toMatch(/governingDesign\(\s*snapshot\.canvas,\s*await linkedCanvasesOf\(ctx, p\.id, snapshot\),\s*designScope\(snapshot, opts\.in\),?\s*\)/);
   });
 });

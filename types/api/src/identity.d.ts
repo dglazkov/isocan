@@ -71,6 +71,8 @@ export declare function findSessionIdentity(client: DaemonClient, home: string):
     key: string;
 } | null>;
 export interface ClaimOptions {
+    /** Explicit caller session; never changes or consults ambient harness variables. */
+    identity?: ExplicitIdentity;
     /** Omitted: the daemon hands out the next free isocan name. */
     name?: string;
     /** Become a NEW actor even if the name is worn — a second Kenny on purpose. */

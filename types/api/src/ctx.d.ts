@@ -1,4 +1,5 @@
 import type { Actor, HomesResponse, Canvas } from "../../core/src/index.js";
+import { type DaemonRoutes } from "./routes.js";
 import { DaemonClient } from "./client.js";
 import { type ExplicitIdentity } from "./identity.js";
 import { type DirBinding } from "../../server/src/index.js";
@@ -162,6 +163,8 @@ export interface CtxOptions {
      * that says who it is must never quietly run as somebody else).
      */
     identity?: ExplicitIdentity;
+    /** A per-call connection lifetime; ordinary HTTP and setup share its cancellation. */
+    signal?: AbortSignal;
     /**
      * May a person at a TTY be asked for a name — the CLI's first-run flow.
      * Defaults on; `connect()` turns it off, because an API call must never
@@ -202,6 +205,12 @@ export interface ResolveOptions {
  * it.
  */
 export declare function resolveCanvas(ctx: Ctx, opts?: ResolveOptions): Promise<Canvas>;
+/** An explicit id is an address, so it meets the ordinary admission door.
+ * Discovery is only for names: listing cannot reveal a link-only canvas before
+ * entry, and that must not make a caller's already-known address unusable.
+ * A prj_-qualified value is always exact, including older/adopted ids; no
+ * shortened id is ever expanded against canvases the caller cannot discover. */
+export declare function resolveCanvasRef(client: Pick<DaemonRoutes, "snapshot" | "listCanvases">, ref: string): Promise<Canvas>;
 /** Exact id, then case-insensitive title prefix. */
 /** A canvas by id or by a unique title prefix — the one spelling of "which
  *  canvas did they mean", shared so `--to` on a copy means exactly what
