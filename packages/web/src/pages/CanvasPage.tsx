@@ -3,7 +3,6 @@ import { createGroupNudger } from "../lib/groupgestures.ts";
 import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
 import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask } from "../lib/canvasgroups.ts";
 import { CanvasGroupScope } from "../components/CanvasGroupScope.tsx";
-const CanvasGroupPanel = lazy(() => import("../components/CanvasGroupPanel.tsx").then((m) => ({ default: m.CanvasGroupPanel })));
 import { type CSSProperties, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
 import type { Actor } from "@isocan/core";
@@ -111,6 +110,15 @@ import { OwnCursor } from "../components/OwnCursor.tsx";
 import { useCanvasHome } from "../lib/homes.ts";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { ElsewherePage } from "./ElsewherePage.tsx";
+
+/* Below the imports, and it has to stay there: vite's dev transform rewrites
+ * `import { lazy } from "react"` into a binding at the import's own position,
+ * so a `lazy()` call above it is a temporal dead zone and the page throws
+ * "Cannot access 'lazy' before initialization". Rollup hoists, so the built
+ * bundle and CI never saw it — only `npm run dev` did. */
+const CanvasGroupPanel = lazy(() =>
+  import("../components/CanvasGroupPanel.tsx").then((m) => ({ default: m.CanvasGroupPanel })),
+);
 
 /** Arrow keys → a world-space direction. */
 const NUDGES: Record<string, [number, number]> = {
