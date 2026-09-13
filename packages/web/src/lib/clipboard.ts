@@ -82,7 +82,7 @@ export async function pasteInto(
           if (visual && item.version.visual) item.version.visual.blobHash = await transfer(visual);
         }
       }
-      const result = await sendEchoedResult(canvasId, actor, { type: "group.change", action });
+      const result = await sendEchoedResult(canvasId, actor, { type: "group.change", action }, undefined, destination.originGroupMode);
       if (result.status === "accepted") return action.rootIds;
       throw new Error(result.status === "queued" ? "Paste queued. It will appear when the home accepts it; do not paste a second copy." : result.message ?? "The paste was refused.");
     } catch (err) {

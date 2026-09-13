@@ -7,6 +7,7 @@ const css = read("../src/styles.css");
 const view = read("../src/components/ItemView.tsx");
 const viewport = read("../src/components/CanvasViewport.tsx");
 const cli = read("../../cli/src/main.ts");
+const aliases = read("../../cli/src/canvas-groups.ts");
 
 /**
  * **Areas, on both surfaces** (`core/area.ts`, sprint phase 0).
@@ -58,15 +59,20 @@ describe("an area lets tools through, and is grabbed by its name", () => {
   });
 });
 
-describe("every area verb is on the terminal too", () => {
-  it("lays, lists, and places into an area", () => {
-    expect(cli).toContain('.command("area")');
-    expect(cli).toContain('.command("new <title...>")');
-    expect(cli).toMatch(/areaCmd\s*\.command\("ls", \{ isDefault: true \}\)/);
+describe("area spellings preserve terminal access after conversion", () => {
+  it("registers group aliases and retains explicitly labelled legacy reads", () => {
+    expect(cli).toContain("registerAreaAliases(program, ctxOf)");
+    expect(aliases).toContain('program.command("area")');
+    expect(aliases).toContain('area.command("new <title...>")');
+    expect(aliases).toContain('area.command("ls", { isDefault: true })');
+    expect(aliases).toContain('snapshot.project.groupMode === "groups"');
+    expect(aliases).toContain("await handle.new(words.join");
+    expect(aliases).toContain("await handle.list()");
+    expect(aliases).toContain("Legacy areas use geometric membership. Preview conversion:");
   });
 
   it("takes --in on text, add, mv, ls and format", () => {
-    expect(cli.match(/\.option\("--in <area>"/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(cli.match(/\.option\("--in <group>"/g)?.length).toBeGreaterThanOrEqual(5);
     expect(cli).toContain("placementFor(snapshot, opts, { width, height })");
     expect(cli).toContain("freeSpotIn(without, into, item.width, item.height)");
     expect(cli).toContain("formatMoves(scope, {");

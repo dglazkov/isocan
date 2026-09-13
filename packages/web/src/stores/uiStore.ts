@@ -112,7 +112,7 @@ interface UiStore {
   enteredItemId: string | null;
   /** Membership scope; separate from an embedded document owning the pointer. */
   activeGroupId: string | null;
-  groupDialog: { kind: "create" | "add" | "inspect"; itemIds: string[]; groupId?: string; at?: { x: number; y: number } } | null;
+  groupDialog: { kind: "create" | "add" | "inspect" | "migrate"; itemIds: string[]; groupId?: string; at?: { x: number; y: number } } | null;
   /** Item whose name is being edited in place — double-clicking the label, or
    * F2 on the selection. */
   renamingItemId: string | null;

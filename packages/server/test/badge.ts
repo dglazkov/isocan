@@ -1,4 +1,12 @@
-import { DOOR_ROUTE, formatBadgeToken, type DoorResponse } from "@isocan/core";
+import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, CLIENT_FEATURES_PARAM, DOOR_ROUTE, formatBadgeToken, type DoorResponse } from "@isocan/core";
+
+/** Ordinary socket fixtures represent the installed client. Capability tests
+ * deliberately use raw URLs with a literal old or absent marker instead. */
+export function currentSocketUrl(value: string): string {
+  const url = new URL(value);
+  url.searchParams.set(CLIENT_FEATURES_PARAM, CANVAS_GROUPS_FEATURE);
+  return url.toString();
+}
 
 /**
  * A badge, for tests that are about something else.
@@ -34,7 +42,9 @@ export async function mintTestBadge(base: string): Promise<TestBadge> {
   if (!res.ok) throw new Error(`the door refused: HTTP ${res.status}`);
   const door = (await res.json()) as DoorResponse;
   const token = formatBadgeToken(door.badgeId, door.secret!);
-  const headers = { Authorization: `Bearer ${token}` };
+  // Ordinary fixture clients run the current build. Compatibility cases
+  // explicitly override this header with their literal old capability.
+  const headers = { Authorization: `Bearer ${token}`, [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE };
   return {
     badgeId: door.badgeId,
     token,

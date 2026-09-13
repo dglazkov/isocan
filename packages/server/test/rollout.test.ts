@@ -5,7 +5,7 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import { WS_BEHIND, type Operation, type ServerMessage } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **The deploy overlap, from the reader's side** (#85).
@@ -77,7 +77,7 @@ interface Tab {
 
 function connect(base: string): Promise<Tab> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=prj_1`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`), {
       headers: badge.headers,
     });
     const messages: ServerMessage[] = [];

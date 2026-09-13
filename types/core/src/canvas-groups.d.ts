@@ -34,6 +34,11 @@ export declare function groupTransformClosure(canvas: CanvasContents, ids: reado
 export declare function validateGroupForest(state: CanvasState): void;
 /** Layout and resize share saved header/inset reservations, independent of browser fonts. */
 export declare function groupContentBox(item: Item): GroupBox;
+/** Migration and layout repair share the same fixed bands and positive grid-cell minimum. */
+export declare function groupFrameMinimum(item: Item): {
+    width: number;
+    height: number;
+};
 /** Historical dense grids stay readable; both surfaces can disclose that full spacing needs a larger frame. */
 export declare function groupGridNeedsRoom(item: Item): boolean;
 /** A cell's usable box excludes saved row/column gutters and inter-cell clearance. */

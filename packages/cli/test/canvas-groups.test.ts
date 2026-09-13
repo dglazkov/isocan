@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
-import { registerCanvasGroups } from "../src/canvas-groups.ts";
+import { registerAreaAliases, registerCanvasGroups } from "../src/canvas-groups.ts";
 import type { Ctx } from "../src/ctx.ts";
 import { groupFixture } from "../../api/test/group-fixture.ts";
 
@@ -13,11 +13,60 @@ function cli(f = groupFixture()) {
   const errors = vi.spyOn(console, "error").mockImplementation(() => {});
   const program = new Command().option("--json");
   const canvas = program.command("canvas");
-  registerCanvasGroups(canvas, async (cmd) => ({ client: f.client, canvasRef: f.state.project.id, actor: f.actor, json: !!cmd.optsWithGlobals().json }) as unknown as Ctx);
+  const context = async (cmd: Command) => ({ client: f.client, canvasRef: f.state.project.id, actor: f.actor, json: !!cmd.optsWithGlobals().json }) as unknown as Ctx;
+  registerCanvasGroups(canvas, context);
+  registerAreaAliases(program, context);
   return { f, program, errors, output, async run(...args: string[]) { output.length = 0; await program.parseAsync(["node", "isocan", ...args]); return output.join("\n"); } };
 }
 
 describe("the canonical canvas group CLI", () => {
+  it("previews and applies migration through production parsing and reports an explicit stale revision", async () => {
+    const c = cli(groupFixture(false)); c.f.card("area", "Acme legacy sheet", 0, 0); c.f.card("a", "Acme member", 100, 200);
+    c.f.apply({ type: "item.update", itemId: "area", patch: { properties: { kind: "area" } } });
+    c.f.apply({ type: "item.resize", itemId: "area", width: 1000, height: 1000 });
+    const preview = JSON.parse(await c.run("--json", "canvas", "group", "migrate", "--dry-run"));
+    expect(preview).toMatchObject({ status: "ready", dryRun: true, revision: 0 });
+    expect(preview.live.find((row: any) => row.itemId === "a").parentAfter).toBe("area");
+    expect(c.f.writes).toHaveLength(0);
+    vi.restoreAllMocks(); const stale = cli(c.f);
+    await stale.run("canvas", "group", "migrate", "--revision", "12");
+    expect(stale.errors).toHaveBeenCalledWith(expect.stringContaining("migration preview changed"));
+    expect(c.f.writes).toHaveLength(0);
+    vi.restoreAllMocks(); const apply = cli(c.f);
+    const result = JSON.parse(await apply.run("--json", "canvas", "group", "migrate", "--revision", String(preview.revision)));
+    expect(result).toMatchObject({ seq: 1, dryRun: false });
+    expect(c.f.state.canvas.items.a?.containerId).toBe("area");
+    expect(c.f.state.project.groupMode).toBe("groups");
+    vi.restoreAllMocks(); const again = cli(c.f);
+    expect(JSON.parse(await again.run("--json", "canvas", "group", "migrate"))).toMatchObject({ status: "already-groups" });
+    expect(c.f.writes).toHaveLength(1);
+  });
+  it("runs area aliases as group intents, clears typed grids, and refuses legacy writes with a migration path", async () => {
+    const c = cli();
+    const made = JSON.parse(await c.run("--json", "area", "new", "Acme alias", "--tint", "pink", "--note", "Acme brief"));
+    const group = c.f.state.canvas.items[made.itemId]!;
+    expect(group.properties).toMatchObject({ kind: "group", tint: "pink" });
+    expect(group.groupLayout?.briefHeight).toBe(120);
+    expect(c.f.writes).toHaveLength(1);
+    expect(c.f.writes[0]!.envelope.op.type).toBe("group.change");
+    expect(JSON.parse(await c.run("--json", "area", "ls"))[0]).toMatchObject({ id: made.itemId, directCount: 0 });
+    await c.run("area", "grid", made.itemId, "2x3", "--rows", "One,Two");
+    expect(c.f.state.canvas.items[made.itemId]!.groupLayout).toMatchObject({ rowCount: 2, columnCount: 3, rows: ["One", "Two"] });
+    vi.restoreAllMocks(); const clear = cli(c.f);
+    await clear.run("area", "grid", made.itemId, "--clear");
+    expect(c.f.state.canvas.items[made.itemId]!.groupLayout).toEqual({ briefHeight: 120 });
+    expect(c.f.writes).toHaveLength(3);
+    vi.restoreAllMocks(); const legacy = cli(groupFixture(false));
+    await legacy.run("area", "new", "Acme old");
+    expect(legacy.errors).toHaveBeenCalledWith(expect.stringContaining("migrate --dry-run"));
+    expect(legacy.f.writes).toHaveLength(0); expect(legacy.f.blobs.size).toBe(0);
+    legacy.f.card("area");
+    legacy.f.apply({ type: "item.update", itemId: "area", patch: { properties: { kind: "area" } } });
+    expect(JSON.parse(await legacy.run("--json", "area", "ls"))[0]).toMatchObject({ id: "area", mode: "legacy" });
+    await legacy.run("area", "grid", "area", "2x2");
+    expect(legacy.errors).toHaveBeenCalledWith(expect.stringContaining("migrate --dry-run"));
+    expect(legacy.f.writes).toHaveLength(0);
+  });
   it("parses resize anchors and frame fitting with exact geometry and no dry-run writes", async () => {
     const c = cli(); c.f.card("a");
     const group = (await c.f.api.wrap(["a"], "Acme Frame")).itemId!;
@@ -52,7 +101,7 @@ describe("the canonical canvas group CLI", () => {
   it("registers and documents every actual family leaf without touching people-group or session-selection verbs", () => {
     const { program } = cli();
     const group = program.commands[0]!.commands[0]!;
-    expect(group.commands.map((cmd) => cmd.name())).toEqual(["new", "wrap", "ls", "show", "add", "remove", "ungroup", "resize", "frame", "layout", "grid"]);
+    expect(group.commands.map((cmd) => cmd.name())).toEqual(["migrate", "new", "wrap", "ls", "show", "add", "remove", "ungroup", "resize", "frame", "layout", "grid"]);
     const guide = readFileSync(new URL("../src/agent-guide.md", import.meta.url), "utf8");
     for (const cmd of group.commands) expect(guide).toMatch(new RegExp("`canvas group " + cmd.name() + "(?:[ `])"));
     expect(group.helpInformation()).toContain("remove");

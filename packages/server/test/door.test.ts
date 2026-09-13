@@ -17,7 +17,7 @@ import { askTheDoor } from "../src/badge-store.ts";
 import { badgeCookie, framedRequest } from "../src/badges.ts";
 import { MINT_BURST, TOO_MANY_BADGES } from "../src/meter.ts";
 import * as p from "../src/paths.ts";
-import { mintTestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge } from "./badge.ts";
 
 /**
  * The door (identity desk, mechanism 1): mint, carry, refuse, migrate.
@@ -197,7 +197,7 @@ describe("both carriers are one badge", () => {
     });
     const wsBase = base.replace("http", "ws");
 
-    const badged = new WebSocket(`${wsBase}/ws?canvasId=prj_1`, {
+    const badged = new WebSocket(currentSocketUrl(`${wsBase}/ws?canvasId=prj_1`), {
       headers: badge.headers,
     });
     const hello = await new Promise<string>((resolve, reject) => {
@@ -210,7 +210,7 @@ describe("both carriers are one badge", () => {
     // A browser cannot set headers on a handshake, so the cookie is the other
     // carrier; with neither, the socket is closed with a code the client can
     // act on rather than a silent hang.
-    const bare = new WebSocket(`${wsBase}/ws?canvasId=prj_1`);
+    const bare = new WebSocket(currentSocketUrl(`${wsBase}/ws?canvasId=prj_1`));
     bare.on("error", () => {});
     const code = await new Promise<number>((resolve) =>
       bare.on("close", resolve),
@@ -218,7 +218,7 @@ describe("both carriers are one badge", () => {
     expect(code).toBe(WS_NO_BADGE);
 
     const cookieBadge = await door({ carrier: "cookie" });
-    const viaCookie = new WebSocket(`${wsBase}/ws?canvasId=prj_1`, {
+    const viaCookie = new WebSocket(currentSocketUrl(`${wsBase}/ws?canvasId=prj_1`), {
       headers: { cookie: cookieBadge.setCookie!.split(";")[0]! },
     });
     const cookieHello = await new Promise<string>((resolve, reject) => {
@@ -530,8 +530,7 @@ describe("the Origin check", () => {
     process.env.ISOCAN_ALLOWED_ORIGINS = `http://127.0.0.1:${port}`;
     try {
       const cookieBadge = await door({ carrier: "cookie" });
-      const ws = new WebSocket(
-        `${base.replace("http", "ws")}/ws?canvasId=prj_1`,
+      const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`),
         {
           headers: {
             cookie: cookieBadge.setCookie!.split(";")[0]!,

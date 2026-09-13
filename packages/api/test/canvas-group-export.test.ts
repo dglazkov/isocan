@@ -39,9 +39,11 @@ it("discovers retained source and distinct visual metadata from saved snapshot c
   f.apply({ type: "item.addVersion", itemId: item.id, version: { ...item.versions[0]!, id: "ver_retained", visual: { ...visual, filename: "face.png" } } });
   const saved = await handle.notify("Retain", { in: group });
   await handle.remove(group);
-  // Root verifies archive+live adoption. This bounded seam isolates metadata discovery
-  // from the snapshot, so it cannot accidentally pass by finding the creation op.
-  const client = { ...f.client, snapshot: async () => { const state = await f.client.snapshot(); return { ...state, canvas: { ...state.canvas, trash: [] } }; }, getArchivedLog: async () => [], getLog: async () => [], actorNames: async () => ({}) } as unknown as DaemonRoutes;
+  await f.client.sendOp(f.state.project.id, f.actor, { type: "trash.empty" });
+  // A native backup now requires a complete archive/live prefix. The saved
+  // request still owns these bytes after both the live item and trash are gone.
+  const birth = { seq: 1, envelope: { id: "op_birth", canvasId: f.state.project.id, actor: f.actor, ts: "2026-09-12T15:00:00.000Z", op: { type: "project.create", canvasId: f.state.project.id, title: f.state.project.title, groupMode: "groups" } }, inverse: null };
+  const client = { ...f.client, snapshot: async () => ({ ...await f.client.snapshot(), lastSeq: f.writes.length + 1 }), getArchivedLog: async () => [birth], getLog: async () => f.writes.map((row, index) => ({ seq: index + 2, ...row })), actorNames: async () => ({}) } as unknown as DaemonRoutes;
   const out = await output();
   const report = await exportCanvases(client, [f.state.project], { out });
   const indexFile = report.written.find((file) => file.endsWith("blobs.json"))!;

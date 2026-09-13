@@ -3,6 +3,7 @@ export * from "./errors.ts";
 export { contextClosure, ambientContextItems, validateContextManifest, canvasContextRoute, commentContextRoute, type ContextRequest, type ContextManifest, type ContextContentPage } from "./canvas-group-context.ts";
 export * from "./canvas-group-context-resolve.ts";
 export * from "./canvas-group-copy.ts";
+export * from "./canvas-group-migration.ts";
 export * from "./ops.ts";
 export { applyOperation } from "./reducer.ts";
 export * from "./badge.ts";

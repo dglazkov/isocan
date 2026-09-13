@@ -9,7 +9,7 @@ what it describes. Run `node scripts/roadmap.mjs` after changing one.
 The same board lives on a canvas, [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),
 open to anyone with the address — it should say what `main` says.
 
-**26 built · 48 still open** — of which 34 partly
+**27 built · 47 still open** — of which 33 partly
 built, 14 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -19,7 +19,7 @@ read lately.
 3 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>34</sub>
+## Partly built <sub>33</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -29,7 +29,6 @@ and the done column should not be flattered by either.
 | research | [An inbox for the person](research/2026-08-29-the-inbox.md) | 2026-08-29 | steps 1–2 built — `isocan inbox`, and the seen-mark that lets it say what is NEW. The mark is designed in `2026-09-12-seen-marks.md` (12 Sep, with the switcher's shared "lately", #134) and needed NO new op: it is desk state at the home, not canvas state. Steps 3–4 (the home's panel, notification) are open · [#147](https://github.com/dglazkov/isocan/issues/147) |
 | **project** | [atlas](projects/atlas/journey.md) | 2026-09-06 | both mechanisms are built, one of them only in the terminal. The content origin closed 6 Sep — all four stages, the hosted half on isocan.store with signed reads. Convergence shipped 29 Aug as `isocan choose` (core/converge.ts) — out of existing ops by grouping, where the design wanted a new op; the explored siblings go to the trash rather than onto the stack as versions; and the web has no "Keep this" door. Still unbuilt from what the scenes force — the question as a thread property and Scene 7's rebuild loop with its structural fingerprint · see atlas |
 | research | [Attaching a directory without the CLI](research/2026-08-26-attaching-a-directory.md) | 2026-08-29 | 1-3 built; the hosted case is not · see workbench · [#141](https://github.com/dglazkov/isocan/issues/141) |
-| **project** | [canvas-groups](projects/canvas-groups/journey.md) | 2026-09-12 | phases 1–4 verify membership, transforms, insertion, label layout, frozen context and lifecycle on both surfaces; legacy conversion and normal creation remain in phase 5 · see sprint, context, design-competition |
 | research | [Component libraries, and what survives the trip to a canvas](research/2026-08-28-component-libraries.md) | 2026-08-30 | `design import` built 29 Aug; motion-as-CSS and the no-house-look rule are not · [#143](https://github.com/dglazkov/isocan/issues/143) |
 | **project** | [context](projects/context/design.md) | 2026-09-09 | stages 1 and 2 built 29–30 Aug; stage 3's MCP surface exists since 9 Sep — @isocan/mcp, built by the embed project, reads the canvas, its items, threads and activity — but not the list this stage specified, so `read_context` (the MCP spelling of `isocan context`) and MCP resources are what is missing · see context |
 | **project** | [embed](projects/embed/phases.md) | 2026-09-09 | isocan inside an agent manager or IDE. Phase 1 built 9 Sep, and the guide doctrine corrected the same day — "the canvas is the only channel" had a precondition that expires inside a manager, where the terminal is a watched window — the framed badge is partitioned (SameSite=None; Secure; Partitioned) so a pane can keep the badge it is handed, and `isocan embed` prints the pass-bearing address to paste into one. Phase 2 read half built the same day — @isocan/mcp, six read tools over @isocan/api, isocan mcp as the command a manager spawns, identity = whoever the machine already is (the person by default, which reverses this doc first answer); its write half waits on addressability rather than permission. Phase 3 (MCP Apps) unbuilt; phase 4 is a decision, not work — no per-IDE extension, which is the harnesses constraint inverted · see harnesses, context, memory, iso-api · [#220](https://github.com/dglazkov/isocan/issues/220) |
@@ -77,13 +76,14 @@ and the done column should not be flattered by either.
 | research | [Small personas: cheap agents, an idle trigger, and a registry of what to explore](research/2026-09-07-small-personas.md) | 2026-09-07 | the cheap tier #197 claims already exists does not — all nine personas are opus at xhigh. This is what a small persona would need: an idle trigger, a cost that is declared, permission to write where a guard already exists, and a registry of what to explore that is not the findings queue. · see personas, standing-agents, on-demand · [#205](https://github.com/dglazkov/isocan/issues/205) |
 | **project** | [webmcp-cobrowsing](projects/webmcp-cobrowsing/journey.md) | 2026-09-11 | roadmap defined — the WebMCP surface is designed against the verified API and the existing @isocan/mcp vocabulary; design and phases follow the census-informed design · see iso-api, embed |
 
-## Built <sub>26</sub>
+## Built <sub>27</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [A timeline for the canvas](research/2026-08-26-timeline.md) | 2026-08-30 | built 30 Aug — the significance function, the CLI track (`isocan timeline`, `isocan at`) and the app's Scrubber, all over core's one fold; still open is measuring that fold on a ~20k-entry canvas before adding snapshots |
 | **project** | [agent-custody](projects/agent-custody/design.md) | 2026-08-31 | designed and built 31 Aug — no Add button without a visible rc; enrolment is a handshake the rc completes, the desk changed not at all. The Open section records what the build decided and what still waits. Its oldest open question — whose ask a parked rc honors — answered 11 Sep 2026 by owner-only summons (its owner's, announced with the hold). · see agent-custody |
 | **project** | [auto-upgrade](projects/auto-upgrade/journey.md) | 2026-08-29 | all four phases done 27–29 Aug 2026 — the home says which commit it runs, a CLI that disagrees says so once, an upgrade is a build installed aside and probed before `current` flips, and a managed install upgrades while parked. Three open items stay named at the top of phases.md. · see auto-upgrade |
+| **project** | [canvas-groups](projects/canvas-groups/journey.md) | 2026-09-12 | all five phases verified: explicit membership, nested transforms, label-safe placement, frozen context, lifecycle, legacy conversion and normal group creation on both surfaces · see sprint, context, design-competition |
 | research | [Chrome you can turn off](research/2026-09-02-chrome-you-can-turn-off.md) | 2026-09-04 | designed 2 Sep — chrome a person can hide (undo/redo in the zoom cluster, the scrubber's rail glyph), as a local preference over a registry of controls, with three doors: right-click the control, a Settings sheet, and ⌘K as the door that never closes. Stages 1, 2 and 4 built 4 Sep — the registry, the store field, the two controls asked for hidden by right-click and shown again under the identity menu or by right-clicking the area they were hidden from, ⌘K "Show hidden controls", and the test that every entry names its other door. Residue — stage 3 (the rest of the rail and the corners) is on request by design, one registry entry each as somebody asks · see ui-refresh · [#151](https://github.com/dglazkov/isocan/issues/151) |
 | research | [Design systems an agent writes, tokens a machine can read](research/2026-08-24-design-systems-and-tokens.md) | 2026-08-29 | import landed 24 Aug; the round-trip landed 4 Sep — the export is DTCG 2025.10 and validates against the official schema for every file in a twelve-file slice of the corpus, the import reads the reference exporter's own files, and the linter went from 42 failing files of 74 to 13, all true findings |
 | **project** | [harnesses](projects/harnesses/journey.md) | 2026-09-04 | built 4 Sep 2026 — pi, codex and antigravity (on a Gemini API key; the server fetched from Google on first use) join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan. · see harnesses, on-demand, standing-agents |

@@ -6,6 +6,7 @@ import type {
   BlobUploadResponse,
   Capability,
   CanvasSnapshotResponse,
+  CanvasGroupMigrationPreview,
   ContextManifest,
   ContextRequest,
   ContextContentPage,
@@ -208,6 +209,9 @@ export class DaemonRoutes {
    */
   private reclaim: (() => Promise<void>) | null = null;
   private reclaiming = false;
+  /** The last observed mode is captured into each request body before retries.
+   * Callers holding an older placement preview pass its mode explicitly. */
+  private observedGroupModes = new Map<string, "legacy" | "groups">();
 
   constructor(
     readonly base: string,
@@ -470,7 +474,9 @@ export class DaemonRoutes {
      *  id are undone together, so `isocan copy` writing eight items is one
      *  ⌘Z on the screen watching it. */
     group?: string,
+    originGroupMode?: "legacy" | "groups",
   ): Promise<PostOpResponse> {
+    const origin = originGroupMode ?? (canvasId ? this.observedGroupModes.get(canvasId) : undefined);
     return this.request("POST", "/api/ops", {
       canvasId,
       actor,
@@ -478,6 +484,7 @@ export class DaemonRoutes {
       ...(clientId !== undefined ? { clientId } : {}),
       ...(home !== undefined ? { home } : {}),
       ...(group !== undefined ? { group } : {}),
+      ...(origin !== undefined ? { originGroupMode: origin } : {}),
     });
   }
 
@@ -485,13 +492,25 @@ export class DaemonRoutes {
 
   /** Semantic group request; canonical resolved patches belong to the
    * authoritative writer. Pass a stable opId when retrying one intent. */
-  changeGroup(
+  async changeGroup(
     canvasId: string,
     actor: Actor,
     action: Exclude<GroupAction, { kind: "apply" }>,
     opId?: string,
+    originGroupMode?: "legacy" | "groups",
   ): Promise<PostOpResponse> {
-    return this.request("POST", "/api/ops", { canvasId, actor, op: { type: "group.change", action }, ...(opId ? { opId } : {}) });
+    const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
+    const response = await this.request<PostOpResponse>("POST", "/api/ops", { canvasId, actor, op: { type: "group.change", action }, ...(opId ? { opId } : {}), ...(origin !== undefined ? { originGroupMode: origin } : {}) });
+    const op = response.envelope?.op;
+    if (op?.type === "group.change" && op.action.kind === "apply" && op.action.change.migration) this.observedGroupModes.set(canvasId, op.action.change.migration.mode);
+    return response;
+  }
+
+  /** Authoritative, read-only legacy conversion plan, including the undo boundary. */
+  async groupMigrationPreview(canvasId: string): Promise<CanvasGroupMigrationPreview> {
+    const preview = await this.request<CanvasGroupMigrationPreview>("GET", `/api/projects/${encodeURIComponent(canvasId)}/groups/migration`);
+    this.observedGroupModes.set(canvasId, preview.fromMode);
+    return preview;
   }
 
   createSession(
@@ -868,8 +887,10 @@ export class DaemonRoutes {
     return this.request("GET", `${route}/content${query.size ? `?${query}` : ""}`);
   }
 
-  snapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
-    return this.request("GET", `/api/projects/${canvasId}/canvas`);
+  async snapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
+    const snapshot = await this.request<CanvasSnapshotResponse>("GET", `/api/projects/${canvasId}/canvas`);
+    this.observedGroupModes.set(canvasId, snapshot.project.groupMode ?? "legacy");
+    return snapshot;
   }
 
   /** How this home serves — today, only whether a content origin exists. */

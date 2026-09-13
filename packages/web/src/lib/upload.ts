@@ -258,11 +258,12 @@ export async function addAreaItem(
   const upload = await uploadBlob(canvasId, blob, AREA_FILENAME);
   const itemId = newItemId();
   if (semantic) {
-    await changeCanvasGroup(canvasId, actor, { kind: "create", group: { id: itemId, title, box: { ...at, ...size }, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: AREA_MIME, filename: AREA_FILENAME, size: upload.size }, layout: { briefHeight: 0 } }, containerId: destination.containerId ?? null });
+    await changeCanvasGroup(canvasId, actor, { kind: "create", group: { id: itemId, title, box: { ...at, ...size }, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: AREA_MIME, filename: AREA_FILENAME, size: upload.size }, layout: { briefHeight: 0 } }, containerId: destination.containerId ?? null }, destination.originGroupMode);
     return itemId;
   }
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+    ...destination,
     itemId,
     version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: AREA_MIME, filename: AREA_FILENAME, size: upload.size },
     ...size,
@@ -363,7 +364,7 @@ export async function addDrawing(
   strokes: InkStroke[],
   /** The item this ink is about, when it was drawn over one. */
   target?: { id: string; x: number; y: number; width: number; height: number } | null,
-  destination = target ? {} : creationDestination(),
+  destination = target ? { originGroupMode: creationDestination().originGroupMode } : creationDestination(),
 ): Promise<string> {
   const exact = inkBounds(strokes);
   if (!exact) throw new Error("nothing to place");
@@ -419,6 +420,7 @@ export async function addVersionFromFile(
   actor: Actor,
   itemId: string,
   file: File,
+  originGroupMode = creationDestination().originGroupMode,
 ): Promise<void> {
   const mimeType = mimeTypeOf(file);
   const upload = await uploadBlob(canvasId, file, file.name);
@@ -432,5 +434,5 @@ export async function addVersionFromFile(
       filename: file.name,
       size: upload.size,
     },
-  });
+  }, undefined, originGroupMode);
 }

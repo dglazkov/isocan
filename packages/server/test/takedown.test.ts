@@ -29,7 +29,7 @@ import {
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import * as p from "../src/paths.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **Look, and take it down** — operator phase 2, walked against a real daemon
@@ -705,7 +705,7 @@ async function makeOtherCanvas(): Promise<string> {
 async function openSocket(
   badge: TestBadge,
 ): Promise<{ ws: WebSocket; heard: ServerMessage[]; closed: Promise<[number, string]> }> {
-  const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`, {
+  const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`), {
     headers: badge.headers,
   });
   const heard: ServerMessage[] = [];

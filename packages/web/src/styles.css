@@ -6675,3 +6675,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .group-context li, .canvas-group-form .group-context li { display: list-item; margin-block: 8px; padding-block: 6px; border-bottom: 1px solid var(--line-soft); }
 .group-context nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .group-context select { max-width: 100%; }
+.group-migration li { margin-block: 10px; overflow-wrap: anywhere; }
+.group-migration nav { display: flex; align-items: center; gap: 12px; }
+.group-migration > .btn { margin-inline-end: 8px; margin-block: 8px; }

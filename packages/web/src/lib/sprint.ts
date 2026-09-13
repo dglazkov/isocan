@@ -216,8 +216,9 @@ export function useRemoteSprint(canvasId: string | null): {
   state: SprintState | null;
   canvas: CanvasContents | null;
   nowMs: number;
+  originGroupMode: "legacy" | "groups" | null;
 } {
-  const [remote, setRemote] = useState<{ id: string; canvas: CanvasContents } | null>(null);
+  const [remote, setRemote] = useState<{ id: string; canvas: CanvasContents; originGroupMode: "legacy" | "groups" } | null>(null);
   const second = useClockSecond();
   useEffect(() => {
     if (!canvasId) {
@@ -228,7 +229,7 @@ export function useRemoteSprint(canvasId: string | null): {
     const pull = () =>
       getSnapshot(canvasId)
         .then((snapshot) => {
-          if (live) setRemote({ id: canvasId, canvas: snapshot.canvas });
+          if (live) setRemote({ id: canvasId, canvas: snapshot.canvas, originGroupMode: snapshot.project.groupMode ?? "legacy" });
         })
         .catch(() => {
           // A pull that failed leaves the last one standing: a stale clock is
@@ -241,7 +242,7 @@ export function useRemoteSprint(canvasId: string | null): {
     };
   }, [canvasId]);
   const canvas = remote && remote.id === canvasId ? remote.canvas : null;
-  return { state: canvas ? sprintState(canvas) : null, canvas, nowMs: second * 1000 };
+  return { state: canvas ? sprintState(canvas) : null, canvas, nowMs: second * 1000, originGroupMode: canvas ? remote!.originGroupMode : null };
 }
 
 /**
@@ -260,6 +261,7 @@ export async function handInFromDesk(
   actor: Actor,
   items: readonly Item[],
   state: SprintState,
+  originGroupMode: "legacy" | "groups",
 ): Promise<number> {
   const group = newGroupId();
   let occupied = sprintCanvas;
@@ -298,6 +300,7 @@ export async function handInFromDesk(
         },
       },
       group,
+      originGroupMode,
     );
     occupied = { ...occupied, items: { ...occupied.items, [itemId]: { ...item, id: itemId, ...spot } } };
     made++;

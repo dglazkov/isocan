@@ -10,11 +10,13 @@ import { useCanEdit } from "../lib/capability.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { Modal } from "./Modal.tsx";
 import { LiveContextInspection } from "./LazyGroupContext.tsx";
+import { GroupMigration } from "./GroupMigration.tsx";
 
 /** One form supplies creation, membership picking and an inspectable member roster. */
 export function CanvasGroupPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const dialog = useUiStore((s) => s.groupDialog);
   if (!dialog) return null;
+  if (dialog.kind === "migrate") return <GroupMigration key={canvasId} canvasId={canvasId} actor={actor} />;
   return <GroupDialog key={`${canvasId}:${dialog.kind}:${dialog.groupId ?? dialog.itemIds.join()}`} canvasId={canvasId} actor={actor} dialog={dialog} />;
 }
 function GroupDialog({ canvasId, actor, dialog }: { canvasId: string; actor: Actor; dialog: NonNullable<ReturnType<typeof useUiStore.getState>["groupDialog"]> }) {

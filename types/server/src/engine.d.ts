@@ -45,6 +45,7 @@ export declare class NothingToUndoError extends Error {
 }
 interface SubmitRequest {
     clientFeatures?: string;
+    originGroupMode?: "legacy" | "groups";
     canvasId: string | null;
     actor: Actor;
     clientId?: string;
@@ -452,6 +453,8 @@ export declare class Engine {
      * empty archive.
      */
     getArchivedLog(canvasId: string): Promise<LogEntry[]>;
+    /** A migration preview reads the home's current revision, even through a replica. */
+    groupMigrationPreview(canvasId: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;
     submit(request: SubmitRequest): Promise<LogEntry>;
     /**
      * Where this op's write belongs: a home, or null for "this daemon".

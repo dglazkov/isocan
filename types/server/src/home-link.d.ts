@@ -41,6 +41,7 @@ export interface HomeConnection {
     readonly homeUrl: string;
     /** `POST /api/ops` at the home, with this daemon's badge. */
     submitOp(body: PostOpRequest): Promise<PostOpResponse>;
+    groupMigrationPreview(canvasId: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;
     undo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
     redo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
     /** Make this daemon's badge at the home vouch for an actor (and, when the
@@ -655,6 +656,7 @@ export declare class HomeLink implements HomeConnection {
     freeName(): Promise<string>;
     private ensureClaim;
     submitOp(body: PostOpRequest): Promise<PostOpResponse>;
+    groupMigrationPreview(canvasId: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;
     /** Who may enter this canvas, as the HOME has it. No claim goes up first:
      * a grant is about badges, never about actors. */
     grants(canvasId: string): Promise<GrantsResponse>;

@@ -163,7 +163,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
         sheet = useCanvasStore.getState().canvas?.items[id] ?? { id, title: CONTEXT_SHEET_TITLE, ...spot, ...CONTEXT_SHEET_SIZE, properties: { kind: destination.groupPlacement ? "group" : "area" } } as unknown as Item;
       }
       if (isGroupItem(sheet)) {
-        destination = { containerId: sheet.id, groupPlacement: "auto" };
+        destination = { ...destination, containerId: sheet.id, groupPlacement: "auto" };
         at = groupContentBox(sheet);
       } else {
       const spot = freeSpotIn(canvas, sheet, CANVAS_ITEM_SIZE.width, CANVAS_ITEM_SIZE.height);
@@ -313,7 +313,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
               </button>
             ))}
           </div>
-          <button type="button" className="btn" disabled={!groupsEnabled()} title={groupsEnabled() ? "Create an empty group" : "Groups are not enabled on this canvas yet"} onClick={() => { setAdding(null); openGroupCreation(); }}>New group</button>
+          <button type="button" className="btn" title={groupsEnabled() ? "Create an empty group" : "Preview conversion of this legacy canvas first"} onClick={() => { setAdding(null); openGroupCreation(); }}>New group</button>
           {(pinned.kind === "canvas" || pinned.kind === "search" || adding === "canvas") && (
             <label className="add-inherit">
               <input type="checkbox" checked={inherit} onChange={(e) => setInherit(e.target.checked)} />

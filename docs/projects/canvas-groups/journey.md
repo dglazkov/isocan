@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-09-12
 see: sprint, context, design-competition
-note: phases 1–4 verify membership, transforms, insertion, label layout, frozen context and lifecycle on both surfaces; legacy conversion and normal creation remain in phase 5
+note: all five phases verified: explicit membership, nested transforms, label-safe placement, frozen context, lifecycle, legacy conversion and normal group creation on both surfaces
 ---
 # Canvas groups — the experience
 

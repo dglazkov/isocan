@@ -1046,7 +1046,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     if (versionTarget && files.length === 1) {
       const { addVersionFromFile } = await import("../lib/upload.ts");
       try {
-        await addVersionFromFile(canvasId, actor, versionTarget.id, files[0]!);
+        await addVersionFromFile(canvasId, actor, versionTarget.id, files[0]!, destination.originGroupMode);
       } catch (err) {
         setNotice(
           `${files[0]!.name}: ${err instanceof Error && err.message ? err.message : "could not be added as a version"}`,

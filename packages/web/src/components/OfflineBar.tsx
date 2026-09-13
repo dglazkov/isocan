@@ -61,6 +61,7 @@ export function OfflineBar() {
             {refused.map((one) => (
               <span key={one.opId} className="offline-hint">
                 <code>{one.opType}</code> — {one.message}
+                {one.op && <details><summary>Review original change{one.originGroupMode ? ` (${one.originGroupMode})` : ""}</summary><p>This change was not applied. Review the current groups before repeating the intent.</p><pre>{JSON.stringify({ opId: one.opId, originGroupMode: one.originGroupMode, op: one.op }, null, 2)}</pre></details>}
               </span>
             ))}
             <span className="offline-hint">

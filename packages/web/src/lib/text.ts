@@ -130,6 +130,7 @@ export async function reviseTextNode(
 ): Promise<void> {
   // One edit, one undo: the version, the title and any resize are one act.
   const group = newGroupId();
+  const { originGroupMode } = creationDestination();
   const blob = new Blob([body], { type: TEXT_MIME });
   const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
   await sendEchoed(
@@ -147,6 +148,7 @@ export async function reviseTextNode(
       },
     },
     group,
+    originGroupMode,
   );
   await sendEchoed(
     canvasId,
@@ -157,6 +159,7 @@ export async function reviseTextNode(
     patch: { title: textTitle(body), ...lookPatch(style, face, paper) },
     },
     group,
+    originGroupMode,
   );
   if (measured && grew) {
     await sendEchoed(
@@ -164,6 +167,7 @@ export async function reviseTextNode(
       actor,
       { type: "item.resize", itemId, width: measured.width, height: measured.height },
       group,
+    originGroupMode,
     );
   }
 }

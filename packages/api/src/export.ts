@@ -128,8 +128,16 @@ export async function exportCanvases(
   let names: Pick<CanvasSnapshotResponse, "names" | "colors"> | null = null;
 
   for (const canvas of canvases) {
-    const entries = await wholeLog(client, canvas.id);
     const snapshot = await client.snapshot(canvas.id);
+    // The project mode/boundary and its restore history describe one revision.
+    // A conversion landing during download belongs to the next backup, not
+    // to a newer record beside an older log (or the other way around).
+    const entries = (await wholeLog(client, canvas.id)).filter((entry) => entry.seq <= snapshot.lastSeq);
+    // Archive and live reads can straddle GC. A gap is an unavailable backup,
+    // never a successful export which cannot recreate the captured state.
+    if (!Number.isSafeInteger(snapshot.lastSeq) || snapshot.lastSeq < 0 || entries.length !== snapshot.lastSeq || entries.some((entry, index) => entry.seq !== index + 1)) {
+      throw new Error(`cannot export ${canvas.id} at revision ${snapshot.lastSeq}: incomplete operation history; retry after GC or restore the missing archive before making a native backup`);
+    }
     names = { names: snapshot.names, colors: snapshot.colors };
     const named = blobsNamedBy(entries, { project: snapshot.project, canvas: snapshot.canvas });
     const dir = path.join(L.canvases, canvas.id);

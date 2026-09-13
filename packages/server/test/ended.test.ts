@@ -21,7 +21,7 @@ import {
   type ServerMessage,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **End a surface, and mean it** — operator phase 4's first half, the one that
@@ -105,7 +105,7 @@ async function kill(by: TestBadge, badgeId: string): Promise<KillBadgeResponse> 
 async function openSocket(
   badge: TestBadge,
 ): Promise<{ ws: WebSocket; heard: ServerMessage[]; closed: Promise<[number, string]> }> {
-  const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`, {
+  const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`), {
     headers: badge.headers,
   });
   const heard: ServerMessage[] = [];
@@ -124,7 +124,7 @@ async function openSocket(
 
 /** A socket the door closes on the handshake: the close, without a hello. */
 function dial(badge: TestBadge): Promise<[number, string]> {
-  const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`, {
+  const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`), {
     headers: badge.headers,
   });
   return new Promise((resolve) => {

@@ -21,6 +21,7 @@ import type {
 } from "@isocan/core";
 import {
   CANVAS_GROUPS_FEATURE,
+  CANVAS_GROUPS_REQUIRED,
   CLIENT_FEATURES_PARAM,
   applyOperation,
   newOpId,
@@ -28,6 +29,7 @@ import {
   WS_NO_BADGE,
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
+  WS_STALE_CLIENT,
   WITHDRAWN,
   TAKEN_DOWN,
   ENDED,
@@ -92,6 +94,8 @@ export type Connection =
    * network, a home that is down, and a tunnel.
    */
   | "offline"
+  /** The home needs a reducer newer than this tab; retries cannot upgrade it. */
+  | "upgrade-required"
   /** The canvas was deleted while this tab was on it. */
   | "gone"
   /** The door said no: a good badge, a canvas that will not have it. */
@@ -332,15 +336,16 @@ function render(): void {
 
 /** Write the replica down. Immediate when there is work in the queue: a
  * queued op is the only copy of a person's gesture in the world. */
-function persist(): void {
-  const { canvasId, confirmed, lastSeq, queue } = useCanvasStore.getState();
+function persist(immediate = false): void {
+  const { canvasId, confirmed, lastSeq, queue, refused } = useCanvasStore.getState();
   if (!canvasId || !confirmed) return;
   const record: StoredReplica = {
     canvasId,
     project: confirmed.project,
     canvas: confirmed.canvas,
     lastSeq,
-    queue: queue.map(({ opId, actor, op, at, seq, group, accepted }) => ({
+    migrationRefusals: refused.filter((write) => write.code === "migration-boundary" && write.op),
+    queue: queue.map(({ opId, actor, op, at, seq, group, accepted, originGroupMode }) => ({
       opId,
       actor,
       op,
@@ -348,10 +353,11 @@ function persist(): void {
       ...(seq !== undefined ? { seq } : {}),
       ...(group !== undefined ? { group } : {}),
       ...(accepted ? { accepted } : {}),
+      ...(originGroupMode ? { originGroupMode } : {}),
     })),
     savedAt: new Date().toISOString(),
   };
-  saveReplica(record, queue.length > 0);
+  saveReplica(record, immediate || queue.length > 0 || Boolean(record.migrationRefusals?.length));
 }
 
 /**
@@ -367,18 +373,38 @@ export function queueOfflineWrite(
   actor: Actor,
   op: Operation,
   opId: string,
+  originGroupMode?: "legacy" | "groups",
+  upgradeRequired = false,
 ): boolean {
   const { canvasId: open, confirmed, queue } = useCanvasStore.getState();
   if (!queueable(canvasId, open) || !confirmed) return false;
   useCanvasStore.setState({
-    queue: [...queue, newWrite(opId, actor, op)],
+    queue: [...queue, newWrite(opId, actor, op, undefined, originGroupMode)],
     // The socket may still think it is alive — a POST discovers the truth
     // first, because it is the thing that actually asked.
     connection: afterQueueFailure(useCanvasStore.getState().connection),
   });
   render();
   persist();
+  if (upgradeRequired) requireClientUpgrade(canvasId!);
   return true;
+}
+
+function requireClientUpgrade(canvasId: string): void {
+  if (useCanvasStore.getState().canvasId !== canvasId) return;
+  stopWatchdog();
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  const doomed = socket;
+  socket = null;
+  doomed?.close();
+  useCanvasStore.setState({ connection: "upgrade-required" });
+}
+
+/** Direct API sends capture this before awaiting transport, not after a failure. */
+export function queuedWriteOrigin(canvasId: string | null): "legacy" | "groups" | undefined {
+  const state = useCanvasStore.getState();
+  return canvasId && state.canvasId === canvasId && state.confirmed?.project.id === canvasId ? state.confirmed.project.groupMode ?? "legacy" : undefined;
 }
 
 /** A delayed POST cannot replace the home's terminal refusal with a network status. */
@@ -428,8 +454,12 @@ async function drainQueue(): Promise<boolean> {
     if (!canvasId) return true;
     const next = pendingWrites(queue)[0];
     if (!next) return true;
+    if (!next.originGroupMode && useCanvasStore.getState().confirmed?.project.groupMigration) {
+      refuse(next, new ApiError(409, "This queued change has no recorded originating canvas mode. Review it after conversion and make a new change explicitly.", "migration-boundary"));
+      continue;
+    }
     try {
-      const answer = await postOp(canvasId, next.actor, next.op, next.opId, next.group);
+      const answer = await postOp(canvasId, next.actor, next.op, next.opId, next.group, next.originGroupMode);
       settleWrite(canvasId, next.opId, { status: "accepted", envelope: answer.envelope });
       // Navigation shares this flush promise. Ignore the old canvas's answer
       // and drain the current queue before its caller is allowed to dial.
@@ -446,6 +476,11 @@ async function drainQueue(): Promise<boolean> {
       render();
       persist();
     } catch (err) {
+      if (err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED) {
+        if (useCanvasStore.getState().canvasId !== canvasId) continue;
+        requireClientUpgrade(canvasId);
+        return false;
+      }
       if (err instanceof ApiError && homeAnswered(err)) settleWrite(canvasId, next.opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
       if (useCanvasStore.getState().canvasId !== canvasId || useCanvasStore.getState().confirmed?.project.id !== canvasId) continue;
       if (!(err instanceof ApiError)) return false; // the home never answered
@@ -469,6 +504,7 @@ function refuse(write: QueuedWrite, err: ApiError): void {
         message: err.message,
         ...(err.code !== undefined ? { code: err.code } : {}),
         at: Date.now(),
+        ...(err.code === "migration-boundary" ? { op: write.op, ...(write.originGroupMode ? { originGroupMode: write.originGroupMode } : {}) } : {}),
       },
     ],
   });
@@ -485,6 +521,7 @@ export function unsynced(): number {
  * canvas — this only clears the notice. */
 export function dismissRefusals(): void {
   useCanvasStore.setState({ refused: [] });
+  persist(true);
 }
 
 /** Say something that could not be done, once. */
@@ -616,8 +653,8 @@ function flushPresence(): void {
  * at once — folded like every other write, invisible to the unsynced count,
  * never re-posted by a flush, retired by `seq` like the rest.
  */
-export async function sendEchoed(canvasId: string, actor: Actor, op: Operation, group?: string): Promise<void> {
-  await sendEchoedResult(canvasId, actor, op, group);
+export async function sendEchoed(canvasId: string, actor: Actor, op: Operation, group?: string, originGroupMode?: "legacy" | "groups"): Promise<void> {
+  await sendEchoedResult(canvasId, actor, op, group, originGroupMode);
 }
 
 /** Forms need the home’s receipt before announcing completion; ordinary gestures keep their existing void contract. */
@@ -627,6 +664,8 @@ export async function sendEchoedResult(
   op: Operation,
   /** One gesture, one undo — carried so a flush re-sends the same grouping. */
   group?: string,
+  /** Uploads capture this before preparing bytes; a cutover cannot refresh their meaning. */
+  capturedOrigin?: "legacy" | "groups",
 ): Promise<WriteReceipt> {
   /**
    * **The past does not take writes.** The scrubber is a way of looking, not a
@@ -647,20 +686,21 @@ export async function sendEchoedResult(
   // An upload may finish after navigation. Its original canvas still owns
   // the operation; another canvas's queue and optimistic view cannot hold it.
   if (!confirmed || !ownsCanvas()) {
-    const answer = await sendOp(canvasId, actor, op, group);
+    const answer = await sendOp(canvasId, actor, op, group, capturedOrigin);
     return answer ? { status: "accepted", envelope: answer.envelope } : { status: "queued" };
   }
   const opId = newOpId();
+  const originGroupMode = capturedOrigin ?? confirmed.project.groupMode ?? "legacy";
   let outcome: WriteOutcome | undefined;
   const completion = new Promise<WriteOutcome>((resolve) => {
     writeWaiters.set(`${canvasId}:${opId}`, (answer) => { outcome = answer; resolve(answer); });
   });
-  const write: QueuedWrite = { ...newWrite(opId, actor, op, group), inflight: true };
+  const write: QueuedWrite = { ...newWrite(opId, actor, op, group, originGroupMode), inflight: true };
   useCanvasStore.setState({ queue: [...useCanvasStore.getState().queue, write] });
   render();
   persist();
   try {
-    const answer = await postOp(canvasId, actor, op, opId, group);
+    const answer = await postOp(canvasId, actor, op, opId, group, originGroupMode);
     settleWrite(canvasId, opId, { status: "accepted", envelope: answer.envelope });
     if (!ownsCanvas()) return { status: "accepted", envelope: answer.envelope };
     // Marked, not removed — it retires when the tail reaches its seq, so the
@@ -677,6 +717,14 @@ export async function sendEchoedResult(
     // An ordered echo can beat a failed HTTP response. It already proves
     // acceptance, including the writer's canonical operation.
     if (outcome) return outcome;
+    if (err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED) {
+      if (ownsCanvas()) {
+        useCanvasStore.setState({ queue: useCanvasStore.getState().queue.map((other) => other.opId === opId ? { ...other, inflight: false } : other) });
+        requireClientUpgrade(canvasId);
+        persist();
+      }
+      return { status: "queued", completion };
+    }
     if (err instanceof ApiError && homeAnswered(err)) settleWrite(canvasId, opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
     if (!ownsCanvas()) {
       if (err instanceof ApiError && homeAnswered(err)) return { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) };
@@ -839,11 +887,12 @@ async function restoreThenOpen(canvasId: string): Promise<void> {
     // `adopt`: a stored write cannot still be this tab's in-flight post — the
     // tab that posted it is gone. They become ordinary pending work and go up
     // again, which the idempotency key makes free if they already landed.
-    const queue = adopt(stored.queue as QueuedWrite[]);
+    const queue = adopt(stored.queue as QueuedWrite[]).map((write) => write.originGroupMode || stored.project.groupMigration ? write : { ...write, originGroupMode: stored.project.groupMode ?? "legacy" as const });
     const view = foldQueue(confirmed, queue);
     useCanvasStore.setState({
       confirmed,
       queue,
+      refused: (stored.migrationRefusals ?? []).filter((write) => write.code === "migration-boundary" && write.op),
       lastSeq: stored.lastSeq,
       project: view?.project ?? confirmed.project,
       canvas: view?.canvas ?? confirmed.canvas,
@@ -1090,9 +1139,10 @@ const OFFLINE_AFTER_FAILED_DIALS = 2;
  * and try the whole gesture again after the backoff.
  */
 async function open(canvasId: string): Promise<void> {
-  if (currentProjectId !== canvasId || socket) return;
+  if (currentProjectId !== canvasId || socket || useCanvasStore.getState().connection === "upgrade-required") return;
   if (!(await flushQueue())) {
     if (currentProjectId !== canvasId) return;
+    if (useCanvasStore.getState().connection === "upgrade-required") return;
     useCanvasStore.setState({ connection: "offline" });
     return retryLater(canvasId);
   }
@@ -1276,6 +1326,10 @@ function openSocket(canvasId: string): void {
   ws.onclose = (event) => {
     if (stale()) return; // superseded or deliberately disconnected
     socket = null;
+    if (event.code === WS_STALE_CLIENT) {
+      requireClientUpgrade(canvasId);
+      return;
+    }
     // "Reconnecting" is what a blip is; "offline" is what a tab that has work
     // to keep is. The queue decides, not `navigator.onLine` — which is true
     // behind a captive portal and true when the home itself is down, and this

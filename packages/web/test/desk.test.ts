@@ -34,7 +34,7 @@ describe("a desk's chip reads the sprint it belongs to", () => {
 
   it("offers Hand in for the selection, and nothing that belongs to the sprint canvas", () => {
     const desk = chip.slice(chip.indexOf("if (!state && deskOf && remote.state && remote.canvas)"), chip.indexOf("if (!state) return null;"));
-    expect(desk).toContain("handInFromDesk(canvasId, deskOf, sprintCanvas, actor, chosen, away)");
+    expect(desk).toContain("handInFromDesk(canvasId, deskOf, sprintCanvas, actor, chosen, away, remote.originGroupMode!)");
     expect(desk).not.toContain("newNoteIn");
     expect(desk).not.toContain("goToArea");
   });

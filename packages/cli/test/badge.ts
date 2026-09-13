@@ -1,4 +1,4 @@
-import { DOOR_ROUTE, formatBadgeToken, type DoorResponse } from "@isocan/core";
+import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, DOOR_ROUTE, formatBadgeToken, type DoorResponse } from "@isocan/core";
 
 /**
  * A badge, for tests that drive the daemon directly.
@@ -34,7 +34,9 @@ export async function mintTestBadge(base: string): Promise<TestBadge> {
   if (!res.ok) throw new Error(`the door refused: HTTP ${res.status}`);
   const door = (await res.json()) as DoorResponse;
   const token = formatBadgeToken(door.badgeId, door.secret!);
-  const headers = { Authorization: `Bearer ${token}` };
+  // Raw fixture reads represent this build, just like the CLI requests under
+  // test. Old-client compatibility tests deliberately supply their own header.
+  const headers = { Authorization: `Bearer ${token}`, [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE };
   return {
     badgeId: door.badgeId,
     token,

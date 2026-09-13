@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-09-12
 see: sprint, context, mindmap, 2026-08-28-op-grouping.md
-note: phases 1–4 verify membership, transforms, insertion, label layout, frozen context and lifecycle on both surfaces; legacy conversion and normal creation remain in phase 5
+note: all five phases verified: explicit membership, nested transforms, label-safe placement, frozen context, lifecycle, legacy conversion and normal group creation on both surfaces
 ---
 # From areas to groups
 
@@ -11,9 +11,9 @@ that mismatch: a **group is an item with explicit members**, and working on
 that item acts on the things it contains. Membership, movement, resizing,
 context and layout must mean the same thing in the browser and the CLI.
 
-The shared foundation, membership clients, transforms and placement are
-implemented and verified in phases 1–3. The remaining experience below is the
-implementation contract.
+All five phases are implemented and independently verified. The experience
+below remains the implementation contract, with evidence and limitations in
+[verification.md](verification.md).
 The initial review used `main` at `ed1520a6`;
 the checkout was subsequently updated to `19355501` on 12 September 2026.
 The conduct contract is now [phases.md](phases.md), with the user-visible
@@ -643,9 +643,10 @@ it is not an arbitrary operation list or a whole-canvas replacement.
 
 Capability alone does not identify a queued write's meaning: an upgraded
 client may have queued it while the canvas was still legacy. Preserve that
-originating mode (or an equivalent cutover precondition) through local queue
-persistence and forwarding. A mismatch at the writer explicitly refuses or
-reconciles the request, preserving a reviewable outcome. Never silently retry
+originating mode before uploads or other delayed preparation, and preserve it
+through local queue persistence and forwarding. A mismatch at the writer explicitly refuses or
+reconciles the request, preserving the original operation for review across
+reload and navigation until explicit dismissal. Never silently retry
 it as a fresh group-mode request. New public canvas creation defaults to group
 mode at the writer; explicit legacy mode remains available for deliberate
 compatibility/import fixtures. Historical `project.create` replay keeps its
@@ -685,7 +686,9 @@ legacy trashed annotation and its target both become live, reconcile their
 parents by the target rule above.
 
 The conversion records an **undo boundary** at its log sequence for every
-actor. Ordinary Undo/Redo never crosses that boundary into pre-conversion
+actor. Conversion preserves the converter's earlier redo candidates and
+stands alone even if its caller reuses an ordinary Undo label. Ordinary
+Undo/Redo never crosses that boundary into pre-conversion
 operations while group mode is active; return a non-consuming
 `migration-boundary` result instead of replaying an old inverse that can
 resurrect `kind=area` or split membership. Historical timeline/replay remains

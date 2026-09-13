@@ -45,6 +45,8 @@ export interface StoredReplica {
   canvas: CanvasContents;
   lastSeq: number;
   queue: StoredWrite[];
+  /** Cutover-refused work remains reviewable across visits until explicitly dismissed. */
+  migrationRefusals?: import("./writequeue.ts").RefusedWrite[];
   /** ISO, for a human reading the database in devtools. */
   savedAt: string;
 }
@@ -61,6 +63,8 @@ export interface StoredWrite {
    * than re-minted, because a flush is a RE-send: a revise that was three ops
    * under one group must still be one undo after a reconnect. */
   group?: string;
+  /** Meaning at the original gesture, kept through reload and migration. */
+  originGroupMode?: "legacy" | "groups";
   /** Set once the home has answered with a seq; the write retires when the
    * confirmed cursor reaches it. */
   seq?: number;

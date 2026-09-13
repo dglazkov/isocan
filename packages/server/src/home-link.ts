@@ -231,6 +231,7 @@ export interface HomeConnection {
   readonly homeUrl: string;
   /** `POST /api/ops` at the home, with this daemon's badge. */
   submitOp(body: PostOpRequest): Promise<PostOpResponse>;
+  groupMigrationPreview(canvasId: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview>;
   undo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
   redo(canvasId: string, body: UndoRedoRequest): Promise<LogEntry>;
   /** Make this daemon's badge at the home vouch for an actor (and, when the
@@ -1794,6 +1795,10 @@ export class HomeLink implements HomeConnection {
     return this.api<PostOpResponse>("POST", "/api/ops", body);
   }
 
+  groupMigrationPreview(canvasId: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview> {
+    return this.api("GET", `/api/projects/${encodeURIComponent(canvasId)}/groups/migration`);
+  }
+
   /** Who may enter this canvas, as the HOME has it. No claim goes up first:
    * a grant is about badges, never about actors. */
   grants(canvasId: string): Promise<GrantsResponse> {
@@ -2151,7 +2156,7 @@ export class HomeLink implements HomeConnection {
     const send = async (held: StoredBadge) =>
       this.fetchHome(`/api/projects/${canvasId}/adopt`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...bearerHeader(held) },
+        headers: { "Content-Type": "application/json", [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...bearerHeader(held) },
         body: JSON.stringify({ entries }),
       });
     let res = await send(badge);

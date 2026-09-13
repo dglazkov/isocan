@@ -27,6 +27,8 @@ import type {
   ServerMessage,
   SlashCommand,
   UploadTicket,
+  GroupChange,
+  GroupMigrationEffect,
 } from "@isocan/core";
 import {
   INTERNAL_OP_TYPES,
@@ -68,8 +70,11 @@ import {
   rejectPublicContext,
   resolveContextOperation,
   validateContextManifest,
+  MigrationBoundaryError,
+  canvasGroupMigrationPreview,
+  resolveCanvasGroupMigration,
 } from "@isocan/core";
-import { requireGroupClient } from "./canvas-groups.ts";
+import { groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { contextBlobAvailable, hydrateContextManifest } from "./canvas-group-context.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
@@ -196,6 +201,7 @@ export class NothingToUndoError extends Error {
 
 interface SubmitRequest {
   clientFeatures?: string;
+  originGroupMode?: "legacy" | "groups";
   canvasId: string | null;
   actor: Actor;
   clientId?: string;
@@ -987,8 +993,19 @@ export class Engine {
     return this.store.readArchivedLog(canvasId);
   }
 
+  /** A migration preview reads the home's current revision, even through a replica. */
+  groupMigrationPreview(canvasId: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview> {
+    return this.enqueue(async () => {
+      const home = this.homes?.for(canvasId);
+      if (home) return home.groupMigrationPreview(canvasId);
+      const runtime = await this.runtime(canvasId);
+      return canvasGroupMigrationPreview(runtime.state, runtime.lastSeq);
+    });
+  }
+
   submit(request: SubmitRequest): Promise<LogEntry> {
     return this.enqueue(async () => {
+      if (request.originGroupMode !== undefined && request.originGroupMode !== "legacy" && request.originGroupMode !== "groups") throw new OpValidationError("bad-op", "originGroupMode must be legacy or groups");
       rejectPublicContext(request.op);
       if (request.op.type === "project.create" && request.op.groupMode !== undefined &&
           request.op.groupMode !== "groups" && request.op.groupMode !== "legacy") {
@@ -1527,9 +1544,12 @@ export class Engine {
           throw new NothingToUndoError("undo", actor.name);
         }
         const targetSeq = group[0]!;
-        preflightGroupHistory(runtime.state, group.map((seq) => runtime.entries.find((entry) => entry.seq === seq)!.inverse!), actor);
+        checkMigrationHistoryBoundary(runtime, group);
+        const inverses = group.map((seq) => undoOperationFor(runtime, runtime.entries.find((entry) => entry.seq === seq)!));
+        for (const inverse of inverses) checkMigrationRollback(runtime, inverse);
+        preflightGroupHistory(runtime.state, inverses, actor);
         const target = runtime.entries.find((entry) => entry.seq === targetSeq)!;
-        const op = repairInverse(runtime.state, target.inverse!);
+        const op = repairInverse(runtime.state, undoOperationFor(runtime, target));
         if (op !== null) {
           try {
             written = await this.applyAndPersist(
@@ -1580,6 +1600,7 @@ export class Engine {
           throw new NothingToUndoError("redo", actor.name);
         }
         const next = group[0]!;
+        checkMigrationHistoryBoundary(runtime, group.map((candidate) => candidate.targetSeq));
         preflightGroupHistory(runtime.state, group.map((candidate) => redoOpFor(
           runtime.entries.find((entry) => entry.seq === candidate.targetSeq)!,
           runtime.entries.find((entry) => entry.seq === candidate.undoSeq)!,
@@ -1899,6 +1920,7 @@ export class Engine {
   private async forwardSubmit(home: HomeConnection, request: SubmitRequest): Promise<LogEntry> {
     const answer = await home.submitOp({
       ...(request.clientFeatures !== undefined ? { clientFeatures: request.clientFeatures } : {}),
+      ...(request.originGroupMode !== undefined ? { originGroupMode: request.originGroupMode } : {}),
       canvasId: request.canvasId,
       actor: request.actor,
       op: request.op,
@@ -2452,6 +2474,7 @@ export class Engine {
     const runtime = await this.runtime(canvasId);
 
     if (request.clientFeatures !== undefined) requireGroupClient(request.clientFeatures, runtime.state.project);
+    if (cause === undefined && request.originGroupMode !== undefined && request.originGroupMode !== (runtime.state.project.groupMode ?? "legacy")) throw new MigrationBoundaryError(`This write was prepared in ${request.originGroupMode} mode, but the canvas now uses ${runtime.state.project.groupMode ?? "legacy"}. Review the queued work before sending a new request.`);
 
     // Normalize placement so the logged op never references ephemeral client
     // state — and so it records where the item ACTUALLY went.
@@ -2513,6 +2536,10 @@ export class Engine {
       }
     }
     const envelope = this.envelope(request, normalizedOp);
+    if (cause?.kind === "redo" && isMigrationChange(normalizedOp, "groups")) {
+      normalizedOp = { ...normalizedOp, action: { kind: "apply", change: { ...normalizedOp.action.change, migration: { ...normalizedOp.action.change.migration!, boundary: { version: 1, opId: envelope.id, seq: runtime.lastSeq + 1 } } } } };
+      envelope.op = normalizedOp;
+    }
     if (cause === undefined) {
       // New group fields cannot enter a legacy canvas through generic item
       // APIs. Validate new writes here; old records still replay unchanged.
@@ -2522,7 +2549,10 @@ export class Engine {
           : (op.type === "item.addVersion" || op.type === "item.setCurrentVersion") && "briefHeight" in op;
         if (introducesGroup) throw new OpValidationError("bad-op", "canvas groups require an explicitly enabled group canvas");
       }
-      normalizedOp = resolveCanvasGroupRequest(runtime.state, normalizedOp, { actor: envelope.actor, ts: envelope.ts, opId: envelope.id });
+      const stamp = { actor: envelope.actor, ts: envelope.ts, opId: envelope.id };
+      normalizedOp = normalizedOp.type === "group.change" && normalizedOp.action.kind === "migrate"
+        ? resolveCanvasGroupMigration(runtime.state, runtime.lastSeq, normalizedOp.action, stamp)
+        : resolveCanvasGroupRequest(runtime.state, normalizedOp, stamp);
       envelope.op = normalizedOp;
       if (op.type === "group.change" && op.action.kind === "copy" && normalizedOp.type === "group.change" && normalizedOp.action.kind === "apply") {
         // A paste is all-or-nothing, including distinct visual bytes. This is
@@ -2588,6 +2618,8 @@ export class Engine {
     request: SubmitRequest,
     op: Operation & { type: "project.create" },
   ): Promise<LogEntry> {
+    op = { ...op, groupMode: op.groupMode ?? "groups" };
+    if (request.clientFeatures !== undefined) requireGroupClient(request.clientFeatures, { groupMode: op.groupMode } as Canvas);
     if (await this.store.canvasExists(op.canvasId)) {
       throw new OpValidationError("duplicate-id", `canvas id already exists: ${op.canvasId}`);
     }
@@ -2699,6 +2731,50 @@ export class Engine {
  * restores full fidelity (trash contents, thread snapshots, version
  * authorship) that re-running the original op would lose or violate.
  */
+type MigrationOperation = { type: "group.change"; action: { kind: "apply"; change: GroupChange & { migration: GroupMigrationEffect } } };
+function isMigrationChange(op: Operation, mode?: "legacy" | "groups"): op is MigrationOperation {
+  return op.type === "group.change" && op.action.kind === "apply" && op.action.change.intent === "migrate" && !!op.action.change.migration && (mode === undefined || op.action.change.migration.mode === mode);
+}
+
+function undoOperationFor(runtime: CanvasRuntime, target: LogEntry): Operation {
+  if (isMigrationChange(target.envelope.op)) {
+    for (let i = runtime.entries.length - 1; i >= 0; i--) {
+      const entry = runtime.entries[i]!;
+      if (entry.cause?.kind === "redo" && entry.cause.targetSeq === target.seq && entry.inverse) return entry.inverse;
+    }
+  }
+  return target.inverse!;
+}
+
+function checkMigrationHistoryBoundary(runtime: CanvasRuntime, targets: number[]): void {
+  const boundary = runtime.state.project.groupMigration;
+  if (!boundary) return;
+  for (const seq of targets) if (seq < boundary.seq) {
+    const entry = runtime.entries.find((candidate) => candidate.seq === seq);
+    if (entry && isMigrationChange(entry.envelope.op, "groups")) continue;
+    throw new MigrationBoundaryError(`Undo/Redo stops at canvas conversion sequence ${boundary.seq}; earlier history remains readable and its candidate was not consumed.`);
+  }
+}
+
+function checkMigrationRollback(runtime: CanvasRuntime, op: Operation): void {
+  if (!isMigrationChange(op, "legacy")) return;
+  const { state } = runtime;
+  const boundary = state.project.groupMigration;
+  if (!boundary) return;
+  const expected = new Map(op.action.change.expected.map((entry) => [entry.itemId, entry]));
+  const depends = (item: import("@isocan/core").Item): boolean => item.properties.kind === "group" || item.containerId !== undefined || item.groupLayout !== undefined;
+  const dependencies: string[] = [];
+  for (const item of Object.values(state.canvas.items)) if (depends(item) && expected.get(item.id)?.location !== "live") dependencies.push(`live ${item.id}`);
+  for (const entry of state.canvas.trash) if ((depends(entry.item) || entry.legacyGroupRestore !== undefined || entry.cohort !== undefined) && expected.get(entry.item.id)?.location !== "trash") dependencies.push(`trash ${entry.item.id}`);
+  for (const thread of Object.values(state.canvas.threads)) for (const comment of thread.comments) if (comment.context) dependencies.push(`saved context ${comment.id}`);
+  for (const candidate of runtime.undo.dependencyTargets()) {
+    if (candidate.seq < boundary.seq) continue;
+    const entry = runtime.entries.find((one) => one.seq === candidate.seq);
+    if (entry && !isMigrationChange(entry.envelope.op) && (groupOperation(entry.envelope.op) || entry.inverse !== null && groupOperation(entry.inverse))) dependencies.push(`${candidate.kind} sequence ${candidate.seq}`);
+  }
+  if (dependencies.length) throw new MigrationBoundaryError(`Migration rollback would strand later group-dependent work: ${dependencies.join(", ")}. Resolve these dependencies explicitly; trash and history were not changed.`);
+}
+
 function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
   switch (target.envelope.op.type) {
     case "item.add": // re-add would collide with the trashed item → restore it
@@ -2721,6 +2797,19 @@ function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
  */
 function repairInverse(state: CanvasState, op: Operation): Operation | null {
   switch (op.type) {
+    case "group.change": {
+      if (op.action.kind !== "apply") return op;
+      const change = op.action.change, write = change.writes[0], expected = change.expected[0];
+      // A plain root insertion uses group placement, but owns no relation or
+      // frame repair. Preserve ordinary creation undo after others move/edit
+      // that card. Any old or current group/annotation dependency keeps the
+      // exact canonical inverse and its non-consuming conflict behavior.
+      if (change.intent !== "insert" || change.writes.length !== 1 || write?.kind !== "trash" || change.expected.length !== 1 || expected?.itemId !== write.itemId || expected.location !== "live" || !expected.facts || expected.facts.containerId !== null || expected.facts.groupLayout !== null || expected.facts.kind === "group" || expected.facts.annotates !== null || expected.children?.length || expected.annotations?.length) return op;
+      const item = state.canvas.items[write.itemId];
+      if (!item) return null;
+      if (isGroupItem(item) || item.containerId !== undefined || item.groupLayout !== undefined || item.properties.annotates || Object.values(state.canvas.items).some((other) => other.containerId === item.id || other.properties.annotates === item.id)) return op;
+      return { type: "item.delete", itemId: item.id };
+    }
     case "items.move": {
       const moves = op.moves.filter((move) => state.canvas.items[move.itemId] !== undefined);
       if (moves.length === 0) return null;

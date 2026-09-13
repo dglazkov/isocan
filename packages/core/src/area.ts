@@ -63,9 +63,6 @@ export const AREA_HEAD = AREA_TITLE_HEIGHT + AREA_CARD_HEIGHT;
 /** Inset from the sheet's edge for anything placed inside it. */
 export const AREA_INSET = 24;
 
-/** A sensible default sheet: room for a row of sketches with a title above. */
-export const AREA_DEFAULT_SIZE = { width: 1600, height: 1000 };
-
 export function isArea(item: Item): boolean {
   return item.properties.kind === AREA_KIND;
 }

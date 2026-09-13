@@ -1,10 +1,16 @@
-import type { Actor, CanvasContents, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupLayout, GroupPlacementPolicy, Item, Operation } from "../../core/src/index.js";
+import type { Actor, CanvasContents, CanvasGroupMigrationPreview, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "../../core/src/index.js";
 import { groupArrangeAction } from "../../core/src/index.js";
 import type { DaemonRoutes } from "./routes.js";
 type PublicAction = Exclude<GroupAction, {
-    kind: "apply";
+    kind: "apply" | "migrate";
 }>;
-type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "downloadBlob" | "changeGroup">;
+type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "downloadBlob" | "changeGroup" | "groupMigrationPreview">;
+/** Migration receipts retain the reviewed complete plan and the actual writer sequence. */
+export type CanvasGroupMigrationResult = CanvasGroupMigrationPreview & {
+    dryRun: boolean;
+    seq?: number;
+    envelope?: PostOpResponse["envelope"];
+};
 export interface CanvasGroupCopyOptions {
     in?: string | undefined;
     at?: {
@@ -77,6 +83,13 @@ export declare class CanvasGroups {
     readonly canvasId: string;
     private identity;
     constructor(client: GroupClient, canvasId: string, identity: Actor | (() => Actor));
+    /** Read the writer's plan; applying names its exact revision and never runs
+     * geometric membership against a cached client snapshot. */
+    migrate(options?: {
+        dryRun?: boolean;
+        expectedRevision?: number;
+        opId?: string;
+    }): Promise<CanvasGroupMigrationResult>;
     private read;
     /** Listing reads explicit group identities, including valid empty groups. */
     list(): Promise<CanvasGroupView[]>;
@@ -137,7 +150,7 @@ export declare class CanvasGroups {
     grid(ref: string, counts: {
         rows: number;
         columns: number;
-    }, options?: {
+    } | null, options?: {
         rows?: string[];
         columns?: string[];
         tidy?: boolean;

@@ -5,14 +5,21 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { uploadBlob } from "./api.ts";
 import { canEditNow } from "./capability.ts";
 import { zoomToItem } from "./zoomactions.ts";
-import { selectCreatedItems } from "./groupplacement.ts";
+import { creationDestination, selectCreatedItems } from "./groupplacement.ts";
 
-/** New membership writes stay opt-in until the migration release. */
+/** Existing legacy canvases stay legacy until their explicit conversion. */
 export function groupsEnabled(): boolean { return useCanvasStore.getState().project?.groupMode === "groups"; }
 /** All editing entry points share the same capability/mode refusal. */
 function requireGroupEditing(): void {
   if (!canEditNow()) throw new Error("This canvas is read-only.");
-  if (!groupsEnabled()) throw new Error("Groups are not enabled on this canvas yet.");
+  if (!groupsEnabled()) { openGroupMigration(); throw new Error("Preview and convert this legacy canvas before changing groups."); }
+}
+/** Read-only preview is available before an editor chooses the atomic conversion. */
+export function openGroupMigration(): void { useUiStore.getState().setGroupDialog({ kind: "migrate", itemIds: [] }); }
+/** A legacy membership request first offers conversion instead of mixing models. */
+export function openGroupAddition(itemIds: string[]): void {
+  if (!groupsEnabled()) { openGroupMigration(); return; }
+  useUiStore.getState().setGroupDialog({ kind: "add", itemIds });
 }
 /** Local menus may start an asynchronous act without dropping its refusal. */
 export function groupTask(work: () => void | Promise<unknown>): void {
@@ -20,27 +27,29 @@ export function groupTask(work: () => void | Promise<unknown>): void {
   catch (error) { setNotice((error as Error).message); }
 }
 /** Submit public intent through the existing queue and authoritative operation writer. */
-export async function changeCanvasGroup(canvasId: string, actor: Actor, action: Exclude<GroupAction, { kind: "apply" }>): Promise<void> {
+export async function changeCanvasGroup(canvasId: string, actor: Actor, action: Exclude<GroupAction, { kind: "apply" }>, originGroupMode?: "legacy" | "groups"): Promise<void> {
   if (useCanvasStore.getState().canvasId === canvasId) requireGroupEditing();
-  const result = await sendEchoedResult(canvasId, actor, { type: "group.change", action });
+  const result = await sendEchoedResult(canvasId, actor, { type: "group.change", action }, undefined, originGroupMode);
   if (result.status === "refused") throw new Error(result.message ?? "The group change was refused.");
   if (result.status === "queued") throw new PendingGroupWriteError();
 }
 /** Header and content edits use one existing item intent and the writer's bounded header repair. */
-export async function changeGroupItem(canvasId: string, actor: Actor, op: Extract<Operation, { type: "item.update" | "item.addVersion" }>): Promise<void> {
+export async function changeGroupItem(canvasId: string, actor: Actor, op: Extract<Operation, { type: "item.update" | "item.addVersion" }>, originGroupMode?: "legacy" | "groups"): Promise<void> {
   if (useCanvasStore.getState().canvasId === canvasId) requireGroupEditing();
-  const result = await sendEchoedResult(canvasId, actor, op);
+  const result = await sendEchoedResult(canvasId, actor, op, undefined, originGroupMode);
   if (result.status === "refused") throw new Error(result.message || "The group edit was refused.");
   if (result.status === "queued") throw new PendingGroupWriteError();
 }
 /** Upload first, then save Markdown and its reserved band as one accepted operation. */
 export async function saveGroupBrief(canvasId: string, actor: Actor, itemId: string, body: string, briefHeight: number): Promise<void> {
   requireGroupEditing();
+  const { originGroupMode } = creationDestination();
   const upload = await uploadBlob(canvasId, new Blob([body || "\n"], { type: "text/markdown" }), "group.md");
-  await changeGroupItem(canvasId, actor, { type: "item.addVersion", itemId, briefHeight: body.trim() ? briefHeight : 0, version: { id: newVersionId(), blobHash: upload.blobHash, size: upload.size, mimeType: "text/markdown", filename: "group.md" } });
+  await changeGroupItem(canvasId, actor, { type: "item.addVersion", itemId, briefHeight: body.trim() ? briefHeight : 0, version: { id: newVersionId(), blobHash: upload.blobHash, size: upload.size, mimeType: "text/markdown", filename: "group.md" } }, originGroupMode);
 }
 /** Open a reviewable creation form; every launch surface calls this same entry. */
 export function openGroupCreation(itemIds: string[] = [], at?: { x: number; y: number }): void {
+  if (!groupsEnabled()) { openGroupMigration(); return; }
   groupTask(() => { requireGroupEditing(); useUiStore.getState().setGroupDialog({ kind: "create", itemIds, ...(at ? { at } : {}) }); });
 }
 /** Creating the brief blob does not split the structural act into separate writes. */
@@ -48,12 +57,12 @@ export async function createCanvasGroup(canvasId: string, actor: Actor, title: s
   requireGroupEditing();
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) throw new Error("The canvas is not loaded.");
-  const containerId = useUiStore.getState().activeGroupId;
+  const { containerId, originGroupMode } = creationDestination();
   const id = newItemId();
   const up = await uploadBlob(canvasId, new Blob([brief || "\n"], { type: "text/markdown" }), "group.md");
   const creation = { id, title: title.trim() || "Untitled group", description: brief, version: { id: newVersionId(), blobHash: up.blobHash, size: up.size, mimeType: "text/markdown", filename: "group.md" }, box: { ...at, ...GROUP_DEFAULT_SIZE }, layout: { briefHeight: brief.trim() ? 120 : 0 } };
-  const action = itemIds.length ? groupWrapAction(canvas, creation, itemIds) : { kind: "create" as const, group: creation, containerId };
-  await changeCanvasGroup(canvasId, actor, action);
+  const action = itemIds.length ? groupWrapAction(canvas, creation, itemIds) : { kind: "create" as const, group: creation, containerId: containerId ?? null };
+  await changeCanvasGroup(canvasId, actor, action, originGroupMode);
   // Wrapping grows the frame above existing cards. Reveal its accepted
   // header/brief by moving only the camera, never the saved arrangement.
   if (selectCreatedItems(canvasId, [id])) zoomToItem(id);

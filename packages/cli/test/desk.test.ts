@@ -112,6 +112,6 @@ describe("a desk, and the bell from it", () => {
     expect(noSprint.stderr).toContain("no sprint is running");
     const noSheet = await isocan("copy", note.itemId, "--to", b.canvasId, "--in", "Nowhere", "--canvas", a.canvasId);
     expect(noSheet.code).not.toBe(0);
-    expect(noSheet.stderr).toContain('no area called "Nowhere"');
+    expect(noSheet.stderr).toContain('no canvas group called "Nowhere"');
   });
 });

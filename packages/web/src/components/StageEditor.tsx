@@ -1,3 +1,4 @@
+import { creationDestination } from "../lib/groupplacement.ts";
 import { useEffect, useRef, useState } from "react";
 import type { Actor, Item, NewVersion } from "@isocan/core";
 import { newVersionId, sourceFaceOf } from "@isocan/core";
@@ -188,6 +189,7 @@ export function StageEditor({
     // identical version, and the buttons for it are not even shown.
     if (doc === undefined || saving || !dirtyRef.current) return;
     setSaving(true);
+    const { originGroupMode } = creationDestination();
     try {
       const upload = await uploadBlob(
         canvasId,
@@ -203,7 +205,7 @@ export function StageEditor({
         ...(current.visual ? { visual: current.visual } : {}),
       };
       const op = { type: "item.addVersion", itemId: item.id, version } as const;
-      await sendEchoed(canvasId, actor, op);
+      await sendEchoed(canvasId, actor, op, undefined, originGroupMode);
       try {
         localStorage.removeItem(draftKey(canvasId, item.id, baseVersion.current));
       } catch {

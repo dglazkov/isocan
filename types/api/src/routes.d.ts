@@ -1,4 +1,4 @@
-import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
 import type { UpgradeVerdict } from "../../core/src/index.js";
 import type { BuildStamp } from "../../server/src/index.js";
 import type { ContextPageOptions } from "./canvas-context.js";
@@ -88,6 +88,9 @@ export declare class DaemonRoutes {
      */
     private reclaim;
     private reclaiming;
+    /** The last observed mode is captured into each request body before retries.
+     * Callers holding an older placement preview pass its mode explicitly. */
+    private observedGroupModes;
     constructor(base: string, home: string);
     /**
      * **The fetch this surface makes its requests with**, so that the half of
@@ -197,12 +200,14 @@ export declare class DaemonRoutes {
     /** **One gesture, one undo** — see `LogEntry.group`. Ops sent under one
      *  id are undone together, so `isocan copy` writing eight items is one
      *  ⌘Z on the screen watching it. */
-    group?: string): Promise<PostOpResponse>;
+    group?: string, originGroupMode?: "legacy" | "groups"): Promise<PostOpResponse>;
     /** Semantic group request; canonical resolved patches belong to the
      * authoritative writer. Pass a stable opId when retrying one intent. */
     changeGroup(canvasId: string, actor: Actor, action: Exclude<GroupAction, {
         kind: "apply";
-    }>, opId?: string): Promise<PostOpResponse>;
+    }>, opId?: string, originGroupMode?: "legacy" | "groups"): Promise<PostOpResponse>;
+    /** Authoritative, read-only legacy conversion plan, including the undo boundary. */
+    groupMigrationPreview(canvasId: string): Promise<CanvasGroupMigrationPreview>;
     createSession(canvasId: string, actor: Actor, label?: string, harness?: string, 
     /** "rc": a parked `isocan rc` announcing itself — a process fact on the
      * presence plane, rendered nowhere. Defaults to "cli". */

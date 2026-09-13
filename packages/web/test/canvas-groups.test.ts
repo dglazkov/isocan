@@ -232,6 +232,41 @@ describe("explicit group insertion and brief production writes", () => {
     expect(state.canvas.items[itemId]!.containerId).toBe(id);
     expect(creationDestination(null)).toMatchObject({ containerId: null });
   });
+  it.each(["text", "file", "site", "document", "drawing", "module", "paste"] as const)("a delayed %s upload keeps its pre-conversion mode through the actual creation path", async (kind) => {
+    state = { ...state, project: { ...state.project, groupMode: "legacy" } }; land();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const normalFetch = fetch;
+    const requests: Array<{ originGroupMode?: string; op: Operation }> = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.includes("/blobs/") && (!init?.method || init.method === "GET")) { await held; return new Response("Acme"); }
+      if (url.endsWith("/blobs")) { await held; return normalFetch(url, init); }
+      const request = JSON.parse(String(init?.body)); requests.push(request);
+      if (request.originGroupMode === "legacy") return Response.json({ code: "migration-boundary", error: "Review the original legacy change after conversion." }, { status: 409 });
+      return normalFetch(url, init);
+    });
+    const at = { x: 700, y: 500 };
+    const start = () => {
+      if (kind === "text") return addTextNode(state.project.id, actor, "Acme delayed words", at);
+      if (kind === "file") return addFiles(state.project.id, actor, [new File(["Acme"], "acme.md", { type: "text/markdown" })], at);
+      if (kind === "site") return addBrowserItem(state.project.id, actor, "https://example.com", at);
+      if (kind === "document") return addDocumentItem(state.project.id, actor, { title: "Acme", markdown: "Acme", filename: "acme.md", source: "https://example.com", syncedAt: "2026-09-13T00:00:00Z" }, at);
+      if (kind === "drawing") return addDrawing(state.project.id, actor, [{ points: [{ x: 0, y: 0 }, { x: 20, y: 20 }], color: "#000000", width: 3 }]);
+      if (kind === "paste") return pasteInto({ canvasId: "prj_source", items: [state.canvas.items.itm_a!] }, state.project.id, actor, at);
+      const host = webHostFor(state.project.id, actor);
+      return host.putBlob(new Blob(["Acme"]), "acme.md").then((blob) => host.send([{ type: "item.add", containerId: null, itemId: "itm_module_delayed", width: 100, height: 100, placement: at, version: { id: "ver_module_delayed", ...blob, filename: "acme.md", mimeType: "text/markdown" } }]));
+    };
+    const pending = start();
+    state = { ...state, project: { ...state.project, groupMode: "groups", groupMigration: { version: 1, seq: 4, opId: "op_migration" } } }; land();
+    const unchanged = structuredClone(state);
+    release(); await expect(pending).rejects.toThrow("original legacy change");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.originGroupMode).toBe("legacy");
+    expect(requests[0]!.op).not.toHaveProperty("originGroupMode");
+    expect(state).toEqual(unchanged);
+    expect(useCanvasStore.getState().queue).toEqual([]);
+    expect(useCanvasStore.getState().refused).toMatchObject([{ code: "migration-boundary", originGroupMode: "legacy", op: requests[0]!.op }]);
+  });
   it.each([false, true])("a delayed upload belongs to its original canvas after navigation (offline=%s)", async (cannotReachHome) => {
     const id = await wrap(); enterCanvasGroup(id); posted = [];
     const saved = new Map<string, StoredReplica>();
@@ -449,7 +484,8 @@ describe("canvas group membership through the real web write path", () => {
   });
   it("legacy and reader mutations refuse before any upload or op", async () => {
     useCanvasStore.setState({ project: { ...state.project, groupMode: "legacy" } });
-    await expect(createCanvasGroup(state.project.id, actor, "Acme", "", [], { x: 0, y: 0 })).rejects.toThrow("not enabled");
+    await expect(createCanvasGroup(state.project.id, actor, "Acme", "", [], { x: 0, y: 0 })).rejects.toThrow("Preview and convert");
+    expect(useUiStore.getState().groupDialog?.kind).toBe("migrate");
     useCanvasStore.setState({ project: state.project, capability: "read" });
     await expect(changeCanvasGroup(state.project.id, actor, { kind: "ungroup", itemIds: ["itm_a"] })).rejects.toThrow("read-only");
     expect(fetch).not.toHaveBeenCalled();

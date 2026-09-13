@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { applyOperation, invertOperation, resolveCanvasGroupRequest, resolveContextOperation, contextManifest, ambientContextManifest, contextContentPage } from "@isocan/core";
+import { applyOperation, invertOperation, resolveCanvasGroupRequest, resolveContextOperation, contextManifest, ambientContextManifest, contextContentPage, canvasGroupMigrationPreview, resolveCanvasGroupMigration } from "@isocan/core";
 import type { Actor, CanvasSnapshotResponse, CanvasState, GroupAction, OpEnvelope, Operation, PostOpResponse } from "@isocan/core";
 import { CanvasGroups } from "../src/canvas-groups.ts";
 
@@ -8,7 +8,7 @@ export function groupFixture(enabled = true, canvasId = "prj_acme") {
   const actor = { id: "usr_acme", name: "Acme" };
   const ts = "2026-09-12T15:00:00.000Z";
   let count = 0;
-  let state = applyOperation(null, { id: "op_birth", canvasId, actor, ts, op: { type: "project.create", canvasId, title: "Acme Board", ...(enabled ? { groupMode: "groups" as const } : {}) } })!;
+  let state = applyOperation(null, { id: "op_birth", canvasId, actor, ts, op: { type: "project.create", canvasId, title: "Acme Board", groupMode: enabled ? "groups" : "legacy" } })!;
   const writes: Array<{ envelope: OpEnvelope; inverse: Operation | null }> = [];
   const blobs = new Map<string, Buffer>();
   let beforeWrite: (() => void) | undefined;
@@ -16,7 +16,9 @@ export function groupFixture(enabled = true, canvasId = "prj_acme") {
   const commit = async (request: Operation, who: Actor, opId?: string): Promise<PostOpResponse> => {
     beforeWrite?.(); beforeWrite = undefined;
     const id = opId ?? `op_write${++count}`;
-    const op = resolveCanvasGroupRequest(state, resolveContextOperation(state, writes.length, request), { actor: who, ts, opId: id });
+    const op = request.type === "group.change" && request.action.kind === "migrate"
+      ? resolveCanvasGroupMigration(state, writes.length, request.action, { actor: who, ts, opId: id })
+      : resolveCanvasGroupRequest(state, resolveContextOperation(state, writes.length, request), { actor: who, ts, opId: id });
     const envelope: OpEnvelope = { id, canvasId: state.project.id, actor: who, ts, op };
     const inverse = invertOperation(state, op);
     state = applyOperation(state, envelope)!;
@@ -26,6 +28,7 @@ export function groupFixture(enabled = true, canvasId = "prj_acme") {
   const client = {
     base: "https://acme.invalid",
     snapshot: async (): Promise<CanvasSnapshotResponse> => ({ ...state, lastSeq: writes.length, colors: {}, names: {} }),
+    groupMigrationPreview: async () => canvasGroupMigrationPreview(state, writes.length),
     listCanvases: async () => [state.project],
     listSessions: async () => [],
     contextManifest: async (_canvasId: string, request?: import("@isocan/core").ContextRequest) => request ? contextManifest(state, writes.length, request) : ambientContextManifest(state, writes.length),

@@ -67,6 +67,9 @@ export interface RefusedWrite {
   message: string;
   code?: string;
   at: number;
+  /** Keep a cutover-refused intent inspectable without automatically resending it. */
+  op?: Operation;
+  originGroupMode?: "legacy" | "groups";
 }
 
 /** Writes still waiting for the home: not yet answered, not refused. */
@@ -153,6 +156,9 @@ export function foldQueue(
   let state: CanvasState = confirmed;
   for (const write of queue) {
     if (write.refused) continue;
+    // A cutover cannot give an older gesture new optimistic semantics while
+    // its original request is still waiting for the writer's decision.
+    if (!write.accepted && ((!write.originGroupMode && confirmed.project.groupMigration) || (write.originGroupMode && write.originGroupMode !== (confirmed.project.groupMode ?? "legacy")))) continue;
     try {
       const stamp = { opId: write.opId, actor: write.actor, ts: new Date(write.at).toISOString() };
       const next = applyOperation(state, write.accepted ?? {
@@ -198,8 +204,9 @@ export function newWrite(
   actor: Actor,
   op: Operation,
   group?: string,
+  originGroupMode?: "legacy" | "groups",
 ): QueuedWrite {
-  return { opId, actor, op, at: Date.now(), ...(group !== undefined ? { group } : {}) };
+  return { opId, actor, op, at: Date.now(), ...(group !== undefined ? { group } : {}), ...(originGroupMode ? { originGroupMode } : {}) };
 }
 
 /**

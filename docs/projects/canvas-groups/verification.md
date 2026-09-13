@@ -548,3 +548,128 @@ frozen-context fidelity, with no new import path. Full native backup remains
 the restoration format. Byte-page responses are bounded, though the current
 API downloads a complete blob before slicing each response. New group mode
 remains opt-in until canvas-groups phase 5 enables migration and normal creation.
+
+## 13 September 2026: phase 5 independently verified
+
+The conductor ran `/conduct` with three disjoint builders, read their tests
+and diffs, and returned failures to the relevant owner. Phase five began at
+14:29 UTC. All canvases, identities, artifacts and daemon homes in these
+walks were synthetic. No hosted resources or real-user canvases were changed.
+
+### Migration, persistence and actual older clients
+
+`/tmp/isocan-canvas-groups-phase5-preview-walk.mts` independently exercised
+production core helpers: smallest-area ownership, stable equal-area ties,
+the centre boundary, target-owned overhanging ink and unchanged ordinary
+positions. A named grid expanded from `(2200, 0, 1000, 600)` to
+`(2080, -56, 1120, 656)` while its content origin stayed `(2224, 176)`.
+The repair was present in the preview and canonical operation.
+
+`/tmp/isocan-canvas-groups-phase5-api-walk.mts` then used actual HTTP, fresh
+production daemons, native export/import and restart. The legacy fixture had
+overlapping areas, grid labels, attached and dangling ink, three trash records,
+versions, board properties and discussion. Preview changed nothing. Apply
+was one operation; retrying its exact ID returned the original receipt.
+Membership, preserved geometry/versions/discussion, trash restore policy,
+snapshot-plus-tail adoption and rollback all matched the declared result.
+
+A literal `d9c212fe` v3 daemon was connected before migration and successfully
+forwarded a write under its own identity. The actual production v3 web build
+was served through a local reverse proxy: archived static files, with API and
+WebSocket bytes relayed to the real current writer. Passive CDP observation
+confirmed the browser advertised v3 and read legacy state at sequence 22.
+Migration committed at 23; neither old client received it. A direct old socket
+closed with 4426, HTTP snapshot/tail reads refused, and an old replica's
+forwarded mutation returned `canvas-groups-required` without a canvas append.
+The literal old JavaScript retried; every retry stayed fenced. It cannot
+acquire the current release's upgrade UI remotely.
+
+Native backup/import into another fresh daemon matched the legacy,
+converted and undone states, including mode, boundary, membership and trash,
+then matched again after restart. Repeated pre-boundary Undo/Redo attempts by
+other actors returned `migration-boundary`, preserved their candidates and
+appended nothing. A legacy-origin write from a v4 caller also refused. New
+group trash/redo and a later ordinary root's canonical Undo prevented rollback;
+later primitive title edits and plain discussion survived a legal rollback.
+Converted trash restored frames alone, retained unrelated trash and reconciled
+a live dangling mark when its target returned.
+
+`/tmp/isocan-canvas-groups-phase5-export-race.mts` changed the actual writer
+between production export reads. Whether the later migration appeared in the
+fetched tail or not, the backup retained its captured legacy revision and
+imported exactly. A real GC between archive and live reads caused an explicit
+incomplete-history refusal; an ordinary retry recovered the complete backup.
+The real Firestore emulator caught a separate bug: merging metadata retained
+an absent boundary after Undo. Explicit field deletion fixed the restart
+case, and the complete suite exercised that test again.
+
+### Browser and CLI walk
+
+On the fresh production build, Groups → Preview group conversion and CLI
+`canvas group migrate --dry-run` disclosed the same revision, three live
+records, parents, complete geometry repairs and history boundary. A concurrent
+edit made the preview stale and disabled conversion until refresh. Holding a
+conversion before the writer showed no optimistic mode change. A transport
+failure left it queued; reopening retained the pending request, and reconnect
+committed the original operation once.
+
+For the upload race, the browser began text on a legacy canvas and paused its
+real blob POST. CLI conversion committed while the upload was held. Releasing
+it produced an explicit legacy-mode refusal, with no item or operation added.
+The original `item.add`, ID, bytes reference, geometry and originating mode
+were reviewable after a real reload. Explicit dismissal persisted through a
+second reload. This used the new build's production creation and queue paths.
+
+The ordinary creation path was also walked again: browser Group selection,
+CLI wrap, menu Enter/Remove, CLI add and `mv --in`, group movement with one
+Undo, numeric group resize with exact Undo, context inspection agreeing with
+the CLI's four-entry manifest, browser copy/paste, delete/restore and Ungroup.
+Authoritative Undo after Ungroup restored the same membership and geometry.
+A real corner resize was held before POST while CLI removal changed its
+membership: release refused the whole transform, cleared the preview and left
+the writer at the concurrent edit's sequence with identical geometry.
+Runtime errors were empty. The separate CLI compatibility run covered area,
+grid, native export, connect and sharing groups: 17 tests passed.
+
+Scratch checks were corrected when they assumed offscreen targets, dialog
+labels, an earlier operation's selection or optimistic completion. Final
+lifecycle and conflict checks waited for writer state before comparing it.
+The old-browser setup first encountered replica-page routing and Chrome's
+local-network classification of intercepted HTML; the successful proof used
+real HTTP for the archived deployment. No substituted API response or patched
+old reducer counted as evidence. Screenshots and command records remain in
+`/tmp/isocan-canvas-groups-browser-walk.jsonl` and the phase-five scratch logs.
+
+### Final checks and surface obligations
+
+| Conductor check | Result before integration with newer main |
+| --- | --- |
+| Named migration command in phases.md | 22 passed, three files, exit 0. |
+| `FIRESTORE_EMULATOR_HOST=127.0.0.1:19099 ISOCAN_REQUIRE_EMULATOR=1 npm test` | 4,844 passed, three existing ACP/dispatch skips; all 476 files passed, exit 0, 186.95 seconds. |
+| `npm run typecheck` and `npm run build` | Both exit 0. |
+| Independent preview, API/old-client/native and export-race scripts | All exit 0. |
+| `git diff --check` and conduct status lint | Clean. |
+
+The initial complete suite had 48 failures. They exposed ordinary root-insert
+Undo repair, replica adoption capability and Firestore boundary removal,
+alongside modern-client fixtures still omitting capability or expecting raw
+legacy `item.add` envelopes. The fixes retained literal old-client tests,
+normal group births, assertions of explicit membership and the original
+compatibility refusals. No timeout, test skip or metric ceiling was widened.
+Before integration, the entry was **733,658 bytes**, below the unchanged **734,200** ceiling.
+Context and Personas load on first use and retain their mounted state.
+
+After rebasing onto `9fc80068`, including five newer main commits, the
+conductor reran the complete Firestore-enabled suite: **4,860 passed, three
+existing skips, all 477 files passed, exit 0 in 176.66 seconds**. Workspace
+typecheck and the production build both exited 0. The integrated entry is
+**733,714 bytes**, below the unchanged 734,200 ceiling. Changelog conflicts
+retained both the upstream measurement work and this phase's record; the
+roadmap was regenerated and conduct status lint remained clean.
+
+All six AGENTS obligations were touched: v4 operation/migration semantics;
+CLI migration, aliases and existing verbs; the shipped agent guide; shared
+core membership/migration/layout helpers; README; and production-path tests
+plus real browser gestures. Sharing groups of people and ordinary Undo labels
+retain their vocabulary. MCP remains read-only, JSON Canvas remains a lossy
+projection, and native backup remains the complete restoration format.

@@ -1105,7 +1105,7 @@ ordinary item: a card that draws the other canvas small and live, opens it in
 a new tab on a double-click or its ↗, and wears `kind=canvas`, `canvas=<id>`
 and `source=<address>` so you can read which canvas it is without opening
 it. A canvas is a place you go, not a thing you step inside of; a card is
-never entered. It takes `--in <area>` like everything else, which is how a
+never entered. It takes `--in <group>` like everything else, which is how a
 person's canvases are shelved onto sheets. `isocan ls --kind canvas` lists
 them. A canvas will not be placed on itself. `--inherit` makes the card a
 memory link as it lands — the other canvas's design system and pins join this
@@ -1118,36 +1118,58 @@ same headless browser the graders run and lands it as a version of the card,
 which shows it under the words when its own pull is refused. Needs the
 repository checkout and Chrome; a nightly is the right place for it.
 
-## Areas: sheets things are placed on
+## Groups: explicit membership, with area aliases
 
-An **area** is a titled region of the canvas — a sheet things are placed on,
-walked to, and read back from. It is an ordinary item (`kind=area`): its
-title is the sheet's name, its blob is a card saying what happens there, its
-box is the region. Membership is geometry, read now: an item is *in* an area
-when its centre is inside it. Nothing is stored on either side, so dragging a
-thing out is all it takes, and dragging the sheet in the app carries what is
-on it. `isocan area new <title>` lays one; `isocan area ls` names them and
-says how much each holds; `--in <area>` on `text`, `add`, `mv`, `ls` and
-`tidy` places into, reads from and tidies within one.
+New canvases have groups. A group owns its direct members: moving it carries
+its descendants and attached ink; resizing it scales their frames. Overlap
+alone never adds an item. Removing a member preserves its world position,
+and ungrouping removes the frame while preserving its children.
 
 ```sh
-isocan area new "Sketches" --tint yellow --note "Sketch alone; hand in at the bell."
-isocan area ls                            # the sheets, and how much each holds
-isocan text "HMW skip the password" --in "Experts"   # placed inside, at the first clear spot
-isocan add sketch.html --in Sketches      # the same for a file
-isocan mv <item> --in Vote                # onto a sheet
-isocan ls --in Sketches                   # what is on it
-isocan tidy --in Sketches                 # tidy the sheet's contents, within it
+isocan canvas group new "Sketches" --note "Sketch alone; hand in at the bell."
+isocan canvas group ls
+isocan text "Acme first sketch" --in Sketches
+isocan add sketch.html --in Sketches
+isocan mv <item> --in Sketches
+isocan ls --in Sketches                    # direct members; --recursive expands
+isocan tidy --in Sketches
+isocan canvas group grid Sketches 2x3 --rows "Draft,Review"
+isocan text "Acme review" --in Sketches --cell 2,1
+isocan canvas group grid Sketches --clear
 ```
 
-A spot found inside a sheet is *chosen*: the daemon never tidies it out. A
-sheet names itself by exact title, then by prefix — `--in sket` is Sketches.
+`area new`, `area ls` and `area grid` are compatibility spellings for these
+canvas-group acts; `area new --tint yellow` also sets the frame's tint. All
+structural aliases support `--dry-run` and `--json`. Group IDs and title
+prefixes must identify exactly one group. `slides add --in Storyboard`
+reads explicit descendants in reading order.
 
-A sheet can carry a **grid**: `isocan area grid Test 5x15 --rows "Ana,Ben,Cy,Di,Ed"`
-draws rows and columns with names, and `--cell row,col` (from 1, top-left)
-with `--in` on `text`, `add` and `mv` puts a thing in one cell. `isocan area
-grid Test --clear` takes it off. `isocan slides add --in Storyboard` makes the
-deck from everything on a sheet, in reading order.
+Existing legacy canvases keep their recorded geometry until you convert them.
+`area ls` labels that legacy read; `area new/grid` instead explain how to migrate.
+Preview before applying:
+
+```sh
+isocan canvas group migrate --dry-run --json
+isocan canvas group migrate --revision <preview-revision>
+```
+
+The writer's preview names membership choices, overlapping-area ambiguity,
+label/grid repairs, dangling annotations, legacy trash and the undo boundary.
+Apply uses that exact revision and refuses a stale preview without changing
+anything. `canvas group migrate` without `--revision` fetches a fresh preview
+and applies its revision in one operation. Repeating conversion is a no-op.
+Older timeline history remains readable. While converted, ordinary Undo/Redo
+cannot cross the boundary into old area operations. Immediate migration undo
+restores the prior legacy structure, but later group-dependent live, trash or
+redo state can block it; undoing visible work alone may not be enough. Nothing
+purges trash or discards history to make rollback pass. Queued writes retain
+their originating mode and a cutover refusal remains visible for reconciliation.
+Full native export/import preserves mode, boundary and history.
+
+`canvas create <title>` uses the writer's group default. `--legacy` is for
+intentional compatibility fixtures; it does not opt out of migration rules.
+Top-level `group` continues to manage people and sharing; an undo-group label
+continues to join log entries for undo. Neither establishes canvas membership.
 
 ## What changed
 
@@ -1367,7 +1389,7 @@ its own. And **a copy records what it was made from** (`parent`), so
 `isocan lineage` shows it hanging off its original — except across canvases,
 where that id would point at nothing.
 
-On group-enabled destinations, one copy is one operation and one undo: a
+On group destinations, one copy is one operation and one undo: a
 group carries its full subtree and attached ink, selected group+child roots
 are deduplicated, and deliberate internal overlaps survive. Only current
 versions are copied, including distinct visual bytes. Every required face is
@@ -2205,7 +2227,7 @@ anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 
 ## Quick reference of the whole surface
 
-**Canvas membership on group-enabled canvases:** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
+**Canvas membership (new canvases use groups):** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
 `canvas group wrap <items...> --title <title> [--note text]`,
 `canvas group ls`, `canvas group show <group> [--recursive]`,
 `canvas group add <group> <items...> [--place] [--cell r,c]`,
@@ -2213,7 +2235,9 @@ anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 `canvas group ungroup <groups...>`, `canvas group resize <group> WxH [--anchor nw|ne|sw|se]`,
 `canvas group frame <groups...> --fit` (or one group with `--size WxH`/`--at x,y`),
 `canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy]`,
-and `canvas group grid <group> RxC [--rows names] [--cols names] [--tidy]`.
+`canvas group grid <group> [RxC] [--rows names] [--cols names] [--tidy] [--clear]`,
+and `canvas group migrate [--dry-run] [--revision n]`.
+`area new <title>`, `area ls` and `area grid <group> [RxC] [--clear]` are compatibility aliases; `area ls` can also read legacy areas.
 **Group context:** `context --in <group> [--include-excluded]` reads the complete
 current hierarchy. `context request <thread> <comment>` reads the complete
 frozen manifest saved with a message, including the actual selected root IDs,
@@ -2279,9 +2303,9 @@ group**. Enter a group to edit its direct children; Escape returns to its
 parent. **Group selection** is ⌘/Ctrl+G, **Ungroup** is ⌘/Ctrl+Shift+G, and
 Shift+F10 or the Menu key opens the selection menu.
 
-Group creation currently requires an explicitly enabled canvas; a legacy
-canvas gives a useful refusal and keeps its `area` commands. Conversion and
-grid-cell placement are not available yet. Top-level `group new|list|add|remove|delete`
+New canvases use groups. Legacy canvases offer `canvas group migrate --dry-run`
+before any group creation; `area ls` still reads the old geometry. Grid cells
+and migration are available through the commands above. Top-level `group new|list|add|remove|delete`
 still manages people and access. `session select` still shares quoted text.
 
 `isocan --help` covers everything; the commands you'll live in:

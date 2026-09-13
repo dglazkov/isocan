@@ -1,4 +1,5 @@
 import type {
+  CanvasGroupMigrationPreview,
   Actor,
   ActorClaimOp,
   AttestOffer,
@@ -52,9 +53,15 @@ import type {
   ContextManifest,
   ContextContentPage,
 } from "@isocan/core";
+
+/** Conversion previews are writer reads, so the reviewed revision guards one apply. */
+export function fetchGroupMigration(canvasId: string): Promise<CanvasGroupMigrationPreview> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/groups/migration`);
+}
 import {
   CANVAS_GROUPS_FEATURE,
   CLIENT_FEATURES_HEADER,
+  CANVAS_GROUPS_REQUIRED,
   ATTEST_ROUTE,
   groupActingRoute,
   groupMemberRoute,
@@ -329,6 +336,7 @@ export function postOp(
   op: Operation,
   opId: string,
   group?: string,
+  originGroupMode?: "legacy" | "groups",
 ): Promise<PostOpResponse> {
   return request("POST", "/api/ops", {
     canvasId,
@@ -337,6 +345,7 @@ export function postOp(
     opId,
     op,
     ...(group !== undefined ? { group } : {}),
+    ...(originGroupMode ? { originGroupMode } : {}),
   });
 }
 
@@ -354,11 +363,13 @@ export function postOp(
  * have open — and then `sendOp` throws, because a gesture that quietly
  * evaporates is the failure this phase exists to remove.
  */
-let queueWrite: ((canvasId: string | null, actor: Actor, op: Operation, opId: string) => boolean) | null =
+let queueWrite: ((canvasId: string | null, actor: Actor, op: Operation, opId: string, originGroupMode?: "legacy" | "groups", upgradeRequired?: boolean) => boolean) | null =
   null;
+let writeOrigin: ((canvasId: string | null) => "legacy" | "groups" | undefined) | null = null;
 
-export function onOfflineWrite(fn: typeof queueWrite): void {
+export function onOfflineWrite(fn: typeof queueWrite, origin: typeof writeOrigin = null): void {
   queueWrite = fn;
+  writeOrigin = origin;
 }
 
 /** What to tell somebody whose act cannot wait in a queue. Each sentence
@@ -401,13 +412,17 @@ export async function sendOp(
    *  nothing here; a paste, or an edit that changes words and title, passes
    *  the same id for every op it writes. */
   group?: string,
+  capturedOrigin?: "legacy" | "groups",
 ): Promise<PostOpResponse | null> {
   const opId = newOpId();
+  const originGroupMode = capturedOrigin ?? writeOrigin?.(canvasId);
   try {
-    return await postOp(canvasId, actor, op, opId, group);
+    return await postOp(canvasId, actor, op, opId, group, originGroupMode);
   } catch (err) {
-    if (homeAnswered(err)) throw err;
-    if (queueWrite?.(canvasId, actor, op, opId)) return null;
+    const upgradeRequired = err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED;
+    if (homeAnswered(err) && !upgradeRequired) throw err;
+    if (queueWrite?.(canvasId, actor, op, opId, originGroupMode, upgradeRequired)) return null;
+    if (upgradeRequired) throw err;
     throw new OfflineError(offlineNote(op));
   }
 }

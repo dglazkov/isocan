@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
-import type { Actor, CanvasContents, CanvasSnapshotResponse, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupCreation, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "@isocan/core";
+import type { Actor, CanvasContents, CanvasGroupMigrationPreview, CanvasSnapshotResponse, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupCreation, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "@isocan/core";
 import { atLeast, captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupCopyAction, groupCopySource, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation, visualFaceOf } from "@isocan/core";
 import type { DaemonRoutes } from "./routes.ts";
 
-type PublicAction = Exclude<GroupAction, { kind: "apply" }>;
-type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "downloadBlob" | "changeGroup">;
+type PublicAction = Exclude<GroupAction, { kind: "apply" | "migrate" }>;
+type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "downloadBlob" | "changeGroup" | "groupMigrationPreview">;
+
+/** Migration receipts retain the reviewed complete plan and the actual writer sequence. */
+export type CanvasGroupMigrationResult = CanvasGroupMigrationPreview & { dryRun: boolean; seq?: number; envelope?: PostOpResponse["envelope"] };
 
 export interface CanvasGroupCopyOptions {
   in?: string | undefined;
@@ -77,9 +80,22 @@ function view(canvas: CanvasContents, item: Item, recursive: boolean): CanvasGro
 export class CanvasGroups {
   constructor(private client: GroupClient, readonly canvasId: string, private identity: Actor | (() => Actor)) {}
 
+  /** Read the writer's plan; applying names its exact revision and never runs
+   * geometric membership against a cached client snapshot. */
+  async migrate(options: { dryRun?: boolean; expectedRevision?: number; opId?: string } = {}): Promise<CanvasGroupMigrationResult> {
+    if (options.expectedRevision !== undefined && (!Number.isSafeInteger(options.expectedRevision) || options.expectedRevision < 0)) throw new Error("migration revision must be a non-negative integer");
+    const preview = await this.client.groupMigrationPreview(this.canvasId);
+    if (preview.status === "already-groups") return { ...preview, dryRun: !!options.dryRun };
+    if (options.expectedRevision !== undefined && options.expectedRevision !== preview.revision) throw new Error(`migration preview changed: expected revision ${options.expectedRevision}, now ${preview.revision}; run canvas group migrate --dry-run again`);
+    if (options.dryRun) return { ...preview, dryRun: true };
+    const actor = typeof this.identity === "function" ? this.identity() : this.identity;
+    const response = await this.client.changeGroup(this.canvasId, actor, { kind: "migrate", expectedRevision: preview.revision }, options.opId ?? newOpId(), "legacy");
+    return { ...preview, dryRun: false, seq: response.seq, envelope: response.envelope };
+  }
+
   private async read(edit = false): Promise<CanvasSnapshotResponse> {
     const state = await this.client.snapshot(this.canvasId);
-    if (state.project.groupMode !== "groups") throw new Error("canvas groups are not enabled on this canvas; existing areas remain available through isocan area. Group conversion is not available in this build.");
+    if (state.project.groupMode !== "groups") throw new Error("canvas groups are not enabled on this legacy canvas; preview conversion with `isocan canvas group migrate --dry-run`, then apply it with `isocan canvas group migrate`. Existing areas remain readable with `isocan area ls`.");
     if (edit && state.capability && !atLeast(state.capability, "edit")) throw new Error("editing this canvas requires edit access; groups can still be listed and inspected");
     return state;
   }
@@ -159,7 +175,13 @@ export class CanvasGroups {
   }
 
   /** Grid counts and optional names use the same saved layout as the browser. */
-  async grid(ref: string, counts: { rows: number; columns: number }, options: { rows?: string[]; columns?: string[]; tidy?: boolean; dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+  async grid(ref: string, counts: { rows: number; columns: number } | null, options: { rows?: string[]; columns?: string[]; tidy?: boolean; dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
+    if (counts === null) {
+      const state = await this.read(true);
+      const item = resolveCanvasGroupRef(state.canvas, ref, true);
+      const { rows: _rows, columns: _columns, rowCount: _rowCount, columnCount: _columnCount, rowGutter: _rowGutter, columnGutter: _columnGutter, ...layout } = item.groupLayout ?? {};
+      return this.perform(state, { kind: "layout", itemId: item.id, layout, clearGrid: true }, !!options.dryRun);
+    }
     return this.layout(ref, { rowCount: counts.rows, columnCount: counts.columns, ...(options.rows ? { rows: options.rows } : {}), ...(options.columns ? { columns: options.columns } : {}) }, options);
   }
 
@@ -239,7 +261,7 @@ export class CanvasGroups {
         const uploaded = await this.client.uploadBlob(this.canvasId, content, action.group.version.mimeType, action.group.version.filename);
         if (uploaded.blobHash !== action.group.version.blobHash) throw new Error("group card upload hash disagreed with its bytes");
       }
-      response = await this.client.changeGroup(this.canvasId, actor, action, opId);
+      response = await this.client.changeGroup(this.canvasId, actor, action, opId, state.project.groupMode ?? "legacy");
       const written = response.envelope.op;
       if (written.type !== "group.change" || written.action.kind !== "apply") throw new Error("writer did not return the resolved group change");
       change = written.action.change;
@@ -259,9 +281,9 @@ export class CanvasGroups {
     const changes = change.writes.map((write) => {
       const id = write.kind === "create" ? write.item.id : write.itemId;
       const before = facts.get(id);
-      const next = write.kind === "create" ? write.item : write.kind === "trash" ? undefined : { ...before!, ...(write.kind === "patch" ? write.fields : { containerId: write.containerId }) };
+      const next = write.kind === "create" ? write.item : write.kind === "trash" ? undefined : { ...before!, ...(write.kind === "patch" || write.kind === "patchTrash" ? write.fields : { containerId: write.containerId }) };
       const coordinates = (value: typeof before | typeof next): GroupBox | null => value ? { x: value.x, y: value.y, width: value.width, height: value.height } : null;
-      return { itemId: id, parentBefore: before?.containerId ?? null, parentAfter: next?.containerId ?? null, boxBefore: coordinates(before), boxAfter: coordinates(next), state: next ? "live" as const : "trash" as const };
+      return { itemId: id, parentBefore: before?.containerId ?? null, parentAfter: next?.containerId ?? null, boxBefore: coordinates(before), boxAfter: coordinates(next), state: next && write.kind !== "patchTrash" ? "live" as const : "trash" as const };
     });
     return { dryRun, intent: action.kind, ...(action.kind === "create" ? { itemId: action.group.id } : {}), affectedRoots: action.kind === "copy" ? action.rootIds : groupSelectionRoots(relation, inputIds), changes, constraints: { valid: true, adjustedFrameIds: changes.filter((row) => facts.get(row.itemId)?.kind === "group" && JSON.stringify(row.boxBefore) !== JSON.stringify(row.boxAfter)).map((row) => row.itemId) }, ...(response ? { seq: response.seq } : {}) };
   }

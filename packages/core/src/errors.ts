@@ -47,6 +47,7 @@ type OpErrorCode =
    * client: see `OplogFencedError`. */
   | "writer-fenced"
   | "group-conflict"
+  | "migration-boundary"
   /** The operator of this home refused that name (operator phase 6): a
    * claim `as` an actor on the refusal list. Its own code rather than
    * `name-taken`, because the remedy differs — a pass will not help, and the
@@ -70,6 +71,11 @@ export class GroupConflictError extends OpValidationError {
     super("group-conflict", message);
     this.name = "GroupConflictError";
   }
+}
+
+/** Conversion refusals leave queued intent and every actor's history candidate intact. */
+export class MigrationBoundaryError extends OpValidationError {
+  constructor(message: string) { super("migration-boundary", message); this.name = "MigrationBoundaryError"; }
 }
 
 /**

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import type { CollectionReference, DocumentData, Firestore } from "@google-cloud/firestore";
+import { FieldValue } from "@google-cloud/firestore";
 import type {
   ActorRegistry,
   LogEntry,
@@ -820,7 +821,10 @@ export class CloudStore implements Store {
     if (this.writtenCanvas.get(canvas.id) === encoded) return;
     await this.db.doc(canvasDoc(canvas.id)).set(
       // `project` is the stored field name — a deliberate holdout (phase 13.5).
-      { project: jsonSafe(canvas), deleted: false },
+      // Merge preserves operator fields beside the project. Absence of a
+      // migration boundary or legacy mode field is meaningful, however:
+      // Firestore must remove it instead of retaining the previous map key.
+      { project: { ...jsonSafe(canvas), ...(canvas.groupMode === undefined ? { groupMode: FieldValue.delete() } : {}), ...(canvas.groupMigration === undefined ? { groupMigration: FieldValue.delete() } : {}) }, deleted: false },
       { merge: true },
     );
     this.writtenCanvas.set(canvas.id, encoded);

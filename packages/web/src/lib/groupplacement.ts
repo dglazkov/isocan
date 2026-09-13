@@ -2,9 +2,10 @@ import type { Actor, Operation } from "@isocan/core";
 import { useCanvasStore, sendEchoedResult } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 
-/** Capture the intended parent before uploads or module work can outlive the current scope. */
-export function creationDestination(containerId = useUiStore.getState().activeGroupId): Pick<Extract<Operation, { type: "item.add" }>, "containerId" | "groupPlacement"> {
-  return useCanvasStore.getState().project?.groupMode === "groups" ? { containerId, groupPlacement: "auto" } : {};
+/** Parent and request mode belong to the initial gesture, before uploads or module work. */
+export function creationDestination(containerId = useUiStore.getState().activeGroupId): Pick<Extract<Operation, { type: "item.add" }>, "containerId" | "groupPlacement"> & { originGroupMode: "legacy" | "groups" } {
+  const originGroupMode = useCanvasStore.getState().project?.groupMode ?? "legacy";
+  return { originGroupMode, ...(originGroupMode === "groups" ? { containerId, groupPlacement: "auto" as const } : {}) };
 }
 
 /** Delayed creation may finish elsewhere; only its original canvas may reveal the new items. */
@@ -20,8 +21,11 @@ export class QueuedItemError extends Error {
 }
 
 /** Creation callers must not select a refused or still-queued item as a completed upload. */
-export async function sendCreatedItem(canvasId: string, actor: Actor, op: Extract<Operation, { type: "item.add" }>, group?: string): Promise<void> {
-  const result = await sendEchoedResult(canvasId, actor, op, group);
+export async function sendCreatedItem(canvasId: string, actor: Actor, creation: Extract<Operation, { type: "item.add" }> & { originGroupMode?: "legacy" | "groups" }, group?: string): Promise<void> {
+  // Transport provenance is carried alongside placement while bytes are
+  // prepared, but it is never part of the operation vocabulary or its log.
+  const { originGroupMode, ...op } = creation;
+  const result = await sendEchoedResult(canvasId, actor, op, group, originGroupMode);
   if (result.status === "refused") throw new Error(result.message || "This item could not be added.");
   if (result.status === "queued") throw new QueuedItemError();
 }

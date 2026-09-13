@@ -3,7 +3,7 @@ import { annotationTarget, groupTransformClosure, isGroupItem, itemPath } from "
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { changeCanvasGroup, detachGroupInk, enterCanvasGroup, groupsEnabled, groupTask, openGroupCreation, removeFromCanvasGroup, selectGroupContents, selectParentGroup } from "./canvasgroups.ts";
+import { changeCanvasGroup, detachGroupInk, enterCanvasGroup, groupsEnabled, groupTask, openGroupCreation, openGroupMigration, openGroupAddition, removeFromCanvasGroup, selectGroupContents, selectParentGroup } from "./canvasgroups.ts";
 
 /** The same semantic entries serve item menus and the visible Groups button. */
 export function canvasGroupEntries(items: Item[], ctx: { canvasId: string; actor: Actor; navigate: (path: string) => void }): MenuEntry[] {
@@ -16,7 +16,8 @@ export function canvasGroupEntries(items: Item[], ctx: { canvasId: string; actor
   const task = (action: Parameters<typeof changeCanvasGroup>[2]) => groupTask(() => changeCanvasGroup(ctx.canvasId, ctx.actor, action));
   return [
     { separator: "Groups" },
-    { label: "Group selection", shortcutFor: "Group selection", writes: true, disabled: !enabled || ids.length === 0, value: !enabled ? "Not enabled on this canvas" : ids.length ? `${ids.length} selected` : "Select items first", run: () => openGroupCreation(ids) },
+    ...(!enabled ? [{ label: "Preview group conversion…", run: openGroupMigration }] : []),
+    { label: "Group selection", shortcutFor: "Group selection", writes: true, disabled: ids.length === 0, value: !enabled ? "Preview conversion first" : ids.length ? `${ids.length} selected` : "Select items first", run: () => openGroupCreation(ids) },
     ...(group ? [
       { label: "Enter group", run: () => enterCanvasGroup(group.id) },
       { label: "Select contents", run: () => selectGroupContents(group.id) },
@@ -29,7 +30,7 @@ export function canvasGroupEntries(items: Item[], ctx: { canvasId: string; actor
       { label: "Ungroup", shortcutFor: "Ungroup", writes: true, run: () => task({ kind: "ungroup", itemIds: [group.id] }) },
     ] : []),
     ...(!group && items.some(isGroupItem) ? [{ label: "Ungroup", shortcutFor: "Ungroup", writes: true, run: () => task({ kind: "ungroup", itemIds: items.filter(isGroupItem).map((item) => item.id) }) }] : []),
-    { label: items.some((item) => item.containerId) ? "Move to group…" : "Add to group…", writes: true, disabled: !enabled || ids.length === 0, ...(!enabled ? { value: "Not enabled on this canvas" } : {}), run: () => useUiStore.getState().setGroupDialog({ kind: "add", itemIds: ids }) },
+    { label: items.some((item) => item.containerId) ? "Move to group…" : "Add to group…", writes: true, disabled: ids.length === 0, ...(!enabled ? { value: "Preview conversion first" } : {}), run: () => openGroupAddition(ids) },
     ...(one?.containerId ? [{ label: "Select parent group", run: () => selectParentGroup(one.id) }] : []),
     ...(members.length ? [{ label: members.length === ids.length ? "Remove from group" : `Remove ${members.length} ${members.length === 1 ? "member" : "members"} from group`, writes: true, run: () => groupTask(() => removeFromCanvasGroup(ctx.canvasId, ctx.actor, members.map((item) => item.id))) }] : []),
     ...(one && annotationTarget(one) ? [{ label: "Detach from annotated item", writes: true, run: () => groupTask(() => detachGroupInk(ctx.canvasId, ctx.actor, one)) }] : []),

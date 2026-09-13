@@ -201,7 +201,7 @@ describe("after the join", () => {
 
   it("the log still carries the id each op was written with", async () => {
     const log = await get<LogEntry[]>(mine, `/api/projects/${CANVAS}/oplog`);
-    const added = log.find((entry) => entry.envelope.op.type === "item.add")!;
+    const added = log.find((entry) => entry.envelope.op.type === "group.change" && entry.envelope.op.action.kind === "apply" && entry.envelope.op.action.change.writes.some((write) => write.kind === "create" && write.item.id === "itm_1"))!;
     expect(added.envelope.actor).toEqual(second);
     const snapshot = await get<CanvasSnapshotResponse>(mine, `/api/projects/${CANVAS}/canvas`);
     expect(snapshot.canvas.items["itm_1"]!.createdBy).toEqual(second);

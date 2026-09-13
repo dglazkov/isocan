@@ -30,7 +30,7 @@ type OpErrorCode = "unknown-item" | "unknown-version" | "unknown-thread" | "unkn
 /** This daemon is no longer the writer for that canvas — another instance
  * already used the sequence number it tried to claim. Never retried by the
  * client: see `OplogFencedError`. */
- | "writer-fenced" | "group-conflict"
+ | "writer-fenced" | "group-conflict" | "migration-boundary"
 /** The operator of this home refused that name (operator phase 6): a
  * claim `as` an actor on the refusal list. Its own code rather than
  * `name-taken`, because the remedy differs — a pass will not help, and the
@@ -42,6 +42,10 @@ export declare class OpValidationError extends Error {
 }
 /** Structural undo conflicts must not be discarded or fall through to older work. */
 export declare class GroupConflictError extends OpValidationError {
+    constructor(message: string);
+}
+/** Conversion refusals leave queued intent and every actor's history candidate intact. */
+export declare class MigrationBoundaryError extends OpValidationError {
     constructor(message: string);
 }
 /**

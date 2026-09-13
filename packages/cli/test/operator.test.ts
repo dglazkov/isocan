@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import {
+  CANVAS_GROUPS_FEATURE,
+  CLIENT_FEATURES_HEADER,
   DOOR_ROUTE,
   decodeHandoff,
   formatBadgeToken,
@@ -346,6 +348,7 @@ describe("the real verbs, driven end to end", () => {
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${formatBadgeToken(badge.badgeId, badge.secret!)}`,
+      [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE,
     };
     // The desk has to vouch for Priya before this badge may speak as her —
     // mechanism 5, and the reason a seeded canvas is two calls rather than one.

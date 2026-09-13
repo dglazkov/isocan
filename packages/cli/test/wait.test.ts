@@ -5,7 +5,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { PresenceSession } from "@isocan/core";
+import { CLIENT_FEATURES_HEADER, type PresenceSession } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -57,6 +57,7 @@ beforeEach(async () => {
       const body = Buffer.concat(chunks);
       const type = req.headers["content-type"];
       const auth = req.headers.authorization;
+      const features = req.headers[CLIENT_FEATURES_HEADER];
       void fetch(`${base}${req.url}`, {
         method: req.method ?? "GET",
         // A proxy forwards the credential. Without this the CLI's badge is
@@ -65,6 +66,8 @@ beforeEach(async () => {
         headers: {
           ...(type ? { "content-type": type } : {}),
           ...(auth ? { authorization: auth } : {}),
+          // The proxy preserves the actual caller's reducer capability too.
+          ...(features ? { [CLIENT_FEATURES_HEADER]: Array.isArray(features) ? features.join(",") : features } : {}),
         },
         ...(body.length > 0 ? { body } : {}),
       })

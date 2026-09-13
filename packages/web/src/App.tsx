@@ -3,7 +3,8 @@ import { preloadMarkdown } from "./lib/markdown.tsx";
 import { BrowserRouter, matchPath, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, MODULE_PAGE_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
-import { getSnapshot } from "./lib/api.ts";
+import { ApiError, getSnapshot } from "./lib/api.ts";
+import { CANVAS_GROUPS_REQUIRED } from "@isocan/core";
 import { Viewer } from "./components/Viewer.tsx";
 import { readIdentity } from "./lib/identity.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
@@ -277,7 +278,7 @@ export function Doorway({
  * words). The read is not wasted work: it is the same request that admits the
  * badge at the door, one flight earlier.
  */
-function ViewerGate({
+export function ViewerGate({
   canvasId,
   itemId,
   door,
@@ -286,7 +287,7 @@ function ViewerGate({
   itemId: string | null;
   door: ReactNode;
 }) {
-  const [standing, setStanding] = useState<"asking" | "view" | "door">("asking");
+  const [standing, setStanding] = useState<"asking" | "view" | "door" | "upgrade-required">("asking");
   useEffect(() => {
     let live = true;
     setStanding("asking");
@@ -296,7 +297,7 @@ function ViewerGate({
     // 1), and the page picks the read-only surface once they are through.
     getSnapshot(canvasId)
       .then((s) => live && setStanding(s.capability === "view" ? "view" : "door"))
-      .catch(() => live && setStanding("door"));
+      .catch((err) => live && setStanding(err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED ? "upgrade-required" : "door"));
     return () => {
       live = false;
     };
@@ -304,6 +305,7 @@ function ViewerGate({
   // The door's own sentence for the beat the answer takes, so a viewer never
   // sees the name prompt flash before the presentation replaces it.
   if (standing === "asking") return <div className="page-note">Letting you in…</div>;
+  if (standing === "upgrade-required") return <div className="page-note page-note-stack"><div>This canvas needs an updated isocan app.</div><div className="page-note-hint">Reload to continue. Any queued changes remain saved in this browser for review.</div><button className="btn" onClick={() => window.location.reload()}>Reload app</button></div>;
   if (standing === "view") return <Viewer canvasId={canvasId} itemId={itemId} />;
   return <>{door}</>;
 }

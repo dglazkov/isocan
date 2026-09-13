@@ -7,7 +7,7 @@ import type {
   CanvasState,
   ServerMessage,
 } from "@isocan/core";
-import { applyOperation, CANVAS_GROUPS_FEATURE, captureGroupExpectations, CLIENT_FEATURES_PARAM, ENDED, REFUSED, TAKEN_DOWN, WS_NOT_ADMITTED, resolveCanvasGroupRequest } from "@isocan/core";
+import { applyOperation, CANVAS_GROUPS_FEATURE, CANVAS_GROUPS_REQUIRED, captureGroupExpectations, CLIENT_FEATURES_PARAM, ENDED, REFUSED, TAKEN_DOWN, WS_NOT_ADMITTED, WS_STALE_CLIENT, resolveCanvasGroupRequest } from "@isocan/core";
 import type { ReplicaStore, StoredReplica } from "../src/lib/replica.ts";
 
 /**
@@ -231,7 +231,7 @@ beforeEach(async () => {
   vi.resetModules();
   const { onOfflineWrite } = await api();
   const { queueOfflineWrite } = await store();
-  onOfflineWrite(queueOfflineWrite);
+  onOfflineWrite(queueOfflineWrite, (await store()).queuedWriteOrigin);
 });
 
 afterEach(async () => {
@@ -284,7 +284,7 @@ describe("a tab with no network keeps working", () => {
     const { setReplicaStore } = await import("../src/lib/replica.ts");
     setReplicaStore(diskStore());
     const { onOfflineWrite } = await api();
-    onOfflineWrite(fresh.queueOfflineWrite);
+    onOfflineWrite(fresh.queueOfflineWrite, fresh.queuedWriteOrigin);
 
     online = false;
     fresh.connectToCanvas("prj_1", priya);
@@ -951,6 +951,119 @@ describe("a heartbeat that says the canvas has moved on", () => {
 
 // The socket event precedes a held HTTP response: drive actual confirm/retire,
 // rather than replacing the store or clearing its queue in a fixture helper.
+it.each(["echoed", "direct"] as const)("preserves a %s write's legacy origin through cutover, disk and reconnect refusal", async (path) => {
+  const { useCanvasStore, sendEchoedResult, connectToCanvas, disconnect, dismissRefusals } = await store();
+  const { sendOp } = await api();
+  const initial = await connected(2);
+  let fail!: () => void;
+  const held = new Promise<void>((resolve) => { fail = resolve; });
+  let request!: { opId: string; originGroupMode?: string; op: Operation };
+  globalThis.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+    request = JSON.parse(String(init?.body));
+    await held;
+    throw new TypeError("Failed to fetch");
+  }) as typeof fetch;
+  const op: Operation = { type: "item.move", itemId: "itm_1", x: 70, y: 80 };
+  const pending = path === "echoed" ? sendEchoedResult("prj_1", priya, op) : sendOp("prj_1", priya, op);
+  await settle();
+  expect(request.originGroupMode).toBe("legacy");
+  const converted = { ...initial, project: { ...initial.project, groupMode: "groups" as const } };
+  FakeSocket.last.deliver({ type: "snapshot", project: converted.project, canvas: converted.canvas, lastSeq: 3, colors: {}, names: {} });
+  await settle();
+  fail(); await pending;
+  expect(useCanvasStore.getState().queue[0]?.originGroupMode).toBe("legacy");
+  expect(useCanvasStore.getState().canvas?.items.itm_1).toMatchObject({ x: 5, y: 6 });
+  await settle();
+  expect([...disk.values()][0]?.queue[0]?.originGroupMode).toBe("legacy");
+  globalThis.fetch = fakeFetch as typeof fetch;
+  refusals.set(request.opId, { status: 409, error: "Canvas mode changed. Review the original legacy change before trying again.", code: "migration-boundary" });
+  connectToCanvas("prj_1", priya); await settle();
+  expect(posted.find((body) => body.opId === request.opId)?.originGroupMode).toBe("legacy");
+  expect(useCanvasStore.getState().queue).toEqual([]);
+  expect(useCanvasStore.getState().refused).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op, code: "migration-boundary" }]);
+  await settle();
+  expect([...disk.values()][0]?.migrationRefusals).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op, code: "migration-boundary" }]);
+  const postCount = posted.length;
+  disconnect(); connectToCanvas("prj_other", priya); await settle();
+  expect(useCanvasStore.getState().refused).toEqual([]);
+  connectToCanvas("prj_1", priya); await settle();
+  expect(useCanvasStore.getState().refused).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op, code: "migration-boundary" }]);
+  expect(posted).toHaveLength(postCount);
+  dismissRefusals(); await settle();
+  disconnect(); connectToCanvas("prj_1", priya); await settle();
+  expect(useCanvasStore.getState().refused).toEqual([]);
+  expect([...disk.values()].find((record) => record.canvasId === "prj_1")?.migrationRefusals).toEqual([]);
+});
+
+it("refuses an unproven old queued origin beside a migration boundary instead of guessing the current mode", async () => {
+  const { useCanvasStore, connectToCanvas, disconnect } = await store();
+  const initial = await connected(2);
+  disconnect();
+  const op: Operation = { type: "item.move", itemId: "itm_1", x: 99, y: 99 };
+  disk.set("prj_1", { canvasId: "prj_1", project: { ...initial.project, groupMode: "groups", groupMigration: { version: 1, seq: 3, opId: "op_migration" } }, canvas: initial.canvas, lastSeq: 3, queue: [{ opId: "op_unknown_origin", actor: priya, op, at: 1 }], savedAt: "2026-09-13T00:00:00Z" });
+  connectToCanvas("prj_1", priya); await settle();
+  expect(posted).toEqual([]);
+  expect(useCanvasStore.getState().canvas?.items.itm_1).toMatchObject({ x: 5, y: 6 });
+  expect(useCanvasStore.getState().refused).toMatchObject([{ opId: "op_unknown_origin", op, code: "migration-boundary" }]);
+  expect(useCanvasStore.getState().queue).toEqual([]);
+});
+
+it.each([false, true])("stops on upgrade refusal with existing connection=%s while preserving queued work", async (existing) => {
+  const { useCanvasStore, connectToCanvas, sendEchoedResult } = await store();
+  if (existing) {
+    await connected(2);
+    online = false;
+    await sendEchoedResult("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 30, y: 40 });
+  } else { connectToCanvas("prj_1", priya); await settle(); }
+  const before = useCanvasStore.getState();
+  const dials = FakeSocket.opened.length;
+  FakeSocket.last.close(WS_STALE_CLIENT, "Canvas groups require an updated isocan client");
+  await settle(); vi.advanceTimersByTime(120_000); await settle();
+  expect(useCanvasStore.getState().connection).toBe("upgrade-required");
+  expect(FakeSocket.opened).toHaveLength(dials);
+  expect(useCanvasStore.getState().queue).toEqual(before.queue);
+  expect(useCanvasStore.getState().confirmed).toEqual(before.confirmed);
+});
+
+it.each(["echoed", "direct"] as const)("keeps the %s request durable when a late HTTP upgrade refusal follows socket refusal", async (path) => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  const { sendOp } = await api();
+  await connected(2);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let request!: { opId: string; originGroupMode: string; op: Operation };
+  globalThis.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+    request = JSON.parse(String(init?.body)); await held;
+    return Response.json({ error: "Update isocan before continuing", code: CANVAS_GROUPS_REQUIRED }, { status: 426 });
+  }) as typeof fetch;
+  const op: Operation = { type: "item.move", itemId: "itm_1", x: 30, y: 40 };
+  const pending = path === "echoed" ? sendEchoedResult("prj_1", priya, op) : sendOp("prj_1", priya, op);
+  await settle();
+  FakeSocket.last.close(WS_STALE_CLIENT, "Update required");
+  release(); await pending; await settle();
+  expect(useCanvasStore.getState().connection).toBe("upgrade-required");
+  expect(useCanvasStore.getState().refused).toEqual([]);
+  expect(useCanvasStore.getState().queue).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op }]);
+  expect([...disk.values()][0]?.queue).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op }]);
+});
+
+it("keeps a persisted queued request when flush requires an upgrade, without declaring it refused or offline", async () => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  await connected(2); await goOffline();
+  const result = await sendEchoedResult("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 30, y: 40 });
+  const write = useCanvasStore.getState().queue[0]!;
+  const complete = vi.fn(); void result.completion?.then(complete);
+  refusals.set(write.opId, { status: 426, error: "Update isocan", code: CANVAS_GROUPS_REQUIRED });
+  const dials = FakeSocket.opened.length;
+  await comeBack();
+  expect(useCanvasStore.getState().connection).toBe("upgrade-required");
+  expect(useCanvasStore.getState().refused).toEqual([]);
+  expect(useCanvasStore.getState().queue).toEqual([write]);
+  expect(complete).not.toHaveBeenCalled();
+  expect(FakeSocket.opened).toHaveLength(dials);
+  expect(posted).toMatchObject([{ opId: write.opId, originGroupMode: "legacy" }]);
+});
+
 it.each(["accepted", "refused"] as const)("settles the exact queued form receipt on reconnect %s", async (status) => {
   const { useCanvasStore, sendEchoedResult } = await store();
   await connected(2);

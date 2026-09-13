@@ -54,11 +54,6 @@ export declare const AREA_CARD_HEIGHT = 120;
 export declare const AREA_HEAD: number;
 /** Inset from the sheet's edge for anything placed inside it. */
 export declare const AREA_INSET = 24;
-/** A sensible default sheet: room for a row of sketches with a title above. */
-export declare const AREA_DEFAULT_SIZE: {
-    width: number;
-    height: number;
-};
 export declare function isArea(item: Item): boolean;
 /** The tint an area wears, or null for the plain sheet. */
 export declare function areaTint(item: Item): Paper | null;

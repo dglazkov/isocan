@@ -281,12 +281,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   (`isocan area grid Test 5x15`). See
   [the research](docs/research/2026-09-01-design-sprint.md) and
   [the journey](docs/projects/sprint/journey.md).
-- **Canvas groups** (on explicitly enabled canvases): wrap selected items with
+- **Canvas groups**: wrap selected items with
   **Group selection** (⌘/Ctrl+G), enter the group to work on direct children,
   add or remove members, and ungroup while preserving their positions.
   Membership is explicit: overlapping cards stay independent, nested groups
   keep their identity, and each structural act is one undo. The matching CLI
-  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid`; mutations
+  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|migrate`; mutations
   support an actual `--dry-run`, all commands support `--json`, and
   `mv <item> --in <group>` transfers membership and places the item atomically.
   Resize scales native frames and attached ink with a fixed anchor; Fit frame
@@ -304,14 +304,18 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   membership, annotations and module references in one undoable act. Full native
   export/import retains saved context; `export --item <group>` backs up its
   subtree as item records (use the full canvas export for restoration).
-  Existing canvases keep their
-  area behavior until conversion is available. Top-level `isocan group`
-  continues to manage people and sharing.
-- **Areas**: a titled sheet things are placed on — `isocan area new "Sketches"`,
-  then `--in Sketches` on `text`, `add` and `mv`, `isocan ls --in` to read it
-  back, `isocan format --in` to tidy within it. A sheet lies behind everything,
-  lets tools through to the canvas, and carries what is on it when dragged by
-  its name. Membership is geometry, never stored.
+  New canvases use groups by default. Existing legacy canvases offer an
+  authoritative `canvas group migrate --dry-run` preview: ownership choices,
+  label repairs, legacy trash and the undo boundary. Apply at the preview
+  revision; stale plans refuse atomically. Native backup preserves mode and
+  history. Top-level `isocan group` continues to manage people and sharing.
+- **Area compatibility**: `area new`, `area ls` and `area grid` are aliases
+  for canvas groups, including `--dry-run`, `--json` and grid `--clear`.
+  `area ls` labels legacy geometric reads; legacy creation/grid edits offer
+  migration first. Converted queued writes are explicitly refused when their
+  originating mode no longer matches. Older timeline replay remains intact;
+  migration undo refuses if later group-dependent live, trash or redo state
+  would be stranded.
 - **The workbench (`W`)**: the same canvas flipped to the agent room — every
   agent with a live session in one roster (its status in its own words,
   expandable to what it is answering and what it last made), the main thread

@@ -6,7 +6,7 @@ import { WebSocket } from "ws";
 import type { PresenceSession, ServerMessage } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { PresenceHub, opLocus } from "../src/presence.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 import { emptyCanvas } from "@isocan/core";
 
 const alice = { id: "usr_alice", name: "Alice" };
@@ -281,7 +281,7 @@ describe("presence over the daemon", () => {
   it("shares saved text ranges over WS and HTTP, rejects other versions, and writes no ops", async () => {
     const before = (await daemon.engine.getSnapshot("prj_1")).lastSeq;
     expect(before).toBeGreaterThan(0);
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=prj_1`, { headers: badge.headers });
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`), { headers: badge.headers });
     const messages: ServerMessage[] = [];
     ws.on("message", data => messages.push(JSON.parse(String(data))));
     try {
@@ -308,7 +308,7 @@ describe("presence over the daemon", () => {
 
   it("web presence flows to the roster and other clients", async () => {
     const messages: ServerMessage[] = [];
-    const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=prj_1`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`), {
       headers: badge.headers,
     });
     ws.on("message", (data) => messages.push(JSON.parse(String(data))));

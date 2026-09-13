@@ -23,9 +23,11 @@ second week.
 
 ## 13 September 2026
 
-- A message about a group keeps the exact items and versions you reviewed, with visible exclusions and a complete context list. Agents can read that saved context through the CLI and MCP. Copy/paste preserves nested membership; Trash shows what a group restore will return and which independently restored items it will leave alone. Available on canvases with groups enabled.
+- New canvases use groups. Existing canvases can preview and convert areas through Groups → Preview group conversion, or `isocan canvas group migrate --dry-run`. The preview names members, overlapping-area choices, label repairs and the Undo boundary. Work prepared before conversion is preserved for review if it cannot be applied. The familiar `area` commands create and work with groups after conversion.
 
-- Groups move and resize their contents together, including nested groups and attached ink. Fit frame preserves the arrangement; frame, grid and brief controls reserve space for labels. New text, files and canvas cards inherit the group you are working inside. Matching CLI commands support placement, sizing, layout and dry runs. Available on canvases with groups enabled.
+- A message about a group keeps the exact items and versions you reviewed, with visible exclusions and a complete context list. Agents can read that saved context through the CLI and MCP. Copy/paste preserves nested membership; Trash shows what a group restore will return and which independently restored items it will leave alone.
+
+- Groups move and resize their contents together, including nested groups and attached ink. Fit frame preserves the arrangement; frame, grid and brief controls reserve space for labels. New text, files and canvas cards inherit the group you are working inside. Matching CLI commands support placement, sizing, layout and dry runs.
 
 ## 12 September 2026
 

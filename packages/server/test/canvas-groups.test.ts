@@ -42,7 +42,7 @@ afterEach(async () => {
 async function request(url: string, body?: unknown, capable: boolean | string = true) {
   const response = await fetch(`${base}${url}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: { ...badge.headers, ...(typeof capable === "string" ? { [CLIENT_FEATURES_HEADER]: capable } : capable ? feature : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    headers: { ...badge.headers, ...(typeof capable === "string" ? { [CLIENT_FEATURES_HEADER]: capable } : capable ? feature : { [CLIENT_FEATURES_HEADER]: "" }), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, body: await response.json() as any };
@@ -318,7 +318,7 @@ describe("canvas groups through the authoritative HTTP writer", () => {
 });
 
 describe("canvas-group reducer capability", () => {
-  it.each(["", "canvas-groups-v1", "canvas-groups-v2"])("gates writes, snapshots, logs, watch, and both socket snapshot and tail for %s", async (oldFeatures) => {
+  it.each(["", "canvas-groups-v1", "canvas-groups-v2", "canvas-groups-v3"])("gates writes, snapshots, logs, watch, and both socket snapshot and tail for %s", async (oldFeatures) => {
     const refusedBirth = await request("/api/ops", { canvasId: null, actor: alice, op: { type: "project.create", canvasId, title: "Acme", groupMode: "groups" } }, oldFeatures);
     expect(refusedBirth.status).toBe(426);
     await seed(); await wrap();
@@ -356,13 +356,13 @@ describe("canvas-group reducer capability", () => {
     ws.close();
   });
 
-  it.each(["", "canvas-groups-v1", "canvas-groups-v2"])("does not let a capable forwarding transport bless incompatible original writer %s", async (oldFeatures) => {
+  it.each(["", "canvas-groups-v1", "canvas-groups-v2", "canvas-groups-v3"])("does not let a capable forwarding transport bless incompatible original writer %s", async (oldFeatures) => {
     await seed(); await wrap();
     const before = await snapshot();
     const denied = await post({ type: "item.move", itemId: "itm_a", x: 0, y: 0 }, alice, { clientFeatures: oldFeatures });
     expect(denied.status).toBe(426);
     expect(await snapshot()).toEqual(before);
-    const legacy = await request("/api/ops", { canvasId: null, actor: alice, op: { type: "project.create", canvasId: "prj_legacy", title: "Acme legacy" } }, false);
+    const legacy = await request("/api/ops", { canvasId: null, actor: alice, op: { type: "project.create", canvasId: "prj_legacy", title: "Acme legacy", groupMode: "legacy" } }, false);
     expect(legacy.status).toBe(200);
     expect((await request("/api/projects/prj_legacy/canvas", undefined, false)).status).toBe(200);
   });
@@ -372,7 +372,7 @@ describe("canvas-group reducer capability", () => {
       const denied = await request("/api/ops", { canvasId: null, actor: alice, op: { type: "project.create", canvasId, title: "Acme", groupMode } });
       expect(denied.status).toBe(400);
     }
-    await accepted({ type: "project.create", canvasId, title: "Acme legacy" });
+    await accepted({ type: "project.create", canvasId, title: "Acme legacy", groupMode: "legacy" });
     const add = { type: "item.add", itemId: "itm_a", version: version("ver_a"), width: 300, height: 300, placement: { x: 0, y: 0 } } as const;
     expect((await post({ ...add, properties: { kind: "group" } })).status).toBe(400);
     await accepted(add);
@@ -416,20 +416,17 @@ describe("v2 insertion and brief effects", () => {
     expect(marked.has("hash_ver_group")).toBe(true);
   });
 
-  it.each(["canvas-groups-v1", "canvas-groups-v2"])("closes an already subscribed %s client before group state reaches it", async (oldFeatures) => {
-    await accepted({ type: "project.create", canvasId, title: "Acme legacy" });
+  it.each(["canvas-groups-v1", "canvas-groups-v2", "canvas-groups-v3"])("closes an already subscribed %s client before group state reaches it", async (oldFeatures) => {
+    await accepted({ type: "project.create", canvasId, title: "Acme legacy", groupMode: "legacy" });
     const messages: ServerMessage[] = [];
     const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}&since=0&${CLIENT_FEATURES_PARAM}=${oldFeatures}`, { headers: badge.headers });
     await new Promise<void>((resolve, reject) => {
       ws.on("message", (data) => { const message = JSON.parse(String(data)) as ServerMessage; messages.push(message); if (message.type === "snapshot") resolve(); });
       ws.on("error", reject);
     });
-    const remote = await snapshot();
-    remote.project.groupMode = "groups";
-    remote.lastSeq++;
-    await daemon.engine.adoptRemoteSnapshot(canvasId, remote);
     const closed = new Promise<number>((resolve, reject) => { ws.on("close", resolve); ws.on("error", reject); });
-    await accepted(action({ kind: "create", group: { id: "itm_group", title: "Acme group", version: version("ver_group") } }));
+    const preview = await daemon.engine.groupMigrationPreview(canvasId);
+    await accepted(action({ kind: "migrate", expectedRevision: preview.revision }));
     expect(await closed).toBe(WS_STALE_CLIENT);
     expect(messages.filter((message) => message.type === "op-applied")).toEqual([]);
   });

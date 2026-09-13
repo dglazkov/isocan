@@ -96,7 +96,7 @@ export function beginGroupGesture(itemIds: string[], onInterrupt?: () => void) {
     async commit(canvasId: string, actor: Actor): Promise<boolean> {
       if (!active() || !action) { clear(); return false; }
       try {
-        const result = await sendEchoedResult(canvasId, actor, { type: "group.change", action });
+        const result = await sendEchoedResult(canvasId, actor, { type: "group.change", action }, undefined, project.groupMode);
         if (result.status !== "accepted" && active() && useCanvasStore.getState().canvasId === canvasId) setNotice(result.message || "This group change is queued until the home is reachable.");
         else if (active() && useCanvasStore.getState().canvasId === canvasId && action.containerId) {
           const ui = useUiStore.getState();

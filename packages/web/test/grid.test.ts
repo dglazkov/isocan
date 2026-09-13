@@ -6,6 +6,7 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
 const view = read("../src/components/ItemView.tsx");
 const css = read("../src/styles.css");
 const cli = read("../../cli/src/main.ts");
+const aliases = read("../../cli/src/canvas-groups.ts");
 
 /**
  * **Grids** (sprint phase 5): guides the app draws from the same four
@@ -29,9 +30,10 @@ describe("a grid on a sheet is drawn from core's reading of it", () => {
 
 describe("the terminal addresses cells and builds the deck from a sheet", () => {
   it("lays and clears a grid", () => {
-    expect(cli).toContain('.command("grid <area> [size]")');
-    expect(cli).toContain("gridPatch(null)");
-    expect(cli).toContain("gridPatch(grid)");
+    expect(cli.includes("registerAreaAliases(program,")).toBe(true);
+    expect(aliases).toContain('area.command("grid <group> [size]")');
+    expect(aliases).toContain("handle.grid(ref, null, opts)");
+    expect(aliases).toContain("handle.grid(ref, { rows: Number(parts[1]), columns: Number(parts[2]) }");
   });
 
   it("places into a cell with --in and --cell, on text, add and mv", () => {
@@ -41,7 +43,7 @@ describe("the terminal addresses cells and builds the deck from a sheet", () => 
   });
 
   it("makes a group deck from explicit descendants and retains legacy sheet containment", () => {
-    expect(cli).toContain('.option("--in <area>", "every item on this sheet, in reading order');
+    expect(cli.includes('.option("--in <group>", "every explicit descendant in reading order; legacy areas use item centres')).toBe(true);
     expect(cli).toContain("...(sheet ? isGroupItem(sheet) ? groupDescendants(snapshot.canvas, sheet.id).filter((item) => !isGroupItem(item)) : itemsIn(snapshot.canvas, sheet) : [])");
   });
 });

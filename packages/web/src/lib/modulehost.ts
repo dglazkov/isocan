@@ -45,8 +45,8 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
          right and skipped the offline queue, the inflight fold and the
          scrubber's refusal. Caught by that guard on the first run. */
       for (const op of ops) {
-        if (op.type === "item.add") await sendCreatedItem(canvasId, actor, { ...op, ...(op.containerId === undefined ? destination : {}) }, group);
-        else await sendEchoed(canvasId, actor, op, group);
+        if (op.type === "item.add") await sendCreatedItem(canvasId, actor, { ...op, ...(op.containerId === undefined ? destination : {}), originGroupMode: destination.originGroupMode }, group);
+        else await sendEchoed(canvasId, actor, op, group, destination.originGroupMode);
       }
     },
     async putBlob(bytes: Blob, filename: string): Promise<{ blobHash: string; size: number }> {

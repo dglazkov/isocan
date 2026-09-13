@@ -54,6 +54,7 @@ interface GroupCopiedItem extends GroupCreation {
 
 /** Closed intents at the request boundary. `apply` is writer/undo output only. */
 export type GroupAction =
+  | { kind: "migrate"; expectedRevision: number }
   | { kind: "copy"; sourceCanvasId: string; rootIds: string[]; items: GroupCopiedItem[]; containerId?: string | null; at?: { x: number; y: number }; cell?: GroupCell; groupPlacement?: GroupPlacementPolicy }
   | { kind: "create"; group: GroupCreation; itemIds?: string[]; containerId?: string | null }
   | { kind: "reparent"; itemIds: string[]; containerId: string | null; place?: boolean; cell?: GroupCell; groupPlacement?: GroupPlacementPolicy; expected?: GroupExpectation[] }
@@ -67,7 +68,7 @@ export type GroupAction =
   | { kind: "frame"; itemId: string; box?: GroupBox; fit?: boolean; expected?: GroupExpectation[] }
   | { kind: "frame"; itemIds: string[]; fit: true; expected?: GroupExpectation[] }
   | { kind: "frame"; targets: Array<{ itemId: string; box?: GroupBox }>; expected?: GroupExpectation[] }
-  | { kind: "layout"; itemId: string; layout: GroupLayout; tidy?: boolean }
+  | { kind: "layout"; itemId: string; layout: GroupLayout; tidy?: boolean; clearGrid?: boolean }
   | { kind: "delete"; itemIds: string[] }
   | { kind: "restore"; itemIds: string[] }
   | { kind: "apply"; change: GroupChange };
@@ -95,6 +96,16 @@ export interface GroupExpectation {
   annotations?: string[];
   cohortId?: string | null;
   content?: GroupContentFields;
+  legacyGroupRestore?: "frame-only" | "root";
+}
+/** The active conversion gates every actor's history, and survives snapshots and restart. */
+export interface GroupMigrationBoundary { version: 1; opId: string; seq: number }
+/** Migration changes only mode/boundary plus the separately guarded item fields. */
+export interface GroupMigrationEffect {
+  expectedMode: "legacy" | "groups";
+  expectedBoundary: GroupMigrationBoundary | null;
+  mode: "legacy" | "groups";
+  boundary: GroupMigrationBoundary | null;
 }
 /** Each trash entry points to one deletion act, preventing restore from stealing newer trash. */
 export interface GroupDeletionCohort { id: string; rootIds: string[] }
@@ -105,9 +116,10 @@ export interface GroupCohortRecord {
 }
 /** Bounded writer effects preserve content edits while recording an exact structural inverse. */
 export type GroupWrite =
+  | { kind: "patchTrash"; itemId: string; fields: GroupFields; content?: GroupContentFields; legacyGroupRestore?: "frame-only" | "root" | null }
   | { kind: "patch"; itemId: string; fields: GroupFields; content?: GroupContentFields }
   | { kind: "create"; item: Item }
-  | { kind: "trash"; itemId: string; deletedAt: string; deletedBy: Actor; cohort?: GroupDeletionCohort }
+  | { kind: "trash"; itemId: string; deletedAt: string; deletedBy: Actor; cohort?: GroupDeletionCohort; legacyGroupRestore?: "frame-only" | "root" }
   | { kind: "restore"; itemId: string; containerId: string | null };
 
 /** Concrete record: no placement search or intent resolution during replay. */
@@ -118,8 +130,9 @@ export interface GroupChange {
   writes: GroupWrite[];
   cohorts?: Record<string, GroupCohortRecord>;
   skippedIds?: string[];
+  migration?: GroupMigrationEffect;
   /** Absent means the original v1 record; v2 adds insertion and content effects. */
-  schemaVersion?: 2;
+  schemaVersion?: 2 | 4;
 }
 /** Narrow the shared vocabulary without inventing a separate client-side mutation channel. */
 export type GroupOperation = Extract<Operation, { type: "group.change" }>;

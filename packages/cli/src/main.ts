@@ -1,6 +1,6 @@
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
-import { registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
+import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
 import { registerContextReads, reportContext, contextReceipt } from "./context-reads.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
@@ -223,7 +223,6 @@ import {
   TEXT_PROPERTIES,
   TEXT_STYLES,
   textStyleFrom,
-  AREA_DEFAULT_SIZE,
   AREA_FILENAME,
   AREA_MIME,
   AREA_PROPERTIES,
@@ -242,7 +241,6 @@ import {
   deskTitle,
   areaGrid,
   cellSpot,
-  gridPatch,
   canvasItemOf,
   CANVAS_ITEM_SIZE,
   DOC_MIME,
@@ -258,12 +256,10 @@ import {
   isGoogleDocItem,
   sourceOf,
   areaInner,
-  areasOf,
   findArea,
   freeSpotIn,
   areaEnclosing,
   itemsIn,
-  isArea,
   TEXT_STYLE_PROP,
   textBox,
   textTitle,
@@ -5677,7 +5673,7 @@ canvas
   .description("Put a canvas on this canvas — by id, title prefix, or address; it draws live and opens in a tab")
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
-  .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--in <group>", "insert into this group; legacy canvases use the existing area")
   .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
   .option("--size <WxH>", `display size (default ${CANVAS_ITEM_SIZE.width}x${CANVAS_ITEM_SIZE.height})`)
   .option("--title <title>", "what it is called (default: the canvas's own title)")
@@ -5729,17 +5725,19 @@ canvas
 
 canvas
   .command("create <title>")
-  .description("Create a canvas")
+  .description("Create a canvas with groups (the writer's default)")
   .option("-d, --description <text>")
+  .option("--legacy", "create a deliberate compatibility canvas; group writes require migration")
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
   .action(
-    run(async (title: string, opts: { description?: string; prop: Record<string, string> }, cmd: Command) => {
+    run(async (title: string, opts: { description?: string; prop: Record<string, string>; legacy?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const canvasId = newCanvasId();
       await sendOp(ctx, null, {
         type: "project.create",
         canvasId,
         title,
+        ...(opts.legacy ? { groupMode: "legacy" as const } : {}),
         ...(opts.description !== undefined ? { description: opts.description } : {}),
         ...(Object.keys(opts.prop).length > 0 ? { properties: opts.prop } : {}),
       });
@@ -6382,7 +6380,7 @@ program
   .option("--as <kind>", "read the thing as this kind: file, site, doc, or canvas (default: what it looks like)")
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
-  .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--in <group>", "insert into this group; legacy canvases use the existing area")
   .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
   .option("--size <WxH>", "display size, e.g. 480x360")
   .option("--title <title>")
@@ -6948,7 +6946,7 @@ program
   )
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
-  .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--in <group>", "insert into this group; legacy canvases use the existing area")
   .option("--cell <row,col>", "with --in: one cell of the sheet's grid, counted from 1 at the top-left")
   .option("--size <WxH>", "display size (default: measured from the words)")
   .option("--title <title>", "what it is called (default: its first line)")
@@ -7634,7 +7632,7 @@ gdocCmd
   .description("Put a Google Doc here as a document — its markdown export, with the doc's address as its ↗")
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
-  .option("--in <area>", "place inside this area, at the first clear spot")
+  .option("--in <group>", "insert into this group; legacy canvases use the existing area")
   .option("--cell <row,col>", "with --in: one cell of the sheet's grid")
   .option("--title <title>", "what it is called (default: the doc's first heading)")
   .action(
@@ -7655,7 +7653,7 @@ gdocCmd
 gdocCmd
   .command("sync")
   .description("Re-export every Google Doc item here; a new version lands only where the document changed")
-  .option("--in <area>", "only the docs on this sheet")
+  .option("--in <group>", "only docs in this explicit subtree; legacy areas use item centres")
   .action(
     run(async (opts: { in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -7713,155 +7711,7 @@ gdocCmd
     }),
   );
 
-/**
- * **Areas** — `core/area.ts`: a titled sheet things are placed on, walked
- * to, and read back from. `docs/projects/sprint/journey.md` is why: a
- * sprint is a board of them, one per phase. An area is an ordinary item
- * (`kind=area`) whose title is its name, whose blob is the card that says
- * what happens there, and whose box is the region; membership is geometry,
- * read by `ls --in`, `mv --in`, `format --in`, and `--in` on `text` and
- * `add`. Nothing here is a new op.
- */
-const areaCmd = program
-  .command("area")
-  .description("Areas — titled sheets things are placed on; `--in <area>` on text, add, mv, ls and format");
-
-areaCmd
-  .command("new <title...>")
-  .description("Lay an area — a titled sheet, to the right of everything unless --at says where")
-  .option("--at <x,y>", "place the sheet's top-left at world coordinates")
-  .option("--size <WxH>", `the sheet's size (default ${AREA_DEFAULT_SIZE.width}x${AREA_DEFAULT_SIZE.height})`)
-  .option("--tint <colour>", "yellow | pink | blue | green | grey — a wash on the sheet")
-  .option("--note <text>", "the card: what happens here, in a few lines")
-  .action(
-    run(
-      async (
-        words: string[],
-        opts: { at?: string; size?: string; tint?: string; note?: string },
-        cmd: Command,
-      ) => {
-        const ctx = await ctxOf(cmd);
-        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-        const title = words.join(" ").trim();
-        if (!title) throw new Error("an area needs a name");
-        const tint = opts.tint === undefined ? null : pickOne("tint", opts.tint, PAPERS, "yellow");
-        const { width, height } = sizeFor(opts.size, AREA_DEFAULT_SIZE);
-        // The card is markdown, like a text node's words: what happens here.
-        // A sheet with nothing to say still needs a blob — the daemon refuses
-        // an empty one — so a plain sheet carries one newline, which renders
-        // as nothing.
-        const card = (opts.note ?? "").trim();
-        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(card.length > 0 ? card : "\n", "utf8"), AREA_MIME, AREA_FILENAME);
-        /**
-         * Where a sheet goes by default: to the RIGHT of everything, level
-         * with the top of it — a new region beside the work, never over it.
-         * `--at` is a chosen spot; this one is chosen too, because the
-         * corner of a sheet is exactly where somebody meant it to be and a
-         * sheet nudged by the tidy rule would land its contents somewhere
-         * else on every replay.
-         */
-        const all = Object.values(snapshot.canvas.items);
-        const right = all.length === 0 ? 0 : Math.max(...all.map((one) => one.x + one.width)) + PLACEMENT_GAP;
-        const top = all.length === 0 ? 0 : Math.min(...all.map((one) => one.y));
-        const placement: Placement = opts.at
-          ? { ...parseXY(opts.at), chosen: true }
-          : { x: right, y: top, chosen: true };
-        const itemId = newItemId();
-        await sendOp(ctx, p.id, {
-          type: "item.add",
-          itemId,
-          version: {
-            id: newVersionId(),
-            blobHash: upload.blobHash,
-            mimeType: AREA_MIME,
-            filename: AREA_FILENAME,
-            size: upload.size,
-          },
-          width,
-          height,
-          placement,
-          title,
-          properties: { ...AREA_PROPERTIES, ...(tint === null ? {} : { [AREA_TINT_PROP]: tint }) },
-        });
-        if (ctx.json) return printJson({ itemId, title, placement, width, height });
-        console.log(`laid "${title}" (${itemId}) at ${"x" in placement ? `${placement.x},${placement.y}` : "?"}, ${width}x${height}`);
-      },
-    ),
-  );
-
-/**
- * **A grid on a sheet** (sprint phase 5): rows × columns, each with a name,
- * drawn as guides in the app; `--cell r,c` on `text`, `add` and `mv` then
- * addresses one cell. The storyboard is 1×15; Friday's test wall is people
- * down the side and frames along the top. Four properties, no new op.
- */
-areaCmd
-  .command("grid <area> [size]")
-  .description("Put a grid on a sheet — `area grid Test 5x15 --rows \"Ana,Ben,Cy,Di,Ed\"` — or `--clear` it")
-  .option("--rows <names>", "row names, comma-separated, top to bottom")
-  .option("--cols <names>", "column names, comma-separated, left to right")
-  .option("--clear", "take the grid off the sheet")
-  .action(
-    run(
-      async (
-        ref: string,
-        size: string | undefined,
-        opts: { rows?: string; cols?: string; clear?: boolean },
-        cmd: Command,
-      ) => {
-        const ctx = await ctxOf(cmd);
-        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-        const area = findArea(snapshot.canvas, ref);
-        if (!area) throw new Error(`no area called "${ref}" — \`isocan area ls\` names them`);
-        if (opts.clear) {
-          await sendOp(ctx, p.id, { type: "item.update", itemId: area.id, patch: gridPatch(null) });
-          if (ctx.json) return printJson({ itemId: area.id, grid: null });
-          return console.log(`"${area.title}" is a plain sheet again`);
-        }
-        const match = (size ?? "").match(/^(\d+)x(\d+)$/i);
-        if (!match) throw new Error(`a grid is ROWSxCOLS, e.g. 5x15 — got: ${size ?? "nothing"}`);
-        const rows = Number(match[1]);
-        const cols = Number(match[2]);
-        if (rows < 1 || cols < 1) throw new Error("a grid needs at least one row and one column");
-        const names = (raw: string | undefined, what: string, count: number): string[] => {
-          const list = (raw ?? "").split(",").map((one) => one.trim()).filter((one) => one.length > 0);
-          if (list.length > count) throw new Error(`${list.length} ${what} names for ${count} ${what}s`);
-          return list;
-        };
-        const grid = { rows, cols, rowNames: names(opts.rows, "row", rows), colNames: names(opts.cols, "column", cols) };
-        await sendOp(ctx, p.id, { type: "item.update", itemId: area.id, patch: gridPatch(grid) });
-        if (ctx.json) return printJson({ itemId: area.id, grid });
-        console.log(`"${area.title}" is a ${rows}×${cols} grid${grid.rowNames.length > 0 ? ` — rows: ${grid.rowNames.join(", ")}` : ""}${grid.colNames.length > 0 ? ` — columns: ${grid.colNames.join(", ")}` : ""}`);
-        console.log("place into a cell with --in and --cell: isocan text \"…\" --in " + JSON.stringify(area.title) + " --cell 1,1");
-      },
-    ),
-  );
-
-areaCmd
-  .command("ls", { isDefault: true })
-  .description("The areas, in reading order, and how much each holds")
-  .action(
-    run(async (_opts: unknown, cmd: Command) => {
-      const ctx = await ctxOf(cmd);
-      const { snapshot } = await canvasAndSnapshot(ctx);
-      const areas = areasOf(snapshot.canvas);
-      const rows = areas.map((area) => ({
-        id: area.id,
-        title: area.title,
-        holds: String(itemsIn(snapshot.canvas, area).length),
-        pos: `${area.x},${area.y}`,
-        size: `${area.width}x${area.height}`,
-        tint: area.properties[AREA_TINT_PROP] ?? "",
-        grid: (() => {
-          const grid = areaGrid(area);
-          return grid ? `${grid.rows}x${grid.cols}` : "";
-        })(),
-      }));
-      if (ctx.json) return printJson(rows);
-      if (rows.length === 0) return console.log("no areas here — `isocan area new <title>` lays one");
-      printTable(rows);
-    }),
-  );
+registerAreaAliases(program, ctxOf);
 
 program
   .command("ls")
@@ -8375,7 +8225,7 @@ program
   )
   .option("--dry-run", "say what would move, move nothing")
   .option("--per-row <n>", "how many per row")
-  .option("--in <area>", "tidy only what is inside this area, within it")
+  .option("--in <group>", "tidy direct group members; legacy areas use item centres")
   .action(
     run(async (
       mode: string | undefined,
@@ -9617,7 +9467,7 @@ function slideVerb(name: "add" | "rm", on: boolean, blurb: string) {
     .command(`${name} [items...]`)
     .description(blurb)
     .option("--canvas <canvas>")
-    .option("--in <area>", "every item on this sheet, in reading order — the storyboard row becomes the deck")
+    .option("--in <group>", "every explicit descendant in reading order; legacy areas use item centres")
     .action(
       run(async (refs: string[], opts: { canvas?: string; in?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
@@ -9631,7 +9481,7 @@ function slideVerb(name: "add" | "rm", on: boolean, blurb: string) {
           ...refs.map((ref) => resolveItem(snapshot, ref)),
           ...(sheet ? isGroupItem(sheet) ? groupDescendants(snapshot.canvas, sheet.id).filter((item) => !isGroupItem(item)) : itemsIn(snapshot.canvas, sheet) : []),
         ];
-        if (targets.length === 0) throw new Error(`name items, or a sheet with --in <area>`);
+        if (targets.length === 0) throw new Error(`name items, or a group with --in <group>`);
         for (const item of targets) {
           if (isSlide(item) === on) {
             console.log(

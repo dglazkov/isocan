@@ -96,8 +96,8 @@ import { RailStrip } from "../components/RailStrip.tsx";
 import { openPanel } from "../lib/panels.ts";
 import { FilesPanel } from "../components/FilesPanel.tsx";
 import { AgentTray } from "../components/AgentTray.tsx";
-import { ContextPanel } from "../components/ContextPanel.tsx";
-import { PersonasPanel } from "../components/PersonasPanel.tsx";
+import { ContextPanel } from "../components/LazyContextPanel.tsx";
+import { PersonasPanel } from "../components/LazyPersonasPanel.tsx";
 import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
@@ -945,6 +945,7 @@ function CanvasSurface({
   // recovery is a social one, which is why the note says who to ask instead of
   // offering a retry that would be refused identically.
   const dead: Record<string, { note: string; hint?: string }> = {
+    "upgrade-required": { note: "This canvas needs an updated isocan app.", hint: "Reload to get the current app. Any queued changes remain saved in this browser for review." },
     gone: { note: "This canvas was deleted." },
     refused: {
       note: "This canvas will not have you.",
@@ -1017,6 +1018,7 @@ function CanvasSurface({
         <div className="page-note page-note-stack">
           <div>{end.note}</div>
           {end.hint && <div className="page-note-hint">{end.hint}</div>}
+          {connection === "upgrade-required" && <button className="btn" onClick={() => window.location.reload()}>Reload app</button>}
           <Link to="/">All canvases</Link>
         </div>
       </div>

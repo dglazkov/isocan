@@ -1,5 +1,5 @@
 import { textAttention } from "@isocan/core";
-import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError } from "@isocan/core";
+import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { registerCanvasGroupContext } from "./canvas-group-context.ts";
 import { createReadStream, existsSync, promises as fs } from "node:fs";
@@ -793,7 +793,7 @@ export function registerRoutes(
     if (err instanceof CanvasGroupsClientError) {
       return reply.status(426).send({ error: err.message, code: err.code });
     }
-    if (err instanceof GroupConflictError) {
+    if (err instanceof GroupConflictError || err instanceof MigrationBoundaryError) {
       return reply.status(409).send({ error: err.message, code: err.code });
     }
     if (err instanceof OpValidationError) {
@@ -1412,9 +1412,16 @@ export function registerRoutes(
 
   registerCanvasGroupContext(app, engine, store);
 
+  app.get("/api/projects/:id/groups/migration", async (req) => {
+    if (!supportsCanvasGroups(String(req.headers[CLIENT_FEATURES_HEADER] ?? ""))) throw new CanvasGroupsClientError();
+    return engine.groupMigrationPreview((req.params as { id: string }).id);
+  });
+
   app.post("/api/ops", async (req, reply) => {
     const body = req.body as PostOpRequest;
     const clientFeatures = body.clientFeatures ?? String(req.headers[CLIENT_FEATURES_HEADER] ?? "");
+    if (body.originGroupMode !== undefined && body.originGroupMode !== "legacy" && body.originGroupMode !== "groups") throw new OpValidationError("bad-op", "originGroupMode must be legacy or groups");
+    if (body.op?.type === "project.create" && body.op.groupMode !== "legacy" && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
     if (body.op && groupOperation(body.op) && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
     if (body.canvasId && !supportsCanvasGroups(clientFeatures)) {
       const snapshot = await engine.getSnapshot(body.canvasId).catch(() => null);

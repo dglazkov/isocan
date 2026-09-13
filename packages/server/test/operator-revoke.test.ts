@@ -22,7 +22,7 @@ import {
   type SpaceResponse,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **`isocan operator revoke`** — operator phase 5, walked against a real
@@ -174,7 +174,7 @@ async function proving(email: string): Promise<TestBadge> {
 /** A socket, open and having heard its hello. In an object, so the async
  * wrapper does not flatten the close promise into the wait. */
 async function openSocket(badge: TestBadge, canvasId = CANVAS): Promise<{ closed: Promise<[number, string]> }> {
-  const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`, { headers: badge.headers });
+  const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`), { headers: badge.headers });
   const closed = new Promise<[number, string]>((resolve) => {
     ws.on("close", (code, reason) => resolve([code, String(reason)]));
   });

@@ -717,8 +717,9 @@ describe("presence, carried both ways and written nowhere", () => {
     // — journey rule, and the one thing presence must never do.
     expect((await oplog(H)).map((entry) => entry.envelope.op.type)).toEqual([
       "project.create",
-      "item.add",
+      "group.change",
     ]);
+    expect((await oplog(H))[1]!.envelope.op).toMatchObject({ action: { kind: "apply", change: { intent: "insert" } } });
     expect(await fs.readFile(p.oplogFile(homeDir, CANVAS), "utf8")).not.toContain(
       session.sessionId,
     );

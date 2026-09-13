@@ -21,7 +21,7 @@ import {
   type OperatorLogResponse,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **`isocan operator end`** — operator phase 4's second half, walked against a
@@ -191,7 +191,7 @@ const samsPhone = () => samsPass(sam).then(redeem);
 /** A socket, open and having heard its hello. In an object, so the async
  * wrapper does not flatten the close promise into the wait. */
 async function openSocket(badge: TestBadge): Promise<{ closed: Promise<[number, string]> }> {
-  const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`, { headers: badge.headers });
+  const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`), { headers: badge.headers });
   const closed = new Promise<[number, string]>((resolve) => {
     ws.on("close", (code, reason) => resolve([code, String(reason)]));
   });

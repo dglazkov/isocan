@@ -14,7 +14,7 @@ export const DEFAULT_PORT = 4441;
 
 /** Reducer capability, independent of the caller's access-control rung. A
  * client advertises this before receiving explicit canvas-group state. */
-export const CANVAS_GROUPS_FEATURE = "canvas-groups-v3";
+export const CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
 /** Shared spelling for HTTP clients and ingress checks; an upgraded replica
  * still preserves its original caller's declaration when forwarding writes. */
 export const CLIENT_FEATURES_HEADER = "x-isocan-features";
@@ -741,6 +741,8 @@ export function staleClientRefusal(
 /** An operation on its way up. Carries no timestamp on purpose — the home
  *  stamps it, so a client cannot lie about when something happened. */
 export interface PostOpRequest {
+  /** Captured before the first send and retained on queued retries across mode cutover. */
+  originGroupMode?: "legacy" | "groups";
   /** Original caller's reducer features, preserved by forwarding replicas.
    * Absent on a direct request: use its transport declaration. */
   clientFeatures?: string;

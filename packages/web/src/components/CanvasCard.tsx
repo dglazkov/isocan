@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CanvasContents, Item } from "@isocan/core";
-import { isArea, isCanvasItem, itemKind } from "@isocan/core";
+import { groupAncestors, isArea, isGroupItem, isCanvasItem, itemKind } from "@isocan/core";
 import { blobUrl, fetchPresenceWhere, getSnapshot } from "../lib/api.ts";
 import { everyWhileVisible } from "../lib/whilevisible.ts";
 
@@ -110,7 +110,7 @@ export function CanvasCard({
   }
 
   const items = Object.values(state.canvas.items);
-  const count = items.filter((one) => !isArea(one)).length;
+  const count = items.filter((one) => !isArea(one) && !isGroupItem(one)).length;
   return (
     <div className="canvas-embed">
       <div className="canvas-embed-head">
@@ -120,7 +120,7 @@ export function CanvasCard({
           {state.here > 0 ? ` · ${state.here} here` : ""}
         </span>
       </div>
-      <Miniature canvasId={canvasId} items={items} width={width} height={Math.max(0, height - 40)} />
+      <Miniature canvasId={canvasId} canvas={state.canvas} items={items} width={width} height={Math.max(0, height - 40)} />
     </div>
   );
 }
@@ -131,7 +131,7 @@ export function CanvasCard({
  * text and everything else as a block in the kind's colour with its title
  * when there is room to read it.
  */
-function Miniature({ canvasId, items, width, height }: { canvasId: string; items: Item[]; width: number; height: number }) {
+function Miniature({ canvasId, canvas, items, width, height }: { canvasId: string; canvas: CanvasContents; items: Item[]; width: number; height: number }) {
   if (items.length === 0) return <div className="canvas-embed-note">Nothing on it yet.</div>;
   const minX = Math.min(...items.map((one) => one.x));
   const minY = Math.min(...items.map((one) => one.y));
@@ -141,11 +141,11 @@ function Miniature({ canvasId, items, width, height }: { canvasId: string; items
   const scale = Math.min((width - pad * 2) / Math.max(1, maxX - minX), (height - pad * 2) / Math.max(1, maxY - minY));
   const offsetX = pad + ((width - pad * 2) - (maxX - minX) * scale) / 2;
   const offsetY = pad + ((height - pad * 2) - (maxY - minY) * scale) / 2;
-  const ordered = [...items].sort((a, b) => Number(isArea(b)) - Number(isArea(a))).slice(0, MOST_ITEMS);
+  const ordered = [...items].sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0)).slice(0, MOST_ITEMS);
   return (
     <div className="canvas-mini" style={{ width, height }} aria-hidden>
       {ordered.map((one) => {
-        const kind = isArea(one) ? "area" : itemKind(one);
+        const kind = isArea(one) || isGroupItem(one) ? "area" : itemKind(one);
         const box = {
           left: offsetX + (one.x - minX) * scale,
           top: offsetY + (one.y - minY) * scale,

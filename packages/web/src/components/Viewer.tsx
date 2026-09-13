@@ -121,11 +121,14 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
     connection === "taken-down" ||
     connection === "ended" ||
     connection === "refused-here" ||
+    connection === "upgrade-required" ||
     connection === "absent"
   ) {
     return (
       <div className="page-note">
-        {connection === "gone"
+        {connection === "upgrade-required"
+          ? "This canvas needs an updated isocan app. Reload to continue."
+          : connection === "gone"
           ? "This canvas was deleted."
           : connection === "withdrawn"
             ? "Your access to this canvas was withdrawn."
@@ -147,6 +150,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
                   ? (refusedHere?.sentence ??
                     "This home will not admit the address this browser proved.")
                   : "This canvas will not have you."}
+        {connection === "upgrade-required" && <button className="btn" onClick={() => window.location.reload()}>Reload app</button>}
       </div>
     );
   }

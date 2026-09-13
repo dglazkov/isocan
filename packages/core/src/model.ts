@@ -1,5 +1,5 @@
 import type { TextAnchor } from "./text-anchor.ts";
-import type { GroupLayout, GroupDeletionCohort, GroupCohortRecord } from "./canvas-group-types.ts";
+import type { GroupLayout, GroupDeletionCohort, GroupCohortRecord, GroupMigrationBoundary } from "./canvas-group-types.ts";
 /**
  * The shared state model. Both the daemon (authoritative) and the web client
  * (live replica) hold this shape; the CLI reads it through queries.
@@ -38,8 +38,10 @@ export function isSystemActor(actorId: string): boolean {
 
 export interface Canvas {
   id: string;
-  /** Opt-in until canvas-group migration/release. Missing is historical area mode. */
+  /** Missing is historical area mode; the public writer defaults new canvases to groups. */
   groupMode?: "groups" | "legacy";
+  /** An explicit conversion boundary, never inferred from the newest visible group. */
+  groupMigration?: GroupMigrationBoundary;
   title: string;
   description: string;
   properties: Record<string, string>;
@@ -250,6 +252,8 @@ export interface TrashEntry {
   deletedBy: Actor;
   /** Captured deletion act; subtree restore never steals another act's trash. */
   cohort?: GroupDeletionCohort;
+  /** Converted legacy trash has no historical subtree or deletion cohort to recover. */
+  legacyGroupRestore?: "frame-only" | "root";
 }
 
 /**

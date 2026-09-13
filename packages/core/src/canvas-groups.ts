@@ -173,9 +173,26 @@ export function groupTransformClosure(canvas: CanvasContents, ids: readonly stri
 /** Pure model validation, including generic writes and replica snapshot adoption. */
 export function validateGroupForest(state: CanvasState): void {
   const { canvas } = state;
+  if (state.project.groupMigration !== undefined) {
+    const boundary = state.project.groupMigration;
+    exactKeys(boundary, ["version", "opId", "seq"], "migration boundary");
+    if (state.project.groupMode !== "groups" || boundary.version !== 1 || typeof boundary.opId !== "string" || !boundary.opId || !Number.isSafeInteger(boundary.seq) || boundary.seq < 1) fail("invalid migration boundary");
+  }
   if (!hasCanvasGroups(state)) {
     if (Object.values(canvas.items).some((item) => item.containerId !== undefined || item.groupLayout !== undefined || isGroupItem(item))) fail("canvas groups require group mode");
+    if (canvas.trash.some((entry) => entry.legacyGroupRestore !== undefined || entry.item.containerId !== undefined || entry.item.groupLayout !== undefined || isGroupItem(entry.item))) fail("group trash requires group mode");
     return;
+  }
+  // Trash may retain a missing parent, but restoring it must never revive an
+  // area or malformed frame. Legacy conversion explicitly repairs these rows.
+  for (const entry of canvas.trash) {
+    const item = entry.item;
+    validBox(item);
+    if (item.properties.kind === "area") fail("legacy areas cannot be retained in group mode");
+    if (entry.legacyGroupRestore !== undefined && !["root", "frame-only"].includes(entry.legacyGroupRestore)) fail("invalid legacy trash restore policy");
+    if (entry.legacyGroupRestore === "frame-only" && !isGroupItem(item)) fail("frame-only restore requires a group");
+    if (item.groupLayout !== undefined) { if (!isGroupItem(item)) fail("layout belongs to groups only"); validLayout(item.groupLayout); }
+    if (isGroupItem(item)) { validBox(groupContentBox(item)); if (item.width < GROUP_MIN_SIZE.width || item.height < GROUP_MIN_SIZE.height) fail("group frame is below its minimum size"); }
   }
   for (const item of Object.values(canvas.items)) {
     validBox(item);
@@ -220,7 +237,8 @@ function groupFootprint(item: Item, canvas?: CanvasContents): GroupBox {
   return enclosing([ownBox, ...marks]);
 }
 
-function frameMinimum(item: Item): { width: number; height: number } {
+/** Migration and layout repair share the same fixed bands and positive grid-cell minimum. */
+export function groupFrameMinimum(item: Item): { width: number; height: number } {
   const band = reservations(item);
   const layout = item.groupLayout ?? {};
   const rows = layout.rowCount ?? Math.max(1, layout.rows?.length ?? 0);
@@ -230,7 +248,7 @@ function frameMinimum(item: Item): { width: number; height: number } {
 
 /** Historical dense grids stay readable; both surfaces can disclose that full spacing needs a larger frame. */
 export function groupGridNeedsRoom(item: Item): boolean {
-  const minimum = frameMinimum(item);
+  const minimum = groupFrameMinimum(item);
   return item.width < minimum.width || item.height < minimum.height;
 }
 
@@ -376,7 +394,7 @@ export function groupFitBox(canvas: CanvasContents, groupId: string, growOnly = 
   if (units.length === 0) return boxOf(group);
   const bounds = enclosing(units.map((id) => groupFootprint(itemIn(canvas, id), canvas)));
   const band = reservations(group);
-  const minimum = frameMinimum(group);
+  const minimum = groupFrameMinimum(group);
   let box = { x: bounds.x - band.left, y: bounds.y - band.top, width: Math.max(minimum.width, bounds.width + band.left + band.right), height: Math.max(minimum.height, bounds.height + band.top + band.bottom) };
   if (growOnly) box = enclosing([box, boxOf(group)]);
   return box;
@@ -401,7 +419,7 @@ function minimumSize(canvas: CanvasContents, item: Item, index = relations(canva
     if (child.x < content.x - 1e-5 || child.y < content.y - 1e-5 || child.x + child.width > content.x + content.width + 1e-5 || bottomRoom < label - 1e-5) fail(`fit ${item.id} before resizing: member intrudes into reserved space`);
   }
   const band = reservations(item);
-  const ownMinimum = frameMinimum(item);
+  const ownMinimum = groupFrameMinimum(item);
   return { width: Math.max(ownMinimum.width, band.left + band.right + Math.max(1, content.width * sx)), height: Math.max(ownMinimum.height, band.top + band.bottom + Math.max(1, content.height * sy)) };
 }
 /** Aspect-preserving handles clamp one scale against the same recursive minima as the writer. */
@@ -468,7 +486,7 @@ function expectation(state: CanvasState, itemId: string, content?: GroupContentF
   const trash = index.trash.get(itemId);
   if (!live && !trash) return { itemId, location: "absent" };
   const item = live ?? trash!.item;
-  return { itemId, location: live ? "live" : "trash", facts: facts(item), children: sorted((index.children.get(itemId) ?? []).map((child) => child.id)), annotations: sorted((index.annotations.get(itemId) ?? []).map((mark) => mark.id)), ...(trash ? { cohortId: trash.cohort?.id ?? null } : {}), ...(content ? { content: contentFacts(item, content) } : {}) };
+  return { itemId, location: live ? "live" : "trash", facts: facts(item), children: sorted((index.children.get(itemId) ?? []).map((child) => child.id)), annotations: sorted((index.annotations.get(itemId) ?? []).map((mark) => mark.id)), ...(trash ? { cohortId: trash.cohort?.id ?? null } : {}), ...(trash?.legacyGroupRestore ? { legacyGroupRestore: trash.legacyGroupRestore } : {}), ...(content ? { content: contentFacts(item, content) } : {}) };
 }
 /** Capture structural dependencies before sending intent, so stale retries cannot move twice. */
 export function captureGroupExpectations(state: CanvasState, itemIds: readonly string[]): GroupExpectation[] {
@@ -487,8 +505,9 @@ export function captureGroupExpectations(state: CanvasState, itemIds: readonly s
 function checkExpectations(state: CanvasState, expected: GroupExpectation[]): void {
   if (!Array.isArray(expected) || expected.length > GROUP_LIMIT) fail("invalid expected state");
   for (const row of expected) {
-    exactKeys(row, ["itemId", "location", "facts", "children", "annotations", "cohortId", "content"], "expectation");
+    exactKeys(row, ["itemId", "location", "facts", "children", "annotations", "cohortId", "content", "legacyGroupRestore"], "expectation");
     if (typeof row.itemId !== "string" || !["live", "trash", "absent"].includes(String(row.location))) fail("invalid expected item");
+    if (own(row, "legacyGroupRestore") && !["root", "frame-only"].includes(String(row.legacyGroupRestore))) fail("invalid legacy trash precondition");
     if (own(row, "content")) validContent(row.content);
   }
   idList(expected.map((row) => row.itemId), true);
@@ -532,6 +551,7 @@ function validateGroupRequest(action: GroupAction): void {
   if (action.kind === "frame" && "itemIds" in action) allowed.frame = ["kind", "itemIds", "fit"];
   if (action.kind === "frame" && "targets" in action) allowed.frame = ["kind", "targets"];
   allowed.frame!.push("expected");
+  allowed.layout!.push("clearGrid");
   if (!own(allowed, action.kind)) fail("resolved group changes are writer-only");
   exactKeys(action, allowed[action.kind]!, "action");
   if (action.kind === "copy") {
@@ -548,7 +568,7 @@ function validateGroupRequest(action: GroupAction): void {
     if (own(action, "at")) { exactKeys(action.at, ["x", "y"], "copy position"); if (!Number.isFinite(action.at!.x) || !Number.isFinite(action.at!.y)) fail("invalid copy position"); }
   }
   if (own(action, "expected") && !Array.isArray((action as { expected?: unknown }).expected)) fail("expected state must be an array");
-  for (const flag of ["place", "fit", "tidy", "toRoot"] as const) if (own(action, flag) && typeof (action as unknown as Record<string, unknown>)[flag] !== "boolean") fail(`${flag} must be a boolean`);
+  for (const flag of ["place", "fit", "tidy", "toRoot", "clearGrid"] as const) if (own(action, flag) && typeof (action as unknown as Record<string, unknown>)[flag] !== "boolean") fail(`${flag} must be a boolean`);
   if (["reparent", "remove", "ungroup", "delete", "restore"].includes(action.kind)) idList((action as { itemIds?: unknown }).itemIds);
   if ((action.kind === "layout" || action.kind === "frame" && !("itemIds" in action) && !("targets" in action)) && typeof (action as { itemId?: unknown }).itemId !== "string") fail("item ID required");
   if (action.kind === "reparent" && !own(action, "containerId")) fail("destination group required");
@@ -642,15 +662,26 @@ function validateCreatedItem(item: Item): void {
 
 /** Validates all writes before publishing a new state. No dynamic placement on replay. */
 export function applyGroupChange(state: CanvasState, change: GroupChange, actor: Actor, ts: string): CanvasState {
-  if (!hasCanvasGroups(state)) fail("canvas groups require group mode");
-  exactKeys(change, ["canvasId", "intent", "expected", "writes", "cohorts", "skippedIds", "schemaVersion"], "resolved change");
-  if (change.schemaVersion !== undefined && change.schemaVersion !== 2) fail("unsupported group schema");
-  if (change.canvasId !== state.project.id) fail("change belongs to another canvas");
-  if (!["create", "reparent", "ungroup", "transform", "frame", "layout", "delete", "restore", ...(change.schemaVersion === 2 ? ["insert", "content"] : [])].includes(change.intent)) fail("unknown semantic intent");
+  if (!hasCanvasGroups(state) && change.intent !== "migrate") fail("canvas groups require group mode");
+  exactKeys(change, ["canvasId", "intent", "expected", "writes", "cohorts", "skippedIds", "schemaVersion", "migration"], "resolved change");
+  if (change.schemaVersion !== undefined && change.schemaVersion !== 2 && change.schemaVersion !== 4) fail("unsupported group schema");
   if (!Array.isArray(change.writes) || change.writes.length > GROUP_LIMIT) fail("invalid write set");
-  for (const write of change.writes) if (!record(write) || !["patch", "create", "trash", "restore"].includes(String(write.kind)) || (write.kind === "create" && !record(write.item))) fail("invalid structural write");
+  for (const write of change.writes) if (!record(write) || !["patch", "create", "trash", "restore", ...(change.schemaVersion === 4 ? ["patchTrash"] : [])].includes(String(write.kind)) || (write.kind === "create" && !record(write.item))) fail("invalid structural write");
+  const modern = change.schemaVersion === 2 || change.schemaVersion === 4;
+  if (change.intent === "migrate") {
+    if (change.schemaVersion !== 4 || !change.migration) fail("migration requires bounded v4 mode effects");
+    const migration = change.migration;
+    exactKeys(migration, ["expectedMode", "expectedBoundary", "mode", "boundary"], "migration effect");
+    if (!["legacy", "groups"].includes(migration.expectedMode) || !["legacy", "groups"].includes(migration.mode) || migration.expectedMode === migration.mode) fail("invalid migration mode transition");
+    if (migration.expectedMode !== (state.project.groupMode ?? "legacy") || !equal(migration.expectedBoundary, state.project.groupMigration ?? null)) throw new GroupConflictError("canvas migration boundary changed since planning");
+    if ((migration.mode === "groups") !== (migration.boundary !== null)) fail("migration boundary must accompany group mode");
+    if (change.writes.some((write) => write.kind !== "patch" && write.kind !== "patchTrash")) fail("migration only patches existing live and trash fields");
+  } else if (change.migration !== undefined) fail("only migration changes the mode boundary");
+  if (change.canvasId !== state.project.id) fail("change belongs to another canvas");
+  if (!["create", "reparent", "ungroup", "transform", "frame", "layout", "delete", "restore", ...(modern ? ["insert", "content"] : []), ...(change.schemaVersion === 4 ? ["migrate"] : [])].includes(change.intent)) fail("unknown semantic intent");
   checkExpectations(state, change.expected);
-  if (change.schemaVersion !== 2 && change.expected.some((row) => hasGridCounts(row.facts?.groupLayout))) fail("grid count preconditions require group schema v2");
+  if (!modern && change.expected.some((row) => hasGridCounts(row.facts?.groupLayout))) fail("grid count preconditions require group schema v2");
+  if (change.schemaVersion !== 4 && change.expected.some((row) => row.legacyGroupRestore !== undefined)) fail("legacy trash preconditions require group schema v4");
   const writeIds = change.writes.map((write) => write.kind === "create" ? write.item.id : write.itemId);
   idList(writeIds, true);
   const guarded = new Set(change.expected.map((row) => row.itemId));
@@ -658,29 +689,46 @@ export function applyGroupChange(state: CanvasState, change: GroupChange, actor:
   const items = { ...state.canvas.items };
   const trash = new Map(state.canvas.trash.map((entry) => [entry.item.id, entry]));
   for (const write of change.writes) {
-    const layout = write.kind === "create" ? write.item.groupLayout : write.kind === "patch" ? write.fields?.groupLayout : undefined;
-    if (hasGridCounts(layout) && change.schemaVersion !== 2) fail("grid counts require group schema v2");
+    const layout = write.kind === "create" ? write.item.groupLayout : write.kind === "patch" || write.kind === "patchTrash" ? write.fields?.groupLayout : undefined;
+    if (hasGridCounts(layout) && !modern) fail("grid counts require group schema v2");
     if (write.kind === "create") {
       exactKeys(write, ["kind", "item"], "create write");
       validateCreatedItem(write.item);
       if (items[write.item.id] || trash.has(write.item.id)) fail("duplicate item ID");
       items[write.item.id] = structuredClone(write.item);
-    } else if (write.kind === "patch") {
-      exactKeys(write, ["kind", "itemId", "fields", ...(change.schemaVersion === 2 ? ["content"] : [])], "patch write");
+    } else if (write.kind === "patch" || write.kind === "patchTrash") {
+      if (write.kind === "patchTrash" && change.intent !== "migrate") fail("legacy trash patches belong to migration only");
+      exactKeys(write, ["kind", "itemId", "fields", ...(modern ? ["content"] : []), ...(write.kind === "patchTrash" ? ["legacyGroupRestore"] : [])], "patch write");
       exactKeys(write.fields, fields, "structural patch");
-      const item = items[write.itemId]; if (!item) fail("patch target is not live");
+      const item = write.kind === "patch" ? items[write.itemId] : trash.get(write.itemId)?.item; if (!item) fail("patch target is unavailable");
       if (own(write, "content")) {
         validContent(write.content);
+        if (change.intent === "migrate") {
+          exactKeys(write.content, ["properties"], "migration content patch");
+          exactKeys(write.content!.properties, ["kind"], "migration kind patch");
+          if (!["area", "group"].includes(String(write.content!.properties!.kind))) fail("migration only converts area kinds");
+        }
         const guardedContent = change.expected.find((row) => row.itemId === write.itemId)?.content;
         if (!guardedContent || Object.keys(write.content!).some((key) => !own(guardedContent, key)) || Object.keys(write.content!.properties ?? {}).some((key) => !own(guardedContent.properties ?? {}, key))) fail("every content field needs its own precondition");
       }
-      items[write.itemId] = { ...patchItem(write.content ? patchContent(item, write.content) : item, write.fields), updatedBy: actor, updatedAt: ts };
+      const patched = patchItem(write.content ? patchContent(item, write.content) : item, write.fields);
+      if (write.kind === "patch") items[write.itemId] = { ...patched, updatedBy: actor, updatedAt: ts };
+      else {
+        const entry = { ...trash.get(write.itemId)!, item: patched };
+        if (own(write, "legacyGroupRestore")) {
+          if (write.legacyGroupRestore === null) delete entry.legacyGroupRestore;
+          else if (write.legacyGroupRestore === "root" || write.legacyGroupRestore === "frame-only") entry.legacyGroupRestore = write.legacyGroupRestore;
+          else fail("invalid legacy trash restore policy");
+        }
+        trash.set(write.itemId, entry);
+      }
     } else if (write.kind === "trash") {
-      exactKeys(write, ["kind", "itemId", "deletedAt", "deletedBy", "cohort"], "trash write");
+      exactKeys(write, ["kind", "itemId", "deletedAt", "deletedBy", "cohort", ...(change.schemaVersion === 4 ? ["legacyGroupRestore"] : [])], "trash write");
       const item = items[write.itemId]; if (!item) fail("delete target is not live");
       if (typeof write.deletedAt !== "string" || !record(write.deletedBy) || typeof write.deletedBy.id !== "string") fail("invalid deletion stamp");
+      if (own(write, "legacyGroupRestore") && !["root", "frame-only"].includes(String(write.legacyGroupRestore))) fail("invalid legacy trash restore policy");
       if (write.cohort) { exactKeys(write.cohort, ["id", "rootIds"], "deletion cohort"); idList(write.cohort.rootIds); if (typeof write.cohort.id !== "string") fail("invalid cohort ID"); }
-      trash.set(write.itemId, { item, deletedAt: write.deletedAt, deletedBy: write.deletedBy, ...(write.cohort ? { cohort: write.cohort } : {}) });
+      trash.set(write.itemId, { item, deletedAt: write.deletedAt, deletedBy: write.deletedBy, ...(write.cohort ? { cohort: write.cohort } : {}), ...(write.legacyGroupRestore ? { legacyGroupRestore: write.legacyGroupRestore } : {}) });
       delete items[write.itemId];
     } else if (write.kind === "restore") {
       exactKeys(write, ["kind", "itemId", "containerId"], "restore write");
@@ -702,6 +750,11 @@ export function applyGroupChange(state: CanvasState, change: GroupChange, actor:
     }
   }
   const next: CanvasState = { project: { ...state.project, updatedBy: actor, updatedAt: ts, lastOp: "group.change" }, canvas: { ...state.canvas, items, trash: [...trash.values()], ...(Object.keys(cohorts).length ? { groupCohorts: cohorts } : {}) } };
+  if (change.migration) {
+    next.project.groupMode = change.migration.mode;
+    if (change.migration.boundary) next.project.groupMigration = structuredClone(change.migration.boundary);
+    else delete next.project.groupMigration;
+  }
   validateGroupForest(next);
   return next;
 }
@@ -712,26 +765,29 @@ export function invertGroupChange(state: CanvasState, change: GroupChange): Grou
   const after = applyGroupChange(state, change, synthetic, "inverse");
   const writes: GroupWrite[] = change.writes.map((write) => {
     if (write.kind === "create") return { kind: "trash", itemId: write.item.id, deletedAt: write.item.createdAt, deletedBy: write.item.createdBy, cohort: { id: `undo-create:${write.item.id}`, rootIds: [write.item.id] } };
-    if (write.kind === "patch") {
-      const item = itemIn(state.canvas, write.itemId);
+    if (write.kind === "patch" || write.kind === "patchTrash") {
+      const entry = state.canvas.trash.find((row) => row.item.id === write.itemId);
+      const item = write.kind === "patch" ? itemIn(state.canvas, write.itemId) : entry!.item;
       const previous: GroupFields = {};
       for (const key of fields) if (own(write.fields, key)) (previous as Record<string, unknown>)[key] = item[key] ?? null;
-      return { kind: "patch", itemId: write.itemId, fields: previous, ...(write.content ? { content: contentFacts(item, write.content) } : {}) };
+      const patch = { itemId: write.itemId, fields: previous, ...(write.content ? { content: contentFacts(item, write.content) } : {}) };
+      return write.kind === "patch" ? { kind: "patch", ...patch } : { kind: "patchTrash", ...patch, ...(own(write, "legacyGroupRestore") ? { legacyGroupRestore: entry?.legacyGroupRestore ?? null } : {}) };
     }
     if (write.kind === "trash") return { kind: "restore", itemId: write.itemId, containerId: itemIn(state.canvas, write.itemId).containerId ?? null };
     const entry = state.canvas.trash.find((row) => row.item.id === write.itemId)!;
-    return { kind: "trash", itemId: write.itemId, deletedAt: entry.deletedAt, deletedBy: entry.deletedBy, ...(entry.cohort ? { cohort: entry.cohort } : {}) };
+    return { kind: "trash", itemId: write.itemId, deletedAt: entry.deletedAt, deletedBy: entry.deletedBy, ...(entry.cohort ? { cohort: entry.cohort } : {}), ...(entry.legacyGroupRestore ? { legacyGroupRestore: entry.legacyGroupRestore } : {}) };
   });
   const cohorts: NonNullable<GroupChange["cohorts"]> = {};
   for (const write of writes) if (write.kind === "trash" && write.cohort && !state.canvas.groupCohorts?.[write.cohort.id]) {
     cohorts[write.cohort.id] = { rootIds: write.cohort.rootIds, members: writes.filter((row): row is Extract<GroupWrite, { kind: "trash" }> => row.kind === "trash" && row.cohort?.id === write.cohort!.id).map((row) => ({ itemId: row.itemId, containerId: after.canvas.items[row.itemId]?.containerId ?? null, annotates: after.canvas.items[row.itemId] ? annotationTarget(after.canvas.items[row.itemId]!) : null })) };
   }
   const afterIndex = relations(after.canvas);
-  return { canvasId: change.canvasId, intent: change.intent, expected: change.expected.map((row) => expectation(after, row.itemId, row.content, afterIndex)), writes, ...(change.schemaVersion ? { schemaVersion: change.schemaVersion } : {}), ...(Object.keys(cohorts).length ? { cohorts } : {}) };
+  return { canvasId: change.canvasId, intent: change.intent, expected: change.expected.map((row) => expectation(after, row.itemId, row.content, afterIndex)), writes, ...(change.schemaVersion ? { schemaVersion: change.schemaVersion } : {}), ...(change.migration ? { migration: { expectedMode: change.migration.mode, expectedBoundary: change.migration.boundary, mode: change.migration.expectedMode, boundary: change.migration.expectedBoundary } } : {}), ...(Object.keys(cohorts).length ? { cohorts } : {}) };
 }
 
 /** Authoritative intent resolution. Requests never contain replacement canvas snapshots. */
 export function resolveGroupOperation(state: CanvasState, op: GroupOperation, stamp: GroupStamp): GroupOperation {
+  if (op.action.kind === "migrate") fail("migration requires an authoritative preview and writer revision");
   validateGroupRequest(op.action);
   if (!hasCanvasGroups(state)) fail("canvas groups require group mode");
   validateGroupForest(state);
@@ -824,7 +880,7 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     fitAncestors(roots);
   } else if (action.kind === "insert") {
     const op = action.item;
-    if (original.items[op.itemId] || original.trash.some((entry) => entry.item.id === op.itemId)) fail("item ID already exists");
+    if (original.items[op.itemId] || original.trash.some((entry) => entry.item.id === op.itemId)) throw new OpValidationError("duplicate-id", "item ID already exists");
     const targetId = op.properties?.annotates;
     const target = targetId ? original.items[targetId] : undefined;
     const parent = target ? target.containerId ?? null : op.containerId ?? null;
@@ -891,7 +947,7 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     // The provisional creation box was never a live frame. A dangling mark
     // already naming this new ID must keep its world geometry when wrap fits.
     if (roots.length) put(group.id, groupFitBox(canvas, group.id));
-    const createdFrame = itemIn(canvas, group.id); const minimum = frameMinimum(createdFrame);
+    const createdFrame = itemIn(canvas, group.id); const minimum = groupFrameMinimum(createdFrame);
     if (createdFrame.width < minimum.width || createdFrame.height < minimum.height) fail("new group is too small for its grid cells");
     fitAncestors([group.id]); roots = [group.id];
   } else if (action.kind === "restore") {
@@ -902,7 +958,7 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
       if (!entry) fail(`not in trash: ${id}`);
       selected.add(id);
       const capture = entry.cohort ? original.groupCohorts?.[entry.cohort.id] : undefined;
-      if (isGroupItem(entry.item) && entry.cohort && capture) {
+      if (!entry.legacyGroupRestore && isGroupItem(entry.item) && entry.cohort && capture) {
         const walk = (parent: string): void => {
           for (const member of capture.members) if (member.containerId === parent || member.annotates === parent) {
             const child = original.trash.find((row) => row.item.id === member.itemId);
@@ -913,11 +969,11 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
         };
         walk(id);
       }
-      for (const mark of original.trash) if (annotationTarget(mark.item) === id && mark.cohort?.id === entry.cohort?.id) selected.add(mark.item.id);
+      if (!entry.legacyGroupRestore) for (const mark of original.trash) if (annotationTarget(mark.item) === id && mark.cohort?.id === entry.cohort?.id) selected.add(mark.item.id);
     }
     for (const id of selected) {
       const entry = original.trash.find((row) => row.item.id === id)!;
-      let parent = entry.item.containerId ?? null;
+      let parent = entry.legacyGroupRestore ? null : entry.item.containerId ?? null;
       const seen = new Set([id]);
       while (parent && !original.items[parent] && !selected.has(parent)) {
         if (seen.has(parent)) fail("trashed membership cycle"); seen.add(parent);
@@ -975,18 +1031,20 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
         const item = itemIn(canvas, target.itemId);
         if (!isGroupItem(item) && !target.box) fail("ordinary fit needs its measured box");
         adjustFrame(item.id, target.box ?? groupFitBox(canvas, item.id));
-        if (isGroupItem(item)) { const minimum = frameMinimum(itemIn(canvas, item.id)); if (itemIn(canvas, item.id).width < minimum.width || itemIn(canvas, item.id).height < minimum.height) fail("frame is too small for its grid cells"); }
+        if (isGroupItem(item)) { const minimum = groupFrameMinimum(itemIn(canvas, item.id)); if (itemIn(canvas, item.id).width < minimum.width || itemIn(canvas, item.id).height < minimum.height) fail("frame is too small for its grid cells"); }
         if (isGroupItem(item) && target.box && !equal(groupFitBox(canvas, item.id, true), target.box)) fail("frame would exclude members or cover reserved labels; fit it or choose a larger box");
       }
       fitAncestors(ids);
     } else if (action.kind === "layout") {
       const group = groupIn(canvas, action.itemId);
       const oldContent = groupContentBox(group);
-      put(group.id, { groupLayout: { ...group.groupLayout, ...action.layout } });
+      const layout = { ...group.groupLayout, ...action.layout };
+      if (action.clearGrid) for (const key of ["rows", "columns", "rowCount", "columnCount", "rowGutter", "columnGutter"] as const) delete layout[key];
+      put(group.id, { groupLayout: layout });
       const content = groupContentBox(itemIn(canvas, group.id));
       const dx = oldContent.x - content.x; const dy = oldContent.y - content.y;
       adjustFrame(group.id, { x: group.x + dx, y: group.y + dy, width: Math.max(GROUP_MIN_SIZE.width, group.width - dx), height: Math.max(GROUP_MIN_SIZE.height, group.height - dy) });
-      const minimum = frameMinimum(itemIn(canvas, group.id));
+      const minimum = groupFrameMinimum(itemIn(canvas, group.id));
       const reservedFrame = itemIn(canvas, group.id);
       if (reservedFrame.width < minimum.width || reservedFrame.height < minimum.height) adjustFrame(group.id, { ...boxOf(reservedFrame), width: Math.max(reservedFrame.width, minimum.width), height: Math.max(reservedFrame.height, minimum.height) });
       if (action.tidy) {
@@ -1033,13 +1091,14 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
   const originalIndex = relations(original);
   const expected = sorted(dependencies).map((id) => expectation(state, id, contents.get(id), originalIndex));
   const v2Layout = expected.some((row) => hasGridCounts(row.facts?.groupLayout)) || writes.some((write) => hasGridCounts(write.kind === "create" ? write.item.groupLayout : write.kind === "patch" ? write.fields.groupLayout : undefined));
-  const change: GroupChange = { canvasId: state.project.id, intent: action.kind === "remove" ? "reparent" : action.kind === "copy" ? "create" : action.kind, expected, writes, ...(action.kind === "insert" || action.kind === "content" || v2Layout ? { schemaVersion: 2 as const } : {}), ...(cohorts ? { cohorts } : {}), ...(skipped.size ? { skippedIds: sorted(skipped) } : {}) };
+  const change: GroupChange = { canvasId: state.project.id, intent: action.kind === "remove" ? "reparent" : action.kind === "copy" ? "create" : action.kind, expected, writes, ...(expected.some((row) => row.legacyGroupRestore !== undefined) ? { schemaVersion: 4 as const } : action.kind === "insert" || action.kind === "content" || v2Layout ? { schemaVersion: 2 as const } : {}), ...(cohorts ? { cohorts } : {}), ...(skipped.size ? { skippedIds: sorted(skipped) } : {}) };
   applyGroupChange(state, change, stamp.actor, stamp.ts);
   return { type: "group.change", action: { kind: "apply", change } };
 }
 
 /** History and presence use actual writes, including fitted ancestors and attached marks. */
 export function groupChangeItemIds(op: GroupOperation): string[] {
+  if (op.action.kind === "migrate") return [];
   if (op.action.kind === "apply") return op.action.change.writes.map((write) => write.kind === "create" ? write.item.id : write.itemId);
   if (op.action.kind === "create") return [op.action.group.id, ...(op.action.itemIds ?? [])];
   if (op.action.kind === "insert") return [op.action.item.itemId];
@@ -1075,7 +1134,7 @@ export function resolveCanvasGroupRequest(state: CanvasState, op: Operation, sta
     action = { kind: "transform", itemId: item.id, box: { x: item.x, y: item.y, width: op.width, height: op.height }, expected: captureGroupExpectations(state, [item.id]) };
   } else if (op.type === "item.delete" && groupRelated(op.itemId)) action = { kind: "delete", itemIds: [op.itemId] };
   else if (op.type === "items.delete" && op.itemIds.some(groupRelated)) action = { kind: "delete", itemIds: op.itemIds };
-  else if (op.type === "item.restore" && state.canvas.trash.some((entry) => entry.item.id === op.itemId && (entry.cohort || isGroupItem(entry.item) || entry.item.containerId))) action = { kind: "restore", itemIds: [op.itemId] };
-  else if (op.type === "items.restore" && state.canvas.trash.some((entry) => op.itemIds.includes(entry.item.id) && (entry.cohort || isGroupItem(entry.item) || entry.item.containerId))) action = { kind: "restore", itemIds: op.itemIds };
+  else if (op.type === "item.restore" && state.canvas.trash.some((entry) => entry.item.id === op.itemId && (entry.legacyGroupRestore || entry.cohort || isGroupItem(entry.item) || entry.item.containerId || annotationsOf(state.canvas, entry.item.id).length))) action = { kind: "restore", itemIds: [op.itemId] };
+  else if (op.type === "items.restore" && state.canvas.trash.some((entry) => op.itemIds.includes(entry.item.id) && (entry.legacyGroupRestore || entry.cohort || isGroupItem(entry.item) || entry.item.containerId || annotationsOf(state.canvas, entry.item.id).length))) action = { kind: "restore", itemIds: op.itemIds };
   return action ? resolveGroupOperation(state, { type: "group.change", action }, stamp) : op;
 }

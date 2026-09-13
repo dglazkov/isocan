@@ -24,7 +24,7 @@ import {
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import * as p from "../src/paths.ts";
 import type { AuthConfig } from "../src/attest.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **The grant, and the door that finally refuses** (identity desk, mechanisms
@@ -99,7 +99,7 @@ async function revokeLink(badge: TestBadge): Promise<Response> {
 /** What a socket was told, so a refusal can be asserted as a close code. */
 function socketClose(badge: TestBadge, canvasId = CANVAS): Promise<number> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`), {
       headers: badge.headers,
     });
     ws.on("error", reject);

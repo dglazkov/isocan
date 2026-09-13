@@ -511,15 +511,15 @@ export class CanvasHandle {
    */
   async add(spec: AddSpec): Promise<Item> {
     return this.reach(async () => {
-      const snapshot = spec.in !== undefined ? await this.snapshot() : undefined;
-      const containerId = spec.in !== undefined ? resolveCanvasGroupRef(snapshot!.canvas, spec.in, true).id : spec.containerId;
+      const snapshot = await this.snapshot();
+      const containerId = spec.in !== undefined ? resolveCanvasGroupRef(snapshot.canvas, spec.in, true).id : spec.containerId;
       if (spec.cell && !containerId) throw new Error("a cell requires a destination group");
       const data = typeof spec.content === "string" ? Buffer.from(spec.content) : spec.content;
       const filename = spec.filename ?? defaultFilename(spec.title, spec.mime);
       const upload = await this.ctx.client.uploadBlob(this.id, data, spec.mime, filename);
       const itemId = newItemId();
       const { width, height } = spec.size ?? DEFAULT_SIZE;
-      const placement = spec.at ?? (await this.defaultPlacement());
+      const placement = spec.at ?? this.defaultPlacement(snapshot);
       const accepted = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
         type: "item.add",
         itemId,
@@ -540,7 +540,7 @@ export class CanvasHandle {
         ...(spec.properties && Object.keys(spec.properties).length > 0
           ? { properties: spec.properties }
           : {}),
-      });
+      }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
       const written = accepted.envelope.op;
       if (written.type === "group.change" && written.action.kind === "apply") {
         const created = written.action.change.writes.find((write) => write.kind === "create" && write.item.id === itemId);
@@ -551,10 +551,7 @@ export class CanvasHandle {
   }
 
   /** The CLI's default: left of the leftmost item, origin on an empty canvas. */
-  private async defaultPlacement(): Promise<
-    { x: number; y: number } | { anchorItemId: string }
-  > {
-    const { canvas } = await this.snapshot();
+  private defaultPlacement({ canvas }: CanvasSnapshotResponse): { x: number; y: number } | { anchorItemId: string } {
     const leftmost = Object.values(canvas.items).reduce<Item | null>(
       (best, item) => (best === null || item.x < best.x ? item : best),
       null,
@@ -569,7 +566,9 @@ export class CanvasHandle {
    */
   async edit(itemId: string, spec: ContentSpec): Promise<Item> {
     return this.reach(async () => {
-      const before = await this.item(itemId);
+      const snapshot = await this.snapshot();
+      const before = snapshot.canvas.items[itemId];
+      if (!before) throw new Error(`no item ${itemId} on ${this.record.title}`);
       const current = before.versions.find((v) => v.id === before.currentVersionId);
       const mime = spec.mime ?? current?.mimeType;
       const filename = spec.filename ?? current?.filename;
@@ -588,7 +587,7 @@ export class CanvasHandle {
           filename,
           size: upload.size,
         },
-      });
+      }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
       return this.item(itemId);
     });
   }
@@ -623,7 +622,8 @@ export class CanvasHandle {
     };
     let did = false;
     await this.reach(async () => {
-      if ((await this.snapshot()).project.groupMode === "groups") {
+      const snapshot = await this.snapshot();
+      if (snapshot.project.groupMode === "groups") {
         if (!Object.keys(meta).length && !patch.size) throw new Error("nothing to change");
         await this.groups.update(itemId, { patch: meta, ...(patch.size ? { size: patch.size } : {}) });
         did = true;
@@ -634,7 +634,7 @@ export class CanvasHandle {
           type: "item.update",
           itemId,
           patch: meta,
-        });
+        }, undefined, undefined, undefined, "legacy");
         did = true;
       }
       if (patch.size) {
@@ -643,7 +643,7 @@ export class CanvasHandle {
           itemId,
           width: patch.size.width,
           height: patch.size.height,
-        });
+        }, undefined, undefined, undefined, "legacy");
         did = true;
       }
     });
@@ -670,6 +670,7 @@ export class CanvasHandle {
         this.id,
         this.ctx.actor,
         moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves },
+        undefined, undefined, undefined, "legacy",
       );
     });
   }
@@ -694,7 +695,7 @@ export class CanvasHandle {
         y: 0,
         anchorItemId: itemId,
         comment,
-      });
+      }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
       return postedComment(threadId, comment.id, receipt);
     });
   }
@@ -704,7 +705,7 @@ export class CanvasHandle {
     return this.reach(async () => {
       const snapshot = await this.snapshot();
       const comment = await this.newComment(snapshot, message, options);
-      const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "thread.reply", threadId, comment });
+      const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "thread.reply", threadId, comment }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
       return postedComment(threadId, comment.id, receipt);
     });
   }
@@ -724,7 +725,7 @@ export class CanvasHandle {
           type: "thread.reply",
           threadId: main.id,
           comment,
-        });
+        }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
         return postedComment(main.id, comment.id, receipt);
       }
       const threadId = newThreadId();
@@ -736,7 +737,7 @@ export class CanvasHandle {
         anchorItemId: null,
         main: true,
         comment,
-      });
+      }, undefined, undefined, undefined, snapshot.project.groupMode ?? "legacy");
       return postedComment(threadId, comment.id, receipt);
     });
   }

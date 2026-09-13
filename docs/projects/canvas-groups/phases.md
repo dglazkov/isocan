@@ -5,13 +5,11 @@ the mechanism. This is the conduct contract for implementing the reviewed
 plan. The conductor owns these documents and the release record; builders
 own only their assigned code, tests, CLI guide and product README changes.
 
-**Where we are:** phases 1–2 are CLOSED (12 Sep 2026) and phases 3–4 are CLOSED
-(13 Sep 2026); phase 5 is NOT STARTED.
-Canvas-groups phase 5 is next: legacy conversion and normal creation.
-Membership, transforms, insertion, label layout, frozen context and lifecycle
-have passed real CLI, HTTP, persistence and browser verification, including
-a complete 1,011-entry context manifest. No phase waits on another project or
-on a person.
+**Where we are:** all five phases are CLOSED. Phases 1–2 were verified on
+12 Sep 2026 and phases 3–5 on 13 Sep 2026. Membership, transforms, insertion,
+label layout, frozen context, lifecycle and legacy conversion have passed
+real CLI/browser, persistence, compatibility and native-backup verification.
+New public canvases use groups. No phase remains or waits on a person.
 
 **Rules for every phase.** Work on main. Every structural act is atomic,
 undoable and shared by both surfaces; a log undo label is not atomicity.
@@ -188,7 +186,7 @@ affected module consumers with non-overlapping builder assignments.
 
 ## Phase 5 — Legacy conversion and release
 
-**Status: NOT STARTED (2026-09-12).** Nothing built.
+**Status: CLOSED (2026-09-13).** Legacy preview/conversion, retained queued intent, old-client gates, rollback, both stores and normal creation passed the CLI/browser and complete-suite proof.
 
 Closes journey 7 and the complete product walk. Mechanisms: design Converting
 existing areas, undo boundary, compatibility and numbered gates 6 and 7.
@@ -216,3 +214,11 @@ The conductor updates project/release/changelog records after verification.
 - **2026-09-13** — Migration needs a v4 replay boundary and queued-write origin. Literal v3 cannot apply mode/boundary or legacy-trash effects, and a v4 client can still hold a legacy request. The contract now names both gates before implementation.
 
 - **2026-09-13** — Literal v3 browser code retries an unrecognized upgrade close code; a new release cannot remotely add its terminal UI. The writer must withhold unsupported state on every retry, and current clients show upgrade guidance. Rollback also counts saved group-dependent undo candidates as history debt.
+
+- **2026-09-13** — Origin belongs to the initial gesture, before content upload. Peer review found that capturing it only at POST could reinterpret a legacy insertion after conversion. Refused cutover work now survives reload until explicit dismissal; the real held-upload walk verified both.
+
+- **2026-09-13** — Migration is its own Undo boundary even when a caller reuses a gesture label, and it preserves the converter's earlier redo. Root-only ordinary insertion keeps its prior inverse repair; group-dependent creation history still blocks migration rollback.
+
+- **2026-09-13** — Native export must capture snapshot and complete history at one revision. Actual conversion and GC races verified bounded history and explicit gap refusal. Firestore merge also requires explicit deletion of an absent boundary; otherwise Undo appears legacy until restart restores stale metadata.
+
+- **2026-09-13** — Deferred Context and Personas panels recover the migration UI's entry cost while retaining their mounted state after opening. The final integrated entry is 733,714 bytes, below the unchanged 734,200 ceiling. Literal old-build verification used real archived assets and current-writer transport.

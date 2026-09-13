@@ -47,6 +47,11 @@ export declare class UndoStacks {
     private merged;
     /** Seq of the entry this actor's next undo should reverse, or null. */
     nextUndoTarget(who: string | readonly string[]): number | null;
+    /** Migration rollback audits every actor's retained group-dependent history. */
+    dependencyTargets(): Array<{
+        seq: number;
+        kind: "undo" | "redo";
+    }>;
     /**
      * **Every seq one ⌘Z should reverse** — newest first, which is the order
      * they must be undone in.
