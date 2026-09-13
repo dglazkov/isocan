@@ -24,6 +24,7 @@ import { OnIt } from "./OnIt.tsx";
 import { runLocalCommand } from "../lib/localcommands.ts";
 import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { QuestionnaireDock, activeQuestion, parseQuestionPayload } from "./QuestionnaireDock.tsx";
 
 /**
  * The designated main thread (#36): one thread per canvas rendered as a
@@ -125,6 +126,14 @@ function Attached({ canvasId }: { canvasId: string }) {
  * it said once — the body below is what they typed on top of the request.
  */
 export function CommandChip({ body }: { body: string }) {
+  const qPayload = parseQuestionPayload(body);
+  if (qPayload) {
+    return (
+      <span className="command-chip" title="Structured questionnaire">
+        📋 Questionnaire ({qPayload.questions.length} questions)
+      </span>
+    );
+  }
   const parsed = parseSlashCommand(body);
   if (!parsed) return null;
   return (
@@ -136,6 +145,10 @@ export function CommandChip({ body }: { body: string }) {
 
 /** The message without its command word — what they typed on top of it. */
 export function withoutCommand(body: string): string {
+  const qPayload = parseQuestionPayload(body);
+  if (qPayload) {
+    return qPayload.headline || "Please answer the questions docked below to align on the design direction.";
+  }
   const parsed = parseSlashCommand(body);
   return parsed ? body.slice(parsed.end).trimStart() : body;
 }
@@ -364,6 +377,8 @@ function Panel({
   const thread = canvas ? mainThread(canvas) : null;
   useLaneFollow(canvas, thread);
   const [draft, setDraft] = useState("");
+  const [dismissedCommentId, setDismissedCommentId] = useState<string | null>(null);
+  const activeQ = useMemo(() => activeQuestion(thread), [thread]);
 
   /**
    * A command the launcher picked, handed over rather than posted.
@@ -539,6 +554,17 @@ function Panel({
           )}
         </div>
       </div>
+      {activeQ && activeQ.comment.id !== dismissedCommentId && (
+        <QuestionnaireDock
+          payload={activeQ.payload}
+          onAnswer={async (reply) => {
+            await send(reply, []);
+          }}
+          onDismiss={() => {
+            setDismissedCommentId(activeQ.comment.id);
+          }}
+        />
+      )}
       <form
         onKeyDown={(e) => {
           submitOnEnter(e);

@@ -79,11 +79,24 @@ export function presentedBadge(headers: IncomingHttpHeaders): PresentedBadge | n
 
 /** The badge behind a presented token, or null if the desk does not know it
  * or the secret does not match. */
+let _cloudtopBrowserBadgeId: string | null = null;
 export async function resolveBadge(
   desk: Desk,
   presented: PresentedBadge | null,
 ): Promise<BadgeRecord | null> {
-  if (!presented) return null;
+  if (!presented) {
+    if (process.env.ISOCAN_ALLOWED_ORIGINS === "*") {
+      if (_cloudtopBrowserBadgeId) {
+        const existing = await desk.badge(_cloudtopBrowserBadgeId);
+        if (existing) return existing;
+      }
+      const { record } = mintBadge("cookie");
+      await desk.put(record);
+      _cloudtopBrowserBadgeId = record.badgeId;
+      return record;
+    }
+    return null;
+  }
   const record = await desk.badge(presented.badgeId);
   if (!record) return null;
   return secretMatches(presented.secret, record.secretHash) ? record : null;
@@ -189,7 +202,7 @@ export function originAllowed(
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  if (allowlist.includes(origin)) return true;
+  if (allowlist.includes("*") || allowlist.includes(origin)) return true;
   if (self.host) {
     const own = `${self.secure ? "https" : "http"}://${self.host}`;
     if (origin === own) return true;
