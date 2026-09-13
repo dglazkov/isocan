@@ -1,3 +1,5 @@
+import { selectCreatedItems } from "../lib/groupplacement.ts";
+import { createGroupNudger } from "../lib/groupgestures.ts";
 import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
 import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask } from "../lib/canvasgroups.ts";
 import { CanvasGroupScope } from "../components/CanvasGroupScope.tsx";
@@ -106,7 +108,6 @@ import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
 import { recordVisit } from "../lib/recents.ts";
 import { noteVisit } from "../lib/seen.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
-import { fitToContent } from "../lib/fititem.ts";
 import { useCanvasHome } from "../lib/homes.ts";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { ElsewherePage } from "./ElsewherePage.tsx";
@@ -450,11 +451,16 @@ function CanvasSurface({
   useEffect(() => {
     if (!canvasId) return;
 
+    const groupNudger = createGroupNudger(canvasId, actor, NUDGE_FLUSH_MS);
     /** Move the selection by whole world units: 1 per press, 10 with shift. */
     function nudge(dx: number, dy: number): void {
       const ids = useUiStore.getState().selectedItemIds;
       const canvas = useCanvasStore.getState().canvas;
       if (ids.length === 0 || !canvas) return;
+      if (groupsEnabled()) {
+        groupNudger.nudge(ids, dx, dy);
+        return;
+      }
       const moves = ids
         .map((id) => canvas.items[id])
         .filter((item) => item !== undefined)
@@ -521,6 +527,7 @@ function CanvasSurface({
     /** Write where the nudged items actually ended up. Items deleted mid-nudge
      * are gone from the replica, so they simply drop out of the op. */
     function flushNudge(): void {
+      if (groupsEnabled()) { void groupNudger.flush(); return; }
       const ids = useUiStore.getState().selectedItemIds;
       const canvas = useCanvasStore.getState().canvas;
       if (ids.length === 0 || !canvas) return;
@@ -587,7 +594,7 @@ function CanvasSurface({
         void pasteInto(held, canvasId!, actor).then((made) => {
           // Select what just arrived: a paste you cannot see the result of is
           // a paste you have to go looking for.
-          if (made.length > 0) useUiStore.getState().setSelection(made);
+          if (made.length > 0) selectCreatedItems(canvasId!, made);
         });
         return;
       }
@@ -775,7 +782,7 @@ function CanvasSurface({
         // Watching is the outermost mode: Esc hands the camera back first.
         // A mark being placed is the innermost: it is the thing under the
         // pointer right now.
-        if (ui.drag || ui.resize) { ui.setDrag(null); ui.setResize(null); ui.setGuides([]); }
+        if (ui.drag || ui.resize || ui.groupPreview) { ui.setDrag(null); ui.setResize(null); ui.setGroupPreview(null); ui.setGroupDropTarget(null); ui.setGuides([]); }
         else if (ui.stamp) ui.setStamp(null);
         else if (ui.renamingItemId) ui.setRenaming(null);
         else if (ui.followSessionId) ui.setFollow(null);
@@ -802,7 +809,7 @@ function CanvasSurface({
         // the ⇧0/⇧1/⇧2 family despite ⇧3 being free there: those move the
         // camera and undo nothing, and this writes ops.
         e.preventDefault();
-        void fitToContent(canvasId!, actor, ui.selectedItemIds);
+        void import("../lib/fititem.ts").then(({ fitToContent }) => fitToContent(canvasId!, actor, ui.selectedItemIds)).catch((error: Error) => setNotice(error.message));
       } else if (e.key === "0") {
         zoomToFit();
       } else if (e.code === "KeyV" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
@@ -904,6 +911,7 @@ function CanvasSurface({
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
+      void groupNudger.flush();
       if (nudgeTimer.current !== null) {
         clearTimeout(nudgeTimer.current);
         nudgeTimer.current = null;

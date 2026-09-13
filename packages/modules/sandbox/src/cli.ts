@@ -7,7 +7,6 @@ import type { Command } from "commander";
 import { actorNameIn } from "@isocan/core";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
 import {
-  SANDBOX_OF_PROP,
   SANDBOX_RUN_PROP,
   TRANSCRIPT_MIME,
   argvOf,
@@ -20,6 +19,7 @@ import {
   transcriptFilename,
   transcriptFor,
   transcriptOf,
+  transcriptOperation,
 } from "./core.ts";
 
 /**
@@ -210,25 +210,8 @@ function register(host: CliHost): void {
             filename: outName,
             size: upload.size,
           };
-          let transcriptId: string;
-          if (existing) {
-            transcriptId = existing.id;
-            await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing.id, version });
-          } else {
-            transcriptId = id("itm");
-            await sendOp(ctx, p.id, {
-              type: "item.add",
-              itemId: transcriptId,
-              version,
-              width: 420,
-              height: 300,
-              // Beside the program it belongs to, which is a chosen spot: a
-              // transcript read anywhere else is a file with no subject.
-              placement: { anchorItemId: item.id },
-              title: `${item.title} — output`,
-              properties: { [SANDBOX_OF_PROP]: item.id },
-            } as never);
-          }
+          const transcriptId = existing?.id ?? id("itm");
+          await sendOp(ctx, p.id, transcriptOperation(item, existing, version, transcriptId, snapshot.project.groupMode === "groups"));
 
           if (ctx.json) {
             return printJson({

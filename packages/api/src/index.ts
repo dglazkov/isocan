@@ -18,6 +18,7 @@
  */
 export * from "./connect.ts";
 export * from "./canvas-groups.ts";
+export * from "./operation-receipt.ts";
 export * from "./routes.ts";
 export * from "./client.ts";
 export * from "./ctx.ts";

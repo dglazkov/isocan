@@ -1,9 +1,11 @@
 import type { Actor, CanvasContents, CanvasState, Item, TrashEntry } from "./model.ts";
-import type { GroupAction, GroupAnchor, GroupBox, GroupChange, GroupExpectation, GroupFacts, GroupFields, GroupLayout, GroupOperation, GroupStamp, GroupWrite } from "./canvas-group-types.ts";
+import type { GroupAction, GroupAnchor, GroupBox, GroupCell, GroupChange, GroupContentFields, GroupExpectation, GroupFacts, GroupFields, GroupLayout, GroupOperation, GroupPlacementPolicy, GroupStamp, GroupWrite } from "./canvas-group-types.ts";
 import { annotationTarget, annotationsOf } from "./annotation.ts";
 import { isDrawingItem } from "./drawing.ts";
 import { GroupConflictError, OpValidationError } from "./errors.ts";
-import { PLACEMENT_GAP } from "./placement.ts";
+import { PLACEMENT_GAP, PLACEMENT_CLEARANCE, nearestFreeSpot, overlaps, resolvePlacement, positionIsMeaningful } from "./placement.ts";
+import { reduceOperation } from "./reducer.ts";
+import { formatMoves } from "./format.ts";
 import type { Operation } from "./ops.ts";
 
 const GROUP_KIND = "group";
@@ -31,6 +33,7 @@ function exactKeys(value: unknown, keys: readonly string[], label: string): asse
   if (!record(value) || Object.keys(value).some((key) => !keys.includes(key))) fail(`invalid ${label} fields`);
 }
 function boxOf(item: GroupBox): GroupBox { return { x: item.x, y: item.y, width: item.width, height: item.height }; }
+function persistedBox(box: GroupBox): GroupBox { return { x: round(box.x), y: round(box.y), width: round(box.width), height: round(box.height) }; }
 function validBox(box: unknown): asserts box is GroupBox {
   if (!record(box) || ["x", "y", "width", "height"].some((key) => typeof box[key] !== "number" || !Number.isFinite(box[key])) || Number(box.width) <= 0 || Number(box.height) <= 0) fail("a box needs finite coordinates and positive dimensions");
 }
@@ -45,13 +48,22 @@ function validVisual(value: unknown): void {
   if (own(value, "size") && (typeof value.size !== "number" || !Number.isFinite(value.size) || value.size < 0)) fail("invalid visual size");
 }
 function validLayout(layout: unknown): asserts layout is GroupLayout {
-  exactKeys(layout, ["titleHeight", "briefHeight", "inset", "rowGutter", "columnGutter", "rows", "columns"], "layout");
+  exactKeys(layout, ["titleHeight", "briefHeight", "inset", "rowGutter", "columnGutter", "rows", "columns", "rowCount", "columnCount"], "layout");
   for (const [key, value] of Object.entries(layout)) {
     if (key === "rows" || key === "columns") {
       if (!Array.isArray(value) || value.length > 100 || value.some((label) => typeof label !== "string" || label.length > 1000)) fail("invalid grid labels");
+    } else if (key === "rowCount" || key === "columnCount") {
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 100) fail("invalid grid count");
     } else if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 10000) fail("invalid layout reservation");
   }
   if (Number(layout.titleHeight ?? 56) < 24 || Number(layout.inset ?? 24) < 0) fail("invalid title or inset reservation");
+  const grid = layout as GroupLayout;
+  if ((grid.rows?.length ?? 0) > (grid.rowCount ?? Math.max(1, grid.rows?.length ?? 0)) || (grid.columns?.length ?? 0) > (grid.columnCount ?? Math.max(1, grid.columns?.length ?? 0))) fail("more grid labels than cells");
+}
+function hasGridCounts(layout: GroupLayout | null | undefined): boolean { return !!layout && (own(layout, "rowCount") || own(layout, "columnCount")); }
+function validCell(cell: unknown): asserts cell is GroupCell {
+  exactKeys(cell, ["row", "column"], "cell");
+  if (!Number.isInteger(cell.row) || !Number.isInteger(cell.column) || Number(cell.row) < 1 || Number(cell.column) < 1) fail("cell indices start at one");
 }
 function itemIn(canvas: CanvasContents, id: string): Item {
   const item = canvas.items[id];
@@ -79,6 +91,12 @@ function groupIndex(canvas: CanvasContents): Map<string | null, Item[]> {
   }
   for (const children of index.values()) children.sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id));
   return index;
+}
+function relations(canvas: CanvasContents) {
+  const children = groupIndex(canvas);
+  const annotations = new Map<string, Item[]>();
+  for (const item of Object.values(canvas.items)) { const target = annotationTarget(item); if (target) { const marks = annotations.get(target) ?? []; marks.push(item); annotations.set(target, marks); } }
+  return { children, annotations, trash: new Map(canvas.trash.map((entry) => [entry.item.id, entry])) };
 }
 /** Direct membership, with null addressing the canvas root instead of an enclosing frame. */
 export function groupChildren(canvas: CanvasContents, groupId: string | null): Item[] { return groupIndex(canvas).get(groupId) ?? []; }
@@ -144,11 +162,10 @@ export function groupSelectionRoots(canvas: CanvasContents, ids: readonly string
 /** Include descendants and target-owned ink once, even when both are explicitly selected. */
 export function groupTransformClosure(canvas: CanvasContents, ids: readonly string[]): string[] {
   const found = new Set<string>();
-  for (const id of groupSelectionRoots(canvas, ids)) {
-    found.add(id);
-    for (const child of groupDescendants(canvas, id)) found.add(child.id);
-  }
-  for (const id of [...found]) for (const mark of annotationsOf(canvas, id)) found.add(mark.id);
+  const index = relations(canvas);
+  const visit = (id: string): void => { if (found.has(id)) return; found.add(id); for (const child of index.children.get(id) ?? []) visit(child.id); };
+  for (const id of groupSelectionRoots(canvas, ids)) visit(id);
+  for (const id of [...found]) for (const mark of index.annotations.get(id) ?? []) found.add(mark.id);
   if (found.size > GROUP_LIMIT) fail("too many affected items");
   return sorted(found);
 }
@@ -196,10 +213,152 @@ export function groupContentBox(item: Item): GroupBox {
 function labelHeight(item: Item): number {
   return isGroupItem(item) || annotationTarget(item) || ["text", "drawing"].includes(item.properties.kind ?? "") ? 0 : GROUP_LABEL_HEIGHT;
 }
+/** A placement unit reserves native labels and every attached mark's overhang. */
 function groupFootprint(item: Item, canvas?: CanvasContents): GroupBox {
   const ownBox = { ...boxOf(item), height: item.height + labelHeight(item) };
   const marks = canvas ? annotationsOf(canvas, item.id).map(boxOf) : [];
   return enclosing([ownBox, ...marks]);
+}
+
+function frameMinimum(item: Item): { width: number; height: number } {
+  const band = reservations(item);
+  const layout = item.groupLayout ?? {};
+  const rows = layout.rowCount ?? Math.max(1, layout.rows?.length ?? 0);
+  const columns = layout.columnCount ?? Math.max(1, layout.columns?.length ?? 0);
+  return { width: Math.max(GROUP_MIN_SIZE.width, band.left + band.right + (columns - 1) * PLACEMENT_GAP + columns), height: Math.max(GROUP_MIN_SIZE.height, band.top + band.bottom + (rows - 1) * PLACEMENT_GAP + rows) };
+}
+
+/** Historical dense grids stay readable; both surfaces can disclose that full spacing needs a larger frame. */
+export function groupGridNeedsRoom(item: Item): boolean {
+  const minimum = frameMinimum(item);
+  return item.width < minimum.width || item.height < minimum.height;
+}
+
+/** A cell's usable box excludes saved row/column gutters and inter-cell clearance. */
+export function groupCellBox(group: Item, row: number, column: number): GroupBox {
+  validCell({ row, column });
+  const layout = group.groupLayout ?? {};
+  const rows = layout.rowCount ?? Math.max(1, layout.rows?.length ?? 0);
+  const columns = layout.columnCount ?? Math.max(1, layout.columns?.length ?? 0);
+  if (row > rows || column > columns) fail(`cell ${row},${column} is outside ${rows}x${columns}`);
+  const inner = groupContentBox(group);
+  // v1 permitted more labels than its frame could separate with full gaps.
+  // Rendering that history compresses only inter-cell whitespace; new layout
+  // and resize requests reserve the full gaps through frameMinimum instead.
+  const gapX = columns > 1 ? Math.min(PLACEMENT_GAP, Math.max(0, (inner.width - columns) / (columns - 1))) : 0;
+  const gapY = rows > 1 ? Math.min(PLACEMENT_GAP, Math.max(0, (inner.height - rows) / (rows - 1))) : 0;
+  const width = (inner.width - gapX * (columns - 1)) / columns;
+  const height = (inner.height - gapY * (rows - 1)) / rows;
+  const box = { x: inner.x + (column - 1) * (width + gapX), y: inner.y + (row - 1) * (height + gapY), width, height };
+  validBox(box);
+  return box;
+}
+
+/** Deterministic insertion considers complete placement units and never spills out of a named cell. */
+export function groupPlacement(canvas: CanvasContents, groupId: string, footprint: { width: number; height: number }, options: { at?: { x: number; y: number }; cell?: GroupCell; policy?: GroupPlacementPolicy; ignoreIds?: readonly string[] } = {}): { x: number; y: number } {
+  const group = groupIn(canvas, groupId);
+  const inner = options.cell ? groupCellBox(group, options.cell.row, options.cell.column) : groupContentBox(group);
+  const ignored = new Set(options.ignoreIds ?? []);
+  const occupied = groupSelectionRoots(canvas, groupChildren(canvas, groupId).filter((item) => !ignored.has(item.id)).map((item) => item.id)).map((id) => groupFootprint(itemIn(canvas, id), canvas));
+  const at = options.at ?? { x: inner.x, y: inner.y };
+  const size = { width: footprint.width, height: footprint.height };
+  const requested = { ...at, ...size };
+  validBox(requested);
+  const inside = (box: GroupBox) => box.x >= inner.x && box.y >= inner.y && box.x + box.width <= inner.x + inner.width && box.y + box.height <= inner.y + inner.height;
+  if (options.policy === "preserve" || options.policy === "exact") {
+    if (options.cell && !inside(requested)) fail("exact placement does not fit the requested grid cell");
+    return at;
+  }
+  const want = { ...requested, x: Math.max(inner.x, at.x), y: Math.max(inner.y, at.y) };
+  const spot = nearestFreeSpot(want, occupied, inner);
+  const found = { ...spot, ...size };
+  if (inside(found) && !occupied.some((other) => overlaps(found, other, PLACEMENT_CLEARANCE))) return spot;
+  if (options.cell) fail("no clear space in the requested grid cell; enlarge the frame or choose another cell");
+  return { x: inner.x, y: Math.max(inner.y, ...occupied.map((other) => other.y + other.height + PLACEMENT_GAP)) };
+}
+
+/** Deepest eligible frame wins; a header hit is offered clear content placement, never membership by overlap. */
+export function groupDropTarget(canvas: CanvasContents, point: { x: number; y: number }, movingIds: readonly string[]): Item | null {
+  const excluded = new Set(groupTransformClosure(canvas, movingIds));
+  return Object.values(canvas.items).map((item, order) => ({ item, order })).filter(({ item }) => {
+    if (!isGroupItem(item) || excluded.has(item.id)) return false;
+    const box = boxOf(item);
+    return point.x >= box.x && point.y >= box.y && point.x <= box.x + box.width && point.y <= box.y + box.height;
+  }).sort((a, b) => groupAncestors(canvas, b.item.id).length - groupAncestors(canvas, a.item.id).length || b.order - a.order)[0]?.item ?? null;
+}
+/** Header drops request a clear content slot; a content drop preserves the deliberate world position. */
+export function groupDropPolicy(group: Item, point: { x: number; y: number }): "auto" | "preserve" {
+  const box = groupContentBox(group);
+  return point.x >= box.x && point.y >= box.y && point.x <= box.x + box.width && point.y <= box.y + box.height ? "preserve" : "auto";
+}
+
+/** Shared arrangement targets footprints; attached marks never receive a competing layout slot. */
+export function groupArrangeAction(state: CanvasState, itemIds: readonly string[], options: { kind: "align"; edge: "left" | "right" | "top" | "bottom" | "center" | "middle" | "hcenter" | "vcenter" } | { kind: "distribute"; axis: "h" | "v" } | { kind: "tidy"; perRow?: number; gap?: number; mode?: "smart" | "grid"; containerId?: string }): Extract<GroupAction, { kind: "transform" }> {
+  const roots = groupSelectionRoots(state.canvas, itemIds);
+  if (!roots.length) fail("select items to arrange");
+  const units = roots.map((id) => ({ item: itemIn(state.canvas, id), box: groupFootprint(itemIn(state.canvas, id), state.canvas) }));
+  const bounds = enclosing(units.map((unit) => unit.box));
+  const moves = units.map(({ item }) => ({ itemId: item.id, x: item.x, y: item.y }));
+  if (options.kind === "align") {
+    units.forEach(({ item, box }, i) => {
+      const dx = options.edge === "left" ? bounds.x - box.x : options.edge === "right" ? bounds.x + bounds.width - box.x - box.width : options.edge === "center" || options.edge === "hcenter" ? bounds.x + bounds.width / 2 - box.x - box.width / 2 : 0;
+      const dy = options.edge === "top" ? bounds.y - box.y : options.edge === "bottom" ? bounds.y + bounds.height - box.y - box.height : options.edge === "middle" || options.edge === "vcenter" ? bounds.y + bounds.height / 2 - box.y - box.height / 2 : 0;
+      moves[i] = { itemId: item.id, x: item.x + dx, y: item.y + dy };
+    });
+  } else if (options.kind === "distribute") {
+    const horizontal = options.axis === "h";
+    const ordered = [...units].sort((a, b) => (horizontal ? a.box.x - b.box.x : a.box.y - b.box.y) || a.item.id.localeCompare(b.item.id));
+    const used = ordered.reduce((sum, unit) => sum + (horizontal ? unit.box.width : unit.box.height), 0);
+    const gap = ordered.length > 1 ? ((horizontal ? bounds.width : bounds.height) - used) / (ordered.length - 1) : 0;
+    let cursor = horizontal ? bounds.x : bounds.y;
+    for (const { item, box } of ordered) { const move = moves.find((row) => row.itemId === item.id)!; if (horizontal) move.x += cursor - box.x; else move.y += cursor - box.y; cursor += (horizontal ? box.width : box.height) + gap; }
+  } else {
+    const perRow = options.perRow ?? Math.max(1, Math.ceil(Math.sqrt(units.length))); const gap = options.gap ?? PLACEMENT_GAP;
+    if (!Number.isInteger(perRow) || perRow < 1 || !Number.isFinite(gap) || gap < PLACEMENT_CLEARANCE) fail("invalid tidy spacing");
+    const formatted = formatMoves({ ...state.canvas, items: Object.fromEntries(units.map(({ item, box }) => [item.id, { ...item, ...box, properties: { ...item.properties, annotates: "" } }])) }, { perRow, gap, mode: options.mode ?? "grid" });
+    const positions = new Map(formatted.map((move) => [move.itemId, move]));
+    const origin = options.containerId ? groupContentBox(groupIn(state.canvas, options.containerId)) : bounds;
+    const placed = units.map(({ box, item }) => ({ ...box, ...(positions.get(item.id) ?? {}) }));
+    const packed = enclosing(placed);
+    units.forEach(({ item, box }, i) => { const at = positions.get(item.id) ?? box; moves[i] = { itemId: item.id, x: item.x + at.x - box.x + origin.x - packed.x, y: item.y + at.y - box.y + origin.y - packed.y }; });
+  }
+  return { kind: "transform", moves, expected: captureGroupExpectations(state, roots) };
+}
+
+/** Content-fit settles only normalized targets against sibling placement units in the same scope. */
+export function groupFitAction(state: CanvasState, targets: readonly { itemId: string; width?: number; height?: number }[]): Extract<GroupAction, { kind: "frame" }> {
+  const roots = groupSelectionRoots(state.canvas, targets.map((target) => target.itemId));
+  const excluded = new Set(groupTransformClosure(state.canvas, roots));
+  const settled = new Map<string | null, GroupBox[]>();
+  const fitted: Array<{ itemId: string; box?: GroupBox }> = [];
+  const occupiedAt = (parent: string | null): GroupBox[] => {
+    let occupied = settled.get(parent);
+    if (!occupied) { occupied = groupSelectionRoots(state.canvas, groupChildren(state.canvas, parent).filter((sibling) => !excluded.has(sibling.id)).map((sibling) => sibling.id)).map((siblingId) => groupFootprint(itemIn(state.canvas, siblingId), state.canvas)); settled.set(parent, occupied); }
+    return occupied;
+  };
+  // A group frame fits around fixed children first. Native siblings may move
+  // clear of that resulting frame, never through it or its attached marks.
+  const ordered = [...roots].sort((a, b) => Number(isGroupItem(itemIn(state.canvas, b))) - Number(isGroupItem(itemIn(state.canvas, a))) || itemIn(state.canvas, a).y - itemIn(state.canvas, b).y || itemIn(state.canvas, a).x - itemIn(state.canvas, b).x);
+  for (const id of ordered) {
+    const item = itemIn(state.canvas, id); const target = targets.find((row) => row.itemId === id)!;
+    const frameFit = isGroupItem(item) && target.width === undefined && target.height === undefined;
+    const desired = frameFit ? groupFitBox(state.canvas, id) : { ...boxOf(item), width: target.width ?? item.width, height: target.height ?? item.height }; validBox(desired);
+    const occupied = occupiedAt(item.containerId ?? null);
+    const footprint = enclosing([{ ...desired, height: desired.height + labelHeight(item) }, ...annotationsOf(state.canvas, id).map((mark) => mapBox(mark, item, desired))]);
+    const at = isGroupItem(item) ? footprint : nearestFreeSpot(footprint, occupied);
+    const box = { ...desired, x: desired.x + at.x - footprint.x, y: desired.y + at.y - footprint.y };
+    fitted.push({ itemId: id, ...(frameFit ? {} : { box }) }); occupied.push({ ...footprint, x: at.x, y: at.y });
+  }
+  return { kind: "frame", targets: fitted, expected: captureGroupExpectations(state, roots) };
+}
+
+/** Preview the same resolved whole act, including ancestor frame repair and any drop transfer. */
+export function groupPreviewBoxes(state: CanvasState, action: Exclude<GroupAction, { kind: "apply" }>): Map<string, GroupBox> {
+  const stamp = { actor: state.project.updatedBy, ts: state.project.updatedAt, opId: "op_preview" };
+  const resolved = resolveGroupOperation(state, { type: "group.change", action }, stamp);
+  if (resolved.action.kind !== "apply") fail("preview did not resolve");
+  const after = applyGroupChange(state, resolved.action.change, stamp.actor, stamp.ts);
+  return new Map(resolved.action.change.writes.flatMap((write) => { const id = write.kind === "create" ? write.item.id : write.itemId; const item = after.canvas.items[id]; return item ? [[id, boxOf(item)] as const] : []; }));
 }
 function enclosing(boxes: GroupBox[]): GroupBox {
   const x = Math.min(...boxes.map((box) => box.x));
@@ -217,7 +376,8 @@ export function groupFitBox(canvas: CanvasContents, groupId: string, growOnly = 
   if (units.length === 0) return boxOf(group);
   const bounds = enclosing(units.map((id) => groupFootprint(itemIn(canvas, id), canvas)));
   const band = reservations(group);
-  let box = { x: bounds.x - band.left, y: bounds.y - band.top, width: Math.max(GROUP_MIN_SIZE.width, bounds.width + band.left + band.right), height: Math.max(GROUP_MIN_SIZE.height, bounds.height + band.top + band.bottom) };
+  const minimum = frameMinimum(group);
+  let box = { x: bounds.x - band.left, y: bounds.y - band.top, width: Math.max(minimum.width, bounds.width + band.left + band.right), height: Math.max(minimum.height, bounds.height + band.top + band.bottom) };
   if (growOnly) box = enclosing([box, boxOf(group)]);
   return box;
 }
@@ -226,14 +386,14 @@ export function groupFitBox(canvas: CanvasContents, groupId: string, growOnly = 
 export function groupResizeBox(item: GroupBox, size: { width: number; height: number }, anchor: GroupAnchor = "nw"): GroupBox {
   return { x: anchor.endsWith("e") ? item.x + item.width - size.width : item.x, y: anchor.startsWith("s") ? item.y + item.height - size.height : item.y, ...size };
 }
-function minimumSize(canvas: CanvasContents, item: Item): { width: number; height: number } {
+function minimumSize(canvas: CanvasContents, item: Item, index = relations(canvas)): { width: number; height: number } {
   if (!isGroupItem(item)) return { width: Math.min(item.width, 80), height: Math.min(item.height, 60) };
   const content = groupContentBox(item);
   validBox(content);
   let sx = 0; let sy = 0;
-  for (const child of groupChildren(canvas, item.id)) {
+  for (const child of index.children.get(item.id) ?? []) {
     if (annotationTarget(child) && canvas.items[annotationTarget(child)!]) continue;
-    const minimum = minimumSize(canvas, child);
+    const minimum = minimumSize(canvas, child, index);
     sx = Math.max(sx, minimum.width / child.width);
     const label = labelHeight(child);
     sy = Math.max(sy, (minimum.height + label) / (child.height + label));
@@ -241,7 +401,12 @@ function minimumSize(canvas: CanvasContents, item: Item): { width: number; heigh
     if (child.x < content.x - 1e-5 || child.y < content.y - 1e-5 || child.x + child.width > content.x + content.width + 1e-5 || bottomRoom < label - 1e-5) fail(`fit ${item.id} before resizing: member intrudes into reserved space`);
   }
   const band = reservations(item);
-  return { width: Math.max(GROUP_MIN_SIZE.width, band.left + band.right + Math.max(1, content.width * sx)), height: Math.max(GROUP_MIN_SIZE.height, band.top + band.bottom + Math.max(1, content.height * sy)) };
+  const ownMinimum = frameMinimum(item);
+  return { width: Math.max(ownMinimum.width, band.left + band.right + Math.max(1, content.width * sx)), height: Math.max(ownMinimum.height, band.top + band.bottom + Math.max(1, content.height * sy)) };
+}
+/** Aspect-preserving handles clamp one scale against the same recursive minima as the writer. */
+export function groupResizeMinimum(canvas: CanvasContents, itemId: string): { width: number; height: number } {
+  return minimumSize(canvas, groupIn(canvas, itemId));
 }
 function mapBox(box: GroupBox, before: GroupBox, after: GroupBox): GroupBox {
   validBox(before); validBox(after);
@@ -272,8 +437,9 @@ export function groupTransform(canvas: CanvasContents, action: Extract<GroupActi
     return boxes;
   }
   const root = itemIn(canvas, action.itemId);
+  const index = relations(canvas);
   validBox(action.box);
-  const minimum = minimumSize(canvas, root);
+  const minimum = minimumSize(canvas, root, index);
   const destination = groupResizeBox(action.box, { width: Math.max(action.box.width, minimum.width), height: Math.max(action.box.height, minimum.height) }, action.anchor);
   const walk = (item: Item, box: GroupBox): void => {
     boxes.set(item.id, box);
@@ -281,7 +447,7 @@ export function groupTransform(canvas: CanvasContents, action: Extract<GroupActi
     const before = groupContentBox(item);
     const after = groupContentBox({ ...item, ...box });
     validBox(before); validBox(after);
-    for (const child of groupChildren(canvas, item.id)) {
+    for (const child of index.children.get(item.id) ?? []) {
       if (annotationTarget(child) && canvas.items[annotationTarget(child)!]) continue;
       const label = labelHeight(child);
       const scaled = mapBox({ ...boxOf(child), height: child.height + label }, before, after);
@@ -289,7 +455,7 @@ export function groupTransform(canvas: CanvasContents, action: Extract<GroupActi
     }
   };
   walk(root, destination);
-  for (const [id, box] of [...boxes]) for (const mark of annotationsOf(canvas, id)) boxes.set(mark.id, mapBox(mark, itemIn(canvas, id), box));
+  for (const [id, box] of [...boxes]) for (const mark of index.annotations.get(id) ?? []) boxes.set(mark.id, mapBox(mark, itemIn(canvas, id), box));
   return boxes;
 }
 
@@ -297,12 +463,12 @@ function facts(item: Item): GroupFacts {
   const current = item.versions.find((version) => version.id === item.currentVersionId);
   return { ...boxOf(item), containerId: item.containerId ?? null, groupLayout: item.groupLayout ?? null, kind: item.properties.kind ?? null, annotates: annotationTarget(item), mimeType: current?.mimeType ?? null };
 }
-function expectation(state: CanvasState, itemId: string): GroupExpectation {
+function expectation(state: CanvasState, itemId: string, content?: GroupContentFields, index = relations(state.canvas)): GroupExpectation {
   const live = state.canvas.items[itemId];
-  const trash = state.canvas.trash.find((entry) => entry.item.id === itemId);
+  const trash = index.trash.get(itemId);
   if (!live && !trash) return { itemId, location: "absent" };
   const item = live ?? trash!.item;
-  return { itemId, location: live ? "live" : "trash", facts: facts(item), children: sorted(Object.values(state.canvas.items).filter((child) => child.containerId === itemId).map((child) => child.id)), annotations: sorted(annotationsOf(state.canvas, itemId).map((mark) => mark.id)), ...(trash ? { cohortId: trash.cohort?.id ?? null } : {}) };
+  return { itemId, location: live ? "live" : "trash", facts: facts(item), children: sorted((index.children.get(itemId) ?? []).map((child) => child.id)), annotations: sorted((index.annotations.get(itemId) ?? []).map((mark) => mark.id)), ...(trash ? { cohortId: trash.cohort?.id ?? null } : {}), ...(content ? { content: contentFacts(item, content) } : {}) };
 }
 /** Capture structural dependencies before sending intent, so stale retries cannot move twice. */
 export function captureGroupExpectations(state: CanvasState, itemIds: readonly string[]): GroupExpectation[] {
@@ -315,16 +481,41 @@ export function captureGroupExpectations(state: CanvasState, itemIds: readonly s
   // Ancestor fitting depends on siblings' complete footprints, including
   // their attached overhang. Their fields must guard the inverse too.
   for (const id of groupTransformClosure(state.canvas, [...wanted].filter((id) => state.canvas.items[id]))) wanted.add(id);
-  return sorted(wanted).map((id) => expectation(state, id));
+  const index = relations(state.canvas);
+  return sorted(wanted).map((id) => expectation(state, id, undefined, index));
 }
 function checkExpectations(state: CanvasState, expected: GroupExpectation[]): void {
   if (!Array.isArray(expected) || expected.length > GROUP_LIMIT) fail("invalid expected state");
   for (const row of expected) {
-    exactKeys(row, ["itemId", "location", "facts", "children", "annotations", "cohortId"], "expectation");
+    exactKeys(row, ["itemId", "location", "facts", "children", "annotations", "cohortId", "content"], "expectation");
     if (typeof row.itemId !== "string" || !["live", "trash", "absent"].includes(String(row.location))) fail("invalid expected item");
+    if (own(row, "content")) validContent(row.content);
   }
   idList(expected.map((row) => row.itemId), true);
-  for (const row of expected) if (!equal(row, expectation(state, row.itemId))) throw new GroupConflictError(`canvas group changed since planning: ${row.itemId}`);
+  const index = relations(state.canvas);
+  for (const row of expected) if (!equal(row, expectation(state, row.itemId, row.content, index))) throw new GroupConflictError(`canvas group changed since planning: ${row.itemId}`);
+}
+
+function validContent(content: unknown): asserts content is GroupContentFields {
+  exactKeys(content, ["title", "description", "properties", "versions", "currentVersionId"], "content patch");
+  for (const key of ["title", "description", "currentVersionId"]) if (own(content, key) && typeof content[key] !== "string") fail("invalid content text");
+  if (own(content, "properties") && (!record(content.properties) || Object.values(content.properties).some((value) => value !== null && typeof value !== "string"))) fail("invalid property patch");
+  if (own(content, "versions") && (!Array.isArray(content.versions) || content.versions.length > GROUP_LIMIT)) fail("invalid version patch");
+}
+function contentFacts(item: Item, spec: GroupContentFields): GroupContentFields {
+  validContent(spec);
+  const result: GroupContentFields = {};
+  for (const key of ["title", "description", "versions", "currentVersionId"] as const) if (own(spec, key)) (result as Record<string, unknown>)[key] = item[key];
+  if (spec.properties) result.properties = Object.fromEntries(Object.keys(spec.properties).map((key) => [key, item.properties[key] ?? null]));
+  return result;
+}
+function patchContent(item: Item, content: GroupContentFields): Item {
+  validContent(content);
+  const properties = { ...item.properties };
+  for (const [key, value] of Object.entries(content.properties ?? {})) { if (value === null) delete properties[key]; else Object.defineProperty(properties, key, { value, enumerable: true, configurable: true, writable: true }); }
+  const result = { ...item, ...content, properties };
+  validateCreatedItem(result);
+  return result;
 }
 
 /** Strict public request validation. Never accept a client-supplied canonical patch. */
@@ -333,15 +524,58 @@ function validateGroupRequest(action: GroupAction): void {
   const allowed: Record<string, string[]> = {
     create: ["kind", "group", "itemIds", "containerId"], reparent: ["kind", "itemIds", "containerId", "place"], remove: ["kind", "itemIds", "toRoot"], ungroup: ["kind", "itemIds"], transform: "by" in action ? ["kind", "itemIds", "by", "expected"] : "moves" in action ? ["kind", "moves", "expected"] : ["kind", "itemId", "box", "anchor", "expected"], frame: ["kind", "itemId", "box", "fit"], layout: ["kind", "itemId", "layout", "tidy"], delete: ["kind", "itemIds"], restore: ["kind", "itemIds"],
   };
+  allowed.insert = ["kind", "item"];
+  allowed.content = ["kind", "operation"];
+  allowed.reparent!.push("cell", "groupPlacement", "expected");
+  allowed.transform!.push("containerId", "cell", "groupPlacement");
+  if (action.kind === "frame" && "itemIds" in action) allowed.frame = ["kind", "itemIds", "fit"];
+  if (action.kind === "frame" && "targets" in action) allowed.frame = ["kind", "targets"];
+  allowed.frame!.push("expected");
   if (!own(allowed, action.kind)) fail("resolved group changes are writer-only");
   exactKeys(action, allowed[action.kind]!, "action");
+  if (own(action, "expected") && !Array.isArray((action as { expected?: unknown }).expected)) fail("expected state must be an array");
   for (const flag of ["place", "fit", "tidy", "toRoot"] as const) if (own(action, flag) && typeof (action as unknown as Record<string, unknown>)[flag] !== "boolean") fail(`${flag} must be a boolean`);
   if (["reparent", "remove", "ungroup", "delete", "restore"].includes(action.kind)) idList((action as { itemIds?: unknown }).itemIds);
-  if (["frame", "layout"].includes(action.kind) && typeof (action as { itemId?: unknown }).itemId !== "string") fail("item ID required");
+  if ((action.kind === "layout" || action.kind === "frame" && !("itemIds" in action) && !("targets" in action)) && typeof (action as { itemId?: unknown }).itemId !== "string") fail("item ID required");
   if (action.kind === "reparent" && !own(action, "containerId")) fail("destination group required");
   if ("itemIds" in action) idList(action.itemIds, action.kind === "create");
   if ("itemId" in action && (typeof action.itemId !== "string" || !action.itemId)) fail("item ID required");
   if ("containerId" in action && action.containerId !== null && (typeof action.containerId !== "string" || !action.containerId)) fail("invalid destination group");
+  if ("containerId" in action || "cell" in action || "groupPlacement" in action) validateDestination(action);
+  if ("groupPlacement" in action && !["auto", "preserve", "exact"].includes(String(action.groupPlacement))) fail("invalid group placement policy");
+  if (action.kind === "frame" && "targets" in action) {
+    if (!Array.isArray(action.targets)) fail("fit targets required");
+    for (const target of action.targets) { exactKeys(target, ["itemId", "box"], "fit target"); if (own(target, "box")) requestBox(target.box); }
+    idList(action.targets.map((target) => target.itemId));
+  }
+  if (action.kind === "insert") {
+    const item = action.item;
+    exactKeys(item, ["type", "itemId", "version", "width", "height", "placement", "title", "description", "properties", "containerId", "cell", "groupPlacement"], "insertion");
+    if (item.type !== "item.add" || typeof item.itemId !== "string" || !item.itemId) fail("insertion item required");
+    if (!record(item.placement)) fail("insertion placement required");
+    exactKeys(item.placement, "anchorItemId" in item.placement ? ["anchorItemId"] : ["x", "y", "chosen"], "insertion placement");
+    if ("anchorItemId" in item.placement ? typeof item.placement.anchorItemId !== "string" : !Number.isFinite(item.placement.x) || !Number.isFinite(item.placement.y)) fail("invalid insertion position");
+    if ("chosen" in item.placement && typeof item.placement.chosen !== "boolean") fail("invalid chosen placement");
+    validateGroupRequest({ kind: "create", group: { id: item.itemId, title: item.title ?? "", version: item.version, box: { x: 0, y: 0, width: item.width, height: item.height }, ...(item.description !== undefined ? { description: item.description } : {}), ...(item.properties !== undefined ? { properties: item.properties } : {}) } });
+    validateDestination(item);
+  }
+  if (action.kind === "content") {
+    const op = action.operation;
+    if (!record(op) || !["item.update", "item.addVersion", "item.setCurrentVersion"].includes(op.type) || typeof op.itemId !== "string") fail("invalid content operation");
+    exactKeys(op, op.type === "item.update" ? ["type", "itemId", "patch", "filename", "size", "briefHeight", "containerId", "cell", "groupPlacement"] : op.type === "item.addVersion" ? ["type", "itemId", "version", "briefHeight"] : ["type", "itemId", "versionId", "briefHeight"], "content operation");
+    if (own(op, "briefHeight") && (typeof op.briefHeight !== "number" || !Number.isFinite(op.briefHeight) || op.briefHeight < 0 || op.briefHeight > 10000)) fail("invalid brief reservation");
+    if (op.type === "item.update") {
+      exactKeys(op.patch, ["title", "description", "properties", "removeProperties"], "metadata");
+      for (const key of ["title", "description"] as const) if (own(op.patch, key) && typeof op.patch[key] !== "string") fail("metadata text required");
+      if (own(op.patch, "properties")) validProperties(op.patch.properties);
+      if (own(op.patch, "removeProperties")) idList(op.patch.removeProperties, true);
+      if (op.filename !== undefined && typeof op.filename !== "string") fail("invalid filename");
+      if (own(op, "size")) { exactKeys(op.size, ["width", "height"], "resize"); validBox({ x: 0, y: 0, ...op.size }); }
+      validateDestination(op);
+    } else if (op.type === "item.addVersion") {
+      validateGroupRequest({ kind: "create", group: { id: op.itemId, title: "", version: op.version } });
+    } else if (typeof op.versionId !== "string" || !op.versionId) fail("current version ID required");
+  }
   if (action.kind === "create") {
     exactKeys(action.group, ["id", "title", "version", "description", "properties", "box", "layout"], "creation");
     if (typeof action.group.id !== "string" || !action.group.id || typeof action.group.title !== "string") fail("group identity and title required");
@@ -363,8 +597,14 @@ function validateGroupRequest(action: GroupAction): void {
     }
     else { if (typeof action.itemId !== "string") fail("resize item ID required"); requestBox(action.box); if (action.anchor !== undefined && !["nw", "ne", "sw", "se"].includes(action.anchor)) fail("invalid anchor"); }
   }
-  if (action.kind === "frame" && own(action, "box")) requestBox(action.box);
+  if (action.kind === "frame" && "box" in action) requestBox(action.box);
   if (action.kind === "layout") validLayout(action.layout);
+}
+function validateDestination(value: { containerId?: unknown; cell?: unknown; groupPlacement?: unknown }): void {
+  if (own(value, "containerId") && value.containerId !== null && (typeof value.containerId !== "string" || !value.containerId)) fail("invalid destination group");
+  if (own(value, "cell")) validCell(value.cell);
+  if (own(value, "groupPlacement") && !["auto", "preserve", "exact"].includes(String(value.groupPlacement))) fail("invalid group placement policy");
+  if (value.cell && !value.containerId) fail("a grid cell requires a destination group");
 }
 
 function patchItem(item: Item, patch: GroupFields): Item {
@@ -389,12 +629,14 @@ function validateCreatedItem(item: Item): void {
 /** Validates all writes before publishing a new state. No dynamic placement on replay. */
 export function applyGroupChange(state: CanvasState, change: GroupChange, actor: Actor, ts: string): CanvasState {
   if (!hasCanvasGroups(state)) fail("canvas groups require group mode");
-  exactKeys(change, ["canvasId", "intent", "expected", "writes", "cohorts", "skippedIds"], "resolved change");
+  exactKeys(change, ["canvasId", "intent", "expected", "writes", "cohorts", "skippedIds", "schemaVersion"], "resolved change");
+  if (change.schemaVersion !== undefined && change.schemaVersion !== 2) fail("unsupported group schema");
   if (change.canvasId !== state.project.id) fail("change belongs to another canvas");
-  if (!["create", "reparent", "ungroup", "transform", "frame", "layout", "delete", "restore"].includes(change.intent)) fail("unknown semantic intent");
+  if (!["create", "reparent", "ungroup", "transform", "frame", "layout", "delete", "restore", ...(change.schemaVersion === 2 ? ["insert", "content"] : [])].includes(change.intent)) fail("unknown semantic intent");
   if (!Array.isArray(change.writes) || change.writes.length > GROUP_LIMIT) fail("invalid write set");
   for (const write of change.writes) if (!record(write) || !["patch", "create", "trash", "restore"].includes(String(write.kind)) || (write.kind === "create" && !record(write.item))) fail("invalid structural write");
   checkExpectations(state, change.expected);
+  if (change.schemaVersion !== 2 && change.expected.some((row) => hasGridCounts(row.facts?.groupLayout))) fail("grid count preconditions require group schema v2");
   const writeIds = change.writes.map((write) => write.kind === "create" ? write.item.id : write.itemId);
   idList(writeIds, true);
   const guarded = new Set(change.expected.map((row) => row.itemId));
@@ -402,16 +644,23 @@ export function applyGroupChange(state: CanvasState, change: GroupChange, actor:
   const items = { ...state.canvas.items };
   const trash = new Map(state.canvas.trash.map((entry) => [entry.item.id, entry]));
   for (const write of change.writes) {
+    const layout = write.kind === "create" ? write.item.groupLayout : write.kind === "patch" ? write.fields?.groupLayout : undefined;
+    if (hasGridCounts(layout) && change.schemaVersion !== 2) fail("grid counts require group schema v2");
     if (write.kind === "create") {
       exactKeys(write, ["kind", "item"], "create write");
       validateCreatedItem(write.item);
       if (items[write.item.id] || trash.has(write.item.id)) fail("duplicate item ID");
       items[write.item.id] = structuredClone(write.item);
     } else if (write.kind === "patch") {
-      exactKeys(write, ["kind", "itemId", "fields"], "patch write");
+      exactKeys(write, ["kind", "itemId", "fields", ...(change.schemaVersion === 2 ? ["content"] : [])], "patch write");
       exactKeys(write.fields, fields, "structural patch");
       const item = items[write.itemId]; if (!item) fail("patch target is not live");
-      items[write.itemId] = { ...patchItem(item, write.fields), updatedBy: actor, updatedAt: ts };
+      if (own(write, "content")) {
+        validContent(write.content);
+        const guardedContent = change.expected.find((row) => row.itemId === write.itemId)?.content;
+        if (!guardedContent || Object.keys(write.content!).some((key) => !own(guardedContent, key)) || Object.keys(write.content!.properties ?? {}).some((key) => !own(guardedContent.properties ?? {}, key))) fail("every content field needs its own precondition");
+      }
+      items[write.itemId] = { ...patchItem(write.content ? patchContent(item, write.content) : item, write.fields), updatedBy: actor, updatedAt: ts };
     } else if (write.kind === "trash") {
       exactKeys(write, ["kind", "itemId", "deletedAt", "deletedBy", "cohort"], "trash write");
       const item = items[write.itemId]; if (!item) fail("delete target is not live");
@@ -453,7 +702,7 @@ export function invertGroupChange(state: CanvasState, change: GroupChange): Grou
       const item = itemIn(state.canvas, write.itemId);
       const previous: GroupFields = {};
       for (const key of fields) if (own(write.fields, key)) (previous as Record<string, unknown>)[key] = item[key] ?? null;
-      return { kind: "patch", itemId: write.itemId, fields: previous };
+      return { kind: "patch", itemId: write.itemId, fields: previous, ...(write.content ? { content: contentFacts(item, write.content) } : {}) };
     }
     if (write.kind === "trash") return { kind: "restore", itemId: write.itemId, containerId: itemIn(state.canvas, write.itemId).containerId ?? null };
     const entry = state.canvas.trash.find((row) => row.item.id === write.itemId)!;
@@ -463,7 +712,8 @@ export function invertGroupChange(state: CanvasState, change: GroupChange): Grou
   for (const write of writes) if (write.kind === "trash" && write.cohort && !state.canvas.groupCohorts?.[write.cohort.id]) {
     cohorts[write.cohort.id] = { rootIds: write.cohort.rootIds, members: writes.filter((row): row is Extract<GroupWrite, { kind: "trash" }> => row.kind === "trash" && row.cohort?.id === write.cohort!.id).map((row) => ({ itemId: row.itemId, containerId: after.canvas.items[row.itemId]?.containerId ?? null, annotates: after.canvas.items[row.itemId] ? annotationTarget(after.canvas.items[row.itemId]!) : null })) };
   }
-  return { canvasId: change.canvasId, intent: change.intent, expected: change.expected.map((row) => expectation(after, row.itemId)), writes, ...(Object.keys(cohorts).length ? { cohorts } : {}) };
+  const afterIndex = relations(after.canvas);
+  return { canvasId: change.canvasId, intent: change.intent, expected: change.expected.map((row) => expectation(after, row.itemId, row.content, afterIndex)), writes, ...(change.schemaVersion ? { schemaVersion: change.schemaVersion } : {}), ...(Object.keys(cohorts).length ? { cohorts } : {}) };
 }
 
 /** Authoritative intent resolution. Requests never contain replacement canvas snapshots. */
@@ -480,11 +730,16 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
   const restores = new Map<string, string | null>();
   const dependencies = new Set<string>();
   const skipped = new Set<string>();
+  const contents = new Map<string, GroupContentFields>();
   const want = (ids: readonly string[]): void => { for (const row of captureGroupExpectations(state, ids)) dependencies.add(row.itemId); };
-  const put = (id: string, patch: GroupFields): void => { canvas.items[id] = patchItem(itemIn(canvas, id), patch); dependencies.add(id); };
+  const put = (id: string, patch: GroupFields): void => {
+    const saved = { ...patch };
+    for (const key of ["x", "y", "width", "height"] as const) if (typeof saved[key] === "number") saved[key] = round(saved[key]!);
+    canvas.items[id] = patchItem(itemIn(canvas, id), saved); dependencies.add(id);
+  };
   const adjustFrame = (id: string, box: GroupBox): void => {
     const before = itemIn(canvas, id); put(id, box);
-    for (const mark of annotationsOf(canvas, id)) put(mark.id, mapBox(mark, before, box));
+    for (const mark of annotationsOf(canvas, id)) put(mark.id, mapBox(mark, before, itemIn(canvas, id)));
   };
   const fitAncestors = (ids: readonly string[]): void => {
     const parents = new Set<string>();
@@ -503,21 +758,71 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     }
     validateGroupForest({ ...state, canvas });
   };
-  const placeUnits = (ids: readonly string[], parent: string): void => {
-    const inner = groupContentBox(groupIn(canvas, parent));
+  const placeUnits = (ids: readonly string[], parent: string, policy: GroupPlacementPolicy = "auto", cell?: GroupCell): void => {
     const moving = new Set(groupTransformClosure(canvas, ids));
-    const others = groupChildren(canvas, parent).filter((item) => !moving.has(item.id));
-    let y = Math.max(inner.y, ...others.map((item) => { const box = groupFootprint(item, canvas); return box.y + box.height + PLACEMENT_GAP; }));
     for (const id of groupSelectionRoots(canvas, ids)) {
       const item = itemIn(canvas, id); const footprint = groupFootprint(item, canvas);
-      const dx = inner.x - footprint.x; const dy = y - footprint.y;
-      for (const childId of groupTransformClosure(canvas, [id])) { const child = itemIn(canvas, childId); put(childId, { x: child.x + dx, y: child.y + dy }); }
-      y += footprint.height + PLACEMENT_GAP;
+      const spot = groupPlacement(canvas, parent, footprint, { at: { x: footprint.x, y: footprint.y }, policy, ignoreIds: [...moving], ...(cell ? { cell } : {}) });
+      const dx = spot.x - footprint.x; const dy = spot.y - footprint.y;
+      for (const childId of groupTransformClosure(canvas, [id])) { const child = itemIn(canvas, childId); put(childId, { x: child.x + dx, y: child.y + dy }); moving.delete(childId); }
     }
+  };
+  const destination = (ids: string[], parent: string | null, policy: GroupPlacementPolicy = "preserve", cell?: GroupCell): void => {
+    if (parent) want([parent]);
+    reparent(ids, parent);
+    if (parent) { placeUnits(ids, parent, policy, cell); adjustFrame(parent, groupFitBox(canvas, parent, true)); fitAncestors([parent]); }
   };
   const trashIds = (ids: readonly string[]): void => { for (const id of ids) { dependencies.add(id); deletions.add(id); delete canvas.items[id]; } };
   let roots: string[] = [];
-  if (action.kind === "create") {
+  if (action.kind === "insert") {
+    const op = action.item;
+    if (original.items[op.itemId] || original.trash.some((entry) => entry.item.id === op.itemId)) fail("item ID already exists");
+    const targetId = op.properties?.annotates;
+    const target = targetId ? original.items[targetId] : undefined;
+    const parent = target ? target.containerId ?? null : op.containerId ?? null;
+    if (target && own(op, "containerId") && op.containerId !== parent) fail("annotation destination differs from its target");
+    if (target) want([target.id]);
+    if (parent) want([parent]);
+    const at = resolvePlacement(original, op.placement, op.width, op.height, parent !== null || positionIsMeaningful(op));
+    const primitive = reduceOperation(state, { id: stamp.opId, actor: stamp.actor, ts: stamp.ts, canvasId: state.project.id, op: { ...op, placement: { ...at, chosen: true } } })!;
+    const created = primitive.canvas.items[op.itemId]!;
+    const item = { ...created, ...persistedBox(created) };
+    validateCreatedItem(item);
+    canvas.items[item.id] = item; creates.set(item.id, item); dependencies.add(item.id); roots = [item.id];
+    // A mark's actual geometry describes its target and is deliberately exempt
+    // from free-space placement, while its membership still follows the target.
+    const policy = target ? "preserve" : op.groupPlacement ?? ("chosen" in op.placement && op.placement.chosen ? "preserve" : "auto");
+    destination(roots, parent, policy, op.cell);
+  } else if (action.kind === "content") {
+    const op = action.operation;
+    const before = itemIn(original, op.itemId); want([before.id]); roots = [before.id];
+    const primitive = reduceOperation(state, { id: stamp.opId, actor: stamp.actor, ts: stamp.ts, canvasId: state.project.id, op })!;
+    let item = primitive.canvas.items[before.id]!;
+    validateCreatedItem(item);
+    const content: GroupContentFields = {};
+    for (const key of ["title", "description", "versions", "currentVersionId"] as const) if (!equal(before[key], item[key])) (content as Record<string, unknown>)[key] = item[key];
+    const properties = Object.fromEntries([...new Set([...Object.keys(before.properties), ...Object.keys(item.properties)])].filter((key) => before.properties[key] !== item.properties[key]).map((key) => [key, item.properties[key] ?? null]));
+    if (Object.keys(properties).length) content.properties = properties;
+    if (op.type === "item.update" && op.filename !== undefined) content.currentVersionId = item.currentVersionId;
+    if (Object.keys(content).length) contents.set(item.id, content);
+    canvas.items[item.id] = item;
+    const target = annotationTarget(item);
+    if (target && canvas.items[target]) { want([target]); reparent([item.id], canvas.items[target]!.containerId ?? null); }
+    if (isGroupItem(item) && op.briefHeight !== undefined) {
+      const oldContent = groupContentBox(item);
+      put(item.id, { groupLayout: { ...item.groupLayout, briefHeight: op.briefHeight } });
+      const newContent = groupContentBox(itemIn(canvas, item.id));
+      const dy = oldContent.y - newContent.y;
+      adjustFrame(item.id, { ...boxOf(item), y: item.y + dy, height: Math.max(GROUP_MIN_SIZE.height, item.height - dy) });
+      item = itemIn(canvas, item.id);
+    } else if (!isGroupItem(item) && op.briefHeight !== undefined) fail("brief reservation belongs to a group");
+    if (op.type === "item.update" && op.size) {
+      const transform: Extract<GroupAction, { kind: "transform" }> = { kind: "transform", itemId: item.id, box: { ...boxOf(item), ...op.size }, expected: [] };
+      for (const [id, box] of groupTransform(canvas, transform)) put(id, box);
+    }
+    if (op.type === "item.update" && own(op, "containerId")) destination([item.id], op.containerId ?? null, op.groupPlacement ?? "preserve", op.cell);
+    fitAncestors([item.id]);
+  } else if (action.kind === "create") {
     const ids = action.itemIds ?? [];
     want(ids); roots = groupSelectionRoots(original, ids);
     let parent = action.containerId;
@@ -528,11 +833,18 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     if (parent) { want([parent]); groupIn(original, parent); }
     const creation = action.group;
     if (original.items[creation.id] || original.trash.some((entry) => entry.item.id === creation.id)) fail("group ID already exists");
-    const box = creation.box ?? { x: 0, y: 0, ...GROUP_DEFAULT_SIZE };
+    const box = persistedBox(creation.box ?? { x: 0, y: 0, ...GROUP_DEFAULT_SIZE });
     const group: Item = { id: creation.id, ...box, title: creation.title, description: creation.description ?? "", properties: { ...creation.properties, kind: GROUP_KIND }, ...(parent ? { containerId: parent } : {}), groupLayout: { ...creation.layout }, versions: [{ ...creation.version, createdAt: stamp.ts, createdBy: stamp.actor }], currentVersionId: creation.version.id, createdAt: stamp.ts, createdBy: stamp.actor, updatedAt: stamp.ts, updatedBy: stamp.actor };
     validateCreatedItem(group); canvas.items[group.id] = group; dependencies.add(group.id); creates.set(group.id, group);
-    reparent(roots, parent = group.id);
-    if (roots.length) adjustFrame(group.id, groupFitBox(canvas, group.id));
+    const waitingMarks = annotationsOf(original, group.id);
+    want(waitingMarks.map((mark) => mark.id));
+    for (const mark of waitingMarks) put(mark.id, { containerId: parent ?? null });
+    reparent(roots, group.id);
+    // The provisional creation box was never a live frame. A dangling mark
+    // already naming this new ID must keep its world geometry when wrap fits.
+    if (roots.length) put(group.id, groupFitBox(canvas, group.id));
+    const createdFrame = itemIn(canvas, group.id); const minimum = frameMinimum(createdFrame);
+    if (createdFrame.width < minimum.width || createdFrame.height < minimum.height) fail("new group is too small for its grid cells");
     fitAncestors([group.id]); roots = [group.id];
   } else if (action.kind === "restore") {
     roots = action.itemIds; want(roots);
@@ -570,16 +882,12 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     for (const item of Object.values(canvas.items)) { const target = annotationTarget(item); if (target && canvas.items[target] && (selected.has(item.id) || selected.has(target))) { put(item.id, { containerId: canvas.items[target]!.containerId ?? null }); if (restores.has(item.id)) restores.set(item.id, canvas.items[target]!.containerId ?? null); } }
     fitAncestors([...selected]);
   } else {
-    const ids = "itemIds" in action ? action.itemIds : "moves" in action ? action.moves.map((move) => move.itemId) : [action.itemId];
+    const ids = "itemIds" in action ? action.itemIds : "moves" in action ? action.moves.map((move) => move.itemId) : "targets" in action ? action.targets.map((target) => target.itemId) : [action.itemId];
     want(ids); roots = groupSelectionRoots(original, ids);
     if (action.kind === "reparent") {
       if (action.containerId) want([action.containerId]);
-      reparent(roots, action.containerId);
-      if (action.containerId) {
-        if (action.place) placeUnits(roots, action.containerId);
-        adjustFrame(action.containerId, groupFitBox(canvas, action.containerId));
-        fitAncestors([action.containerId]);
-      }
+      if (action.expected) { checkExpectations(state, action.expected); if ([...dependencies].some((id) => !action.expected!.some((row) => row.itemId === id))) fail("reparent expectations omit destination dependencies"); }
+      destination(roots, action.containerId, action.groupPlacement ?? (action.place ? "auto" : "preserve"), action.cell);
     } else if (action.kind === "remove") {
       // Resolve every destination against the starting relation. Earlier
       // roots in the same act must not change where a later root is promoted.
@@ -599,26 +907,64 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     } else if (action.kind === "delete") {
       trashIds(groupTransformClosure(original, roots));
     } else if (action.kind === "transform") {
+      if (action.containerId) want([action.containerId]);
       checkExpectations(state, action.expected);
       const captured = new Set(action.expected.map((row) => row.itemId));
       if ([...dependencies].some((id) => !captured.has(id))) fail("transform expectations omit affected items or ancestors");
       for (const [id, box] of groupTransform(original, action)) put(id, box);
+      if (own(action, "containerId")) destination(roots, action.containerId ?? null, action.groupPlacement ?? "preserve", action.cell);
       fitAncestors(roots);
     } else if (action.kind === "frame") {
-      groupIn(canvas, action.itemId);
-      if (!action.fit && !action.box) fail("frame needs a box or fit");
-      adjustFrame(action.itemId, action.fit ? groupFitBox(canvas, action.itemId) : action.box!);
-      if (!action.fit && !equal(groupFitBox(canvas, action.itemId, true), action.box)) fail("frame would exclude members or cover reserved labels; fit it or choose a larger box");
-      fitAncestors([action.itemId]);
+      if (action.expected) {
+        checkExpectations(state, action.expected);
+        const captured = new Set(action.expected.map((row) => row.itemId));
+        if ([...dependencies].some((id) => !captured.has(id))) fail("frame expectations omit a structural dependency");
+      }
+      const targets: Array<{ itemId: string; box?: GroupBox }> = "targets" in action ? action.targets : "itemIds" in action ? action.itemIds.map((itemId) => ({ itemId })) : [{ itemId: action.itemId, ...(action.box && !action.fit ? { box: action.box } : {}) }];
+      if (!("targets" in action) && !("itemIds" in action) && !action.fit && !action.box) fail("frame needs a box or fit");
+      const normalized = new Set(groupSelectionRoots(canvas, targets.map((target) => target.itemId)));
+      for (const target of targets.filter((target) => normalized.has(target.itemId))) {
+        const item = itemIn(canvas, target.itemId);
+        if (!isGroupItem(item) && !target.box) fail("ordinary fit needs its measured box");
+        adjustFrame(item.id, target.box ?? groupFitBox(canvas, item.id));
+        if (isGroupItem(item)) { const minimum = frameMinimum(itemIn(canvas, item.id)); if (itemIn(canvas, item.id).width < minimum.width || itemIn(canvas, item.id).height < minimum.height) fail("frame is too small for its grid cells"); }
+        if (isGroupItem(item) && target.box && !equal(groupFitBox(canvas, item.id, true), target.box)) fail("frame would exclude members or cover reserved labels; fit it or choose a larger box");
+      }
+      fitAncestors(ids);
     } else if (action.kind === "layout") {
       const group = groupIn(canvas, action.itemId);
       const oldContent = groupContentBox(group);
       put(group.id, { groupLayout: { ...group.groupLayout, ...action.layout } });
       const content = groupContentBox(itemIn(canvas, group.id));
       const dx = oldContent.x - content.x; const dy = oldContent.y - content.y;
-      adjustFrame(group.id, { x: group.x + dx, y: group.y + dy, width: group.width - dx, height: group.height - dy });
-      if (action.tidy) placeUnits(groupChildren(canvas, group.id).map((child) => child.id), group.id);
-      adjustFrame(group.id, groupFitBox(canvas, group.id, !action.tidy));
+      adjustFrame(group.id, { x: group.x + dx, y: group.y + dy, width: Math.max(GROUP_MIN_SIZE.width, group.width - dx), height: Math.max(GROUP_MIN_SIZE.height, group.height - dy) });
+      const minimum = frameMinimum(itemIn(canvas, group.id));
+      const reservedFrame = itemIn(canvas, group.id);
+      if (reservedFrame.width < minimum.width || reservedFrame.height < minimum.height) adjustFrame(group.id, { ...boxOf(reservedFrame), width: Math.max(reservedFrame.width, minimum.width), height: Math.max(reservedFrame.height, minimum.height) });
+      if (action.tidy) {
+        const units = groupSelectionRoots(canvas, groupChildren(canvas, group.id).map((child) => child.id));
+        if (units.length) {
+          const layout = itemIn(canvas, group.id).groupLayout ?? {};
+          const columns = layout.columnCount ?? Math.max(1, layout.columns?.length ?? 0, Math.ceil(Math.sqrt(units.length)));
+          const rows = layout.rowCount ?? Math.max(1, layout.rows?.length ?? 0, Math.ceil(units.length / columns));
+          if (units.length > rows * columns) fail("the grid has fewer cells than placement units");
+          const footprints = units.map((id) => groupFootprint(itemIn(canvas, id), canvas));
+          const inner = groupContentBox(itemIn(canvas, group.id));
+          const width = Math.max(inner.width, columns * Math.max(...footprints.map((box) => box.width)) + PLACEMENT_GAP * (columns - 1));
+          const height = Math.max(inner.height, rows * Math.max(...footprints.map((box) => box.height)) + PLACEMENT_GAP * (rows - 1));
+          const frame = itemIn(canvas, group.id);
+          adjustFrame(group.id, { ...boxOf(frame), width: frame.width + width - inner.width, height: frame.height + height - inner.height });
+          const cellWidth = (width - PLACEMENT_GAP * (columns - 1)) / columns;
+          const cellHeight = (height - PLACEMENT_GAP * (rows - 1)) / rows;
+          for (let i = 0; i < units.length; i++) {
+            const footprint = footprints[i]!;
+            const dx = inner.x + i % columns * (cellWidth + PLACEMENT_GAP) - footprint.x;
+            const dy = inner.y + Math.floor(i / columns) * (cellHeight + PLACEMENT_GAP) - footprint.y;
+            for (const id of groupTransformClosure(canvas, [units[i]!])) { const child = itemIn(canvas, id); put(id, { x: child.x + dx, y: child.y + dy }); }
+          }
+        }
+      }
+      adjustFrame(group.id, groupFitBox(canvas, group.id, true));
       fitAncestors([group.id]);
     }
   }
@@ -631,12 +977,15 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     if (!before || !after) continue;
     const patch: GroupFields = {};
     for (const key of fields) if (!equal(before[key] ?? null, after[key] ?? null)) (patch as Record<string, unknown>)[key] = after[key] ?? null;
-    if (Object.keys(patch).length) writes.push({ kind: "patch", itemId: id, fields: patch });
+    if (Object.keys(patch).length || contents.has(id)) writes.push({ kind: "patch", itemId: id, fields: patch, ...(contents.has(id) ? { content: contents.get(id)! } : {}) });
   }
   const cohorts = deletions.size ? { [stamp.opId]: { rootIds: roots, members: sorted(deletions).map((id) => ({ itemId: id, containerId: original.items[id]!.containerId ?? null, annotates: annotationTarget(original.items[id]!) })) } } : undefined;
-  // Remove is derived reparenting, so its canonical form remains readable
-  // by the first canvas-groups-v1 reducer as well as this richer request API.
-  const change: GroupChange = { canvasId: state.project.id, intent: action.kind === "remove" ? "reparent" : action.kind, expected: sorted(dependencies).map((id) => expectation(state, id)), writes, ...(cohorts ? { cohorts } : {}), ...(skipped.size ? { skippedIds: sorted(skipped) } : {}) };
+  // Remove remains reparenting. Counted-grid facts need v2 even when this
+  // act writes only geometry, membership or trash transitions.
+  const originalIndex = relations(original);
+  const expected = sorted(dependencies).map((id) => expectation(state, id, contents.get(id), originalIndex));
+  const v2Layout = expected.some((row) => hasGridCounts(row.facts?.groupLayout)) || writes.some((write) => hasGridCounts(write.kind === "create" ? write.item.groupLayout : write.kind === "patch" ? write.fields.groupLayout : undefined));
+  const change: GroupChange = { canvasId: state.project.id, intent: action.kind === "remove" ? "reparent" : action.kind, expected, writes, ...(action.kind === "insert" || action.kind === "content" || v2Layout ? { schemaVersion: 2 as const } : {}), ...(cohorts ? { cohorts } : {}), ...(skipped.size ? { skippedIds: sorted(skipped) } : {}) };
   applyGroupChange(state, change, stamp.actor, stamp.ts);
   return { type: "group.change", action: { kind: "apply", change } };
 }
@@ -645,13 +994,24 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
 export function groupChangeItemIds(op: GroupOperation): string[] {
   if (op.action.kind === "apply") return op.action.change.writes.map((write) => write.kind === "create" ? write.item.id : write.itemId);
   if (op.action.kind === "create") return [op.action.group.id, ...(op.action.itemIds ?? [])];
-  return "itemIds" in op.action ? op.action.itemIds : "moves" in op.action ? op.action.moves.map((move) => move.itemId) : [op.action.itemId];
+  if (op.action.kind === "insert") return [op.action.item.itemId];
+  if (op.action.kind === "content") return [op.action.operation.itemId];
+  return "itemIds" in op.action ? op.action.itemIds : "moves" in op.action ? op.action.moves.map((move) => move.itemId) : "targets" in op.action ? op.action.targets.map((target) => target.itemId) : [op.action.itemId];
 }
 
 /** New raw requests share group semantics; historical logged operations do not. */
 export function resolveCanvasGroupRequest(state: CanvasState, op: Operation, stamp: GroupStamp): Operation {
   if (op.type === "group.change") return resolveGroupOperation(state, op, stamp);
   if (!hasCanvasGroups(state)) return op;
+  if (op.type === "item.add") return resolveGroupOperation(state, { type: "group.change", action: { kind: "insert", item: op } }, stamp);
+  if (op.type === "item.update" || op.type === "item.addVersion" || op.type === "item.setCurrentVersion") {
+    const item = itemIn(state.canvas, op.itemId);
+    const changesBand = op.briefHeight !== undefined && op.briefHeight !== (item.groupLayout?.briefHeight ?? 0);
+    const structural = changesBand || op.type === "item.update" && (op.size !== undefined || own(op, "containerId") || own(op.patch.properties ?? {}, "annotates") || op.patch.removeProperties?.includes("annotates"));
+    if (structural) return resolveGroupOperation(state, { type: "group.change", action: { kind: "content", operation: op } }, stamp);
+    if (op.briefHeight !== undefined) { const { briefHeight: _height, ...plain } = op; return plain; }
+    return op;
+  }
   const groupRelated = (id: string): boolean => {
     const item = state.canvas.items[id];
     return !!item && (isGroupItem(item) || !!item.containerId || annotationsOf(state.canvas, id).length > 0 || !!annotationTarget(item));

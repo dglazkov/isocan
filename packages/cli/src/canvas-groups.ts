@@ -1,15 +1,23 @@
 import { Command } from "commander";
 import { CanvasGroups, resolveCanvas } from "@isocan/api";
 import type { CanvasGroupResult, CanvasGroupView } from "@isocan/api";
-import { GROUP_DEFAULT_SIZE } from "@isocan/core";
+import { GROUP_DEFAULT_SIZE, type GroupAnchor, type GroupLayout } from "@isocan/core";
 import { makeCtx, type Ctx } from "./ctx.ts";
 import { parseXY, printJson, printTable } from "./output.ts";
+import { parseGroupCell } from "./group-placement.ts";
 
-function report(ctx: Ctx, result: CanvasGroupResult): void {
+export function reportCanvasGroup(ctx: Ctx, result: CanvasGroupResult): void {
   if (ctx.json) return printJson(result);
   console.log(`${result.dryRun ? "preview" : "applied"} ${result.intent}${result.itemId ? ` ${result.itemId}` : ""}: ${result.changes.length} item${result.changes.length === 1 ? "" : "s"} affected`);
   printTable(result.changes.map((change) => ({ id: change.itemId, parent: change.parentAfter ?? "canvas", position: change.boxAfter ? `${change.boxAfter.x},${change.boxAfter.y}` : "trash", size: change.boxAfter ? `${change.boxAfter.width}x${change.boxAfter.height}` : "—" })));
 }
+
+function sizeOf(value: string): { width: number; height: number } {
+  const parts = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/i.exec(value);
+  if (!parts || Number(parts[1]) <= 0 || Number(parts[2]) <= 0) throw new Error(`size expects positive WxH, got: ${value}`);
+  return { width: Number(parts[1]), height: Number(parts[2]) };
+}
+const report = reportCanvasGroup;
 
 function rows(groups: CanvasGroupView[]): Array<Record<string, string>> {
   return groups.map((group) => ({ id: group.id, title: group.title, parent: group.parentId ?? "canvas", direct: String(group.directCount), descendants: String(group.descendantCount) }));
@@ -17,7 +25,7 @@ function rows(groups: CanvasGroupView[]): Array<Record<string, string>> {
 
 /** The full three-word family is registered here, independently of the people-group namespace. */
 export function registerCanvasGroups(canvas: Command, context: (cmd: Command) => Promise<Ctx> = makeCtx): void {
-  const groups = canvas.command("group").description("Explicit canvas membership — new, wrap, inspect, add, remove and ungroup");
+  const groups = canvas.command("group").description("Canvas groups: membership, transforms, frame fitting and label-safe layout");
   const act = (work: (handle: CanvasGroups, ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
     try {
       const ctx = await context(args[args.length - 1] as Command);
@@ -65,8 +73,9 @@ export function registerCanvasGroups(canvas: Command, context: (cmd: Command) =>
 
   groups.command("add <group> <items...>").description("Add or move items into a group in one undo; preserve positions by default")
     .option("--place", "place additions below existing members, growing the frame as needed")
+    .option("--cell <row,column>", "place in this 1-based grid cell; refuse if the pieces do not fit")
     .option("--dry-run", "report resolved membership and boxes without writing")
-    .action(act(async (handle, ctx, [ref, items, opts]) => report(ctx, await handle.add(ref, items, opts))));
+    .action(act(async (handle, ctx, [ref, items, opts]) => report(ctx, await handle.add(ref, items, { ...opts, ...(opts.cell ? { cell: parseGroupCell(opts.cell), place: true } : {}) }))));
 
   groups.command("remove <items...>").description("Leave each item's group for its parent, preserving world geometry")
     .option("--to-root", "move directly to the canvas root, even from nested groups")
@@ -76,4 +85,45 @@ export function registerCanvasGroups(canvas: Command, context: (cmd: Command) =>
   groups.command("ungroup <groups...>").description("Dissolve selected frames, preserving their children and nested groups")
     .option("--dry-run", "report promoted members and trashed frames without writing")
     .action(act(async (handle, ctx, [refs, opts]) => report(ctx, await handle.ungroup(refs, opts))));
+
+  groups.command("resize <group> <WxH>").description("Scale contents and attached ink; --anchor names the fixed corner")
+    .option("--anchor <corner>", "nw | ne | sw | se", "nw")
+    .option("--dry-run", "report constrained final geometry without writing")
+    .action(act(async (handle, ctx, [ref, size, opts]) => {
+      if (!["nw", "ne", "sw", "se"].includes(opts.anchor)) throw new Error("--anchor expects nw, ne, sw or se");
+      report(ctx, await handle.resize(ref, sizeOf(size), { ...opts, anchor: opts.anchor as GroupAnchor }));
+    }));
+
+  groups.command("frame <groups...>").description("Fit frames around contents, or change one frame without scaling its members")
+    .option("--fit", "fit frame to the saved member footprints")
+    .option("--size <WxH>", "frame size; members retain their boxes")
+    .option("--at <x,y>", "frame origin in world coordinates")
+    .option("--dry-run", "report final frames without writing")
+    .action(act(async (handle, ctx, [refs, opts]) => report(ctx, await handle.frame(refs, { ...opts, ...(opts.size ? { size: sizeOf(opts.size) } : {}), ...(opts.at ? { at: parseXY(opts.at) } : {}) }))));
+
+  groups.command("layout <group>").description("Save label bands, padding and grid gutters; optionally tidy members")
+    .option("--title-height <n>", "title band height")
+    .option("--brief-height <n>", "Markdown brief band height")
+    .option("--inset <n>", "content padding")
+    .option("--row-gutter <n>", "reserved row-label gutter")
+    .option("--column-gutter <n>", "reserved column-label gutter")
+    .option("--tidy", "arrange direct member placement units")
+    .option("--dry-run", "report layout effects without writing")
+    .action(act(async (handle, ctx, [ref, opts]) => {
+      const layout: GroupLayout = {};
+      for (const key of ["titleHeight", "briefHeight", "inset", "rowGutter", "columnGutter"] as const) if (opts[key] !== undefined) layout[key] = Number(opts[key]);
+      if (!Object.keys(layout).length && !opts.tidy) throw new Error("choose a layout setting or --tidy");
+      report(ctx, await handle.layout(ref, layout, opts));
+    }));
+
+  groups.command("grid <group> <RxC>").description("Set the grid's counts and optional comma-separated row and column names")
+    .option("--rows <names>", "comma-separated row labels")
+    .option("--cols <names>", "comma-separated column labels")
+    .option("--tidy", "place direct members in the saved grid")
+    .option("--dry-run", "report grid and frame effects without writing")
+    .action(act(async (handle, ctx, [ref, dimensions, opts]) => {
+      const parts = /^(\d+)x(\d+)$/i.exec(dimensions);
+      if (!parts || Number(parts[1]) < 1 || Number(parts[2]) < 1) throw new Error("grid expects positive RxC, e.g. 2x3");
+      report(ctx, await handle.grid(ref, { rows: Number(parts[1]), columns: Number(parts[2]) }, { dryRun: !!opts.dryRun, tidy: !!opts.tidy, ...(opts.rows !== undefined ? { rows: opts.rows.split(",").map((name: string) => name.trim()) } : {}), ...(opts.cols !== undefined ? { columns: opts.cols.split(",").map((name: string) => name.trim()) } : {}) }));
+    }));
 }

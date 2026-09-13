@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
 import { groupAncestors, groupChildren, groupContentBox, groupDescendants, groupSelectionRoots, isGroupItem, itemPath } from "@isocan/core";
 import { useNavigate } from "react-router-dom";
-import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { PendingGroupWriteError, changeCanvasGroup, createCanvasGroup, enterCanvasGroup, groupTask, removeFromCanvasGroup, selectGroupContents } from "../lib/canvasgroups.ts";
+import { PendingGroupWriteError, changeGroupItem, changeCanvasGroup, createCanvasGroup, enterCanvasGroup, groupTask, removeFromCanvasGroup, selectGroupContents } from "../lib/canvasgroups.ts";
+import { GroupLayoutControls } from "./GroupLayoutControls.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { Modal } from "./Modal.tsx";
@@ -28,7 +29,7 @@ function GroupDialog({ canvasId, actor, dialog }: { canvasId: string; actor: Act
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
-  const close = () => useUiStore.getState().setGroupDialog(null);
+  const close = useCallback(() => { if (useUiStore.getState().groupDialog === dialog) useUiStore.getState().setGroupDialog(null); }, [dialog]);
   const groups = Object.values(canvas?.items ?? {}).filter(isGroupItem);
   const targets = groups.filter((candidate) => !picked.some((id) => id === candidate.id || (canvas && groupAncestors(canvas, candidate.id).some((parent) => parent.id === id))));
   const missingSelection = dialog.itemIds.filter((id) => !canvas?.items[id]);
@@ -37,7 +38,7 @@ function GroupDialog({ canvasId, actor, dialog }: { canvasId: string; actor: Act
   const descendants = group && canvas ? groupDescendants(canvas, group.id) : [];
   const content = group ? groupContentBox(group) : null;
   // A remotely dissolved frame stops being an editable inspector.
-  useEffect(() => { if (dialog.kind === "inspect" && canvas && !group) close(); }, [canvas, group, dialog.kind]);
+  useEffect(() => { if (dialog.kind === "inspect" && canvas && !group) close(); }, [canvas, group, dialog.kind, close]);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setError("");
     try {
@@ -50,7 +51,7 @@ function GroupDialog({ canvasId, actor, dialog }: { canvasId: string; actor: Act
         if (!destination || picked.length === 0) throw new Error("Choose a group and at least one item.");
         await changeCanvasGroup(canvasId, actor, { kind: "reparent", itemIds: picked, containerId: destination, place });
       } else if (group && title.trim() !== group.title) {
-        await sendEchoed(canvasId, actor, { type: "item.update", itemId: group.id, patch: { title: title.trim() || group.title } });
+        await changeGroupItem(canvasId, actor, { type: "item.update", itemId: group.id, patch: { title: title.trim() || group.title } });
       }
       close();
     } catch (err) { setError((err as Error).message); if (err instanceof PendingGroupWriteError) setPending(true); }
@@ -75,6 +76,7 @@ function GroupDialog({ canvasId, actor, dialog }: { canvasId: string; actor: Act
         <p>{members.length} direct members · {descendants.length} total descendants</p>
         <p>Parent: {group.containerId ? <button type="button" onClick={() => { enterCanvasGroup(group.containerId!); close(); }}>{canvas?.items[group.containerId]?.title}</button> : "Canvas"}</p>
         <p>Content: {content?.width} × {content?.height} at {content?.x}, {content?.y}</p>
+        {canEdit && <GroupLayoutControls canvasId={canvasId} actor={actor} item={group} />}
         <div className="canvas-group-controls">
           <button type="button" onClick={() => { selectGroupContents(group.id); close(); }}>Select contents</button>
           <button type="button" onClick={() => { navigate(itemPath(canvasId, group.id)); close(); }}>Open brief</button>

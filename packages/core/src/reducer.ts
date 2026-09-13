@@ -35,7 +35,8 @@ export function applyOperation(
   return next;
 }
 
-function reduceOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
+/** Primitive existing effects also compile a bounded content write before group-frame repair. */
+export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
   const { op, actor, ts } = envelope;
 
   if (op.type === "project.create") {

@@ -21,7 +21,12 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 13 September 2026
+
+- Groups move and resize their contents together, including nested groups and attached ink. Fit frame preserves the arrangement; frame, grid and brief controls reserve space for labels. New text, files and canvas cards inherit the group you are working inside. Matching CLI commands support placement, sizing, layout and dry runs. Available on canvases with groups enabled.
+
 ## 12 September 2026
+
 
 - On canvases with groups enabled, Group selection puts cards together without moving them. Enter works inside the group; Remove lets a card leave, and Ungroup keeps the cards while removing the frame. The Groups menu, keyboard shortcuts and `isocan canvas group` commands work on the same membership, with undo. Titles and briefs have space above the cards. Existing canvases keep areas until conversion is available.
 

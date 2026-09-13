@@ -28,6 +28,8 @@ import {
 import { uploadBlob } from "./api.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { mimeTypeOf } from "./mime.ts";
+import { changeCanvasGroup, groupsEnabled } from "./canvasgroups.ts";
+import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
 
 const MAX_INITIAL_WIDTH = 480;
 /** Between files dropped together — the canvas's own placement gap, so a row
@@ -115,6 +117,7 @@ export async function addFiles(
   actor: Actor,
   files: File[],
   placement: Placement,
+  destination = creationDestination(),
 ): Promise<string[]> {
   // One drop is one act: however many files, one ⌘Z takes them back.
   const group = newGroupId();
@@ -170,8 +173,9 @@ export async function addFiles(
 
     const itemId = newItemId();
     try {
-      await sendEchoed(canvasId, actor, {
+      await sendCreatedItem(canvasId, actor, {
         type: "item.add",
+        ...destination,
         itemId,
         version: {
           id: newVersionId(),
@@ -209,14 +213,16 @@ export async function addBrowserItem(
   actor: Actor,
   rawUrl: string,
   placement: Placement,
+  destination = creationDestination(),
 ): Promise<string> {
   const site = normalizeSiteUrl(rawUrl);
   const filename = siteFilename(site);
   const blob = new Blob([`${site}\n`], { type: BROWSER_MIME });
   const upload = await uploadBlob(canvasId, blob, filename);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+        ...destination,
     itemId,
     version: {
       id: newVersionId(),
@@ -246,9 +252,15 @@ export async function addAreaItem(
   at: { x: number; y: number },
   size: { width: number; height: number },
 ): Promise<string> {
+  const destination = creationDestination();
+  const semantic = groupsEnabled();
   const blob = new Blob(["\n"], { type: AREA_MIME });
   const upload = await uploadBlob(canvasId, blob, AREA_FILENAME);
   const itemId = newItemId();
+  if (semantic) {
+    await changeCanvasGroup(canvasId, actor, { kind: "create", group: { id: itemId, title, box: { ...at, ...size }, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: AREA_MIME, filename: AREA_FILENAME, size: upload.size }, layout: { briefHeight: 0 } }, containerId: destination.containerId ?? null });
+    return itemId;
+  }
   await sendEchoed(canvasId, actor, {
     type: "item.add",
     itemId,
@@ -273,12 +285,14 @@ export async function addDocumentItem(
   actor: Actor,
   doc: { title: string; markdown: string; filename: string; source: string; syncedAt: string },
   placement: Placement,
+  destination = creationDestination(),
 ): Promise<string> {
   const blob = new Blob([doc.markdown], { type: DOC_MIME });
   const upload = await uploadBlob(canvasId, blob, doc.filename);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+        ...destination,
     itemId,
     version: {
       id: newVersionId(),
@@ -312,13 +326,15 @@ export async function addCanvasItem(
   /** `memory=inherit` on the card: the linked canvas's context joins this
    *  one's (`core/memory.ts`). One property, set at placement. */
   memory: "inherit" | null = null,
+  destination = creationDestination(),
 ): Promise<string> {
   const made = canvasItemOf(origin, targetCanvasId);
   const blob = new Blob([made.blob], { type: made.mimeType });
   const upload = await uploadBlob(canvasId, blob, made.filename);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+        ...destination,
     itemId,
     version: {
       id: newVersionId(),
@@ -347,6 +363,7 @@ export async function addDrawing(
   strokes: InkStroke[],
   /** The item this ink is about, when it was drawn over one. */
   target?: { id: string; x: number; y: number; width: number; height: number } | null,
+  destination = target ? {} : creationDestination(),
 ): Promise<string> {
   const exact = inkBounds(strokes);
   if (!exact) throw new Error("nothing to place");
@@ -362,8 +379,9 @@ export async function addDrawing(
   const blob = new Blob([svg], { type: DRAWING_MIME });
   const upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+        ...destination,
     itemId,
     version: {
       id: newVersionId(),

@@ -1,5 +1,5 @@
 import type { TextAnchor } from "./text-anchor.js";
-import type { GroupAction } from "./canvas-group-types.js";
+import type { GroupAction, GroupCell, GroupPlacementPolicy } from "./canvas-group-types.js";
 import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.js";
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
@@ -199,6 +199,10 @@ export type Operation = {
     action: GroupAction;
 } | {
     type: "item.add";
+    /** Explicit destination on group canvases; attached ink inherits its target's parent. */
+    containerId?: string | null;
+    cell?: GroupCell;
+    groupPlacement?: GroupPlacementPolicy;
     itemId: string;
     version: NewVersion;
     width: number;
@@ -242,6 +246,16 @@ export type Operation = {
     height: number;
 } | {
     type: "item.update";
+    /** Saved group brief reservation; omitted lets the home inspect the brief bytes. */
+    briefHeight?: number;
+    /** A group metadata edit and resize share one resolved content/geometry change. */
+    size?: {
+        width: number;
+        height: number;
+    };
+    containerId?: string | null;
+    cell?: GroupCell;
+    groupPlacement?: GroupPlacementPolicy;
     itemId: string;
     patch: MetaPatch;
     /** Rename the file under the CURRENT version too. Renaming an item and
@@ -253,10 +267,12 @@ export type Operation = {
     type: "item.addVersion";
     itemId: string;
     version: NewVersion;
+    briefHeight?: number;
 } | {
     type: "item.setCurrentVersion";
     itemId: string;
     versionId: string;
+    briefHeight?: number;
 } | {
     type: "item.removeVersion";
     itemId: string;

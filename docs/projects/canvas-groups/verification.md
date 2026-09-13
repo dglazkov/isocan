@@ -284,3 +284,141 @@ logic tests and actual browser interaction proofs ran. Group mode remains
 opt-in until phase 5. Complete gesture previews, all insertion producers and
 atomic brief/header edits belong to phase 3; context and migration remain
 phases 4 and 5. No external provisioning or human-only step is pending.
+
+## 12–13 September 2026: phase 3 — transforms, insertion and layout
+
+The same three builders owned disjoint paths: core/server semantics,
+API/CLI/module producers, and web interactions. The API/CLI builder then
+independently reviewed the web changes, and the core builder reviewed the
+performance changes. The conductor ran the acceptance commands and browser
+walks, returned failures to their owners, and owns this record. Final
+independent review reported no remaining concrete blocker.
+
+The new vocabulary remains inside `group.change`: bounded insertion and
+content effects, saved grid counts and their preconditions require schema 2
+and the `canvas-groups-v2` capability. Historical v1 replay remains supported.
+Ordinary metadata/version changes retain their ordinary operation and undo
+behavior unless structural/header repair is necessary.
+
+### Checks run by the conductor
+
+All final commands exited 0:
+
+| Command | Observed result |
+| --- | --- |
+| `npm test -- packages/core/test/canvas-groups.test.ts packages/cli/test/canvas-groups.test.ts packages/web/test/canvas-groups.test.ts packages/server/test/canvas-groups.test.ts` | 122 tests, four files, 6.27 seconds. |
+| `FIRESTORE_EMULATOR_HOST=127.0.0.1:19099 ISOCAN_REQUIRE_EMULATOR=1 npm test` | 4,718 passed, four skips, 457 files, 152.13 seconds. Rebase refreshed source mtimes, so the stale-build skip was rerun separately after rebuilding; only three existing ACP/dispatch skips remain uncovered. Real Firestore tests ran. |
+| `npm run typecheck` | Every workspace passed. |
+| `npm test -- test/roadmap.test.ts test/changelog.test.ts` | 11 documentation checks passed, 1.96 seconds; rerun outside the sandbox after the CLI log path was blocked. |
+| `npm run build` | Vite completed in 5.14 seconds; final entry `index-DjmIL7El.js` was 721,172 bytes. |
+| `npm test -- test/bundle-budget.test.ts` | Rebuilt after the final rebase; one test passed, zero skips, exit 0. The entry hash remained unchanged. |
+| `npm test -- packages/cli/test/area.test.ts packages/cli/test/grid.test.ts` | Four real-daemon CLI compatibility tests passed, 10.98 seconds. |
+| `node --import tsx /tmp/isocan-canvas-groups-phase3-api-walk.mts` | Independent numeric, concurrency, insertion, brief and capability gates all passed against fresh synthetic daemons. |
+
+The full suite initially caught ordinary CLI placement JSON losing `chosen`,
+source guards that no longer described their call sites, a hooks dependency,
+and the historical-view write guard. These were corrected and rerun; the old
+CLI compatibility and scrubber behavior tests were preserved. New registered
+module-command tests preserve the existing mindmap coordinate response and
+use accepted group geometry where appropriate. The three final skips are the
+existing ACP/dispatch cases, not group or emulator tests. Post-rebase checks
+are recorded in the phase commit message.
+
+Upstream operator access controls exposed a further race: a same-canvas POST
+failure could replace a terminal socket refusal with “offline.” Both queue
+entry paths preserve that terminal decision now. The conductor ran 43 API
+and offline tests; six cases close the actual store socket before releasing
+the held POST failure and verify persisted work without reconnecting. Badge
+recovery also reports the door's definitive 403 instead of an earlier 401,
+without retrying the write or reclaiming identity. Full verification caught
+an older fake close event missing its reason and a new test cleanup missing
+the required retries; both were corrected before the green run.
+
+One post-rebase full run timed out in the pre-existing RC enrollment test.
+Read-only diagnosis identified an older enrollment/park-claim ordering that
+can displace an RC cursor; those application paths predate this feature and
+were unchanged. The exact competing owner in that failed run was not traced.
+The isolated RC rerun passed all 24 tests, and the complete rerun exited 0.
+No cursor-ownership behavior was changed as part of groups.
+
+The terminal race was repeated against the final built app and a fresh real
+daemon: a hit-tested group drag held its real 200 response and operation echo;
+a 4402 refusal close reached the browser before the held response failed at
+the transport. The refusal page remained visible after settlement, with no
+runtime exceptions. This verifies transport ordering, not a new operator
+ledger action. Browser, proxy and daemon cleanup completed successfully.
+
+### Actual browser, HTTP and CLI observations
+
+Walks used fresh synthetic local daemons and real Chrome, serving built
+assets. Pointer targets were checked with `elementFromPoint` before CDP
+mouse/touch input. Network-ordering probes held actual HTTP responses or
+relayed the daemon's unmodified WebSocket bytes; they did not replace the
+writer or reducer. The final browser reloaded the final entry above and
+reported no runtime exceptions.
+
+| Walk | What was observed |
+| --- | --- |
+| Four corners and zoom | At 135%, every resize corner previewed descendant boxes without appending an operation until release. Each commit was one entry, and one undo restored exact geometry. Zooming to 100% changed no saved geometry. A real CLI 700×720 resize and browser resize produced identical boxes: Alpha 289.777778×225.333333, Beta x562.222222, Gamma y566.666667. |
+| Cancellation and nested ink | Escape and actual touch cancellation removed all preview drift with no appended entry. A nested group with child-attached and frame-attached overhanging SVG marks retained its labels and overhang at 64% zoom under aspect-preserving resize; exact undo passed. The final build repeated northwest preview/cancel successfully. |
+| Numeric ownership | The separate HTTP probe computed expected asymmetric boxes independently, exercised both annotation insertion orders, and compared exact committed results and inverse restoration. Membership, gutter and attachment races each refused with zero appended entries. An unrelated text edit survived accepted geometry and its undo. |
+| Receipt and echo order | Both orders were repeated on the final build. Echo-first held the real 200 HTTP response until the real operation echo arrived. Receipt-first held the echo until after the response. Group and child frames moved once, with exact undo in both cases. An earlier walk also started a new preview before releasing an older receipt; that receipt did not clear the new preview. |
+| Keyboard ownership | ArrowRight on Alpha followed immediately by selecting Beta committed only Alpha's one-unit move. Waiting beyond the nudge timer appended nothing else; undo restored the starting canvas. The earlier empty-timer entry found by this walk has a production timer regression. |
+| Frame, grid and brief controls | Frame-only width/height editing preserved all children and undid exactly. The real inspector saved a named 2×2 grid and tidied it in one entry. Title, brief, 120-unit row gutter and 32-unit column gutter stayed clear; a long row label truncated inside its own band. Brief editing created one version/structural entry; undo restored the original version. The inspector uses one outer scroll. |
+| Insertion | The Text tool created a node in the entered group. The Add form's canvas picker inserted an existing synthetic canvas card into that group in one operation and grew its frame. A native file drop on a closed group created a new member; after entering, dropping on the reachable child added a version instead. Existing cards retained their boxes during insertion. |
+| Navigation during upload | A real blob POST was held after choosing a file. Actual SPA links navigated from canvas A through Home to B before the upload resumed. The item landed in A's original group; B remained empty, with no selection or queue pollution. Read-only inspection of IndexedDB showed B's empty queue and empty saved canvas. |
+| Drop membership | A header drop named its destination and placed the new member in clear content space. Alt suppressed feedback and retained root membership. Dragging a member beyond the frame kept its parent and grew the frame. A deeper nested header won over the outer group. Each mutation/undo restored the exact baseline. |
+| CLI geometry | Real CLI named-grid/tidy, align, distribute and fit commands each returned accepted canonical geometry and one operation. Each real CLI undo restored all saved boxes. The native fit example grew the parent while avoiding an existing overlap. |
+| Sandbox producer | A synthetic program ran through the actual Seatbelt fence with the temporary installed sandbox runtime. Its first transcript inherited the program's group; after explicitly moving the transcript, a second fenced run added a version to that same item and preserved its new group and exact geometry. |
+
+Other insertion producers share the tested core/CLI/web dispatch and have
+production tests, including implicit Context-sheet group creation, modules,
+Google Doc and sprint paths. This record does not claim an external Google
+Doc account workflow or every producer's browser button was manually walked.
+Copy/context-specific producer coverage remains in phase 4.
+
+### The 1,000-item result
+
+The real daemon received 1,000 synthetic Markdown cards, ten containing
+groups and one outer group through actual operations. The first browser walk
+exposed minutes of tail/render lag and 1,006 mounted document content trees
+at overview zoom. Pure geometry timing had not found this. The correction
+keeps selectable frames and actual image/video visual faces, while deferring
+unreadable/offscreen document trees. Sprint derivation is shared by immutable
+canvas revision, and an absent, untimed or completed sprint does not tick
+all item components. Pointer snapping and structural expectations reuse the
+captured gesture state.
+
+The corrected live seeding took 24.351 seconds; the outer group appeared
+47 ms after seeding finished. At overview zoom there were 1,020 item shells,
+12 groups and zero document trees or iframes. The real CLI's recursive show
+returned all 1,010 descendants, including the final card, in 394 ms. Selection
+and movement did not mount document previews or increase the three blob
+requests. Across a 45.3-second idle interval, layout count stayed unchanged;
+script time increased by 54 ms, with ordinary canvas polling still present.
+
+Pointer update calls measured 83–125 ms in the repeated preview sample; a
+final-build move measured 77 ms. These timings are recorded limits, not a
+60-fps claim. The large move appended one entry, translated the first and last
+children by the same delta, left unrelated groups fixed, and one undo restored
+all 1,020 boxes and memberships. Cancellation also preserved the log tip.
+Reloading the final corrected bundle displayed the full group in 277 ms.
+
+The bundle increase was investigated before raising its ceiling. Same-source
+lazy boundaries for the Add form and content fitting removed 11,474 entry
+bytes. Before rebasing, entry growth over phase 2 was 17,526 bytes. Upstream added
+5,367 bytes and the terminal fix added 125. Moving the shared refusal constant
+into the existing error leaf deferred 4,195 bytes of operator helpers while
+preserving its exports. The final entry is 721,172 bytes, with the same eager
+third-party dependencies; ceiling 721,200 leaves 28 bytes. The 640,000 goal
+and 20,000 jump guard remain unchanged.
+
+### Surface obligations and remaining work
+
+All six AGENTS obligations were touched: bounded operations, matching
+CLI/API geometry and layout verbs, agent-guide command documentation, shared
+core computations, product README, and production tests plus real browser
+interaction proof. Existing area and sharing-group meanings remain intact.
+Creation is still opt-in. Phase 4 owns frozen group context, context consumers,
+copy/export and lifecycle completion; phase 5 owns conversion and normal
+release creation. No credential, paid resource or human-only gate is pending.

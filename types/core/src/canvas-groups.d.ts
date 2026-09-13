@@ -1,5 +1,5 @@
 import type { Actor, CanvasContents, CanvasState, Item } from "./model.js";
-import type { GroupAction, GroupAnchor, GroupBox, GroupChange, GroupExpectation, GroupOperation, GroupStamp } from "./canvas-group-types.js";
+import type { GroupAction, GroupAnchor, GroupBox, GroupCell, GroupChange, GroupExpectation, GroupOperation, GroupPlacementPolicy, GroupStamp } from "./canvas-group-types.js";
 import type { Operation } from "./ops.js";
 /** Empty frames have one shared initial size on the CLI and browser shelf. */
 export declare const GROUP_DEFAULT_SIZE: {
@@ -34,6 +34,64 @@ export declare function groupTransformClosure(canvas: CanvasContents, ids: reado
 export declare function validateGroupForest(state: CanvasState): void;
 /** Layout and resize share saved header/inset reservations, independent of browser fonts. */
 export declare function groupContentBox(item: Item): GroupBox;
+/** Historical dense grids stay readable; both surfaces can disclose that full spacing needs a larger frame. */
+export declare function groupGridNeedsRoom(item: Item): boolean;
+/** A cell's usable box excludes saved row/column gutters and inter-cell clearance. */
+export declare function groupCellBox(group: Item, row: number, column: number): GroupBox;
+/** Deterministic insertion considers complete placement units and never spills out of a named cell. */
+export declare function groupPlacement(canvas: CanvasContents, groupId: string, footprint: {
+    width: number;
+    height: number;
+}, options?: {
+    at?: {
+        x: number;
+        y: number;
+    };
+    cell?: GroupCell;
+    policy?: GroupPlacementPolicy;
+    ignoreIds?: readonly string[];
+}): {
+    x: number;
+    y: number;
+};
+/** Deepest eligible frame wins; a header hit is offered clear content placement, never membership by overlap. */
+export declare function groupDropTarget(canvas: CanvasContents, point: {
+    x: number;
+    y: number;
+}, movingIds: readonly string[]): Item | null;
+/** Header drops request a clear content slot; a content drop preserves the deliberate world position. */
+export declare function groupDropPolicy(group: Item, point: {
+    x: number;
+    y: number;
+}): "auto" | "preserve";
+/** Shared arrangement targets footprints; attached marks never receive a competing layout slot. */
+export declare function groupArrangeAction(state: CanvasState, itemIds: readonly string[], options: {
+    kind: "align";
+    edge: "left" | "right" | "top" | "bottom" | "center" | "middle" | "hcenter" | "vcenter";
+} | {
+    kind: "distribute";
+    axis: "h" | "v";
+} | {
+    kind: "tidy";
+    perRow?: number;
+    gap?: number;
+    mode?: "smart" | "grid";
+    containerId?: string;
+}): Extract<GroupAction, {
+    kind: "transform";
+}>;
+/** Content-fit settles only normalized targets against sibling placement units in the same scope. */
+export declare function groupFitAction(state: CanvasState, targets: readonly {
+    itemId: string;
+    width?: number;
+    height?: number;
+}[]): Extract<GroupAction, {
+    kind: "frame";
+}>;
+/** Preview the same resolved whole act, including ancestor frame repair and any drop transfer. */
+export declare function groupPreviewBoxes(state: CanvasState, action: Exclude<GroupAction, {
+    kind: "apply";
+}>): Map<string, GroupBox>;
 /** Fit includes labels and attached-ink overhang; growth preserves room already reserved. */
 export declare function groupFitBox(canvas: CanvasContents, groupId: string, growOnly?: boolean): GroupBox;
 /** Corner denotes the FIXED corner, shared by CLI, pointer handles and tests. */
@@ -41,6 +99,11 @@ export declare function groupResizeBox(item: GroupBox, size: {
     width: number;
     height: number;
 }, anchor?: GroupAnchor): GroupBox;
+/** Aspect-preserving handles clamp one scale against the same recursive minima as the writer. */
+export declare function groupResizeMinimum(canvas: CanvasContents, itemId: string): {
+    width: number;
+    height: number;
+};
 /** Immutable geometry only. Final constraints and arithmetic are preview arithmetic. */
 export declare function groupTransform(canvas: CanvasContents, action: Extract<GroupAction, {
     kind: "transform";

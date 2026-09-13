@@ -1,11 +1,13 @@
-import { useRef, useState, type ReactNode } from "react";
+import { selectCreatedItems } from "../lib/groupplacement.ts";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { addFailure, addFiles } from "../lib/upload.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { HistoryGlyph } from "./Glyphs.tsx";
-import { AddPopover } from "./AddPopover.tsx";
+// Address search and remote-document import are needed only after Add opens.
+const AddPopover = lazy(() => import("./AddPopover.tsx").then((module) => ({ default: module.AddPopover })));
 import { hideMenu, showMenu, useChromeHidden } from "../lib/chromemenu.tsx";
 import { openContextMenu } from "./ContextMenu.tsx";
 import { textToolMenu } from "../lib/textmenu.ts";
@@ -151,6 +153,7 @@ const TOOLS: ToolDef[] = [
 export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const colors = useActorColors();
   const activeTool = useUiStore((s) => s.activeTool);
+  const adding = useUiStore((s) => s.adding);
   const setActiveTool = useUiStore((s) => s.setActiveTool);
   const inkColor = useUiStore((s) => s.inkColor);
   const marksOpen = useUiStore((s) => s.marksOpen);
@@ -165,6 +168,12 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       : false;
   });
   const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // Keep native file picking independent of the address popover's download.
+    if (adding !== "file") return;
+    fileInput.current?.click();
+    useUiStore.getState().setAdding(null);
+  }, [adding]);
   const mine = actorColorIn(colors, actor.id);
   const ink = inkColor ?? mine;
 
@@ -193,8 +202,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       setNotice(notice);
       return landed;
     });
-    if (ids.length > 0) {
-      useUiStore.getState().setSelection(ids);
+    if (ids.length > 0 && selectCreatedItems(canvasId, ids)) {
       const canvas = useCanvasStore.getState().canvas;
       const landed = canvas ? ids.map((id) => canvas.items[id]).filter(Boolean) : [];
       revealIfOffscreen(
@@ -336,7 +344,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           here — files, a site, a Google Doc, a canvas. It was three buttons
           and a hidden fourth; the popover reads what it is given and says
           what it would do, so one field is enough. See AddPopover. */}
-      <AddPopover canvasId={canvasId} actor={actor} onFiles={() => fileInput.current?.click()} />
+      {adding && adding !== "file" && <Suspense fallback={null}><AddPopover canvasId={canvasId} actor={actor} onFiles={() => fileInput.current?.click()} /></Suspense>}
       <input
         ref={fileInput}
         type="file"
@@ -348,4 +356,3 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
     </div>
   );
 }
-

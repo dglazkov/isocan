@@ -1,4 +1,5 @@
-import type { Actor, CanvasContents, GroupAction, GroupBox, Item } from "../../core/src/index.js";
+import type { Actor, CanvasContents, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupLayout, GroupPlacementPolicy, Item, Operation } from "../../core/src/index.js";
+import { groupArrangeAction } from "../../core/src/index.js";
 import type { DaemonRoutes } from "./routes.js";
 type PublicAction = Exclude<GroupAction, {
     kind: "apply";
@@ -54,6 +55,7 @@ export interface CanvasGroupCreateOptions {
         height: number;
     };
     note?: string;
+    properties?: Record<string, string>;
     dryRun?: boolean;
 }
 /** Exact IDs win; every other title/ID prefix must identify one item, with candidates on refusal. */
@@ -77,6 +79,74 @@ export declare class CanvasGroups {
     /** Add and move-between-groups are one reparent intent, optionally placing the new members. */
     add(group: string, refs: string[], options?: {
         place?: boolean;
+        dryRun?: boolean;
+        cell?: GroupCell;
+        groupPlacement?: GroupPlacementPolicy;
+    }): Promise<CanvasGroupResult>;
+    /** Move one root and its placement unit, with the dependency capture made before the write. */
+    move(ref: string, destination: {
+        at: {
+            x: number;
+            y: number;
+        };
+    } | {
+        by: {
+            x: number;
+            y: number;
+        };
+    }, options?: {
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
+    /** Scale the group's native frames and attached marks, keeping the named corner fixed. */
+    resize(ref: string, size: {
+        width: number;
+        height: number;
+    }, options?: {
+        anchor?: GroupAnchor;
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
+    /** Frame edits never scale children. Fitting several groups still produces one record. */
+    frame(refs: string | string[], options?: {
+        fit?: boolean;
+        at?: {
+            x: number;
+            y: number;
+        };
+        size?: {
+            width: number;
+            height: number;
+        };
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
+    layout(ref: string, layout: GroupLayout, options?: {
+        tidy?: boolean;
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
+    /** Grid counts and optional names use the same saved layout as the browser. */
+    grid(ref: string, counts: {
+        rows: number;
+        columns: number;
+    }, options?: {
+        rows?: string[];
+        columns?: string[];
+        tidy?: boolean;
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
+    arrange(refs: string[], arrangement: Parameters<typeof groupArrangeAction>[2], options?: {
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
+    /** Sized content updates reserve headers and transform geometry in the same accepted record. */
+    update(ref: string, update: Omit<Extract<Operation, {
+        type: "item.update";
+    }>, "type" | "itemId">, options?: {
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
+    /** Native leaf fitting and frame-only group fitting share one bounded writer act. */
+    fit(targets: Array<{
+        itemId: string;
+        width?: number;
+        height?: number;
+    }>, options?: {
         dryRun?: boolean;
     }): Promise<CanvasGroupResult>;
     /** Remove promotes each root one level; mixed-parent selections still use one undoable act. */

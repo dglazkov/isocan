@@ -11,7 +11,7 @@ import type { LogEntry, OpEnvelope, Operation } from "./ops.js";
 export declare const DEFAULT_PORT = 4441;
 /** Reducer capability, independent of the caller's access-control rung. A
  * client advertises this before receiving explicit canvas-group state. */
-export declare const CANVAS_GROUPS_FEATURE = "canvas-groups-v1";
+export declare const CANVAS_GROUPS_FEATURE = "canvas-groups-v2";
 /** Shared spelling for HTTP clients and ingress checks; an upgraded replica
  * still preserves its original caller's declaration when forwarding writes. */
 export declare const CLIENT_FEATURES_HEADER = "x-isocan-features";

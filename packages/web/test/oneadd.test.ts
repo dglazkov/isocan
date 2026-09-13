@@ -64,7 +64,8 @@ describe("one field reads what you give it", () => {
     expect(draft).not.toContain("normalizeSiteUrl(");
     expect(submit).toContain("normalizeSiteUrl(what.url)");
     expect(submit).toContain("checkFrameable(url)");
-    expect(submit).toContain("addBrowserItem(canvasId, actor, url, at)");
+    expect(submit).toContain("addBrowserItem(canvasId, actor, url, at, destination)");
+    expect(submit.indexOf("const destination = creationDestination()")).toBeLessThan(submit.indexOf("await checkFrameable(url)"));
   });
 
   it("dispatches each kind to the item.add that surface already made", () => {

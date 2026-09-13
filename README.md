@@ -286,10 +286,16 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   add or remove members, and ungroup while preserving their positions.
   Membership is explicit: overlapping cards stay independent, nested groups
   keep their identity, and each structural act is one undo. The matching CLI
-  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup`; mutations
+  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid`; mutations
   support an actual `--dry-run`, all commands support `--json`, and
   `mv <item> --in <group>` transfers membership and places the item atomically.
-  `show --recursive` inspects the full hierarchy. Existing canvases keep their
+  Resize scales native frames and attached ink with a fixed anchor; Fit frame
+  keeps the arrangement and adjusts its border. CLI `mv`, `set --size`, `fit`,
+  `align`, `distribute` and `tidy` share these semantics. Text, files, sites,
+  Google Docs and modules insert with explicit `--in` membership; `--cell r,c`
+  honors protected label gutters. New sandbox transcripts inherit their
+  program's group. `ls --in` lists direct members and `--recursive` includes
+  descendants. Existing canvases keep their
   area behavior until conversion is available. Top-level `isocan group`
   continues to manage people and sharing.
 - **Areas**: a titled sheet things are placed on — `isocan area new "Sketches"`,

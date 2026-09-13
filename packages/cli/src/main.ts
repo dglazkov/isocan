@@ -1,6 +1,7 @@
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
-import { CanvasGroups } from "@isocan/api";
-import { registerCanvasGroups } from "./canvas-groups.ts";
+import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
+import { registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
+import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
@@ -44,6 +45,10 @@ import type {
 } from "@isocan/core";
 import {
   fitMoves,
+  groupChildren,
+  groupDescendants,
+  groupSelectionRoots,
+  isGroupItem,
   type FitTarget,
   BROWSER_MIME,
   DEFAULT_HOME_URL,
@@ -786,6 +791,7 @@ function itemCenter(item: Item): { x: number; y: number } {
 }
 
 async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation, group?: string) {
+  op = insertionOperation(op);
   // Ops bound to an active session move its cursor to the op's locus
   // (presence piggyback) — the daemon matches clientId to the session.
   const session = await readSessionFile(ctx.home, ctx.actor.id);
@@ -5603,6 +5609,9 @@ async function placeCanvasItem(
   if (opts.inherit && !opts.at && !opts.anchor && !opts.in && !opts.cell) {
     if (!contextSheet(snapshot.canvas)) {
       const spot = contextSheetSpot(snapshot.canvas);
+      if (snapshot.project.groupMode === "groups") {
+        await new CanvasGroups(ctx.client, p.id, () => ctx.actor).new(CONTEXT_SHEET_TITLE, { at: spot, size: CONTEXT_SHEET_SIZE });
+      } else {
       const upload = await ctx.client.uploadBlob(p.id, Buffer.from("\n", "utf8"), AREA_MIME, AREA_FILENAME);
       await sendOp(ctx, p.id, {
         type: "item.add",
@@ -5613,6 +5622,7 @@ async function placeCanvasItem(
         title: CONTEXT_SHEET_TITLE,
         properties: { ...AREA_PROPERTIES },
       });
+      }
       if (!ctx.json) console.log(`laid the "${CONTEXT_SHEET_TITLE}" sheet at ${spot.x},${spot.y} — where this canvas's inheritance sits`);
       snapshot = await ctx.client.snapshot(p.id);
     }
@@ -5653,7 +5663,7 @@ async function placeCanvasItem(
     // `--inherit` is memory phase 1: one more property on the card.
     properties: { ...made.properties, ...(opts.inherit ? { [MEMORY_PROP]: "inherit" } : {}) },
   });
-  const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+  const placed = insertionReceiptPlacement(result.envelope.op, itemId);
   if (ctx.json) return printJson({ itemId, canvasId: target.id, address: made.properties.source, placement: placed, inherit: opts.inherit === true });
   console.log(
     `placed "${target.title}" (${target.id}) as ${itemId} at ${placed.x},${placed.y} — double-click it, or its ↗, to open ${made.properties.source}` +
@@ -6171,6 +6181,8 @@ function placementFor(
    *  a spot inside the area that will hold it. */
   size?: { width: number; height: number },
 ): Placement {
+  const grouped = groupPlacementFor(snapshot, opts);
+  if (grouped) return grouped;
   if (opts.at) return { ...parseXY(opts.at), chosen: true };
   // `--in <area>`: the first clear spot inside the sheet, and CHOSEN, because
   // the search already found it clear and the daemon must not tidy it out
@@ -6521,7 +6533,7 @@ program
         // it, meaningful by kind (`positionIsMeaningful`). Everything else
         // goes through `placementFor`, where `--at` is the chosen case.
         const placement = inkBox
-          ? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) }
+          ? (groupPlacementFor(snapshot, { ...opts, at: `${Math.floor(inkBox.minX)},${Math.floor(inkBox.minY)}` }) ?? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) })
           : placementFor(snapshot, opts, { width, height });
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
@@ -6542,7 +6554,7 @@ program
           ...(opts.description !== undefined ? { description: opts.description } : {}),
           ...(Object.keys(properties).length > 0 ? { properties } : {}),
         });
-        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+        const placed = insertionReceiptPlacement(result.envelope.op, itemId);
         if (ctx.json) return printJson({ itemId, placement: placed });
         console.log(`added ${itemId} (${filename}) at ${placed.x},${placed.y}`);
         await noteMissingDesignSystem(ctx, p.id);
@@ -6759,6 +6771,7 @@ program
       const ctx = await ctxOf(cmd);
       const { canvas: from, snapshot } = await canvasAndSnapshot(ctx);
       const sources = items.map((ref) => resolveItem(snapshot, ref));
+      if (sources.some(isGroupItem)) throw new Error("copying a group hierarchy is not available in this build; copy ordinary items individually until graph copying is enabled");
       // `--to` names a canvas the way every other ref does; without it the
       // copies land beside their originals.
       const target = opts.to
@@ -6768,7 +6781,9 @@ program
       // The arrangement is placed against the canvas the copies LAND on —
       // beside the originals when that is the same one, on clear ground when
       // it is not.
-      const into = sameCanvas ? snapshot.canvas : (await ctx.client.snapshot(target.id)).canvas;
+      const destinationSnapshot = sameCanvas ? snapshot : await ctx.client.snapshot(target.id);
+      const into = destinationSnapshot.canvas;
+      const groupMode = destinationSnapshot.project.groupMode === "groups";
       /**
        * `--in <sheet>`: each copy takes the first clear spot on the sheet,
        * the search seeing the ones before it land — a hand-in from a desk is
@@ -6777,7 +6792,7 @@ program
        * the phase running on the canvas they land on, so a desk's bell is
        * one command.
        */
-      const sheet = opts.in === undefined ? null : findArea(into, opts.in);
+      const sheet = opts.in === undefined ? null : groupMode ? resolveCanvasGroupRef(into, opts.in, true) : findArea(into, opts.in);
       if (opts.in !== undefined && !sheet) {
         throw new Error(`no area called "${opts.in}" on "${target.title}" — \`isocan area ls\` there names them`);
       }
@@ -6787,7 +6802,7 @@ program
       }
       let placements: { item: Item; x: number; y: number }[];
       let targetAreaResize: { width: number; height: number } | null = null;
-      if (sheet) {
+      if (sheet && !groupMode) {
         let occupied = into;
         placements = [];
         let currentSheet = sheet;
@@ -6849,6 +6864,7 @@ program
           // `--at` chose the spot, and so did a sheet's search: the copies
           // stay where they were put.
           placement: { x, y, ...(opts.at || sheet ? { chosen: true } : {}) },
+          ...(groupMode ? { containerId: sheet?.id ?? (sameCanvas ? item.containerId ?? null : null), groupPlacement: opts.at ? "exact" as const : "auto" as const } : {}),
           title: item.title,
           ...(item.description ? { description: item.description } : {}),
           properties: {
@@ -7034,7 +7050,7 @@ program
             ...(paper === null ? {} : { [PAPER_PROP]: paper }),
           },
         });
-        const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+        const placed = insertionReceiptPlacement(result.envelope.op, itemId);
         if (ctx.json) return printJson({ itemId, placement: placed, title: opts.title ?? textTitle(body) });
         console.log(`wrote ${itemId} ("${textTitle(body)}") at ${placed.x},${placed.y}`);
       },
@@ -7057,6 +7073,7 @@ const moduleHost: CliHost = {
   resolveCanvas,
   resolveItem,
   sendOp,
+  insertionReceiptPlacement,
   printJson,
   sizeFor,
   placementFor,
@@ -7102,7 +7119,7 @@ async function addSiteItem(
     placement: placementFor(snapshot, opts, { width, height }),
     title: opts.title ?? siteLabel(site),
   });
-  const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+  const placed = insertionReceiptPlacement(result.envelope.op, itemId);
   if (ctx.json) return printJson({ itemId, url: site, placement: placed });
   console.log(`projected ${site} as ${itemId} at ${placed.x},${placed.y}`);
 }
@@ -7114,6 +7131,8 @@ program
   )
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
+  .option("--in <group>", "insert into this group (or area on a legacy canvas)")
+  .option("--cell <row,column>", "place in a 1-based group grid cell; requires --in")
   .option("--size <WxH>", "display size (default 800x600)")
   .option("--title <title>")
   .action(
@@ -7542,7 +7561,7 @@ async function addGoogleDocItem(
     title,
     properties: docProperties(doc.source, doc.fetchedAt),
   });
-  const placed = (result.envelope.op as { placement: { x: number; y: number } }).placement;
+  const placed = insertionReceiptPlacement(result.envelope.op, itemId);
   if (ctx.json) return printJson({ itemId, title, source: doc.source, syncedAt: doc.fetchedAt, via: doc.via, placement: placed });
   console.log(`added "${title}" (${itemId}) at ${placed.x},${placed.y}${doc.via === "drive" ? " — read with this machine's Drive token" : ""} — its ↗ opens ${doc.source}; \`isocan gdoc sync\` refreshes it`);
   console.log("note: the words are on the canvas now, readable by everyone admitted to it");
@@ -7838,9 +7857,10 @@ program
   .option("--kind <kind>", `only this kind: ${itemKinds().join(", ")}`)
   .option("--filter <text>", "only items whose title or filename contains this")
   .option("--reaction <emoji>", "only items wearing this mark")
-  .option("--in <area>", "only what is inside this area (by its centre)")
+  .option("--in <group>", "direct group members; legacy areas use item centres")
+  .option("--recursive", "with --in, include every explicit descendant")
   .action(
-    run(async (opts: { kind?: string; filter?: string; reaction?: string; in?: string }, cmd: Command) => {
+    run(async (opts: { kind?: string; filter?: string; reaction?: string; in?: string; recursive?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "surveying the canvas…" });
@@ -7850,11 +7870,11 @@ program
       const needle = opts.filter?.trim().toLowerCase();
       // `--in`: membership is geometry, read now — the same answer the app
       // gives when it drags a sheet and takes its contents along.
-      const area = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
-      if (opts.in !== undefined && !area) {
-        throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
-      }
-      const held = area ? new Set(itemsIn(snapshot.canvas, area).map((one) => one.id)) : null;
+      const grouped = snapshot.project.groupMode === "groups";
+      const area = opts.in === undefined ? null : grouped ? resolveCanvasGroupRef(snapshot.canvas, opts.in, true) : findArea(snapshot.canvas, opts.in);
+      if (opts.in !== undefined && !area) throw new Error(`no area called "${opts.in}" — isocan area ls names them`);
+      if (opts.recursive && !opts.in) throw new Error("--recursive needs --in <group>");
+      const held = area ? new Set((grouped ? (opts.recursive ? groupDescendants(snapshot.canvas, area.id) : groupChildren(snapshot.canvas, area.id)) : itemsIn(snapshot.canvas, area)).map((one) => one.id)) : null;
       // The same two questions the web's files panel answers, so a canvas
       // reads the same way from either side.
       const items = Object.values(snapshot.canvas.items).filter((item) => {
@@ -7967,14 +7987,17 @@ program
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         if (opts.in !== undefined && snapshot.project.groupMode === "groups") {
-          if (opts.cell) throw new Error("group grid-cell placement is not available in this build; use canvas group add --place");
           if (opts.by !== undefined || x !== undefined || y !== undefined) throw new Error("--in chooses placement; omit coordinates and --by");
-          const result = await new CanvasGroups(ctx.client, p.id, () => ctx.actor).add(opts.in, [ref], { place: true, dryRun: !!opts.dryRun });
-          if (ctx.json) return printJson(result);
-          console.log(`${result.dryRun ? "preview" : "moved"} ${result.affectedRoots.join(", ")} into ${opts.in}; ${result.changes.length} items affected`);
-          return;
+          return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).add(opts.in, [ref], { place: true, dryRun: !!opts.dryRun, ...(opts.cell ? { cell: parseGroupCell(opts.cell) } : {}) }));
         }
-        if (opts.dryRun) throw new Error("mv --dry-run currently requires --in on a group-enabled canvas");
+        if (snapshot.project.groupMode === "groups") {
+          if (opts.cell) throw new Error("--cell requires --in <group>");
+          if (opts.by && (x !== undefined || y !== undefined)) throw new Error("choose positional x y or --by, not both");
+          if (!opts.by && (x === undefined || y === undefined)) throw new Error("give x and y, or a delta with --by");
+          const destination = opts.by ? { by: parseXY(opts.by) } : { at: parseXY(`${x},${y}`) };
+          return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).move(ref, destination, opts));
+        }
+        if (opts.dryRun) throw new Error("mv --dry-run requires a group-enabled canvas");
         const item = resolveItem(snapshot, ref);
         // `--in`: the sheet's first clear spot, the search not counting the
         // item itself as in the way.
@@ -8140,14 +8163,17 @@ program
     "--to <edge>",
     `left | hcenter | right | top | vcenter | bottom`,
   )
+  .option("--dry-run", "report geometry without writing on a group canvas")
   .action(
-    run(async (refs: string[], opts: { to: string }, cmd: Command) => {
+    run(async (refs: string[], opts: { to: string; dryRun?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const edge = opts.to.toLowerCase();
       if (!ALIGN_EDGES.includes(edge as never)) {
         throw new Error(`--to expects one of ${ALIGN_EDGES.join(", ")}, got: ${opts.to}`);
       }
+      if (snapshot.project.groupMode === "groups") return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).arrange(refs, { kind: "align", edge: (edge === "hcenter" ? "center" : edge === "vcenter" ? "middle" : edge) as never }, opts));
+      if (opts.dryRun) throw new Error("align --dry-run requires a group-enabled canvas");
       const items = refs.map((ref) => resolveItem(snapshot, ref));
       const moves = alignMoves(items, edge as never);
       await applyMoves(ctx, p.id, moves, `aligned ${items.length} items to ${edge}`);
@@ -8158,8 +8184,9 @@ program
   .command("fit <items...>")
   .description("Grow items to the size their content wants, and settle them so nothing overlaps")
   .option("--size <WxH>", "the size to grow to, when the file cannot say")
+  .option("--dry-run", "report final frames without writing on a group canvas")
   .action(
-    run(async (refs: string[], opts: { size?: string }, cmd: Command) => {
+    run(async (refs: string[], opts: { size?: string; dryRun?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const items = refs.map((ref) => resolveItem(snapshot, ref));
@@ -8168,6 +8195,7 @@ program
       const targets: FitTarget[] = [];
       const unmeasurable: string[] = [];
       for (const item of items) {
+        if (snapshot.project.groupMode === "groups" && isGroupItem(item)) continue;
         if (asked) {
           targets.push({ itemId: item.id, ...asked });
           continue;
@@ -8180,13 +8208,19 @@ program
         if (size) targets.push({ itemId: item.id, ...size });
         else unmeasurable.push(item.title || item.id);
       }
-      if (unmeasurable.length > 0 && targets.length === 0) {
+      if (unmeasurable.length > 0 && targets.length === 0 && !items.some(isGroupItem)) {
         throw new Error(
           `only a browser can measure a page: pass --size WxH for ${unmeasurable.join(", ")} ` +
             `(or press Shift F on the canvas, which measures it)`,
         );
       }
+      if (snapshot.project.groupMode === "groups") {
+        if (unmeasurable.length) throw new Error(`pass --size WxH for ${unmeasurable.join(", ")}; no part of the fit was written`);
+        const requested = [...targets, ...items.filter(isGroupItem).map((item) => ({ itemId: item.id, ...(asked ?? {}) }))];
+        return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).fit(requested, opts));
+      }
       const { resizes, moves } = fitMoves(snapshot.canvas, targets);
+      if (opts.dryRun) throw new Error("fit --dry-run requires a group-enabled canvas");
       for (const r of resizes) {
         await sendOp(ctx, p.id, { type: "item.resize", itemId: r.itemId, width: r.width, height: r.height });
       }
@@ -8202,12 +8236,15 @@ program
   .command("distribute <items...>")
   .description("Even out the gaps between items — the canvas's spacing measures, as a verb")
   .requiredOption("--axis <h|v>", "h across, v down")
+  .option("--dry-run", "report geometry without writing on a group canvas")
   .action(
-    run(async (refs: string[], opts: { axis: string }, cmd: Command) => {
+    run(async (refs: string[], opts: { axis: string; dryRun?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const axis = opts.axis.toLowerCase();
       if (axis !== "h" && axis !== "v") throw new Error(`--axis expects h or v, got: ${opts.axis}`);
+      if (snapshot.project.groupMode === "groups") return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).arrange(refs, { kind: "distribute", axis }, opts));
+      if (opts.dryRun) throw new Error("distribute --dry-run requires a group-enabled canvas");
       const items = refs.map((ref) => resolveItem(snapshot, ref));
       const moves = distributeMoves(items, axis);
       await applyMoves(ctx, p.id, moves, `spaced ${items.length} items ${axis === "h" ? "across" : "down"}`);
@@ -8337,6 +8374,15 @@ program
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const perRow = opts.perRow === undefined ? undefined : Number(opts.perRow);
+      if (snapshot.project.groupMode === "groups") {
+        if (perRow !== undefined && (!Number.isInteger(perRow) || perRow < 1)) throw new Error("--per-row expects a positive integer");
+        if (mode !== undefined && !isFormatMode(mode)) throw new Error(`not a format: ${mode}`);
+        if (refs.length && opts.in) throw new Error("choose named items or --in <group>");
+        const groups = new CanvasGroups(ctx.client, p.id, () => ctx.actor);
+        if (opts.in && perRow === undefined && mode !== "smart") return reportCanvasGroup(ctx, await groups.layout(opts.in, {}, { tidy: true, dryRun: !!opts.dryRun }));
+        const ids = refs.length ? refs : opts.in ? groupChildren(snapshot.canvas, resolveCanvasGroupRef(snapshot.canvas, opts.in, true).id).map((item) => item.id) : groupSelectionRoots(snapshot.canvas, Object.keys(snapshot.canvas.items));
+        return reportCanvasGroup(ctx, await groups.arrange(ids, { kind: "tidy", mode: mode ?? "grid", ...(opts.in ? { containerId: resolveCanvasGroupRef(snapshot.canvas, opts.in, true).id } : {}), ...(perRow !== undefined ? { perRow } : {}) }, opts));
+      }
       /**
        * `--in <area>`: the same arrangement over the sheet's contents only,
        * starting at the sheet's inner corner — a wall formatted as a wall.
@@ -8440,7 +8486,8 @@ program
   .option("-d, --description <text>")
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
   .option("--rm-prop <key>", "remove a property (repeatable)", (v: string, prev: string[]) => [...prev, v], [])
-  .option("--size <WxH>", "resize, e.g. 480x360")
+  .option("--size <WxH>", "resize, e.g. 480x360; groups scale their contents")
+  .option("--dry-run", "preview a metadata/size update without writing on a group canvas")
   .option(
     "--file <path>",
     "back this item with a file at <path>, relative to the bound directory (--file '' unbacks it)",
@@ -8467,6 +8514,7 @@ program
           prop: Record<string, string>;
           rmProp: string[];
           size?: string;
+          dryRun?: boolean;
           keepFilename?: boolean;
           file?: string;
           visualFile?: string;
@@ -8515,6 +8563,16 @@ program
             patch.properties = { ...(patch.properties ?? {}), [VISUAL_FILE_PROP]: clean };
           }
         }
+        const requestedSize = opts.size ? sizeFor(opts.size, { width: 0, height: 0 }) : undefined;
+        if (snapshot.project.groupMode === "groups" && !opts.visual) {
+          if (!Object.keys(patch).length && !requestedSize) throw new Error("nothing to change");
+          if (!Object.keys(patch).length && requestedSize) return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).resize(item.id, requestedSize, opts));
+          const current = item.versions.find((version) => version.id === item.currentVersionId);
+          const filename = opts.title !== undefined && !opts.keepFilename && current ? renamedFilename(snapshot.canvas, item.id, opts.title, current.filename) : undefined;
+          return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).update(item.id, { patch, ...(filename && filename !== current?.filename ? { filename } : {}), ...(requestedSize ? { size: requestedSize } : {}) }, opts));
+        }
+        if (opts.dryRun) throw new Error("set --dry-run requires a group-enabled canvas and a metadata/size edit");
+        if (snapshot.project.groupMode === "groups" && opts.visual && (Object.keys(patch).length || requestedSize)) throw new Error("a visual version and metadata/size edits are separate acts; issue set --visual on its own");
         let did = false;
         if (opts.visual) {
           const visRaw = await fs.readFile(opts.visual);
@@ -9749,6 +9807,7 @@ slidesCmd
         height: spot.height,
         // Under its slide is a spot somebody meant: a tidy must not move it away.
         placement: { x: spot.x, y: spot.y, chosen: true },
+        ...(snapshot.project.groupMode === "groups" ? { containerId: slide.containerId ?? null, groupPlacement: "auto" as const } : {}),
         title: textTitle(body),
         properties: noteProperties(slide.id),
       });
@@ -9969,6 +10028,12 @@ sprintCmd
           kept.push({ key: sheet.key, itemId: existing.id, title: existing.title });
           continue;
         }
+        if (snapshot.project.groupMode === "groups") {
+          const result = await new CanvasGroups(ctx.client, p.id, () => ctx.actor).new(sheet.title, { at: { x: sheet.x, y: sheet.y }, size: { width: sheet.width, height: sheet.height }, note: sheet.card, properties: { [AREA_TINT_PROP]: sheet.tint, [BOARD_PROP]: sheet.key } });
+          const placed = result.changes.find((change) => change.itemId === result.itemId)!.boxAfter!;
+          laid.push({ key: sheet.key, itemId: result.itemId!, title: sheet.title, x: placed.x, y: placed.y });
+          continue;
+        }
         const upload = await ctx.client.uploadBlob(p.id, Buffer.from(sheet.card, "utf8"), AREA_MIME, AREA_FILENAME);
         const itemId = newItemId();
         await sendOp(
@@ -10000,7 +10065,7 @@ sprintCmd
       if (ctx.json) return printJson({ laid, kept, origin });
       if (laid.length === 0) return console.log(`the board is already laid — ${kept.length} sheets, nothing added`);
       console.log(`laid ${laid.length} sheet${laid.length === 1 ? "" : "s"}${kept.length > 0 ? ` (${kept.length} already there)` : ""}: ${laid.map((one) => one.title).join(" · ")}`);
-      console.log("one undo takes the whole board away; `isocan area ls` names the sheets");
+      console.log(snapshot.project.groupMode === "groups" ? "each sheet is an undoable group creation; isocan canvas group ls names them" : "one undo takes the whole board away; `isocan area ls` names the sheets");
     }),
   );
 
@@ -10054,11 +10119,11 @@ sprintCmd
         // is still a brief.
         const sheet = boardAreaFor(snapshot.canvas, "brief");
         const size = { width: 900, height: 600 };
-        const placement: Placement = sheet
-          ? { ...freeSpotIn(snapshot.canvas, sheet, size.width, size.height), chosen: true }
-          : placementFor(snapshot, {}, size);
+        // Sheet placement is chosen: placementFor preserves the clear spot
+        // inside a legacy sheet and carries an explicit parent for a group.
+        const placement = placementFor(snapshot, sheet ? { in: sheet.id } : {}, size);
         const itemId = newItemId();
-        await sendOp(ctx, p.id, {
+        const accepted = await sendOp(ctx, p.id, {
           type: "item.add",
           itemId,
           version,
@@ -10068,7 +10133,7 @@ sprintCmd
           title: "Brief",
           properties: { ...TEXT_PROPERTIES, [BRIEF_PROP]: "1" },
         });
-        if (ctx.json) return printJson({ itemId, version: 1, placement });
+        if (ctx.json) return printJson({ itemId, version: 1, placement: accepted.envelope.op.type === "group.change" ? insertedItemBox(accepted.envelope.op, itemId) : placement });
         console.log(`the brief is on the board${sheet ? "" : " (no Brief sheet — laid where text goes)"} — react ✅ on it when it is right`);
       },
     ),
@@ -10158,7 +10223,8 @@ sprintCmd
           console.log(`"${item.title}" is already in for ${phase}`);
           continue;
         }
-        await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: handInPatch(phase) });
+        const destination = boardAreaFor(snapshot.canvas, phaseSpec(phase)!.area);
+        await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: handInPatch(phase), ...(snapshot.project.groupMode === "groups" && destination ? { containerId: destination.id, groupPlacement: "auto" as const } : {}) });
         console.log(`"${item.title}" handed in for ${phase}`);
       }
     }),

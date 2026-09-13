@@ -1,4 +1,4 @@
-import type { Actor, Item } from "./model.js";
+import type { Actor, Item, ItemVersion } from "./model.js";
 import type { NewVersion, Operation } from "./ops.js";
 /** Saved world-space reservations; never derived from browser text metrics. */
 export interface GroupLayout {
@@ -9,6 +9,27 @@ export interface GroupLayout {
     columnGutter?: number;
     rows?: string[];
     columns?: string[];
+    rowCount?: number;
+    columnCount?: number;
+}
+/** A named grid cell is one-based on both user surfaces. */
+export interface GroupCell {
+    row: number;
+    column: number;
+}
+/** Auto finds space; preserve keeps world geometry; exact refuses a violated cell constraint. */
+export type GroupPlacementPolicy = "auto" | "preserve" | "exact";
+/** Only existing item content verbs can be compiled into atomic header repair. */
+type GroupContentOperation = Extract<Operation, {
+    type: "item.update" | "item.addVersion" | "item.setCurrentVersion";
+}>;
+/** Saved content effects own specific metadata keys and the version fields they replace. */
+export interface GroupContentFields {
+    title?: string;
+    description?: string;
+    properties?: Record<string, string | null>;
+    versions?: ItemVersion[];
+    currentVersionId?: string;
 }
 /** World coordinates stay flat even when explicit membership nests several levels deep. */
 export interface GroupBox {
@@ -46,6 +67,17 @@ export type GroupAction = {
     itemIds: string[];
     containerId: string | null;
     place?: boolean;
+    cell?: GroupCell;
+    groupPlacement?: GroupPlacementPolicy;
+    expected?: GroupExpectation[];
+} | {
+    kind: "insert";
+    item: Extract<Operation, {
+        type: "item.add";
+    }>;
+} | {
+    kind: "content";
+    operation: GroupContentOperation;
 } | {
     kind: "remove";
     itemIds: string[];
@@ -61,6 +93,9 @@ export type GroupAction = {
         y: number;
     };
     expected: GroupExpectation[];
+    containerId?: string | null;
+    cell?: GroupCell;
+    groupPlacement?: GroupPlacementPolicy;
 } | {
     kind: "transform";
     moves: Array<{
@@ -69,17 +104,36 @@ export type GroupAction = {
         y: number;
     }>;
     expected: GroupExpectation[];
+    containerId?: string | null;
+    cell?: GroupCell;
+    groupPlacement?: GroupPlacementPolicy;
 } | {
     kind: "transform";
     itemId: string;
     box: GroupBox;
     anchor?: GroupAnchor;
     expected: GroupExpectation[];
+    containerId?: string | null;
+    cell?: GroupCell;
+    groupPlacement?: GroupPlacementPolicy;
 } | {
     kind: "frame";
     itemId: string;
     box?: GroupBox;
     fit?: boolean;
+    expected?: GroupExpectation[];
+} | {
+    kind: "frame";
+    itemIds: string[];
+    fit: true;
+    expected?: GroupExpectation[];
+} | {
+    kind: "frame";
+    targets: Array<{
+        itemId: string;
+        box?: GroupBox;
+    }>;
+    expected?: GroupExpectation[];
 } | {
     kind: "layout";
     itemId: string;
@@ -120,6 +174,7 @@ export interface GroupExpectation {
     children?: string[];
     annotations?: string[];
     cohortId?: string | null;
+    content?: GroupContentFields;
 }
 /** Each trash entry points to one deletion act, preventing restore from stealing newer trash. */
 export interface GroupDeletionCohort {
@@ -140,6 +195,7 @@ export type GroupWrite = {
     kind: "patch";
     itemId: string;
     fields: GroupFields;
+    content?: GroupContentFields;
 } | {
     kind: "create";
     item: Item;
@@ -162,8 +218,11 @@ export interface GroupChange {
     writes: GroupWrite[];
     cohorts?: Record<string, GroupCohortRecord>;
     skippedIds?: string[];
+    /** Absent means the original v1 record; v2 adds insertion and content effects. */
+    schemaVersion?: 2;
 }
 /** Narrow the shared vocabulary without inventing a separate client-side mutation channel. */
 export type GroupOperation = Extract<Operation, {
     type: "group.change";
 }>;
+export {};

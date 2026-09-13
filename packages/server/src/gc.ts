@@ -75,7 +75,12 @@ function hashesInOperation(op: Operation): string[] {
   switch (op.type) {
     case "group.change": {
       const versions = op.action.kind === "create" ? [op.action.group.version]
-        : op.action.kind === "apply" ? op.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions : []) : [];
+        : op.action.kind === "insert" ? [op.action.item.version]
+        : op.action.kind === "content" && op.action.operation.type === "item.addVersion" ? [op.action.operation.version]
+        : op.action.kind === "apply" ? [
+          ...op.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions : write.kind === "patch" ? write.content?.versions ?? [] : []),
+          ...op.action.change.expected.flatMap((row) => row.content?.versions ?? []),
+        ] : [];
       return versions.flatMap((version) => [version.blobHash, ...(version.visual ? [version.visual.blobHash] : [])]);
     }
     case "item.add":

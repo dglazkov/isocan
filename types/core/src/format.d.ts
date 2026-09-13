@@ -51,6 +51,8 @@ export type FormatMode = "grid" | "smart";
 export declare const FORMAT_MODES: readonly FormatMode[];
 export declare function isFormatMode(value: unknown): value is FormatMode;
 interface FormatOptions {
+    /** Shared group tidy may request a uniform gutter around complete footprints. */
+    gap?: number;
     /** Which tidy. Defaults to `grid` — see `FormatMode`. */
     mode?: FormatMode;
     /** Where the top-left of the arrangement goes. Defaults to where the

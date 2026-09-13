@@ -1,4 +1,4 @@
-import type { TextAnchor } from "@isocan/core";
+import type { GroupBox, TextAnchor } from "@isocan/core";
 import { create } from "zustand";
 import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
@@ -43,6 +43,8 @@ export interface ResizeState {
 
 /** A text node being typed — before it exists, or while it is re-worded. */
 export interface PendingText {
+  /** The scope at composition start, retained through async upload and later navigation. */
+  containerId?: string | null;
   /** World coordinates of the node's top-left. */
   x: number;
   y: number;
@@ -97,6 +99,8 @@ interface UiStore {
   fannedItemId: string | null;
   drag: DragState | null;
   resize: ResizeState | null;
+  groupPreview: { id: string; boxes: ReadonlyMap<string, GroupBox> } | null;
+  groupDropTargetId: string | null;
   marquee: MarqueeState | null;
   /** Alignment guides for the drag in hand: the lines the dragged box has
    * settled onto. World coordinates; empty when nothing is aligned. */
@@ -292,6 +296,8 @@ interface UiStore {
   setFanned: (itemId: string | null) => void;
   setDrag: (drag: DragState | null) => void;
   setResize: (resize: ResizeState | null) => void;
+  setGroupPreview: (preview: UiStore["groupPreview"]) => void;
+  setGroupDropTarget: (itemId: string | null) => void;
   setMarquee: (marquee: MarqueeState | null) => void;
   setGuides: (guides: Guide[], spacing?: SpacingGuide[]) => void;
   setEntered: (itemId: string | null) => void;
@@ -612,6 +618,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     fannedItemId: null,
     drag: null,
     resize: null,
+    groupPreview: null,
+    groupDropTargetId: null,
     marquee: null,
     guides: [],
     spacing: [],
@@ -687,6 +695,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     setFanned: (fannedItemId) => set({ fannedItemId }),
     setDrag: (drag) => set({ drag }),
     setResize: (resize) => set({ resize }),
+    setGroupPreview: (groupPreview) => set({ groupPreview }),
+    setGroupDropTarget: (groupDropTargetId) => set({ groupDropTargetId }),
     setMarquee: (marquee) => set({ marquee }),
     setGuides: (guides, spacing = []) => set({ guides, spacing }),
     setEntered: (enteredItemId) => set({ enteredItemId }),
@@ -711,7 +721,7 @@ export const useUiStore = create<UiStore>((set, get) => {
       set((s) =>
         pendingText === null && s.pendingText?.oneShot === true && s.activeTool === "text"
           ? { pendingText, activeTool: "select" as Tool }
-          : { pendingText },
+          : { pendingText: pendingText && pendingText.containerId === undefined ? { ...pendingText, containerId: s.activeGroupId } : pendingText },
       ),
     setClipboard: (clipboard) => set({ clipboard }),
     setContextMenu: (contextMenu) => set({ contextMenu }),

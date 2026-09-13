@@ -11,3 +11,5 @@ import type { OpEnvelope } from "./ops.js";
  *   restores content, not these stamps — the undoer did mutate the item.
  */
 export declare function applyOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null;
+/** Primitive existing effects also compile a bounded content write before group-frame repair. */
+export declare function reduceOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null;

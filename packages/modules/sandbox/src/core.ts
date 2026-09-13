@@ -1,4 +1,4 @@
-import type { CanvasContents, ContextPiece, CoreModule, Item, SlashCommand } from "@isocan/core";
+import type { CanvasContents, ContextPiece, CoreModule, Item, NewVersion, Operation, SlashCommand } from "@isocan/core";
 
 /**
  * **Sandboxes** (`docs/projects/modules/phases.md`, phase 5 — the agent-side
@@ -36,6 +36,12 @@ export const SANDBOX_RUN_PROP = "sandbox.run";
 export const SANDBOX_OF_PROP = "sandbox.of";
 
 export const TRANSCRIPT_MIME = "text/plain";
+
+/** A first transcript inherits its program's container; further runs own only its version stack. */
+export function transcriptOperation(program: Item, existing: Item | null, version: NewVersion, itemId: string, groups: boolean): Operation {
+  if (existing) return { type: "item.addVersion", itemId: existing.id, version };
+  return { type: "item.add", itemId, version, width: 420, height: 300, placement: { anchorItemId: program.id }, title: `${program.title} — output`, properties: { [SANDBOX_OF_PROP]: program.id }, ...(groups ? { containerId: program.containerId ?? null, groupPlacement: "auto" as const } : {}) };
+}
 
 export function runOf(item: Item): string | null {
   const value = item.properties?.[SANDBOX_RUN_PROP];

@@ -64,6 +64,8 @@ export interface StoredWrite {
   /** Set once the home has answered with a seq; the write retires when the
    * confirmed cursor reaches it. */
   seq?: number;
+  /** Writer-resolved effects are replayed verbatim while their ordered tail is still in flight. */
+  accepted?: import("@isocan/core").OpEnvelope;
 }
 
 /**

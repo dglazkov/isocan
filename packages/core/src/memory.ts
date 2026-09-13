@@ -1,6 +1,7 @@
 import type { CanvasContents, Item } from "./model.ts";
 import { canvasIdOf, isCanvasItem } from "./canvasitem.ts";
 import { areasOf } from "./area.ts";
+import { isGroupItem } from "./canvas-groups.ts";
 import { PLACEMENT_GAP } from "./placement.ts";
 import { designSystem } from "./designsystem.ts";
 import { pinnedItems } from "./contextmark.ts";
@@ -211,7 +212,7 @@ export const CONTEXT_SHEET_TITLE = "Context";
 export const CONTEXT_SHEET_SIZE = { width: 1760, height: 1400 };
 
 export function contextSheet(canvas: CanvasContents): Item | null {
-  return areasOf(canvas).find((area) => area.title === CONTEXT_SHEET_TITLE) ?? null;
+  return Object.values(canvas.items).find((item) => isGroupItem(item) && item.title === CONTEXT_SHEET_TITLE) ?? areasOf(canvas).find((area) => area.title === CONTEXT_SHEET_TITLE) ?? null;
 }
 
 export function contextSheetSpot(

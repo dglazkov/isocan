@@ -18,6 +18,7 @@
  */
 export * from "./connect.js";
 export * from "./canvas-groups.js";
+export * from "./operation-receipt.js";
 export * from "./routes.js";
 export * from "./client.js";
 export * from "./ctx.js";

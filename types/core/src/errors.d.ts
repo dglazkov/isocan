@@ -1,3 +1,22 @@
+/**
+ * **The one word for a home-scope refusal**, wherever a refusal already
+ * carries a word.
+ *
+ * As the `reason` beside `not-admitted` at the door and on a
+ * `WS_NOT_ADMITTED` close, where `withdrawn`, `taken-down` and `ended` ride:
+ * the same kind of fact about the same kind of moment, and every client that
+ * branches on those is already looking in the right place. As the `code` at
+ * `/api/attest` and at the door's mint, where there is no admission to be
+ * refused and the refusal is the whole answer. And as the `OpValidationError`
+ * code at `actor.claim`, so a terminal prints the sentence and stops rather
+ * than reading `name-taken` and offering a pass.
+ *
+ * Short, for `TAKEN_DOWN`'s reason: a WebSocket close reason is capped at 123
+ * bytes and throws rather than truncating, so the word travels on the socket
+ * and the sentence is fetched by whoever renders it. Kept with the other
+ * wire errors so branching on it does not load refusal policy helpers.
+ */
+export declare const REFUSED = "refused";
 type OpErrorCode = "unknown-item" | "unknown-version" | "unknown-thread" | "unknown-comment" | "unknown-anchor" | "not-in-trash" | "duplicate-id" | "empty-body" | "last-comment" | "main-exists" | "name-taken" | "unknown-actor"
 /** The speaker named an actor its badge does not claim (the identity desk's
  * mechanism 5). The remedy is always the same and always available: claim

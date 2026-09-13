@@ -290,8 +290,10 @@ export const useCanvasStore = create<CanvasStore>(() => ({
  * one place where "the truth advanced" and "the view was rebuilt" happen
  * together, and no path that can do one without the other.
  */
-function confirm(state: CanvasState, lastSeq: number): void {
-  const queue = retire(useCanvasStore.getState().queue, lastSeq);
+function confirm(state: CanvasState, lastSeq: number, observedOpId?: string): void {
+  // An ordered echo proves this write landed even if its HTTP receipt has
+  // not supplied a seq yet. Never fold its public intent over its own effect.
+  const queue = retire(useCanvasStore.getState().queue, lastSeq).filter((write) => write.opId !== observedOpId);
   const view = foldQueue(state, queue);
   useCanvasStore.setState({
     confirmed: state,
@@ -325,12 +327,14 @@ function persist(): void {
     project: confirmed.project,
     canvas: confirmed.canvas,
     lastSeq,
-    queue: queue.map(({ opId, actor, op, at, seq }) => ({
+    queue: queue.map(({ opId, actor, op, at, seq, group, accepted }) => ({
       opId,
       actor,
       op,
       at,
       ...(seq !== undefined ? { seq } : {}),
+      ...(group !== undefined ? { group } : {}),
+      ...(accepted ? { accepted } : {}),
     })),
     savedAt: new Date().toISOString(),
   };
@@ -357,11 +361,16 @@ export function queueOfflineWrite(
     queue: [...queue, newWrite(opId, actor, op)],
     // The socket may still think it is alive — a POST discovers the truth
     // first, because it is the thing that actually asked.
-    connection: "offline",
+    connection: afterQueueFailure(useCanvasStore.getState().connection),
   });
   render();
   persist();
   return true;
+}
+
+/** A delayed POST cannot replace the home's terminal refusal with a network status. */
+function afterQueueFailure(connection: Connection): Connection {
+  return connection === "connecting" || connection === "live" || connection === "reconnecting" ? "offline" : connection;
 }
 
 /**
@@ -408,17 +417,22 @@ async function drainQueue(): Promise<boolean> {
     if (!next) return true;
     try {
       const answer = await postOp(canvasId, next.actor, next.op, next.opId, next.group);
+      // Navigation shares this flush promise. Ignore the old canvas's answer
+      // and drain the current queue before its caller is allowed to dial.
+      if (useCanvasStore.getState().canvasId !== canvasId || useCanvasStore.getState().confirmed?.project.id !== canvasId) continue;
       // Not removed — marked. It retires when the tail reaches its seq, so the
       // view never rewinds between the answer and the history that carries it.
       useCanvasStore.setState({
-        queue: useCanvasStore
+        queue: retire(useCanvasStore
           .getState()
           .queue.map((write) =>
-            write.opId === next.opId ? { ...write, seq: answer.seq } : write,
-          ),
+            write.opId === next.opId ? { ...write, seq: answer.seq, accepted: answer.envelope } : write,
+          ), useCanvasStore.getState().lastSeq),
       });
+      render();
       persist();
     } catch (err) {
+      if (useCanvasStore.getState().canvasId !== canvasId || useCanvasStore.getState().confirmed?.project.id !== canvasId) continue;
       if (!(err instanceof ApiError)) return false; // the home never answered
       refuse(next, err);
     }
@@ -605,13 +619,17 @@ export async function sendEchoedResult(
    * the difference between a rule and a habit — every path that changes this
    * canvas comes through here, including the ones that have no button.
    */
-  if (useCanvasStore.getState().past) {
+  const current = useCanvasStore.getState();
+  const viewedCanvasId = current.canvasId ?? current.confirmed?.project.id;
+  if (current.past && (!viewedCanvasId || viewedCanvasId === canvasId)) {
     flashNotice("this is the canvas as it was — return to now to change it");
     return { status: "refused", message: "Return to now before changing this canvas." };
   }
-  const { confirmed } = useCanvasStore.getState();
-  // No confirmed state means no queue to join — nothing has been folded yet.
-  if (!confirmed) {
+  const { confirmed } = current;
+  const ownsCanvas = () => useCanvasStore.getState().canvasId === canvasId && useCanvasStore.getState().confirmed?.project.id === canvasId;
+  // An upload may finish after navigation. Its original canvas still owns
+  // the operation; another canvas's queue and optimistic view cannot hold it.
+  if (!confirmed || !ownsCanvas()) {
     const answer = await sendOp(canvasId, actor, op, group);
     return { status: answer ? "accepted" : "queued" };
   }
@@ -622,16 +640,24 @@ export async function sendEchoedResult(
   persist();
   try {
     const answer = await postOp(canvasId, actor, op, opId, group);
+    if (!ownsCanvas()) return { status: "accepted" };
     // Marked, not removed — it retires when the tail reaches its seq, so the
     // view never rewinds between the answer and the history that carries it.
     useCanvasStore.setState({
-      queue: useCanvasStore
+      queue: retire(useCanvasStore
         .getState()
-        .queue.map((other) => (other.opId === opId ? { ...other, seq: answer.seq } : other)),
+        .queue.map((other) => (other.opId === opId ? { ...other, seq: answer.seq, accepted: answer.envelope } : other)), useCanvasStore.getState().lastSeq),
     });
+    render();
     persist();
     return { status: "accepted" };
   } catch (err) {
+    if (!ownsCanvas()) {
+      if (err instanceof ApiError && homeAnswered(err)) return { status: "refused", message: err.message };
+      // The original queue was persisted before navigation. Its stable opId
+      // can retry there; never mark the newly opened canvas offline for it.
+      return { status: "queued" };
+    }
     if (err instanceof ApiError && homeAnswered(err)) {
       // The home said no to something the person already saw happen.
       refuse(write, err);
@@ -645,7 +671,7 @@ export async function sendEchoedResult(
       queue: useCanvasStore
         .getState()
         .queue.map((other) => (other.opId === opId ? { ...other, inflight: false } : other)),
-      connection: "offline",
+      connection: afterQueueFailure(useCanvasStore.getState().connection),
     });
     render();
     persist();
@@ -1205,7 +1231,7 @@ function openSocket(canvasId: string): void {
         return;
       }
       if (next === null) return; // project.delete arrives as canvas-deleted too
-      confirm(next, message.entry.seq);
+      confirm(next, message.entry.seq, message.entry.envelope.id);
       if (message.entry.seq > replayThrough) announceComment(message.entry.envelope);
     } else if (message.type === "standing") {
       // This connection's rung moved under it (roles journey 2 step 1): the

@@ -1,3 +1,4 @@
+import { selectCreatedItems } from "./groupplacement.ts";
 import type { Actor, CanvasCursor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
 import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
@@ -15,7 +16,7 @@ import {
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
-import { alignItems, tidyItems } from "./actions.ts";
+import { alignItems, distributeGroupItems, tidyItems } from "./actions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -25,7 +26,7 @@ import { addSpeakerNote, noteStarter } from "./notes.ts";
 import { handIn, handable } from "./sprint.ts";
 import { canEditNow } from "./capability.ts";
 import { canvasGroupEntries, groupDeleteLabel } from "./canvasgroupmenus.ts";
-import { openGroupCreation, groupsEnabled } from "./canvasgroups.ts";
+import { openGroupCreation, groupTask, groupsEnabled } from "./canvasgroups.ts";
 
 /**
  * **What the right-click menu offers, and why each thing is on it.**
@@ -129,13 +130,13 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       label: many ? `Tidy ${items.length} items` : "Tidy",
       writes: true,
       disabled: !many,
-      run: () => void tidyItems(ctx.canvasId, ctx.actor, ids, "grid"),
+      run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "grid")),
     },
     {
       label: "Tidy — smart",
       writes: true,
       disabled: !many,
-      run: () => void tidyItems(ctx.canvasId, ctx.actor, ids, "smart"),
+      run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "smart")),
     },
     {
       /**
@@ -158,9 +159,13 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       submenu: ALIGN_EDGES.map((edge) => ({
         label: alignLabel(edge),
         writes: true,
-        run: () => void alignItems(ctx.canvasId, ctx.actor, ids, edge),
+        run: () => groupTask(() => alignItems(ctx.canvasId, ctx.actor, ids, edge)),
       })),
     },
+    ...(groupsEnabled() ? [
+      { label: "Distribute horizontally", writes: true, disabled: ids.length < 3, run: () => groupTask(() => distributeGroupItems(ctx.canvasId, ctx.actor, ids, "h")) },
+      { label: "Distribute vertically", writes: true, disabled: ids.length < 3, run: () => groupTask(() => distributeGroupItems(ctx.canvasId, ctx.actor, ids, "v")) },
+    ] : []),
     { separator: "" },
     ...(!one || !isGroupItem(one) ? [{
       label: "Open full screen",
@@ -350,7 +355,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
                   writes: true,
                   run: async () => {
                     const id = await addSpeakerNote(ctx.canvasId, ctx.actor, slide, noteStarter(slide));
-                    useUiStore.getState().select(id);
+                    if (!selectCreatedItems(ctx.canvasId, [id])) return;
                     revealItem(id);
                     flashNotice(`Notes for "${slide.title}" — under the slide; N shows them in full screen`);
                   },
@@ -431,7 +436,7 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
       run: () => {
         if (!held) return;
         void pasteInto(held, ctx.canvasId, ctx.actor, ctx.world).then((made) => {
-          if (made.length > 0) useUiStore.getState().setSelection(made);
+          if (made.length > 0) selectCreatedItems(ctx.canvasId, made);
         });
       },
     },

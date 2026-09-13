@@ -19,6 +19,7 @@ import {
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
+import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
 
 /**
  * Words typed onto the canvas, committed the same way ink is
@@ -41,6 +42,7 @@ export async function addTextNode(
   face: TextFace = "sans",
   /** Paper, or null for a plain caption. See `core/textnode.ts`. */
   paper: Paper | null = null,
+  destination = creationDestination(),
 ): Promise<string> {
   const blob = new Blob([body], { type: TEXT_MIME });
   const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
@@ -64,8 +66,9 @@ export async function addTextNode(
    * describes something that genuinely exists at the home. An echo of a
    * version nobody else could fetch would be a different and much worse idea.
    */
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+    ...destination,
     itemId,
     version: {
       id: newVersionId(),

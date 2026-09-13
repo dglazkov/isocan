@@ -39,10 +39,10 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-async function request(url: string, body?: unknown, capable = true) {
+async function request(url: string, body?: unknown, capable: boolean | string = true) {
   const response = await fetch(`${base}${url}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: { ...badge.headers, ...(capable ? feature : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    headers: { ...badge.headers, ...(typeof capable === "string" ? { [CLIENT_FEATURES_HEADER]: capable } : capable ? feature : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, body: await response.json() as any };
@@ -318,23 +318,23 @@ describe("canvas groups through the authoritative HTTP writer", () => {
 });
 
 describe("canvas-group reducer capability", () => {
-  it("gates writes, snapshots, logs, watch, and both socket snapshot and tail", async () => {
-    const refusedBirth = await request("/api/ops", { canvasId: null, actor: alice, op: { type: "project.create", canvasId, title: "Acme", groupMode: "groups" } }, false);
+  it.each(["", "canvas-groups-v1"])("gates writes, snapshots, logs, watch, and both socket snapshot and tail for %s", async (oldFeatures) => {
+    const refusedBirth = await request("/api/ops", { canvasId: null, actor: alice, op: { type: "project.create", canvasId, title: "Acme", groupMode: "groups" } }, oldFeatures);
     expect(refusedBirth.status).toBe(426);
     await seed(); await wrap();
     for (const url of [`/api/projects/${canvasId}/canvas`, `/api/projects/${canvasId}/oplog`, `/api/projects/${canvasId}/oplog/archive`]) {
-      const refused = await request(url, undefined, false);
+      const refused = await request(url, undefined, oldFeatures);
       expect(refused.status).toBe(426);
       expect(refused.body.code).toBe(CANVAS_GROUPS_REQUIRED);
     }
-    expect((await request("/api/ops", { canvasId, actor: alice, op: { type: "item.move", itemId: "itm_a", x: 0, y: 0 } }, false)).status).toBe(426);
-    expect((await request("/api/oplog/watch", { cursors: {}, only: [canvasId] }, false)).status).toBe(426);
-    const all = await request("/api/oplog/watch", { cursors: {}, waitMs: 1 }, false);
+    expect((await request("/api/ops", { canvasId, actor: alice, op: { type: "item.move", itemId: "itm_a", x: 0, y: 0 } }, oldFeatures)).status).toBe(426);
+    expect((await request("/api/oplog/watch", { cursors: {}, only: [canvasId] }, oldFeatures)).status).toBe(426);
+    const all = await request("/api/oplog/watch", { cursors: {}, waitMs: 1 }, oldFeatures);
     expect(all.status).toBe(200);
     expect(all.body.entries).toEqual([]);
     for (const since of [0, 1]) {
       const messages: unknown[] = [];
-      const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}&since=${since}`, { headers: badge.headers });
+      const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}&since=${since}&${CLIENT_FEATURES_PARAM}=${oldFeatures}`, { headers: badge.headers });
       ws.on("message", (data) => messages.push(JSON.parse(String(data))));
       const code = await new Promise<number>((resolve, reject) => { ws.on("close", resolve); ws.on("error", reject); });
       expect(code).toBe(WS_STALE_CLIENT);
@@ -356,10 +356,10 @@ describe("canvas-group reducer capability", () => {
     ws.close();
   });
 
-  it("does not let a capable forwarding transport bless an incompatible original writer", async () => {
+  it.each(["", "canvas-groups-v1"])("does not let a capable forwarding transport bless incompatible original writer %s", async (oldFeatures) => {
     await seed(); await wrap();
     const before = await snapshot();
-    const denied = await post({ type: "item.move", itemId: "itm_a", x: 0, y: 0 }, alice, { clientFeatures: "" });
+    const denied = await post({ type: "item.move", itemId: "itm_a", x: 0, y: 0 }, alice, { clientFeatures: oldFeatures });
     expect(denied.status).toBe(426);
     expect(await snapshot()).toEqual(before);
     const legacy = await request("/api/ops", { canvasId: null, actor: alice, op: { type: "project.create", canvasId: "prj_legacy", title: "Acme legacy" } }, false);
@@ -382,5 +382,55 @@ describe("canvas-group reducer capability", () => {
       expect(denied.status).toBe(400);
       expect(await snapshot()).toEqual(before);
     }
+  });
+});
+
+describe("v2 insertion and brief effects", () => {
+  it("infers actual brief emptiness for both raw and nested content requests, with one exact inverse", async () => {
+    await seed(); await wrap();
+    const original = await snapshot();
+    const filled = await daemon.engine.putBlob(canvasId, Buffer.from("  # Acme brief\n"), { mimeType: "text/markdown", filename: "brief.md" });
+    const empty = await daemon.engine.putBlob(canvasId, Buffer.from(" \n\t"), { mimeType: "text/markdown", filename: "empty.md" });
+    const added = await accepted({ type: "item.addVersion", itemId: "itm_group", version: { id: "ver_filled", ...filled, filename: "brief.md" } });
+    expect(added.envelope.op).toMatchObject({ type: "group.change", action: { kind: "apply", change: { schemaVersion: 2, intent: "content" } } });
+    const shown = await snapshot();
+    expect(shown.lastSeq).toBe(original.lastSeq + 1);
+    expect(shown.canvas.items.itm_group?.groupLayout?.briefHeight).toBe(120);
+    expect(shown.canvas.items.itm_a).toEqual(original.canvas.items.itm_a);
+    const cleared = await accepted(action({ kind: "content", operation: { type: "item.addVersion", itemId: "itm_group", version: { id: "ver_empty", ...empty, filename: "empty.md" } } }));
+    expect(cleared.seq).toBe(shown.lastSeq + 1);
+    expect((await snapshot()).canvas.items.itm_group?.groupLayout?.briefHeight).toBe(0);
+    expect((await history("undo")).status).toBe(200);
+    expect((await snapshot()).canvas.items.itm_group).toMatchObject({ currentVersionId: "ver_filled", groupLayout: { briefHeight: 120 } });
+  });
+
+  it("retains source and inherited visual metadata from v2 content and its inverse", async () => {
+    await seed(); await wrap();
+    const visual = { blobHash: "hash_content_visual", mimeType: "image/png" };
+    await accepted({ type: "item.addVersion", itemId: "itm_group", version: { ...version("ver_content"), visual }, briefHeight: 120 });
+    const state = await snapshot();
+    const record = (await log()).at(-1)!;
+    const marked = reachableHashes({ ...state, canvas: { ...state.canvas, items: {}, trash: [] } }, [record]);
+    expect(marked.has("hash_ver_content")).toBe(true);
+    expect(marked.has("hash_content_visual")).toBe(true);
+    expect(marked.has("hash_ver_group")).toBe(true);
+  });
+
+  it("closes an already subscribed v1 client before the first v2 operation reaches it", async () => {
+    await accepted({ type: "project.create", canvasId, title: "Acme legacy" });
+    const messages: ServerMessage[] = [];
+    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}&since=0&${CLIENT_FEATURES_PARAM}=canvas-groups-v1`, { headers: badge.headers });
+    await new Promise<void>((resolve, reject) => {
+      ws.on("message", (data) => { const message = JSON.parse(String(data)) as ServerMessage; messages.push(message); if (message.type === "snapshot") resolve(); });
+      ws.on("error", reject);
+    });
+    const remote = await snapshot();
+    remote.project.groupMode = "groups";
+    remote.lastSeq++;
+    await daemon.engine.adoptRemoteSnapshot(canvasId, remote);
+    const closed = new Promise<number>((resolve, reject) => { ws.on("close", resolve); ws.on("error", reject); });
+    await accepted(action({ kind: "create", group: { id: "itm_group", title: "Acme group", version: version("ver_group") } }));
+    expect(await closed).toBe(WS_STALE_CLIENT);
+    expect(messages.filter((message) => message.type === "op-applied")).toEqual([]);
   });
 });

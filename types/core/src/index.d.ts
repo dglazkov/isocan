@@ -1,7 +1,7 @@
 export * from "./model.js";
 export * from "./errors.js";
 export * from "./ops.js";
-export * from "./reducer.js";
+export { applyOperation } from "./reducer.js";
 export * from "./badge.js";
 export * from "./grants.js";
 export * from "./passes.js";

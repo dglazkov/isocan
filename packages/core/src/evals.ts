@@ -573,7 +573,16 @@ export function harvestPreferences(
   for (const entry of log) {
     const op = entry.envelope.op;
     if (op.type === "group.change" && op.action.kind === "apply") {
-      for (const write of op.action.change.writes) if (write.kind === "create") seen.set(write.item.id, write.item.versions.map((version) => version.id));
+      for (const write of op.action.change.writes) {
+        if (write.kind === "create") seen.set(write.item.id, write.item.versions.map((version) => version.id));
+        if (write.kind === "patch" && write.content) {
+          if (write.content.versions) seen.set(write.itemId, write.content.versions.map((version) => version.id));
+          const chosen = write.content.currentVersionId;
+          const stack = seen.get(write.itemId) ?? [];
+          const at = chosen ? stack.indexOf(chosen) : -1;
+          if (chosen && at >= 0 && at < stack.length - 1) pairs.push({ itemId: write.itemId, title: canvas.items[write.itemId]?.title ?? write.itemId, chosen, chosenAt: entry.envelope.ts, chosenBy: entry.envelope.actor.name, chosenById: entry.envelope.actor.id, against: stack.filter((id) => id !== chosen) });
+        }
+      }
       continue;
     }
     if (op.type === "item.add") {

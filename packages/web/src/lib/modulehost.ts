@@ -1,7 +1,8 @@
 import type { Actor, Operation, WebHost } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
 import { canEditNow } from "./capability.ts";
-import { sendEchoed, setNotice } from "../stores/canvasStore.ts";
+import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
+import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
  * **The web half's host object** (#156, 9 Sep 2026).
@@ -30,10 +31,11 @@ import { sendEchoed, setNotice } from "../stores/canvasStore.ts";
  * moves before the round trip. A component's write must feel the same or the
  * tray will seem slower than the menu that does the same thing.
  */
-export function webHostFor(canvasId: string, actor: Actor): WebHost {
+export function webHostFor(canvasId: string, actor: Actor, destination = creationDestination()): WebHost {
+  const couldEdit = canEditNow();
   return {
     async send(ops: readonly Operation[], group?: string): Promise<void> {
-      if (!canEditNow()) {
+      if (!couldEdit || (useCanvasStore.getState().canvasId === canvasId && !canEditNow())) {
         setNotice("You are reading this canvas — that change was not sent.");
         return;
       }
@@ -42,7 +44,10 @@ export function webHostFor(canvasId: string, actor: Actor): WebHost {
          to it. Echoing by hand here would have been a second door that looked
          right and skipped the offline queue, the inflight fold and the
          scrubber's refusal. Caught by that guard on the first run. */
-      for (const op of ops) await sendEchoed(canvasId, actor, op, group);
+      for (const op of ops) {
+        if (op.type === "item.add") await sendCreatedItem(canvasId, actor, { ...op, ...(op.containerId === undefined ? destination : {}) }, group);
+        else await sendEchoed(canvasId, actor, op, group);
+      }
     },
     async putBlob(bytes: Blob, filename: string): Promise<{ blobHash: string; size: number }> {
       /**

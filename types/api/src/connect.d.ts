@@ -86,6 +86,14 @@ export interface AddSpec extends ContentSpec {
         height: number;
     };
     properties?: Record<string, string>;
+    /** Explicit group ID or unique reference; insertion and any frame growth are one act. */
+    in?: string;
+    containerId?: string | null;
+    cell?: {
+        row: number;
+        column: number;
+    };
+    groupPlacement?: "auto" | "preserve" | "exact";
 }
 /** The metadata half of `isocan set`, sized to what a script reaches for. */
 export interface SetSpec {

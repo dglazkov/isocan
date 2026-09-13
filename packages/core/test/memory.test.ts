@@ -117,6 +117,7 @@ describe("the Context sheet, a convention with one name", () => {
   it("is any sheet titled Context, and none when there is none", () => {
     const sheet = item("sheet", { title: "Context", properties: { kind: "area" }, width: 1600, height: 1000 });
     expect(contextSheet(canvas([sheet, item("x")]))?.id).toBe("sheet");
+    expect(contextSheet(canvas([{ ...sheet, properties: { kind: "group" } }]))?.id).toBe("sheet");
     expect(contextSheet(canvas([item("Context")]))).toBeNull();
   });
 
