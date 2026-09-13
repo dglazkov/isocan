@@ -77,7 +77,10 @@ design sections Joining/moving/leaving, Selecting a group, CLI/API surface,
 and UI entry points. Geometry preview and smart placement close in phase 3.
 
 **Work:** `isocan canvas group` new/wrap/ls/show/add/remove/ungroup, API helpers,
-JSON/dry-run/unique-ref behavior; browser create/wrap/add/remove/ungroup,
+JSON/dry-run/unique-ref behavior, and the existing `mv --in` spelling for
+atomic membership transfer and placement. Add one closed `remove` action
+inside `group.change` for selections whose roots have different destination
+parents; never approximate it with a loop of reparent requests. Browser create/wrap/add/remove/ungroup,
 activeGroupId, scoped click/marquee/Enter/Escape, group/ink/member menus,
 shortcuts and inspector/navigation. Retain sharing-group and text-selection
 verbs. Document every registered command in agent-guide quick reference and
@@ -91,7 +94,7 @@ are assigned explicitly by the conductor to avoid overlapping ownership.
 
 **Trajectory:**
 
-*nothing yet — the phase has not started.*
+- **2026-09-12** — Removing roots from different groups can require different destination parents. Phase 2 adds one closed `remove` intent within `group.change`, resolving all destinations from the starting relation. Its membership walk also requires `mv --in` now; phase 3 retains broader geometry dispatch.
 
 ## Phase 3 — Transforms, frame fitting and label-safe layout
 

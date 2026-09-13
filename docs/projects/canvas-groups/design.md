@@ -119,7 +119,9 @@ source frame keeps its size until explicitly fitted.
 
 **Remove from group** reparents a selected child to its current group's
 parent, preserving its entire subtree and world position. `--to-root` offers
-the canvas itself when the group is nested. **Ungroup** reparents all direct
+the canvas itself when the group is nested. A mixed selection can have several
+destination parents: resolve them from one starting state in one `remove`
+intent, rather than issuing a reparent request per destination. **Ungroup** reparents all direct
 children to the dissolved group's parent, keeping nested groups intact.
 The frame goes to trash, with its own card, versions and comments recoverable.
 Marks attached to that frame go to trash with it; marks attached to promoted
@@ -361,6 +363,11 @@ structural facts and bounded field writes. The shared writer resolver handles
 new ordinary geometry/lifecycle requests on group canvases through this same
 boundary. Public callers cannot submit a resolved patch.
 
+Phase 2 adds `remove` to this same closed action union. Unlike `reparent`,
+which names one destination, removal derives each selected root's destination
+from its current parent (or the explicit canvas-root option). It still emits
+one bounded resolved change and one exact inverse for a mixed selection.
+
 Keep operation members directly discoverable by `scripts/isomorphism.mjs`.
 Any vocabulary-bound adjustment must name the semantic acts it accounts for;
 type aliases that hide operation members would defeat that instrument.
@@ -368,7 +375,8 @@ type aliases that hide operation members would defeat that instrument.
 | Intent | Operation / shared behavior |
 | --- | --- |
 | Make a group, optionally wrapping roots | `create`: new group item, membership changes and enclosing frame as one change. |
-| Add, transfer, remove one or several nodes | `reparent`: roots, destination group or canvas root, placement policy and required frame adjustments. |
+| Add or transfer one or several nodes | `reparent`: roots, destination group or canvas root, placement policy and required frame adjustments. |
+| Remove one or several nodes from their current groups | `remove`: normalized roots and optional canvas-root policy; derive each destination from the same starting relation, preserving geometry in one change. |
 | Dissolve a group | `ungroup`: promote children and trash the frame, preserving its recoverable contents. |
 | Move or resize | `transform`: normalized roots, move delta or destination box, expected affected geometry/membership, and resolved changes. |
 | Fit or resize frame only | `frame`: frame policy/box and ancestor frame changes; member geometry is unchanged. |
