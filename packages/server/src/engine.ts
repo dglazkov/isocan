@@ -8,6 +8,7 @@ import type {
   ActorJoinOp,
   ActorJoins,
   ActorMarks,
+  HomeRefusal,
   ActorKinds,
   ActorNames,
   ActorRegistry,
@@ -30,6 +31,8 @@ import {
   INTERNAL_OP_TYPES,
   OplogFencedError,
   OpValidationError,
+  refusalSentence,
+  REFUSED,
   DEFAULT_COMMANDS,
   actorAliases,
   actorColors,
@@ -158,6 +161,17 @@ interface EngineOptions {
   /** Who is visibly on a canvas right now — presence, which lives outside
    * the engine. Claims consult it so a live face holds its name. */
   liveness?: (canvasId: string) => PresenceSession[];
+  /**
+   * **The operator's refusal on a name, or null** (operator phase 6). Handed
+   * in rather than reached for, because the engine must not import the
+   * refusals registry — it is home-scope operator state, and the engine
+   * judges actors, never operator standing. When it answers with a row,
+   * `actor.claim {as}` for that name is refused with the home's sentence: the
+   * name stops coming back, which is the `actor:` subject's whole job and the
+   * enforcement operator phase 4 said would land here. Absent in a caller
+   * that wired the engine by hand — a home with no operator refuses nobody.
+   */
+  refusedActor?: (actorId: string) => HomeRefusal | null;
 }
 
 export class CanvasNotFoundError extends Error {
@@ -1990,6 +2004,19 @@ export class Engine {
   private async applyClaimAndPersist(request: ClaimRequest): Promise<LogEntry> {
     const runtime = await this.actors();
     const ts = new Date().toISOString();
+    /**
+     * **The operator refused this name** (operator phase 6). Only `as`
+     * resuming an existing actor is checked: `fresh` mints a new name, which
+     * the operator has never seen and cannot have refused, and the whole
+     * point of refusing an `actor:` is that the name *stops coming back* — a
+     * modified client re-badging and re-claiming the ended name (operator
+     * phase 4's open finding) meets this here, at the one writer, where a
+     * client-side courtesy could not reach it. The sentence is the home's.
+     */
+    if (request.op.as) {
+      const refused = this.options.refusedActor?.(request.op.as);
+      if (refused) throw new OpValidationError(REFUSED, refusalSentence(refused));
+    }
     const { registry, actor, claims, adopted } = applyClaim(
       await this.claimContext(request, runtime.registry, ts),
       request.op,

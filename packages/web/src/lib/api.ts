@@ -26,6 +26,7 @@ import type {
   TakedownNotice,
   TakedownsResponse,
   BadgeEnd,
+  RefusalNotice,
   Operation,
   Persona,
   PostOpResponse,
@@ -69,6 +70,8 @@ import {
   badgeRoute,
   BADGES_ROUTE,
   BADGE_ENDED,
+  REFUSED,
+  NOT_ADMITTED,
   DOOR_ROUTE,
   encodeFilename,
   FILENAME_HEADER,
@@ -176,6 +179,19 @@ function isFramed(): boolean {
 }
 
 /**
+ * **The last refusal the door gave a knock** (operator phase 6), or null.
+ *
+ * A refused MINT — a knock from a network the operator refused — is answered
+ * 403 with the home's sentence, and `knockOnDoor` keeps its boolean contract
+ * for its many callers by recording the refusal here rather than throwing.
+ * `request` reads it to surface the sentence in place of the bare *a badge is
+ * required*, which is the *cheerful wrong answer* — advice to do the one thing
+ * that cannot work — the meter's own comment warns against. A 429 (metered) is
+ * NOT recorded: waiting genuinely fixes that one.
+ */
+let lastDoorRefusal: { message: string; refusal?: RefusalNotice } | null = null;
+
+/**
  * Go to the door and be handed a cookie. The page load already badges this
  * browser — the daemon sets the cookie on the HTML document — so this is
  * belt-and-braces: it heals a cookie that was cleared mid-session, and the
@@ -200,7 +216,21 @@ export async function knockOnDoor(): Promise<boolean> {
       // jar it cannot read back — see `badgeCookie`.
       body: JSON.stringify({ carrier: "cookie", framed: isFramed() }),
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      if (res.status === 403) {
+        const json = (await res.json().catch(() => null)) as
+          | { error?: string; reason?: string; refusal?: RefusalNotice }
+          | null;
+        if (json?.reason === REFUSED) {
+          lastDoorRefusal = {
+            message: json.error ?? "This home will not admit knocks from your network.",
+            ...(json.refusal ? { refusal: json.refusal } : {}),
+          };
+        }
+      }
+      return false;
+    }
+    lastDoorRefusal = null;
     await reclaimNow();
     return true;
   } catch {
@@ -230,6 +260,13 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   if (recovered) {
     res = await send();
     json = (await res.json().catch(() => null)) as any;
+  } else if (res.status === 401 && lastDoorRefusal) {
+    // The door refused the mint this recovery needed (operator phase 6): the
+    // home's sentence, not *a badge is required — ask the door*, which here
+    // would be advice to do the one thing that cannot work.
+    const said = lastDoorRefusal;
+    lastDoorRefusal = null;
+    throw new ApiError(403, said.message, NOT_ADMITTED, REFUSED);
   }
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
   return json as T;
@@ -453,6 +490,27 @@ export async function fetchEnded(): Promise<BadgeEnd | null> {
     if (res.status !== 401) return null;
     const json = (await res.json().catch(() => null)) as { code?: string; ended?: BadgeEnd } | null;
     return json?.code === BADGE_ENDED && json.ended ? json.ended : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **The sentence for a badge this home refuses at the door** (operator phase
+ * 6), or null. Read off the 403 the canvas gives — the home writes the
+ * refusal notice beside the code — so the tab that was closed with `refused`
+ * shows the home's words: *This home will not admit …* with the date, the
+ * category and the address to write to. Best-effort, like `fetchTakedown`: a
+ * home that will not answer leaves the page saying the short version.
+ */
+export async function fetchRefused(canvasId: string): Promise<RefusalNotice | null> {
+  try {
+    const res = await fetch(`/api/projects/${encodeURIComponent(canvasId)}/canvas`);
+    if (res.status !== 403) return null;
+    const json = (await res.json().catch(() => null)) as
+      | { reason?: string; refusal?: RefusalNotice }
+      | null;
+    return json?.reason === REFUSED && json.refusal ? json.refusal : null;
   } catch {
     return null;
   }

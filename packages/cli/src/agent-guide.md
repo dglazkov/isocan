@@ -2294,11 +2294,12 @@ given to once; `remove` reaches every canvas the group is shared with),
 it, never commit it; `share`'s address is what you hand a person),
 `badges` (the surfaces carrying this identity; `--kill` ends one — ask first),
 `operator show|look|takedown|purge|log <canvas>`, `operator end <badge|actor|email:…>`,
-`operator revoke <canvas|space> <subject>` — **this one is not yours.**
+`operator revoke <canvas|space> <subject>`,
+`operator refuse <email:…|repo:…|actor:…|net:…>` — **this one is not yours.**
 `isocan operator` is for the person who runs the home; it needs their sign-in
 in a browser and refuses inside a session — if asked to take something down,
-erase it, end somebody's surface, or turn off a grant, say so and give the
-address on /terms. If `isocan share` prints *Turned off by the operator of this
+erase it, end somebody's surface, turn off a grant, or refuse an address or a
+network at the door, say so and give the address on /terms. If `isocan share` prints *Turned off by the operator of this
 home*, the owner can turn it back on, and it is theirs to decide. If a wait of yours exits with `ended`, or a command
 prints *This surface was ended by the operator of this home*, your badge is
 finished here: stop, and tell the person who asked you to work.

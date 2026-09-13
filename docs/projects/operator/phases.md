@@ -16,21 +16,20 @@ after, because a takedown answers every one of those reports on its own,
 more bluntly. The words on `/terms` come first of all, because they are
 untrue today and fixing them costs nothing.
 
-**Where we are:** phases 1 to 5 are PART-DONE (12 Sep 2026): the operator
-is proved per act and refused in words; a look admits for an hour and is not
-in presence; a takedown stops the home serving a canvas and lifts; a purge
-erases the bytes and keeps the tombstone; ending a badge reaches what it held,
-for everyone, and the operator can end by badge, actor or address; the
-operator can turn off a grant on a canvas or a space, the owner's Share says
-so and how to turn it back on, and the owner's re-grant is hers alone; every
-act writes its ledger row before it answers. All of it green here with the
-cloud halves against the Firestore emulator, walked by hand against local
-daemons and, for the Share dialog, in a real browser; none of it walked on
-dev. Phase 0 still waits on Dion's call on the wording. The dev walks for 1–5
-wait on a person: `ISOCAN_OPERATORS` on dev.isocan.io, a sign-in, a second
-account, a third browser, a phone — and a decision about journey 1 step 3,
-which says Google where this app has only an emailed link. Phase 6 (refuse
-at the door) is next, and needs none of that.
+**Where we are:** phases 1 to 6 are PART-DONE (12–13 Sep 2026) — every
+act the page promised exists: the operator proved per act; a look; a
+takedown that lifts; a purge that does not; ending a badge that reaches what
+it held; turning off a grant the owner can turn back on; refusing an address
+or a network at the door for a stated time, which also closes phase 4's
+reclaim gap at the engine. Every act writes its ledger row before it answers.
+All of it green here with the cloud halves against the Firestore emulator,
+walked by hand against local daemons; none of it walked on dev. What stops
+the walk is one sitting of Dion's: `ISOCAN_OPERATORS` on dev.isocan.io, a
+sign-in, a second account, a third browser, a phone, two networks — and a
+decision about journey 1 step 3, which says Google where this app has only
+an emailed link. Phase 0's wording and phase 7's are Dion's call, drafted;
+phase 8 waits for a self-hosted home to ask. Nothing left here needs no
+person.
 
 **Sizes.** S is a day's work with its tests. M is two or three. L would be a
 week; nothing here is one.
@@ -317,7 +316,12 @@ owner's act is the owner's.
 
 ## Phase 6 — Refuse at the door (M)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE (2026-09-13).** Built and proved here: refusals on both
+desks, loaded at boot and re-read on write, in the one registry phase 2 made;
+read at the door, at `/api/attest`, at `actor.claim` and at the mint meter;
+`refuse`, `--for`, `--lift`; refusing an address ends every badge that proved
+it, with the sentence; a `--for` that expires on a clock a test moves. Journey
+9 on dev from two real networks waits on a person.
 
 Closes journey 9.
 
@@ -330,6 +334,29 @@ Closes journey 9.
 
 **Acceptance:** journey 9 on dev, from two networks — a refused `/24` and
 one that is not — with the refusal gone on its own at `--for 10m`.
+
+**Trajectory:**
+
+- **2026-09-13** — One door registry, not two: refusals were folded into phase
+  2's `Takedowns`, now `Refusals`, so `daemon.ts` still wires exactly one and
+  three readers of one list cannot become three answers.
+- **2026-09-13** — The desk keeps no clock; the registry does. A refusal's
+  `expiresAt` is judged in memory against an injectable `now`, never by
+  deleting rows on a timer, so *gone on its own at `--for 10m`* is a clock a
+  test moves, and `desk.refusals()` hands back expired rows for the registry
+  to filter.
+- **2026-09-13** — Refuse-by-actor closes operator phase 4's reclaim gap:
+  `Engine.claim` consults an injected refusal predicate, so `actor.claim {as}`
+  for a refused name is turned away at the one writer, where the CLI's
+  courtesy could not reach.
+- **2026-09-13** — A refused mint is 403 with the home's sentence, not 429:
+  waiting does not fix a refused network, so the door answers it before the
+  meter, and the client throws the sentence rather than *a badge is required*.
+- **2026-09-13** — Open: the walk on dev — journey 9 from two real networks, a
+  refused `/24` and one that is not, the sign-in half of the verb, and the
+  three sentences rendered in a real browser. Waits on Dion.
+- **2026-09-13** — Open: `repo:` refusals are enforceable but unprovable end
+  to end until a home has a repo attester (multiuser Scene 6).
 
 ## Phase 7 — The page says what is built (S)
 

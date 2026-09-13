@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActorClaim, CanvasTakedown, Grant, Group, OperatorAct, Space } from "@isocan/core";
+import type { ActorClaim, CanvasTakedown, Grant, Group, HomeRefusal, OperatorAct, Space } from "@isocan/core";
 import { groupSubject, LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
 import type { BadgeRecord, Desk, PassRecord } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
@@ -1066,6 +1066,81 @@ export function deskConformance(
         // Silent on a canvas that was never down, for the lift's reason.
         await desk.markPurged("prj_nothing", { at: ts(21), actId: "opr_10", counts });
         expect(await desk.takedownFor("prj_nothing")).toBeNull();
+      }),
+    );
+
+    /**
+     * **The refusal row: one per subject, a lift keeps it, and the desk
+     * keeps no clock** (operator phase 6).
+     *
+     * The takedown row's shape at home scope. What is different, and tested
+     * here on purpose: a `net:` subject carries a slash, which a Firestore
+     * document id may not — so the cloud backing escapes the id and the row
+     * must come back whole under the subject it was written with. And an
+     * expired row is STILL answered by `refusals()`: the desk has no clock,
+     * and the registry judges `expiresAt` against the one it is handed.
+     */
+    test(
+      "a refusal row stands until it is lifted, a lift keeps it, and a network's slash survives",
+      withDesk(async ({ desk }) => {
+        expect(await desk.refusals(), "a fresh home refuses nobody").toEqual([]);
+        expect(await desk.refusalFor("email:sam@example.test")).toBeNull();
+
+        const sam: HomeRefusal = {
+          subject: "email:sam@example.test",
+          kind: "email",
+          at: ts(10),
+          reason: "harassment",
+          note: "kai's report, 12 Sep",
+          by: "email:olu@acme.test",
+          actId: "opr_1",
+        };
+        const net: HomeRefusal = {
+          subject: "net:203.0.113.0/24",
+          kind: "net",
+          at: ts(10),
+          reason: "spam",
+          by: "email:olu@acme.test",
+          actId: "opr_2",
+          // Long past. Still a row, and still answered: expiry is the
+          // registry's judgement, not the desk's.
+          expiresAt: ts(11),
+        };
+        await desk.recordRefusal(sam);
+        await desk.recordRefusal(net);
+        expect(await desk.refusalFor("email:sam@example.test")).toEqual(sam);
+        expect(await desk.refusalFor("net:203.0.113.0/24")).toEqual(net);
+        expect((await desk.refusals()).map((row) => row.subject).sort()).toEqual([
+          "email:sam@example.test",
+          "net:203.0.113.0/24",
+        ]);
+
+        await desk.liftRefusal("email:sam@example.test", {
+          at: ts(12),
+          by: "email:olu@acme.test",
+          actId: "opr_3",
+        });
+        const lifted = await desk.refusalFor("email:sam@example.test");
+        expect(lifted!.liftedAt).toBe(ts(12));
+        expect(lifted!.liftedActId).toBe("opr_3");
+        // Everything the refusal said is still readable, the note included.
+        expect(lifted!.reason).toBe("harassment");
+        expect(lifted!.note).toBe("kai's report, 12 Sep");
+        expect(lifted!.actId).toBe("opr_1");
+        expect((await desk.refusals()).map((row) => row.subject), "a lifted row is not answered").toEqual([
+          "net:203.0.113.0/24",
+        ]);
+
+        // Refusing again after a lift rewrites the one row, in force again.
+        await desk.recordRefusal({ ...sam, at: ts(13), actId: "opr_4" });
+        const again = await desk.refusalFor("email:sam@example.test");
+        expect(again!.liftedAt).toBeUndefined();
+        expect(again!.actId).toBe("opr_4");
+
+        // Lifting something that is not refused is silent, for the takedown
+        // lift's reason — and creates nothing.
+        await desk.liftRefusal("actor:usr_nobody", { at: ts(14), by: "email:olu@acme.test", actId: "opr_5" });
+        expect(await desk.refusalFor("actor:usr_nobody")).toBeNull();
       }),
     );
   });

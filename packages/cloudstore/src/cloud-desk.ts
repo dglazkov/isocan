@@ -8,6 +8,7 @@ import type {
   Grant,
   GrantSubject,
   Group,
+  HomeRefusal,
   OperatorAct,
   OperatorEnd,
   OperatorRevocation,
@@ -125,6 +126,28 @@ export const OPERATOR = "operator";
  * absence.
  */
 export const TAKEDOWNS = "takedowns";
+
+/**
+ * `refusals/{subject}` (operator phase 6) — keyed by the subject, for the
+ * takedown row's reason: standing state with exactly one answer per subject,
+ * so the document id IS the question, and a lift merges onto it.
+ *
+ * The id is the subject with its one forbidden character escaped: a document
+ * id may not contain `/`, and `net:203.0.113.0/24` does. `%2F` is what
+ * {@link refusalDocId} writes and nothing reads back — the row carries the
+ * subject whole, so the escape is an address and never a spelling.
+ *
+ * `liftedAt: null` is written explicitly, for `TAKEDOWNS`' reason: the one
+ * query, `liftedAt == null`, needs no composite index and no in-memory
+ * filter. Expiry is NOT queried here — the desk keeps no clock, and the
+ * registry judges `expiresAt` against the one it is handed (see `Desk`).
+ */
+export const REFUSALS = "refusals";
+
+/** The subject as a document id. */
+export function refusalDocId(subject: string): string {
+  return subject.replace(/\//g, "%2F");
+}
 /** The migration shelf: pre-badge claims waiting for the session key that
  * will collect them. It belongs to no badge, so it has no home in
  * `badges/{badgeId}` — one document, keyed by sessionKey, and it dies when it
@@ -910,6 +933,40 @@ export class CloudDesk implements Desk {
     return found.docs.map((doc) => asTakedown(doc.data()));
   }
 
+  // ---- refusals (operator phase 6) ----
+
+  /** `liftedAt: null` explicitly, for `recordTakedown`'s reason. One line
+   * with the collection on it, so `cloud-desk-writers.test.ts` resolves the
+   * write. */
+  async recordRefusal(row: HomeRefusal): Promise<void> {
+    const at = this.db.collection(REFUSALS).doc(refusalDocId(row.subject));
+    await at.set(jsonSafe({ liftedAt: null, ...row }));
+  }
+
+  /** A transaction, for `liftTakedown`'s reason: a merge onto a document that
+   * is not there would CREATE it, and a row of lift fields with no subject
+   * would then be answered as a refusal of nothing. Read, and merge only onto
+   * a row that exists. */
+  async liftRefusal(subject: string, lifted: { at: string; by: string; actId: string }): Promise<void> {
+    const ref = this.db.collection(REFUSALS).doc(refusalDocId(subject));
+    const patch = { liftedAt: lifted.at, liftedBy: lifted.by, liftedActId: lifted.actId };
+    await this.db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists) return;
+      tx.set(ref, jsonSafe(patch), { merge: true });
+    });
+  }
+
+  async refusalFor(subject: string): Promise<HomeRefusal | null> {
+    const doc = await this.db.collection(REFUSALS).doc(refusalDocId(subject)).get();
+    return doc.exists ? asRefusal(doc.data()!) : null;
+  }
+
+  async refusals(): Promise<HomeRefusal[]> {
+    const found = await this.db.collection(REFUSALS).where("liftedAt", "==", null).get();
+    return found.docs.map((doc) => asRefusal(doc.data()));
+  }
+
   // ---- internals ----
 
   private async shelf(): Promise<Record<string, ActorClaim>> {
@@ -1113,6 +1170,24 @@ function asTakedown(data: DocumentData): CanvasTakedown {
     ...(data["purged"] && typeof data["purged"] === "object"
       ? { purged: data["purged"] as PurgeCounts }
       : {}),
+  };
+}
+
+/** A refusal row from its document, field by field for `asTakedown`'s
+ * reason: the explicit `liftedAt: null` must come back as absence. */
+function asRefusal(data: DocumentData): HomeRefusal {
+  return {
+    subject: data["subject"] as string,
+    kind: data["kind"] as HomeRefusal["kind"],
+    at: data["at"] as string,
+    reason: data["reason"] as HomeRefusal["reason"],
+    by: data["by"] as string,
+    actId: data["actId"] as string,
+    ...(typeof data["note"] === "string" ? { note: data["note"] } : {}),
+    ...(typeof data["expiresAt"] === "string" ? { expiresAt: data["expiresAt"] } : {}),
+    ...(typeof data["liftedAt"] === "string" ? { liftedAt: data["liftedAt"] } : {}),
+    ...(typeof data["liftedBy"] === "string" ? { liftedBy: data["liftedBy"] } : {}),
+    ...(typeof data["liftedActId"] === "string" ? { liftedActId: data["liftedActId"] } : {}),
   };
 }
 

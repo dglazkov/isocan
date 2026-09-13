@@ -63,6 +63,8 @@ import type {
   OperatorEndResponse,
   OperatorRevokeRequest,
   OperatorRevokeResponse,
+  OperatorRefuseRequest,
+  OperatorRefuseResponse,
   TakedownsResponse,
 } from "@isocan/core";
 import {
@@ -1104,6 +1106,27 @@ export class DaemonRoutes {
     return this.request(
       "POST",
       `/api/operator/revoke/${encodeURIComponent(target)}`,
+      request,
+      undefined,
+      { [OPERATOR_PROOF_HEADER]: proof },
+    );
+  }
+
+  /**
+   * **Refuse at the door** (operator phase 6) — a subject a report names:
+   * `email:…`, `repo:…`, `actor:…` or `net:<cidr>`, with `for` to expire it
+   * and `lift` to end it early. Same header, same proof, same shape as the
+   * takedown. The subject rides in the path, URL-encoded, because a `net:`
+   * carries a slash.
+   */
+  async operatorRefuse(
+    subject: string,
+    proof: string,
+    request: OperatorRefuseRequest,
+  ): Promise<OperatorRefuseResponse> {
+    return this.request(
+      "POST",
+      `/api/operator/refuse/${encodeURIComponent(subject)}`,
       request,
       undefined,
       { [OPERATOR_PROOF_HEADER]: proof },

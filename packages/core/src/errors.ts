@@ -27,6 +27,11 @@ type OpErrorCode =
    * client: see `OplogFencedError`. */
   | "writer-fenced"
   | "group-conflict"
+  /** The operator of this home refused that name (operator phase 6): a
+   * claim `as` an actor on the refusal list. Its own code rather than
+   * `name-taken`, because the remedy differs — a pass will not help, and the
+   * message is the home's sentence, with the address to write to. */
+  | "refused"
   | "bad-op";
 
 export class OpValidationError extends Error {

@@ -17,6 +17,7 @@ import type {
   SlashCommand,
   TakedownNotice,
   BadgeEnd,
+  RefusalNotice,
 } from "@isocan/core";
 import {
   CANVAS_GROUPS_FEATURE,
@@ -30,11 +31,13 @@ import {
   WITHDRAWN,
   TAKEN_DOWN,
   ENDED,
+  REFUSED,
 } from "@isocan/core";
 import {
   ApiError,
   CLIENT_ID,
   fetchEnded,
+  fetchRefused,
   fetchTakedown,
   getBacking,
   homeAnswered,
@@ -126,6 +129,14 @@ export type Connection =
    * The sentence is the HOME's and is read off the 401 — see `ended` below.
    */
   | "ended"
+  /**
+   * **This badge proved an address the operator refuses** (operator phase 6;
+   * journey 9 step 2). Its own state beside `refused` (a link that is off) and
+   * `ended` (a surface that was ended): the badge is fine and was never
+   * inside, but this home will not admit the address it proved. The sentence
+   * is the HOME's and is read off the 403 — see `refused` below.
+   */
+  | "refused-here"
   /** There is no canvas at this address here. */
   | "absent";
 
@@ -193,6 +204,11 @@ interface CanvasStore {
   /** The tombstone's notice, when this badge was ended (operator phase 4) —
    * the date, and for an end by the operator the reason and the address. */
   ended: BadgeEnd | null;
+  /** The refusal's notice, when this badge proved an address this home refuses
+   * (operator phase 6) — the home's sentence, off the 403, so the door reads
+   * *This home will not admit …* rather than the bare *will not have you*.
+   * Named apart from the refused-writes queue above. */
+  refusedHere: RefusalNotice | null;
   /** Remote presence sessions (own tab filtered out). Ephemeral plane. */
   sessions: PresenceSession[];
   /** Chosen identity colors (actor id → hex), from the daemon's actor
@@ -253,6 +269,7 @@ export const useCanvasStore = create<CanvasStore>(() => ({
   connection: "connecting",
   takenDown: null,
   ended: null,
+  refusedHere: null,
   sessions: [],
   actorColors: {},
   actorNames: {},
@@ -740,6 +757,7 @@ export function connectToCanvas(canvasId: string, actor: Actor | null): void {
     // been taken down.
     takenDown: null,
     ended: null,
+    refusedHere: null,
     sessions: [],
     // Edit until THIS canvas's hello says otherwise: the flag is per
     // admission, and carrying a previous canvas's "view" across would dress
@@ -1249,7 +1267,14 @@ function openSocket(canvasId: string): void {
                     // from a canvas. The sentence is asked for below.
                     event.reason === ENDED
                     ? "ended"
-                    : "refused",
+                    : // **And the one that says the OPERATOR refuses the address
+                      // this badge proved** (operator phase 6). Its own state,
+                      // not `refused` (a link that is off): the badge was never
+                      // inside, and the home's sentence names the address and
+                      // who to write to. Asked for below.
+                      event.reason === REFUSED
+                      ? "refused-here"
+                      : "refused",
       });
       /**
        * **The tombstone's sentence, off the 401** (operator phase 4). Asked
@@ -1285,6 +1310,16 @@ function openSocket(canvasId: string): void {
         void fetchTakedown(canvasId).then((takenDown) => {
           if (takenDown && useCanvasStore.getState().canvasId === canvasId) {
             useCanvasStore.setState({ takenDown });
+          }
+        });
+      }
+      // The refusal's sentence, off the 403 (operator phase 6). Fire-and-forget
+      // with the store-canvas guard, exactly as the takedown's — a home that
+      // will not answer leaves the door saying the short version.
+      if (event.reason === REFUSED) {
+        void fetchRefused(canvasId).then((refusedHere) => {
+          if (refusedHere && useCanvasStore.getState().canvasId === canvasId) {
+            useCanvasStore.setState({ refusedHere });
           }
         });
       }

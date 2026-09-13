@@ -259,6 +259,7 @@ function CanvasSurface({
   // The home's own sentence about a canvas it took down (operator phase 2).
   const takenDown = useCanvasStore((s) => s.takenDown);
   const ended = useCanvasStore((s) => s.ended);
+  const refusedHere = useCanvasStore((s) => s.refusedHere);
   const capability = useCanvasStore((s) => s.capability);
   const canEdit = useCanEdit();
   const joined = useCanvasStore((s) => s.actorJoins);
@@ -979,6 +980,17 @@ function CanvasSurface({
             "You can still open this home as a stranger; write to the address above about the rest."
           : "This browser's badge was ended from another of your surfaces — a sign-out, or a " +
             "lost machine. Nothing you made is undone; reload to start again.",
+    },
+    /**
+     * **The operator refuses the address this badge proved** (operator phase
+     * 6; journey 9 step 2). The note is the HOME's sentence, off the 403 — the
+     * address, the date, the category and who to write to. Not `refused` (a
+     * link that is off): this badge is fine and was never inside, and the home
+     * will not admit the address it proved, which the sentence names.
+     */
+    "refused-here": {
+      note: refusedHere?.sentence ?? "This home will not admit the address this browser proved.",
+      hint: "Nothing you made is undone. Write to the address above; this home's operator decided it.",
     },
   };
   const end = dead[connection];
