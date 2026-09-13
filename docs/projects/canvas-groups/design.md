@@ -371,6 +371,21 @@ The recorded change keeps the existing canonical `reparent` intent: phase 1
 readers already advertising `canvas-groups-v1` accept that value but reject a
 new `remove` value. The public spelling does not require a new replay shape.
 
+Phase 3 extends the bounded effects for ordinary item insertion and group
+brief/header edits: creating the item or replacing its brief and adjusting
+its frame is one resolved record with one precise inverse. The phase-1
+geometry-only patch fields cannot express that act. Add specific typed item
+and content effects, with content preconditions only for content being
+written; do not introduce arbitrary operation lists or whole-canvas writes.
+Unrelated text changes must still survive a geometry-only transform/undo.
+
+These new canonical effects require `canvas-groups-v2`. The upgraded reducer
+still replays v1 history, but the phase-3 home requires v2 from group-canvas
+clients before serving snapshots/tails or accepting writes. A literal v1-only
+client, including an existing subscription and a forwarded original caller,
+must be refused before unsupported state arrives. Do not silently change the
+v1 promise merely because the feature remains opt-in until phase 5.
+
 Keep operation members directly discoverable by `scripts/isomorphism.mjs`.
 Any vocabulary-bound adjustment must name the semantic acts it accounts for;
 type aliases that hide operation members would defeat that instrument.

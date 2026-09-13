@@ -117,17 +117,22 @@ annotation placement-unit semantics. Update tests, agent guide and README.
 Include sandbox transcript creation, which inherits its program's group;
 later transcript versions keep the transcript's existing membership.
 Geometry changes on a stale dependency refuse as a whole and clear previews.
+Extend bounded canonical effects for item insertion and atomic brief/header
+changes; require canvas-groups-v2 for this richer replay schema while retaining
+v1 historical replay. Verify literal v1-only client refusal, including the
+existing subscription and forwarded-caller gates.
 
 **Ownership:** packages/web/src and test, packages/cli/src and test,
 packages/core/src and test placement/area/group/layout helpers,
-packages/api/src and test and affected module producers. Split builders by
+packages/api/src and test, server writer/protocol plumbing and tests, and
+affected module producers. Split builders by
 path, not by gesture, so no two own ItemView or main.ts concurrently.
 
 **Proof:** run `npm test -- packages/core/test/canvas-groups.test.ts packages/cli/test/canvas-groups.test.ts packages/web/test/canvas-groups.test.ts packages/server/test/canvas-groups.test.ts`, then `npm test`, `npm run typecheck`, and `npm run build`. Walk journey 2 and gate 3 with actual hit-tested pointer events at multiple zooms, every resize corner, Escape/cancel, nested groups and overhanging ink. Inspect exact committed boxes via CLI. Exercise receipt/echo order and unrelated-text versus structural races through real production APIs; measure the 1,000-item synthetic case and record observations.
 
 **Trajectory:**
 
-*nothing yet — the phase has not started.*
+- **2026-09-12** — Atomic insertion and brief/header edits need effects beyond phase 1's geometry-only writes. Phase 3 explicitly extends that bounded schema and requires canvas-groups-v2; a v1-only reader cannot be promised support for records its reducer rejects.
 
 ## Phase 4 — Group context and lifecycle
 
