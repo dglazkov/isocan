@@ -211,6 +211,8 @@ export interface Comment {
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];
+  /** Writer-resolved request scope, retained independently of live item versions. */
+  context?: import("./canvas-group-context.ts").ContextManifest;
   createdAt: string;
   /** When the author last rewrote it, if they did. This is what makes a
    * working note possible: one comment that says "on it", then what it found,

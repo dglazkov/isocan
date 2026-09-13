@@ -45,9 +45,16 @@ export interface GroupCreation {
   box?: GroupBox;
   layout?: GroupLayout;
 }
+/** A copy can create bounded new items, never replace existing live or trash records. */
+interface GroupCopiedItem extends GroupCreation {
+  box: GroupBox;
+  /** Only another newly copied group ID; the operation names the external destination. */
+  containerId?: string;
+}
 
 /** Closed intents at the request boundary. `apply` is writer/undo output only. */
 export type GroupAction =
+  | { kind: "copy"; sourceCanvasId: string; rootIds: string[]; items: GroupCopiedItem[]; containerId?: string | null; at?: { x: number; y: number }; cell?: GroupCell; groupPlacement?: GroupPlacementPolicy }
   | { kind: "create"; group: GroupCreation; itemIds?: string[]; containerId?: string | null }
   | { kind: "reparent"; itemIds: string[]; containerId: string | null; place?: boolean; cell?: GroupCell; groupPlacement?: GroupPlacementPolicy; expected?: GroupExpectation[] }
   | { kind: "insert"; item: Extract<Operation, { type: "item.add" }> }
@@ -106,7 +113,7 @@ export type GroupWrite =
 /** Concrete record: no placement search or intent resolution during replay. */
 export interface GroupChange {
   canvasId: string;
-  intent: Exclude<GroupAction["kind"], "apply" | "remove">;
+  intent: Exclude<GroupAction["kind"], "apply" | "remove" | "copy">;
   expected: GroupExpectation[];
   writes: GroupWrite[];
   cohorts?: Record<string, GroupCohortRecord>;

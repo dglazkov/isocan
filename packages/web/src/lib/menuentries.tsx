@@ -16,6 +16,7 @@ import {
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
+import { captureClipboard } from "./clipboard.ts";
 import { alignItems, distributeGroupItems, tidyItems } from "./actions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -81,8 +82,9 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       label: many ? `Copy ${items.length} items` : "Copy",
       shortcutFor: "Copy the selection",
       run: () => {
-        useUiStore.getState().setClipboard({ canvasId: ctx.canvasId, items });
-        flashNotice(`Copied ${items.length} item${items.length === 1 ? "" : "s"}`);
+        const copied = captureClipboard(ctx.canvasId, ids);
+        useUiStore.getState().setClipboard(copied);
+        flashNotice(`Copied ${copied.items.length} item${copied.items.length === 1 ? "" : "s"}`);
       },
     },
     {
@@ -96,7 +98,9 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       run: () => {
         // The clipboard is not disturbed: duplicating something should not
         // cost you what you had copied a minute ago.
-        void pasteInto({ canvasId: ctx.canvasId, items }, ctx.canvasId, ctx.actor);
+        void pasteInto(captureClipboard(ctx.canvasId, ids), ctx.canvasId, ctx.actor).then((made) => {
+          if (made.length) selectCreatedItems(ctx.canvasId, made);
+        });
       },
     },
     /**

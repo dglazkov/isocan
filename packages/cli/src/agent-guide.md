@@ -374,6 +374,17 @@ identity --session`). `add` and `edit` take content as values and return the
 item they made; `notify` speaks in the Chat; a refusal is an `ApiError`
 carrying the wire's code, with `unreachable` when nothing answered.
 
+Group-aware API clients use `canvas.context({ in: groupId })`, then
+`canvas.say("Review", { in: groupId, expectedRevision: manifest.revision })`
+when the sent scope must match that preview. `canvas.contextOfComment(threadId,
+commentId)` returns the saved manifest; `canvas.contextItem(threadId, commentId,
+itemId, { face: "source", offset: 0, limit: 16384 })` reads saved byte pages.
+`canvas.contextPage(...)` pages reference metadata, with a required
+`expectedRevision` for live paging. `canvas.copy([groupId], { to: canvasId,
+in: destinationId, dryRun: true })` uses the same graph planner as the CLI.
+Read-only MCP provides `read_context` and `read_context_content` with the same
+frozen-version contract; it adds no message or mutation tools.
+
 The reference is the types themselves: the package is TypeScript source, so
 your editor answers what `connect()` returns straight from the install, and
 there is no separate API document to go stale. The ops a script sends are the
@@ -1356,6 +1367,21 @@ its own. And **a copy records what it was made from** (`parent`), so
 `isocan lineage` shows it hanging off its original — except across canvases,
 where that id would point at nothing.
 
+On group-enabled destinations, one copy is one operation and one undo: a
+group carries its full subtree and attached ink, selected group+child roots
+are deduplicated, and deliberate internal overlaps survive. Only current
+versions are copied, including distinct visual bytes. Every required face is
+checked before the write; a missing member or failed upload refuses the whole
+copy. `--dry-run` validates without uploading or writing. `--in` names an
+explicit destination group; omission puts copied roots on the canvas. Copying
+only a child does not copy its old container. Internal module relationships
+are remapped; external references are dropped across canvases.
+
+`export --item <group>` backs up the complete subtree, all saved versions and
+both faces into the existing item-backup directories. Item backups are not an
+import format. Use a full native `export` and `import` to restore a canvas and
+its frozen request provenance. JSON Canvas remains export-only.
+
 A copy does NOT inherit the original's `file`. Two items claiming one path
 would overwrite each other on `save`, and the copy is not that file — bind it
 yourself if it should be one.
@@ -2188,6 +2214,29 @@ anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 `canvas group frame <groups...> --fit` (or one group with `--size WxH`/`--at x,y`),
 `canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy]`,
 and `canvas group grid <group> RxC [--rows names] [--cols names] [--tidy]`.
+**Group context:** `context --in <group> [--include-excluded]` reads the complete
+current hierarchy. `context request <thread> <comment>` reads the complete
+frozen manifest saved with a message, including the actual selected root IDs,
+every expanded item, source/visual versions, hierarchy and inclusion counts.
+`context content <thread> <comment> <item> [--face source|visual] [--offset bytes] [--limit bytes]`
+reads that saved version, even after its live item changes or is deleted.
+Follow `nextOffset` until null; the default page is 16384 bytes and the maximum
+is 262144. UTF-8 text is printed directly; binary or split UTF-8 chunks are
+base64. Excluded and unavailable entries include a reason and return no bytes;
+an access refusal remains an error. All reads support `--json` and work for
+readers without creating a session or changing selection.
+
+`say <message...>` is an alias of `notify <message...>`: both post to the Chat.
+They accept `--item <refs...>` and `--in <group> [--include-excluded]`.
+`ask <question...>`, `comment add <text>` and `comment reply <thread> <text>`
+accept the same `--in` context attachment. `comment edit <thread> <comment> <text>`
+preserves saved context unless `--in` explicitly replaces it. `ask --item`
+and `comment add --item` choose the thread's anchor; `--in` chooses the
+context attached to the message. Group #references also expand at the writer.
+Excluded descendants stay listed and skip content unless explicitly overridden.
+This does not change mention/summon permissions. `session say <text>` remains
+the separate presence/status command; it does not post to Chat.
+
 Grid labels are comma-separated; cells count from 1. Every mutation accepts `--dry-run`:
 it validates through the shared resolver and reports affected roots, parent
 changes, final boxes and frame adjustments without uploading note bytes or
@@ -2278,7 +2327,7 @@ agents for here and what came of it — a local report, never a score),
 admitted to at this home, not just this one),
 `blobs [--push]` (are this canvas's bytes at its home — and send the ones
 that are not; the answer when a teammate sees an item and no picture),
-`copy <items...> [--to <canvas>] [--at x,y]` (copy items beside themselves, or
+`copy <items...> [--to <canvas>] [--at x,y] [--in <group>] [--cell r,c] [--dry-run]` (copy items beside themselves, or
 into another canvas — the arrangement of a selection is kept, and the bytes
 travel when the canvas does),
 `notify <message...> [--item <ref>]` (say something in the Chat in one

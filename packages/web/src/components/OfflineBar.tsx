@@ -55,8 +55,8 @@ export function OfflineBar() {
           <div className="offline-stack">
             <span className="offline-note">
               {refused.length === 1
-                ? "One change did not go through when you reconnected:"
-                : `${refused.length} changes did not go through when you reconnected:`}
+                ? "One change did not go through:"
+                : `${refused.length} changes did not go through:`}
             </span>
             {refused.map((one) => (
               <span key={one.opId} className="offline-hint">

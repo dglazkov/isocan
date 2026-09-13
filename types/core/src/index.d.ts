@@ -1,5 +1,8 @@
 export * from "./model.js";
 export * from "./errors.js";
+export { contextClosure, ambientContextItems, validateContextManifest, canvasContextRoute, commentContextRoute, type ContextRequest, type ContextManifest, type ContextContentPage } from "./canvas-group-context.js";
+export * from "./canvas-group-context-resolve.js";
+export * from "./canvas-group-copy.js";
 export * from "./ops.js";
 export { applyOperation } from "./reducer.js";
 export * from "./badge.js";

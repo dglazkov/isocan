@@ -8,6 +8,7 @@ import { getSnapshot } from "../lib/api.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { ContextGlyph } from "./Glyphs.tsx";
 import { PanelHead } from "./PanelHead.tsx";
+import { LiveContextInspection } from "./LazyGroupContext.tsx";
 
 /**
  * **What an agent will actually read when it starts work here.**
@@ -39,6 +40,7 @@ import { PanelHead } from "./PanelHead.tsx";
 export function ContextPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const open = useUiStore((s) => s.contextPanelOpen);
   const canvas = useCanvasStore((s) => s.canvas);
+  const groupMode = useCanvasStore((s) => s.project?.groupMode);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const linked = useLinkedCanvases(open ? canvas : null);
   if (!open || !canvas) return null;
@@ -60,6 +62,7 @@ export function ContextPanel({ canvasId, actor }: { canvasId: string; actor: Act
         onClose={() => openPanel(canvasId, null)}
       />
       <div className="context-body">
+        {groupMode === "groups" && <LiveContextInspection key={canvasId} canvasId={canvasId} />}
         {layers.map((layer) => (
           <Layer key={layer.canvasId ?? "this"} layer={layer} />
         ))}

@@ -18,6 +18,8 @@
  */
 export * from "./connect.js";
 export * from "./canvas-groups.js";
+export type { ContextReadOptions, CommentContextOptions, ContextPageOptions, ContextBytesOptions, ContextItemContent } from "./canvas-context.js";
+export type { CanvasGroupCopyOptions } from "./canvas-groups.js";
 export * from "./operation-receipt.js";
 export * from "./routes.js";
 export * from "./client.js";

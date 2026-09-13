@@ -115,6 +115,8 @@ describe("what a host can see", () => {
       "list_canvases",
       "read_activity",
       "read_canvas",
+      "read_context",
+      "read_context_content",
       "read_item",
       "read_threads",
       "who",

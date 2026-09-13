@@ -1,5 +1,5 @@
 import type { Actor, Item } from "@isocan/core";
-import { annotationTarget, groupDescendants, isGroupItem, itemPath } from "@isocan/core";
+import { annotationTarget, groupTransformClosure, isGroupItem, itemPath } from "@isocan/core";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -21,6 +21,7 @@ export function canvasGroupEntries(items: Item[], ctx: { canvasId: string; actor
       { label: "Enter group", run: () => enterCanvasGroup(group.id) },
       { label: "Select contents", run: () => selectGroupContents(group.id) },
       { label: "Group details", run: () => useUiStore.getState().setGroupDialog({ kind: "inspect", groupId: group.id, itemIds: [] }) },
+      { label: "Inspect context", run: () => useUiStore.getState().setGroupDialog({ kind: "inspect", groupId: group.id, itemIds: [] }) },
       { label: "Open brief", run: () => ctx.navigate(itemPath(ctx.canvasId, group.id)) },
       { label: "Add items…", writes: true, run: () => useUiStore.getState().setGroupDialog({ kind: "add", groupId: group.id, itemIds: [] }) },
       { label: "Fit frame to contents", writes: true, run: () => task({ kind: "frame", itemId: group.id, fit: true }) },
@@ -36,7 +37,8 @@ export function canvasGroupEntries(items: Item[], ctx: { canvasId: string; actor
 }
 /** A group deletion names the descendants it takes; Ungroup remains separate. */
 export function groupDeleteLabel(items: Item[]): string | null {
-  if (items.length !== 1 || !isGroupItem(items[0]!)) return null;
+  if (!items.some(isGroupItem)) return null;
   const canvas = useCanvasStore.getState().canvas;
-  return `Delete group and ${canvas ? groupDescendants(canvas, items[0]!.id).length : 0} items`;
+  const count = canvas ? groupTransformClosure(canvas, items.map((item) => item.id)).length : items.length;
+  return items.length === 1 ? `Delete group and ${count - 1} items` : `Delete ${count} items including group contents`;
 }

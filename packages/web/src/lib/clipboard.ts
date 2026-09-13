@@ -5,9 +5,14 @@ import {
   newGroupId,
   newItemId,
   newVersionId,
+  groupCopySource,
+  groupCopyAction,
+  groupDropPolicy,
+  isGroupItem,
+  visualFaceOf,
 } from "@isocan/core";
 import { readBlob, uploadBlob } from "./api.ts";
-import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 
 import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
 
@@ -31,6 +36,15 @@ export interface Clipboard {
   /** Where these came from: paste is a different act within it and outside it. */
   canvasId: string;
   items: Item[];
+  rootIds?: string[];
+}
+
+/** Every copy entry point captures the same immutable explicit subtree, including its marks. */
+export function captureClipboard(canvasId: string, itemIds: string[]): Clipboard {
+  const { canvas, project } = useCanvasStore.getState();
+  if (!canvas) return { canvasId, items: [] };
+  if (project?.groupMode === "groups") return groupCopySource(canvasId, canvas, itemIds);
+  return { canvasId, items: itemIds.flatMap((id) => canvas.items[id] ? [structuredClone(canvas.items[id]!)] : []) };
 }
 
 /**
@@ -47,6 +61,39 @@ export async function pasteInto(
 ): Promise<string[]> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return [];
+  if (useCanvasStore.getState().project?.groupMode === "groups") {
+    try {
+      const source = { ...clipboard, rootIds: clipboard.rootIds ?? clipboard.items.map((item) => item.id) };
+      const parent = destination.containerId ? canvas.items[destination.containerId] : undefined;
+      const action = groupCopyAction(source, canvasId, { newItemId, newVersionId, ...destination, ...(want ? { at: { x: want.x, y: want.y }, groupPlacement: parent ? groupDropPolicy(parent, want) : "preserve" as const } : {}) });
+      if (source.canvasId !== canvasId) {
+        const copiedBlobs = new Map<string, string>();
+        const transfer = async (face: { blobHash: string; filename: string; mimeType: string }) => {
+          const cached = copiedBlobs.get(face.blobHash); if (cached) return cached;
+          const bytes = await readBlob(source.canvasId, face.blobHash);
+          const uploaded = await uploadBlob(canvasId, new Blob([bytes], { type: face.mimeType }), face.filename);
+          copiedBlobs.set(face.blobHash, uploaded.blobHash); return uploaded.blobHash;
+        };
+        // All faces must arrive before the single structural act. A missing
+        // child cannot leave a plausible-looking partial group behind.
+        for (const item of action.items) {
+          const visual = item.version.visual ? visualFaceOf({ ...item.version, createdAt: "", createdBy: actor }) : null;
+          item.version.blobHash = await transfer(item.version);
+          if (visual && item.version.visual) item.version.visual.blobHash = await transfer(visual);
+        }
+      }
+      const result = await sendEchoedResult(canvasId, actor, { type: "group.change", action });
+      if (result.status === "accepted") return action.rootIds;
+      throw new Error(result.status === "queued" ? "Paste queued. It will appear when the home accepts it; do not paste a second copy." : result.message ?? "The paste was refused.");
+    } catch (err) {
+      if (useCanvasStore.getState().canvasId === canvasId) setNotice(`Could not complete paste: ${(err as Error).message}`);
+      return [];
+    }
+  }
+  if (clipboard.items.some(isGroupItem)) {
+    setNotice("This canvas has not enabled groups. Paste into a group-capable canvas.");
+    return [];
+  }
   const sameCanvas = clipboard.canvasId === canvasId;
   // One paste is one act, so one ⌘Z takes it back — however many items it
   // turns out to be. See `LogEntry.group`.

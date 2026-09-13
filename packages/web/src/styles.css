@@ -2846,7 +2846,7 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   border-left: 3px solid var(--line); margin: 0.4em 0; padding-left: 8px; color: var(--ink-muted);
 }
 .comment .body hr { border: none; border-top: 1px solid var(--line-soft); margin: 0.6em 0; }
-.thread-popover form { display: flex; gap: 6px; margin-top: 8px; flex: none; }
+.thread-popover form { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; flex: none; }
 .thread-popover .thread-actions { display: flex; justify-content: space-between; margin-top: 6px; flex: none; }
 .thread-popover .thread-actions button {
   background: none; border: none; color: var(--danger); font-size: 11px; padding: 2px 4px;
@@ -6665,3 +6665,13 @@ button.mt-card:hover { border-color: var(--accent); }
 .canvas-group-form li { display: flex; justify-content: space-between; padding: 5px; }
 .canvas-group-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 .context-item:focus-visible { background: var(--chip-hover); outline: 2px solid var(--accent); outline-offset: -2px; }
+.message-context { flex-basis: 100%; min-width: 0; }
+.group-context { min-width: 0; margin: 8px 0; color: var(--ink); }
+.group-context-summary { width: 100%; text-align: left; padding: 8px 10px; background: var(--chip); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); }
+.group-context-summary span, .group-context small { display: block; color: var(--ink-muted); overflow-wrap: anywhere; }
+.group-context-disclosure { padding: 8px; border: 1px solid var(--line-soft); max-height: 400px; overflow: auto; }
+.group-context-roots { overflow-wrap: anywhere; }
+.group-context ol { margin: 10px 0; padding-inline-start: 22px; }
+.group-context li, .canvas-group-form .group-context li { display: list-item; margin-block: 8px; padding-block: 6px; border-bottom: 1px solid var(--line-soft); }
+.group-context nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.group-context select { max-width: 100%; }

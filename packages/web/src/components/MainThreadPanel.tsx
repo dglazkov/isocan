@@ -25,6 +25,9 @@ import { GateGrant } from "./LazyGate.tsx";
 import { runLocalCommand } from "../lib/localcommands.ts";
 import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { messageContextRoots, useMessageContext, useMessageSend } from "../lib/messagecontext.ts";
+import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
+import { useCanEdit } from "../lib/capability.ts";
 
 /**
  * The designated main thread (#36): one thread per canvas rendered as a
@@ -218,7 +221,7 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
   // Closed, the panel has no surface of its own — its toggle (wearing the
   // unread badge) is the "Main" button in the top bar's create actions.
   if (!canvas || !open) return null;
-  return <Panel canvasId={canvasId} actor={actor} />;
+  return <Panel key={canvasId} canvasId={canvasId} actor={actor} />;
 }
 
 /**
@@ -341,7 +344,7 @@ export function MainThreadBody({
   actor: Actor;
   docked?: boolean;
 }) {
-  return <Panel canvasId={canvasId} actor={actor} docked={docked} />;
+  return <Panel key={canvasId} canvasId={canvasId} actor={actor} docked={docked} />;
 }
 
 function Panel({
@@ -365,6 +368,9 @@ function Panel({
   const thread = canvas ? mainThread(canvas) : null;
   useLaneFollow(canvas, thread);
   const [draft, setDraft] = useState("");
+  const context = useMessageContext(canvasId, messageContextRoots(canvas, draft, selected));
+  const sending = useMessageSend(canvasId, context, draft);
+  const canEdit = useCanEdit();
 
   /**
    * A command the launcher picked, handed over rather than posted.
@@ -414,10 +420,6 @@ function Panel({
   }, [thread?.id, commentCount]);
 
   if (!canvas) return null; // reconnecting — parent unmounts us next render
-
-  async function send(body: string, attached: string[]) {
-    await postToMain(canvasId, actor, body, attached);
-  }
 
   function chipTarget(e: { target: EventTarget }): string | null {
     return (e.target as HTMLElement).closest("[data-item-id]")?.getAttribute("data-item-id") ?? null;
@@ -522,7 +524,7 @@ function Panel({
                   </Markdown>
                 </div>
                 {canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
-                {(comment.items ?? [])
+                {comment.context ? <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} /> : (comment.items ?? [])
                   .filter((id, i, all) => all.indexOf(id) === i)
                   .map((itemId) => (
                     <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} />
@@ -548,7 +550,7 @@ function Panel({
           )}
         </div>
       </div>
-      <form
+      {canEdit && <form
         onKeyDown={(e) => {
           submitOnEnter(e);
           submitOnCmdEnter(e);
@@ -556,7 +558,7 @@ function Panel({
         onSubmit={async (e) => {
           e.preventDefault();
           const body = draft.trim();
-          if (!body) return;
+          if (!body || sending.disabled) return;
           // /help and its kind are answered here rather than posted: see
           // lib/localcommands.ts.
           if (runLocalCommand(body, commands)) {
@@ -564,11 +566,11 @@ function Panel({
             return;
           }
           const attached = useUiStore.getState().selectedItemIds;
-          setDraft("");
-          await send(body, attached);
+          await sending.submit(() => postToMain(canvasId, actor, body, attached, context.request), () => setDraft(""));
         }}
       >
-        <Attached canvasId={canvasId} />
+        {context.enabled ? <MessageContextPreview context={context} /> : <Attached canvasId={canvasId} />}
+        {sending.error && <p role="alert">{sending.error}</p>}
         <MentionField
           // One placeholder, both states: what the CHANNEL is beats what the
           // moment is. Everything typed here reaches every agent listening
@@ -585,10 +587,10 @@ function Panel({
           itemCandidates={itemRoster.candidates}
           items={itemRoster.entries}
         />
-        <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim()}>
+        <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim() || sending.disabled}>
           ↑
         </button>
-      </form>
+      </form>}
     </div>
   );
 }

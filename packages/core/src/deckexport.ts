@@ -30,8 +30,8 @@ export interface DeckPage {
 
 /** The pages, in order: the marked slides, or — with none marked — every
  *  item in reading order, because a canvas of screens is already a deck. */
-export function deckPages(canvas: CanvasContents): DeckPage[] {
-  return deck(canvas).flatMap((item) => {
+export function deckPages(canvas: CanvasContents, groupId?: string): DeckPage[] {
+  return deck(canvas, groupId).flatMap((item) => {
     const current = currentVersion(item);
     if (!current) return [];
     const note = noteFor(canvas, item.id);

@@ -207,6 +207,7 @@ describe("explicit group insertion and brief production writes", () => {
     const site = await addBrowserItem(state.project.id, actor, "https://example.com", at); land();
     const doc = await addDocumentItem(state.project.id, actor, { title: "Acme doc", markdown: "# Acme", filename: "acme.md", source: "https://docs.google.com/document/d/acme/edit", syncedAt: "2026-09-12T00:00:00Z" }, at); land();
     const copies = await pasteInto({ canvasId: state.project.id, items: [state.canvas.items.itm_outside!] }, state.project.id, actor, at); land();
+    expect(copies, useCanvasStore.getState().notice ?? "paste should add one scoped item").toHaveLength(1);
     const host = webHostFor(state.project.id, actor);
     useUiStore.getState().setActiveGroup(null);
     await host.send([{ type: "item.add", itemId: "itm_module", version: { id: "ver_module", blobHash: "hash_module", filename: "acme.svg", mimeType: "image/svg+xml", size: 1 }, width: 100, height: 100, placement: at }]); land();

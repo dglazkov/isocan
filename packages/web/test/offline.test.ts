@@ -951,6 +951,32 @@ describe("a heartbeat that says the canvas has moved on", () => {
 
 // The socket event precedes a held HTTP response: drive actual confirm/retire,
 // rather than replacing the store or clearing its queue in a fixture helper.
+it.each(["accepted", "refused"] as const)("settles the exact queued form receipt on reconnect %s", async (status) => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  await connected(2);
+  await goOffline();
+  const receipt = await sendEchoedResult("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 40, y: 50 });
+  expect(receipt.status).toBe("queued");
+  expect(receipt.completion).toBeInstanceOf(Promise);
+  const opId = useCanvasStore.getState().queue[0]!.opId;
+  const finished = vi.fn(); void receipt.completion!.then(finished);
+  await settle(); expect(finished).not.toHaveBeenCalled();
+  if (status === "refused") refusals.set(opId, { status: 409, error: "Acme stale", code: "group-conflict" });
+  seqs = [3];
+  await comeBack();
+  const outcome = await receipt.completion;
+  expect(outcome?.status).toBe(status);
+  expect(finished).toHaveBeenCalledTimes(1);
+  expect(posted.filter((request) => request.opId === opId)).toHaveLength(1);
+  if (status === "accepted") {
+    expect(outcome?.envelope?.id).toBe(opId);
+    FakeSocket.last.deliver({ type: "op-applied", entry: { seq: 3, envelope: outcome!.envelope!, inverse: null } });
+    await settle();
+    expect(useCanvasStore.getState().confirmed?.canvas.items.itm_1).toMatchObject({ x: 40, y: 50 });
+  } else expect(useCanvasStore.getState().refused).toMatchObject([{ opId, message: "Acme stale" }]);
+  expect(useCanvasStore.getState().queue).toEqual([]);
+});
+
 it.each(["insert", "brief"] as const)("retires an echo-first canonical group %s when its delayed receipt supplies the seq", async (kind) => {
   const { useCanvasStore, sendEchoedResult } = await store();
   await connected(2);
@@ -986,7 +1012,7 @@ it.each(["insert", "brief"] as const)("retires an echo-first canonical group %s 
   expect(useCanvasStore.getState().confirmed).toEqual(writer);
   expect(useCanvasStore.getState().queue).toEqual([]);
   release();
-  expect(await promise).toEqual({ status: "accepted" });
+  expect(await promise).toEqual({ status: "accepted", envelope: accepted.envelope });
   expect(useCanvasStore.getState().queue).toEqual([]);
   expect(useCanvasStore.getState().canvas).toEqual(writer.canvas);
 });
@@ -1026,7 +1052,7 @@ it.each([
   expect(useCanvasStore.getState().connection).toBe(expectedConnection);
   const sockets = FakeSocket.opened.length;
   release();
-  expect(await pending).toEqual(path === "echoed" ? { status: "queued" } : null);
+  expect(await pending).toEqual(path === "echoed" ? { status: "queued", completion: expect.any(Promise) } : null);
   expect(useCanvasStore.getState().connection).toBe(expectedConnection);
   expect(useCanvasStore.getState().confirmed).toEqual(initial);
   expect(useCanvasStore.getState().queue.map((write) => write.opId)).toEqual([attempts[0]!.opId]);

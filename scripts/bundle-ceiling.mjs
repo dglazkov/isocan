@@ -310,11 +310,20 @@
  * removed 4,195 entry bytes. The measured result is 721,172: a net 1,297 over
  * the original build, with no new eager dependency. The approved ceiling has
  * 28 bytes of margin; GOAL 640,000 and JUMP 20,000 remain unchanged.
+ *
+ * **721,200 → 734,200 on 13 Sep, for canvas groups phase 4 after deferral.**
+ * The fresh production entry is 734,159 bytes, a net 12,987 over 721,172.
+ * Lazy context and Trash panels, plus separating writer-only context
+ * resolution from shared validation, removed 11,339 bytes from the initial
+ * 745,498-byte entry. The remaining cost serves synchronous context validation
+ * and ambient membership, atomic copy resolution, and operation-owned form
+ * completion. No new eager dependency was added. The reviewed ceiling leaves
+ * 41 bytes of margin; GOAL 640,000 and JUMP 20,000 remain unchanged.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 721_200;
+export const CEILING = 734_200;
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

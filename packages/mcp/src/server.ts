@@ -142,12 +142,12 @@ export function createServer(deps: ServerDeps): McpServer {
       title: "Read a canvas",
       description:
         "What is on a canvas: every item with its id, title, kind and position. The map, not the contents — use read_item for one item's text.",
-      inputSchema: canvasArg,
+      inputSchema: { ...canvasArg, in: z.string().optional().describe("Read direct members of this canvas group (or legacy sheet)."), recursive: z.boolean().optional().describe("Include nested descendants of the named group.") },
     },
-    async ({ canvas }) =>
+    async ({ canvas, in: group, recursive }) =>
       answering(async () => {
         const handle = await canvasOf(canvas);
-        const items = await handle.items();
+        const items = await handle.items({ in: group, recursive });
         return {
           canvas: { id: handle.record.id, title: handle.record.title },
           items: items.map((item) => ({
@@ -156,10 +156,38 @@ export function createServer(deps: ServerDeps): McpServer {
             kind: item.kind,
             x: item.x,
             y: item.y,
+            width: item.width,
+            height: item.height,
+            containerId: item.containerId ?? null,
+            ...(item.groupLayout ? { groupLayout: item.groupLayout } : {}),
           })),
         };
       }),
   );
+
+  server.registerTool("read_context", {
+    title: "Read complete context",
+    description: "The complete context manifest: hierarchy, original selected roots, included/excluded/unavailable counts and exact source/visual versions. Supply thread and comment to read a frozen request; otherwise read current roots or ambient pins. This never sends a message.",
+    annotations: { readOnlyHint: true },
+    inputSchema: { ...canvasArg, roots: z.array(z.string()).optional(), in: z.string().optional(), includeExcluded: z.boolean().optional(), thread: z.string().optional(), comment: z.string().optional() },
+  }, async ({ canvas, roots, in: group, includeExcluded, thread, comment }) => answering(async () => {
+    const handle = await canvasOf(canvas);
+    if (thread !== undefined || comment !== undefined) {
+      if (!thread || !comment) throw new Error("frozen context needs both thread and comment");
+      if (roots !== undefined || group !== undefined || includeExcluded !== undefined) throw new Error("a saved request already fixes its roots and exclusion policy");
+      return handle.contextOfComment(thread, comment);
+    }
+    return handle.context({ rootIds: roots, in: group, includeExcluded });
+  }));
+
+  server.registerTool("read_context_content", {
+    title: "Read saved context content",
+    description: "Read one exact version from a saved message's context, even after its live item changes or is deleted. Returns a bounded byte page with progress, exclusion/unavailability reasons, and UTF-8 or lossless base64. Follow nextOffset until null; source and visual are separate faces. Access refusal is an error, never reported as missing content.",
+    annotations: { readOnlyHint: true },
+    inputSchema: { ...canvasArg, thread: z.string(), comment: z.string(), item: z.string(), face: z.enum(["source", "visual"]).optional(), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(262144).optional() },
+  }, async ({ canvas, thread, comment, item, face, offset, limit }) => answering(async () => {
+    return (await canvasOf(canvas)).contextItem(thread, comment, item, { face, offset, limit });
+  }));
 
   server.registerTool(
     "read_item",

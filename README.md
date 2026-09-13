@@ -295,7 +295,16 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Google Docs and modules insert with explicit `--in` membership; `--cell r,c`
   honors protected label gutters. New sandbox transcripts inherit their
   program's group. `ls --in` lists direct members and `--recursive` includes
-  descendants. Existing canvases keep their
+  descendants. Group context includes the brief, complete hierarchy and attached
+  ink. `context --in <group>` previews it; `say`, `notify`, `ask` and comment
+  commands accept `--in` and save exact source/visual versions with the message.
+  `context request` reads that complete saved manifest; `context content` and
+  read-only MCP tools page its original bytes with explicit exclusions and
+  availability. Copying a group preserves its internal arrangement and remaps
+  membership, annotations and module references in one undoable act. Full native
+  export/import retains saved context; `export --item <group>` backs up its
+  subtree as item records (use the full canvas export for restoration).
+  Existing canvases keep their
   area behavior until conversion is available. Top-level `isocan group`
   continues to manage people and sharing.
 - **Areas**: a titled sheet things are placed on — `isocan area new "Sketches"`,

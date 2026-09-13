@@ -40,8 +40,8 @@ describe("the terminal addresses cells and builds the deck from a sheet", () => 
     expect(cli).toContain("cellSpot(without, into, cell[0]!, cell[1]!, item.width, item.height)");
   });
 
-  it("makes the deck from every item on a sheet, in reading order", () => {
+  it("makes a group deck from explicit descendants and retains legacy sheet containment", () => {
     expect(cli).toContain('.option("--in <area>", "every item on this sheet, in reading order');
-    expect(cli).toContain("...(sheet ? itemsIn(snapshot.canvas, sheet) : [])");
+    expect(cli).toContain("...(sheet ? isGroupItem(sheet) ? groupDescendants(snapshot.canvas, sheet.id).filter((item) => !isGroupItem(item)) : itemsIn(snapshot.canvas, sheet) : [])");
   });
 });

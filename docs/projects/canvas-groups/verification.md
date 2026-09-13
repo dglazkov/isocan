@@ -422,3 +422,129 @@ interaction proof. Existing area and sharing-group meanings remain intact.
 Creation is still opt-in. Phase 4 owns frozen group context, context consumers,
 copy/export and lifecycle completion; phase 5 owns conversion and normal
 release creation. No credential, paid resource or human-only gate is pending.
+
+## 13 September 2026: phase 4 — context and lifecycle
+
+Three builders owned core/server, API/CLI/MCP/modules, and web respectively.
+The conductor ran the named tests, full suite, typecheck, production build,
+real-daemon retention/copy walks and browser interactions independently.
+The core/server builder reviewed API/CLI/MCP; the web builder reviewed
+core/server. All fixtures were synthetic and all daemons used fresh local
+homes, with no login, hosted resource or paid service.
+
+### Review findings and dispositions
+
+- Literal v2 reducers discard frozen comment metadata. A separately committed
+  contract correction requires `canvas-groups-v3` for new group state and
+  provenance, while preserving historical v1/v2 reduction. Connected clients,
+  forwarded original callers, snapshot/log reads and writes have protocol
+  regression coverage.
+- Snapshot adoption does not replay operations. Independent review found a
+  missing retained-context validation step there. The writer now validates
+  metadata before compacting logs, saving or replacing cached state. Invalid
+  or foreign-canvas manifests leave cached, persisted and restarted state
+  unchanged; valid manifests need not find their deleted original items.
+- Copy initially remapped any property value equal to an item ID. Only declared
+  reference properties now remap; literal values remain literal. Module-owned
+  tests bind mindmap and sandbox references without breaking module isolation.
+- The first complete suite found five failures: two test module-isolation
+  violations, an unused-export increase, a stale deck/grid source assertion,
+  and browser entry growth. Test ownership and internal exports were corrected
+  with existing guards intact. Bundle measurement and final totals follow.
+
+### Real context retention and lifecycle proof
+
+`node --import tsx /tmp/isocan-canvas-groups-phase4-api-walk.mts` started actual
+local daemons and used production HTTP, API, MCP, GC and export/import paths.
+A nested group included its brief, cards and attached ink; geometric overlap
+alone did not add a nonmember. Group-plus-child roots in either order retained
+provenance while producing the same deduplicated hierarchy. Exclusions and
+ambient pinned/excluded ancestors were tested separately.
+
+The writer's saved manifest exactly matched the observed preview revision,
+IDs, annotation target/region and source/visual version metadata. A stale
+request returned 409 without an appended entry; caller-supplied canonical
+context returned 400. Body edits retained scope. Later membership and content
+changes did not rewrite the saved request.
+
+After deleting every original item, emptying trash and collecting with
+`keepOps: 0, graceMs: 0`, all 20 originating operations were archived. Four
+referenced blobs (257 bytes) remained; an unreferenced 57-byte replacement
+was swept. Source Markdown and a distinct HTML visual remained byte-exact
+after restart. Production API and a real MCP SDK client reconstructed both
+faces in seven-byte pages; excluded content returned zero bytes, and MCP
+reads left the canvas snapshot unchanged.
+
+Native export/import into a second daemon restored the exact canvas and
+manifest and uploaded all four retained blobs. The backup honestly reported
+the swept historical replacement as missing. Saved reference metadata carried
+filename, MIME type and size for backup discovery, including the visual face.
+
+Copies placed overlapping ordinary cards (40-by-40 relative offsets) inside
+another group and another canvas, preserving the nested forest and deliberate
+overlap. Container and annotation IDs remapped; unrelated literal properties
+did not. A member copied alone omitted its frame. Both faces were retrieved
+from the destination. Missing visual bytes refused the entire copy with no
+state or sequence change. One accepted copy was one canonical creation;
+undo/redo retained item/version IDs, geometry and original authorship. Normal
+updated timestamps changed on redo.
+
+For two independent deletion cohorts, a child and its ink were restored and
+moved elsewhere before the ancestor was restored. The second run deleted that
+child again. Both restore previews and canonical receipts reported skipped
+IDs; the ancestor never moved or stole those items back.
+
+### Real browser and CLI walk
+
+The conductor built the app before starting a fresh daemon and Chrome. A
+five-item group showed four included and one excluded; the explicit override
+showed five included. The sent comment matched the browser's observed preview
+exactly. Actual CLI `context request` returned the same saved manifest and
+`context content --limit 7` read the original version. `say --in` returned the
+writer's new canonical scope after a member left.
+
+The driver held an actual browser send before the writer received it, removed
+a member through the real CLI, and released the request. The 409 appended
+nothing, preserved the draft, refreshed the preview and left the older saved
+message unchanged. Sending after an explicit completed refresh succeeded.
+A later CLI change caused another honest stale-revision refusal while a draft
+was waiting; elapsed time never silently approved a new scope.
+
+Actual Cmd-C/Cmd-V created a nested copy and selected only its new root. The
+saved snapshot confirmed membership. Its menu said `Delete group and 3 items`;
+clicking it deleted all four. Trash inspection listed four exact IDs and
+parents; `Restore 4 items` returned the nested copy and reported its result.
+
+A synthetic large group contained 1,000 cards, ten inner frames and one outer
+frame. The browser exposed all 1,011 IDs across 21 pages, at most 50 plain
+manifest rows at once, with no iframe/image/canvas previews in the disclosure.
+Actual scrolling and Next clicks collected 1,011 unique IDs exactly matching
+the server manifest. The CLI independently returned all 1,011 entries at the
+same revision. The browser reported no runtime errors. Screenshots were
+inspected; persistent labels and the scrollable manifest remained separate.
+
+### Final checks and limits
+
+- Named proof: `npm test -- packages/core/test/canvas-group-context.test.ts packages/server/test/canvas-group-context.test.ts packages/cli/test/canvas-groups.test.ts packages/mcp/test/tools.test.ts`: **37 passed, four files, exit 0**. Its first sandbox run could not bind the MCP port; the unrestricted rerun exercised real sockets.
+- `FIRESTORE_EMULATOR_HOST=127.0.0.1:19099 ISOCAN_REQUIRE_EMULATOR=1 npm test`: **4,784 passed, three existing skips, 470 files, exit 0**.
+- `npm run typecheck`, `npm run build` and `git diff --check`: **exit 0**.
+- The final production entry is **734,159 bytes** (12,987 above phase three and 11,339 below the first phase-four build). Context and Trash load on demand; writer-only context resolution is a separate core leaf. The recorded ceiling is 734,200; the 640,000 goal and 20,000 jump guard remain unchanged.
+- Real API/GC/export/MCP walk: **exit 0**. The saved distinct visual metadata is exactly `acme-visual.html`, 76 bytes, in both the manifest and exported index.
+
+Independent review found late acceptance clearing newly typed text and queued forms never unlocking. The final browser build passed delayed HTTP acceptance while typing, canonical echo before failed HTTP, a pre-writer transport failure followed by stale-context refusal with zero append, and successful resubmission from that same mounted composer. Another queued message reached the writer once after reconnect. Trash remained queued when closed and reopened, then reported the canonical three-item restore after reconnect; membership and sequence were checked over HTTP. Runtime errors were empty. Two scratch expectations were corrected after inspection: typing inserted at the actual caret, and optimistic restore had already changed the menu from `Trash (3)` to `Trash`. Neither expectation was used as a product pass.
+
+After syncing with main, the first complete rerun reached 4,783 passes and
+one 90-second child timeout in the existing canvas-board metric renderer.
+Independent inspection found no canvas write or new feature path there; its
+focused rerun also timed out while sharing the full retry's load. The next
+complete run passed all 4,784 tests with the same three skips in 162.98 seconds,
+without a concurrent typecheck or any code/timeout change. Workspace typecheck
+also exited 0 on the committed tree.
+
+All six AGENTS obligations were touched: shared operation semantics, CLI
+intents, agent-guide reference, core helpers, README and tests. MCP remains
+read-only; JSON Canvas is a documented projection without membership/layout/
+frozen-context fidelity, with no new import path. Full native backup remains
+the restoration format. Byte-page responses are bounded, though the current
+API downloads a complete blob before slicing each response. New group mode
+remains opt-in until canvas-groups phase 5 enables migration and normal creation.

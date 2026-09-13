@@ -85,7 +85,7 @@ export declare function slides(canvas: CanvasContents): Item[];
  * fallback too: a deck that projected its own notes would be the one thing a
  * presenter cannot forgive.
  */
-export declare function deck(canvas: CanvasContents): Item[];
+export declare function deck(canvas: CanvasContents, groupId?: string): Item[];
 /**
  * **What you say about a slide, kept beside it.**
  *

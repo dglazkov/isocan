@@ -46,7 +46,8 @@ export declare function wholeLog(client: DaemonRoutes, canvasId: string): Promis
  */
 export declare function exportCanvases(client: DaemonRoutes, canvases: readonly Canvas[], options: ExportOptions): Promise<ExportReport>;
 /**
- * Back up one item: its record, every version's bytes, the threads pinned to
+ * Back up an item (or a complete group subtree and its attached marks):
+ * its record, every source and visual version, the threads pinned to
  * it, and the entries of the log that name it. Not a canvas — it does not
  * restore through `import` — but everything somebody would want back if the
  * item were the thing they cared about.

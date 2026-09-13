@@ -1,8 +1,8 @@
-import type { Actor, PresenceSession } from "@isocan/core";
+import type { Actor, NewComment, PresenceSession } from "@isocan/core";
 import { mainThread, newThreadId } from "@isocan/core";
 
 import { screenToWorld } from "./viewport.ts";
-import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoedResult, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { makeComment } from "../components/CommentLayer.tsx";
 
@@ -20,27 +20,26 @@ export async function postToMain(
   /** Items the message is about — the selection, carried as ids so an agent
    * can act on exactly what was on screen rather than guess from the words. */
   attached: string[] = [],
-): Promise<void> {
+  contextRequest?: NewComment["contextRequest"],
+): ReturnType<typeof sendEchoedResult> {
   const withItems = (text: string) => {
     const comment = makeComment(text);
-    if (attached.length === 0) return comment;
-    return { ...comment, items: [...new Set([...(comment.items ?? []), ...attached])] };
+    return { ...comment, ...(attached.length ? { items: [...new Set([...(comment.items ?? []), ...attached])] } : {}), ...(contextRequest ? { contextRequest } : {}) };
   };
   const existing = mainThread(useCanvasStore.getState().canvas!);
   if (existing) {
-    await sendEchoed(canvasId, actor, {
+    return sendEchoedResult(canvasId, actor, {
       type: "thread.reply",
       threadId: existing.id,
       comment: withItems(body),
     });
-    return;
   }
   // First message births the thread. Its coordinates are where the pin would
   // land if the channel is ever demoted — the middle of the current view.
   const ui = useUiStore.getState();
   const center = screenToWorld(ui.viewport, window.innerWidth / 2, window.innerHeight / 2);
   try {
-    await sendEchoed(canvasId, actor, {
+    const result = await sendEchoedResult(canvasId, actor, {
       type: "thread.create",
       threadId: newThreadId(),
       x: Math.round(center.x),
@@ -49,18 +48,22 @@ export async function postToMain(
       main: true,
       comment: withItems(body),
     });
-  } catch {
+    if (result.status !== "refused" || result.code !== "main-exists") return result;
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "main-exists") throw error;
+  }
     // Lost a birth race ("main-exists") — the winner's thread is the channel
     // now; deliver the message there.
-    const winner = mainThread(useCanvasStore.getState().canvas!);
+    const current = useCanvasStore.getState();
+    const winner = current.canvasId === canvasId && current.canvas ? mainThread(current.canvas) : null;
     if (winner) {
-      await sendEchoed(canvasId, actor, {
+      return sendEchoedResult(canvasId, actor, {
         type: "thread.reply",
         threadId: winner.id,
         comment: withItems(body),
       });
     }
-  }
+  return { status: "refused", message: "The main conversation changed. Review the message and send again." };
 }
 
 /**

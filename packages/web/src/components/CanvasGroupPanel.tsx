@@ -9,12 +9,13 @@ import { GroupLayoutControls } from "./GroupLayoutControls.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { Modal } from "./Modal.tsx";
+import { LiveContextInspection } from "./LazyGroupContext.tsx";
 
 /** One form supplies creation, membership picking and an inspectable member roster. */
 export function CanvasGroupPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const dialog = useUiStore((s) => s.groupDialog);
   if (!dialog) return null;
-  return <GroupDialog key={`${dialog.kind}:${dialog.groupId ?? dialog.itemIds.join()}`} canvasId={canvasId} actor={actor} dialog={dialog} />;
+  return <GroupDialog key={`${canvasId}:${dialog.kind}:${dialog.groupId ?? dialog.itemIds.join()}`} canvasId={canvasId} actor={actor} dialog={dialog} />;
 }
 function GroupDialog({ canvasId, actor, dialog }: { canvasId: string; actor: Actor; dialog: NonNullable<ReturnType<typeof useUiStore.getState>["groupDialog"]> }) {
   const canvas = useCanvasStore((s) => s.canvas);
@@ -73,6 +74,7 @@ function GroupDialog({ canvasId, actor, dialog }: { canvasId: string; actor: Act
         <p>{picked.length} selected · positions are preserved unless arrangement is chosen.</p>
       </>}
       {dialog.kind === "inspect" && group && <>
+        <LiveContextInspection canvasId={canvasId} rootIds={[group.id]} />
         <p>{members.length} direct members · {descendants.length} total descendants</p>
         <p>Parent: {group.containerId ? <button type="button" onClick={() => { enterCanvasGroup(group.containerId!); close(); }}>{canvas?.items[group.containerId]?.title}</button> : "Canvas"}</p>
         <p>Content: {content?.width} × {content?.height} at {content?.x}, {content?.y}</p>

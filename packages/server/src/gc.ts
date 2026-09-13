@@ -8,7 +8,7 @@ import type {
   LogEntry,
   Operation,
 } from "@isocan/core";
-import { blobsInProperties, undoneSeqs } from "@isocan/core";
+import { blobsInProperties, blobsNamedBy, undoneSeqs } from "@isocan/core";
 import type { Engine } from "./engine.ts";
 
 /**
@@ -113,6 +113,9 @@ function hashesInOperation(op: Operation): string[] {
  */
 export function reachableHashes(state: CanvasState, retained: LogEntry[]): Set<string> {
   const marked = new Set<string>();
+  // Full metadata references include request provenance, both in saved comments
+  // and in retained comment inverses, after their source items have gone.
+  for (const hash of blobsNamedBy(retained, state).keys()) marked.add(hash);
   for (const hash of blobsInProperties(state)) marked.add(hash);
   for (const item of Object.values(state.canvas.items)) {
     for (const version of item.versions) {

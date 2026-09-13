@@ -107,6 +107,7 @@ function registeredCommands(): string[] {
   const sources = [
     path.join(repo, "packages/cli/src/main.ts"),
     path.join(repo, "packages/cli/src/canvas-groups.ts"),
+    path.join(repo, "packages/cli/src/context-reads.ts"),
     ...moduleDirs().map((dir) => path.join(dir, "src/cli.ts")).filter((f) => existsSync(f)),
   ];
   const names = new Set<string>();

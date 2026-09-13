@@ -86,6 +86,11 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
     gate: "{canEdit && (\n        <form",
   },
   {
+    what: "the main Chat comment composer — frozen context stays readable",
+    file: "components/MainThreadPanel.tsx",
+    gate: "{canEdit && <form",
+  },
+  {
     what: "reactions — adding one, and toggling one already worn",
     file: "components/Reactions.tsx",
     gate: "if (!canEdit) return; // a mark is an op, and the daemon would refuse it",

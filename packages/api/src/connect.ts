@@ -2,12 +2,15 @@ import type {
   Actor,
   Canvas,
   CanvasSnapshotResponse,
+  ContextManifest,
+  ContextContentPage,
   CommentThread,
   Item,
   ItemKind,
   MentionCandidate,
   NewComment,
   Operation,
+  PostOpResponse,
   PresenceSession,
   WatchedLogEntry,
   WatchLogResponse,
@@ -17,6 +20,10 @@ import {
   actorsAnswerTo,
   resolveActor,
   annotationsOf,
+  groupChildren,
+  groupDescendants,
+  findArea,
+  itemsIn,
   collectCanvasActors,
   collectCanvasNames,
   collectItemRefCandidates,
@@ -26,6 +33,7 @@ import {
   filenameFromTitle,
   itemKind,
   mainThread,
+  itemThread,
   newCommentId,
   newItemId,
   newThreadId,
@@ -36,7 +44,8 @@ import {
 import { matchRef, resolveCanvas, resolveCtx, type Ctx } from "./ctx.ts";
 import { noIdentityHere, type ExplicitIdentity } from "./identity.ts";
 import { ApiError, type DaemonRoutes } from "./routes.ts";
-import { CanvasGroups, resolveCanvasGroupRef } from "./canvas-groups.ts";
+import { CanvasGroups, resolveCanvasGroupRef, type CanvasGroupCopyOptions, type CanvasGroupResult } from "./canvas-groups.ts";
+import { readContextItem, type CommentContextOptions, type ContextReadOptions, type ContextPageOptions, type ContextBytesOptions, type ContextItemContent } from "./canvas-context.ts";
 
 /**
  * **Unreachable is a typed refusal here, not a stack trace** (journey 1's
@@ -193,6 +202,19 @@ export interface SetSpec {
   size?: { width: number; height: number };
 }
 
+export interface PostedComment {
+  threadId: string;
+  commentId: string;
+  /** Authoritative writer provenance, when this message supplied group context. */
+  context?: ContextManifest;
+}
+
+function postedComment(threadId: string, commentId: string, receipt: PostOpResponse): PostedComment {
+  const op = receipt.envelope.op;
+  const context = op.type === "thread.create" || op.type === "thread.reply" ? op.comment.context : undefined;
+  return { threadId, commentId, ...(context ? { context } : {}) };
+}
+
 /** A name in use on a canvas — from a live session or from its history. Keyed
  * by NAME, not actor: one person can have worked under several, and every one
  * of them still answers to `@Name`. */
@@ -294,6 +316,14 @@ export class CanvasHandle {
   /** Membership verbs share the CLI's typed canvas-group helper and atomic writer boundary. */
   get groups(): CanvasGroups { return new CanvasGroups(this.ctx.client, this.id, () => this.ctx.actor); }
 
+  /** Copy a selected graph and both content faces in one writer act. */
+  async copy(refs: string[], options: CanvasGroupCopyOptions & { to?: string } = {}): Promise<CanvasGroupResult> {
+    return this.reach(async () => {
+      const target = options.to ? matchRef(await this.ctx.client.listCanvases(), options.to) : this.record;
+      return new CanvasGroups(this.ctx.client, target.id, () => this.ctx.actor).copyFrom(this.id, refs, options);
+    });
+  }
+
   private snapshot(): Promise<CanvasSnapshotResponse> {
     return this.reach(() => this.ctx.client.snapshot(this.id));
   }
@@ -304,9 +334,46 @@ export class CanvasHandle {
   }
 
   /** Every live item, each carrying its derived kind — `--json ls`. */
-  async items(): Promise<ListedItem[]> {
-    const { canvas } = await this.snapshot();
-    return Object.values(canvas.items).map((item) => ({ ...item, kind: itemKind(item) }));
+  async items(options: { in?: string | undefined; recursive?: boolean | undefined } = {}): Promise<ListedItem[]> {
+    const { project, canvas } = await this.snapshot();
+    let items = Object.values(canvas.items);
+    if (options.in !== undefined) {
+      if (project.groupMode === "groups") {
+        const parent = resolveCanvasGroupRef(canvas, options.in, true);
+        items = options.recursive ? groupDescendants(canvas, parent.id) : groupChildren(canvas, parent.id);
+      } else {
+        const area = findArea(canvas, options.in);
+        if (!area) throw new Error(`no area called "${options.in}"`);
+        items = itemsIn(canvas, area);
+      }
+    }
+    return items.map((item) => ({ ...item, kind: itemKind(item) }));
+  }
+
+  /** Complete current hierarchy at one revision; omission reads ambient pins. */
+  async context(options: ContextReadOptions = {}): Promise<ContextManifest> {
+    return this.reach(async () => {
+      if (options.in === undefined && options.rootIds === undefined) {
+        if (options.includeExcluded !== undefined || options.expectedRevision !== undefined) throw new Error("includeExcluded and expectedRevision require explicit context roots or in");
+        return this.ctx.client.contextManifest(this.id);
+      }
+      const snapshot = await this.snapshot();
+      const roots = [...(options.rootIds ?? []).map((ref) => resolveCanvasGroupRef(snapshot.canvas, ref).id)];
+      if (options.in !== undefined) roots.push(resolveCanvasGroupRef(snapshot.canvas, options.in, true).id);
+      return this.ctx.client.contextManifest(this.id, { rootIds: [...new Set(roots)], ...(options.includeExcluded !== undefined ? { includeExcluded: options.includeExcluded } : {}), ...(options.expectedRevision !== undefined ? { expectedRevision: options.expectedRevision } : {}) });
+    });
+  }
+
+  contextOfComment(threadId: string, commentId: string): Promise<ContextManifest> {
+    return this.reach(() => this.ctx.client.commentContext(this.id, threadId, commentId));
+  }
+
+  contextPage(options: ContextPageOptions): Promise<ContextContentPage> {
+    return this.reach(() => this.ctx.client.contextContentPage(this.id, options));
+  }
+
+  contextItem(threadId: string, commentId: string, itemId: string, options: ContextBytesOptions = {}): Promise<ContextItemContent> {
+    return this.reach(() => readContextItem(this.ctx.client, this.id, threadId, commentId, itemId, options));
   }
 
   /** One item, by exact id, fresh from the store. */
@@ -615,12 +682,12 @@ export class CanvasHandle {
    * channel — it noticed itself, mid-run, that it had posted 80 of a
    * thread's 96 messages.
    */
-  async comment(itemId: string, message: string): Promise<{ threadId: string; commentId: string }> {
+  async comment(itemId: string, message: string, options: CommentContextOptions = {}): Promise<PostedComment> {
     return this.reach(async () => {
       const snapshot = await this.snapshot();
-      const comment = await this.newComment(snapshot, message);
+      const comment = await this.newComment(snapshot, message, options);
       const threadId = newThreadId();
-      await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+      const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
         type: "thread.create",
         threadId,
         x: 0,
@@ -628,17 +695,17 @@ export class CanvasHandle {
         anchorItemId: itemId,
         comment,
       });
-      return { threadId, commentId: comment.id };
+      return postedComment(threadId, comment.id, receipt);
     });
   }
 
   /** Reply in a thread that exists — `isocan comment reply`'s act. */
-  async reply(threadId: string, message: string): Promise<{ threadId: string; commentId: string }> {
+  async reply(threadId: string, message: string, options: CommentContextOptions = {}): Promise<PostedComment> {
     return this.reach(async () => {
       const snapshot = await this.snapshot();
-      const comment = await this.newComment(snapshot, message);
-      await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "thread.reply", threadId, comment });
-      return { threadId, commentId: comment.id };
+      const comment = await this.newComment(snapshot, message, options);
+      const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "thread.reply", threadId, comment });
+      return postedComment(threadId, comment.id, receipt);
     });
   }
 
@@ -647,21 +714,21 @@ export class CanvasHandle {
    * the reply, or is born from the first message, with `@Name` mentions and
    * `#Title` references resolved the way every comment resolves them.
    */
-  async notify(message: string): Promise<{ threadId: string; commentId: string }> {
+  async notify(message: string, options: CommentContextOptions = {}): Promise<PostedComment> {
     return this.reach(async () => {
       const snapshot = await this.snapshot();
-      const comment = await this.newComment(snapshot, message);
+      const comment = await this.newComment(snapshot, message, options);
       const main = mainThread(snapshot.canvas);
       if (main) {
-        await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+        const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
           type: "thread.reply",
           threadId: main.id,
           comment,
         });
-        return { threadId: main.id, commentId: comment.id };
+        return postedComment(main.id, comment.id, receipt);
       }
       const threadId = newThreadId();
-      await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+      const receipt = await this.ctx.client.sendOp(this.id, this.ctx.actor, {
         type: "thread.create",
         threadId,
         x: 0,
@@ -670,12 +737,28 @@ export class CanvasHandle {
         main: true,
         comment,
       });
-      return { threadId, commentId: comment.id };
+      return postedComment(threadId, comment.id, receipt);
     });
   }
 
-  private newComment(snapshot: CanvasSnapshotResponse, body: string): Promise<NewComment> {
-    return buildComment(this.ctx.client, this.id, snapshot, body);
+  say(message: string, options: CommentContextOptions = {}): Promise<PostedComment> {
+    return this.notify(message, options);
+  }
+
+  async ask(question: string, options: CommentContextOptions & { itemId?: string } = {}): Promise<PostedComment> {
+    const words = question.trim();
+    if (!words) throw new Error("ask what?");
+    const body = words.startsWith("/ask") ? words : `/ask ${words}`;
+    if (options.itemId) {
+      const snapshot = await this.snapshot();
+      const existing = itemThread(snapshot.canvas, options.itemId);
+      return existing ? this.reply(existing.id, body, options) : this.comment(options.itemId, body, options);
+    }
+    return this.notify(body, options);
+  }
+
+  private newComment(snapshot: CanvasSnapshotResponse, body: string, options: CommentContextOptions = {}): Promise<NewComment> {
+    return buildComment(this.ctx.client, this.id, snapshot, body, options);
   }
 }
 
@@ -692,6 +775,7 @@ export async function buildComment(
   canvasId: string,
   snapshot: CanvasSnapshotResponse,
   body: string,
+  options: CommentContextOptions = {},
 ): Promise<NewComment> {
   // What the canvas remembers, plus what everyone goes by NOW — otherwise
   // "@Di" resolves to nobody the moment Dion 2 renames, and the summons that
@@ -707,12 +791,20 @@ export async function buildComment(
     if (session.label) candidates.push({ id: session.actor.id, name: session.label });
   }
   const mentions = extractMentions(body, candidates);
-  const items = extractItemRefs(body, collectItemRefCandidates(snapshot.canvas));
+  const items = [...new Set([
+    ...extractItemRefs(body, collectItemRefCandidates(snapshot.canvas)),
+    ...(options.items ?? []).map((ref) => resolveCanvasGroupRef(snapshot.canvas, ref).id),
+    ...(options.rootIds ?? []).map((ref) => resolveCanvasGroupRef(snapshot.canvas, ref).id),
+    ...(options.in !== undefined ? [resolveCanvasGroupRef(snapshot.canvas, options.in, true).id] : []),
+  ])];
+  const explicit = options.in !== undefined || options.rootIds !== undefined || options.includeExcluded !== undefined || options.expectedRevision !== undefined;
+  if (explicit && snapshot.project.groupMode !== "groups") throw new Error("group context requires a group-enabled canvas");
   return {
     id: newCommentId(),
     body,
     ...(mentions.length > 0 ? { mentions } : {}),
     ...(items.length > 0 ? { items } : {}),
+    ...(explicit ? { contextRequest: { rootIds: items, ...(options.includeExcluded !== undefined ? { includeExcluded: options.includeExcluded } : {}), ...(options.expectedRevision !== undefined ? { expectedRevision: options.expectedRevision } : {}) } } : {}),
   };
 }
 

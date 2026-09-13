@@ -1,8 +1,9 @@
 import type { Actor } from "@isocan/core";
 import { itemUrl } from "@isocan/core";
 import { readBlob } from "./api.ts";
-import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoedResult, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { captureClipboard } from "./clipboard.ts";
 
 /**
  * **What you can do to an item, in one place, so two doors cannot disagree.**
@@ -37,14 +38,16 @@ export async function deleteItems(
   ids: string[],
 ): Promise<void> {
   if (ids.length === 0) return;
-  await sendEchoed(
+  const result = await sendEchoedResult(
     canvasId,
     actor,
     ids.length === 1
       ? { type: "item.delete", itemId: ids[0]! }
       : { type: "items.delete", itemIds: ids },
   );
-  useUiStore.getState().select(null);
+  if (result.status !== "refused" && useCanvasStore.getState().canvasId === canvasId) {
+    useUiStore.getState().select(null);
+  }
 }
 
 /**
@@ -62,7 +65,7 @@ export async function cutItems(canvasId: string, actor: Actor, ids: string[]): P
     .map((id) => canvas.items[id])
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
   if (picked.length === 0) return;
-  useUiStore.getState().setClipboard({ canvasId, items: picked });
+  useUiStore.getState().setClipboard(captureClipboard(canvasId, picked.map((item) => item.id)));
   await deleteItems(canvasId, actor, ids);
 }
 

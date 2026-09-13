@@ -522,6 +522,7 @@ function patchContent(item: Item, content: GroupContentFields): Item {
 function validateGroupRequest(action: GroupAction): void {
   if (!record(action) || typeof action.kind !== "string") fail("invalid action");
   const allowed: Record<string, string[]> = {
+    copy: ["kind", "sourceCanvasId", "rootIds", "items", "containerId", "at", "cell", "groupPlacement"],
     create: ["kind", "group", "itemIds", "containerId"], reparent: ["kind", "itemIds", "containerId", "place"], remove: ["kind", "itemIds", "toRoot"], ungroup: ["kind", "itemIds"], transform: "by" in action ? ["kind", "itemIds", "by", "expected"] : "moves" in action ? ["kind", "moves", "expected"] : ["kind", "itemId", "box", "anchor", "expected"], frame: ["kind", "itemId", "box", "fit"], layout: ["kind", "itemId", "layout", "tidy"], delete: ["kind", "itemIds"], restore: ["kind", "itemIds"],
   };
   allowed.insert = ["kind", "item"];
@@ -533,6 +534,19 @@ function validateGroupRequest(action: GroupAction): void {
   allowed.frame!.push("expected");
   if (!own(allowed, action.kind)) fail("resolved group changes are writer-only");
   exactKeys(action, allowed[action.kind]!, "action");
+  if (action.kind === "copy") {
+    if (typeof action.sourceCanvasId !== "string" || !action.sourceCanvasId || !Array.isArray(action.items)) fail("copy source and new items required");
+    idList(action.rootIds); idList(action.items.map((item) => item?.id));
+    for (const item of action.items) {
+      exactKeys(item, ["id", "title", "version", "description", "properties", "box", "layout", "containerId"], "copied item");
+      const { containerId, ...creation } = item;
+      if (containerId !== undefined && (typeof containerId !== "string" || !action.items.some((parent) => parent.id === containerId && parent.properties?.kind === GROUP_KIND))) fail("copied parent must be another copied group");
+      requestBox(item.box);
+      validateGroupRequest({ kind: "create", group: creation });
+    }
+    if (action.rootIds.some((id) => !action.items.some((item) => item.id === id))) fail("copy roots must name copied items");
+    if (own(action, "at")) { exactKeys(action.at, ["x", "y"], "copy position"); if (!Number.isFinite(action.at!.x) || !Number.isFinite(action.at!.y)) fail("invalid copy position"); }
+  }
   if (own(action, "expected") && !Array.isArray((action as { expected?: unknown }).expected)) fail("expected state must be an array");
   for (const flag of ["place", "fit", "tidy", "toRoot"] as const) if (own(action, flag) && typeof (action as unknown as Record<string, unknown>)[flag] !== "boolean") fail(`${flag} must be a boolean`);
   if (["reparent", "remove", "ungroup", "delete", "restore"].includes(action.kind)) idList((action as { itemIds?: unknown }).itemIds);
@@ -774,7 +788,41 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
   };
   const trashIds = (ids: readonly string[]): void => { for (const id of ids) { dependencies.add(id); deletions.add(id); delete canvas.items[id]; } };
   let roots: string[] = [];
-  if (action.kind === "insert") {
+  if (action.kind === "copy") {
+    const parent = action.containerId ?? null;
+    if (parent) { groupIn(original, parent); want([parent]); }
+    const copiedIds = new Set(action.items.map((item) => item.id));
+    for (const creation of action.items) {
+      if (original.items[creation.id] || original.trash.some((entry) => entry.item.id === creation.id)) fail("copied ID already exists");
+      const properties = { ...creation.properties };
+      const containerId = creation.containerId ?? parent;
+      const target = properties.annotates;
+      if (target && !copiedIds.has(target)) {
+        const external = original.items[target];
+        if (action.sourceCanvasId !== state.project.id || !external || (external.containerId ?? null) !== containerId) { delete properties.annotates; delete properties.region; }
+        else want([target]);
+      }
+      const item: Item = {
+        id: creation.id, title: creation.title, description: creation.description ?? "", properties, ...persistedBox(creation.box),
+        ...(containerId ? { containerId } : {}), ...(creation.layout ? { groupLayout: structuredClone(creation.layout) } : {}),
+        versions: [{ ...creation.version, createdAt: stamp.ts, createdBy: stamp.actor }], currentVersionId: creation.version.id,
+        createdAt: stamp.ts, createdBy: stamp.actor, updatedAt: stamp.ts, updatedBy: stamp.actor,
+      };
+      validateCreatedItem(item); canvas.items[item.id] = item; creates.set(item.id, item); dependencies.add(item.id);
+    }
+    validateGroupForest({ ...state, canvas });
+    roots = groupSelectionRoots(canvas, [...copiedIds]);
+    if (!equal(sorted(roots), sorted(action.rootIds))) fail("copy roots do not match the copied forest");
+    const footprints = roots.map((id) => groupFootprint(itemIn(canvas, id), canvas));
+    const left = Math.min(...footprints.map((box) => box.x)), top = Math.min(...footprints.map((box) => box.y));
+    const footprint = { x: left, y: top, width: Math.max(...footprints.map((box) => box.x + box.width)) - left, height: Math.max(...footprints.map((box) => box.y + box.height)) - top };
+    const desired = action.at ?? { x: footprint.x + PLACEMENT_GAP, y: footprint.y + PLACEMENT_GAP };
+    const policy = action.groupPlacement ?? "auto";
+    const spot = parent ? groupPlacement(canvas, parent, { width: footprint.width, height: footprint.height }, { at: desired, policy, ignoreIds: [...copiedIds], ...(action.cell ? { cell: action.cell } : {}) })
+      : policy === "preserve" || policy === "exact" ? desired : nearestFreeSpot({ ...desired, width: footprint.width, height: footprint.height }, Object.values(original.items).filter((item) => !item.containerId).map((item) => ({ id: item.id, ...groupFootprint(item, original) })));
+    for (const id of copiedIds) { const item = itemIn(canvas, id); put(id, { x: item.x + spot.x - footprint.x, y: item.y + spot.y - footprint.y }); }
+    fitAncestors(roots);
+  } else if (action.kind === "insert") {
     const op = action.item;
     if (original.items[op.itemId] || original.trash.some((entry) => entry.item.id === op.itemId)) fail("item ID already exists");
     const targetId = op.properties?.annotates;
@@ -985,7 +1033,7 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
   const originalIndex = relations(original);
   const expected = sorted(dependencies).map((id) => expectation(state, id, contents.get(id), originalIndex));
   const v2Layout = expected.some((row) => hasGridCounts(row.facts?.groupLayout)) || writes.some((write) => hasGridCounts(write.kind === "create" ? write.item.groupLayout : write.kind === "patch" ? write.fields.groupLayout : undefined));
-  const change: GroupChange = { canvasId: state.project.id, intent: action.kind === "remove" ? "reparent" : action.kind, expected, writes, ...(action.kind === "insert" || action.kind === "content" || v2Layout ? { schemaVersion: 2 as const } : {}), ...(cohorts ? { cohorts } : {}), ...(skipped.size ? { skippedIds: sorted(skipped) } : {}) };
+  const change: GroupChange = { canvasId: state.project.id, intent: action.kind === "remove" ? "reparent" : action.kind === "copy" ? "create" : action.kind, expected, writes, ...(action.kind === "insert" || action.kind === "content" || v2Layout ? { schemaVersion: 2 as const } : {}), ...(cohorts ? { cohorts } : {}), ...(skipped.size ? { skippedIds: sorted(skipped) } : {}) };
   applyGroupChange(state, change, stamp.actor, stamp.ts);
   return { type: "group.change", action: { kind: "apply", change } };
 }
@@ -996,6 +1044,7 @@ export function groupChangeItemIds(op: GroupOperation): string[] {
   if (op.action.kind === "create") return [op.action.group.id, ...(op.action.itemIds ?? [])];
   if (op.action.kind === "insert") return [op.action.item.itemId];
   if (op.action.kind === "content") return [op.action.operation.itemId];
+  if (op.action.kind === "copy") return op.action.rootIds;
   return "itemIds" in op.action ? op.action.itemIds : "moves" in op.action ? op.action.moves.map((move) => move.itemId) : "targets" in op.action ? op.action.targets.map((target) => target.itemId) : [op.action.itemId];
 }
 

@@ -1,9 +1,10 @@
-import type { Actor, Canvas, CanvasSnapshotResponse, CommentThread, Item, ItemKind, NewComment, Operation, WatchedLogEntry } from "../../core/src/index.js";
+import type { Actor, Canvas, CanvasSnapshotResponse, ContextManifest, ContextContentPage, CommentThread, Item, ItemKind, NewComment, Operation, WatchedLogEntry } from "../../core/src/index.js";
 import { type ActivityEntry } from "../../core/src/index.js";
 import { type Ctx } from "./ctx.js";
 import { type ExplicitIdentity } from "./identity.js";
 import { type DaemonRoutes } from "./routes.js";
-import { CanvasGroups } from "./canvas-groups.js";
+import { CanvasGroups, type CanvasGroupCopyOptions, type CanvasGroupResult } from "./canvas-groups.js";
+import { type CommentContextOptions, type ContextReadOptions, type ContextPageOptions, type ContextBytesOptions, type ContextItemContent } from "./canvas-context.js";
 /**
  * **`connect()` — the API's front door** (iso-api phase 2, journey 1).
  *
@@ -104,6 +105,12 @@ export interface SetSpec {
         height: number;
     };
 }
+export interface PostedComment {
+    threadId: string;
+    commentId: string;
+    /** Authoritative writer provenance, when this message supplied group context. */
+    context?: ContextManifest;
+}
 /** A name in use on a canvas — from a live session or from its history. Keyed
  * by NAME, not actor: one person can have worked under several, and every one
  * of them still answers to `@Name`. */
@@ -161,11 +168,23 @@ export declare class CanvasHandle {
     get title(): string;
     /** Membership verbs share the CLI's typed canvas-group helper and atomic writer boundary. */
     get groups(): CanvasGroups;
+    /** Copy a selected graph and both content faces in one writer act. */
+    copy(refs: string[], options?: CanvasGroupCopyOptions & {
+        to?: string;
+    }): Promise<CanvasGroupResult>;
     private snapshot;
     /** Every network act on this handle throws `ApiError` — see {@link reaching}. */
     private reach;
     /** Every live item, each carrying its derived kind — `--json ls`. */
-    items(): Promise<ListedItem[]>;
+    items(options?: {
+        in?: string | undefined;
+        recursive?: boolean | undefined;
+    }): Promise<ListedItem[]>;
+    /** Complete current hierarchy at one revision; omission reads ambient pins. */
+    context(options?: ContextReadOptions): Promise<ContextManifest>;
+    contextOfComment(threadId: string, commentId: string): Promise<ContextManifest>;
+    contextPage(options: ContextPageOptions): Promise<ContextContentPage>;
+    contextItem(threadId: string, commentId: string, itemId: string, options?: ContextBytesOptions): Promise<ContextItemContent>;
     /** One item, by exact id, fresh from the store. */
     item(itemId: string): Promise<Item>;
     /** Every comment thread — `--json comment list`. */
@@ -240,24 +259,19 @@ export declare class CanvasHandle {
      * channel — it noticed itself, mid-run, that it had posted 80 of a
      * thread's 96 messages.
      */
-    comment(itemId: string, message: string): Promise<{
-        threadId: string;
-        commentId: string;
-    }>;
+    comment(itemId: string, message: string, options?: CommentContextOptions): Promise<PostedComment>;
     /** Reply in a thread that exists — `isocan comment reply`'s act. */
-    reply(threadId: string, message: string): Promise<{
-        threadId: string;
-        commentId: string;
-    }>;
+    reply(threadId: string, message: string, options?: CommentContextOptions): Promise<PostedComment>;
     /**
      * Say something in the Chat — `isocan notify`'s act: the main thread gets
      * the reply, or is born from the first message, with `@Name` mentions and
      * `#Title` references resolved the way every comment resolves them.
      */
-    notify(message: string): Promise<{
-        threadId: string;
-        commentId: string;
-    }>;
+    notify(message: string, options?: CommentContextOptions): Promise<PostedComment>;
+    say(message: string, options?: CommentContextOptions): Promise<PostedComment>;
+    ask(question: string, options?: CommentContextOptions & {
+        itemId?: string;
+    }): Promise<PostedComment>;
     private newComment;
 }
 /**
@@ -268,4 +282,4 @@ export declare class CanvasHandle {
  * resolves differently depending on which surface posted it would summon
  * nobody.
  */
-export declare function buildComment(client: DaemonRoutes, canvasId: string, snapshot: CanvasSnapshotResponse, body: string): Promise<NewComment>;
+export declare function buildComment(client: DaemonRoutes, canvasId: string, snapshot: CanvasSnapshotResponse, body: string, options?: CommentContextOptions): Promise<NewComment>;

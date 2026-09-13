@@ -318,7 +318,7 @@ describe("canvas groups through the authoritative HTTP writer", () => {
 });
 
 describe("canvas-group reducer capability", () => {
-  it.each(["", "canvas-groups-v1"])("gates writes, snapshots, logs, watch, and both socket snapshot and tail for %s", async (oldFeatures) => {
+  it.each(["", "canvas-groups-v1", "canvas-groups-v2"])("gates writes, snapshots, logs, watch, and both socket snapshot and tail for %s", async (oldFeatures) => {
     const refusedBirth = await request("/api/ops", { canvasId: null, actor: alice, op: { type: "project.create", canvasId, title: "Acme", groupMode: "groups" } }, oldFeatures);
     expect(refusedBirth.status).toBe(426);
     await seed(); await wrap();
@@ -356,7 +356,7 @@ describe("canvas-group reducer capability", () => {
     ws.close();
   });
 
-  it.each(["", "canvas-groups-v1"])("does not let a capable forwarding transport bless incompatible original writer %s", async (oldFeatures) => {
+  it.each(["", "canvas-groups-v1", "canvas-groups-v2"])("does not let a capable forwarding transport bless incompatible original writer %s", async (oldFeatures) => {
     await seed(); await wrap();
     const before = await snapshot();
     const denied = await post({ type: "item.move", itemId: "itm_a", x: 0, y: 0 }, alice, { clientFeatures: oldFeatures });
@@ -416,10 +416,10 @@ describe("v2 insertion and brief effects", () => {
     expect(marked.has("hash_ver_group")).toBe(true);
   });
 
-  it("closes an already subscribed v1 client before the first v2 operation reaches it", async () => {
+  it.each(["canvas-groups-v1", "canvas-groups-v2"])("closes an already subscribed %s client before group state reaches it", async (oldFeatures) => {
     await accepted({ type: "project.create", canvasId, title: "Acme legacy" });
     const messages: ServerMessage[] = [];
-    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}&since=0&${CLIENT_FEATURES_PARAM}=canvas-groups-v1`, { headers: badge.headers });
+    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}&since=0&${CLIENT_FEATURES_PARAM}=${oldFeatures}`, { headers: badge.headers });
     await new Promise<void>((resolve, reject) => {
       ws.on("message", (data) => { const message = JSON.parse(String(data)) as ServerMessage; messages.push(message); if (message.type === "snapshot") resolve(); });
       ws.on("error", reject);

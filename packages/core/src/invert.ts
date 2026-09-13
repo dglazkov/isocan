@@ -186,6 +186,7 @@ export function invertOperation(
         body: existing.body,
         ...(existing.mentions ? { mentions: existing.mentions } : {}),
         ...(existing.items ? { items: existing.items } : {}),
+        ...(op.context !== undefined ? { context: existing.context ?? null } : {}),
       };
     }
 

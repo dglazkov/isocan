@@ -31,6 +31,8 @@ interface JsonCanvasNode {
     url?: string;
     /** `text`: inline markdown. */
     text?: string;
+    /** A group's visible name; explicit isocan ownership is reported as a projection loss. */
+    label?: string;
 }
 interface JsonCanvasEdge {
     id: string;
@@ -52,6 +54,9 @@ interface ExportLosses {
     threads: number;
     properties: number;
     reactions: number;
+    groupMemberships?: number;
+    groupLayouts?: number;
+    contextRequests?: number;
 }
 /**
  * Array order IS z-order in this format — first is furthest back — so items

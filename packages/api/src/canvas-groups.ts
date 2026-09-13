@@ -1,10 +1,19 @@
 import { createHash } from "node:crypto";
 import type { Actor, CanvasContents, CanvasSnapshotResponse, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupCreation, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "@isocan/core";
-import { atLeast, captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation } from "@isocan/core";
+import { atLeast, captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupCopyAction, groupCopySource, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation, visualFaceOf } from "@isocan/core";
 import type { DaemonRoutes } from "./routes.ts";
 
 type PublicAction = Exclude<GroupAction, { kind: "apply" }>;
-type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "changeGroup">;
+type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "downloadBlob" | "changeGroup">;
+
+export interface CanvasGroupCopyOptions {
+  in?: string | undefined;
+  at?: { x: number; y: number } | undefined;
+  cell?: GroupCell | undefined;
+  dryRun?: boolean | undefined;
+  /** Additional metadata for each copied root, such as one sprint hand-in. */
+  properties?: Record<string, string> | undefined;
+}
 
 /** Membership inspection exposes the relation and both boxes, rather than counting overlap. */
 export interface CanvasGroupView {
@@ -185,6 +194,38 @@ export class CanvasGroups {
     return this.perform(state, { kind: "ungroup", itemIds: refs.map((ref) => resolveCanvasGroupRef(state.canvas, ref, true).id) }, !!options.dryRun);
   }
 
+  /** Freeze the selected source graph, upload every face, then submit one creation. */
+  async copyFrom(sourceCanvasId: string, refs: string[], options: CanvasGroupCopyOptions = {}): Promise<CanvasGroupResult> {
+    const sourceState = await this.client.snapshot(sourceCanvasId);
+    const source = groupCopySource(sourceCanvasId, sourceState.canvas, refs.map((ref) => resolveCanvasGroupRef(sourceState.canvas, ref).id));
+    if (!source.items.length) throw new Error("copy needs at least one item");
+    const state = await this.read(true);
+    const parent = options.in !== undefined ? resolveCanvasGroupRef(state.canvas, options.in, true).id : null;
+    const action = groupCopyAction(source, this.canvasId, { newItemId, newVersionId, containerId: parent, ...(options.at ? { at: options.at } : {}), ...(options.cell ? { cell: options.cell } : {}) });
+    if (options.properties) for (const item of action.items) if (action.rootIds.includes(item.id)) item.properties = { ...item.properties, ...options.properties };
+    // Perform's first pass validates geometry and metadata without writing bytes.
+    await this.perform(state, action, true);
+    if (!options.dryRun) {
+      const faces = new Map<string, { blobHash: string; mimeType: string; filename: string }>();
+      for (const item of source.items) {
+        const version = item.versions.find((entry) => entry.id === item.currentVersionId)!;
+        faces.set(version.blobHash, version);
+        const visual = visualFaceOf(version);
+        faces.set(visual.blobHash, visual);
+      }
+      // Same-canvas copy also checks every byte: a missing face refuses the whole paste.
+      for (const face of faces.values()) {
+        const bytes = await this.client.downloadBlob(sourceCanvasId, face.blobHash);
+        if (createHash("sha256").update(bytes).digest("hex") !== face.blobHash) throw new Error(`copy could not verify saved bytes ${face.blobHash}`);
+        if (sourceCanvasId !== this.canvasId) {
+          const uploaded = await this.client.uploadBlob(this.canvasId, bytes, face.mimeType, face.filename);
+          if (uploaded.blobHash !== face.blobHash) throw new Error("copied blob upload hash disagreed with its bytes");
+        }
+      }
+    }
+    return this.perform(state, action, !!options.dryRun);
+  }
+
   private async perform(state: CanvasSnapshotResponse, action: PublicAction, dryRun: boolean, content?: Buffer): Promise<CanvasGroupResult> {
     const actor = typeof this.identity === "function" ? this.identity() : this.identity;
     const opId = newOpId();
@@ -222,6 +263,6 @@ export class CanvasGroups {
       const coordinates = (value: typeof before | typeof next): GroupBox | null => value ? { x: value.x, y: value.y, width: value.width, height: value.height } : null;
       return { itemId: id, parentBefore: before?.containerId ?? null, parentAfter: next?.containerId ?? null, boxBefore: coordinates(before), boxAfter: coordinates(next), state: next ? "live" as const : "trash" as const };
     });
-    return { dryRun, intent: action.kind, ...(action.kind === "create" ? { itemId: action.group.id } : {}), affectedRoots: groupSelectionRoots(relation, inputIds), changes, constraints: { valid: true, adjustedFrameIds: changes.filter((row) => facts.get(row.itemId)?.kind === "group" && JSON.stringify(row.boxBefore) !== JSON.stringify(row.boxAfter)).map((row) => row.itemId) }, ...(response ? { seq: response.seq } : {}) };
+    return { dryRun, intent: action.kind, ...(action.kind === "create" ? { itemId: action.group.id } : {}), affectedRoots: action.kind === "copy" ? action.rootIds : groupSelectionRoots(relation, inputIds), changes, constraints: { valid: true, adjustedFrameIds: changes.filter((row) => facts.get(row.itemId)?.kind === "group" && JSON.stringify(row.boxBefore) !== JSON.stringify(row.boxAfter)).map((row) => row.itemId) }, ...(response ? { seq: response.seq } : {}) };
   }
 }

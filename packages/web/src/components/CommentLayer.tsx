@@ -11,7 +11,7 @@ import {
   newThreadId,
   workedFor, itemThread, atCorner, faceMark} from "@isocan/core";
 
-import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, sendEchoedResult, useCanvasStore } from "../stores/canvasStore.ts";
 import { type PendingComment, useUiStore } from "../stores/uiStore.ts";
 import { threadWorldPos, worldToScreen } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -31,6 +31,8 @@ import { GateGrant } from "./LazyGate.tsx";
 import { liveActorIds } from "../lib/presence.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
+import { messageContextRoots, useMessageContext, useMessageSend, withMessageContext } from "../lib/messagecontext.ts";
+import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
 
 /** Comment payload with @Name mentions and #Title item references resolved
  * against what's visible on the canvas — actors in the state plus the live
@@ -115,6 +117,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: "var(--z-popover)" }}>
         {openThread && (
           <ThreadPopover
+            key={`${canvasId}:${openThread.id}`}
             thread={openThread}
             screen={screenOf(openThread)}
             canvasId={canvasId}
@@ -122,7 +125,7 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
           />
         )}
         {pendingComment && canEdit && (
-          <ComposePopover canvasId={canvasId} actor={actor} pending={pendingComment} />
+          <ComposePopover key={`${canvasId}:${pendingComment.anchorItemId}:${pendingComment.x}:${pendingComment.y}`} canvasId={canvasId} actor={actor} pending={pendingComment} />
         )}
       </div>
       , document.querySelector(".fullscreen") ?? document.body)}
@@ -338,6 +341,9 @@ function ThreadPopover({
   actor: Actor;
 }) {
   const [reply, setReply] = useState("");
+  const canvas = useCanvasStore((state) => state.canvas);
+  const context = useMessageContext(canvasId, messageContextRoots(canvas, reply, thread.anchorItemId ? [thread.anchorItemId] : []));
+  const sending = useMessageSend(canvasId, context, reply);
   const textView = useTextAnchorStore(s => s.views[thread.id]);
   // The registry names people, not the comment: see lib/names.ts.
   const names = useActorNames();
@@ -394,6 +400,7 @@ function ThreadPopover({
                   {withoutCommand(comment.body)}
                 </Markdown>
               </div>
+              {comment.context && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
             </CommentFold>
             {/* The refusal is the control (#272): under the ask an agent's
                 gate turned away, the owner — and nobody else — gets the two
@@ -429,12 +436,11 @@ function ThreadPopover({
           e.preventDefault();
           const body = reply.trim();
           if (!body) return;
-          setReply("");
-          await sendEchoed(canvasId, actor, {
+          await sending.submit(() => sendEchoedResult(canvasId, actor, {
             type: "thread.reply",
             threadId: thread.id,
-            comment: makeComment(body),
-          });
+            comment: withMessageContext(makeComment(body), context.request),
+          }), () => setReply(""));
         }}
       >
         <MentionField
@@ -457,7 +463,9 @@ function ThreadPopover({
             go looked like the one that was not, and people stopped believing
             they could press it. The accent makes the two states different
             colours rather than two shades of the same one. */}
-        <button className="btn primary" type="submit" title="Reply (⌘⏎)" disabled={!reply.trim()}>
+        <MessageContextPreview context={context} />
+        {sending.error && <p role="alert">{sending.error}</p>}
+        <button className="btn primary" type="submit" title="Reply (⌘⏎)" disabled={!reply.trim() || sending.disabled}>
           ↑
         </button>
       </form>
@@ -510,6 +518,8 @@ function ComposePopover({
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const [body, setBody] = useState("");
+  const context = useMessageContext(canvasId, messageContextRoots(canvas, body, [pending.aboutItemId, pending.anchorItemId].filter((id): id is string => Boolean(id))));
+  const sending = useMessageSend(canvasId, context, body);
 
   // Pending world position: anchored offsets resolve against the item.
   let wx = pending.x;
@@ -535,20 +545,21 @@ function ComposePopover({
           e.preventDefault();
           const trimmed = body.trim();
           if (!trimmed) return;
-          useUiStore.getState().setPendingComment(null);
-          await sendEchoed(canvasId, actor, {
+          await sending.submit(() => sendEchoedResult(canvasId, actor, {
             type: "thread.create",
             threadId: newThreadId(),
             x: pending.x,
             y: pending.y,
             anchorItemId: pending.anchorItemId,
             ...(pending.textAnchor ? { textAnchor: pending.textAnchor } : {}),
-            comment: withAbout(makeComment(trimmed), pending.aboutItemId),
-          });
+            comment: withMessageContext(withAbout(makeComment(trimmed), pending.aboutItemId), context.request),
+          }), () => { if (useUiStore.getState().pendingComment === pending) useUiStore.getState().setPendingComment(null); });
         }}
         style={{ display: "block" }}
       >
         {pending.textAnchor && <blockquote className="thread-text-anchor">{pending.textAnchor.quote}</blockquote>}
+        <MessageContextPreview context={context} />
+        {sending.error && <p role="alert">{sending.error}</p>}
         <MentionField
           multiline
           autoFocus
@@ -574,7 +585,7 @@ function ComposePopover({
           >
             Cancel
           </button>
-          <button className="btn primary" type="submit" title="Comment (⌘⏎)" disabled={!body.trim()}>
+          <button className="btn primary" type="submit" title="Comment (⌘⏎)" disabled={!body.trim() || sending.disabled}>
             Comment
           </button>
         </div>

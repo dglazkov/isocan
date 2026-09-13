@@ -4,7 +4,18 @@ import type { DaemonRoutes } from "./routes.js";
 type PublicAction = Exclude<GroupAction, {
     kind: "apply";
 }>;
-type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "changeGroup">;
+type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "downloadBlob" | "changeGroup">;
+export interface CanvasGroupCopyOptions {
+    in?: string | undefined;
+    at?: {
+        x: number;
+        y: number;
+    } | undefined;
+    cell?: GroupCell | undefined;
+    dryRun?: boolean | undefined;
+    /** Additional metadata for each copied root, such as one sprint hand-in. */
+    properties?: Record<string, string> | undefined;
+}
 /** Membership inspection exposes the relation and both boxes, rather than counting overlap. */
 export interface CanvasGroupView {
     id: string;
@@ -158,6 +169,8 @@ export declare class CanvasGroups {
     ungroup(refs: string[], options?: {
         dryRun?: boolean;
     }): Promise<CanvasGroupResult>;
+    /** Freeze the selected source graph, upload every face, then submit one creation. */
+    copyFrom(sourceCanvasId: string, refs: string[], options?: CanvasGroupCopyOptions): Promise<CanvasGroupResult>;
     private perform;
 }
 export {};

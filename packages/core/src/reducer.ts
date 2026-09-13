@@ -1,4 +1,5 @@
 import { validateTextAnchor } from "./text-anchor.ts";
+import { validateContextManifest } from "./canvas-group-context.ts";
 import type {
   Actor,
   Canvas,
@@ -28,6 +29,14 @@ export function applyOperation(
   state: CanvasState | null,
   envelope: OpEnvelope,
 ): CanvasState | null {
+  const op = envelope.op;
+  const contexts = op.type === "thread.create" || op.type === "thread.reply" || op.type === "comment.restore" ? [op.comment.context]
+    : op.type === "comment.update" ? [op.context]
+    : op.type === "thread.restore" ? op.thread.comments.map((comment) => comment.context) : [];
+  for (const context of contexts) if (context) {
+    if (!state || state.project.groupMode !== "groups") throw new OpValidationError("bad-op", "frozen context requires a group-mode canvas");
+    validateContextManifest(context, state.project.id);
+  }
   const next = reduceOperation(state, envelope);
   // Historical area canvases keep their original reduction. Explicit group
   // state is validated after EVERY operation, including ordinary inverses.
@@ -455,6 +464,11 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
         ...(op.items ? { items: op.items } : {}),
         editedAt: ts,
       };
+      if (op.context === null) delete edited.context;
+      else if (op.context !== undefined) {
+        validateContextManifest(op.context, state.project.id);
+        edited.context = structuredClone(op.context);
+      }
       const next = {
         ...thread,
         comments: thread.comments.map((c) => (c.id === op.commentId ? edited : c)),
@@ -555,6 +569,10 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
   const comment: Comment = { id: c.id, author: actor, body: c.body, createdAt: ts };
   if (c.mentions && c.mentions.length > 0) comment.mentions = [...c.mentions];
   if (c.items && c.items.length > 0) comment.items = [...c.items];
+  if (c.context) {
+    validateContextManifest(c.context, c.context.canvasId);
+    comment.context = structuredClone(c.context);
+  }
   return comment;
 }
 

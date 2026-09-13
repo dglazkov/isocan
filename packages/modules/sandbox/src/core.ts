@@ -191,6 +191,7 @@ const RUN_COMMAND: SlashCommand = {
 export const sandboxModule: CoreModule = {
   name: "@isocan/sandbox",
   propertyKeys: [SANDBOX_RUN_PROP, SANDBOX_OF_PROP],
+  itemReferenceProperties: [SANDBOX_OF_PROP],
   commands: [RUN_COMMAND],
   contextPieces: (canvas: CanvasContents): ContextPiece[] => {
     const programs = sandboxesOn(canvas);

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { promises as fs, readFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -537,17 +536,17 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
 describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
   // A PATH with nothing on it, so only what config.json declares is
   // runnable and the runner's own installs cannot vote.
-  const bare = { PATH: path.join(home ?? os.tmpdir(), "no-such-bin") };
+  const bare = () => ({ PATH: path.join(home, "no-such-bin") });
 
   it("`isocan harness` reads the machine, with no daemon in the way", async () => {
-    const run = await collect(spawnCli(["--json", "harness"], bare));
+    const run = await collect(spawnCli(["--json", "harness"], bare()));
     expect(run.code).toBe(0);
     const scan = JSON.parse(run.stdout) as { harnesses: Array<{ name: string; runnable: boolean; default: boolean }>; default: string | null; source: string };
     expect(scan.default).toBe("claude-code");
     expect(scan.source).toBe("config");
     expect(scan.harnesses.find((h) => h.name === "claude-code")).toMatchObject({ runnable: true, default: true });
     expect(scan.harnesses.find((h) => h.name === "pi")).toMatchObject({ runnable: false, default: false });
-    const table = await collect(spawnCli(["harness"], bare));
+    const table = await collect(spawnCli(["harness"], bare()));
     expect(table.stdout).toContain("HARNESS");
     expect(table.stdout).toContain("config.json's defaultHarness");
   });
@@ -564,14 +563,14 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
       actor: dimitri,
       op: { type: "agent.enroll", agent: { id: "usr_sian", name: "Sian" } },
     });
-    const refused = await collect(spawnCli(["rc"], bare));
+    const refused = await collect(spawnCli(["rc"], bare()));
     expect(refused.code).not.toBe(0);
     expect(refused.stderr).toContain("Sian named no harness");
     expect(refused.stderr).toContain("2 harnesses here (claude-code, fake); an agent added without naming one can't run until");
     expect(refused.stderr).toContain("isocan rc --default-harness <name>");
 
     // The flag answers and is kept: the next bare start needs no flag.
-    const rc = spawnCli(["rc", "--default-harness", "fake"], bare);
+    const rc = spawnCli(["rc", "--default-harness", "fake"], bare());
     let out = "";
     rc.stdout!.setEncoding("utf8");
     rc.stdout!.on("data", (chunk) => (out += chunk));
@@ -581,11 +580,11 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     rc.kill("SIGINT");
     await done;
     expect(JSON.parse(await fs.readFile(path.join(home, "config.json"), "utf8")).defaultHarness).toBe("fake");
-    const again = await collect(spawnCli(["--json", "harness"], bare));
+    const again = await collect(spawnCli(["--json", "harness"], bare()));
     expect(JSON.parse(again.stdout).default).toBe("fake");
 
     // A flag naming what cannot run here is refused with the list.
-    const wrong = await collect(spawnCli(["rc", "--default-harness", "pi"], bare));
+    const wrong = await collect(spawnCli(["rc", "--default-harness", "pi"], bare()));
     expect(wrong.code).not.toBe(0);
     expect(wrong.stderr).toContain("--default-harness pi: not runnable here");
     expect(wrong.stderr).toContain("runnable: claude-code, fake");
@@ -599,7 +598,7 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     );
     await isocan("rc", "add", "Sian", "--harness", "fake");
     const { actorId } = (await rcRows()).find((r) => r.name === "Sian")!;
-    const rc = spawnCli(["rc"], bare);
+    const rc = spawnCli(["rc"], bare());
     let out = "";
     rc.stdout!.setEncoding("utf8");
     rc.stdout!.on("data", (chunk) => (out += chunk));

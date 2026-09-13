@@ -290,10 +290,10 @@ export const useCanvasStore = create<CanvasStore>(() => ({
  * one place where "the truth advanced" and "the view was rebuilt" happen
  * together, and no path that can do one without the other.
  */
-function confirm(state: CanvasState, lastSeq: number, observedOpId?: string): void {
+function confirm(state: CanvasState, lastSeq: number, observed?: OpEnvelope): void {
   // An ordered echo proves this write landed even if its HTTP receipt has
   // not supplied a seq yet. Never fold its public intent over its own effect.
-  const queue = retire(useCanvasStore.getState().queue, lastSeq).filter((write) => write.opId !== observedOpId);
+  const queue = retire(useCanvasStore.getState().queue, lastSeq).filter((write) => write.opId !== observed?.id);
   const view = foldQueue(state, queue);
   useCanvasStore.setState({
     confirmed: state,
@@ -303,6 +303,19 @@ function confirm(state: CanvasState, lastSeq: number, observedOpId?: string): vo
     canvas: view?.canvas ?? state.canvas,
   });
   persist();
+  if (observed) settleWrite(state.project.id, observed.id, { status: "accepted", envelope: observed });
+}
+
+type WriteOutcome = { status: "accepted" | "refused"; message?: string; code?: string; envelope?: OpEnvelope };
+type WriteReceipt = { status: "accepted" | "refused" | "queued"; message?: string; code?: string; envelope?: OpEnvelope; completion?: Promise<WriteOutcome> };
+// Only live requests are retained. An exact authoritative receipt resolves the
+// waiter and removes it; queue disappearance alone never means acceptance.
+const writeWaiters = new Map<string, (outcome: WriteOutcome) => void>();
+function settleWrite(canvasId: string, opId: string, outcome: WriteOutcome): void {
+  const key = `${canvasId}:${opId}`;
+  const resolve = writeWaiters.get(key);
+  writeWaiters.delete(key);
+  resolve?.(outcome);
 }
 
 /** Re-fold the queue over the confirmed state — after a write is queued,
@@ -417,6 +430,7 @@ async function drainQueue(): Promise<boolean> {
     if (!next) return true;
     try {
       const answer = await postOp(canvasId, next.actor, next.op, next.opId, next.group);
+      settleWrite(canvasId, next.opId, { status: "accepted", envelope: answer.envelope });
       // Navigation shares this flush promise. Ignore the old canvas's answer
       // and drain the current queue before its caller is allowed to dial.
       if (useCanvasStore.getState().canvasId !== canvasId || useCanvasStore.getState().confirmed?.project.id !== canvasId) continue;
@@ -432,6 +446,7 @@ async function drainQueue(): Promise<boolean> {
       render();
       persist();
     } catch (err) {
+      if (err instanceof ApiError && homeAnswered(err)) settleWrite(canvasId, next.opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
       if (useCanvasStore.getState().canvasId !== canvasId || useCanvasStore.getState().confirmed?.project.id !== canvasId) continue;
       if (!(err instanceof ApiError)) return false; // the home never answered
       refuse(next, err);
@@ -441,6 +456,8 @@ async function drainQueue(): Promise<boolean> {
 
 /** The home said no to something a person already saw happen. */
 function refuse(write: QueuedWrite, err: ApiError): void {
+  const canvasId = useCanvasStore.getState().canvasId;
+  if (canvasId) settleWrite(canvasId, write.opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
   const { queue, refused } = useCanvasStore.getState();
   useCanvasStore.setState({
     queue: queue.filter((other) => other.opId !== write.opId),
@@ -610,7 +627,7 @@ export async function sendEchoedResult(
   op: Operation,
   /** One gesture, one undo — carried so a flush re-sends the same grouping. */
   group?: string,
-): Promise<{ status: "accepted" | "queued" | "refused"; message?: string }> {
+): Promise<WriteReceipt> {
   /**
    * **The past does not take writes.** The scrubber is a way of looking, not a
    * branch: there is no operation that means "and from here it went
@@ -631,16 +648,21 @@ export async function sendEchoedResult(
   // the operation; another canvas's queue and optimistic view cannot hold it.
   if (!confirmed || !ownsCanvas()) {
     const answer = await sendOp(canvasId, actor, op, group);
-    return { status: answer ? "accepted" : "queued" };
+    return answer ? { status: "accepted", envelope: answer.envelope } : { status: "queued" };
   }
   const opId = newOpId();
+  let outcome: WriteOutcome | undefined;
+  const completion = new Promise<WriteOutcome>((resolve) => {
+    writeWaiters.set(`${canvasId}:${opId}`, (answer) => { outcome = answer; resolve(answer); });
+  });
   const write: QueuedWrite = { ...newWrite(opId, actor, op, group), inflight: true };
   useCanvasStore.setState({ queue: [...useCanvasStore.getState().queue, write] });
   render();
   persist();
   try {
     const answer = await postOp(canvasId, actor, op, opId, group);
-    if (!ownsCanvas()) return { status: "accepted" };
+    settleWrite(canvasId, opId, { status: "accepted", envelope: answer.envelope });
+    if (!ownsCanvas()) return { status: "accepted", envelope: answer.envelope };
     // Marked, not removed — it retires when the tail reaches its seq, so the
     // view never rewinds between the answer and the history that carries it.
     useCanvasStore.setState({
@@ -650,20 +672,24 @@ export async function sendEchoedResult(
     });
     render();
     persist();
-    return { status: "accepted" };
+    return { status: "accepted", envelope: answer.envelope };
   } catch (err) {
+    // An ordered echo can beat a failed HTTP response. It already proves
+    // acceptance, including the writer's canonical operation.
+    if (outcome) return outcome;
+    if (err instanceof ApiError && homeAnswered(err)) settleWrite(canvasId, opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
     if (!ownsCanvas()) {
-      if (err instanceof ApiError && homeAnswered(err)) return { status: "refused", message: err.message };
+      if (err instanceof ApiError && homeAnswered(err)) return { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) };
       // The original queue was persisted before navigation. Its stable opId
       // can retry there; never mark the newly opened canvas offline for it.
-      return { status: "queued" };
+      return { status: "queued", completion };
     }
     if (err instanceof ApiError && homeAnswered(err)) {
       // The home said no to something the person already saw happen.
       refuse(write, err);
       render();
       persist();
-      return { status: "refused", message: err.message };
+      return { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) };
     }
     // The home never answered. It stops being in-flight and starts being
     // work this tab is holding — which is the moment "not synced" is true.
@@ -675,7 +701,7 @@ export async function sendEchoedResult(
     });
     render();
     persist();
-    return { status: "queued" };
+    return { status: "queued", completion };
   }
 }
 
@@ -1231,7 +1257,7 @@ function openSocket(canvasId: string): void {
         return;
       }
       if (next === null) return; // project.delete arrives as canvas-deleted too
-      confirm(next, message.entry.seq, message.entry.envelope.id);
+      confirm(next, message.entry.seq, message.entry.envelope);
       if (message.entry.seq > replayThrough) announceComment(message.entry.envelope);
     } else if (message.type === "standing") {
       // This connection's rung moved under it (roles journey 2 step 1): the

@@ -1,6 +1,7 @@
 import { textAttention } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
+import { registerCanvasGroupContext } from "./canvas-group-context.ts";
 import { createReadStream, existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { createHash } from "node:crypto";
@@ -1408,6 +1409,8 @@ export function registerRoutes(
       },
     ];
   };
+
+  registerCanvasGroupContext(app, engine, store);
 
   app.post("/api/ops", async (req, reply) => {
     const body = req.body as PostOpRequest;

@@ -29,7 +29,7 @@ export interface DeckPage {
 }
 /** The pages, in order: the marked slides, or — with none marked — every
  *  item in reading order, because a canvas of screens is already a deck. */
-export declare function deckPages(canvas: CanvasContents): DeckPage[];
+export declare function deckPages(canvas: CanvasContents, groupId?: string): DeckPage[];
 /** What a page holds once its bytes were read: a screen's HTML, an image as
  *  a data URL, or nothing a deck can show (a video, a PDF) — said, not
  *  skipped. And the note's words, when there are any. */

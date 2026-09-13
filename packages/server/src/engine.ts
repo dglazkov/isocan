@@ -65,8 +65,12 @@ import {
   resolveCanvasGroupRequest,
   validateGroupForest,
   isGroupItem,
+  rejectPublicContext,
+  resolveContextOperation,
+  validateContextManifest,
 } from "@isocan/core";
 import { requireGroupClient } from "./canvas-groups.ts";
+import { contextBlobAvailable, hydrateContextManifest } from "./canvas-group-context.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
 import { admittingGrant, ensureHomeLinkGrant, ensureLinkGrant } from "./grants.ts";
@@ -985,6 +989,7 @@ export class Engine {
 
   submit(request: SubmitRequest): Promise<LogEntry> {
     return this.enqueue(async () => {
+      rejectPublicContext(request.op);
       if (request.op.type === "project.create" && request.op.groupMode !== undefined &&
           request.op.groupMode !== "groups" && request.op.groupMode !== "legacy") {
         throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
@@ -1725,6 +1730,14 @@ export class Engine {
         throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
       }
       validateGroupForest(state);
+      // Snapshot adoption bypasses the reducer. Validate retained provenance
+      // here too, without requiring its original items or versions to survive.
+      for (const thread of Object.values(state.canvas.threads)) {
+        for (const comment of thread.comments) if (comment.context !== undefined) {
+          if (state.project.groupMode !== "groups") throw new OpValidationError("bad-op", "frozen context requires a group-mode canvas");
+          validateContextManifest(comment.context, canvasId);
+        }
+      }
       let held: LogEntry[] = [];
       if (await this.store.canvasExists(canvasId)) {
         const runtime = await this.runtime(canvasId).catch(() => null);
@@ -2491,6 +2504,14 @@ export class Engine {
         }
       }
     }
+    if (cause === undefined) {
+      normalizedOp = resolveContextOperation(runtime.state, runtime.lastSeq, normalizedOp);
+      if (normalizedOp.type === "thread.create" || normalizedOp.type === "thread.reply") {
+        if (normalizedOp.comment.context) normalizedOp = { ...normalizedOp, comment: { ...normalizedOp.comment, context: await hydrateContextManifest(this.store, runtime.state, normalizedOp.comment.context) } };
+      } else if (normalizedOp.type === "comment.update" && normalizedOp.context) {
+        normalizedOp = { ...normalizedOp, context: await hydrateContextManifest(this.store, runtime.state, normalizedOp.context) };
+      }
+    }
     const envelope = this.envelope(request, normalizedOp);
     if (cause === undefined) {
       // New group fields cannot enter a legacy canvas through generic item
@@ -2503,6 +2524,12 @@ export class Engine {
       }
       normalizedOp = resolveCanvasGroupRequest(runtime.state, normalizedOp, { actor: envelope.actor, ts: envelope.ts, opId: envelope.id });
       envelope.op = normalizedOp;
+      if (op.type === "group.change" && op.action.kind === "copy" && normalizedOp.type === "group.change" && normalizedOp.action.kind === "apply") {
+        // A paste is all-or-nothing, including distinct visual bytes. This is
+        // checked at the home after shape validation and before any append.
+        const hashes = new Set(normalizedOp.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions.flatMap((version) => [version.blobHash, ...(version.visual ? [version.visual.blobHash] : [])]) : []));
+        for (const hash of hashes) if (!(await contextBlobAvailable(this.store, canvasId, hash))) throw new OpValidationError("bad-op", `copy content is unavailable: ${hash}; prepare every source and visual blob before pasting`);
+      }
     }
     const inverse = invertOperation(runtime.state, normalizedOp);
     const nextState = applyOperation(runtime.state, envelope);

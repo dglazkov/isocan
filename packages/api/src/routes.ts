@@ -6,6 +6,9 @@ import type {
   BlobUploadResponse,
   Capability,
   CanvasSnapshotResponse,
+  ContextManifest,
+  ContextRequest,
+  ContextContentPage,
   CreateSessionResponse,
   GcReport,
   GcRequest,
@@ -71,6 +74,8 @@ import {
   BADGE_ENDED,
   CANVAS_GROUPS_FEATURE,
   CLIENT_FEATURES_HEADER,
+  canvasContextRoute,
+  commentContextRoute,
   encodeFilename,
   groupActingRoute,
   groupMemberRoute,
@@ -111,6 +116,7 @@ import {
 import type { UpgradeVerdict } from "@isocan/core";
 import type { BuildStamp, StoredBadge } from "@isocan/server";
 import { askTheDoor, bearerHeader, readBadge, writeBadge } from "@isocan/server";
+import type { ContextPageOptions } from "./canvas-context.ts";
 
 /** The health route: who is holding the port, and which build they are. */
 export interface Health extends Partial<BuildStamp> {
@@ -804,6 +810,35 @@ export class DaemonRoutes {
     return this.request("GET", HOMES_ROUTE);
   }
 
+  /** Complete current scope; omitted roots read ambient pins. Reads never move presence. */
+  contextManifest(canvasId: string, request?: ContextRequest): Promise<ContextManifest> {
+    const query = new URLSearchParams();
+    if (request) {
+      query.set("roots", request.rootIds.join(","));
+      if (request.includeExcluded !== undefined) query.set("includeExcluded", String(request.includeExcluded));
+      if (request.expectedRevision !== undefined) query.set("expectedRevision", String(request.expectedRevision));
+    }
+    return this.request("GET", `${canvasContextRoute(canvasId)}${query.size ? `?${query}` : ""}`);
+  }
+
+  /** Frozen provenance belongs to the saved comment, not today's membership. */
+  commentContext(canvasId: string, threadId: string, commentId: string): Promise<ContextManifest> {
+    return this.request("GET", commentContextRoute(canvasId, threadId, commentId));
+  }
+
+  contextContentPage(canvasId: string, options: ContextPageOptions): Promise<ContextContentPage> {
+    if (!!options.threadId !== !!options.commentId) throw new Error("a saved context requires both thread and comment IDs");
+    if (options.threadId && (options.rootIds !== undefined || options.includeExcluded !== undefined || options.expectedRevision !== undefined)) throw new Error("saved context already fixes its roots, exclusion policy and revision");
+    if (!options.threadId && options.expectedRevision === undefined) throw new Error("live context paging requires expectedRevision from its manifest");
+    const query = new URLSearchParams();
+    if (options.rootIds !== undefined) query.set("roots", options.rootIds.join(","));
+    for (const field of ["offset", "limit", "face", "includeExcluded", "expectedRevision"] as const) {
+      if (options[field] !== undefined) query.set(field, String(options[field]));
+    }
+    const route = options.threadId ? commentContextRoute(canvasId, options.threadId, options.commentId!) : canvasContextRoute(canvasId);
+    return this.request("GET", `${route}/content${query.size ? `?${query}` : ""}`);
+  }
+
   snapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
     return this.request("GET", `/api/projects/${canvasId}/canvas`);
   }
@@ -1198,7 +1233,10 @@ export class DaemonRoutes {
       });
     let res = await send();
     if (res.status === 401 && (await this.reBadge())) res = await send();
-    if (!res.ok) throw new ApiError(res.status, `blob not found: ${blobHash}`);
+    if (!res.ok) {
+      const json = await res.json().catch(() => null) as { error?: string; code?: string; reason?: string } | null;
+      throw new ApiError(res.status, json?.error ?? `blob not found: ${blobHash}`, json?.code, json?.reason);
+    }
     return Buffer.from(await res.arrayBuffer());
   }
 }

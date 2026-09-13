@@ -18,11 +18,10 @@ import type { CanvasContents, Item } from "./model.js";
  * no collisions to nudge. Nothing has to be exempted and no core predicate
  * changes; the arrangement survives because it was never in the way.
  *
- * The one case this does not cover: items that deliberately overlap EACH
- * OTHER. The second one collides with the first wherever the group goes, and
- * is nudged. Annotations — the common overlap — are already exempt from
- * nudging by `positionIsMeaningful`, so the case left over is rare and is
- * better fixed by grouping in the oplog than by weakening the placement rule.
+ * This legacy placement helper cannot protect deliberate overlap between
+ * separate item.add operations. Group-mode copies use `groupCopyAction`
+ * instead: one resolved creation places the entire copied footprint and
+ * records every child's final position without per-item collision searches.
  */
 /** The rectangle a set of items occupies. Null when the set is empty. */
 export declare function boundsOf(items: readonly Item[]): {

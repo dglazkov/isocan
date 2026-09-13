@@ -121,7 +121,7 @@ export declare function parseExportTarget(raw: string): ExportTarget | null;
  * Inverses are walked too: an undone `item.add`'s bytes are still part of
  * the history, and `redo` will want them.
  */
-export declare function blobsNamedBy(entries: readonly LogEntry[]): Map<string, {
+export declare function blobsNamedBy(entries: readonly LogEntry[], state?: import("./model.js").CanvasState): Map<string, {
     mimeType: string;
     filename: string;
     size: number;

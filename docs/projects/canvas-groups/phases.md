@@ -5,12 +5,13 @@ the mechanism. This is the conduct contract for implementing the reviewed
 plan. The conductor owns these documents and the release record; builders
 own only their assigned code, tests, CLI guide and product README changes.
 
-**Where we are:** phases 1–2 are CLOSED (12 Sep 2026) and phase 3 is CLOSED
-(13 Sep 2026); phases 4–5 are NOT STARTED.
-Canvas-groups phase 4 is next: frozen group context and lifecycle coverage.
-Shared membership, transforms, insertion and protected label layout have passed
-real CLI, HTTP, persistence and browser verification, including a 1,000-item
-nested canvas. No phase waits on another project or on a person.
+**Where we are:** phases 1–2 are CLOSED (12 Sep 2026) and phases 3–4 are CLOSED
+(13 Sep 2026); phase 5 is NOT STARTED.
+Canvas-groups phase 5 is next: legacy conversion and normal creation.
+Membership, transforms, insertion, label layout, frozen context and lifecycle
+have passed real CLI, HTTP, persistence and browser verification, including
+a complete 1,011-entry context manifest. No phase waits on another project or
+on a person.
 
 **Rules for every phase.** Work on main. Every structural act is atomic,
 undoable and shared by both surfaces; a log undo label is not atomicity.
@@ -150,7 +151,7 @@ path, not by gesture, so no two own ItemView or main.ts concurrently.
 
 ## Phase 4 — Group context and lifecycle
 
-**Status: NOT STARTED (2026-09-12).** Nothing built.
+**Status: CLOSED (2026-09-13).** Frozen context, byte retention, subtree copy and cohort restore passed the full suite, typecheck, real API/CLI/MCP, GC/restart, two-daemon backup and browser proofs.
 
 Closes journeys 4 and 5. Mechanisms: design Selecting/context, lifecycle,
 request provenance, and numbered verification gates 4 and 5.
@@ -163,6 +164,11 @@ trash-cohort restore, native backup and JSON Canvas projection, deck/sprint/
 memory/module consumer coverage. Do not add MCP writes or JSON Canvas import.
 Retained context stays inside operator purge's deletion boundary; new reads
 honor takedown/purge and requests retain the existing summon authority policy.
+Frozen comment provenance requires canvas-groups-v3, because v2 reducers drop
+it. Preserve v1/v2 historical replay and gate group state, writes and existing
+subscriptions accordingly. Legacy comments retain their historical behavior.
+Copy uses one bounded public intent and existing canonical creation effects;
+prepare all source/visual content before applying the complete subtree.
 
 **Ownership:** relevant context/model/ops/GC/export helpers in core/server,
 API/CLI/MCP context and lifecycle clients, web composer/item actions, and
@@ -172,7 +178,13 @@ affected module consumers with non-overlapping builder assignments.
 
 **Trajectory:**
 
-*nothing yet — the phase has not started.*
+- **2026-09-13** — Frozen comment provenance needs a v3 reader boundary. Contract review found that literal v2 reducers discard the new context record, so additive fields alone cannot preserve request scope or GC retention. Legacy comments and actual v1/v2 replay remain unchanged.
+
+- **2026-09-13** — Distinct visual faces need their own immutable metadata. A real retention walk exposed source filename/size leaking into the visual face; fresh writer manifests now hydrate omitted fields from that blob, while replay and saved requests remain untouched.
+
+- **2026-09-13** — Queued forms need authoritative completion keyed by original canvas and operation, not disappearance from a queue. Independent review and delayed browser receipts exposed erased newer drafts and permanent queued locks; message and Trash forms now follow exact outcomes.
+
+- **2026-09-13** — Context and Trash panels load on demand, and fresh context resolution stays out of the browser's replay leaf. Bundle measurement reduced the first phase-four entry by 11,339 bytes to 734,159; the declared ceiling is 734,200, with the long-term goal unchanged.
 
 ## Phase 5 — Legacy conversion and release
 

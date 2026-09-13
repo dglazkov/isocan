@@ -4,7 +4,7 @@ import { areasOf } from "./area.ts";
 import { isGroupItem } from "./canvas-groups.ts";
 import { PLACEMENT_GAP } from "./placement.ts";
 import { designSystem } from "./designsystem.ts";
-import { pinnedItems } from "./contextmark.ts";
+import { ambientContextItems } from "./canvas-group-context.ts";
 import { type ContextExtras, type ContextPiece, contextPieces } from "./context.ts";
 
 /**
@@ -104,7 +104,7 @@ export function inheritedPieces(
       ...(localHasDesign ? { overridden: "this canvas's wins" } : {}),
     });
   }
-  const pinned = pinnedItems(linked);
+  const pinned = ambientContextItems(linked);
   if (pinned.length > 0) {
     pieces.push({
       name: "Pinned items",

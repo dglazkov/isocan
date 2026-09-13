@@ -49,6 +49,8 @@ import type {
   SeenResponse,
   GroupResponse,
   GroupsResponse,
+  ContextManifest,
+  ContextContentPage,
 } from "@isocan/core";
 import {
   CANVAS_GROUPS_FEATURE,
@@ -93,7 +95,29 @@ import {
   TAKEDOWNS_ROUTE,
   SIGN_BLOBS_PARAM,
   SIGN_BLOBS_ROUTE,
+  canvasContextRoute,
+  commentContextRoute,
 } from "@isocan/core";
+
+/** Context previews come from the home so the shown revision can guard the eventual send. */
+export function fetchContextManifest(canvasId: string, roots?: string[], includeExcluded = false): Promise<ContextManifest> {
+  const query = new URLSearchParams();
+  if (roots !== undefined) query.set("roots", roots.join(","));
+  if (includeExcluded) query.set("includeExcluded", "true");
+  return request("GET", `${canvasContextRoute(canvasId)}?${query}`);
+}
+
+/** Frozen messages read retained faces through the same admitted route as current context. */
+export function fetchContextContent(manifest: ContextManifest, offset: number, face: "source" | "visual", comment?: { threadId: string; commentId: string }): Promise<ContextContentPage> {
+  const route = comment ? commentContextRoute(manifest.canvasId, comment.threadId, comment.commentId) : canvasContextRoute(manifest.canvasId);
+  const query = new URLSearchParams({ offset: String(offset), limit: "50", face });
+  if (!comment) {
+    if (!manifest.ambient) query.set("roots", manifest.rootIds.join(","));
+    query.set("expectedRevision", String(manifest.revision));
+    if (manifest.includeExcluded) query.set("includeExcluded", "true");
+  }
+  return request("GET", `${route}/content?${query}`);
+}
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
 export const CLIENT_ID = newClientId();

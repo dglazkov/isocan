@@ -1,5 +1,6 @@
 import type { CanvasContents, Item } from "./model.ts";
 import { TEXT_PROPERTIES } from "./textnode.ts";
+import { contextClosure } from "./canvas-group-context.ts";
 
 /**
  * **The slide deck** (#87): mark items as slides, and full screen flips
@@ -105,7 +106,7 @@ export function readingOrder(items: readonly Item[]): Item[] {
 /** The marked slides, in reading order. A speaker note is never a slide,
  *  whatever it wears: it is what you say about one. */
 export function slides(canvas: CanvasContents): Item[] {
-  return readingOrder(Object.values(canvas.items).filter((item) => isSlide(item) && !isNote(item)));
+  return readingOrder(Object.values(canvas.items).filter((item) => isSlide(item) && !isNote(item) && item.properties?.kind !== "group"));
 }
 
 /**
@@ -116,9 +117,11 @@ export function slides(canvas: CanvasContents): Item[] {
  * fallback too: a deck that projected its own notes would be the one thing a
  * presenter cannot forgive.
  */
-export function deck(canvas: CanvasContents): Item[] {
-  const marked = slides(canvas);
-  return marked.length > 0 ? marked : readingOrder(Object.values(canvas.items).filter((item) => !isNote(item)));
+export function deck(canvas: CanvasContents, groupId?: string): Item[] {
+  // A scoped deck follows ownership, never the rectangle's accidental overlaps.
+  const scoped = groupId ? { ...canvas, items: Object.fromEntries(contextClosure(canvas, [groupId]).flatMap(({ itemId }) => canvas.items[itemId] ? [[itemId, canvas.items[itemId]!]] : [])) } : canvas;
+  const marked = slides(scoped);
+  return marked.length > 0 ? marked : readingOrder(Object.values(scoped.items).filter((item) => !isNote(item) && item.properties?.kind !== "group"));
 }
 
 // ---------- speaker notes ----------

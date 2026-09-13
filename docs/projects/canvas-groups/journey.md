@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-12
 see: sprint, context, design-competition
-note: phases 1–3 verify shared membership, transforms, insertion and label layout through both clients; frozen group context and lifecycle are next, with migration and release still ahead
+note: phases 1–4 verify membership, transforms, insertion, label layout, frozen context and lifecycle on both surfaces; legacy conversion and normal creation remain in phase 5
 ---
 # Canvas groups — the experience
 

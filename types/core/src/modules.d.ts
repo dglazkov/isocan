@@ -48,6 +48,10 @@ export interface CoreModule {
     /** The property keys it owns. Namespaced, and forever: keys replay, and a
      *  removed module's keys must read as orphaned rather than be reused. */
     propertyKeys?: readonly string[];
+    /** Item-valued properties remap on copy and lose cross-canvas external references. */
+    itemReferenceProperties?: readonly string[];
+    /** Family identities remap once per copy, keeping copied members in one new family. */
+    groupIdentityProperties?: readonly string[];
     contextPieces?: (canvas: CanvasContents) => ContextPiece[];
     edges?: (canvas: CanvasContents) => ModuleEdge[];
     kinds?: readonly ModuleKind[];

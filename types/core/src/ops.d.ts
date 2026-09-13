@@ -59,6 +59,10 @@ export interface NewComment {
     mentions?: string[];
     /** Resolved #item-references (item ids); see Comment.items. */
     items?: string[];
+    /** Public attachment intent; the home resolves it at one canvas revision. */
+    contextRequest?: import("./canvas-group-context.js").ContextRequest;
+    /** Canonical writer output only; public callers cannot supply retained metadata. */
+    context?: import("./canvas-group-context.js").ContextManifest;
 }
 export interface MetaPatch {
     title?: string;
@@ -349,6 +353,9 @@ export type Operation = {
     /** Re-resolved for the new body; see NewComment. */
     mentions?: string[];
     items?: string[];
+    contextRequest?: import("./canvas-group-context.js").ContextRequest;
+    /** Null is an exact inverse restoring a comment with no prior context. */
+    context?: import("./canvas-group-context.js").ContextManifest | null;
 } | {
     type: "comment.remove";
     threadId: string;

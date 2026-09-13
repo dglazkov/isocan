@@ -1,6 +1,7 @@
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
 import { registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
+import { registerContextReads, reportContext, contextReceipt } from "./context-reads.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
@@ -458,7 +459,7 @@ import {
   writeMarker,
 } from "@isocan/server";
 import { DEFAULT_MODE, DIRECT_VAR, refuseDaemonVerb, resolveDeclared } from "@isocan/api";
-import { CanvasHandle, activityRows, buildComment } from "@isocan/api";
+import { CanvasHandle, activityRows, buildComment, type CommentContextOptions } from "@isocan/api";
 import { defaultCloneDir, gitRemote } from "./gitrepo.ts";
 import { ApiError, DaemonClient, type Health } from "@isocan/api";
 import { DaemonRoutes, exportCanvases, exportItem, importExport, type ExportReport } from "@isocan/api";
@@ -6646,29 +6647,26 @@ program
  */
 program
   .command("notify <message...>")
+  .alias("say")
   .description("Say something in the Chat — every parked agent hears it, and the human sees it")
   .option("--item <ref...>", "items this is about, carried so a reader can act on them")
+  .option("--in <group>", "attach this group and its complete subtree as frozen context")
+  .option("--include-excluded", "explicitly include excluded context in this request")
   .action(
-    run(async (words: string[], opts: { item?: string[] }, cmd: Command) => {
+    run(async (words: string[], opts: { item?: string[]; in?: string; includeExcluded?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const body = words.join(" ");
-      const attached = (opts.item ?? []).map((ref) => resolveItem(snapshot, ref).id);
-      const withItems = (comment: NewComment): NewComment =>
-        attached.length === 0
-          ? comment
-          : { ...comment, items: [...new Set([...(comment.items ?? []), ...attached])] };
-
       const main = mainThread(snapshot.canvas);
-      const comment = withItems(await newComment(ctx, p.id, snapshot, body));
+      const comment = await newComment(ctx, p.id, snapshot, body, { items: opts.item, in: opts.in, includeExcluded: opts.includeExcluded });
       if (main) {
-        await sendOp(ctx, p.id, { type: "thread.reply", threadId: main.id, comment });
-        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id });
+        const receipt = await sendOp(ctx, p.id, { type: "thread.reply", threadId: main.id, comment });
+        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id, ...contextReceipt(receipt) });
         console.log(`said in the Chat: ${body}`);
         return;
       }
       const threadId = newThreadId();
-      await sendOp(ctx, p.id, {
+      const receipt = await sendOp(ctx, p.id, {
         type: "thread.create",
         threadId,
         x: 0,
@@ -6677,7 +6675,7 @@ program
         main: true,
         comment,
       });
-      if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true });
+      if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true, ...contextReceipt(receipt) });
       console.log(`started the Chat, and said: ${body}`);
     }),
   );
@@ -6686,8 +6684,10 @@ program
   .command("ask <question...>")
   .description("Ask the person a question and stop — the canvas shows you as waiting")
   .option("--item <item>", "pin the question to a thing, instead of the Chat")
+  .option("--in <group>", "attach this group and its complete subtree as frozen context")
+  .option("--include-excluded", "explicitly include excluded context in this request")
   .action(
-    run(async (words: string[], opts: { item?: string }, cmd: Command) => {
+    run(async (words: string[], opts: { item?: string; in?: string; includeExcluded?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const question = words.join(" ").trim();
@@ -6707,7 +6707,7 @@ program
        * `/ask /ask …` and fail to parse as anything.
        */
       const body = question.startsWith("/ask") ? question : `/ask ${question}`;
-      const comment = await newComment(ctx, p.id, snapshot, body);
+      const comment = await newComment(ctx, p.id, snapshot, body, { in: opts.in, includeExcluded: opts.includeExcluded });
 
       if (opts.item) {
         // A question about one thing belongs on that thing, where somebody
@@ -6717,14 +6717,14 @@ program
         const item = resolveItem(snapshot, opts.item);
         const existing = itemThread(snapshot.canvas, item.id);
         if (existing) {
-          await sendOp(ctx, p.id, { type: "thread.reply", threadId: existing.id, comment });
-          if (ctx.json) return printJson({ threadId: existing.id, commentId: comment.id });
+          const receipt = await sendOp(ctx, p.id, { type: "thread.reply", threadId: existing.id, comment });
+          if (ctx.json) return printJson({ threadId: existing.id, commentId: comment.id, ...contextReceipt(receipt) });
           console.log(`asked on "${item.title}" — parked until somebody answers`);
           return;
         }
         const threadId = newThreadId();
         const { x, y } = anchorOffset(item);
-        await sendOp(ctx, p.id, {
+        const receipt = await sendOp(ctx, p.id, {
           type: "thread.create",
           threadId,
           x,
@@ -6732,20 +6732,20 @@ program
           anchorItemId: item.id,
           comment,
         });
-        if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true });
+        if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true, ...contextReceipt(receipt) });
         console.log(`asked on "${item.title}" — parked until somebody answers`);
         return;
       }
 
       const main = mainThread(snapshot.canvas);
       if (main) {
-        await sendOp(ctx, p.id, { type: "thread.reply", threadId: main.id, comment });
-        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id });
+        const receipt = await sendOp(ctx, p.id, { type: "thread.reply", threadId: main.id, comment });
+        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id, ...contextReceipt(receipt) });
         console.log("asked in the Chat — parked until somebody answers");
         return;
       }
       const threadId = newThreadId();
-      await sendOp(ctx, p.id, {
+      const receipt = await sendOp(ctx, p.id, {
         type: "thread.create",
         threadId,
         x: 0,
@@ -6754,7 +6754,7 @@ program
         main: true,
         comment,
       });
-      if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true });
+      if (ctx.json) return printJson({ threadId, commentId: comment.id, created: true, ...contextReceipt(receipt) });
       console.log("asked in the Chat — parked until somebody answers");
     }),
   );
@@ -6764,14 +6764,15 @@ program
   .description("Copy items — beside themselves, or into another canvas with --to")
   .option("--to <canvas>", "copy into this canvas instead of beside the originals")
   .option("--at <x,y>", "where the copy goes (default: clear ground beside the originals)")
-  .option("--in <area>", "onto this sheet of the canvas they land on, at the first clear spots")
+  .option("--in <group>", "destination group (or legacy sheet)")
+  .option("--cell <row,column>", "place the complete copied arrangement in a destination grid cell")
+  .option("--dry-run", "validate group copy and report geometry without uploads or writes")
   .option("--handin", "and hand them in for the phase running where they land — a desk's bell")
   .action(
-    run(async (items: string[], opts: { to?: string; at?: string; in?: string; handin?: boolean }, cmd: Command) => {
+    run(async (items: string[], opts: { to?: string; at?: string; in?: string; handin?: boolean; cell?: string; dryRun?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: from, snapshot } = await canvasAndSnapshot(ctx);
       const sources = items.map((ref) => resolveItem(snapshot, ref));
-      if (sources.some(isGroupItem)) throw new Error("copying a group hierarchy is not available in this build; copy ordinary items individually until graph copying is enabled");
       // `--to` names a canvas the way every other ref does; without it the
       // copies land beside their originals.
       const target = opts.to
@@ -6800,6 +6801,17 @@ program
       if (opts.handin && !running) {
         throw new Error(`no sprint is running on "${target.title}" — nothing to hand in for`);
       }
+      if (groupMode) {
+        const receipt = await new CanvasHandle(ctx, from).copy(items, {
+          to: target.id, in: opts.in, ...(opts.at ? { at: parseXY(opts.at) } : {}),
+          ...(opts.cell ? { cell: parseGroupCell(opts.cell) } : {}), dryRun: opts.dryRun,
+          ...(running ? { properties: handInPatch(running.phase.name).properties as Record<string, string> } : {}),
+        });
+        if (ctx.json) return printJson({ ...receipt, items: receipt.changes.filter((row) => row.boxBefore === null && row.state === "live").map((row) => row.itemId), canvasId: target.id, ...(running ? { handedInFor: running.phase.name } : {}) });
+        return reportCanvasGroup(ctx, receipt);
+      }
+      if (sources.some(isGroupItem)) throw new Error("a group hierarchy needs a group-enabled destination canvas");
+      if (opts.dryRun || opts.cell) throw new Error("--dry-run and --cell copy require a group-enabled destination canvas");
       let placements: { item: Item; x: number; y: number }[];
       let targetAreaResize: { width: number; height: number } | null = null;
       if (sheet && !groupMode) {
@@ -7648,9 +7660,9 @@ gdocCmd
     run(async (opts: { in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const sheet = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
+      const sheet = opts.in === undefined ? null : snapshot.project.groupMode === "groups" ? resolveCanvasGroupRef(snapshot.canvas, opts.in, true) : findArea(snapshot.canvas, opts.in);
       if (opts.in !== undefined && !sheet) throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
-      const docs = (sheet ? itemsIn(snapshot.canvas, sheet) : Object.values(snapshot.canvas.items)).filter(isGoogleDocItem);
+      const docs = (sheet ? isGroupItem(sheet) ? groupDescendants(snapshot.canvas, sheet.id).filter((item) => !isGroupItem(item)) : itemsIn(snapshot.canvas, sheet) : Object.values(snapshot.canvas.items)).filter(isGoogleDocItem);
       if (docs.length === 0) {
         if (ctx.json) return printJson({ synced: [], unchanged: [], failed: [] });
         return console.log("no Google Doc items here — `isocan gdoc add <url>` puts one on the canvas");
@@ -9448,8 +9460,12 @@ async function linkedCanvasesOf(ctx: Ctx, canvasId: string, snapshot: { canvas: 
 
 const context = program
   .command("context")
-  .description("What an agent will actually read when it starts work here — this canvas, then the canvases it inherits from")
+  .description("Read ambient memory or a complete group context manifest")
+  .option("--in <group>", "read this group and its complete subtree")
+  .option("--include-excluded", "include excluded entries in an explicit --in scope")
   .option("--canvas <canvas>");
+
+registerContextReads(context, ctxOf);
 
 /**
  * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,
@@ -9538,6 +9554,9 @@ context
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
+      const options = cmd.optsWithGlobals() as { in?: string; includeExcluded?: boolean };
+      if (options.in !== undefined) return reportContext(ctx, await new CanvasHandle(ctx, p).context(options));
+      if (options.includeExcluded) throw new Error("--include-excluded requires --in <group>");
       const snapshot = await ctx.client.snapshot(p.id);
 
       /**
@@ -9606,11 +9625,11 @@ function slideVerb(name: "add" | "rm", on: boolean, blurb: string) {
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         // A sheet's contents in reading order — a 1×15 storyboard's frames
         // left to right — so the deck flips in the order the wall reads.
-        const sheet = opts.in === undefined ? null : findArea(snapshot.canvas, opts.in);
+        const sheet = opts.in === undefined ? null : snapshot.project.groupMode === "groups" ? resolveCanvasGroupRef(snapshot.canvas, opts.in, true) : findArea(snapshot.canvas, opts.in);
         if (opts.in !== undefined && !sheet) throw new Error(`no area called "${opts.in}" — \`isocan area ls\` names them`);
         const targets: Item[] = [
           ...refs.map((ref) => resolveItem(snapshot, ref)),
-          ...(sheet ? itemsIn(snapshot.canvas, sheet) : []),
+          ...(sheet ? isGroupItem(sheet) ? groupDescendants(snapshot.canvas, sheet.id).filter((item) => !isGroupItem(item)) : itemsIn(snapshot.canvas, sheet) : []),
         ];
         if (targets.length === 0) throw new Error(`name items, or a sheet with --in <area>`);
         for (const item of targets) {
@@ -11080,10 +11099,11 @@ async function newComment(
   canvasId: string,
   snapshot: CanvasSnapshotResponse,
   body: string,
+  options: CommentContextOptions = {},
 ): Promise<NewComment> {
   // The API's one spelling (`buildComment`), so a mention posted from a
   // script and from this CLI resolve identically (iso-api phase 2).
-  const comment = await buildComment(ctx.client, canvasId, snapshot, body);
+  const comment = await buildComment(ctx.client, canvasId, snapshot, body, options);
   await noteTurnedAway(ctx, canvasId, snapshot, comment.mentions);
   return comment;
 }
@@ -11200,8 +11220,10 @@ comment
   .option("--quote <text>", "anchor to exact rendered text on --item")
   .option("--occurrence <number>", "which matching quote, counted from 1")
   .option("--at <x,y>", "freestanding at world coordinates")
+  .option("--in <group>", "attach this group and its complete subtree as frozen context")
+  .option("--include-excluded", "explicitly include excluded context in this request")
   .action(
-    run(async (text: string, opts: { item?: string; at?: string; quote?: string; occurrence?: string }, cmd: Command) => {
+    run(async (text: string, opts: { item?: string; at?: string; quote?: string; occurrence?: string; in?: string; includeExcluded?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       if (!opts.item && !opts.at) throw new Error("pass --item <item> or --at <x,y>");
@@ -11221,8 +11243,8 @@ comment
         anchorItemId = null;
       }
       const threadId = newThreadId();
-      const first = await newComment(ctx, p.id, snapshot, text);
-      await sendOp(ctx, p.id, {
+      const first = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
+      const receipt = await sendOp(ctx, p.id, {
         type: "thread.create",
         threadId,
         x,
@@ -11233,7 +11255,7 @@ comment
       });
       // The comment id comes back because a note posted while working is one
       // you will want to rewrite: `comment edit <thread> <comment> "…"`.
-      if (ctx.json) return printJson({ threadId, commentId: first.id });
+      if (ctx.json) return printJson({ threadId, commentId: first.id, ...contextReceipt(receipt) });
       console.log(`started thread ${threadId} (${first.id})`);
     }),
   );
@@ -11241,18 +11263,20 @@ comment
 comment
   .command("reply <thread> <text>")
   .description("Reply to a thread")
+  .option("--in <group>", "attach this group and its complete subtree as frozen context")
+  .option("--include-excluded", "explicitly include excluded context in this request")
   .action(
-    run(async (threadRef: string, text: string, _opts: unknown, cmd: Command) => {
+    run(async (threadRef: string, text: string, opts: { in?: string; includeExcluded?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, threadRef);
-      const comment = await newComment(ctx, p.id, snapshot, text);
-      await sendOp(ctx, p.id, {
+      const comment = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
+      const receipt = await sendOp(ctx, p.id, {
         type: "thread.reply",
         threadId: thread.id,
         comment,
       });
-      if (ctx.json) return printJson({ threadId: thread.id, commentId: comment.id });
+      if (ctx.json) return printJson({ threadId: thread.id, commentId: comment.id, ...contextReceipt(receipt) });
       // The id is here because a note you post while working is one you will
       // want to rewrite: `comment edit <thread> <comment> "…"`.
       console.log(`replied to ${thread.id} (${comment.id})`);
@@ -11423,8 +11447,10 @@ main. With no argument, prints the current main thread.`,
 comment
   .command("edit <thread> <comment> <text>")
   .description("Rewrite a comment you wrote — a working note that changes as the work does")
+  .option("--in <group>", "replace saved context with this group at the current revision")
+  .option("--include-excluded", "include excluded context when explicitly replacing this request")
   .action(
-    run(async (threadRef: string, commentId: string, text: string, _opts: unknown, cmd: Command) => {
+    run(async (threadRef: string, commentId: string, text: string, opts: { in?: string; includeExcluded?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, threadRef);
@@ -11432,17 +11458,18 @@ comment
       if (!existing) throw new Error(`no comment ${commentId} on ${thread.id}`);
       // Mentions and #refs are resolved against the NEW body, the same way a
       // fresh comment resolves them.
-      const resolved = await newComment(ctx, p.id, snapshot, text);
-      await sendOp(ctx, p.id, {
+      const resolved = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
+      const receipt = await sendOp(ctx, p.id, {
         type: "comment.update",
         threadId: thread.id,
         commentId,
         body: text,
+        ...(resolved.contextRequest ? { contextRequest: resolved.contextRequest } : {}),
         ...(resolved.mentions ? { mentions: resolved.mentions } : {}),
         ...(resolved.items ? { items: resolved.items } : {}),
       });
       const took = elapsedLabel(existing.createdAt, new Date().toISOString());
-      if (ctx.json) return printJson({ threadId: thread.id, commentId, took });
+      if (ctx.json) return printJson({ threadId: thread.id, commentId, took, ...contextReceipt(receipt) });
       console.log(`edited ${commentId} — ${took} since it was posted`);
     }),
   );
