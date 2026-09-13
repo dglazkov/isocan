@@ -58,9 +58,9 @@ export function parseQuestionPayload(body: string): QuestionContextPayload | nul
             description: "Clarify the target audience and core value proposition.",
             renderer: "choice-list",
             options: [
-              { id: "consumer", title: "Consumer / Fan Experience", body: "Engaging, visual, rich interactions and collectibles." },
-              { id: "competitive", title: "Competitive / Tournament", body: "Detailed stats, strategy, team building, and battle meta." },
-              { id: "casual", title: "Casual / Pokédex Reference", body: "Clean, fast encyclopedia, search, and species details." },
+              { id: "consumer", title: "Consumer Experience", body: "Engaging, visual, rich interactions and high polish." },
+              { id: "productivity", title: "Productivity & Utility", body: "Fast, density-optimized workflows, data tables, and shortcuts." },
+              { id: "dashboard", title: "Overview & Analytics", body: "Clean metrics, charts, status cards, and high-level health." },
             ],
           },
           {
@@ -69,9 +69,9 @@ export function parseQuestionPayload(body: string): QuestionContextPayload | nul
             description: "Choose an aesthetic tone and color palette.",
             renderer: "visual-cards",
             options: [
-              { id: "retro-gameboy", title: "Retro Game Boy", eyebrow: "Nostalgic", colors: ["#8bac0f", "#306230", "#0f380f"] },
-              { id: "modern-pokedex", title: "Sleek Pokédex Red", eyebrow: "Vibrant", colors: ["#ef4444", "#ffffff", "#1e293b"] },
-              { id: "dark-minimal", title: "Dark & Minimalist", eyebrow: "Clean", colors: ["#0f172a", "#38bdf8", "#f8fafc"] },
+              { id: "clean-light", title: "Clean Light", eyebrow: "Minimalist", colors: ["#ffffff", "#3b82f6", "#0f172a"] },
+              { id: "sleek-dark", title: "Sleek Dark", eyebrow: "Modern", colors: ["#0f172a", "#38bdf8", "#f8fafc"] },
+              { id: "warm-editorial", title: "Warm Editorial", eyebrow: "Refined", colors: ["#fef3c7", "#d97706", "#78350f"] },
             ],
           },
         ];
