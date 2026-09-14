@@ -170,7 +170,6 @@ export function Toolbar({
                   trashCount,
                   historyOpen,
                   unreadNews,
-                  minimapOpen,
                   theme: themeOf(canvas),
                   anchor: anchorOf(canvas),
                   toggleAnchor: async () => {

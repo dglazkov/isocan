@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { keyFor, THEMES, themeLabel } from "@isocan/core";
 import { chromeMenu } from "../src/lib/menuentries.tsx";
+import { DISPLAY_SWITCHES } from "../src/lib/hideable.ts";
 import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
 
 /**
@@ -42,7 +43,6 @@ const menu = (over = {}) =>
     trashCount: 0,
     historyOpen: false,
     unreadNews: 0,
-    minimapOpen: true,
     theme: null,
     ownGround: false,
     pickGround: () => {},
@@ -59,9 +59,16 @@ const menu = (over = {}) =>
 describe("the drawer holds everything it took", () => {
   it("offers the rail's panels, the trash, the map and the shortcut list", () => {
     const found = labels(menu()).join(" | ");
-    for (const control of ["Chat", "Files", "Agents", "Context", "Workbench", "Trash", "minimap", "shortcuts"]) {
+    for (const control of ["Chat", "Files", "Agents", "Context", "Workbench", "Trash", "shortcuts"]) {
       expect(found, `${control} must be reachable from the drawer`).toContain(control);
     }
+    /* The minimap left this menu on 14 Sep — it was the last per-browser
+       switch out here, beside Background, which is the same question about a
+       different owner: a ground is a canvas fact everyone sees, the minimap is
+       this browser's alone. Nothing-lost still applies, so it is asserted
+       where it went rather than dropped from the list. */
+    expect(found, "the minimap moved, it did not vanish").not.toContain("minimap");
+    expect(DISPLAY_SWITCHES.map((one) => one.id)).toContain("canvas.minimap");
   });
 
   describe("Groups, which left the bar on 13 Sep", () => {
@@ -299,9 +306,12 @@ describe("the drawer holds everything it took", () => {
   });
 
   it("says which way the remaining toggles will go", () => {
-    expect(labels(menu({ minimapOpen: true }))).toContain("Hide minimap");
-    expect(labels(menu({ minimapOpen: false }))).toContain("Show minimap");
+    /* A row that toggles says what clicking it DOES, not what is true — the
+       minimap used to be the third of these and is a checkbox in Settings
+       now, where a tick says the state instead. */
     expect(labels(menu({ trashOpen: true }))).toContain("Hide trash");
+    expect(labels(menu({ trashOpen: false }))).toContain("Trash");
+    expect(labels(menu({ historyOpen: true }))).toContain("Hide history timeline");
   });
 });
 

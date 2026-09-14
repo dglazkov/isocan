@@ -134,6 +134,18 @@ export function IdentityMenu({
      `isocan.cursorGlow` the menu row did. */
   const cursorGlow = useUiStore((s) => s.cursorGlow);
   const setCursorGlow = useUiStore((s) => s.setCursorGlow);
+  const minimapOpen = useUiStore((s) => s.minimapOpen);
+  const setMinimapOpen = useUiStore((s) => s.setMinimapOpen);
+  /**
+   * Each switch's current answer and how to change it, by the id the registry
+   * uses. Written out rather than derived: two entries is not a mechanism, and
+   * `hideable.test.ts` fails on a switch the registry names and this map does
+   * not — so a row that would render as permanently off cannot ship.
+   */
+  const display: Record<string, { on: boolean; set: (on: boolean) => void }> = {
+    "cursor.glow": { on: cursorGlow, set: setCursorGlow },
+    "canvas.minimap": { on: minimapOpen, set: setMinimapOpen },
+  };
   const setChromeHidden = useUiStore((s) => s.setChromeHidden);
   const experiments = useUiStore((s) => s.experiments);
   const setExperiment = useUiStore((s) => s.setExperiment);
@@ -374,17 +386,20 @@ export function IdentityMenu({
             because a person looking for a control is looking for something
             they lost, and a person looking for the glow is deciding about
             taste. */}
-        {DISPLAY_SWITCHES.map((entry) => (
-          <label key={entry.id} className="chrome-row">
-            <input
-              type="checkbox"
-              checked={cursorGlow}
-              onChange={(e) => setCursorGlow(e.target.checked)}
-            />
-            <span className="chrome-name">{entry.name}</span>
-            <span className="chrome-where">{entry.what}</span>
-          </label>
-        ))}
+        {DISPLAY_SWITCHES.map((entry) => {
+          const shown = display[entry.id];
+          return (
+            <label key={entry.id} className="chrome-row">
+              <input
+                type="checkbox"
+                checked={shown?.on ?? false}
+                onChange={(e) => shown?.set(e.target.checked)}
+              />
+              <span className="chrome-name">{entry.name}</span>
+              <span className="chrome-where">{entry.what}</span>
+            </label>
+          );
+        })}
         {hiddenChrome.length > 0 && (
           /* It said "Show everything", which reads as an action on the CANVAS
              — reveal what is hidden out there, or select the lot. It acts on

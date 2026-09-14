@@ -82,11 +82,25 @@ describe("the two controls asked for hide by right-click and come back from Sett
       }
     });
 
-    it("shows it in the same Settings section, reading the same store", () => {
-      expect(DISPLAY_SWITCHES.map((entry) => entry.id)).toContain("cursor.glow");
+    it("shows them in the same Settings section, reading the same store", () => {
+      expect(DISPLAY_SWITCHES.map((entry) => entry.id)).toEqual(["cursor.glow", "canvas.minimap"]);
       expect(identity).toContain("DISPLAY_SWITCHES.map((entry) =>");
-      expect(identity).toContain("setCursorGlow(e.target.checked)");
       expect(store).toContain('const GLOW_KEY = "isocan.cursorGlow";');
+    });
+
+    it("has a state and a setter for every switch it declares", () => {
+      /* The row renders from a map keyed by the registry's id. A switch the
+         registry names and the map does not would draw a checkbox that is
+         permanently off and silently does nothing — which is worse than the
+         two homes this move was meant to end. */
+      for (const entry of DISPLAY_SWITCHES) {
+        expect(identity, `${entry.id} has no state in the switch map`).toContain(`"${entry.id}": {`);
+      }
+    });
+
+    it("leaves no second home for the minimap either", () => {
+      const menu = read("../src/lib/menuentries.tsx");
+      expect(menu, "a switch in two places disagrees with itself").not.toMatch(/Hide minimap/);
     });
 
     it("leaves no second home for it in the drawer", () => {

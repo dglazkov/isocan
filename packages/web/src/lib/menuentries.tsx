@@ -527,7 +527,6 @@ export function chromeMenu(ctx: {
   historyOpen: boolean;
   /** Days of release notes this reader has not seen — 0 hides the count. */
   unreadNews: number;
-  minimapOpen: boolean;
   /** What ground this canvas is wearing, or null for the dot grid. */
   theme: CanvasTheme | null;
   /**
@@ -614,10 +613,32 @@ export function chromeMenu(ctx: {
        selection in the one place that is always on screen. The rows are
        unchanged and the item menu still carries them; this is where you look
        when nothing is selected, or when you do not yet know the gesture. */
-    ...(ctx.groups?.length
-      ? [{ label: "Groups", value: ctx.groupsValue ?? "", run: () => {}, submenu: ctx.groups }]
-      : []),
+    /* A module's workspace IS a take-over, the same kind of thing Workbench
+       is, so it sits with Workbench rather than adrift below Groups. Anatomy
+       is the one that exists today; anything with an `x/<segment>` lands here
+       beside it. */
     ...(ctx.projectViews ?? []),
+    {
+      /**
+       * **Switching canvases, where somebody can find it** (6 Sep 2026).
+       *
+       * It lived only on a caret beside the canvas's name, and that caret was
+       * unreadable for a reason worth writing down: clicking the NAME opens
+       * the rename editor, so the two controls sit adjacent and mean entirely
+       * different things. Every app with several documents puts a caret next
+       * to the title, but there it is ONE control opening a menu — here it was
+       * a second button whose only label was its shape, beside a `···` whose
+       * only label was its shape.
+       *
+       * A row here carries a word and, through `shortcutFor`, the key — which
+       * is the part the caret could never do. Somebody who finds this once
+       * learns ⌘O and stops needing the menu, which is the right direction for
+       * a thing done many times a day.
+       */
+      label: "Switch canvas…",
+      shortcutFor: "Switch canvas",
+      run: () => ctx.openSwitcher(),
+    },
     { separator: "" },
     {
       /**
@@ -644,32 +665,15 @@ export function chromeMenu(ctx: {
             run: () => ui().setTrashOpen(!ctx.trashOpen),
           },
         ]),
-    {
-      label: ctx.minimapOpen ? "Hide minimap" : "Show minimap",
-      icon: <MinimapGlyph size={14} />,
-      run: () => ui().setMinimapOpen(!ctx.minimapOpen),
-    },
-    {
-      /**
-       * **Switching canvases, where somebody can find it** (6 Sep 2026).
-       *
-       * It lived only on a caret beside the canvas's name, and that caret was
-       * unreadable for a reason worth writing down: clicking the NAME opens
-       * the rename editor, so the two controls sit adjacent and mean entirely
-       * different things. Every app with several documents puts a caret next
-       * to the title, but there it is ONE control opening a menu — here it was
-       * a second button whose only label was its shape, beside a `···` whose
-       * only label was its shape.
-       *
-       * A row here carries a word and, through `shortcutFor`, the key — which
-       * is the part the caret could never do. Somebody who finds this once
-       * learns ⌘O and stops needing the menu, which is the right direction for
-       * a thing done many times a day.
-       */
-      label: "Switch canvas…",
-      shortcutFor: "Switch canvas",
-      run: () => ctx.openSwitcher(),
-    },
+    /* **Groups moved down here on 14 Sep.** It had been sitting between
+       Workbench and the module rooms, which read as a place you GO — it is
+       not. It is something about this canvas: what is on it, how it is
+       arranged, and (until a canvas is converted) which model it uses. That
+       puts it with the history and the trash rather than with the rooms. */
+    ...(ctx.groups?.length
+      ? [{ label: "Groups", value: ctx.groupsValue ?? "", run: () => {}, submenu: ctx.groups }]
+      : []),
+    { separator: "" },
     {
       /**
        * **The canvas's ground, as a set you can see** (#195, reshaped 7 Sep).

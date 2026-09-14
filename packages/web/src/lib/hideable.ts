@@ -95,6 +95,21 @@ export const DISPLAY_SWITCHES: readonly DisplaySwitch[] = [
     name: "Cursor glow",
     what: "the soft light under live cursors · yours only, nobody else's view changes",
   },
+  {
+    /**
+     * **The last per-browser switch that was still in the `···` menu** (14 Sep).
+     *
+     * It sat beside Background, which is the same question — what this canvas
+     * looks like — asked about a different owner. A ground is a canvas fact
+     * every collaborator sees; the minimap is this browser's alone, like the
+     * glow above it. Two kinds of switch in one row taught nobody which was
+     * which, and a person looking for "the things I can turn off" had to know
+     * to look in two places.
+     */
+    id: "canvas.minimap",
+    name: "Minimap",
+    what: "the small map of the canvas, bottom right · yours only, and ⌘K still toggles it",
+  },
 ];
 
 export function hideableEntry(id: string): HideableEntry | undefined {
