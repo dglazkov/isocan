@@ -223,8 +223,7 @@
           </div>
           <section class="voice-facts-strip" aria-label="Connection">
             <div class="voice-setup" id="setup" hidden>
-              <h3>Set this up</h3>
-              <p class="voice-hint" id="setup-note"></p>
+              <p class="voice-hint" id="setup-note" hidden></p>
               <ul class="voice-steps" id="setup-steps"></ul>
             </div>
 
@@ -237,6 +236,10 @@
                   <div class="voice-keyrow" id="canvas-row" hidden>
                     <select id="canvas-select" aria-label="Canvas"></select>
                     <button id="canvas-use" type="button">Use this canvas</button>
+                  </div>
+                  <div class="voice-keyrow" id="canvas-create-row">
+                    <input id="canvas-create-title" type="text" placeholder="New canvas title" aria-label="New canvas title" autocomplete="off" />
+                    <button id="canvas-create-btn" type="button">Create canvas</button>
                   </div>
                   <div class="voice-help-card" popover="hint" id="help-canvas">
                     <p>The canvas every command in this conversation lands on. The agent switches it when you ask it to, so if work appears somewhere you were not looking, this is the line that says where it went.</p>
@@ -278,6 +281,7 @@
                   <div class="voice-keyrow" id="actor-row">
                     <input id="actor-name-field" type="text" placeholder="a name, e.g. Voice" aria-label="actor name" autocomplete="off" />
                     <button id="actor-claim-btn" type="button">Claim this name</button>
+                    <button id="actor-enrol-btn" type="button">Enrol on canvas</button>
                   </div>
                   <div class="voice-help-card" popover="hint" id="help-actor">
                     <p>The name your edits are attributed to, and whether anything can summon it. Enrolled means the daemon accepts work under that name; not enrolled still speaks from the microphone, but no other harness can hand it a job.</p>

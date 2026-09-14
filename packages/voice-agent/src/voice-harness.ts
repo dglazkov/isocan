@@ -4235,6 +4235,32 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         });
         return;
       }
+      if (req.method === "POST" && url.pathname === "/canvas/create") {
+        const body = await readBody();
+        const asked = typeof body === "string" ? {} : body;
+        const title = String(asked.title ?? "").trim();
+        if (!title) {
+          respond(400, { error: "a canvas title is required" });
+          return;
+        }
+        const canvasId = newCanvasId();
+        try {
+          await target.canvas.ctx.client.sendOp(null, target.canvas.ctx.actor, {
+            type: "project.create",
+            canvasId,
+            title,
+          });
+          const switched = await switchThisSession(canvasId);
+          respond(200, {
+            ok: true,
+            canvas: { id: canvasId, title },
+            switched: switched.ok,
+          });
+        } catch (err) {
+          respond(502, { error: (err as Error).message });
+        }
+        return;
+      }
       /**
        * **`POST /actor` — the person naming this agent, from the settings
        * drawer.**
