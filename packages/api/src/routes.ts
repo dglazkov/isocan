@@ -1,5 +1,6 @@
 import { SOURCE_POLICY_HEADER, sourcePolicyHeader, parseSourcePolicyHeader, sourceClassificationRoute, SOURCE_ACCESS_ROUTE, personalRoute, personalCanvasRoute, personalDelegatesRoute, type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "@isocan/core";
 import { inboxRoute, type InboxResponse } from "@isocan/core";
+import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type {
   Actor,
   ActorBindingRecord,
@@ -992,6 +993,11 @@ export class DaemonRoutes {
     }
     const route = options.threadId ? commentContextRoute(canvasId, options.threadId, options.commentId!) : canvasContextRoute(canvasId);
     return this.request("GET", `${route}/content${query.size ? `?${query}` : ""}`);
+  }
+
+  /** A bounded ordinary-source history head; the authority refuses personal sources before reads. */
+  recapHead(canvasId: string, signal?: AbortSignal): Promise<RecapHeadResponse> {
+    return this.request("GET", recapHeadRoute(canvasId), undefined, signal);
   }
 
   async snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse> {

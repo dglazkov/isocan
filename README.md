@@ -130,6 +130,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   (`allow-scripts` without `allow-same-origin`). "Double-click to interact"
   hangs under the item while you point at it, rather than lying across the
   bottom of the document it is describing.
+- **Inherited Recent work**: Context shows recent activity beside a linked
+  canvas's design and pins, with its source and covered range. CLI
+  `isocan context` and MCP summaries show the same bounded reading and say
+  what was omitted. Missing history leaves readable design and pins in place.
+  Personal history does not enter this inherited reading.
 - **Personal memory**: **Your canvas** in Context creates one private canvas
   for your identity at this home. Pin a preference there, link it into a
   project, and explicitly allow the agents who may read it. The project shows

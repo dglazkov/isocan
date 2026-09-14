@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -100,6 +101,10 @@ describe("installable straight from git", () => {
     const strays: string[] = [];
     for (const file of await sourceFiles(path.join(repo, "packages"))) {
       if (file.endsWith(path.join("core", "src", "address.ts"))) continue; // the definition
+      // SKILL.md verbatim, generated (scripts/rc-skill.mjs) and held equal to
+      // it by packages/rc/test/skill.test.ts — and SKILL.md's specs are
+      // swept for #release in the doc loop at the end of this test.
+      if (file.endsWith(path.join("rc", "src", "skill.ts"))) continue;
       const text = await fs.readFile(file, "utf8");
       for (const [i, line] of text.split("\n").entries()) {
         if (line.includes("github:dglazkov/isocan")) {
@@ -188,6 +193,44 @@ describe("installable straight from git", () => {
       types: "./types/api/src/index.d.ts",
       default: "./index.mjs",
     });
+  });
+
+  it("the release manifest aims every export's types at declarations the release emits", async () => {
+    // Room phase 0 added `./rc` beside `.`. The script once rewrote `.` alone,
+    // so a second export would have shipped a `types` path into `.ts` sources
+    // an installed editor cannot read. Every `types` entry maps the same way,
+    // and the workspace it names is one emitTypes compiles.
+    const { releaseManifest, RELEASE_TYPE_ROOTS } = await import("../scripts/release.mjs");
+    const pkg = await readJson("package.json");
+    const shipped = releaseManifest(pkg).exports;
+    expect(shipped["./rc"]).toEqual({ types: "./types/rc/src/index.d.ts", default: "./rc.mjs" });
+    expect(RELEASE_TYPE_ROOTS).toContain("packages/rc/src");
+    for (const [key, entry] of Object.entries(pkg.exports as Record<string, { types?: string }>)) {
+      if (typeof entry !== "object" || !entry.types) continue;
+      const workspace = /^\.\/(packages\/[^/]+\/src)\//.exec(entry.types)?.[1];
+      expect(RELEASE_TYPE_ROOTS, `${key}'s types live in a workspace the release never compiles`).toContain(workspace);
+      expect(shipped[key].types).toBe(entry.types.replace(/^\.\/packages\//, "./types/").replace(/\.ts$/, ".d.ts"));
+    }
+  });
+
+  it("the emitted declarations include isocan/rc, self-contained", async () => {
+    // The emit itself, into a scratch directory: about two seconds of tsc,
+    // cheap enough that the manifest's claim is checked against real files.
+    const { emitTypes, releaseManifest } = await import("../scripts/release.mjs");
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-types-"));
+    try {
+      await emitTypes(out);
+      const shipped = releaseManifest(await readJson("package.json")).exports;
+      for (const key of [".", "./rc"]) {
+        const declared = path.join(out, shipped[key].types.replace(/^\.\/types\//, ""));
+        await expect(fs.access(declared), `${key}: ${declared}`).resolves.toBeUndefined();
+      }
+      const helpers = await fs.readFile(path.join(out, "rc/src/helpers.d.ts"), "utf8");
+      expect(helpers).not.toMatch(/"@isocan\//);
+      expect(helpers).toContain('"../../core/src/index.js"');
+    } finally {
+      await fs.rm(out, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 
   it("releases from CI on every commit, with the history a push needs", async () => {

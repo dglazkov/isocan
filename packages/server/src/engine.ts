@@ -76,6 +76,8 @@ import {
   MigrationBoundaryError,
   canvasGroupMigrationPreview,
   resolveCanvasGroupMigration,
+  buildRecapHead,
+  clipRecapLabel,
 } from "@isocan/core";
 import { groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { contextBlobAvailable, hydrateContextManifest } from "./canvas-group-context.ts";
@@ -1070,6 +1072,28 @@ export class Engine {
   async getArchivedLog(canvasId: string): Promise<LogEntry[]> {
     await this.runtime(canvasId);
     return this.store.readArchivedLog(canvasId);
+  }
+
+  /** Read current state and its complete recent history under the same queue
+   * as GC/mutations. Archive materialization is not a bounded backing scan. */
+  recapHead(canvasId: string, badgeId: string, context: SourceRequestContext, home: string): Promise<import("@isocan/core").RecapHeadResponse | null> {
+    return this.enqueue(async () => {
+      const excluded: SourceRequestContext = { ...context, policy: { mode: "exclude" } };
+      excluded.signal?.throwIfAborted();
+      if (this.homes?.for(canvasId)) throw new PersonalError("Recent work must be read at its authoritative home");
+      if (await this.desk.personalSource(canvasId) || await this.desk.personalReplica(canvasId)) throw new PersonalError("Recent work does not read personal history", "personal-source-excluded");
+      await this.sourceGuard?.(canvasId, badgeId, excluded, "read");
+      if (await this.store.canvasLifecycle(canvasId) !== "live") throw new CanvasNotFoundError(canvasId);
+      excluded.signal?.throwIfAborted();
+      const runtime = await this.runtime(canvasId);
+      const archived = await this.store.readArchivedLog(canvasId);
+      excluded.signal?.throwIfAborted();
+      const head = buildRecapHead([...archived, ...runtime.entries], runtime.state.canvas, runtime.lastSeq);
+      if (!head) return null;
+      const title = clipRecapLabel(runtime.state.project.title);
+      if (title.clipped) head.omitted.clippedLabels++;
+      return { canvasId, home, title: title.text, revision: runtime.lastSeq, head };
+    });
   }
 
   /** A migration preview reads the home's current revision, even through a replica. */

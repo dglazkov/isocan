@@ -489,8 +489,10 @@ import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
+import { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus } from "@isocan/rc";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
-import { openInBrowser, proveInBrowser, summonedRefusal } from "./operator.ts";
+import { openInBrowser } from "./browser.ts";
+import { proveInBrowser, summonedRefusal } from "./operator.ts";
 import { SHEEP_HARNESS, SheepAgent, describePlace, endSheep, homeAddressForCell, loopbackFromCell, noSheepLine, placeLine, sheepPlaceFor } from "./sheep.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, onPath, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
 import {
@@ -792,11 +794,6 @@ async function narrate(
   const session = await readSessionFile(ctx.home, ctx.actor.id);
   if (!session || session.canvasId !== canvasId) return;
   await touchSession(ctx, canvasId, { ...patch, statusSource: "inferred" }).catch(() => {});
-}
-
-/** World center of an item — where narration points the cursor. */
-function itemCenter(item: Item): { x: number; y: number } {
-  return { x: item.x + item.width / 2, y: item.y + item.height / 2 };
 }
 
 async function sendOp(ctx: Ctx, canvasId: string | null, op: Operation, group?: string, spaceId?: string) {
@@ -2708,11 +2705,7 @@ program
       // its canvas-shaped caller. The browser strips the fragment on arrival
       // (`lib/arrival.ts`), so the route it is left standing on is the one
       // that was asked for.
-      spawn(
-        process.platform === "darwin" ? "open" : "xdg-open",
-        [token ? urlWithPass(url, token) : url],
-        { stdio: "ignore", detached: true },
-      ).unref();
+      openInBrowser(token ? urlWithPass(url, token) : url);
       console.log(url);
     }),
   );
@@ -5558,10 +5551,7 @@ program
         // in a line setup printed is one that ends up in a transcript.
         const open = opts.open ?? Boolean(process.stdout.isTTY);
         if (open && daemonUp) {
-          spawn(process.platform === "darwin" ? "open" : "xdg-open", [where], {
-            stdio: "ignore",
-            detached: true,
-          }).unref();
+          openInBrowser(where);
         }
 
         if (globals.json) return printJson(report);
@@ -11881,15 +11871,6 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
   }
 }
 
-/** Where a thread sits in world coordinates, anchored or freestanding. */
-function threadLocus(
-  snapshot: CanvasSnapshotResponse,
-  thread: CommentThread,
-): { x: number; y: number } {
-  const anchor = thread.anchorItemId ? snapshot.canvas.items[thread.anchorItemId] : undefined;
-  return anchor ? { x: anchor.x + thread.x, y: anchor.y + thread.y } : { x: thread.x, y: thread.y };
-}
-
 /**
  * The wake IS the status: the moment `wait` returns with a summons, land the
  * agent's presence on the summoning canvas — cursor at the thread, status
@@ -12507,33 +12488,6 @@ command or reply. No \`session start\` needed after a wake.`,
  * and withdrawal is one gesture away; a mechanical gate waits for phase 4,
  * where a summoned turn gives it something real to anchor to.
  */
-
-/**
- * An actor id → the name this canvas would show, for `listenWords`. The
- * registry's current name, not the one stamped on an old op — a gate that
- * says who somebody USED to be is a gate nobody can act on.
- *
- * **The registry is asked FIRST, and that is the fix rather than the
- * tidy-up.** `collectCanvasActors` walks canvas state, so it knows the
- * people who have written something here — which is exactly not the person
- * a fresh gate usually names: enrolling an agent and pointing it at
- * yourself is often the first thing you do on a canvas, and it left `who`
- * printing *listens to usr_nico*. An unreadable gate is the silent gate in
- * different clothes, so the map that knows everyone the home knows is the
- * one that answers.
- */
-function actorNamesOn(snapshot: CanvasSnapshotResponse): Map<string, string> {
-  const names = new Map<string, string>(Object.entries(snapshot.names ?? {}));
-  for (const actor of collectCanvasActors(snapshot.canvas)) {
-    if (!names.has(actor.id)) names.set(actor.id, actorNameIn(snapshot.names, actor));
-  }
-  return names;
-}
-
-function nameResolver(snapshot: CanvasSnapshotResponse): (actorId: string) => string | undefined {
-  const names = actorNamesOn(snapshot);
-  return (actorId) => names.get(actorId);
-}
 
 /**
  * **`--listen` / `--to`, as a person types it** — `me`, `everyone`, or a
@@ -14025,24 +13979,6 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         });
     };
 
-    /** The fixed brief around the wait-shaped payload (phase 4's door):
-     * identical for fresh and loaded sessions — delivery differs, content
-     * never does — with orientation and the guide pointer carrying the
-     * cold-arrival weight instead of 15k inlined tokens. */
-    const summonsPrompt = (
-      agentName: string,
-      payload: { reason: string; entries: WatchedLogEntry[] },
-    ): string =>
-      `You are ${agentName}, an agent enrolled on the isocan canvas "${p.title}". ` +
-      `This is a summons: activity addressed to you arrived while nothing was running for you. ` +
-      `Work from this directory through the \`isocan\` CLI — \`isocan --agent-help\` is the full ` +
-      `protocol if you need orientation, and \`isocan comment reply <threadId> "…"\` answers a comment. ` +
-      `Address what the payload below carries, reply on its thread, and then simply finish your ` +
-      `turn: do NOT run \`isocan wait\` — your session rests when you stop, and new activity ` +
-      `summons you again.\n\n` +
-      `The payload (the same shape \`isocan wait --json\` returns):\n` +
-      JSON.stringify(payload, null, 2);
-
     /** One summoned turn: adapter up, session loaded-or-new, presence on
      * while it runs and gone when it ends (journey 2's acceptance — the
      * summoned equivalent of the park's `landPresence`). */
@@ -14265,7 +14201,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         let lastToolBeat = 0;
         const turn = await agent.prompt(
           session.sessionId,
-          summonsPrompt(record.actor.name, { reason, entries: flagged }),
+          summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }),
           (event) => {
             if (event.kind === "permission") console.log(rcLine(tag, `${record.actor.name} · permission ${event.detail}`));
             if (event.kind === "tool" && event.detail && Date.now() - lastToolBeat >= 2_000) {

@@ -1,10 +1,13 @@
-import { ago } from "./elapsed.ts";
 import { type CanvasContents, type Item, mainThread } from "./model.ts";
 import { designSystem } from "./designsystem.ts";
 
 import { moduleContextPieces } from "./modules.ts";
 import { excludedItems } from "./contextmark.ts";
 import { ambientContextItems } from "./canvas-group-context.ts";
+import type { RecapHeadResponse } from "./recap-head.ts";
+
+// Preserve direct imports while keeping terminal formatting outside Context assembly.
+export { contextReport } from "./context-report.ts";
 
 /**
  * **What an agent will actually read when it starts work here.**
@@ -34,6 +37,8 @@ export interface ContextPiece {
   /** Which canvas it was borrowed from, when it is inherited (`memory.ts`).
    *  Absent on this canvas's own pieces. */
   from?: { canvasId: string; title: string };
+  /** A bounded authoritative history head, distinct from source content or frozen context. */
+  recap?: RecapHeadResponse;
   /** Present but beaten by this canvas's own — "this canvas's wins" — so
    *  the view shows it struck rather than hiding what a link would have
    *  contributed. */
@@ -222,23 +227,4 @@ export function contextPieces(
   }
 
   return pieces;
-}
-
-/** The list as a terminal prints it — one line a piece, and the reasons under
- *  the pieces that have them. */
-export function contextReport(pieces: ContextPiece[], nowMs: number = Date.now()): string {
-  const lines: string[] = [];
-  const width = Math.max(...pieces.map((p) => p.name.length)) + 2;
-  for (const piece of pieces) {
-    const mark = piece.present ? (piece.stale ? "!" : " ") : "·";
-    const when = piece.updatedAt ? ` · ${ago(piece.updatedAt, nowMs)}` : "";
-    const size = piece.present ? (piece.size ?? "yes") : "not here";
-    const beaten = piece.overridden ? ` (${piece.overridden})` : "";
-    lines.push(`${mark} ${piece.name.padEnd(width)}${size}${when}${beaten}`);
-    if (piece.stale) lines.push(`  ${" ".repeat(width)}${piece.stale}`);
-    if (piece.fix && (piece.stale || !piece.present)) {
-      lines.push(`  ${" ".repeat(width)}→ ${piece.fix}`);
-    }
-  }
-  return lines.join("\n");
 }

@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents
-note: phases 0–4 are verified on CLI, browser and real MCP transport. Phase 5 next adds bounded inherited recap heads under inherited-recap.md; pin-from-source remains the following engineering contract
+note: phases 0–5 are verified, 13 Sep. Phase 6 next copies an ordinary inherited piece into a local pin under Journey 6 and pin-from-source.md
 ---
 # Memory, in layers you can see
 
@@ -71,7 +71,7 @@ property: `memory=inherit`. A linked canvas contributes its *context pieces*
 here, read-only: its design system (if this canvas has none of its own, the
 linked one governs; if both, this canvas's wins and the panel says so), its
 pinned items, and its bounded recap head under
-[inherited-recap.md](inherited-recap.md), the next build in memory phase 5. The
+[inherited-recap.md](inherited-recap.md), built in memory phase 5. The
 link contributes neither Chat nor items wholesale: context is what somebody
 decided matters, and the link inherits exactly that decision. Several links compose in the order they sit on the canvas, top to
 bottom, left to right, because that is the order the room reads.
@@ -123,8 +123,9 @@ one, so every canvas has a corner where its inheritance sits and a newcomer
 reads it first.
 
 **For the agent**, `isocan context` prints the same three headings with the
-same provenance. The separate proposed `isocan context pin --from <canvas>`
-remains unbuilt; it is not implied by the personal-memory continuation. An agent that
+same provenance. `isocan context pin <item> --from <canvas>` is the next build,
+memory phase 6: a deliberate current-piece copy governed by
+[pin-from-source.md](pin-from-source.md), with the same choice in Context. An agent that
 starts work reads one list and knows where every piece came from, which is
 the whole point of the context project restated with more sources.
 
@@ -197,6 +198,10 @@ home. [phases.md](phases.md) records the build and independently verified proof.
 5. **Inherited recap head:** bounded recent-work metadata from a coherent
    authoritative record, on existing Context surfaces. The mechanism and
    refusal boundary are in inherited-recap.md; Journey 5 is its acceptance.
+6. **Pin from a source:** explicitly copy an ordinary inherited current piece
+   into a local pinned item, with durable provenance and one undo. The shared
+   copy mechanism and limits are in pin-from-source.md; Journey 6 proves both
+   clients, refusal boundaries and independence from later source changes.
 
 **Zero new op types** again: visible links use the existing canvas operation
 vocabulary. Personal birth, consent and delegation use the private Desk and
@@ -271,3 +276,16 @@ the other clients use. Real stdio calls prove all three layers, independent
 callers, current versions, zero private reads on refusal and unchanged saved
 requests. The four journeys are verified; recap-head and pin-from-source are
 the next engineering phases.
+
+**Phase 5, 13 September 2026.** Ordinary inherited sources now contribute
+Recent work on CLI, web and MCP. Core calculates and formats one bounded
+metadata head; the authoritative engine captures the required contiguous
+history in its existing writer queue. Personal history is excluded before
+source reads. Missing history preserves readable design/pins and says why.
+
+The actual HTTP audit found that encoded static URL segments bypassed raw-path
+guards on existing snapshot/history routes as well as the new recap route.
+Shared checks now classify Fastify's matched API route, retaining the original
+URL for forwarding. Both backings, real CLI/browser/stdio and the full
+5,197-test suite passed; the entry is 734,004 bytes. See phases.md for the
+proof and inherited-recap.md for the limits. Pin-from-source remains next.

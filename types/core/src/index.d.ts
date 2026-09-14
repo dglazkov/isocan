@@ -16,6 +16,7 @@ export * from "./address.js";
 export * from "./emoji.js";
 export * from "./reactions.js";
 export * from "./recap.js";
+export * from "./recap-head.js";
 export * from "./roster.js";
 export * from "./claims.js";
 export * from "./invert.js";

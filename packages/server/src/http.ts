@@ -391,6 +391,18 @@ export const STATIC_TYPES: Record<string, string> = {
 /** The canvas-scoped API prefix. `/api/projects/` is a deliberate holdout
  * (phase 13.5's rename): it is the wire between an installed CLI and a home. */
 const CANVAS_API_ROUTE = /^\/api\/projects\/([^/?]+)/;
+const RECAP_HEAD_ROUTE = /^\/api\/projects\/[^/]+\/context\/recap\/?$/;
+
+/** Security follows the API handler Fastify matched, including encoded static
+ * segments. Decode nothing from the raw URL: router parameters are already
+ * decoded data, and encoding each once preserves their existing identity.
+ * Non-API pages/content keep their original path behavior. */
+function policyPathname(req: FastifyRequest): string {
+  const matched = req.routeOptions.url;
+  if (!matched?.startsWith("/api/")) return req.url.split("?")[0]!;
+  const params = req.params as Record<string, string>;
+  return matched.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_token, name: string) => encodeURIComponent(params[name]!));
+}
 
 /**
  * **The blob route is closed, and the argument that kept it open was wrong —
@@ -1092,12 +1104,15 @@ export function registerRoutes(
   });
 
   app.addHook("onRequest", async (req, reply) => {
-    const pathname = (req.url ?? "/").split("?")[0]!;
+    const pathname = policyPathname(req);
     const sourceHeader = req.headers[SOURCE_POLICY_HEADER.toLowerCase()];
-    if (sourceHeader !== undefined) {
-      if (typeof sourceHeader !== "string") throw new PersonalError("invalid source policy", "bad-source-policy");
-      let decoded: Omit<SourceRequestContext, "signal">;
-      try { decoded = parseSourcePolicyHeader(sourceHeader); } catch { throw new PersonalError("invalid source policy", "bad-source-policy"); }
+    if (sourceHeader !== undefined || RECAP_HEAD_ROUTE.test(pathname)) {
+      if (sourceHeader !== undefined && typeof sourceHeader !== "string") throw new PersonalError("invalid source policy", "bad-source-policy");
+      let decoded: Omit<SourceRequestContext, "signal"> = { policy: { mode: "exclude" } };
+      try { if (sourceHeader !== undefined) decoded = parseSourcePolicyHeader(sourceHeader); } catch { throw new PersonalError("invalid source policy", "bad-source-policy"); }
+      // This door is automatic inheritance, even for an owner or a client
+      // that omits the policy header. Preserve expected authority/cancellation.
+      if (RECAP_HEAD_ROUTE.test(pathname)) decoded = { ...decoded, policy: { mode: "exclude" } };
       const controller = new AbortController();
       req.raw.once("aborted", () => controller.abort());
       reply.raw.once("close", () => { if (!reply.raw.writableFinished) controller.abort(); });
@@ -1133,7 +1148,7 @@ export function registerRoutes(
      * whole of option A, and the reason this branch is not a hole.
      */
     if (isContentRequest(hostHeader(req.headers.host), options.contentHost ?? null)) {
-      if (isContentPath(req.method, pathname)) return;
+      if (isContentPath(req.method, req.url.split("?")[0]!)) return;
       return reply.status(404).send({ error: `not found: ${req.method} ${pathname}` });
     }
 
@@ -1226,7 +1241,10 @@ export function registerRoutes(
           // The actual authoritative response is forwarded after parsing the body.
           if (options.homes?.for(canvasId)) return;
         }
-        await admit(req, canvasId);
+        const recap = RECAP_HEAD_ROUTE.test(pathname);
+        if (recap && await store.canvasLifecycle(canvasId) !== "live") throw new CanvasNotFoundError(canvasId);
+        await admit(req, canvasId, false, recap);
+        if (recap && !atLeast(capabilityIn(req.badge, canvasId) ?? "edit", "read")) throw new ViewOnlyError(canvasId);
         // Blob renderers do not carry reducer state. Every other canvas
         // route is gated, including newly added mutation routes.
         if (!pathname.includes("/blobs") && !supportsCanvasGroups(req.headers[CLIENT_FEATURES_HEADER])) {
@@ -1312,7 +1330,7 @@ export function registerRoutes(
   app.addHook("preValidation", async (req, reply) => {
     const context = sourceContexts.get(req);
     if (context && req.badge) {
-      const pathname = req.url.split("?")[0]!;
+      const pathname = policyPathname(req);
       const body = req.body as { canvasId?: string; actor?: Actor; actorId?: string; op?: { type?: string; canvasId?: string } } | undefined;
       const scoped = CANVAS_API_ROUTE.exec(pathname)?.[1] ?? /^\/api\/spaces\/[^/]+\/canvases\/([^/]+)$/.exec(pathname)?.[1];
       const canvasId = scoped ? decodeSegment(scoped) : (pathname === "/api/ops" || pathname.startsWith("/api/park/")) ? body?.canvasId ?? (body?.op?.type === "project.create" ? body.op.canvasId : undefined) : undefined;
@@ -1453,7 +1471,7 @@ export function registerRoutes(
    * small one: ids are 10 characters of nanoid, and the whole premise of the
    * link grant is that knowing the id is what gets you in.
    */
-  const admit = async (req: FastifyRequest, canvasId: string, bootstrap = false) => {
+  const admit = async (req: FastifyRequest, canvasId: string, bootstrap = false, metadataOnly = false) => {
     // Nothing to admit. It used to mean "an open route (the blob GET)"; phase
     // 9 closed that one, so the only callers left here already hold a badge
     // and this is the belt on `/api/ops`, whose canvas is in its body.
@@ -1471,8 +1489,9 @@ export function registerRoutes(
       // for the creator's floor is paid only by the re-ask.
       const held = capabilityIn(req.badge, canvasId);
       if (held !== null && !atLeast(held, "edit")) {
-        const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
-        await heldCapability(desk, canvasId, req.badge, snapshot?.project.createdBy.id ?? null);
+        const project = metadataOnly ? await store.canvasRecord(canvasId) : (await engine.getSnapshot(canvasId).catch(() => null))?.project;
+        if (metadataOnly && !project) throw new CanvasNotFoundError(canvasId);
+        await heldCapability(desk, canvasId, req.badge, project?.createdBy.id ?? null);
       }
       return;
     }
@@ -1514,9 +1533,9 @@ export function registerRoutes(
       // The snapshot is read for one field: the creator, so the door can
       // apply the floor (roles design) when no row admits. Once per badge per
       // canvas, which is what an admission costs.
-      const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
-      if (!snapshot) return;
-      const answer = await admittingGrant(desk, canvasId, req.badge, snapshot.project.createdBy.id);
+      const project = metadataOnly ? await store.canvasRecord(canvasId) : (await engine.getSnapshot(canvasId).catch(() => null))?.project;
+      if (!project) { if (metadataOnly) throw new CanvasNotFoundError(canvasId); return; }
+      const answer = await admittingGrant(desk, canvasId, req.badge, project.createdBy.id);
       if (!answer) throw new NotAdmittedError(canvasId);
       provenance = answer.provenance;
       capability = answer.capability;
@@ -1548,7 +1567,7 @@ export function registerRoutes(
       if (context.policy.mode === "exclude") throw new PersonalError("ambient calls cannot use personal memory", "personal-source-excluded");
       const joined = await engine.actorJoins();
       if (resolveActor(joined, context.policy.actorId) !== resolveActor(joined, actorId)) throw new PersonalError("the personal caller differs from the selected source actor");
-      const pathname = req.url.split("?")[0]!;
+      const pathname = policyPathname(req);
       const intent = pathname.includes("/delegates") && req.method !== "GET" ? "own" : sourceIntent(req.method, pathname);
       if (!atLeast(context.policy.intent, intent)) throw new PersonalError("this request exceeds its selected source intent", "personal-intent-exceeded");
     }
@@ -5220,6 +5239,14 @@ export function registerRoutes(
     }
     requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
     return entries;
+  });
+
+  /** Only bounded ordinary-source metadata crosses the inheritance door. */
+  app.get("/api/projects/:id/context/recap", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const head = await engine.recapHead(id, req.badge!.badgeId, sourceContexts.get(req)!, localOrigin(req));
+    if (!head) return reply.status(409).send({ code: "recap-unavailable", error: "Recent work is unavailable because its required recent history is incomplete or conflicting." });
+    return head;
   });
 
   /**

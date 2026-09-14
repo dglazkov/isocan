@@ -385,8 +385,9 @@ in: destinationId, dryRun: true })` uses the same graph planner as the CLI.
 MCP keeps `read_context` and `read_context_content` for that same manifest and
 frozen-version contract. `read_context_summary` separately reads the live
 layered Context view: local and inherited sources, plus permitted personal
-summaries when you supply an explicitly claimed session. It reports exclusions,
-overrides, staleness and reasons a source could not be read. JSON resources at
+summaries when you supply an explicitly claimed session. Ordinary inherited
+sources also contribute bounded Recent work. It reports exclusions, overrides,
+staleness and reasons a source could not be read. JSON resources at
 `isocan://canvas/{id}` and `isocan://canvas/{id}/context` expose the current
 canvas and summary under ambient identity; they omit personal memory.
 Resource listing includes only discoverable canvases, and every read checks admission.
@@ -809,6 +810,17 @@ is on, and clicking it is the same switch. `isocan design check` on a canvas wit
 design system of its own checks against the inherited one and says whose. A
 linked canvas at another home is named under its heading and not read from
 here. The same headings are in the app's Context panel.
+
+Each readable ordinary inherited source also contributes **Recent work**: the
+sequence/time range for up to 100 latest operations, operation and comment counts, up
+to five actor names and eight current touched items, with source provenance.
+It reports earlier available operations outside the head, omitted rows and
+labels clipped at 160 Unicode code points. This head contains no Chat text,
+content bodies, removed names or excluded item details. A personal source
+never contributes history, even if its card is copied or relabelled as inherited.
+If Recent work is unavailable, its reason remains beside any readable design
+and pins. The project's own design still governs. Reading Context copies no
+source history into the project and changes no saved request.
 
 **Your personal canvas is private.** `isocan context personal` creates it on
 explicit first use and prints the same address thereafter. `context personal status`

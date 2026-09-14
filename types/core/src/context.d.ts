@@ -1,4 +1,6 @@
 import { type CanvasContents, type Item } from "./model.js";
+import type { RecapHeadResponse } from "./recap-head.js";
+export { contextReport } from "./context-report.js";
 /**
  * **What an agent will actually read when it starts work here.**
  *
@@ -30,6 +32,8 @@ export interface ContextPiece {
         canvasId: string;
         title: string;
     };
+    /** A bounded authoritative history head, distinct from source content or frozen context. */
+    recap?: RecapHeadResponse;
     /** Present but beaten by this canvas's own — "this canvas's wins" — so
      *  the view shows it struck rather than hiding what a link would have
      *  contributed. */
@@ -61,6 +65,3 @@ export interface ContextExtras {
  *  matter", and a real signal because a person put it there by hand. */
 export declare function markedItems(canvas: CanvasContents): Item[];
 export declare function contextPieces(canvas: CanvasContents, extras?: ContextExtras, nowMs?: number): ContextPiece[];
-/** The list as a terminal prints it — one line a piece, and the reasons under
- *  the pieces that have them. */
-export declare function contextReport(pieces: ContextPiece[], nowMs?: number): string;

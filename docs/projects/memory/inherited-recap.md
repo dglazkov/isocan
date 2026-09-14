@@ -3,7 +3,7 @@
 This discharges the recap-head contribution left out of memory phase 1.
 The record remains the canvas's operation history. An inherited head is a
 bounded, deterministic reading of recent activity, not a model summary or a
-new stored memory record. Memory phase 5 builds this contract after phase 4.
+new stored memory record. Memory phase 5 completed this contract on 13 September 2026.
 
 ## What appears in Context
 
@@ -112,3 +112,21 @@ Read-only shared state and frozen manifests remain byte-identical. Run the
 full suite with Firestore and bundle required, workspace typecheck, build and
 real browser acceptance on the final source. No service, credential, paid
 resource or live personal data is needed.
+
+## Built and verified — 13 September 2026
+
+`core/recap-head.ts` and the shared `recap-window.ts` calculation enforce the
+metadata limits; `core/context-report.ts` keeps the existing report export
+compatible without making history code eager. `api/context-reader.ts` adds
+heads only to Context assembly, leaving design-only reads history-free.
+The web's deferred Context request and stable Recent work row share that
+formatter with CLI and MCP.
+
+The actual HTTP route-policy and recap tests, File/Cloud conformance,
+`packages/mcp/test/recap-summary-transport.test.ts` and the retained
+`scripts/journey-recap.mjs` passed independent acceptance. The browser walk
+reconstructs the daemon/store on persisted data within one fixture process;
+it does not claim a separate operating-system process restart. The archive
+API still materializes its array, and this phase makes no new cross-instance
+archive transaction or bounded-I/O guarantee. Exact closing gates are in
+phases.md.

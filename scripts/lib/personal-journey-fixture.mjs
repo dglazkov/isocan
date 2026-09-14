@@ -46,11 +46,18 @@ export async function makeFixture() {
   const state = path.join(output,'state');
   await fs.mkdir(state);
   process.env.ISOCAN_STORE='file';
-  const daemon=await startDaemon({port:0,host:'127.0.0.1',home:path.join(state,'daemon'),birthHome:null,auth:null,operators:[],contentPort:'off',servesWorld:true});
+  const daemonOptions={host:'127.0.0.1',home:path.join(state,'daemon'),birthHome:null,auth:null,operators:[],contentPort:'off',servesWorld:true};
+  let daemon=await startDaemon({...daemonOptions,port:0});
   const base=`http://127.0.0.1:${daemon.app.server.address().port}`;
   const owner=await browser();
   await owner.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   const fixture={output,state,daemon,base,owner,extraBrowsers:[]};
+  // Reopen the same synthetic home/port so archive reads can be proven across daemon/store lifetimes.
+  fixture.restart=async()=>{
+    daemon.app.server.closeAllConnections(); await daemon.close();
+    daemon=await startDaemon({...daemonOptions,port:Number(new URL(base).port)});
+    fixture.daemon=daemon;
+  };
   fixture.close=async()=>{
     const closed=await Promise.allSettled([owner,...fixture.extraBrowsers].map(b=>b.close()));
     daemon.app.server.closeAllConnections(); await daemon.close();

@@ -20,15 +20,17 @@ async function contextHome(ctx: Ctx, canvasId: string): Promise<string> {
 }
 
 function port(ctx: Ctx): ContextReadPort {
+  const sourceClient = (expectedHome: string, signal?: AbortSignal) => {
+    const client = new DaemonClient(ctx.client.base, ctx.home, signal, {
+      policy: { mode: "exclude" }, expectedHome, ...(signal ? { signal } : {}),
+    });
+    ctx.reclaimOn?.(client);
+    return client;
+  };
   return {
     classifySource: (request, signal) => ctx.client.classifySource(request, signal),
-    sourceSnapshot: (source, signal) => {
-      const client = new DaemonClient(ctx.client.base, ctx.home, signal, {
-        policy: { mode: "exclude" }, expectedHome: source.expectedHome, ...(signal ? { signal } : {}),
-      });
-      ctx.reclaimOn?.(client);
-      return client.snapshot(source.canvasId, signal);
-    },
+    sourceSnapshot: (source, signal) => sourceClient(source.expectedHome, signal).snapshot(source.canvasId, signal),
+    sourceRecap: (source, signal) => sourceClient(source.expectedHome, signal).recapHead(source.canvasId, signal),
     readPersonal: (id, request, signal) => ctx.client.readPersonal(id, request, signal),
     designText: async (id, hash, signal) => (await ctx.client.downloadBlob(id, hash, signal)).toString("utf8"),
   };

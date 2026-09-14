@@ -1,9 +1,11 @@
-import { type CanvasContents, type CanvasSnapshotResponse, type ContextExtras, type ContextLayer, type LinkedCanvas, type PersonalReadResponse, type SourceClassificationRequest, type SourceClassificationResponse } from "../../core/src/index.js";
+import { type CanvasContents, type CanvasSnapshotResponse, type ContextExtras, type ContextLayer, type LinkedCanvas, type PersonalReadResponse, type RecapHeadResponse, type SourceClassificationRequest, type SourceClassificationResponse } from "../../core/src/index.js";
 /** A browser and a Node client inject transport; this module owns the shared read order. */
 export interface ContextReadPort {
     classifySource(source: SourceClassificationRequest, signal?: AbortSignal): Promise<SourceClassificationResponse>;
     /** Actual source reads carry exclusion and this expected authority, not only an earlier preflight. */
     sourceSnapshot(source: SourceClassificationRequest, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
+    /** Optional for existing ports; missing support is reported as unavailable, never as zero activity. */
+    sourceRecap?(source: SourceClassificationRequest, signal?: AbortSignal): Promise<RecapHeadResponse>;
     readPersonal(canvasId: string, request: {
         actorId: string;
         itemId: string;

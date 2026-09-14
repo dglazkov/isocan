@@ -1,5 +1,6 @@
 import { type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "../../core/src/index.js";
 import { type InboxResponse } from "../../core/src/index.js";
+import { type RecapHeadResponse } from "../../core/src/index.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
 import type { UpgradeVerdict } from "../../core/src/index.js";
 import type { BuildStamp } from "../../server/src/index.js";
@@ -374,6 +375,8 @@ export declare class DaemonRoutes {
     /** Frozen provenance belongs to the saved comment, not today's membership. */
     commentContext(canvasId: string, threadId: string, commentId: string): Promise<ContextManifest>;
     contextContentPage(canvasId: string, options: ContextPageOptions): Promise<ContextContentPage>;
+    /** A bounded ordinary-source history head; the authority refuses personal sources before reads. */
+    recapHead(canvasId: string, signal?: AbortSignal): Promise<RecapHeadResponse>;
     snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
     /** How this home serves — today, only whether a content origin exists. */
     serving(): Promise<ServingResponse>;

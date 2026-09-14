@@ -6,6 +6,7 @@ import { PLACEMENT_GAP } from "./placement.ts";
 import { designSystem } from "./designsystem.ts";
 import { ambientContextItems, excludedInAmbient } from "./canvas-group-context.ts";
 import { type ContextExtras, type ContextPiece, contextPieces } from "./context.ts";
+import type { RecapHeadResponse } from "./recap-head.ts";
 
 /**
  * **Memory, in layers you can see** (`docs/projects/memory/design.md`).
@@ -109,6 +110,8 @@ export interface LinkedCanvas {
   canvas: CanvasContents | null;
   /** Why it could not be read, when it could not. */
   refused?: string;
+  /** Only Context assembly asks for history; a failed head does not discard readable pieces. */
+  recap?: { value: RecapHeadResponse } | { refused: string };
 }
 
 interface LayerContents {
@@ -134,6 +137,7 @@ export function inheritedPieces(
   linked: CanvasContents,
   from: { canvasId: string; title: string },
   localHasDesign: boolean,
+  recap?: LinkedCanvas["recap"],
 ): ContextPiece[] {
   const pieces: ContextPiece[] = [];
   const ownPieces = contextPieces(linked);
@@ -164,6 +168,12 @@ export function inheritedPieces(
   const items = Object.values(linked.items);
   const excluded = ownPieces.find((piece) => piece.name === "Excluded items");
   if (excluded) pieces.push({ ...excluded, from });
+  if (recap) pieces.push({
+    name: "Recent work", source: "canvas", present: "value" in recap,
+    ...("value" in recap
+      ? { recap: recap.value, from: { canvasId: recap.value.canvasId, title: recap.value.title }, size: `${recap.value.head.count} operations` }
+      : { from, stale: recap.refused }),
+  });
   pieces.push({
     name: "The canvas",
     source: "canvas",
@@ -206,7 +216,7 @@ export function contextLayers(
       canvasId: link.canvasId,
       itemId: link.item.id,
       heading: link.title,
-      pieces: inheritedPieces(link.canvas, { canvasId: link.canvasId, title: link.title }, localHasDesign),
+      pieces: inheritedPieces(link.canvas, { canvasId: link.canvasId, title: link.title }, localHasDesign, link.recap),
     });
   }
   return layers;

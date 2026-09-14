@@ -23,6 +23,12 @@ second week.
 
 ## 13 September 2026
 
+- Catch up on a shared source from Context. **Recent work** shows its latest
+  activity beside its design and pins, with the source and covered range.
+  Busy sources say what was left out; an unavailable history keeps the
+  readable pieces and explains why. `isocan context` and MCP summaries show
+  the same reading. Your personal history stays out of inherited Context.
+
 - Bring your own preferences into a project. Open **Your canvas** in Context
   to create your private canvas at this home, pin what matters, then link it
   here and allow the agents who may read it. Everyone sees the linked card;

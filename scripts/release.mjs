@@ -62,16 +62,23 @@ export function releaseManifest(pkg, sourceCommit = "", builtAt = "") {
   const { workspaces, scripts, ...rest } = pkg;
   const built = sourceCommit ? ` from ${sourceCommit}` : "";
   /**
-   * **The `types` condition moves to the compiled declarations** (iso-api
-   * phase 4). On main it points at `packages/api/src/index.ts` — right in a
+   * **The `types` conditions move to the compiled declarations** (iso-api
+   * phase 4; every export since room phase 0). On main `"."` points at
+   * `packages/api/src/index.ts` — right in a
    * checkout, where the workspace links let an editor follow `@isocan/core`.
    * An install has no workspace links, and tsserver refuses `.ts` sources
    * inside node_modules (TS5097) and cannot resolve the sibling packages
    * (TS2307) — measured 31 Aug, the turn design.md predicted. So the release
    * carries `types/` (emitTypes below) and ships the manifest aimed at it.
    */
-  const exportsMap = rest.exports?.["."]?.types
-    ? { ...rest.exports, ".": { ...rest.exports["."], types: "./types/api/src/index.d.ts" } }
+  const exportsMap = rest.exports
+    ? Object.fromEntries(
+        Object.entries(rest.exports).map(([key, entry]) =>
+          entry && typeof entry === "object" && typeof entry.types === "string"
+            ? [key, { ...entry, types: releasedTypesPath(entry.types) }]
+            : [key, entry],
+        ),
+      )
     : rest.exports;
   return {
     ...rest,
@@ -93,6 +100,28 @@ export function releaseManifest(pkg, sourceCommit = "", builtAt = "") {
 }
 
 /**
+ * **Where an export's `types` condition points on the release branch.** Every
+ * export key with a `types` entry is rewritten, not only `"."` (room phase 0
+ * added `"./rc"`): `./packages/<ws>/src/<file>.ts` becomes
+ * `./types/<ws>/src/<file>.d.ts`, the path emitTypes writes it to, because
+ * `rootDir` is `./packages`. A `types` entry of any other shape is a manifest
+ * this script does not know how to ship, and says so.
+ */
+export function releasedTypesPath(source) {
+  const m = /^\.\/packages\/(.+)\.tsx?$/.exec(source);
+  if (!m) throw new Error(`cannot map the types condition ${source} into types/ — expected ./packages/<ws>/src/<file>.ts`);
+  return `./types/${m[1]}.d.ts`;
+}
+
+/**
+ * The workspaces whose declarations the release compiles: api's public types
+ * reach into core and server, and `isocan/rc`'s into core. A workspace named
+ * by an export's `types` condition must be here, or its `.d.ts` never exists;
+ * `test/packaging.test.ts` holds the two together.
+ */
+export const RELEASE_TYPE_ROOTS = ["packages/core/src", "packages/server/src", "packages/api/src", "packages/rc/src"];
+
+/**
  * **Compile the API's declarations into `types/`** — the release-time half of
  * `import { connect } from "isocan"` having types (iso-api phase 4).
  *
@@ -102,10 +131,10 @@ export function releaseManifest(pkg, sourceCommit = "", builtAt = "") {
  * consumer should need, and `@isocan/core` / `@isocan/server` are bare
  * specifiers with no node_modules to answer them in an installed tree.
  *
- * So: one `tsc` declaration-only emit of core, server and api (api's public
- * types reach into both), then a rewrite of every emitted specifier into a
- * form an installed tree can resolve — `./x.ts` becomes `./x.js` (TypeScript
- * maps that back to `x.d.ts`), and the two bare package names become relative
+ * So: one `tsc` declaration-only emit of RELEASE_TYPE_ROOTS, then a rewrite
+ * of every emitted specifier into a form an installed tree can resolve —
+ * `./x.ts` becomes `./x.js` (TypeScript maps that back to `x.d.ts`), and the
+ * bare `@isocan/*` names become relative
  * paths within `types/` itself. The result is self-contained: no workspace,
  * no loader, no node_modules but the consumer's own.
  *
@@ -114,10 +143,12 @@ export function releaseManifest(pkg, sourceCommit = "", builtAt = "") {
  * strip it from every install — the tree would carry it and npm would not.
  * `main()` removes it after the release commit instead.
  */
-export async function emitTypes() {
-  const out = path.join(root, "types");
+export async function emitTypes(out = path.join(root, "types")) {
   await fs.rm(out, { recursive: true, force: true });
-  const tsconfig = path.join(root, "tsconfig.release-types.json");
+  // Beside the base config, so `extends` and `@types` resolve as they do for
+  // every workspace; uniquely named, so a test's emit into a scratch `out`
+  // never collides with a release's.
+  const tsconfig = path.join(root, `tsconfig.release-types.${process.pid}.${Date.now()}.json`);
   await fs.writeFile(
     tsconfig,
     JSON.stringify(
@@ -127,11 +158,11 @@ export async function emitTypes() {
           noEmit: false,
           emitDeclarationOnly: true,
           declaration: true,
-          outDir: "./types",
+          outDir: out,
           rootDir: "./packages",
           types: ["node"],
         },
-        include: ["packages/core/src", "packages/server/src", "packages/api/src"],
+        include: RELEASE_TYPE_ROOTS,
       },
       null,
       2,
@@ -145,10 +176,15 @@ export async function emitTypes() {
     await fs.rm(tsconfig, { force: true });
   }
   await rewriteSpecifiers(out, out);
-  const entry = path.join(out, "api", "src", "index.d.ts");
-  await fs.access(entry).catch(() => {
-    throw new Error(`no declarations at ${entry} — nothing for the manifest's types condition to name`);
-  });
+  const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
+  const shipped = releaseManifest(pkg).exports ?? {};
+  for (const entry of Object.values(shipped)) {
+    if (!entry || typeof entry !== "object" || typeof entry.types !== "string") continue;
+    const declared = path.join(out, entry.types.replace(/^\.\/types\//, ""));
+    await fs.access(declared).catch(() => {
+      throw new Error(`no declarations at ${declared} — nothing for the manifest's types condition to name`);
+    });
+  }
   return out;
 }
 
@@ -170,7 +206,8 @@ async function rewriteSpecifiers(dir, out) {
     const rewritten = text
       .replace(/"(\.[^"]*)\.ts"/g, '"$1.js"')
       .replace(/"@isocan\/core"/g, `"${relative("core")}"`)
-      .replace(/"@isocan\/server"/g, `"${relative("server")}"`);
+      .replace(/"@isocan\/server"/g, `"${relative("server")}"`)
+      .replace(/"@isocan\/rc"/g, `"${relative("rc")}"`);
     if (rewritten !== text) await fs.writeFile(full, rewritten);
   }
 }

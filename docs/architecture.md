@@ -69,6 +69,20 @@ redacted for personal or unknown sources. Browser private text exists only in
 the current Context inspection; shared canvas state and frozen requests do not
 acquire it.
 
+Ordinary inherited Context adds a bounded metadata head from
+`GET /api/projects/:id/context/recap`. The engine's existing writer queue
+captures current and archived operations coherently with GC, and core validates
+the required recent range before calculating it. Missing history is unavailable,
+not an empty summary. The backing still materializes its archive; only the
+response is newly bounded. Context-only assembly and a deferred report leaf
+keep design resolution and automatic source classification history-free.
+
+The shared API security hooks classify the route Fastify actually matched,
+including decoded parameters, so encoded static URL segments receive the same
+badge, Origin, admission, lifecycle and source checks as canonical requests.
+Forwarding retains the actual URL. The ordinary recap route forces personal
+exclusion before generic source-loading hooks and repeats it in the queue.
+
 MCP's `read_personal_context` adapts that same authoritative read. A claimed
 session and concrete destination card are required; the resolved destination
 handle carries the actor and cancellation through the request. Pagination and

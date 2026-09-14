@@ -1,6 +1,7 @@
 import type { CanvasContents, Item, ItemVersion } from "./model.js";
 import { canvasItemOf } from "./canvasitem.js";
 import { type ContextExtras, type ContextPiece } from "./context.js";
+import type { RecapHeadResponse } from "./recap-head.js";
 /**
  * **Memory, in layers you can see** (`docs/projects/memory/design.md`).
  *
@@ -66,6 +67,12 @@ export interface LinkedCanvas {
     canvas: CanvasContents | null;
     /** Why it could not be read, when it could not. */
     refused?: string;
+    /** Only Context assembly asks for history; a failed head does not discard readable pieces. */
+    recap?: {
+        value: RecapHeadResponse;
+    } | {
+        refused: string;
+    };
 }
 interface LayerContents {
     heading: string;
@@ -98,7 +105,7 @@ export type ContextLayer = LayerContents & ({
 export declare function inheritedPieces(linked: CanvasContents, from: {
     canvasId: string;
     title: string;
-}, localHasDesign: boolean): ContextPiece[];
+}, localHasDesign: boolean, recap?: LinkedCanvas["recap"]): ContextPiece[];
 /**
  * The Context view in layers: this canvas first, then one heading per linked
  * canvas in reading order. `contextPieces` is unchanged underneath — the

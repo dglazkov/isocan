@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: NOT STARTED. Next: room phase 0.** Five phases, none
+**Where we are: phase 0 CLOSED 13 Sep 2026; `packages/rc` exists and ships as `isocan/rc`. Next: room phase 1, the room over its deps.** Five phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -16,7 +16,7 @@ module by accident at any later phase.
 
 ## Phase 0 — The workspace
 
-**Status: NOT STARTED.**
+**Status: CLOSED 2026-09-13.** `@isocan/rc` holds the guards, the row types, the pure helpers and `COLLAB_SKILL`; the boundary test, the manifest test and the skill test are in the suite, and the rc tests pass unchanged.
 
 **Outcome:** `packages/rc` exists, is exported from the root manifest as
 `isocan/rc` beside `.`, resolves through `packages/cli/bin/workspace-loader.mjs`
@@ -40,7 +40,11 @@ passes over the moved `gateTurn`. A test over the manifest
 `.agents/skills/isocan-collab/SKILL.md`. `npm test` and
 `npm run typecheck` whole.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-13** — The boundary walk follows `@isocan/*` through each workspace's `exports`, and `@isocan/api`'s root re-exports `client.ts` and `connect.ts`, which reach `node:` and `@isocan/server`. Phase 1's `routes` dep comes through an api subpath that reaches `routes.ts` alone; added to its Outcome.
+- **2026-09-13** — The walk and the bundle read imports only, so a bare `process` or `Buffer` under `packages/rc/src` passes both: the workspace's tsconfig carries Node's types for its tests. Phase 1's Proof gains a typecheck of `src` without them.
+- **2026-09-13** — Moving `askTheDoor` and `bearerHeader` to `@isocan/api` for `@isocan/server` to import back is a cycle, since `api` depends on `server`. They move to `@isocan/core`; phase 1's "api no longer imports server" narrows to `routes.ts`'s closure.
 
 ## Phase 1 — The room over its deps
 
@@ -51,8 +55,12 @@ passes over the moved `gateTurn`. A test over the manifest
 `routes`, `canvas`, `owner`, `rows`, `adapterFor`, `endSession`,
 `narrate`, `state`, `limits`, `clock`, `sleep`. `DaemonRoutes` takes its
 badge store as a constructor parameter, `askTheDoor` and `bearerHeader`
-move to `@isocan/api` with `@isocan/server` importing them from there,
-and `@isocan/api` no longer imports `@isocan/server` at all. `main.ts`'s
+move to `@isocan/core` with `@isocan/server` re-exporting them, and
+`routes.ts`, with everything it reaches, no longer imports
+`@isocan/server`. The room
+imports `DaemonRoutes` from an `@isocan/api` subpath whose closure is
+`routes.ts` and what it needs, since the api root reaches `client.ts`
+(phase 0's trajectory). `main.ts`'s
 `runRcRoom` becomes the laptop's consumer: it builds the deps from
 `ctx`, the file-backed rows, the file-backed badge store, an
 `adapterFor` that fences, scans and spawns, a `narrate` that prints, a
@@ -61,7 +69,8 @@ session pointer file and the daemon restart. The `rc` command's action
 is unchanged.
 
 **Proof:** `rc.test.ts` passes unchanged. The boundary test now covers
-the room and still passes. `packages/api/test/boundary.test.ts` gains
+the room and still passes, and `packages/rc/src` typechecks under a
+tsconfig with no Node types, falsified by a bare `process.env` there. `packages/api/test/boundary.test.ts` gains
 `@isocan/server` to its forbidden list for `routes.ts`. A new
 `packages/rc/test/room.test.ts` over in-memory deps and a hand-advanced
 clock: a summons is dispatched to the adapter the deps name and the

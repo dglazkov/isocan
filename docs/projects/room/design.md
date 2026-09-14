@@ -105,8 +105,12 @@ an abort that ends both long polls and the hold. `RoomDeps`:
   `badge-store.ts`. The first two become a constructor parameter,
   `badges: { read(): Promise<StoredBadge | null>; keep(badge): Promise<void> }`,
   with the file-backed store as the CLI's argument. The other two move
-  to `@isocan/api`, and `@isocan/server` imports them from there. The
-  `BuildStamp` and `StoredBadge` types move with them or to core.
+  to `@isocan/core`, beside the door vocabulary they already speak
+  (`DOOR_ROUTE`, `BADGE_SCHEME`, `formatBadgeToken`), and
+  `@isocan/server` re-exports them; `@isocan/api` cannot be their home,
+  because `api` depends on `server` and `server` calls `askTheDoor`
+  itself. The `BuildStamp` and `StoredBadge` types move to core with
+  them.
 - `canvas`, `owner`: what the room is parked on and who it answers to.
 - `rows`: the rc half of the enrolment record, an interface with the
   verbs the room uses. The row type moves into the module; `rc.ts`

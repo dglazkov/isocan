@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-02
 see: context, inception, standing-agents, embed, public
-note: phases 0–4 and the four personal-memory scenes are verified, 13 Sep. Phase 5 adds bounded inherited recap heads under Journey 5; pin-from-source remains the following engineering contract
+note: phases 0–5 are verified, 13 Sep. Phase 6 next copies an ordinary inherited piece into a local pin under Journey 6 and pin-from-source.md
 ---
 # Memory — bring a source, see where it came from
 
@@ -80,6 +80,28 @@ for Recent work. Reading the shared source changes neither it nor the project,
 and a saved request keeps exactly the context its sender chose.
 
 
+## Journey 6: Keep this piece here
+
+Theo reads a useful pinned review checklist on Design System through Acme
+Onboarding's Context. He chooses Copy a piece here, selects the checklist and
+confirms Copy and pin. The panel tells him this is a copy of the current
+version. His local Context now shows the checklist and where it came from;
+Rowan can make the same choice with `isocan context pin --from`.
+
+Theo edits the local checklist for this project. Design System is unchanged.
+The source team edits its original later and removes it, and Theo eventually
+unlinks that shared source: his copy still has its saved bytes and provenance.
+One undo at the time of copying removes the whole copied pin; redo restores
+it. Copying a small pinned group brings its actual children and current faces
+together. Copying the design note keeps it as a reference, without replacing
+the design that governs Acme Onboarding.
+
+On a phone the choice and source are just as clear. A source or destination
+that can no longer be read or edited says why and leaves no half-copy. If the
+inheritance card disappears while the copy is loading, it stops. Maya's
+personal card cannot be used to publish her private context through this
+ordinary-source picker, even if somebody changes its label.
+
 ## What these scenes force
 
 Canvases remain the memory record. Ordinary inheritance is shared; personal
@@ -90,5 +112,6 @@ paid run, cloud resource or live personal data is required to prove this work.
 
 See design.md for the existing layered mechanism and personal-memory.md for
 the precise personal birth, consent and reading contract; inherited-recap.md
-defines the bounded recent-work contribution. Browser closure is
+defines the bounded recent-work contribution. Pin-from-source.md defines the
+deliberate local copy, including its authority and one-undo boundary. Browser closure is
 not revocation; unlink and explicit delegate removal are the deliberate acts.

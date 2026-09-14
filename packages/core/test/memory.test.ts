@@ -20,6 +20,7 @@ import {
   personalCanvasItemOf,
 } from "../src/memory.ts";
 import { contextReport } from "../src/context.ts";
+import { formatRecapHead, type RecapHeadResponse } from "../src/recap-head.ts";
 
 /**
  * **Memory in layers** (`docs/projects/memory/design.md`, phases 0–1). The
@@ -128,6 +129,23 @@ describe("what a linked canvas contributes", () => {
   it("contributes no design row when it has none, and no pins row when it has none", () => {
     const bare = canvas([item("one")]);
     expect(inheritedPieces(bare, from, false).map((p) => p.name)).toEqual(["The canvas"]);
+  });
+
+  it("renders the authoritative head through the shared report and preserves pieces on a failed head", () => {
+    const response: RecapHeadResponse = { canvasId: from.canvasId, home: "https://acme.invalid", title: "Current source label", revision: 120,
+      head: { fromSeq: 21, toSeq: 120, fromTs: at, toTs: at, count: 100, comments: 4,
+        actors: [{ name: "Acme", ops: 100 }], items: [{ id: "brief", title: "The brief", ops: 90 }],
+        omitted: { earlierAvailableOps: 20, actors: 1, items: 2, hiddenItems: 3, clippedLabels: 1 } } };
+    const pieces = inheritedPieces(linked, from, true, { value: response });
+    expect(pieces.find((piece) => piece.name === "Recent work")).toMatchObject({ present: true, recap: response, from: { canvasId: from.canvasId, title: response.title } });
+    const report = contextReport(pieces, Date.parse(at));
+    expect(report).toContain(formatRecapHead(response.head));
+    expect(report).toContain("earlier available operations");
+    expect(report).toContain("(this canvas's wins)");
+    const failed = inheritedPieces(linked, from, true, { refused: "Required history is unavailable" });
+    expect(failed.find((piece) => piece.name === "Recent work")).toMatchObject({ present: false, stale: "Required history is unavailable" });
+    expect(failed.filter((piece) => piece.name !== "Recent work")).toEqual(inheritedPieces(linked, from, true));
+    expect(contextReport(failed, Date.parse(at))).toContain("Required history is unavailable");
   });
 });
 

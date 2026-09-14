@@ -469,6 +469,9 @@ export declare class Engine {
      * empty archive.
      */
     getArchivedLog(canvasId: string): Promise<LogEntry[]>;
+    /** Read current state and its complete recent history under the same queue
+     * as GC/mutations. Archive materialization is not a bounded backing scan. */
+    recapHead(canvasId: string, badgeId: string, context: SourceRequestContext, home: string): Promise<import("../../core/src/index.js").RecapHeadResponse | null>;
     /** A migration preview reads the home's current revision, even through a replica. */
     groupMigrationPreview(canvasId: string, sourceContext?: SourceRequestContext, badgeId?: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;
     submit(request: SubmitRequest): Promise<LogEntry>;

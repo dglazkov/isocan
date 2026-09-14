@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { INSTALL_SPEC } from "@isocan/core";
 import { readConfigFile } from "@isocan/server";
+import type { SheepPlace } from "@isocan/rc";
 import type { TurnEvent } from "./acp.ts";
 import type { AdapterSpec } from "./harnesses.ts";
 
@@ -52,13 +53,9 @@ export const SHEEP_HARNESS = "sheep";
 /** The line that puts `sheep` on a machine that has none. */
 export const SHEEP_INSTALL = "npm install -g github:dglazkov/sheep#release";
 
-/** Where an agent's sheep live: the kennel sheep reads, and the home that
- * kennel named at birth — an address, or `local` for the home under the
- * kennel itself, whose port changes with every start. */
-export interface SheepPlace {
-  kennel: string;
-  home: string;
-}
+/** Where an agent's sheep live — the type is the room module's, because the
+ * rc row carries one; finding it on this machine stays here. */
+export type { SheepPlace } from "@isocan/rc";
 
 /**
  * The kennel for a directory, by sheep's own rule: the first `.sheep/` at
