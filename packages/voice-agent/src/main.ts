@@ -304,6 +304,8 @@ export function wireVoice(doc: Document = document): VoicePage {
   const actorNameField = required<HTMLInputElement>("actor-name-field", doc);
   const actorClaimBtn = required<HTMLButtonElement>("actor-claim-btn", doc);
   const actorEnrolBtn = required<HTMLButtonElement>("actor-enrol-btn", doc);
+  const canvasCustomId = required<HTMLInputElement>("canvas-custom-id", doc);
+  const canvasCustomBtn = required<HTMLButtonElement>("canvas-custom-btn", doc);
   const canvasCreateTitle = required<HTMLInputElement>("canvas-create-title", doc);
   const canvasCreateBtn = required<HTMLButtonElement>("canvas-create-btn", doc);
   const audioLine = required<HTMLElement>("audio", doc);
@@ -3122,6 +3124,10 @@ export function wireVoice(doc: Document = document): VoicePage {
   actorEnrolBtn.addEventListener("click", () => {
     const name = actorNameField.value.trim() || facts?.agent?.name || undefined;
     void setupPost("/enrol", { name });
+  });
+  canvasCustomBtn.addEventListener("click", () => {
+    const ref = canvasCustomId.value.trim();
+    if (ref) void setupPost("/canvas", { id: ref });
   });
   canvasCreateBtn.addEventListener("click", () => {
     const title = canvasCreateTitle.value.trim();
