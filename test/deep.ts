@@ -113,6 +113,7 @@ export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/upgrade-notice.test.ts", secs: 17 },
   { file: "packages/cli/test/place.test.ts", secs: 15 },
   { file: "packages/cli/test/deckexport.test.ts", secs: 15 },
+  { file: "packages/cli/test/agent-key.test.ts", secs: 22 },
   { file: "packages/cli/test/claiming.test.ts", secs: 12 },
   { file: "packages/cli/test/desk.test.ts", secs: 11 },
   { file: "packages/cli/test/documents.test.ts", secs: 11 },

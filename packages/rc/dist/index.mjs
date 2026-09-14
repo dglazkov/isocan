@@ -44,12 +44,14 @@ var ApiError = class extends Error {
   reason;
 };
 var OpValidationError = class extends Error {
-  constructor(code, message) {
+  constructor(code, message, reason) {
     super(message);
     this.code = code;
+    this.reason = reason;
     this.name = "OpValidationError";
   }
   code;
+  reason;
 };
 
 // packages/core/src/textnode.ts
@@ -989,6 +991,11 @@ function newId(prefix) {
 
 // packages/core/src/claims.ts
 var CLAIM_STANDS_MS = 30 * 60 * 1e3;
+var CLAIM_REFUSAL = {
+  heldElsewhere: "held-elsewhere",
+  claimedJustNow: "claimed-just-now",
+  live: "live"
+};
 
 // packages/core/src/protocol.ts
 var PARK_ADOPTED_CODE = "park-adopted";
@@ -2128,9 +2135,6 @@ function nameResolver(snapshot) {
   const names = actorNamesOn(snapshot);
   return (actorId) => names.get(actorId);
 }
-function enrolmentKey(agentName) {
-  return `agent:${agentName}`;
-}
 var summonsPrompt = (canvasTitle, agentName, payload) => `You are ${agentName}, an agent enrolled on the isocan canvas "${canvasTitle}". This is a summons: activity addressed to you arrived while nothing was running for you. Work from this directory through the \`isocan\` CLI \u2014 \`isocan --agent-help\` is the full protocol if you need orientation, and \`isocan comment reply <threadId> "\u2026"\` answers a comment. Address what the payload below carries, reply on its thread, and then simply finish your turn: do NOT run \`isocan wait\` \u2014 your session rests when you stop, and new activity summons you again.
 
 The payload (the same shape \`isocan wait --json\` returns):
@@ -2418,6 +2422,7 @@ var keys = {
   notHeldSaid: (canvasId, actorId) => `said:${canvasId}:not-held:${actorId}`
 };
 var NOT_YOUR_ACTOR = "not-your-actor";
+var heldElsewhere = (err) => err instanceof ApiError && err.code === "name-taken" && err.reason === CLAIM_REFUSAL.heldElsewhere;
 function runRoom(deps) {
   const life = new AbortController();
   let announcement = null;
@@ -2480,6 +2485,11 @@ async function room(deps, life, announce) {
     const name = known.get(actorId) ?? actorId;
     narrate(`${name} is not held by this machine \u2014 a pass minted for ${name} hands it over, or re-add it here`);
   };
+  const standDownNotHeld = async (actorId) => {
+    dispatches.delete(actorId);
+    notHeld.add(actorId);
+    await sayNotHeld(actorId);
+  };
   const enrolSeqs = /* @__PURE__ */ new Map();
   for (const entry of await routes.getLog(p.id, 0)) {
     if (entry.envelope.op.type === "agent.enroll") {
@@ -2491,8 +2501,14 @@ async function room(deps, life, announce) {
     if (notHeld.has(actorId)) return "not-held";
     const name = known.get(actorId);
     if (own && name !== void 0) {
-      await routes.claimActor({ type: "actor.claim", sessionKey: enrolmentKey(name), as: actorId }).catch(() => {
+      let elsewhere = false;
+      await deps.agentKey(name).then((sessionKey) => routes.claimActor({ type: "actor.claim", sessionKey, as: actorId })).catch((err) => {
+        elsewhere = heldElsewhere(err);
       });
+      if (elsewhere) {
+        notHeld.add(actorId);
+        return "not-held";
+      }
     }
     try {
       const floor = seedAt ?? enrolSeqs.get(actorId);
@@ -2643,8 +2659,11 @@ async function room(deps, life, announce) {
     );
     for (const row of mine) {
       const name = known.get(row.actorId) ?? row.name;
-      await routes.claimActor({ type: "actor.claim", sessionKey: enrolmentKey(name), as: row.actorId }).catch(() => {
+      let elsewhere = false;
+      await deps.agentKey(name).then((sessionKey) => routes.claimActor({ type: "actor.claim", sessionKey, as: row.actorId })).catch((err) => {
+        elsewhere = heldElsewhere(err);
       });
+      if (elsewhere) await standDownNotHeld(row.actorId);
     }
     try {
       return await holdOnce();
@@ -2715,6 +2734,17 @@ async function room(deps, life, announce) {
     for (const id of new Set(authors)) carried.set(id, await originsOf(id));
     await state.set(keys.origins(record.actor.id), [...speakersFor(authors, (id) => carried.get(id))]);
     const say = (line) => narrate(`${record.actor.name} \xB7 ${line}`);
+    try {
+      await routes.claimActor({
+        type: "actor.claim",
+        sessionKey: await deps.agentKey(record.actor.name),
+        as: record.actor.id
+      });
+    } catch (err) {
+      if (!heldElsewhere(err)) throw err;
+      await standDownNotHeld(record.actor.id);
+      return;
+    }
     say(`${reason} from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"} \u2014 starting a session`);
     try {
       await routes.parkDelivered({
@@ -2740,11 +2770,6 @@ async function room(deps, life, announce) {
       sessionId: null
     };
     const harness = await deps.adapterFor({ ...row, name: record.actor.name });
-    await routes.claimActor({
-      type: "actor.claim",
-      sessionKey: enrolmentKey(record.actor.name),
-      as: record.actor.id
-    });
     const firstComment = flagged.find(
       (e2) => e2.envelope.op.type === "thread.create" || e2.envelope.op.type === "thread.reply"
     );
@@ -3072,7 +3097,6 @@ export {
   actorNamesOn,
   assistantText,
   endSheep,
-  enrolmentKey,
   gateTurn,
   itemCenter,
   mapState,

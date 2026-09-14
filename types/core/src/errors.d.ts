@@ -60,7 +60,15 @@ export declare class ApiError extends Error {
 }
 export declare class OpValidationError extends Error {
     readonly code: OpErrorCode;
-    constructor(code: OpErrorCode, message: string);
+    /** Why, when the code alone does not say — which of `name-taken`'s
+     * refusals of `as` this is (`CLAIM_REFUSAL` in `claims.ts`). Sent beside
+     * the code, and read back as `ApiError.reason`. */
+    readonly reason?: string | undefined;
+    constructor(code: OpErrorCode, message: string, 
+    /** Why, when the code alone does not say — which of `name-taken`'s
+     * refusals of `as` this is (`CLAIM_REFUSAL` in `claims.ts`). Sent beside
+     * the code, and read back as `ApiError.reason`. */
+    reason?: string | undefined);
 }
 /** Structural undo conflicts must not be discarded or fall through to older work. */
 export declare class GroupConflictError extends OpValidationError {

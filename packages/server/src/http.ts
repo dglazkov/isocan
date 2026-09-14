@@ -837,7 +837,7 @@ export function registerRoutes(
       return reply.status(409).send({ error: err.message, code: err.code });
     }
     if (err instanceof OpValidationError) {
-      return reply.status(400).send({ error: err.message, code: err.code });
+      return reply.status(400).send({ error: err.message, code: err.code, ...(err.reason ? { reason: err.reason } : {}) });
     }
     if (err instanceof CanvasNotFoundError) {
       return reply.status(404).send({ error: err.message, code: "unknown-canvas" });

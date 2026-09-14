@@ -270,10 +270,29 @@ broken, not one:
    key every time, so re-enrolment, a second canvas, the environment
    injected into a turn and lost-badge recovery all behave as before.
    Another machine cannot derive the key, so its claim is refused as
-   `name-taken`, unless it holds a pass or a vouch. Existing agents are
+   `name-taken`, unless it holds a pass or a vouch. As built, the key is
+   `agent:<mac>`: HMAC-SHA256 of the name, keyed by 32 random bytes in
+   `~/.isocan/agent-secret` (mode 0600), with no name in the key. The
+   room takes it as a dep, `agentKey(name)`, because a host's secret is
+   the host's. Retiring the old row needs no op: the desk keeps one row
+   per actor per badge. The refusal carries a `reason`
+   (`held-elsewhere`, `claimed-just-now`, `live`), which the room reads. Existing agents are
    rebound to the new key by the badge that holds them, and their rows
    under `agent:<name>` are retired. The desk's custody rules do not
    change.
+
+**Dual-held agents, decided 13 September (Dimitri): not held here.**
+Two rcs from before phase 3, or anyone who used the old hole, can leave
+another badge holding an agent under `agent:<name>` as well. This
+machine cannot move that agent to its own key, because the desk refuses
+it as held elsewhere. So the room treats it as it treats another
+machine's agent. It says once `<name> is not held by this machine — a
+pass minted for <name> hands it over, or re-add it here`, and it does
+not claim, park, hold, face or dispatch it, so no summons fails. A
+refusal that is only the minute after this badge's own claim, or the
+agent's live face, is transient and is not treated this way. If the
+other holder is a dead machine, the agent is quiet until a pass or a
+re-add, and `isocan rc`'s start names it.
 
 **Orphans, decided 13 September (Dimitri): inert.** An enrolment whose
 actor no badge holds, from a raw `agent.enroll` as web adds made before

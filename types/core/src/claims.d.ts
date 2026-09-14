@@ -431,6 +431,26 @@ export declare function actorColors(registry: ActorRegistry): ActorColors;
  */
 export declare function actorNames(registry: ActorRegistry): ActorNames;
 /**
+ * The refusals, and the vouch that switches them off.
+ *
+ * Split from `reincarnate` so the one-rule-two-satisfiers line above is
+ * readable as one statement, and so the three refusal reasons sit together
+ * where they can be compared.
+ */
+/**
+ * **Which refusal of `as` a `name-taken` is**, as `reason` beside the code.
+ * The sentence says it for a person; this says it for a client that has to
+ * act on it (docs/projects/room/design.md, the claim rule, "Dual-held agents").
+ * `held-elsewhere` lasts until the other badge is ended or hands the actor
+ * over. `claimed-just-now` and `live` pass on their own: a claim under another
+ * key on this badge in the last minute, or a live face.
+ */
+export declare const CLAIM_REFUSAL: {
+    readonly heldElsewhere: "held-elsewhere";
+    readonly claimedJustNow: "claimed-just-now";
+    readonly live: "live";
+};
+/**
  * The next free isocan name: the roster in order, then numbered rounds
  * ("Isaac 2", …) — allocation can always answer.
  *

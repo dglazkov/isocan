@@ -24,7 +24,6 @@ export const {
   gateTurn,
   // helpers.ts — the pure helpers the room speaks with
   actorNamesOn,
-  enrolmentKey,
   itemCenter,
   nameResolver,
   summonsPrompt,

@@ -482,7 +482,8 @@ import type { CliHost, EnrolTemplate } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { fileRcRows, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type RcAgentRow } from "./rc.ts";
 import { SheepAgent, actorNamesOn, endSheep, itemCenter, mapState, nameResolver, runRoom, threadLocus, type RoomAdapter, type RoomState, type RoomTurn } from "@isocan/rc";
-import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
+import { AcpAgentProcess, adapterEnv } from "./acp.ts";
+import { agentSessionOf, keysMovedLines, machineAgentKey, moveToMachineKeys } from "./agent-key.ts";
 import { openInBrowser } from "./browser.ts";
 import { proveInBrowser, summonedRefusal } from "./operator.ts";
 import { SHEEP_HARNESS, describePlace, homeAddressForCell, loopbackFromCell, noSheepLine, openSheep, placeLine, sheepCommands, sheepPlaceFor, type CellBirth } from "./sheep.ts";
@@ -12559,21 +12560,27 @@ async function mintAndEnrol(
   ctx: Ctx,
   canvasId: string,
   name: string,
-  opts: { cwd: string; harness: string | null; rules?: unknown },
+  opts: { cwd: string; harness: string | null; rules?: unknown; say?: (line: string) => void },
 ): Promise<Actor> {
+  // An actor this badge still holds under the key the name derives moves to
+  // the machine key first (agent-key.ts), so re-enrolling it resumes it
+  // rather than meeting its own old claim as somebody else's.
+  const say = opts.say ?? ((line: string) => console.error(line));
+  for (const line of keysMovedLines(await moveToMachineKeys(ctx.client, ctx.home, { only: name }))) say(line);
   // The actor is minted through the same claim everything else uses, keyed
-  // per NAME on this badge — so re-enrolling Sian after a withdrawal hands
-  // the same Sian back, history intact; so does enrolling Sian on a SECOND
-  // canvas from this machine (standing agents, phase 1): one machine, one
-  // Sian, standing wherever she is enrolled. A name worn by somebody else is
+  // per NAME on this badge by a key only this machine derives — so
+  // re-enrolling Sian after a withdrawal hands the same Sian back, history
+  // intact; so does enrolling Sian on a SECOND canvas from this machine
+  // (standing agents, phase 1): one machine, one Sian, standing wherever she
+  // is enrolled. A name worn by somebody else is
   // refused by the registry rather than silently doubled. Phase 3 rebinds the actor to
   // its adapter-born session key when a session first exists.
   const claimed = await ctx.client.claimActor({
     type: "actor.claim",
     // The SAME key the rc's injected environment will present when this
-    // agent's sessions run (acp.ts `enrolmentKey`): the mint claim IS the
-    // session binding, so a CLI-added agent needs no rebinding, ever.
-    sessionKey: enrolmentKey(name),
+    // agent's sessions run (agent-key.ts): the mint claim IS the session
+    // binding, so a CLI-added agent needs no rebinding, ever.
+    sessionKey: await machineAgentKey(ctx.home, name),
     name,
   });
   const agent = claimed.envelope.actor;
@@ -13149,9 +13156,10 @@ try a policy against one agent before starting an rc with it.`,
       // under the key the injected environment presents. For a CLI-added
       // agent this is the mint claim resuming (a no-op); for a web-added
       // one it is the one rebinding the spike showed is needed.
+      const agentKey = await machineAgentKey(ctx.home, record.actor.name);
       await ctx.client.claimActor({
         type: "actor.claim",
-        sessionKey: enrolmentKey(record.actor.name),
+        sessionKey: agentKey,
         as: record.actor.id,
       });
 
@@ -13186,7 +13194,7 @@ try a policy against one agent before starting an rc with it.`,
             })
           : await AcpAgentProcess.spawn(fence.spec, {
               cwd: row.cwd,
-              env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
+              env: adapterEnv(p.id, agentSessionOf(agentKey), { pass: await passedEnv(ctx.home) }),
             });
       try {
         const session = await agent.ensureSession(row.cwd, row.sessionId);
@@ -13453,6 +13461,14 @@ rcCommand
       throw new Error("`isocan rc --all` found no canvas to answer on — nothing is enrolled from this machine yet (`isocan rc add <name>` on a bound canvas)");
     }
     await settleDefaultHarness(ctx, rooms, opts.defaultHarness);
+    // This badge's agents still claimed under the key their names derive
+    // move to this machine's own keys (agent-key.ts) before any room claims
+    // under them. Quiet when there is nothing to move.
+    const moved = await moveToMachineKeys(ctx.client, ctx.home).catch((err: Error) => {
+      console.log(`rc: could not move agents to this machine's own keys — ${err.message}`);
+      return null;
+    });
+    if (moved) for (const line of keysMovedLines(moved)) console.log(`rc: ${line}`);
     /**
      * The fence, settled before anything parks — and refused here if it was
      * asked for and cannot be built, because a machine missing `bwrap`
@@ -13693,8 +13709,9 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
       const prepared = ask.template
         ? await prepareFromTemplate(ctx.home, p.id, ask.name, ask.template, ask.args ?? {})
         : null;
-      await mintAndEnrol(ctx, p.id, ask.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null });
+      await mintAndEnrol(ctx, p.id, ask.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null, say: print });
     },
+    agentKey: (name) => machineAgentKey(ctx.home, name),
     narrate: print,
     state: shared.state,
     limits: {
@@ -13767,7 +13784,7 @@ async function openAdapter(
         })
       : await AcpAgentProcess.spawn(fence.spec, {
           cwd: row.cwd,
-          env: adapterEnv(p.id, row.name, { pass: await passedEnv(ctx.home) }),
+          env: adapterEnv(p.id, agentSessionOf(await machineAgentKey(ctx.home, row.name)), { pass: await passedEnv(ctx.home) }),
           narrate: turn.narrate,
         });
   return {

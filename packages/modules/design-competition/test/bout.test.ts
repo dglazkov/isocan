@@ -44,11 +44,23 @@ interface Run {
   stderr: string;
 }
 
+/** The session half of the key this machine claims an agent under — derived
+ * from the home's agent secret (room phase 3.5), so it is asked of the CLI's
+ * own derivation rather than spelled from the name. Imported by address: the
+ * module does not depend on the CLI. */
+async function agentSession(name: string): Promise<string> {
+  const keys = (await import(new URL("../../../cli/src/agent-key.ts", import.meta.url).href)) as {
+    machineAgentKey(home: string, name: string): Promise<string>;
+    agentSessionOf(key: string): string;
+  };
+  return keys.agentSessionOf(await keys.machineAgentKey(home, name));
+}
+
 /** The CLI as a person — or, with `as`, as the agent the rc would summon. */
-function isocan(args: string[], as?: { name: string; canvas: string }): Promise<Run> {
+async function isocan(args: string[], as?: { name: string; canvas: string }): Promise<Run> {
   const env = { ...process.env };
   for (const name of harnessVars) delete env[name];
-  const agent = as ? { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: as.name, ISOCAN_CANVAS: as.canvas } : {};
+  const agent = as ? { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: await agentSession(as.name), ISOCAN_CANVAS: as.canvas } : {};
   const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
     env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...agent },
     cwd: home,

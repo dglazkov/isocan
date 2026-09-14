@@ -1,5 +1,6 @@
 import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, formatBadgeToken } from "@isocan/core";
 import { adoptRcAgent, type RcAgentRow } from "../src/rc.ts";
+import { agentSessionOf, machineAgentKey } from "../src/agent-key.ts";
 import { describe, expect, it, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -531,8 +532,8 @@ describe("the vocabulary divide, enforced", () => {
  * phase 1). The enrolment key used to be `agent:<canvasId>:<name>`, so Percy
  * enrolled on a second canvas from the same machine was a second session key
  * on the same badge asking for a worn name — refused by the desk, the gate
- * #89 hit. The key is the name now: the same claim on any canvas resumes the
- * one Percy.
+ * #89 hit. The key is derived from the name now, by this machine's agent
+ * secret (room phase 3.5): the same claim on any canvas resumes the one Percy.
  */
 describe("one agent, one name, one machine, many canvases", () => {
   it("enrolling a name this machine answers for, on a second canvas, is the same actor", async () => {
@@ -564,12 +565,13 @@ describe("one agent, one name, one machine, many canvases", () => {
     // A CLI run the way a summons on prj_2 runs it — the injected environment,
     // nothing else, in an unbound directory — speaks as Percy AND acts on
     // prj_2: `ISOCAN_CANVAS` is read like `--canvas`.
+    const percySession = agentSessionOf(await machineAgentKey(home, "Percy"));
     const inside = await collect(
-      spawnCli(["--json", "whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+      spawnCli(["--json", "whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: percySession, ISOCAN_CANVAS: "prj_2" }),
     );
     expect(JSON.parse(inside.stdout).id).toBe(a.id);
     const typed = await collect(
-      spawnCli(["text", "standing", "here"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+      spawnCli(["text", "standing", "here"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: percySession, ISOCAN_CANVAS: "prj_2" }),
     );
     expect(typed.code).toBe(0);
     const itemsOf = async (canvasId: string) => {
@@ -583,12 +585,12 @@ describe("one agent, one name, one machine, many canvases", () => {
     // The containment still holds for the agent's spelling: an explicit
     // pointer is refused, but the environment a summons runs in is not one.
     const pointed = await collect(
-      spawnCli(["--canvas", "prj_1", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+      spawnCli(["--canvas", "prj_1", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: percySession, ISOCAN_CANVAS: "prj_2" }),
     );
     expect(pointed.code).toBe(1);
     expect(pointed.stderr).toContain("beside itself");
     const beside = await collect(
-      spawnCli(["--json", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+      spawnCli(["--json", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: percySession, ISOCAN_CANVAS: "prj_2" }),
     );
     expect(beside.code).toBe(0);
     expect(JSON.parse(beside.stdout).canvasId).toBe("prj_2");

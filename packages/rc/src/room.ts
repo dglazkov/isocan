@@ -26,6 +26,7 @@ import type {
 } from "@isocan/core";
 import {
   ApiError,
+  CLAIM_REFUSAL,
   PARK_ADOPTED_CODE,
   SYSTEM_ACTOR,
   answerPolicy,
@@ -44,7 +45,7 @@ import {
   turnedAwayLine,
 } from "@isocan/core";
 import { gateTurn, type GuardLimits, type GuardState } from "./guards.ts";
-import { enrolmentKey, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
+import { itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
 import type { RcAgentRow, SheepPlace } from "./rows.ts";
 import { SHEEP_HARNESS } from "./sheep.ts";
 
@@ -198,6 +199,15 @@ export interface RoomDeps {
   /** The last hop of the web's "add an agent", on this machine: prepare the
    * directory an ask names, claim the actor, write its row, enroll it. */
   enrol(ask: RcAsk): Promise<void>;
+  /**
+   * The session key an agent's actor is claimed under on this machine, and
+   * the key a turn's injected environment presents. The host derives it from
+   * a secret it keeps and the agent's name, so the same machine derives the
+   * same key every time and nobody else can: a name is visible to anyone
+   * admitted to the canvas, and the desk resumes an actor for whoever
+   * presents the key it was claimed under.
+   */
+  agentKey(name: string): Promise<string>;
   /** One line, no level. */
   narrate(line: string): void;
   state: RoomState;
@@ -247,6 +257,16 @@ const keys = {
 
 /** The desk's refusal for an actor the presenting badge does not hold. */
 const NOT_YOUR_ACTOR = "not-your-actor";
+
+/**
+ * **A claim refused because another badge holds the actor** (the claim rule,
+ * "Dual-held agents"): the desk's `name-taken` with the reason
+ * `held-elsewhere`. It does not pass on its own, so the agent is not held
+ * here. The minute after this badge's own claim and a live face come back
+ * as `name-taken` with other reasons, and are retried as before.
+ */
+const heldElsewhere = (err: unknown): boolean =>
+  err instanceof ApiError && err.code === "name-taken" && err.reason === CLAIM_REFUSAL.heldElsewhere;
 
 /** One canvas's whole rc — holds, cursors, dispatch, narration. */
 export function runRoom(deps: RoomDeps): Room {
@@ -359,6 +379,13 @@ async function room(
     const name = known.get(actorId) ?? actorId;
     narrate(`${name} is not held by this machine — a pass minted for ${name} hands it over, or re-add it here`);
   };
+  /** A held agent found held by another badge too: out of the hold and the
+   * dispatch, what waited for it dropped, and said once. Its row stays. */
+  const standDownNotHeld = async (actorId: string): Promise<void> => {
+    dispatches.delete(actorId);
+    notHeld.add(actorId);
+    await sayNotHeld(actorId);
+  };
   // Where each standing began — the floor for a cursor row that does not
   // exist yet (a web add with no rc parked, and nothing to claim it since).
   // One log read at start; the enrol verb and the live enroll event carry
@@ -385,10 +412,21 @@ async function room(
     if (notHeld.has(actorId)) return "not-held";
     const name = known.get(actorId);
     if (own && name !== undefined) {
-      // A refusal here is read from the park that follows.
-      await routes
-        .claimActor({ type: "actor.claim", sessionKey: enrolmentKey(name), as: actorId })
-        .catch(() => {});
+      // A refusal here is read from the park that follows — save one: another
+      // badge holding the actor (dual-held) is not held here, even though
+      // this badge may still hold it under an old key and the park would
+      // take it.
+      let elsewhere = false;
+      await deps
+        .agentKey(name)
+        .then((sessionKey) => routes.claimActor({ type: "actor.claim", sessionKey, as: actorId }))
+        .catch((err: unknown) => {
+          elsewhere = heldElsewhere(err);
+        });
+      if (elsewhere) {
+        notHeld.add(actorId);
+        return "not-held";
+      }
     }
     try {
       const floor = seedAt ?? enrolSeqs.get(actorId);
@@ -627,7 +665,9 @@ async function room(
    * claims it had: a re-badge at the door re-claims the person alone. The
    * room re-claims the agents in this machine's own rows under their keys and
    * asks once more. Still refused, it says so once and keeps asking; these
-   * are its own agents, and they are never said to be held notHeld.
+   * are its own agents, and they are not said to be not held — unless the
+   * re-claim itself is refused because another badge holds the agent
+   * (dual-held), which is.
    */
   let holdRefusedSaid = false;
   const holdAfterRefusal = async (): Promise<RcHoldResponse | null> => {
@@ -636,9 +676,15 @@ async function room(
     );
     for (const row of mine) {
       const name = known.get(row.actorId) ?? row.name;
-      await routes
-        .claimActor({ type: "actor.claim", sessionKey: enrolmentKey(name), as: row.actorId })
-        .catch(() => {});
+      let elsewhere = false;
+      await deps
+        .agentKey(name)
+        .then((sessionKey) => routes.claimActor({ type: "actor.claim", sessionKey, as: row.actorId }))
+        .catch((err: unknown) => {
+          elsewhere = heldElsewhere(err);
+        });
+      // Another badge holds it: not this room's to hold any more.
+      if (elsewhere) await standDownNotHeld(row.actorId);
     }
     try {
       return await holdOnce();
@@ -743,6 +789,21 @@ async function room(
     for (const id of new Set(authors)) carried.set(id, await originsOf(id));
     await state.set(keys.origins(record.actor.id), [...speakersFor(authors, (id) => carried.get(id))]);
     const say = (line: string) => narrate(`${record.actor.name} · ${line}`);
+    // The binding (on-demand phase 3): idempotent for CLI-added agents, the
+    // one rebinding a web-added one needs. Made before anything is said: an
+    // agent another badge holds (dual-held) is not held here, and gets the
+    // one line, no turn, and nothing in the thread.
+    try {
+      await routes.claimActor({
+        type: "actor.claim",
+        sessionKey: await deps.agentKey(record.actor.name),
+        as: record.actor.id,
+      });
+    } catch (err) {
+      if (!heldElsewhere(err)) throw err;
+      await standDownNotHeld(record.actor.id);
+      return;
+    }
     say(`${reason} from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"} — starting a session`);
     try {
       await routes.parkDelivered({
@@ -769,13 +830,6 @@ async function room(
         sessionId: null,
       };
     const harness = await deps.adapterFor({ ...row, name: record.actor.name });
-    // The binding (on-demand phase 3): idempotent for CLI-added agents, the
-    // one rebinding a web-added one needs.
-    await routes.claimActor({
-      type: "actor.claim",
-      sessionKey: enrolmentKey(record.actor.name),
-      as: record.actor.id,
-    });
     // Presence: the summoned session is SEEN — it appears when the turn
     // starts and fades when it ends, because the session ends, not a TTL.
     const firstComment = flagged.find(

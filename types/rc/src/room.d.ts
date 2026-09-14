@@ -145,6 +145,15 @@ export interface RoomDeps {
     /** The last hop of the web's "add an agent", on this machine: prepare the
      * directory an ask names, claim the actor, write its row, enroll it. */
     enrol(ask: RcAsk): Promise<void>;
+    /**
+     * The session key an agent's actor is claimed under on this machine, and
+     * the key a turn's injected environment presents. The host derives it from
+     * a secret it keeps and the agent's name, so the same machine derives the
+     * same key every time and nobody else can: a name is visible to anyone
+     * admitted to the canvas, and the desk resumes an actor for whoever
+     * presents the key it was claimed under.
+     */
+    agentKey(name: string): Promise<string>;
     /** One line, no level. */
     narrate(line: string): void;
     state: RoomState;

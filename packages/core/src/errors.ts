@@ -85,6 +85,10 @@ export class OpValidationError extends Error {
   constructor(
     public readonly code: OpErrorCode,
     message: string,
+    /** Why, when the code alone does not say — which of `name-taken`'s
+     * refusals of `as` this is (`CLAIM_REFUSAL` in `claims.ts`). Sent beside
+     * the code, and read back as `ApiError.reason`. */
+    public readonly reason?: string,
   ) {
     super(message);
     this.name = "OpValidationError";

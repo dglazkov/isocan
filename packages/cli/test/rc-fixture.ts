@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
+import { machineAgentKey } from "../src/agent-key.ts";
 import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -266,7 +267,8 @@ export async function rcRows(): Promise<RcAgentRow[]> {
  * Add reaches the rc as an ask, and the rc mints the actor on its own badge;
  * an enrolment whose actor no badge holds is inert. So the actor is claimed
  * here on the badge the rc's home presents, under the key `mintAndEnrol`
- * uses, before the op names it. A home that has not been to the door yet is
+ * uses — the one that home's agent secret derives (`agent-key.ts`) — before
+ * the op names it. A home that has not been to the door yet is
  * sent there by an `isocan who` first.
  */
 export async function holdOnThisMachine(actor: { id: string; name: string }, machine: string = home): Promise<void> {
@@ -286,7 +288,7 @@ export async function holdOnThisMachine(actor: { id: string; name: string }, mac
       Authorization: `Bearer ${formatBadgeToken(mine.badgeId, mine.secret)}`,
       [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE,
     },
-    body: JSON.stringify({ canvasId: null, op: { type: "actor.claim", sessionKey: `agent:${actor.name}`, as: actor.id, name: actor.name } }),
+    body: JSON.stringify({ canvasId: null, op: { type: "actor.claim", sessionKey: await machineAgentKey(machine, actor.name), as: actor.id, name: actor.name } }),
   });
   if (!res.ok) throw new Error(`the desk would not let this machine hold ${actor.id}: ${await res.text()}`);
 }

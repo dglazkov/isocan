@@ -10,7 +10,7 @@
  */
 export { gateTurn, type GuardLimits, type GuardState, type GuardVerdict } from "./guards.ts";
 export type { RcAgentRow, SheepPlace } from "./rows.ts";
-export { actorNamesOn, enrolmentKey, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
+export { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
 export {
   mapState,
   runRoom,

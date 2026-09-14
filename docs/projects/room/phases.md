@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–3 and 4 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Phase 3, answered elsewhere, is CLOSED: the cursor and hold routes require the actor, and orphans are inert. Phase 4, the bundle a host installs, is CLOSED and walked. Next: room phase 3.5, keys nobody else derives; phase 5's walks follow it.** Seven phases, none
+**Where we are: phases 0–3 and 4 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Phase 3, answered elsewhere, is CLOSED: the cursor and hold routes require the actor, and orphans are inert. Phase 4, the bundle a host installs, is CLOSED and walked. Phase 3.5, keys nobody else derives, is PART-DONE: built and proved here, its hosted measurement waits on a second dev badge. Next: room phase 5, the walks.** Seven phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -178,7 +178,7 @@ turned out to accept that claim.
 
 ## Phase 3.5 — Keys nobody else derives
 
-**Status: NOT STARTED.**
+**Status: PART-DONE 2026-09-13.** Agent keys are `agent:<mac>` from `~/.isocan/agent-secret`, agents move at `isocan rc` start and at enrolment, a second badge presenting `agent:<name>` is refused after the move, and a dual-held agent is not held here; the dev.isocan.io measurement waits on a second badge there.
 
 **Outcome:** an agent's session key is a keyed hash of a secret kept in
 this machine's `~/.isocan` and the agent's name. Enrolment, the room's
@@ -205,7 +205,13 @@ key is refused.
   if that badge needs a person: whether admission narrowed the old
   hole there.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-13** — Retiring `agent:<name>` needs no desk op: `bindClaim` keeps one row per actor per badge, so claiming the machine key with `as` from the same badge drops the old row. The move runs at `isocan rc` start and at enrolment.
+- **2026-09-13** — An agent another badge also holds under `agent:<name>` cannot move, and its summons failed where it ran before. Decided (Dimitri): not held here, the phase 3 line, no claim or dispatch; transient refusals (the minute after, a live face) are not that.
+- **2026-09-13** — The desk's `name-taken` refusal of `as` now carries `reason` (`held-elsewhere`, `claimed-just-now`, `live`), held-elsewhere first; the room reads it rather than the sentence. A field on an existing refusal, not an op.
+- **2026-09-13** — Open: "or re-add it here" is untrue on the machine that still holds a dual-held agent under its old key; `rc add` there meets its own old row and is refused `name-taken`. Waits on a wording or remedy decision.
+- **2026-09-13** — Open: whether admission narrowed the old `agent:<name>` hole on a hosted home is unmeasured; it needs a second badge on dev.isocan.io, which needs a person.
 
 ## Phase 4 — The bundle a host installs
 
