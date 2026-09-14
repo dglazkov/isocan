@@ -95,7 +95,7 @@ terminal. You want it to answer for an agent the way `isocan rc` does.*
    you get back is `{ stop() }`.
 4. Your host reaches a sheep home somehow. You implement `SheepCommands`
    over it: `sessions`, `session`, `pastures`, `pastureNew`,
-   `pasturePut`, `mint`, `attach`, `rm`, `abort`. The sheep's policy — a
+   `pasturePut`, `pastureSecret`, `mint`, `attach`, `rm`, `abort`. The sheep's policy — a
    pasture per agent, the setup script, the brief, the skill, the pass
    as the sheep's own secret, a sheep resumed from the herd before one
    is born — is the module's, not yours. The collab skill's text comes

@@ -431,13 +431,27 @@ The repository uses three branches:
 Edit `main` only. CI generates `green` and `release`.
 
 On every push to `main`,
-[`release.yml`](../.github/workflows/release.yml) runs `npm test` with
-`ISOCAN_REQUIRE_EMULATOR=1`, then `npm run typecheck`. If both pass, it
-fast-forwards `green` to that commit. Cloud Build deploys `dev.isocan.io` from
-`green`.
+[`release.yml`](../.github/workflows/release.yml) runs `npm run test:ci`, then
+`npm run typecheck`. If both pass, it fast-forwards `green` to that commit.
+Cloud Build deploys `dev.isocan.io` from `green`.
 
-`ISOCAN_REQUIRE_EMULATOR=1` turns a skipped Firestore suite into a failure. The
-same suites skip locally and report what they didn't check.
+`npm run test:ci` is `vitest run` with every anti-skip switch set — the list
+lives in [`scripts/switches.mjs`](../scripts/switches.mjs) and nowhere else, so
+`release.yml` and `pr.yml` cannot come to disagree about what CI tests. Three
+suites here can decide at runtime that they cannot run: the cloud suites
+without a Firestore emulator, the bundle budget without a built
+`packages/web/dist`, and the deep lane, which `npm test` leaves out on a
+laptop. Locally each one skips and says what it didn't check. On this run each
+one is a failure, because it is the run that decides what gets released.
+
+Run `npm run test:deep` before a push — the whole file set, about four
+minutes. The alternative is finding out from CI on a commit that has already
+moved `green`, which happened three times in the week the lane was built, every
+time in a file the change did not name.
+
+`npm run test:ci` is stricter still and worth running when your machine can: it
+needs a 21+ JRE and a built `dist`, and without them it fails rather than
+skips. On a machine with neither, those two thirds of the gate are CI's.
 
 The fast-forward uses `git push` without `--force`. If `green` already points
 at a commit that yours doesn't descend from, the push fails, CI logs a warning,

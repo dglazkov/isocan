@@ -200,7 +200,22 @@ opinion about anything.
 
 ## House rules
 
-- `npm test` (vitest) and `npm run typecheck` before you call something done.
+- `npm test` (vitest) and `npm run typecheck` before you call something done —
+  and **`npm run test:deep` before you push**. `npm test` is the fast lane: it
+  leaves out the thirty-seven files that spawn the CLI per case, four minutes
+  of the run, and prints at the end exactly what it left out. That is the right
+  default for the loop and the wrong thing to push on. Three times in one week
+  a green subset hid a real failure here — every time in a file the change did
+  not name, every time found by the whole suite after the push. A subset is
+  never the gate.
+- `npm run test:ci` is what both workflows run: the deep lane plus every
+  anti-skip switch, so no suite in it can decide at runtime that it cannot run.
+  It needs a 21+ JRE for the Firestore emulator and a built `packages/web/dist`
+  for the bundle budget; without those it fails rather than skips, which is the
+  point of it and the reason `test:deep` is the pre-push command instead. Run
+  `test:ci` when your machine can, and know that otherwise those two thirds of
+  the gate are CI's. The list of switches and the argument for each is
+  `scripts/switches.mjs`; which files are deep and why is `test/deep.ts`.
 - Work on `main`. Two other refs are GENERATED and neither is ever edited by
   hand: `release` is what people install from
   (`github:dglazkov/isocan#release`) — CI rebuilds it from every commit you

@@ -905,7 +905,12 @@ npm run dev:replica # a scratch machine on :4442 with its OWN isocan home —
                     # with `-- setup <address>#<pass>` and exercise that path
                     # from zero
 npm test            # vitest: reducer round-trips, random-walk undo property
-                    # tests, storage crash recovery, daemon HTTP/WS integration
+                    # tests, storage crash recovery, daemon HTTP/WS integration.
+                    # The fast lane — it leaves out the files that spawn the
+                    # CLI per case and says so at the end
+npm run test:deep   # those too: ~4 minutes, and what every flake has lived in
+npm run test:ci     # the gate CI applies: deep, plus the emulator and the
+                    # bundle budget, with no suite allowed to skip itself
 npm run typecheck   # strict tsc across all packages
 npm run release     # build, commit onto the `release` branch, push it
 ```
