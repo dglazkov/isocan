@@ -127,5 +127,9 @@ describe("placing a canvas on a canvas", () => {
     const self = await isocan("canvas", "place", S, "--canvas", S);
     expect(self.code).not.toBe(0);
     expect(self.stderr).toContain("cannot be placed on itself");
-  });
+    // Thirty-odd CLI walks in one case: 14-17s on a laptop, and it timed out at
+    // the default 30s on a loaded release shard (run 34893853023, 14 Sep 2026).
+    // The same 40s the other long walks here take — `dispatch.test.ts` and
+    // friends — rather than a case that is fine until the runner is busy.
+  }, 40_000);
 });
