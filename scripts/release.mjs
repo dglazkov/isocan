@@ -207,7 +207,7 @@ export const RELEASE_TYPE_ROOTS = ["packages/core/src", "packages/server/src", "
  * So: one `tsc` declaration-only emit of RELEASE_TYPE_ROOTS, then a rewrite
  * of every emitted specifier into a form an installed tree can resolve —
  * `./x.ts` becomes `./x.js` (TypeScript maps that back to `x.d.ts`), and the
- * bare `@isocan/*` names become relative
+ * bare `@isocan/*` names (and `@isocan/api/routes`) become relative
  * paths within `types/` itself. The result is self-contained: no workspace,
  * no loader, no node_modules but the consumer's own.
  *
@@ -270,8 +270,8 @@ async function rewriteSpecifiers(dir, out) {
       continue;
     }
     if (!entry.name.endsWith(".d.ts")) continue;
-    const relative = (pkg) => {
-      const target = path.relative(path.dirname(full), path.join(out, pkg, "src", "index.js"));
+    const relative = (pkg, file = "index.js") => {
+      const target = path.relative(path.dirname(full), path.join(out, pkg, "src", file));
       const posix = target.split(path.sep).join("/");
       return posix.startsWith(".") ? posix : `./${posix}`;
     };
@@ -280,7 +280,10 @@ async function rewriteSpecifiers(dir, out) {
       .replace(/"(\.[^"]*)\.ts"/g, '"$1.js"')
       .replace(/"@isocan\/core"/g, `"${relative("core")}"`)
       .replace(/"@isocan\/server"/g, `"${relative("server")}"`)
-      .replace(/"@isocan\/rc"/g, `"${relative("rc")}"`);
+      .replace(/"@isocan\/rc"/g, `"${relative("rc")}"`)
+      // `isocan/rc` re-exports the route surface a host constructs (sheep's
+      // collie, phase 1) by `@isocan/api`'s subpath, not its Node-only root.
+      .replace(/"@isocan\/api\/routes"/g, `"${relative("api", "routes.js")}"`);
     if (rewritten !== text) await fs.writeFile(full, rewritten);
   }
 }

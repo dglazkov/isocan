@@ -122,7 +122,18 @@ import {
 } from "@isocan/core";
 import type { BadgeStore, BuildStamp, StoredBadge, UpgradeVerdict } from "@isocan/core";
 import { ApiError, askTheDoor, bearerHeader } from "@isocan/core";
-import type { ContextPageOptions } from "./canvas-context.ts";
+
+/** One page of a comment's saved context, or of a live one at a revision. */
+export interface ContextPageOptions {
+  threadId?: string | undefined;
+  commentId?: string | undefined;
+  rootIds?: readonly string[] | undefined;
+  includeExcluded?: boolean | undefined;
+  expectedRevision?: number | undefined;
+  offset?: number | undefined;
+  limit?: number | undefined;
+  face?: "source" | "visual" | undefined;
+}
 
 /** The health route: who is holding the port, and which build they are. */
 export interface Health extends Partial<BuildStamp> {
@@ -1361,7 +1372,7 @@ export class DaemonRoutes {
 
   async uploadBlob(
     canvasId: string,
-    data: Buffer,
+    data: Uint8Array,
     mimeType: string,
     filename: string,
     signal?: AbortSignal,
@@ -1394,7 +1405,7 @@ export class DaemonRoutes {
     return json as BlobUploadResponse;
   }
 
-  async downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Buffer> {
+  async downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Uint8Array> {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
@@ -1411,6 +1422,6 @@ export class DaemonRoutes {
       const json = await res.json().catch(() => null) as { error?: string; code?: string; reason?: string } | null;
       throw new ApiError(res.status, json?.error ?? `blob not found: ${blobHash}`, json?.code, json?.reason);
     }
-    return Buffer.from(await res.arrayBuffer());
+    return new Uint8Array(await res.arrayBuffer());
   }
 }

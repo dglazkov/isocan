@@ -20,6 +20,9 @@ registerLoader("./packages/cli/bin/workspace-loader.mjs", import.meta.url);
 const rc = await import("@isocan/rc");
 
 export const {
+  // @isocan/api/routes — the client a host speaks to the daemon with
+  ApiError,
+  DaemonRoutes,
   // guards.ts — the dispatch guards
   gateTurn,
   // helpers.ts — the pure helpers the room speaks with

@@ -9224,7 +9224,7 @@ async function writeJsonCanvas(
     const v = item.versions.find((x) => x.id === item.currentVersionId);
     if (v?.mimeType !== BROWSER_MIME) continue;
     const bytes = await client.downloadBlob(canvasId, v.blobHash).catch(() => null);
-    if (bytes) bodies.set(item.id, bytes.toString("utf8"));
+    if (bytes) bodies.set(item.id, new TextDecoder().decode(bytes));
   }
   const { file: out, lost } = toJsonCanvas(snapshot.canvas, {
     bodyOf: (item) => bodies.get(item.id) ?? null,

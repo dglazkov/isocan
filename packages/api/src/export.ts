@@ -76,7 +76,7 @@ const pretty = (value: unknown) => JSON.stringify(value, null, 2) + "\n";
 const lines = (entries: readonly unknown[]) =>
   entries.length === 0 ? "" : entries.map((e) => JSON.stringify(e)).join("\n") + "\n";
 
-async function writeInto(out: string, rel: string, data: string | Buffer, written: string[]) {
+async function writeInto(out: string, rel: string, data: string | Uint8Array, written: string[]) {
   const file = path.join(out, rel);
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, data);
@@ -101,7 +101,7 @@ async function fetchBlob(
   client: DaemonRoutes,
   canvasId: string,
   hash: string,
-): Promise<Buffer | null> {
+): Promise<Uint8Array | null> {
   try {
     return await client.downloadBlob(canvasId, hash);
   } catch (err) {

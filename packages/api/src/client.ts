@@ -147,6 +147,18 @@ export class DaemonClient extends DaemonRoutes {
     : platformFetch;
 
   /**
+   * **A blob, as the bytes Node code reads** (collie phase 1). The route
+   * surface answers a `Uint8Array`, because `isocan/rc` hands that surface to
+   * hosts that have no `Buffer`; the CLI and the modules read what this
+   * returns with `.toString("utf8")`, so the Node half wraps the same memory
+   * — a view, not a copy.
+   */
+  override async downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Buffer> {
+    const bytes = await super.downloadBlob(canvasId, blobHash, signal);
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+
+  /**
    * **Which copy a daemon started from here should run** (auto-upgrade phase
    * 4). Normally this one — the process asking for a daemon is the obvious
    * candidate to provide it. On a MANAGED install it is `current` instead,

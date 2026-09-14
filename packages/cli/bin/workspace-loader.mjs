@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 
 const sources = new Map([
   ["@isocan/api/context", new URL("../../api/src/context-reader.ts", import.meta.url).href],
+  ["@isocan/api/routes", new URL("../../api/src/routes.ts", import.meta.url).href],
   ["@isocan/api", new URL("../../api/src/index.ts", import.meta.url).href],
   ["@isocan/core", new URL("../../core/src/index.ts", import.meta.url).href],
   ["@isocan/mcp", new URL("../../mcp/src/index.ts", import.meta.url).href],

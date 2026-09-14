@@ -1,5 +1,10 @@
 import type { ContextContentPage } from "@isocan/core";
-import { ApiError, type DaemonRoutes } from "./routes.ts";
+import { ApiError, type ContextPageOptions, type DaemonRoutes } from "./routes.ts";
+
+/** Declared beside the route it shapes, so `routes.ts` reaches nothing in this
+ * package (`isocan/rc` hands that file to hosts with no Node); re-exported
+ * here, where the rest of the context reader's options live. */
+export type { ContextPageOptions };
 
 export interface ContextReadOptions {
   /** Group ID or unique reference; combined with explicit item roots. */
@@ -12,17 +17,6 @@ export interface ContextReadOptions {
 export interface CommentContextOptions extends ContextReadOptions {
   /** Additional item references, combined with #references in the message. */
   items?: readonly string[] | undefined;
-}
-
-export interface ContextPageOptions {
-  threadId?: string | undefined;
-  commentId?: string | undefined;
-  rootIds?: readonly string[] | undefined;
-  includeExcluded?: boolean | undefined;
-  expectedRevision?: number | undefined;
-  offset?: number | undefined;
-  limit?: number | undefined;
-  face?: "source" | "visual" | undefined;
 }
 
 export interface ContextBytesOptions {
@@ -67,7 +61,8 @@ export async function readContextItem(
   if (entry.status !== "available" || !entry.blob) return result;
   let bytes: Buffer;
   try {
-    bytes = await client.downloadBlob(canvasId, entry.blob.blobHash);
+    const view = await client.downloadBlob(canvasId, entry.blob.blobHash);
+    bytes = Buffer.from(view.buffer, view.byteOffset, view.byteLength);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       const unavailable = { ...result, status: "unavailable" as const, reason: "the saved version's bytes are no longer available at this home" };

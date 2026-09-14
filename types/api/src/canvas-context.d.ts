@@ -1,5 +1,9 @@
 import type { ContextContentPage } from "../../core/src/index.js";
-import { type DaemonRoutes } from "./routes.js";
+import { type ContextPageOptions, type DaemonRoutes } from "./routes.js";
+/** Declared beside the route it shapes, so `routes.ts` reaches nothing in this
+ * package (`isocan/rc` hands that file to hosts with no Node); re-exported
+ * here, where the rest of the context reader's options live. */
+export type { ContextPageOptions };
 export interface ContextReadOptions {
     /** Group ID or unique reference; combined with explicit item roots. */
     in?: string | undefined;
@@ -10,16 +14,6 @@ export interface ContextReadOptions {
 export interface CommentContextOptions extends ContextReadOptions {
     /** Additional item references, combined with #references in the message. */
     items?: readonly string[] | undefined;
-}
-export interface ContextPageOptions {
-    threadId?: string | undefined;
-    commentId?: string | undefined;
-    rootIds?: readonly string[] | undefined;
-    includeExcluded?: boolean | undefined;
-    expectedRevision?: number | undefined;
-    offset?: number | undefined;
-    limit?: number | undefined;
-    face?: "source" | "visual" | undefined;
 }
 export interface ContextBytesOptions {
     face?: "source" | "visual" | undefined;

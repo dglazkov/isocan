@@ -232,6 +232,15 @@ describe("installable straight from git", () => {
       const helpers = await fs.readFile(path.join(out, "rc/src/helpers.d.ts"), "utf8");
       expect(helpers).not.toMatch(/"@isocan\//);
       expect(helpers).toContain('"../../core/src/index.js"');
+      // The entry re-exports the route surface a host constructs (sheep's
+      // collie, phase 1) by a workspace subpath an install cannot resolve, so
+      // the emit must have rewritten it into the tree, at a file that exists.
+      const index = await fs.readFile(path.join(out, "rc/src/index.d.ts"), "utf8");
+      expect(index).not.toMatch(/"@isocan\//);
+      expect(index).toContain('"../../api/src/routes.js"');
+      const routes = await fs.readFile(path.join(out, "api/src/routes.d.ts"), "utf8");
+      expect(routes).toContain("export declare class DaemonRoutes");
+      expect(routes).not.toMatch(/"@isocan\//);
     } finally {
       await fs.rm(out, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
@@ -304,6 +313,9 @@ describe("installable straight from git", () => {
       expect(Object.keys(surface).sort()).toEqual(Object.keys(source).sort());
       expect(typeof surface.runRoom).toBe("function");
       expect(typeof surface.SheepAgent).toBe("function");
+      // And the client a host constructs (sheep's collie, phase 1), inlined
+      // into the same node-free bundle rather than left to a Node entry.
+      expect(typeof surface.DaemonRoutes).toBe("function");
       expect(surface.COLLAB_SKILL).toBe(source.COLLAB_SKILL);
     } finally {
       await fs.rm(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

@@ -37,12 +37,17 @@ describe("the room module's boundary", () => {
     }
     const reachedPaths = reached.map((f) => path.relative(repo, f));
     expect(reachedPaths).toContain("packages/core/src/index.ts");
-    // The room is reached, and nothing of `@isocan/api` is: the routes it
-    // speaks to the daemon through are its own interface over core's types.
+    // The room is reached: the routes it speaks to the daemon through are its
+    // own interface over core's types.
     expect(reachedPaths).toContain("packages/rc/src/room.ts");
     // And the sheep's policy, which a host speaks to a sheep home through.
     expect(reachedPaths).toContain("packages/rc/src/sheep.ts");
-    expect(reachedPaths.filter((f) => f.startsWith("packages/api/"))).toEqual([]);
+    // Of `@isocan/api`, exactly the route surface and nothing it could grow
+    // into (sheep's collie, phase 1): `DaemonRoutes` is the client a host
+    // constructs, re-exported rather than written again. A second api file in
+    // this list is a new reach to argue for, not a line to update — and
+    // `routes.ts` itself is swept for `node:` below like every reached file.
+    expect(reachedPaths.filter((f) => f.startsWith("packages/api/"))).toEqual(["packages/api/src/routes.ts"]);
     expect(
       offenders,
       `isocan/rc is for hosts with no Node — nothing it reaches may import node:* or @isocan/server:\n${offenders.join("\n")}`,

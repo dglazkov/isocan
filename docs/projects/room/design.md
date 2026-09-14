@@ -381,8 +381,17 @@ behavioural tests of that window, and every other case stays as it is.
   remembers what it said and whose word a turn carried. Whether the
   guard's window should survive a restart, and for how long, is
   decided when a host exists to ask.
-- **Bytes on a host.** `DaemonRoutes`'s blob methods speak `Buffer`. The
-  room never calls them; a host that wants them decides how bytes cross
-  its `fetch`.
+- **Bytes on a host.** Closed 14 Sep 2026 for sheep's collie (phase 1),
+  which needed `DaemonRoutes` from a host with no Node and would not
+  write the wire again. `isocan/rc` re-exports it, with `ApiError`,
+  `BadgeStore` and `StoredBadge`, from `@isocan/api/routes`; the
+  boundary test names `routes.ts` as the one file of `@isocan/api` the
+  entry reaches, and `tsconfig.src.json` typechecks it with no Node
+  types. So the blob methods stopped naming `Buffer`: `uploadBlob` takes
+  a `Uint8Array` (a `Buffer` is one), and `downloadBlob` answers one.
+  `DaemonClient` overrides `downloadBlob` to wrap the same memory as a
+  `Buffer`, so the CLI and the modules, which read a blob with
+  `.toString("utf8")`, are unchanged. `ContextPageOptions` moved into
+  `routes.ts`, which had been reaching `canvas-context.ts` for it.
 - **A pasture per canvas.** Unchanged from sheep-harness's door; the
   `SheepCommands` interface does not decide it.

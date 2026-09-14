@@ -4,7 +4,17 @@ import { type RecapHeadResponse } from "../../core/src/index.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
 import type { BadgeStore, BuildStamp, UpgradeVerdict } from "../../core/src/index.js";
 import { ApiError } from "../../core/src/index.js";
-import type { ContextPageOptions } from "./canvas-context.js";
+/** One page of a comment's saved context, or of a live one at a revision. */
+export interface ContextPageOptions {
+    threadId?: string | undefined;
+    commentId?: string | undefined;
+    rootIds?: readonly string[] | undefined;
+    includeExcluded?: boolean | undefined;
+    expectedRevision?: number | undefined;
+    offset?: number | undefined;
+    limit?: number | undefined;
+    face?: "source" | "visual" | undefined;
+}
 /** The health route: who is holding the port, and which build they are. */
 export interface Health extends Partial<BuildStamp> {
     ok: true;
@@ -548,6 +558,6 @@ export declare class DaemonRoutes {
      * badge may see, which is what a canvas list draws beside its rows.
      */
     takedowns(canvasId?: string): Promise<TakedownsResponse>;
-    uploadBlob(canvasId: string, data: Buffer, mimeType: string, filename: string, signal?: AbortSignal): Promise<BlobUploadResponse>;
-    downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Buffer>;
+    uploadBlob(canvasId: string, data: Uint8Array, mimeType: string, filename: string, signal?: AbortSignal): Promise<BlobUploadResponse>;
+    downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Uint8Array>;
 }
