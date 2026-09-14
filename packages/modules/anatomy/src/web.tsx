@@ -11,6 +11,7 @@ import type {
 import {
   anatomyModule,
   PROJECT_MIME,
+  RUN_MIME,
   NODE_MIME,
   CHECKPOINT_MIME,
   projectsOn,
@@ -49,7 +50,7 @@ export const anatomyWeb: WebModule<
   core: anatomyModule,
   underlays: [Edges],
   renderers: [
-    { mimes: [PROJECT_MIME, NODE_MIME, CHECKPOINT_MIME], component: Render },
+    { mimes: [PROJECT_MIME, NODE_MIME, CHECKPOINT_MIME, RUN_MIME], component: Render },
   ],
   workspaces: [
     {
@@ -64,7 +65,7 @@ export const anatomyWeb: WebModule<
           project.properties[PROP.repository] ||
           project.properties.repository
           ? {
-              label: hasAnalysis ? "View Anatomy" : "Analyze repository",
+              label: hasAnalysis ? "Anatomy" : "Analyze repository",
               glyph: "◈",
             }
           : null;

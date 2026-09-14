@@ -5,6 +5,7 @@ import {
   CHECKPOINT_MIME,
   NODE_MIME,
   PROJECT_MIME,
+  RUN_MIME,
   PROP,
   projectsOn,
 } from "./facts.ts";
@@ -38,7 +39,7 @@ export const anatomyActivation = {
        instructions for an agent and stays in the loaded half. */
     commands: [{ ...ANATOMY_COMMAND_METADATA, body: "" }],
   } satisfies CoreModule,
-  renderers: [{ mimes: [PROJECT_MIME, NODE_MIME, CHECKPOINT_MIME] }],
+  renderers: [{ mimes: [PROJECT_MIME, NODE_MIME, CHECKPOINT_MIME, RUN_MIME] }],
   /** The underlay draws project edges, so it is worth loading only where a
    *  project is. `projectsOn` is a scan of the items the shell already has. */
   underlays: [{ needed: (canvas: CanvasContents) => projectsOn(canvas).length > 0 }],
@@ -55,7 +56,7 @@ export const anatomyActivation = {
       projectEntry: ({ project, canvas }: { project: Canvas; canvas: CanvasContents }) => {
         const hasAnalysis = projectsOn(canvas).length > 0;
         return hasAnalysis || project.properties[PROP.repository] || project.properties.repository
-          ? { label: hasAnalysis ? "View Anatomy" : "Analyze repository", glyph: "\u25C8" }
+          ? { label: hasAnalysis ? "Anatomy" : "Analyze repository", glyph: "\u25C8" }
           : null;
       },
     },

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import type { RendererFacts } from "@isocan/core";
 import { modulePagePath } from "@isocan/core";
-import { NODE_MIME, PROJECT_MIME } from "./manifest.ts";
+import { NODE_MIME, PROJECT_MIME, RUN_MIME } from "./facts.ts";
 import {
   AXIS_LABELS,
   nodeBodySchema,
   projectBodySchema,
   checkpointSchema,
+  runCardSchema,
+  runStateLine,
 } from "./schema.ts";
 import "./style.css";
 
@@ -36,6 +38,29 @@ export default function Card({
             label: AXIS_LABELS[node.category],
             text: node.summary,
             status: node.status,
+          };
+        }
+        /**
+         * **The analysis request, which had no renderer at all.**
+         *
+         * `/anatomy` records a request as an item — it has to be one: an agent
+         * claims it, polls it for `cancelRequested`, and completes it, and a
+         * chat message cannot carry state anybody writes to. But with no
+         * renderer for its mime the card fell through to the generic file
+         * placeholder and a person saw `analysis-request.json
+         * (application/vnd.isocan.anatomy-run+json)` on their canvas, which
+         * tells them nothing they wanted to know and looks like a mistake.
+         *
+         * The repository first, because that is the question — *what did I
+         * just ask about* — and then what is happening to the request, in the
+         * same words the requests pane uses (`runStateLine`, one home).
+         */
+        if (mimeType === RUN_MIME) {
+          const run = runCardSchema.parse(raw);
+          return {
+            label: "Analysis request",
+            text: `${run.repository}\n${runStateLine(run)}${run.message ? `\n${run.message}` : ""}`,
+            status: run.status,
           };
         }
         if (mimeType === PROJECT_MIME) {

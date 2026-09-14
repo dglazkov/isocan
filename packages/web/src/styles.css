@@ -6737,3 +6737,18 @@ button.mt-card:hover { border-color: var(--accent); }
 .presentation-presence { position: absolute; z-index: 4; top: -22px; left: 0; padding: 2px 6px; border-radius: 5px; background: var(--card); color: var(--ink); font: inherit; font-size: 11px; white-space: nowrap; }
 .item[data-content-changed] { outline: 3px solid var(--ink-soft); outline-offset: 5px; }
 .item[data-presentation]:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
+
+/* A module's own mark in the drawer's icon column. The shell's glyphs are
+   line-art SVGs at 14px; a module supplies a character instead, because it is
+   deferred and a component would mean fetching its chunk to draw a menu row.
+   Sized and centred to the same box so the column stays a column. */
+.module-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--ink-soft);
+}

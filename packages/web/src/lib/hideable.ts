@@ -65,6 +65,38 @@ export const HIDEABLE: readonly HideableEntry[] = [
   },
 ];
 
+/**
+ * **What this browser draws, which is not the same as what it hides.**
+ *
+ * The cursor glow lived in the `···` menu while everything else of its kind
+ * lived in Settings, so one category had two homes and neither named the
+ * other. It is in Settings now — but not in `HIDEABLE`, because that list has
+ * a rule and the glow fails it: a control may be hidden only if what it DOES
+ * is reachable another way, and `hideable.test.ts` refuses an entry with
+ * neither a shortcut nor a command. The glow does nothing. Turning it off
+ * strands nobody, which is precisely why it cannot claim a door.
+ *
+ * Same section on screen, same storage, different list — and the difference
+ * is stated rather than smoothed over. A row here answers the question a
+ * person actually has about an effect: whether switching it off changes what
+ * a collaborator sees.
+ */
+interface DisplaySwitch {
+  id: string;
+  name: string;
+  /** What it is, in the words of somebody deciding whether they want it. */
+  what: string;
+}
+
+/** The switches themselves. One today; a second one is a row, not a redesign. */
+export const DISPLAY_SWITCHES: readonly DisplaySwitch[] = [
+  {
+    id: "cursor.glow",
+    name: "Cursor glow",
+    what: "the soft light under live cursors · yours only, nobody else's view changes",
+  },
+];
+
 export function hideableEntry(id: string): HideableEntry | undefined {
   return HIDEABLE.find((entry) => entry.id === id);
 }

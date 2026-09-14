@@ -528,7 +528,6 @@ export function chromeMenu(ctx: {
   /** Days of release notes this reader has not seen — 0 hides the count. */
   unreadNews: number;
   minimapOpen: boolean;
-  cursorGlow: boolean;
   /** What ground this canvas is wearing, or null for the dot grid. */
   theme: CanvasTheme | null;
   /**
@@ -560,7 +559,19 @@ export function chromeMenu(ctx: {
   /** Navigation belongs to the caller: this module builds entries and has no
    *  business holding a router. */
   toWorkbench: () => void;
-  projectViews?: Array<{ label: string; run: () => void }>;
+  /**
+   * The Groups rows, built by the caller because they need the current
+   * selection and a `navigate`. A submenu rather than a flattened block:
+   * selecting items and right-clicking is how grouping actually gets done
+   * (the same `canvasGroupEntries` are already in the item menu above), so
+   * this is the findable way in rather than the fast one, and a fast way in
+   * that costs five rows of a menu everybody opens is the wrong trade.
+   */
+  groups?: MenuEntry[];
+  /** What the parent row says to the right of "Groups" — how many items the
+   *  submenu would act on, so the count is legible without opening it. */
+  groupsValue?: string;
+  projectViews?: Array<{ label: string; icon?: ReactNode; run: () => void }>;
 }): MenuEntry[] {
   const ui = () => useUiStore.getState();
   /* The same mark the surface itself wears, so the row and the thing it opens
@@ -598,6 +609,14 @@ export function chromeMenu(ctx: {
       shortcutFor: "Workbench — the agent room",
       run: () => ctx.toWorkbench(),
     },
+    /* **Groups left the bar on 13 Sep.** It was a top-level button beside the
+       title, which put a feature most people reach by right-clicking a
+       selection in the one place that is always on screen. The rows are
+       unchanged and the item menu still carries them; this is where you look
+       when nothing is selected, or when you do not yet know the gesture. */
+    ...(ctx.groups?.length
+      ? [{ label: "Groups", value: ctx.groupsValue ?? "", run: () => {}, submenu: ctx.groups }]
+      : []),
     ...(ctx.projectViews ?? []),
     { separator: "" },
     {
@@ -769,19 +788,13 @@ export function chromeMenu(ctx: {
         },
       ],
     },
-    {
-      /**
-       * **The cursor glow, off if you want it off** (#195).
-       *
-       * Beside the minimap because it is the same kind of choice: what this
-       * browser draws, for this person, on every canvas. It is not a property
-       * of anybody's canvas, so turning it off must not change what a
-       * collaborator sees. `prefers-reduced-motion` already hides it; this is
-       * for people who simply find it busy.
-       */
-      label: ctx.cursorGlow ? "Turn off cursor glow" : "Turn on cursor glow",
-      run: () => ui().setCursorGlow(!ctx.cursorGlow),
-    },
+    /* **The cursor glow left this menu on 13 Sep** (#195 put it here). Its
+       own note said it belonged "beside the minimap because it is the same
+       kind of choice: what this browser draws, for this person, on every
+       canvas" — which is the description of the Controls list in Settings,
+       where every other switch of that kind already was. One category, two
+       homes, and neither naming the other. It is a row in `DISPLAY_SWITCHES`
+       now, reading and writing the same store key. */
     { separator: "" },
     {
       /* Release notes belong beside the shortcut list: both are things you

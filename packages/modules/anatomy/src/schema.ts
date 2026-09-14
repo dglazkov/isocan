@@ -232,3 +232,55 @@ export function parseProject(value: unknown): AnatomyProject {
     validateGraph(checkpoint.nodes, checkpoint.edges);
   return project;
 }
+
+/**
+ * **The analysis request, as a card can read it.**
+ *
+ * The full record and its writers live in `runs.ts`, which reaches the daemon
+ * and the operations; a renderer needs none of that and must not pull it into
+ * its chunk. This is the readable half: the fields a person is told about,
+ * parsed from the same bytes.
+ *
+ * `.passthrough()` on purpose — a card that refuses to draw because the record
+ * grew a field is a worse card than one that ignores it. `runs.ts` keeps the
+ * strict schema, which is where strictness belongs: on the way in.
+ */
+export const runCardSchema = z
+  .object({
+    repository: z.string(),
+    analysisTitle: z.string().optional(),
+    status: z.enum(["requested", "running", "completed", "failed", "cancelled"]),
+    cancelRequested: z.boolean().optional(),
+    executor: z.object({ id: z.string(), name: z.string() }).optional(),
+    revision: z.string().optional(),
+    message: z.string().optional(),
+  })
+  .passthrough();
+
+/**
+ * **What a request's state is called, said once.**
+ *
+ * The pane and the card both answer "what is happening with this request", and
+ * two answers to that in two files is `docs/reviews/lessons.md` #5 waiting to
+ * happen: they drift, and the canvas disagrees with the panel about the same
+ * row. `dispatched` is the pane's extra knowledge — whether the request
+ * reached Chat — and is absent on a card, which is reading an item rather than
+ * a receipt.
+ */
+export function runStateLine(
+  run: z.infer<typeof runCardSchema>,
+  dispatched?: boolean,
+): string {
+  const state =
+    run.status === "requested"
+      ? dispatched === false
+        ? "Recorded; not posted in Chat"
+        : "Requested; awaiting agent"
+      : run.status === "running"
+        ? `Claimed by ${run.executor?.name ?? "executor"}`
+        : run.status;
+  const cancelling = run.cancelRequested
+    ? ` · Cancellation requested${run.status === "cancelled" ? "; acknowledged" : ""}`
+    : "";
+  return `${state}${cancelling}`;
+}

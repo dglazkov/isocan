@@ -56,8 +56,11 @@ import type {
 } from "@isocan/core";
 
 /** Conversion previews are writer reads, so the reviewed revision guards one apply. */
-export function fetchGroupMigration(canvasId: string): Promise<CanvasGroupMigrationPreview> {
-  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/groups/migration`);
+export function fetchGroupMigration(
+  canvasId: string,
+  signal?: AbortSignal,
+): Promise<CanvasGroupMigrationPreview> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/groups/migration`, undefined, signal);
 }
 import {
   PUBLIC_CANVASES_ROUTE,

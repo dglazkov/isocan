@@ -14,7 +14,7 @@ import { setActorColor, setActorMark } from "../lib/identitycolor.ts";
 import { invalidateOwnActors, useOwnActors } from "../lib/ownactors.ts";
 import { refreshActorMarks, useActorMarks } from "../lib/marks.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
-import { HIDEABLE, showAllChrome } from "../lib/hideable.ts";
+import { DISPLAY_SWITCHES, HIDEABLE, showAllChrome } from "../lib/hideable.ts";
 import { EXPERIMENTS } from "../lib/experiments.ts";
 import { loadExperiments } from "../modules.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -129,6 +129,11 @@ export function IdentityMenu({
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const hiddenChrome = useUiStore((s) => s.hiddenChrome);
+  /* The glow's switch moved here from the `···` menu on 13 Sep: one category
+     had two homes. The store is unchanged — this reads and writes the same
+     `isocan.cursorGlow` the menu row did. */
+  const cursorGlow = useUiStore((s) => s.cursorGlow);
+  const setCursorGlow = useUiStore((s) => s.setCursorGlow);
   const setChromeHidden = useUiStore((s) => s.setChromeHidden);
   const experiments = useUiStore((s) => s.experiments);
   const setExperiment = useUiStore((s) => s.setExperiment);
@@ -362,9 +367,31 @@ export function IdentityMenu({
             </label>
           );
         })}
+        {/* The effects, in the same list and read the same way. They are a
+            separate registry because `HIDEABLE`'s rule is that a control may
+            be hidden only when what it does is reachable another way, and an
+            effect does nothing — see `DISPLAY_SWITCHES`. Below the controls
+            because a person looking for a control is looking for something
+            they lost, and a person looking for the glow is deciding about
+            taste. */}
+        {DISPLAY_SWITCHES.map((entry) => (
+          <label key={entry.id} className="chrome-row">
+            <input
+              type="checkbox"
+              checked={cursorGlow}
+              onChange={(e) => setCursorGlow(e.target.checked)}
+            />
+            <span className="chrome-name">{entry.name}</span>
+            <span className="chrome-where">{entry.what}</span>
+          </label>
+        ))}
         {hiddenChrome.length > 0 && (
+          /* It said "Show everything", which reads as an action on the CANVAS
+             — reveal what is hidden out there, or select the lot. It acts on
+             this list and nothing else, so it says which list and how many:
+             "Turn all 3 back on" is a sentence about the boxes above it. */
           <button type="button" className="btn chrome-show-all" onClick={showAllChrome}>
-            Show everything
+            Turn all {hiddenChrome.length} back on
           </button>
         )}
       </div>

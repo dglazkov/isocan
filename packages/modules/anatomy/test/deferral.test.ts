@@ -63,6 +63,39 @@ describe("anatomy is not in the entry chunk", () => {
     expect(underlay?.needed(empty), "a canvas with nothing on it fetches nothing").toBe(false);
   });
 
+  /**
+   * **A kind with no renderer is a card that says its own mime out loud.**
+   *
+   * `/anatomy` records its request as an item — it has to be one, because an
+   * agent claims it, polls it for `cancelRequested` and completes it, and a
+   * chat message cannot carry state anybody writes to. But `anatomy-run` was
+   * declared as a kind and left out of the renderer's mime list, so the card
+   * fell through to the generic file placeholder and Dion saw
+   * `analysis-request.json (application/vnd.isocan.anatomy-run+json)` sitting
+   * on his canvas.
+   *
+   * Declaring a kind is a promise that this module knows what the thing IS.
+   * Anything less than a renderer for it hands that job back to a fallback
+   * that can only read the filename.
+   */
+  it("renders every kind it declares — a mime it names is a mime it draws", () => {
+    const drawn = new Set(anatomyActivation.renderers?.flatMap((one) => one.mimes) ?? []);
+    const undrawn = ANATOMY_KINDS.flatMap((kind) => kind.mimes).filter((mime) => !drawn.has(mime));
+    expect(
+      undrawn,
+      "declared as a kind and left to the generic file card, which can only say the filename",
+    ).toEqual([]);
+  });
+
+  it("draws the request through the same lazy half as everything else", () => {
+    // Not a second renderer: the request card is a branch of `card.tsx`, so it
+    // arrives in the chunk that is already fetched to draw a concept.
+    const card = read("card.tsx");
+    expect(card).toContain("mimeType === RUN_MIME");
+    expect(card, "the repository is the question a person actually has").toContain("run.repository");
+    expect(card, "and the state in the words the requests pane uses").toContain("runStateLine(run)");
+  });
+
   it("still says enough for the shell to route a project item", () => {
     expect(ANATOMY_KINDS.some((kind) => kind.mimes.includes(PROJECT_MIME))).toBe(true);
     expect(anatomyActivation.renderers?.[0]?.mimes).toContain(PROJECT_MIME);

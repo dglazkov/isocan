@@ -24,6 +24,56 @@
 .anatomy-file-button:hover {
   background: var(--chip-hover);
 }
+/**
+ * **The selects were never dressed.** The rule above gives `button` a font, a
+ * colour, a ground, a border, a radius and padding; `select` appeared only in
+ * the `:focus-visible` line below, so every dropdown in this workspace fell
+ * through to the platform widget — on macOS a dark popup with a leading ✓ and
+ * its own metrics, sitting inside a light custom header with no padding of its
+ * own. It read as broken because it was a different app's control.
+ *
+ * `appearance: none` is what makes the rest apply at all: with the native
+ * appearance on, a macOS select paints itself and ignores the ground and the
+ * border. Which means the caret has to be drawn too, since removing the
+ * appearance removes the platform's own — that is `.anatomy-select`.
+ */
+.anatomy-workspace select {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  /* Room on the right for the caret the wrapper draws. */
+  padding: 6px 26px 6px 10px;
+  cursor: pointer;
+}
+.anatomy-workspace select:hover {
+  background: var(--chip-hover);
+}
+/**
+ * The caret, drawn rather than fetched: a rotated corner in `var(--ink-soft)`,
+ * so it is one colour in both themes and no image to load. Wrap a select in
+ * this to give it one — the project picker does; the form selects inside
+ * dialogs can adopt it the same way.
+ */
+.anatomy-select {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+.anatomy-select::after {
+  content: "";
+  position: absolute;
+  right: 11px;
+  top: calc(50% - 3px);
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink-soft);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
 .anatomy-workspace button:focus-visible,
 .anatomy-workspace input:focus-visible,
 .anatomy-workspace textarea:focus-visible,
@@ -111,12 +161,16 @@
   gap: 10px;
   min-width: 220px;
 }
-.anatomy-project-picker select {
+.anatomy-project-picker .anatomy-select select {
   max-width: 240px;
   font-weight: 650;
+  text-overflow: ellipsis;
 }
 .anatomy-mark {
-  font-size: 27px;
+  /* 27px stood a head taller than everything beside it. Sized to the title it
+     marks, which is what a mark is for. */
+  font-size: 18px;
+  line-height: 1;
   color: var(--accent);
 }
 .anatomy-convergence {
@@ -125,8 +179,9 @@
   white-space: nowrap;
 }
 .anatomy-convergence small {
-  display: block;
-  margin-top: 3px;
+  /* Was `display: block`, which made a one-line header two lines tall and left
+     "35 concepts" hanging under the percentage with nothing to align to. */
+  color: var(--ink-soft);
 }
 .anatomy-tabs {
   display: flex;
@@ -242,8 +297,14 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
 }
+/* **The tree was 240px and fixed, while the inspector opposite it was
+   clamped and draggable.** Same kind of column, two different deals — and 240
+   is narrow for concept titles, which wrap to two lines at that width. It is
+   the inspector's shape now, a little wider by default, with the same handle.
+   `--anatomy-tree-width` is the stored preference; the clamp is what keeps a
+   dragged column from eating the blueprint it exists to navigate. */
 .anatomy-blueprint.has-tree {
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: clamp(200px, var(--anatomy-tree-width, 300px), min(480px, 38vw)) minmax(0, 1fr);
 }
 .anatomy-blueprint.has-inspector {
   grid-template-columns: minmax(0, 1fr) clamp(
@@ -253,7 +314,7 @@
     );
 }
 .anatomy-blueprint.has-tree.has-inspector {
-  grid-template-columns: 240px minmax(0, 1fr) clamp(
+  grid-template-columns: clamp(200px, var(--anatomy-tree-width, 300px), min(480px, 38vw)) minmax(0, 1fr) clamp(
       220px,
       var(--anatomy-inspector-width, 340px),
       min(560px, 45vw)
@@ -802,6 +863,43 @@
   overflow: auto;
   padding: 24px;
   box-sizing: border-box;
+}
+/* The hierarchy's handle: the inspector's, on the other edge. Same width,
+   same grip, same hover — a column you resize should feel like the column you
+   already know how to resize. */
+.anatomy-tree {
+  position: relative;
+}
+.anatomy-tree-resize {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+}
+.anatomy-tree-resize span {
+  height: 36px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--ink-soft);
+  opacity: 0.5;
+}
+.anatomy-tree-resize:hover,
+.anatomy-tree-resize:focus-visible {
+  background: var(--chip-hover);
+  outline: 1px solid var(--ink-soft);
+  outline-offset: -1px;
+}
+@media (max-width: 760px) {
+  /* Stacked, so a vertical grip on a full-width column would be nonsense. */
+  .anatomy-tree-resize {
+    display: none;
+  }
 }
 .anatomy-inspector-resize {
   position: absolute;

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SHORTCUTS } from "@isocan/core";
-import { HIDEABLE } from "../src/lib/hideable.ts";
+import { DISPLAY_SWITCHES, HIDEABLE } from "../src/lib/hideable.ts";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const actions = read("../src/lib/actions.ts");
@@ -53,10 +53,65 @@ describe("the two controls asked for hide by right-click and come back from Sett
     expect(read("../src/components/Toolbar.tsx")).toContain('showMenu(e, "the top edge")');
   });
 
-  it("Settings under the identity menu lists the registry with a switch each and Show everything", () => {
+  it("Settings under the identity menu lists the registry with a switch each", () => {
     expect(identity).toContain("HIDEABLE.map((entry) =>");
-    expect(identity).toContain("Show everything");
     expect(identity).toContain("setChromeHidden(entry.id, !e.target.checked)");
+  });
+
+  /**
+   * **One category, one place.** The cursor glow was a row in the `···` menu
+   * while every other "what this browser draws" switch was in Settings, and
+   * neither surface mentioned the other — so a person who had seen one had no
+   * reason to believe the other existed. It is in Settings now.
+   *
+   * It is a separate list from `HIDEABLE` and that is the interesting part.
+   * `HIDEABLE`'s rule is that a control may be hidden only when what it DOES
+   * is reachable another way, and the case above refuses an entry with neither
+   * a shortcut nor a command. An effect does nothing, so it can never satisfy
+   * that rule and must never be smuggled in to sit in the same list. Same
+   * section on screen, different registry, and the reason written down.
+   */
+  describe("effects, which are not controls", () => {
+    it("keeps the glow out of the hideable registry, because it has no door", () => {
+      expect(HIDEABLE.map((entry) => entry.id)).not.toContain("cursor.glow");
+      for (const entry of DISPLAY_SWITCHES) {
+        expect(
+          HIDEABLE.some((hideable) => hideable.id === entry.id),
+          `${entry.id} cannot be both: a hideable control owes a door, an effect has none`,
+        ).toBe(false);
+      }
+    });
+
+    it("shows it in the same Settings section, reading the same store", () => {
+      expect(DISPLAY_SWITCHES.map((entry) => entry.id)).toContain("cursor.glow");
+      expect(identity).toContain("DISPLAY_SWITCHES.map((entry) =>");
+      expect(identity).toContain("setCursorGlow(e.target.checked)");
+      expect(store).toContain('const GLOW_KEY = "isocan.cursorGlow";');
+    });
+
+    it("leaves no second home for it in the drawer", () => {
+      const menu = read("../src/lib/menuentries.tsx");
+      expect(menu, "a switch in two menus is a switch that disagrees with itself").not.toMatch(
+        /label: ctx\.cursorGlow \?/,
+      );
+      expect(read("../src/components/Toolbar.tsx")).not.toMatch(/^\s*cursorGlow,$/m);
+    });
+
+    it("says what it costs everybody else, which for an effect is nothing", () => {
+      for (const entry of DISPLAY_SWITCHES) {
+        expect(entry.what, `${entry.id} should say whose view it changes`).toMatch(/yours|nobody/i);
+      }
+    });
+  });
+
+  /**
+   * "Show everything" read as an action on the CANVAS — reveal what is hidden
+   * out there, or select the lot — when it acts on the checkboxes directly
+   * above it and nothing else. It names its own list and its own size now.
+   */
+  it("names what the restore button restores, and how much of it", () => {
+    expect(identity, "the old label claimed the whole screen").not.toContain(">Show everything<");
+    expect(identity).toMatch(/Turn all \{hiddenChrome\.length\} back on/);
   });
 
   it("is local, per browser, and survives an unreadable store as nothing hidden", () => {

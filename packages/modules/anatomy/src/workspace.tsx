@@ -66,6 +66,15 @@ const status = (value: string) => (
   <span className={`anatomy-status anatomy-${value}`}>{value}</span>
 );
 
+/**
+ * The hierarchy column's bounds, matching the clamp in `style.css` — a stored
+ * width that the CSS would silently ignore is a preference that lies.
+ */
+const TREE_MIN = 200;
+const TREE_MAX = 480;
+const clampTree = (value: number): number =>
+  Math.round(Math.max(TREE_MIN, Math.min(TREE_MAX, value)));
+
 export default function Workspace({
   canvas,
   viewState,
@@ -103,14 +112,18 @@ export default function Workspace({
   const [search, setSearch] = useState("");
   const prefKey = `anatomy:pane:${canvasRecord.id}`;
   const [panePrefs] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(prefKey) ?? "null") as { left?: boolean; right?: boolean; width?: number; height?: number } | null; } catch { return null; }
+    try { return JSON.parse(localStorage.getItem(prefKey) ?? "null") as { left?: boolean; right?: boolean; width?: number; height?: number; tree?: number } | null; } catch { return null; }
   });
   const [leftOpen, setLeftOpen] = useState(() => panePrefs?.left ?? window.innerWidth > 760);
   const [rightOpen, setRightOpen] = useState(() => panePrefs?.right ?? window.innerWidth > 760);
   const [inspectorSize, setInspectorSize] = useState({ width: Math.max(220, Math.min(560, Number(panePrefs?.width) || 340)), height: Math.max(120, Math.min(600, Number(panePrefs?.height) || 280)) });
+  /* The hierarchy's width, remembered beside the inspector's in the same
+     stored preference — one key, because they are one layout. */
+  const [treeWidth, setTreeWidth] = useState(() => clampTree(Number(panePrefs?.tree) || 300));
+  const treeDrag = useRef<{ start: number; from: number } | null>(null);
   useEffect(() => {
-    try { localStorage.setItem(prefKey, JSON.stringify({ left: leftOpen, right: rightOpen, ...inspectorSize })); } catch { /* Restricted storage leaves a normal session-local pane. */ }
-  }, [prefKey, leftOpen, rightOpen, inspectorSize]);
+    try { localStorage.setItem(prefKey, JSON.stringify({ left: leftOpen, right: rightOpen, tree: treeWidth, ...inspectorSize })); } catch { /* Restricted storage leaves a normal session-local pane. */ }
+  }, [prefKey, leftOpen, rightOpen, treeWidth, inspectorSize]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -289,6 +302,7 @@ export default function Workspace({
           <span className="anatomy-mark" aria-hidden>
             ◈
           </span>
+          <span className="anatomy-select">
           <select
             aria-label="Anatomy project"
             value={selectedProject?.id ?? ""}
@@ -308,9 +322,10 @@ export default function Workspace({
               </option>
             ))}
           </select>
+          </span>
           {project && (
             <span className="anatomy-convergence">
-              {convergence(project.nodes)}% settled{" "}
+              {convergence(project.nodes)}% settled · {" "}
               <small>{project.nodes.length} concepts</small>
             </span>
           )}
@@ -616,6 +631,7 @@ export default function Workspace({
                 className={`anatomy-blueprint${leftOpen ? " has-tree" : ""}${rightOpen ? " has-inspector" : ""}`}
                 style={
                   {
+                    "--anatomy-tree-width": `${treeWidth}px`,
                     "--anatomy-inspector-width": `${inspectorSize.width}px`,
                     "--anatomy-inspector-height": `${inspectorSize.height}px`,
                   } as CSSProperties
@@ -626,6 +642,44 @@ export default function Workspace({
                     className="anatomy-tree"
                     aria-label="Concept hierarchy"
                   >
+                    {/* The same handle the inspector has, on the other edge.
+                        A column you cannot size is a column that is wrong for
+                        somebody, and concept titles wrap at 240px. */}
+                    <div
+                      className="anatomy-tree-resize"
+                      role="separator"
+                      tabIndex={0}
+                      aria-label="Resize the concept hierarchy"
+                      aria-orientation="vertical"
+                      aria-valuemin={TREE_MIN}
+                      aria-valuemax={TREE_MAX}
+                      aria-valuenow={treeWidth}
+                      title="Drag to resize. Use Left and Right arrows when focused."
+                      onPointerDown={(event) => {
+                        if (event.button !== 0) return;
+                        event.preventDefault();
+                        event.currentTarget.focus();
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        treeDrag.current = { start: event.clientX, from: treeWidth };
+                      }}
+                      onPointerMove={(event) => {
+                        const drag = treeDrag.current;
+                        if (!drag) return;
+                        setTreeWidth(clampTree(drag.from + (event.clientX - drag.start)));
+                      }}
+                      onPointerUp={(event) => {
+                        treeDrag.current = null;
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }}
+                      onKeyDown={(event) => {
+                        const step = event.key === "ArrowLeft" ? -16 : event.key === "ArrowRight" ? 16 : 0;
+                        if (!step) return;
+                        event.preventDefault();
+                        setTreeWidth((was) => clampTree(was + step));
+                      }}
+                    >
+                      <span />
+                    </div>
                     <input
                       aria-label="Search concepts"
                       placeholder="Find a concept…"
