@@ -1,9 +1,10 @@
 # Design lint: the implementation walk
 
 **Where we are — 14 September 2026:** Research and issues #299–303 are published.
-Design-lint phases 1–4 are CLOSED on current `origin/main`; phase 5 is next.
-The no-spend evaluation harness remains work to do. Model-run approval and
-human ratings remain separate person-dependent steps.
+Design-lint phases 1–4 are CLOSED; phase 5 is PART-DONE. Its complete dry-run
+harness and independent local proofs pass. The next step is design-lint phase 5
+model-usage approval, followed by human ratings on actual model outputs. No
+implementation dependency remains before that approval.
 
 The [journeys](journey.md) are acceptance and [design](design.md) names the
 mechanisms. Each phase closes only on its named proof, with a full suite,
@@ -246,7 +247,7 @@ with other technology checks explicitly recommendations.
 
 ## Phase 5 — Controlled repair evaluation (#302)
 
-**Status: NOT STARTED.** 2026-09-14 — Harness follows product phases; paid runs wait.
+**Status: PART-DONE.** 2026-09-14 — The complete local evaluation instrument passes; model-usage approval and actual human intent ratings remain open.
 
 **Work:** Prepare equal-budget rules-only versus diagnostics tasks and a dry-run
 harness, declare go/no-go thresholds, and render fixtures at intended sizes.
@@ -263,4 +264,56 @@ the harness is reviewable. Human intent ratings wait on a person's review.
 
 **Trajectory:**
 
-*nothing — implementation has not begun.*
+- **2026-09-14** — An opened popover with transparent response text passed the
+  first interaction predicate. The final check requires painted, unclipped and
+  unobscured response text, including overlays that ignore pointer events;
+  conservative DOM evidence still cannot replace human intent review.
+- **2026-09-14** — A zero-byte candidate is refused by storage before it can
+  become a render. The empty-page control uses valid HTML with an empty body;
+  invalid output consumes an attempt and retains the actual stored screen for review.
+- **2026-09-14** — Open: approve the proposed $10 CLI-reported estimated
+  API-equivalent evaluation budget, at most 72 `claude-sonnet-5` invocations
+  through the current Claude Max session. Waits on the user; billing and actual
+  provider cap enforcement are not established by the dry run.
+- **2026-09-14** — Open: collect blind intent and preference ratings for the
+  18 actual model-output pairs after the approved pilot. Waits on a person;
+  automated checks and canned outputs supply no human study ratings.
+
+**Proof record:** The conductor ran the complete source-checkout command on
+base `0fa80ee5`: 36 fresh synthetic canvas runs, 42 canned attempts, 30 saved
+repairs and 12 unchanged results. All 42 selected/adjacent document snapshots
+preserved bytes and full histories. Six readiness pairs, thirteen stored-output
+or policy negative controls, real stale-write refusal and the two-invalid-output
+case passed. The frozen 26-file fixture aggregate remains
+`00ba41f97cdfebcd200113b7605d59cb211bb3345b10c9089fc290ee528d17b9`.
+
+Independent verification checked actual input/stored/audit/browser bytes,
+19 required source hashes, 108 image hashes and all 18 blind pairs. Real Chrome
+inspection and a download click verified the review UI; original ratings stayed
+pending. A separate browser probe passed 19 cases / 38 viewport observations,
+including scaled text and a small cover. Nineteen model-boundary controls and
+sixteen summary controls used explicitly synthetic data. The actual summary
+is `instrumentation-only`: zero evaluation model calls, no measured model lift,
+no comparative cost and no human ratings.
+
+The full four-worker suite passed 5,394 tests (108 skipped) across 530 files;
+typecheck and production build exited 0. The strict local emulator-backed
+`npm run test:ci -- --maxWorkers=6` passed all 582 files: 5,951 tests passed,
+three opt-in model/sandbox tests skipped, in 420.15 seconds. No application
+package, operation, product CLI verb, shared-core/browser runtime, existing
+limit or timeout changed. The source-checkout evaluation/summary command is
+accessible to agents and documented in README and the agent guide; its new
+unit/integration tests and the actual daemon/browser walk are the test surface.
+
+The initial app entry is 762,574 raw / 258,875 gzip bytes on this base, within
+the unchanged limit. [Research and reproduction](../../research/2026-09-14-design-lint-evaluation.md),
+[compact proof](../../research/shadcn-lint/results-2026-09-14-phase5.json) and
+[complete dry-run archive](../../research/shadcn-lint/phase5-dry-run-2026-09-14.tar.gz)
+retain the evidence. The archive was extracted afresh and its bytes verified.
+
+Publication incorporated upstream `4ce3ba7f` (Voice Agent canvas selection).
+The combined tree passed all 5,394 fast tests (108 skipped) in 176.72 seconds,
+typecheck and build. The entry bytes/hash are unchanged from the proof base;
+all nineteen named lint/harness source hashes remain identical. The strict
+suite and dry run above predate this upstream UI-only refresh. Fifteen record
+guards passed. No model run or human rating was performed.

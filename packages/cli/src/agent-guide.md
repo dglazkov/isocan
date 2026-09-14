@@ -2112,6 +2112,19 @@ isocan fit <items...>                  # grow items to the size their content wa
   [optional-tool research](../../../docs/research/2026-09-14-optional-project-linters.md)
   for measured compatibility, limits and conditional recommendations.
 
+  The source checkout's standalone repair-evaluation harness uses a fresh
+  output directory:
+
+  ```sh
+  node scripts/design-lint-eval.mjs --dry-run --out /tmp/acme-design-eval
+  ```
+
+  Its six fixtures and 36 canned runs exercise a real local daemon, Chrome and
+  conditional repair with zero evaluation model calls. Dry runs establish no
+  model lift or human ratings. Model mode needs a separately user-approved
+  budget. Read the [evaluation plan](../../../docs/projects/design-lint/evaluation.md)
+  and [measured results](../../../docs/research/2026-09-14-design-lint-evaluation.md).
+
   **Past six screens with no design system, `isocan add` refuses an HTML file.**
   Two screens gets you a note, because the second screen is where a choice
   becomes a convention. Six is where a note that has been ignored stops being

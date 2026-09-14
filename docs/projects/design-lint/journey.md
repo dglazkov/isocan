@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals
-note: phases 1–4 deliver parsed diagnostics, conditional repair and scoped contracts on both surfaces, plus an advisory repository runner and measured optional-tool fixtures. The controlled repair harness is next; model-run approval and human ratings remain separate.
+note: phases 1–4 deliver parsed diagnostics, conditional repair and scoped contracts on both surfaces, plus an advisory repository runner and measured optional-tool fixtures. Phase 5 now has a complete, independently verified dry-run harness; model-run approval and actual human ratings remain open.
 ---
 # A design check that gives the next edit
 

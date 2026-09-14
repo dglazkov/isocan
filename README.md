@@ -795,6 +795,19 @@ incomplete coverage; zero findings does not establish design-policy compliance.
 The [optional-tool research](docs/research/2026-09-14-optional-project-linters.md)
 records compatibility proofs, limits and recommendations for other technologies.
 
+The source checkout also includes a repair-evaluation dry run. Choose a fresh
+output directory:
+
+```sh
+node scripts/design-lint-eval.mjs --dry-run --out /tmp/acme-design-eval
+```
+
+It exercises six fixtures in 36 canned runs through a real local daemon, Chrome
+and conditional repair, with zero evaluation model calls. It proves the harness;
+it does not infer model lift or human ratings. Model mode requires a separately
+user-approved budget. See the [evaluation plan](docs/projects/design-lint/evaluation.md)
+and [measured results](docs/research/2026-09-14-design-lint-evaluation.md).
+
 ## Architecture
 
 npm-workspaces monorepo, source-mode TypeScript (tsx + Vite consume `.ts`

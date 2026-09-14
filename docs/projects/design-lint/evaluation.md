@@ -120,8 +120,8 @@ Mismatched model identity, missing cost, invalid usage or an unconfirmed outcome
 stops the comparison rather than being assigned zero cost or clean success.
 
 Read-only preflight on 14 September found Claude Code 2.1.269 signed in through
-Claude Max. A run therefore consumes that subscription's quota; the CLI's
-reported dollar cost is **API-equivalent cost**, not evidence of a new invoice.
+Claude Max. The proposed run uses that authenticated session; the CLI's
+reported dollar cost is **estimated API-equivalent cost**, not billing evidence.
 Actual billed spend remains unavailable without billing evidence. The published
 Sonnet 5 base API prices are $2 per million input tokens and $10 per million
 output tokens; token estimates do not replace actual reported cost.
@@ -146,3 +146,22 @@ reviewable per-attempt inputs, candidates, receipts, audits and screenshots,
 plus a blind paired review sheet with ratings left empty and a separate arm key.
 The human gate remains pending until a person supplies preserved/uncertain/lost
 and preference/tie ratings. Do not infer those values from the browser checks.
+
+## Instrument built; comparison remains pending
+
+The source-checkout command is
+`node scripts/design-lint-eval.mjs --dry-run --out <fresh-directory>`.
+The [independent instrument report](../../research/2026-09-14-design-lint-evaluation.md)
+records 36 actual daemon/browser runs and 42 canned attempts, with no evaluation
+model calls or human ratings. Its archive includes the complete blind review.
+Use `--summarize <directory> --ratings <file>` only after a person rates the
+actual model outputs; the dry-run summary always remains instrumentation-only.
+
+The final browser predicate also checks painted response text and conservative
+DOM occlusion. Transparent overlays can produce conservative failures, so this
+remains a bounded browser instrument. A byte-empty candidate is a storage refusal;
+the rendered empty-page control is valid HTML with an empty body. Invalid output
+consumes an attempt while retaining the actual stored screen for review.
+
+Approval for the proposed evaluation usage and subsequent human ratings remain
+separate. This implementation record does not approve or execute either step.

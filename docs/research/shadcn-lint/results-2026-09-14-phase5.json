@@ -1,0 +1,508 @@
+{
+  "phase": 5,
+  "status": "part-done",
+  "date": "2026-09-14",
+  "baseCommit": "0fa80ee5503abff9770168539e440a2679c7339c",
+  "source": {
+    "node": "v24.13.0",
+    "gitRevision": "0fa80ee5503abff9770168539e440a2679c7339c",
+    "hashes": {
+      "scripts/design-lint-eval.mjs": "0005ccad1041f7de093f85dd291e404882c6366ac7464ba25824c2c9fa22c108",
+      "scripts/lib/design-lint-eval-runner.mjs": "4c673ddd09041714860a5c88e0a630017ed02eb661d45b3149b26fa509bd4c74",
+      "scripts/lib/design-lint-eval-model.mjs": "799199ee757faeac5a90bdb6de884a1378f3081928cad7f9f63a4f0e11e083bd",
+      "scripts/lib/design-lint-eval-browser.mjs": "5f778e2ddbf58b3cad8af5ec6b4bd11554d733796b8db71707bc61abdc6d0718",
+      "scripts/lib/design-lint-eval-score.mjs": "2abc54f1af668819f4da3cdf7b73d6ed5b119ecaa32ec904518993bb55b3b6a8",
+      "scripts/lib/browser.mjs": "f93e28691de92d921f77bff05b4c7119bf6b3f90b80908c4031aa81d8a4733d9",
+      "packages/core/src/designaudit.ts": "8d2d3ab5091133c59cd1baf6ea1df97e7ffcdfeef0e2dc4ad9e64738d7fd8b56",
+      "packages/core/src/design-contract.ts": "26cc06cc9a514cc87cf454a1e4d6324bf91ec01295726fa001b79b948ce775df",
+      "packages/core/src/design-contract-rules.ts": "a3b0100e03bea83d13d74a54c846010936461034994dcb156b4ab10befbb9858",
+      "packages/core/src/designmd.ts": "fa81c2459ab9d128e7576d3ad539d6d1a9414c0e105cd7dad0e14dcf2dad1cff",
+      "packages/core/src/tokens.ts": "e4af2ceaaab9f144833f098986e2cdc3362fbf646faae6ef4b683deb675fe1ac",
+      "packages/core/src/memory.ts": "66973da3b310abdd5750df16b13dd2e8e07128ae3f30f0d376cd7e0fc70508ac",
+      "packages/core/src/designsystem.ts": "2d8767c67190de251941870b56b1ddbb2c061ea2b8583c19ea2e8dfa808773e6",
+      "packages/core/src/canvas-scope.ts": "6cdcd1b0b2160efb3ed35c6502fb98b9afe013eb8024061c0e6667ff0e85c520",
+      "packages/api/src/context-reader.ts": "b7b9ec1a4c67b365c38be23b14601db226667f0c988ad7c602e14d7762e22715",
+      "packages/api/src/design-audit-reader.ts": "f6853916146a300d26c789edab5a2883ef5a32e26aab609b7c77976709dfc316",
+      "packages/api/src/design-audit.ts": "e7a3c81ef849b0129ca5d5538adb04dca01de73dc5344059e4f36bb109a8a30f",
+      "packages/api/src/connect.ts": "d27a9aa14e5d6258a94543caa3993f42cbb6483957c1a6beb1801fb0bc46f80f",
+      "package-lock.json": "2a3f6add6d3fff24d765e50c9bcbd37b3dc642b2958f76b039c762a0e4318151"
+    },
+    "boundary": "Required named harness, scorer, parser, governing resolver and API sources plus dependency lock; not a transitive fingerprint of every daemon/platform input."
+  },
+  "gates": [
+    {
+      "command": "npm test -- --maxWorkers=4",
+      "exitCode": 0,
+      "filesPassed": 530,
+      "filesSkipped": 11,
+      "testsPassed": 5394,
+      "testsSkipped": 108,
+      "durationSeconds": 198.99
+    },
+    {
+      "command": "npm run typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:ci -- --maxWorkers=6",
+      "environment": "Local JRE21 and Firestore emulator1.22.0; no cloud resource",
+      "exitCode": 0,
+      "filesPassed": 582,
+      "testsPassed": 5951,
+      "testsSkipped": 3,
+      "durationSeconds": 420.15,
+      "skips": [
+        "packages/cli/test/dispatch.test.ts: one opt-in model test",
+        "packages/cli/test/acp.test.ts: two opt-in model/sandbox tests"
+      ]
+    }
+  ],
+  "bundle": {
+    "entry": "/assets/index-k3a2TSzf.js",
+    "rawBytes": 762574,
+    "gzipBytes": 258875,
+    "sha256": "75945c5fe067994f380c4dd265204ce1023bf728f0373c637fb89c9bf7b6c6cb"
+  },
+  "dryRun": {
+    "command": "node scripts/design-lint-eval.mjs --dry-run --out <fresh directory> --seed design-lint-pilot-v1",
+    "exitCode": 0,
+    "runs": 36,
+    "candidateAttempts": 42,
+    "sumCorrectionRunElapsedMs": 78239.731374,
+    "elapsedBoundary": "Sum of run correction-loop times; excludes upfront readiness, controls, host creation/teardown and review packaging.",
+    "modelCalls": 0,
+    "readinessPairs": 6,
+    "negativeControls": [
+      {
+        "id": "empty",
+        "passed": true
+      },
+      {
+        "id": "hidden",
+        "passed": true
+      },
+      {
+        "id": "clipped",
+        "passed": true
+      },
+      {
+        "id": "styles-removed",
+        "passed": true
+      },
+      {
+        "id": "new-uncovered",
+        "passed": true
+      },
+      {
+        "id": "broken-interaction",
+        "passed": true
+      },
+      {
+        "id": "transparent-feedback",
+        "passed": true
+      },
+      {
+        "id": "clipped-feedback",
+        "passed": true
+      },
+      {
+        "id": "covered-text",
+        "passed": true
+      },
+      {
+        "id": "recipe-removed",
+        "passed": true
+      },
+      {
+        "id": "recipe-renamed",
+        "passed": true
+      },
+      {
+        "id": "governing-document-changed",
+        "passed": true
+      },
+      {
+        "id": "adjacent-document-changed",
+        "passed": true
+      }
+    ],
+    "staleWritePassed": true,
+    "invalidOutputControl": {
+      "passed": true,
+      "attempts": 2,
+      "modelCalls": 0
+    },
+    "sourceAndStoredEvidence": {
+      "passed": true,
+      "purpose": "Independent comparison of actual saved evidence files, initial frozen inputs, policy histories, receipts and screenshot hashes. Canned outputs are instrumentation evidence only.",
+      "runs": 36,
+      "freshCanvasIds": 36,
+      "candidateAttempts": 42,
+      "receiptCounts": {
+        "unchanged": 12,
+        "saved": 30
+      },
+      "protectedDocumentSnapshots": 42,
+      "sourceHashesVerified": 19,
+      "reviewImageHashesVerified": 108,
+      "reviewPairs": 18,
+      "allActualHumanRatingsPending": true,
+      "modelCalls": 0,
+      "verdict": "instrumentation-only",
+      "reportSha256": "5bccba9ec155ddd8ee87bcdedd408cdee7cf75932e8f1dafa27e4d985922f5af"
+    },
+    "summary": {
+      "schemaVersion": 1,
+      "mode": "dry-run",
+      "verdict": "instrumentation-only",
+      "modelLift": null,
+      "reason": "Canned outputs prove the instrument only; no model comparison occurred.",
+      "reasons": [
+        "Comparable reported API-equivalent costs are unavailable.",
+        "Human intent and preference ratings are pending."
+      ],
+      "metrics": {
+        "rules-only": {
+          "runs": 18,
+          "completed": 18,
+          "medianRounds": 1,
+          "medianApiEquivalentCost": null,
+          "interactionFailures": 0,
+          "newUnexamined": 0
+        },
+        "diagnostics": {
+          "runs": 18,
+          "completed": 18,
+          "medianRounds": 1,
+          "medianApiEquivalentCost": null,
+          "interactionFailures": 0,
+          "newUnexamined": 0
+        }
+      },
+      "human": {
+        "available": false,
+        "intentLost": {
+          "rules-only": null,
+          "diagnostics": null
+        },
+        "preference": {
+          "rules-only": null,
+          "diagnostics": null,
+          "tie": null
+        }
+      },
+      "comparison": {
+        "completionDelta": 0,
+        "roundsReduction": 0,
+        "apiEquivalentCostReduction": null,
+        "objectiveThreshold": false,
+        "safeguards": false,
+        "ceilingEffect": false
+      },
+      "billedSpend": null
+    }
+  },
+  "frozenFixtures": {
+    "schemaVersion": 1,
+    "root": "test/fixtures/design-lint-eval",
+    "algorithm": "sha256",
+    "files": {
+      "README.md": "c381fa0321b24c6bacc79e7b077eb7c140b5a2fb9f8c6bf7ce68701e4dd03242",
+      "button-treatment/DESIGN.md": "b65747d808b89432200468a19e32c03b519ed9a9fe1e94079bb977d9e4dc044e",
+      "button-treatment/initial.html": "c3474fc7dcc8367e3b3edb1cdb91f2f0e4ad17f5a9488d2f914f05a0a15e0570",
+      "button-treatment/repaired.html": "29afa87dee9a769bd9a45d6f68f378756bb76029846158814971ef713b619ab5",
+      "button-treatment/task.json": "3f27575da94ecfde8adb3ddd4a7fea4219ee74744f1fa4c87f60656ae2454841",
+      "card-spacing/DESIGN.md": "6ceb6a3428096c8f25caeded4f55552ab8a00455d9b9eff33b06834cabf14c18",
+      "card-spacing/initial.html": "b2d37a5f91969c1e2e1ae9e8fe91d310fcdb5e5eb1df88657923719fb39699de",
+      "card-spacing/repaired.html": "c7ac962e1df12e9331436bbc587b855a4d3edabc5ddde1e9e8629be7bbcc717f",
+      "card-spacing/task.json": "335e944d5f1435db25b8fe3ebf2daee57731b6093e46d7ff8b209dd8e77350f2",
+      "clean-control/DESIGN.md": "6ceb6a3428096c8f25caeded4f55552ab8a00455d9b9eff33b06834cabf14c18",
+      "clean-control/initial.html": "2740e8cb613a7bc154b2ecce7e96ce921cc0b00e17d705242ba9d8588183adfb",
+      "clean-control/repaired.html": "2740e8cb613a7bc154b2ecce7e96ce921cc0b00e17d705242ba9d8588183adfb",
+      "clean-control/task.json": "3db57422a49793991b0d784928fc0a048c5dbb529c8e51f7798194174f05d284",
+      "ink-reference/DESIGN.md": "6ceb6a3428096c8f25caeded4f55552ab8a00455d9b9eff33b06834cabf14c18",
+      "ink-reference/initial.html": "386204259cd5e6b84570a2bf631c3e13feeac911edd39329141d2fa3ba67d36d",
+      "ink-reference/repaired.html": "bcf3f3942ce77ccdb26f441c8ce16cefe1790cec0f0d61024492c7eed3fa0733",
+      "ink-reference/task.json": "4ce3022a1469752ed8d33e8de8177b4e3f661f9009f2478bc5170223c1663e00",
+      "scoped-lane/DESIGN.md": "6ceb6a3428096c8f25caeded4f55552ab8a00455d9b9eff33b06834cabf14c18",
+      "scoped-lane/adjacent-DESIGN.md": "f1950459417651c4ac484046ad542e9ea03ad2e0f876eb7b0678fc96b908c352",
+      "scoped-lane/initial.html": "c2a90f866252800aaa7b5b2d459e3b41ec5984985c18d4aece5aabb3fb91aa76",
+      "scoped-lane/repaired.html": "732c92e7a4add593ee1288ea542ccf037069f9f9112cb3265cbce971e0c63bfc",
+      "scoped-lane/task.json": "728ac46f531e36ba8a353099e17b7831fde57a62e55fdcf5b99aa4fb694986a1",
+      "type-shorthand/DESIGN.md": "6ceb6a3428096c8f25caeded4f55552ab8a00455d9b9eff33b06834cabf14c18",
+      "type-shorthand/initial.html": "4a8028246610cd46b8d6f4bfa20d11434d7c0fc886ed86c77cbd9d7f17a4dd42",
+      "type-shorthand/repaired.html": "f6ed93af011fbce985344ac4aa254125a908bd594f0ebab467828b4c3997d9e4",
+      "type-shorthand/task.json": "b9947a3134d060f1306d9964cceab9e038e0f62f72663c2905bd1608c6233d9b"
+    },
+    "fixtureSetSha256": "00ba41f97cdfebcd200113b7605d59cb211bb3345b10c9089fc290ee528d17b9",
+    "aggregateDefinition": "SHA-256 of sorted relative-path rows, each SHA256 + two spaces + path + newline"
+  },
+  "browser": {
+    "command": "independent frozen-browser probe (inputs and source hashes retained in archive)",
+    "exitCode": 0,
+    "version": "Chrome/152.0.7977.84",
+    "cases": 19,
+    "viewportObservations": 38,
+    "passed": true,
+    "boundary": "Actual DOM/computed styles/text geometry and native focus/click evidence. Conservative occlusion may reject transparent overlays; no human or pixel-perfect certification."
+  },
+  "reviewUi": {
+    "purpose": "Independent actual browser review/download check; in-memory synthetic selection was not ingested. Actual human ratings remain pending.",
+    "evaluationId": "d31552a03c6856d442f18f3805830b513dae7f0ff82aef5a1bceacafac165d5d",
+    "pairs": 18,
+    "images": 108,
+    "brokenImages": 0,
+    "intentOptions": [
+      "",
+      "preserved",
+      "uncertain",
+      "lost"
+    ],
+    "conditionNamesHidden": true,
+    "actualCdpDownloadClick": true,
+    "downloadedSyntheticSelection": "uncertain",
+    "savedRatingsRemainPending": true,
+    "reviewSha256": "82ff43888160c3d7127a6fba21753b06958c0531ec1de86bd58ad5e704541806",
+    "modelCalls": 0,
+    "humanRatings": 0
+  },
+  "modelBoundaryControls": {
+    "modelCalls": 0,
+    "syntheticProviderData": true,
+    "checks": [
+      {
+        "name": "fixed per-call allowance never increases after cheaper calls",
+        "passed": true
+      },
+      {
+        "name": "pending call cannot start a concurrent invocation",
+        "passed": true
+      },
+      {
+        "name": "missing cost ends ledger without inventing zero",
+        "passed": true
+      },
+      {
+        "name": "overbudget result ends ledger retaining reported excess",
+        "passed": true
+      },
+      {
+        "name": "seventy-third invocation refused",
+        "passed": true
+      },
+      {
+        "name": "zero/negative/unavailable approval budgets rejected",
+        "passed": true
+      },
+      {
+        "name": "confirmed synthetic usage accepted without real provider",
+        "passed": true
+      },
+      {
+        "name": "missing cost stops model comparison",
+        "passed": true
+      },
+      {
+        "name": "unexpected model stops model comparison",
+        "passed": true
+      },
+      {
+        "name": "extra turn stops model comparison",
+        "passed": true
+      },
+      {
+        "name": "missing token evidence stops model comparison",
+        "passed": true
+      },
+      {
+        "name": "over output allowance stops model comparison",
+        "passed": true
+      },
+      {
+        "name": "unconfirmed outcome stops model comparison",
+        "passed": true
+      },
+      {
+        "name": "split UTF-8 remains exact through capture",
+        "passed": true
+      },
+      {
+        "name": "invalid UTF-8 never becomes repaired candidate",
+        "passed": true
+      },
+      {
+        "name": "only one candidate HTML key accepted",
+        "passed": true
+      },
+      {
+        "name": "diagnostics add actual report without changing shared prompt prefix",
+        "passed": true
+      },
+      {
+        "name": "routing/customization env does not leak into model process",
+        "passed": true
+      },
+      {
+        "name": "unapproved mode refused before provider invocation",
+        "passed": true
+      }
+    ],
+    "preflight": {
+      "available": true,
+      "version": "2.1.269 (Claude Code)",
+      "helpSha256": "ae85d661e9c086f05637ebcd868f5702b477ff6e55e2e65b8ada7807cd51a4b6",
+      "model": {
+        "model": "claude-sonnet-5",
+        "outputTokens": 8192,
+        "effort": "high",
+        "maxTurns": 1,
+        "retries": 0,
+        "tools": [],
+        "maxCalls": 72
+      },
+      "contextBoundary": "Safe mode disables local customizations; admin-managed provider policy may still apply. OS login credentials are not copied into evidence.",
+      "budgetBoundary": "CLI-reported estimated/API-equivalent token cost; admin-managed modelPricing can affect rates. Not billing evidence. Actual provider cap enforcement remains unmeasured."
+    }
+  },
+  "summaryControls": {
+    "syntheticControlData": true,
+    "actualModelCalls": 0,
+    "actualHumanRatings": 0,
+    "checks": [
+      {
+        "name": "immediate success ceiling is not lift",
+        "passed": true
+      },
+      {
+        "name": "pending human values remain inconclusive",
+        "passed": true
+      },
+      {
+        "name": "unknown cost remains inconclusive",
+        "passed": true
+      },
+      {
+        "name": "unknown coverage remains inconclusive",
+        "passed": true
+      },
+      {
+        "name": "two additional completed runs passes objective threshold with safeguards",
+        "passed": true
+      },
+      {
+        "name": "one additional completed run below threshold does not pass",
+        "passed": true
+      },
+      {
+        "name": "tied completion and lower median rounds can pass",
+        "passed": true
+      },
+      {
+        "name": "additional interaction failure blocks adoption",
+        "passed": true
+      },
+      {
+        "name": "new unexamined styling blocks adoption",
+        "passed": true
+      },
+      {
+        "name": "additional human intent-lost blocks adoption",
+        "passed": true
+      },
+      {
+        "name": "dry mode never interprets synthetic difference as model lift",
+        "passed": true
+      },
+      {
+        "name": "stale evaluation ratings refused",
+        "passed": true
+      },
+      {
+        "name": "candidate hash substitution refused",
+        "passed": true
+      },
+      {
+        "name": "duplicate review pair refused",
+        "passed": true
+      },
+      {
+        "name": "missing pairs refused",
+        "passed": true
+      },
+      {
+        "name": "review only contains pending ratings and no condition labels",
+        "passed": true
+      }
+    ]
+  },
+  "archive": {
+    "archive": "phase5-dry-run-2026-09-14.tar.gz",
+    "sha256": "e2ffdd4e1e0ee9a5ab1033d1bbd62955155cd85552728fb3581319ea2bbf7c43",
+    "bytes": 3273267,
+    "entries": 1101,
+    "identicalFilesStoredAsInternalHardlinks": 677,
+    "primaryReportSha256": "5bccba9ec155ddd8ee87bcdedd408cdee7cf75932e8f1dafa27e4d985922f5af",
+    "primaryEvidenceRoot": "phase5-dry-run",
+    "originalOutputDirectory": "/tmp/isocan-phase5-conductor-full"
+  },
+  "archiveExtractionVerified": true,
+  "remaining": [
+    {
+      "step": "evaluation model pilot",
+      "status": "requires user approval",
+      "proposedModel": "claude-sonnet-5",
+      "maxInvocations": 72,
+      "proposedReportedApiEquivalentBudgetUsd": 10,
+      "approved": false,
+      "actualBilledSpend": null,
+      "providerCapEnforcement": "unmeasured"
+    },
+    {
+      "step": "18-pair blind human intent/preference review of actual model outputs",
+      "status": "pending model run and a person",
+      "humanRatings": 0
+    }
+  ],
+  "applicationDependenciesAdded": 0,
+  "cloudResourcesCreated": 0,
+  "publicationBaseCommit": "4ce3ba7ff938c2988df598e1e97f3e9ada64080d",
+  "publicationRefresh": {
+    "upstreamChange": "Ten Voice Agent UI lines add direct canvas selection; no design-lint source or dependency change.",
+    "gates": [
+      {
+        "command": "npm test -- --maxWorkers=4",
+        "exitCode": 0,
+        "filesPassed": 530,
+        "filesSkipped": 11,
+        "testsPassed": 5394,
+        "testsSkipped": 108,
+        "durationSeconds": 176.72
+      },
+      {
+        "command": "npm run typecheck",
+        "exitCode": 0
+      },
+      {
+        "command": "npm run build",
+        "exitCode": 0
+      }
+    ],
+    "bundle": {
+      "entry": "/assets/index-k3a2TSzf.js",
+      "rawBytes": 762574,
+      "gzipBytes": 258875,
+      "sha256": "75945c5fe067994f380c4dd265204ce1023bf728f0373c637fb89c9bf7b6c6cb"
+    },
+    "strictProofBase": "0fa80ee5503abff9770168539e440a2679c7339c",
+    "note": "The strict proof and complete dry run precede this upstream Voice Agent UI refresh; full fast/typecheck/build passed on the combined tree. All named lint/harness source hashes are unchanged."
+  },
+  "recordGuards": {
+    "filesPassed": 3,
+    "testsPassed": 15,
+    "exitCode": 0
+  }
+}
