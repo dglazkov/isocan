@@ -222,6 +222,7 @@ describe("apply ∘ invert round-trips", () => {
   it("non-undoable ops invert to null", () => {
     expect(invertOperation(s, { type: "trash.empty" })).toBeNull();
     expect(invertOperation(s, { type: "project.delete" })).toBeNull();
+    expect(invertOperation(s, { type: "item.pruneVersions", itemId: "itm_1", keep: 1 })).toBeNull();
   });
 });
 

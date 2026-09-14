@@ -1242,7 +1242,13 @@ that woke you, with no `session start` needed.
   stack is a CHOICE, not the newest: `version promote` puts any version
   back on top, `isocan versions <item>` marks it `▶`, and `isocan get`
   follows it. When you are asked to change "this item", change the version
-  it currently points at — not the last one that happened to land.
+  it currently points at — not the last one that happened to land. A stack
+  is worth keeping whole when people made it; one a script regenerates on
+  every run is silt, and every version's metadata rides on every load of
+  the canvas. Bound those: `isocan version prune <item> --keep 14 --force`
+  keeps the newest fourteen (the current one always survives), and `gc
+  --keep-versions N --force` does it for every item before it sweeps. Not
+  undoable — say so before you do it to somebody else's stack.
 - **Leave the canvas tidy.** What a person does by dragging — edges snapping
   together, gaps evening out — you do with `isocan align <items…> --to
 isocan fit <items...>                  # grow items to the size their content wants, and settle them apart
@@ -1619,13 +1625,17 @@ make),
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
+`version prune <items…> --keep N --force` (`--all`: every item; NOT undoable —
+ask first, and reach for it when a stack YOU keep regenerating has grown past
+what anybody compares),
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
 `undo`/`redo`, `wait`, `tail -f` (`--archived`: the full history, including
 what gc compacted), `recap` (that history at decaying resolution — old spans
 summarized, recent ops verbatim), `evals corpus|pairs` (what people have asked
 agents for here and what came of it — a local report, never a score),
-`gc [--all]` (`--all`: every canvas you are
-admitted to at this home, not just this one),
+`gc [--all] [--keep-versions N --force]` (`--all`: every canvas you are
+admitted to at this home, not just this one; `--keep-versions`: prune every
+stack on this canvas to its newest N first),
 `blobs [--push]` (are this canvas's bytes at its home — and send the ones
 that are not; the answer when a teammate sees an item and no picture),
 `copy <items...> [--to <canvas>] [--at x,y]` (copy items beside themselves, or

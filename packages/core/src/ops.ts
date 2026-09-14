@@ -228,6 +228,23 @@ export type Operation =
     }
   | { type: "item.addVersion"; itemId: string; version: NewVersion }
   | { type: "item.setCurrentVersion"; itemId: string; versionId: string }
+  /**
+   * **Keep only the newest `keep` versions of one item.** The rest leave the
+   * stack for good — like `trash.empty`, NOT undoable, and confirmation-gated
+   * at every surface that offers it.
+   *
+   * Why an op and not maintenance beside `gc`: a replica folds the log, and a
+   * stack shortened at the home outside the log would leave every replica
+   * carrying versions the home has forgotten — two copies of one item that
+   * disagree about its history. In the log, it replays.
+   *
+   * Newest by stack order, which is creation order. The CURRENT version is
+   * always kept, even when it is older than the cut: pruning is about size,
+   * and must never change what an item shows. Bytes are the collector's
+   * business — the versions' blobs become unreachable once the entries that
+   * introduced them fall past the undo horizon, and `gc` sweeps them then.
+   */
+  | { type: "item.pruneVersions"; itemId: string; keep: number }
   | {
       // internal: inverse of item.addVersion only
       type: "item.removeVersion";

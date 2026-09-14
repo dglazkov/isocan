@@ -402,6 +402,7 @@ export function opLocus(op: Operation, canvas: CanvasContents): { x: number; y: 
     case "item.addVersion":
     case "item.setCurrentVersion":
     case "item.restoreVersion":
+    case "item.pruneVersions":
     case "item.delete":
     case "item.restore":
       return itemCenter(op.itemId);

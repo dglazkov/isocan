@@ -32,6 +32,7 @@ import type {
 } from "@isocan/core";
 import {
   fitMoves,
+  prunedVersions,
   type FitTarget,
   BROWSER_MIME,
   DEFAULT_HOME_URL,
@@ -357,7 +358,8 @@ The system:
              point it at the localhost dev server you're building and the
              human watches it run (vite HMR keeps it fresh by itself)
   version    every \`edit\` stacks a new version on the item; \`version promote\`
-             brings any older one back to the top
+             brings any older one back to the top; \`version prune --keep N\`
+             bounds a stack that a generator keeps growing (not undoable)
   comment    threads pinned to an item (--item) or a spot (--at x,y); write
              @Name to address someone, \`comment anchor\` to re-pin a thread.
              One thread may be \`comment main\`: the canvas's Chat, as the
@@ -5675,6 +5677,74 @@ version
     }),
   );
 
+version
+  .command("prune [items...]")
+  .description(
+    "Keep only the newest N versions of an item — the rest are gone for good (requires --force; not undoable)",
+  )
+  .requiredOption("--keep <n>", "how many versions to keep on each stack")
+  .option("--all", "every item on the canvas, not just the ones named")
+  .option("--force", "confirm")
+  .action(
+    run(
+      async (
+        refs: string[],
+        opts: { keep: string; all?: boolean; force?: boolean },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const keep = Number(opts.keep);
+        if (!Number.isInteger(keep) || keep < 1) {
+          throw new Error(`--keep wants a whole number of at least 1, not "${opts.keep}"`);
+        }
+        if (refs.length === 0 && !opts.all) {
+          throw new Error("name the items to prune, or --all for every item on the canvas");
+        }
+        const items = opts.all
+          ? Object.values(snapshot.canvas.items)
+          : [...new Set(refs.map((ref) => resolveItem(snapshot, ref)))];
+        // Only stacks that would actually shrink: a logged no-op is noise in
+        // everybody's history, and the count below must be true.
+        const work = items
+          .map((item) => ({ item, dropping: prunedVersions(item, keep) }))
+          .filter(({ dropping }) => dropping.length > 0);
+        const dropping = work.reduce((n, w) => n + w.dropping.length, 0);
+        if (work.length === 0) {
+          if (ctx.json) return printJson({ pruned: [], dropped: 0, keep });
+          console.log(`nothing to prune — no stack here is deeper than ${keep}`);
+          return;
+        }
+        if (!opts.force) {
+          throw new Error(
+            `pruning ${dropping} version${dropping === 1 ? "" : "s"} across ${work.length} item${work.length === 1 ? "" : "s"} is not undoable — re-run with --force`,
+          );
+        }
+        for (const { item } of work) {
+          await sendOp(ctx, p.id, { type: "item.pruneVersions", itemId: item.id, keep });
+        }
+        if (ctx.json) {
+          return printJson({
+            pruned: work.map(({ item, dropping: d }) => ({ itemId: item.id, dropped: d.length })),
+            dropped: dropping,
+            keep,
+          });
+        }
+        printTable(
+          work.map(({ item, dropping: d }) => ({
+            item: item.id,
+            title: truncate(item.title || item.id, 32),
+            dropped: String(d.length),
+            kept: String(item.versions.length - d.length),
+          })),
+        );
+        console.log(
+          `pruned ${dropping} version${dropping === 1 ? "" : "s"} — the bytes go when \`isocan gc\` next runs`,
+        );
+      },
+    ),
+  );
+
 program
   .command("rm <items...>")
   .description("Delete item(s) to the trash — several at once is one undo step")
@@ -9613,18 +9683,70 @@ program
   .description("Reclaim storage: compact the oplog and sweep unreachable blobs")
   .option("--dry-run", "report what would be freed without deleting anything")
   .option("--keep-ops <n>", "how many recent operations to keep undoable (default 500)")
+  .option(
+    "--keep-versions <n>",
+    "first prune every item's stack to its newest N versions (not undoable; needs --force)",
+  )
+  .option("--force", "confirm --keep-versions")
   // One act, one place: collecting a home is the same act as collecting a
   // canvas, over a different set, so it is a flag on this verb rather than a
   // second one. `--all` also names no canvas, which is the point — it is the
   // command to run in a directory bound to nothing.
   .option("--all", "sweep every canvas you are admitted to at this home, not just this one")
   .action(
-    run(async (opts: { dryRun?: boolean; keepOps?: string; all?: boolean }, cmd: Command) => {
+    run(
+      async (
+        opts: {
+          dryRun?: boolean;
+          keepOps?: string;
+          keepVersions?: string;
+          force?: boolean;
+          all?: boolean;
+        },
+        cmd: Command,
+      ) => {
       const ctx = await ctxOf(cmd);
       const request = {
         ...(opts.dryRun ? { dryRun: true } : {}),
         ...(opts.keepOps !== undefined ? { keepOps: Number(opts.keepOps) } : {}),
       };
+      /**
+       * `--keep-versions` is `version prune --all` run first, so one command
+       * says "bound this canvas": stacks to N, log to the horizon, bytes
+       * swept. The prune is an OP and the sweep is maintenance, which is why
+       * it is a flag here and not a field in `GcRequest` — the collector must
+       * never write history. Per canvas only: a home-wide prune is a bigger
+       * decision than a flag should carry.
+       */
+      if (opts.keepVersions !== undefined) {
+        const keep = Number(opts.keepVersions);
+        if (!Number.isInteger(keep) || keep < 1) {
+          throw new Error(`--keep-versions wants a whole number of at least 1, not "${opts.keepVersions}"`);
+        }
+        if (opts.all) throw new Error("--keep-versions prunes one canvas — drop --all, or run it per canvas");
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const work = Object.values(snapshot.canvas.items)
+          .map((item) => ({ item, dropping: prunedVersions(item, keep).length }))
+          .filter(({ dropping }) => dropping > 0);
+        const dropping = work.reduce((n, w) => n + w.dropping, 0);
+        if (dropping > 0 && !opts.dryRun) {
+          if (!opts.force) {
+            throw new Error(
+              `pruning ${dropping} version${dropping === 1 ? "" : "s"} across ${work.length} item${work.length === 1 ? "" : "s"} is not undoable — re-run with --force`,
+            );
+          }
+          for (const { item } of work) {
+            await sendOp(ctx, p.id, { type: "item.pruneVersions", itemId: item.id, keep });
+          }
+        }
+        if (!ctx.json) {
+          console.log(
+            opts.dryRun
+              ? `would prune ${dropping} version${dropping === 1 ? "" : "s"} across ${work.length} item${work.length === 1 ? "" : "s"}`
+              : `pruned ${dropping} version${dropping === 1 ? "" : "s"} across ${work.length} item${work.length === 1 ? "" : "s"}`,
+          );
+        }
+      }
       if (opts.all) {
         const home = await ctx.client.gcHome(request);
         if (ctx.json) return printJson(home);

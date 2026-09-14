@@ -469,13 +469,17 @@ isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore
 isocan edit <item> [<file>]        # new version from a file or $EDITOR
 isocan versions <item> · version promote <item> <version>
+isocan version prune <items...> --keep N --force   # bound a stack a generator
+                                       # keeps growing (--all: every item; not undoable)
 isocan comment add (--item <item> | --at x,y) <text> · reply · list · rm
 isocan comment anchor <thread> (<item> | --at x,y)   # re-pin / detach a thread
 isocan comment main [<thread> | --clear]   # the docked agent↔user channel
 isocan undo · redo · trash list|restore|empty --force
 isocan gc [--all] [--dry-run] [--keep-ops N]   # compact the oplog, sweep
                                        # unreachable blobs (--all: every canvas
-                                       # you are admitted to at this home)
+                                       # you are admitted to at this home;
+                                       # --keep-versions N --force: prune every
+                                       # stack here to its newest N first)
 isocan session start|on|work|point|move|say|end · isocan who   # presence
 isocan session on <thread> --say "…"    # picked it up; shows live in the thread
 isocan activity [who] [-n N]           # what has been happening here, newest first
@@ -540,6 +544,16 @@ compacted history is archived, never lost to the product), then sweeps blobs
 unreachable from live items, the
 trash, and the retained log. Blobs younger than ten minutes are never swept,
 covering the gap between upload and `item.add`.
+
+Version stacks are kept whole by default — every `edit` is history. What a
+generator republishes on every commit is not: `isocan version prune <item>
+--keep N --force` (or `gc --keep-versions N --force` for every item) keeps the
+newest N and the current one, logged as `item.pruneVersions` so replicas
+forget the same versions, and the next `gc` sweeps their bytes. Measured on a
+14-panel board with 837 versions: the snapshot every load and every CLI
+command carries is ~220 KB of version metadata against ~90 KB of content;
+the render itself only ever fetches the current version, so the cost of a
+deep stack is the snapshot and the storage, not the screens.
 
 The daemon also does this to itself: every canvas it holds, a minute after it
 starts serving and every hour after that (`ISOCAN_GC_INTERVAL_MS`), so a home

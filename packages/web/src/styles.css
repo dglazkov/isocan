@@ -2132,6 +2132,16 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 }
 .fan-card .fan-label b { color: var(--ink); font-weight: 600; }
 .fan-card .fan-body { flex: 1; overflow: hidden; position: relative; pointer-events: none; }
+/* Past the live window the fan draws labels, not documents: a stack 150 deep
+   is 150 iframes otherwise, which is the one place the canvas ever paid for
+   every version at once. */
+.fan-card.folded .fan-body { display: flex; align-items: center; justify-content: center; color: var(--ink-muted); font-size: 11px; }
+/* The offer to bound a silted stack — above the fan, beside the card, and
+   two-step like emptying the trash, because it is the same kind of act. */
+.fan-prune {
+  position: absolute; z-index: 4; display: flex; align-items: center; gap: 6px;
+  white-space: nowrap; font-size: 12px;
+}
 
 /* ---------- comments ---------- */
 .pin {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { OpValidationError, applyOperation } from "../src/index.ts";
-import type { Operation } from "../src/index.ts";
+import { OpValidationError, applyOperation, pruneVersions, prunedVersions } from "../src/index.ts";
+import type { CanvasState, Operation } from "../src/index.ts";
 import { apply, bob, envelope, nv, seedState } from "./helpers.ts";
 
 function expectRejects(op: Operation, code: string) {
@@ -396,5 +396,63 @@ describe("semantics", () => {
     apply(s, { type: "item.delete", itemId: "itm_2" });
     apply(s, { type: "project.update", patch: { title: "x" } });
     expect(s).toEqual(snapshot);
+  });
+});
+
+describe("item.pruneVersions", () => {
+  /** itm_1 with five versions, ver_1 … ver_5, newest on top. */
+  function stacked(): CanvasState {
+    let s = seedState();
+    for (const id of ["ver_3", "ver_4", "ver_5"]) {
+      s = apply(s, { type: "item.addVersion", itemId: "itm_1", version: nv(id) })!;
+    }
+    // seedState made ver_1 and ver_1b; rename in the reader's head: five deep.
+    expect(s.canvas.items["itm_1"]!.versions.map((v) => v.id)).toEqual([
+      "ver_1",
+      "ver_1b",
+      "ver_3",
+      "ver_4",
+      "ver_5",
+    ]);
+    return s;
+  }
+
+  it("keeps the newest N, in stack order", () => {
+    const s = apply(stacked(), { type: "item.pruneVersions", itemId: "itm_1", keep: 2 })!;
+    expect(s.canvas.items["itm_1"]!.versions.map((v) => v.id)).toEqual(["ver_4", "ver_5"]);
+    expect(s.canvas.items["itm_1"]!.currentVersionId).toBe("ver_5");
+  });
+
+  it("never drops the current version, even when it is older than the cut", () => {
+    let s = apply(stacked(), { type: "item.setCurrentVersion", itemId: "itm_1", versionId: "ver_1b" })!;
+    s = apply(s, { type: "item.pruneVersions", itemId: "itm_1", keep: 2 })!;
+    expect(s.canvas.items["itm_1"]!.versions.map((v) => v.id)).toEqual(["ver_1b", "ver_4", "ver_5"]);
+    expect(s.canvas.items["itm_1"]!.currentVersionId).toBe("ver_1b");
+  });
+
+  it("is a no-op on a stack already within the bound", () => {
+    const before = stacked();
+    const s = apply(before, { type: "item.pruneVersions", itemId: "itm_1", keep: 5 })!;
+    expect(s.canvas.items["itm_1"]!.versions).toEqual(before.canvas.items["itm_1"]!.versions);
+    const one = apply(before, { type: "item.pruneVersions", itemId: "itm_2", keep: 1 })!;
+    expect(one.canvas.items["itm_2"]!.versions).toHaveLength(1);
+  });
+
+  it("refuses to keep fewer than one, or a non-integer", () => {
+    expectRejects({ type: "item.pruneVersions", itemId: "itm_1", keep: 0 }, "bad-op");
+    expectRejects({ type: "item.pruneVersions", itemId: "itm_1", keep: -3 }, "bad-op");
+    expectRejects({ type: "item.pruneVersions", itemId: "itm_1", keep: 1.5 }, "bad-op");
+    expectRejects({ type: "item.pruneVersions", itemId: "itm_1", keep: Number.NaN }, "bad-op");
+    expectRejects({ type: "item.pruneVersions", itemId: "itm_nope", keep: 1 }, "unknown-item");
+  });
+
+  it("says what it would drop from the same rule it applies", () => {
+    const s = stacked();
+    const item = s.canvas.items["itm_1"]!;
+    expect(prunedVersions(item, 2).map((v) => v.id)).toEqual(["ver_1", "ver_1b", "ver_3"]);
+    expect(prunedVersions(item, 9)).toEqual([]);
+    // The preview and the reducer cannot disagree: one is defined by the other.
+    const after = apply(s, { type: "item.pruneVersions", itemId: "itm_1", keep: 2 })!;
+    expect(after.canvas.items["itm_1"]!.versions).toEqual(pruneVersions(item, 2));
   });
 });

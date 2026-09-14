@@ -6,7 +6,7 @@ Every research note and every project, by where it stands. **Derived**: the
 status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
-**14 built · 25 still open** — of which 16 partly
+**15 built · 25 still open** — of which 16 partly
 built, 9 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -51,7 +51,7 @@ and the done column should not be flattered by either.
 | **project** | [sprint](docs/projects/sprint/journey.md) | 2026-09-02 | designed 2 Sep — `/sprint` starts the whole flow and walks the room across a board of areas; builds on the 1 Sep stages 0–2 (clock, curtain, tally). Nothing built yet; phase 0 (areas) is the one new primitive and the first thing to do · see on-demand, personas, mindmap, atlas |
 | research | [WYSIWYG on the stage](docs/research/2026-08-26-wysiwyg.md) | 2026-08-29 |  · see atlas |
 
-## Built <sub>14</sub>
+## Built <sub>15</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -67,6 +67,7 @@ and the done column should not be flattered by either.
 | research | [The ask: what the field built for the moment an agent needs a person](docs/research/2026-08-24-the-ask.md) | 2026-08-29 |  · see context |
 | research | [The post-it, and which of three things it is](docs/research/2026-09-01-post-it-notes.md) | 2026-09-01 | built 1 Sep — `properties.paper` on a text node, a swatch row on the Text tool and `isocan text --paper`; option A as recommended, no new op and no new kind · see ui-refresh |
 | **project** | [ui-refresh](docs/projects/ui-refresh/phases.md) | 2026-08-29 | phases 1-6, all acceptances closed · see ui-refresh |
+| research | [What a deep version stack costs, measured](docs/research/2026-09-02-version-scaling.md) | 2026-09-02 | pruning is on every surface and the board bounds itself; the hosted path's own latency (cold start, Firestore tail, GCS reads) is still unmeasured · see on-demand |
 | research | [Where the canvas is janky](docs/research/2026-08-29-performance.md) | 2026-08-29 |  |
 | **project** | [workbench](docs/projects/workbench/design.md) | 2026-08-29 |  · see workbench |
 
