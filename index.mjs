@@ -89,4 +89,8 @@ export const {
   readManifest,
   exportedCanvasIds,
   wholeLog,
+  // @isocan/core — the address helpers: compose, read, is-it-this-machine
+  canvasUrlWithPass,
+  isLoopbackBase,
+  parseCanvasAddress,
 } = api;

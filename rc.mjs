@@ -23,6 +23,10 @@ export const {
   // @isocan/api/routes — the client a host speaks to the daemon with
   ApiError,
   DaemonRoutes,
+  // @isocan/core — the address helpers a host composes and refuses with
+  canvasUrlWithPass,
+  isLoopbackBase,
+  parseCanvasAddress,
   // guards.ts — the dispatch guards
   gateTurn,
   // helpers.ts — the pure helpers the room speaks with

@@ -19,6 +19,14 @@
  */
 export { ApiError, DaemonRoutes } from "../../api/src/routes.js";
 export type { BadgeStore, StoredBadge } from "../../core/src/index.js";
+/**
+ * **The address helpers a host composes and refuses with** (sheep's collie,
+ * phase 2). A Worker that parses a pass address and builds one, and a command
+ * that refuses a loopback home before minting, would otherwise write core's
+ * spelling again — the drift `@isocan/core`'s address module exists to end. Core is
+ * already what this entry reaches, so the boundary does not move.
+ */
+export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "../../core/src/index.js";
 export { gateTurn, type GuardLimits, type GuardState, type GuardVerdict } from "./guards.js";
 export type { RcAgentRow, SheepPlace } from "./rows.js";
 export { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.js";

@@ -68,6 +68,38 @@ var WORKBENCH_ITEM_ROUTE = `${WORKBENCH_ROUTE}/:wbItemId`;
 function canvasUrl(origin, canvasId) {
   return `${origin.replace(/\/+$/, "")}${canvasPath(canvasId)}`;
 }
+function canvasUrlWithPass(origin, canvasId, token) {
+  return urlWithPass(canvasUrl(origin, canvasId), token);
+}
+function urlWithPass(url, token) {
+  return `${url}#${token}`;
+}
+function splitPassFragment(address) {
+  const hash = address.indexOf("#");
+  if (hash < 0) return { address };
+  const pass = address.slice(hash + 1);
+  const rest = address.slice(0, hash);
+  return pass ? { address: rest, pass } : { address: rest };
+}
+function parseCanvasAddress(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const { address, pass } = splitPassFragment(trimmed);
+  const schemed = /^[a-z][a-z0-9+.-]*:\/\//i.test(address) ? address : `${/^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(address) ? "http" : "https"}://${address}`;
+  let url;
+  try {
+    url = new URL(schemed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  const parts = url.pathname.replace(/\/+$/, "").split("/");
+  if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
+  const canvasId = decodeURIComponent(parts[2] ?? "");
+  if (!canvasId) return null;
+  return { origin: url.origin, canvasId, ...pass !== void 0 ? { pass } : {} };
+}
 function normalizeHomeUrl(raw) {
   const trimmed = raw.trim();
   try {
@@ -4238,11 +4270,14 @@ export {
   SheepAgent,
   actorNamesOn,
   assistantText,
+  canvasUrlWithPass,
   endSheep,
   gateTurn,
+  isLoopbackBase,
   itemCenter,
   mapState,
   nameResolver,
+  parseCanvasAddress,
   runRoom,
   summonsPrompt,
   threadLocus,

@@ -5209,7 +5209,7 @@ export function registerRoutes(
     return snapshot;
   });
 
-  app.get("/api/projects/:id/oplog", async (req) => {
+  app.get("/api/projects/:id/oplog", async (req, reply) => {
     const { id } = req.params as { id: string };
     const { since, waitMs } = req.query as { since?: string; waitMs?: string };
     const sinceSeq = since ? Number(since) : 0;
@@ -5219,19 +5219,22 @@ export function registerRoutes(
     // window closes). The seq cursor makes this restart-safe — the waiter is
     // resolved by the engine's op event, and a client abort cleans it up.
     const holdMs = Math.min(Number(waitMs) || 0, 55_000);
-    if (entries.length === 0 && holdMs > 0) {
+    if (entries.length === 0 && holdMs > 0 && !reply.raw.destroyed) {
       await new Promise<void>((resolve) => {
         const done = () => {
           clearTimeout(timer);
           unsubscribe();
-          req.raw.off("close", done);
+          reply.raw.off("close", done);
           resolve();
         };
         const timer = setTimeout(done, holdMs);
         const unsubscribe = engine.onEvent((canvasId, message) => {
           if (canvasId === id && message.type === "op-applied") done();
         });
-        req.raw.on("close", done);
+        // The response, as every long poll here listens. A GET's request
+        // does close with its socket, but a POST's closes once its body is
+        // read (lessons.md #68), and one spelling cannot be copied wrong.
+        reply.raw.on("close", done);
       });
       const context = sourceContexts.get(req);
       if (context) await checkSource(id, req.badge!.badgeId, context, "read");
@@ -5531,7 +5534,7 @@ export function registerRoutes(
    * the home-link the way faces do.
    */
   const rc = options.rc ?? new RcHolds();
-  app.post("/api/rc/hold", async (req) => {
+  app.post("/api/rc/hold", async (req, reply) => {
     const body = (req.body ?? {}) as Partial<import("@isocan/core").RcHoldRequest>;
     const canvasId = body.canvasId ?? "";
     const actorIds = new Set((body.actorIds ?? []).filter((a) => typeof a === "string"));
@@ -5555,7 +5558,13 @@ export function registerRoutes(
       ...(owner ? { owner } : {}),
       ...(policies ? { policies } : {}),
     });
-    req.raw.on("close", hold.release);
+    // The response, not the request: a POST's IncomingMessage has already
+    // closed once its body was read, so a listener there never hears the
+    // socket go (collie's walk, 14 Sep 2026: a dead rc stayed answerable for
+    // its whole waitMs). The response closes with the socket, and one whose
+    // client left during the awaits above is already destroyed.
+    if (reply.raw.destroyed) hold.release();
+    else reply.raw.once("close", hold.release);
     const asks = await hold.done;
     return { ok: true, asks };
   });

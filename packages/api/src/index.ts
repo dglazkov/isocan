@@ -30,3 +30,7 @@ export * from "./identity.ts";
 export * from "./direct.ts";
 export * from "./harness.ts";
 export * from "./export.ts";
+/** The address helpers, from core, for a script or a host beside `connect`:
+ * compose a pass address, read one a person pasted, ask whether a home is
+ * this machine. The same three `isocan/rc` hands a host with no Node. */
+export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "@isocan/core";

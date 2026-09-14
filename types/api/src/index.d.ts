@@ -30,3 +30,7 @@ export * from "./identity.js";
 export * from "./direct.js";
 export * from "./harness.js";
 export * from "./export.js";
+/** The address helpers, from core, for a script or a host beside `connect`:
+ * compose a pass address, read one a person pasted, ask whether a home is
+ * this machine. The same three `isocan/rc` hands a host with no Node. */
+export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "../../core/src/index.js";

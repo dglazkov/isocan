@@ -241,6 +241,15 @@ describe("installable straight from git", () => {
       const routes = await fs.readFile(path.join(out, "api/src/routes.d.ts"), "utf8");
       expect(routes).toContain("export declare class DaemonRoutes");
       expect(routes).not.toMatch(/"@isocan\//);
+      // And both entries hand over core's address helpers (sheep's collie,
+      // phase 2), re-exported from core's own declarations inside the tree.
+      const apiIndex = await fs.readFile(path.join(out, "api/src/index.d.ts"), "utf8");
+      for (const declared of [index, apiIndex]) {
+        expect(declared).toMatch(/export \{[^}]*canvasUrlWithPass[^}]*isLoopbackBase[^}]*parseCanvasAddress[^}]*\} from "\.\.\/\.\.\/core\/src\/index\.js"/);
+      }
+      expect(apiIndex).not.toMatch(/"@isocan\//);
+      const address = await fs.readFile(path.join(out, "core/src/address.d.ts"), "utf8");
+      expect(address).toContain("export declare function parseCanvasAddress(raw: string): CanvasAddress | null;");
     } finally {
       await fs.rm(out, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
@@ -316,6 +325,13 @@ describe("installable straight from git", () => {
       // And the client a host constructs (sheep's collie, phase 1), inlined
       // into the same node-free bundle rather than left to a Node entry.
       expect(typeof surface.DaemonRoutes).toBe("function");
+      // And core's address helpers (sheep's collie, phase 2), in the same bundle.
+      expect(surface.parseCanvasAddress("https://acme.example/p/prj_acme#pas_acme.s3cret")).toEqual({
+        origin: "https://acme.example",
+        canvasId: "prj_acme",
+        pass: "pas_acme.s3cret",
+      });
+      expect(surface.isLoopbackBase("http://127.0.0.1:4441")).toBe(true);
       expect(surface.COLLAB_SKILL).toBe(source.COLLAB_SKILL);
     } finally {
       await fs.rm(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
