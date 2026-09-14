@@ -10394,6 +10394,7 @@ style
 
       // The machine-readable halves. A design system nobody can export stops
       // at the edge of this canvas.
+      if ((opts.css || opts.tokens) && doc.problems.length) throw new Error(`Cannot convert this design document without losing unsupported content: ${doc.problems.join("; ")}`);
       if (opts.css) return console.log(toCss(doc.tokens));
       if (opts.tokens) return printJson(toDtcg(doc.tokens));
       if (ctx.json) {
@@ -10511,7 +10512,7 @@ style
     run(async (file: string, opts: { dryRun?: boolean; title: string; in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const text = await fs.readFile(file, "utf8");
-      const { tokens, problems, format } = importDesign(text, path.basename(file));
+      const { tokens, problems, notes, format } = importDesign(text, path.basename(file));
       const counts = {
         colors: Object.keys(tokens.colors ?? {}).length,
         typography: Object.keys(tokens.typography ?? {}).length,
@@ -10533,9 +10534,10 @@ style
       // result, and an agent reading `--json` off stdout needs the caveat as
       // much as a person reading the summary does.
       for (const problem of problems) console.error(`note: ${problem}`);
+      for (const note of notes) console.error(`note: ${note}`);
 
       if (opts.dryRun) {
-        if (ctx.json) return printJson({ format, counts, problems, markdown });
+        if (ctx.json) return printJson({ format, counts, problems, notes, markdown });
         console.log(markdown);
         console.error(
           `${format}: ${counts.colors} colours, ${counts.typography} type roles, ${counts.rounded} radii, ${counts.spacing} spacings — nothing written`,
@@ -10564,7 +10566,7 @@ style
         // to, and it matters more here: an import is exactly the moment
         // somebody discovers they wanted the old one back.
         await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing.id, version });
-        if (ctx.json) return printJson({ itemId: existing.id, format, counts, problems });
+        if (ctx.json) return printJson({ itemId: existing.id, format, counts, problems, notes });
         console.error(
           `${existing.id} — design system v${existing.versions.length + 1} from ${path.basename(file)}`,
         );
@@ -10581,7 +10583,7 @@ style
         title: opts.title,
         properties: designSystemProperties(),
       });
-      if (ctx.json) return printJson({ itemId, format, counts, problems });
+      if (ctx.json) return printJson({ itemId, format, counts, problems, notes });
       console.error(`${itemId} — design system for ${p.title}, imported from ${path.basename(file)}`);
     }),
   );

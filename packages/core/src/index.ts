@@ -65,7 +65,8 @@ export type { ScreenAudit, AuditDiagnostic, AuditUnexamined, AuditRepair, AuditR
 export * from "./preference.ts";
 export * from "./extensions.ts";
 export * from "./media.ts";
-export * from "./designmd.ts";
+export { DESIGN_SECTIONS, canonicalSection, parseFrontMatter, parseDesign, referencesIn, unresolvedReferences, resolveToken, serializeDesign } from "./designmd.ts";
+export type { DesignTypography, DesignTokens, DesignDoc } from "./designmd.ts";
 export * from "./contrast.ts";
 export * from "./designcheck.ts";
 export * from "./tokens.ts";
@@ -113,3 +114,5 @@ export * from "./text-anchor.ts";
 export { markdownResource, SOURCE_PATH_PROP } from "./markdown-resources.ts";
 
 export * from "./inbox-api.ts";
+
+export type { DesignRecipeContract, DesignContractException, EffectiveDesignContract, DesignPolicyProblem, DesignContractPolicy } from "./design-contract.ts";

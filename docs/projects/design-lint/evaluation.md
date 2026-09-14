@@ -50,7 +50,8 @@ The governing document is held fixed; weakening it cannot count as repair.
 
 Render at 390×844 and 1280×900. Require a nonempty page, the task's visible text,
 and its specified interactions. An empty page, hidden required content, removed
-styles used to evade analysis, new uncovered styling, or a broken button is a
+styles used to evade analysis, removal or renaming of the required recipe
+identity to escape its contract, new uncovered styling, or a broken button is a
 failed task even if its finding count is zero. Accessibility checks can add
 evidence but cannot certify every interaction or visual intent.
 

@@ -5,7 +5,7 @@ import path from "node:path";
 import { canvasItemOf, designSystemProperties, newCanvasId, SOURCE_POLICY_HEADER, parseSourcePolicyHeader } from "@isocan/core";
 import { startDaemon, type Daemon } from "@isocan/server";
 import { ApiError, CanvasHandle, DaemonClient, designAuditPort, repairDesignScreen, type Ctx, type DesignRepairPort } from "@isocan/api";
-import { auditDesign, auditHtml } from "./design-audit-fixture.ts";
+import { auditContractDesign, auditContractHtml, auditDesign, auditHtml } from "./design-audit-fixture.ts";
 
 let daemon: Daemon;
 let home: string;
@@ -37,6 +37,45 @@ async function repairFixture() {
   };
   return { canvas, system, screen, request, port };
 }
+
+it("real scoped and inherited contracts refresh through policy edit and undo while HTML repair leaves policy bytes intact", async () => {
+  const canvas = await create("Acme policy lanes");
+  const library = await create("Acme policy library");
+  const outer = await canvas.groups.new("Acme literal lane");
+  const inner = await canvas.groups.new("Acme reference lane");
+  await canvas.groups.add(outer.itemId!, [inner.itemId!], { place: true });
+  const literalDesign = await canvas.add({ title: "Acme literal DESIGN.md", content: auditContractDesign("allow"), mime: "text/markdown", properties: designSystemProperties(), in: outer.itemId! });
+  const strictBytes = auditContractDesign("require-references");
+  const strictDesign = await canvas.add({ title: "Acme reference DESIGN.md", content: strictBytes, mime: "text/markdown", properties: designSystemProperties(), in: inner.itemId! });
+  const inheritedDesign = await library.add({ title: "Acme inherited DESIGN.md", content: auditContractDesign("allow"), mime: "text/markdown", properties: designSystemProperties() });
+  const link = canvasItemOf(ctx.client.base, library.id);
+  await canvas.add({ title: "Acme policy source", content: ctx.client.base, mime: "text/plain", properties: { ...link.properties, memory: "inherit" } });
+  const literalScreen = await canvas.add({ title: "Acme literal screen", content: auditContractHtml, mime: "text/html", in: outer.itemId! });
+  const strictScreen = await canvas.add({ title: "Acme reference screen", content: auditContractHtml, mime: "text/html", in: inner.itemId! });
+  const inheritedScreen = await canvas.add({ title: "Acme inherited screen", content: auditContractHtml, mime: "text/html" });
+  const initial = await canvas.designAudit();
+  expect(initial.items.find(row => row.itemId === literalScreen.id)).toMatchObject({ governing: { itemId: literalDesign.id }, diagnostics: [], policy: { effective: { literals: "allow" } } });
+  expect(initial.items.find(row => row.itemId === inheritedScreen.id)).toMatchObject({ governing: { canvasId: library.id, itemId: inheritedDesign.id, inherited: true }, diagnostics: [], policy: { effective: { literals: "allow" } } });
+  const strict = initial.items.find(row => row.itemId === strictScreen.id)!;
+  if (strict.status !== "audited") throw new Error(strict.reason);
+  expect(strict.policy.effective?.literals).toBe("require-references");
+  expect(strict.diagnostics.map(({ code, property }) => ({ code, property }))).toEqual(["padding", "border-radius", "margin", "font-size", "font-weight"].map(property => ({ code: "design/reference-required", property })));
+  await canvas.edit(strictDesign.id, { content: auditContractDesign("allow") });
+  expect((await canvas.designAudit({ itemIds: [strictScreen.id] })).items[0]).toMatchObject({ diagnostics: [], policy: { effective: { literals: "allow" } } });
+  await ctx.client.undo(canvas.id, ctx.actor);
+  const restored = (await canvas.designAudit({ itemIds: [strictScreen.id] })).items[0]!;
+  if (restored.status !== "audited") throw new Error(restored.reason);
+  expect(restored.governing.versionId).toBe(strict.governing.versionId);
+  expect(restored.diagnostics).toEqual(strict.diagnostics);
+  const beforePolicy = await canvas.item(strictDesign.id);
+  const replacement = '<style>:root{--space-md:16px;--radius-card:8px;--size-body:16px;--weight-body:700}</style>' + auditContractHtml.replaceAll("16px", "var(--space-md)").replace("border-radius:8px", "border-radius:var(--radius-card)").replace("font-size:var(--space-md)", "font-size:var(--size-body)").replace("font-weight:700", "font-weight:var(--weight-body)");
+  const result = await canvas.designRepair(strictScreen.id, { text: replacement, expectedVersionId: strictScreen.currentVersionId, expectedGoverning: restored.governing, expectedRuleVersion: restored.ruleVersion });
+  expect(result).toMatchObject({ status: "saved", after: { status: "available", report: { items: [{ diagnostics: [], policy: { effective: { literals: "require-references" } } }] } } });
+  const afterPolicy = await canvas.item(strictDesign.id);
+  expect(afterPolicy).toEqual(beforePolicy);
+  const policyVersion = afterPolicy.versions.find(version => version.id === afterPolicy.currentVersionId)!;
+  expect((await ctx.client.downloadBlob(canvas.id, policyVersion.blobHash)).toString("utf8")).toBe(strictBytes);
+});
 
 it("an explicit repair is one conditional version and one undo, while stale versions are preserved", async () => {
   const { canvas, screen, request } = await repairFixture();

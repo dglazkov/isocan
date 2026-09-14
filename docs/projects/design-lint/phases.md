@@ -1,9 +1,9 @@
 # Design lint: the implementation walk
 
 **Where we are — 14 September 2026:** Research and issues #299–303 are published.
-Design-lint phases 1 and 2 are CLOSED on current `origin/main`; phase 3 is next.
-Paid evaluation and human ratings wait on a person; native repair, contracts
-and repository compatibility do not.
+Design-lint phases 1–3 are CLOSED on current `origin/main`; phase 4 is next.
+Paid evaluation and human ratings wait on a person; repository compatibility
+and the no-spend evaluation harness do not.
 
 The [journeys](journey.md) are acceptance and [design](design.md) names the
 mechanisms. Each phase closes only on its named proof, with a full suite,
@@ -115,7 +115,7 @@ runs; no timeout was changed by this phase.
 
 ## Phase 3 — Scoped declarative recipe contracts (#301)
 
-**Status: NOT STARTED.** 2026-09-14 — Depends on design-lint phases 1 and 2.
+**Status: CLOSED.** 2026-09-14 — Scoped contracts, usable native/DTCG preservation and policy edit/undo passed both real surfaces and the full strict suite.
 
 **Work:** Finalize and record the version 1 schema before coding. Preserve
 unknown extension data or report unsupported conversion. Implement literal
@@ -131,7 +131,47 @@ and undo the edit. Confirm an HTML repair cannot weaken the governing policy.
 
 **Trajectory:**
 
-*nothing — implementation has not begun.*
+- **2026-09-14** — The existing YAML subset silently changed five of six
+  extension round-trip probes, including quoted reasons and unknown JSON types.
+  Version 1 now names its supported ownership/selector boundary and requires
+  an opaque preservation path before enforcement, with DTCG vendor metadata
+  and explicit CSS conversion notes.
+
+- **2026-09-14** — Preserving extension bytes was insufficient: generic DTCG
+  import renamed token paths and broke otherwise preserved contract references.
+  Native vendor imports now restore native names and partial typography from
+  metadata; the round trip compares the effective contract as well as its bytes.
+
+**Proof record:** On upstream `b4fb0a52`, `npm test -- --maxWorkers=4` passed
+5,322 tests (108 skipped); `npm run typecheck` and `npm run build` exited 0.
+`npm run test:ci -- --maxWorkers=6` passed all 578 files: 5,879 tests passed,
+three opt-in real-model/sandbox tests skipped. The local Firestore emulator
+and bundle gates ran. No dependency or bundle threshold was added or raised.
+The initial entry is 762,562 raw / 258,847 gzip bytes, a 9,648 / 3,495 byte
+increase from design-lint phase 2; the analyzer remains lazy.
+
+The conductor independently passed 34 synthetic contract cases and 11
+preservation/conversion cases. They distinguish owned values from token
+membership, actual exported references from literal aliases and shadows,
+physical shorthand sides and radius axes, approved treatments/exceptions,
+unknown rules and unsupported selectors. A retained CSS identifier escape
+cannot be treated as a definite nonmatch; it now makes coverage incomplete.
+An earlier strict run was interrupted for that correction and is not counted
+as proof; the final complete run above passed afterward.
+
+The fresh-daemon browser walk passed in 13.818 seconds: CLI/browser policy,
+exact finding, quoted exception reason and governing version agree; ordinary
+policy edit refreshes findings; actual canvas Undo restores the exact policy,
+findings and source version; HTML repair leaves governing bytes and version
+history unchanged. Real adapter tests cover nested lanes and inherited policy.
+The same walk checks CLI DTCG export/import and CSS conversion notes.
+[Evidence and reproducible probes](../../research/shadcn-lint/results-2026-09-14-phase3.json)
+and [verified browser view](../../research/shadcn-lint/phase3-contract-2026-09-14.png).
+
+Existing operations provide document versions, conditional HTML repair and
+Undo. Existing CLI verbs and both report surfaces expose the shared core
+semantics; the agent guide and README are updated. No paid evaluation or human
+intent rating is claimed.
 
 ## Phase 4 — Optional repository checks and Tailwind proof (#303)
 

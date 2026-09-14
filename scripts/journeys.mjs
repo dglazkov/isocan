@@ -340,6 +340,99 @@ const IDLE_BOUND = 15;
 
 export const JOURNEYS = [
   {
+    name: "design-contract",
+    what: "governing recipes and reasoned exceptions are visible; a policy edit refreshes findings, Undo restores it, and HTML repair preserves policy",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 1000, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme design contract");
+      const reason = 'Acme #1 needs room for its "two-line" label.';
+      const extension = { lint: { version: 1, literals: "require-references", recipes: { Button: { owns: { padding: "{spacing.md}", "border-radius": "{rounded.card}" }, allow: [], treatments: { compact: { padding: "{spacing.sm}" } } } }, exceptions: { "hero-spacing": { recipe: "Button", properties: ["padding"], reason } } } };
+      const design = `---\nname: Acme contract\nisocan: ${JSON.stringify(extension)}\ncolors:\n  ink: "#112233"\nspacing:\n  md: 16px\n  sm: 8px\ntypography:\n  body:\n    fontSize: 16px\nrounded:\n  card: 8px\n---\n## Usage\nSynthetic contract fixture.\n`;
+      const html = '<style>:root{--radius-card:8px}</style><button data-isocan-recipe="Button" data-isocan-treatment="compact" data-isocan-exception="hero-spacing" style="padding:16px;border-radius:8px">Acme contract</button>';
+      const repaired = html.replace("border-radius:8px", "border-radius:var(--radius-card)");
+      const designFile = path.join(rig.home, "DESIGN.md"), htmlFile = path.join(rig.home, "acme-contract.html");
+      writeFileSync(designFile, design); writeFileSync(htmlFile, html);
+      const runCli = (...args) => { const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: rig.home, encoding: "utf8", env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-contract-journey", ISOCAN_HARNESS: "test" } }); return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out; };
+      runCli("identity", "--session", "--name", "Acme Contract CLI");
+      runCli("--canvas", id, "design", "set", designFile);
+      const added = runCli("--canvas", id, "add", htmlFile, "--title", "Acme contract screen");
+      const audit = () => runCli("--canvas", id, "design", "audit", "--item", added.itemId).items[0];
+      const initial = audit();
+      const same = (actual, expected, label) => { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`); };
+      const tokens = runCli("--canvas", id, "design", "--tokens");
+      same(tokens.$extensions?.["io.isocan"]?.isocan, extension, "DTCG exported contract");
+      const css = runCli("--canvas", id, "design", "--css");
+      if (typeof css !== "string" || !css.includes("not preserved")) throw new Error("CSS export omitted its contract conversion note");
+      const tokenFile = path.join(rig.home, "acme-tokens.json"), cssFile = path.join(rig.home, "acme-tokens.css");
+      writeFileSync(tokenFile, JSON.stringify(tokens)); writeFileSync(cssFile, css);
+      const imported = runCli("--canvas", id, "design", "import", tokenFile, "--dry-run");
+      if (!imported.markdown.includes(JSON.stringify(extension))) throw new Error("DTCG import dry run lost the native extension");
+      const cssImport = runCli("--canvas", id, "design", "import", cssFile, "--dry-run");
+      if (!cssImport.notes?.some(note => /polic|contract/i.test(note))) throw new Error("CSS import omitted its contract conversion note");
+      same(initial.diagnostics.map(({ code, property, actual }) => ({ code, property, actual })), [{ code: "design/reference-required", property: "border-radius", actual: "8px" }], "strict contract's seeded reference finding");
+      same(initial.policy.effective.literals, "require-references", "CLI initial policy");
+      same(initial.policy.appliedExceptions[0].reason, reason, "CLI active exception reason");
+      const snapshot = async () => (await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json())`)).canvas;
+      const readItem = async item => { const hash = item.versions.find(v => v.id === item.currentVersionId).blobHash; return b.ev(`fetch('/api/projects/${id}/blobs/${hash}').then(r => r.text())`); };
+      const openScreen = async () => { await rig.go(`/p/${id}/w/${added.itemId}`); await until(b, `!!document.querySelector('.stage-editor') || !!document.querySelector('button[title="Open the editor"]')`, "screen editor access"); if (!await b.ev(`!!document.querySelector('.stage-editor')`)) await rig.click('button[title="Open the editor"]'); await until(b, `!!document.querySelector('[data-design-policy]')`, "effective contract report"); };
+      const replaceEditor = async text => { await rig.click(".cm-content", "document editor"); await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 }); await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 }); await b.send("Input.insertText", { text }); };
+      await openScreen();
+      same(await b.ev(`document.querySelector('[data-design-policy]').dataset.designLiterals`), initial.policy.effective.literals, "CLI/browser literal policy");
+      same(await b.ev(`[...document.querySelectorAll('[data-design-code]')].map(el => el.dataset.designCode)`), initial.diagnostics.map(one => one.code), "CLI/browser contract findings");
+      same(await b.ev(`document.querySelector('[data-design-code="design/reference-required"] > p').textContent`), initial.diagnostics[0].explanation, "browser reference requirement explanation");
+      if (!await b.ev(`document.querySelector('.design-lint-source').textContent.includes(${JSON.stringify(initial.governing.versionId)})`)) throw new Error("initial governing version missing from browser report");
+      if (!await b.ev(`document.querySelector('[data-design-exception="hero-spacing"]')?.textContent.includes(${JSON.stringify(reason)})`)) throw new Error("active exception reason missing in browser");
+      if (!await b.ev(`!!document.querySelector('[data-design-treatment="compact"]')`)) throw new Error("active treatment missing in browser");
+      await b.ev(`document.querySelector('.design-lint-contract summary').scrollIntoView({block:'center'})`);
+      await rig.click(".design-lint-contract summary", "effective recipe details");
+      if (!await b.ev(`document.querySelector('.design-lint-contract').textContent.includes('padding: {spacing.md}')`)) throw new Error("owned declaration not inspectable");
+      const screenshot = path.join(tmpdir(), `isocan-design-contract-${Date.now()}.png`);
+      writeFileSync(screenshot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+      await b.ev(`document.querySelector('.design-lint-provenance a').scrollIntoView({block:'center'})`);
+      await rig.click(".design-lint-provenance a", "governing document link");
+      await until(b, `location.pathname.includes(${JSON.stringify(initial.governing.itemId)})`, "governing workbench");
+      await until(b, `!!document.querySelector('.cm-content') || !!document.querySelector('button[title="Open the editor"]')`, "governing editor access");
+      if (!await b.ev(`!!document.querySelector('.cm-content')`)) await rig.click('button[title="Open the editor"]');
+      await until(b, `!!document.querySelector('.cm-content')`, "governing document editor");
+      const relaxed = design.replace('"require-references"', '"allow"');
+      await replaceEditor(relaxed);
+      await rig.clickText(".stage-editor-bar button", "Save version");
+      await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.canvas.items[${JSON.stringify(initial.governing.itemId)}].currentVersionId !== ${JSON.stringify(initial.governing.versionId)})`, "ordinary policy version saved");
+      const changed = (await snapshot()).items[initial.governing.itemId];
+      same(await readItem(changed), relaxed, "saved governing bytes");
+      await openScreen();
+      await until(b, `document.querySelector('[data-design-policy]')?.dataset.designLiterals === 'allow' && document.querySelector('.design-lint-summary')?.dataset.designFindings === '0'`, "policy edit refreshed findings");
+      const relaxedAudit = audit();
+      same(relaxedAudit.diagnostics, [], "CLI refreshed contract findings");
+      same(relaxedAudit.governing.versionId, changed.currentVersionId, "CLI changed governing version");
+      if (!await b.ev(`document.querySelector('.design-lint-source').textContent.includes(${JSON.stringify(changed.currentVersionId)})`)) throw new Error("browser did not report changed governing version");
+      await rig.go(`/p/${id}`);
+      await until(b, `!!document.querySelector('.zoom-controls')`, "canvas Undo controls");
+      await rig.click('button[title="Undo (⌘Z)"]', "governing document Undo");
+      await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.canvas.items[${JSON.stringify(initial.governing.itemId)}].currentVersionId === ${JSON.stringify(initial.governing.versionId)})`, "policy Undo restored version");
+      const restoredPolicy = (await snapshot()).items[initial.governing.itemId];
+      same(await readItem(restoredPolicy), design, "Undo restored policy bytes");
+      await openScreen();
+      await until(b, `document.querySelector('[data-design-policy]')?.dataset.designLiterals === 'require-references' && document.querySelector('.design-lint-summary')?.dataset.designFindings === '${initial.diagnostics.length}'`, "Undo restored strict findings");
+      const undoneAudit = audit();
+      same(undoneAudit.policy, initial.policy, "Undo restored complete effective policy and active reasons");
+      same(undoneAudit.diagnostics, initial.diagnostics, "Undo restored exact reference findings");
+      same(undoneAudit.governing, initial.governing, "Undo restored governing provenance");
+      same(await b.ev(`document.querySelector('[data-design-code="design/reference-required"] > p').textContent`), initial.diagnostics[0].explanation, "Undo restored browser explanation");
+      if (!await b.ev(`document.querySelector('.design-lint-source').textContent.includes(${JSON.stringify(initial.governing.versionId)})`)) throw new Error("Undo did not restore browser governing version");
+      await replaceEditor(repaired);
+      await until(b, `document.querySelector('.design-lint-summary')?.dataset.designFindings === '0'`, "authored HTML repair check");
+      await rig.clickText(".design-lint button", "Save repair");
+      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair saved as one version')`, "HTML repair accepted");
+      const after = await snapshot();
+      same(after.items[initial.governing.itemId], restoredPolicy, "HTML repair kept governing version stack");
+      same(await readItem(after.items[initial.governing.itemId]), design, "HTML repair kept governing bytes");
+      same(await readItem(after.items[added.itemId]), repaired, "HTML repair stored authored bytes");
+      return { screenshot, policy: initial.policy.effective, governing: initial.governing, activeExceptionReason: reason, findingsBefore: initial.diagnostics.length, findingsAfterPolicyEdit: 0, policyUndo: true, htmlRepairPreservedPolicy: true };
+    },
+  },
+  {
     name: "design-lint",
     what: "CLI and browser findings agree; source selection, one-version repair, undo and stale refusal preserve edits",
     async run(rig) {

@@ -2033,7 +2033,8 @@ isocan fit <items...>                  # grow items to the size their content wa
   screen's governing system: colours, type sizes, radii and declared spacing.
   Findings include original source locations, missing references and candidate
   token repairs. External styles, dynamic expressions and ambiguous CSS remain
-  visibly unexamined; matching literals are allowed. `--json` includes screen
+  visibly unexamined; matching literals are allowed unless the governing
+  contract requires references. `--json` includes screen
   item/version/blob identity, governing item/version/source canvas, rule version,
   diagnostics and coverage, alongside the existing `system`, `screens`,
   `offSystem`, `items` and per-screen `onSystem`/`offSystem` fields. An unavailable
@@ -2044,6 +2045,26 @@ isocan fit <items...>                  # grow items to the size their content wa
   A DESIGN.md names expected values; it does not inject CSS into a screen.
   Token-reference repairs may require including the exported declarations in
   the artifact. Read each candidate's prerequisites before applying it.
+
+  Each report exposes `policy`: the effective contract, original `isocan`
+  extension, unsupported rules and applied treatments/exceptions with reasons.
+  A governing DESIGN.md may declare `isocan.lint.version: 1` and
+  `literals: require-references`, plus recipes with `owns`, `allow` and
+  `treatments` maps, and reasoned exceptions. HTML opts in explicitly with
+  `data-isocan-recipe="Button"`, `data-isocan-treatment="compact"` or
+  `data-isocan-exception="hero-spacing"`. Generic class names grant nothing.
+  Version 1 checks owned padding, physical border radii, font size and weight;
+  its report states the supported selector/cascade boundary. Exceptions relax
+  only their named ownership/reference checks; off-scale values still fail.
+  Unsupported contracts remain visible with incomplete coverage.
+
+  The nearest governing document supplies the whole contract; lane policies
+  do not merge. Change that document through its ordinary editor or
+  `isocan design set DESIGN.md --in <group>`, then refresh the audit.
+  `isocan undo` restores its prior version. HTML repair changes only the screen.
+  Native DESIGN.md and DTCG `--tokens` exports preserve extension data;
+  `--css` exports token values and carries a note that contracts are omitted.
+  `design import --dry-run --json` includes conversion `notes` and `problems`.
 
   Select a screen with `isocan design audit --item <item>`. Check a file without
   saving it with `isocan design audit --file screen.html --item <item>` or

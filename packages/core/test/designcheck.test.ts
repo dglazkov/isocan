@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bySeverity, checkDesign, parseDesign } from "../src/index.ts";
+import { bySeverity, checkDesign, parseDesign, serializeDesign } from "../src/index.ts";
 
 const check = (text: string) => checkDesign(parseDesign(text));
 const found = (text: string, where: string) => check(text).filter((f) => f.where === where);
@@ -94,5 +94,36 @@ describe("checking a design system", () => {
     const ordered = bySeverity(check(messy)).map((f) => f.severity);
     expect(ordered).toEqual([...ordered].sort());
     expect(ordered[0]).toBe("error");
+  });
+});
+
+describe("checking governing contract support", () => {
+  it("checks known policy, then exposes unknown versions and fields as document findings", () => {
+    const tokens = parseDesign(GOOD).tokens;
+    const report = (lint: unknown) => checkDesign(parseDesign(serializeDesign({ ...tokens, isocan: { lint } }, parseDesign(GOOD).body)));
+    expect(report({ version: 1, literals: "allow" })).toEqual([]);
+    expect(report({ version: 9, future: [true, null] })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ severity: "error", where: "isocan.lint.version" }),
+    ]));
+    expect(report({ version: 1, future: true })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ severity: "error", where: "isocan.lint.future" }),
+    ]));
+    expect(report({ version: 1, recipes: { Button: { owns: { opacity: "1" } } } })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ severity: "error", where: "isocan.lint.recipes.Button.owns.opacity" }),
+    ]));
+  });
+
+  it("preserves a quoted reason while rejecting an exception without one", () => {
+    const tokens = parseDesign(GOOD).tokens;
+    const lint = { version: 1, recipes: { Title: { owns: { "font-weight": "600" }, allow: ["font-size"] } }, exceptions: {
+      "acme-title": { recipe: "Title", properties: ["font-weight"], reason: 'Acme #1 uses the "compact" title.' },
+    } };
+    const good = parseDesign(serializeDesign({ ...tokens, isocan: { lint } }, parseDesign(GOOD).body));
+    expect(checkDesign(good)).toEqual([]);
+    lint.exceptions["acme-title"].reason = "";
+    const bad = parseDesign(serializeDesign({ ...tokens, isocan: { lint } }, good.body));
+    expect(checkDesign(bad)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ severity: "error", where: "isocan.lint.exceptions.acme-title", what: expect.stringContaining("nonempty reason") }),
+    ]));
   });
 });

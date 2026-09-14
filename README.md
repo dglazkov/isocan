@@ -735,11 +735,14 @@ isocan design [--css|--tokens] · design set <file> · design check
 #   typed design tokens (W3C-compatible) and whose sections are the reasoning
 isocan design audit [--item <item>|--in <group>] [--json] [--fail]
 #   parsed HTML styling, source locations, token repair candidates and explicit
-#   coverage; each screen names its governing system and captured versions
+#   coverage; each screen names its governing system and captured versions,
+#   effective recipe contract, active treatments/exceptions and unsupported rules
 isocan design audit --file screen.html --design DESIGN.md
 isocan design repair <item> repaired.html --from-audit audit.json
 #   capture audit.json with design audit --item <item> --json; repair checks
 #   the captured versions, preserves concurrent edits and reports fresh evidence
+#   policy edits use the governing DESIGN.md's ordinary editor/design set and Undo;
+#   native DESIGN.md and --tokens preserve contracts, --css carries token values only
 isocan command list|show|add|rm        # slash commands: work a message can ask for
 #   built-in: /help /format /variation /grill-me /accessibility-audit
 #             /app-store-assets /web-assets /marketing-kit

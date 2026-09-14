@@ -2085,6 +2085,11 @@ var KEPT_AFTER_MS = 12 * 60 * 60 * 1e3;
 var DESIGN_SYSTEM_AFTER = 2;
 var DESIGN_SYSTEM_LIMIT = DESIGN_SYSTEM_AFTER * 3;
 
+// packages/core/src/design-contract.ts
+var sides = ["top", "right", "bottom", "left"];
+var corners = ["top-left", "top-right", "bottom-right", "bottom-left"];
+var ownedProperties = /* @__PURE__ */ new Set(["padding", ...sides.map((side) => `padding-${side}`), "border-radius", ...corners.map((corner) => `border-${corner}-radius`), "font-size", "font-weight"]);
+
 // packages/core/src/operator.ts
 var OPERATOR_PROOF_HEADER = "x-isocan-operator-proof";
 var OPERATOR_PROOF_WINDOW_MS = 10 * 60 * 1e3;

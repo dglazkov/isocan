@@ -3,7 +3,7 @@ import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import type { CanvasSnapshotResponse } from "@isocan/core";
 import { auditDesignSource, designAuditFails, readCanvasDesignAudit, readDesignAuditAdvisory, readDesignSourceAudit, type DesignAuditReadPort } from "../src/design-audit-reader.ts";
-import { auditDesign, auditFixture, auditHome, auditItem } from "./design-audit-fixture.ts";
+import { auditContractDesign, auditContractHtml, auditDesign, auditFixture, auditHome, auditItem } from "./design-audit-fixture.ts";
 
 function fixture() {
   const data = auditFixture();
@@ -18,6 +18,29 @@ function fixture() {
 }
 
 describe("shared design audit reads", () => {
+  it("keeps nested lane contracts separate from inherited policy and exposes unknown rules", async () => {
+    const { canvas, blobs, io, run } = fixture();
+    const innerDesign = auditItem("innerDesign", "text/markdown", { role: "design-system" }, "inner");
+    const outerScreen = auditItem("outerScreen", "text/html", {}, "outer");
+    canvas.items.innerDesign = innerDesign;
+    canvas.items.outerScreen = outerScreen;
+    blobs.hash_design = auditContractDesign("allow");
+    blobs.hash_innerDesign = auditContractDesign("require-references");
+    blobs.hash_inherited = auditContractDesign("allow", { lint: { version: 17, future: { enabled: true } } });
+    blobs.hash_nested = blobs.hash_outerScreen = blobs.hash_outside = auditContractHtml;
+    const report = await run();
+    const outer = report.items.find(row => row.itemId === "outerScreen")!;
+    const inner = report.items.find(row => row.itemId === "nested")!;
+    const inherited = report.items.find(row => row.itemId === "outside")!;
+    expect(outer).toMatchObject({ status: "audited", governing: { itemId: "design" }, policy: { status: "supported", effective: { literals: "allow" } }, diagnostics: [] });
+    expect(inner).toMatchObject({ status: "audited", governing: { itemId: "innerDesign" }, policy: { status: "supported", effective: { literals: "require-references" } } });
+    if (inner.status !== "audited") throw new Error(inner.reason);
+    expect(inner.diagnostics.map(({ code, property }) => ({ code, property }))).toEqual(["padding", "border-radius", "margin", "font-size", "font-weight"].map(property => ({ code: "design/reference-required", property })));
+    expect(inherited).toMatchObject({ status: "audited", governing: { itemId: "inherited", canvasId: "prj_library", inherited: true }, policy: { status: "unsupported", effective: null, original: { lint: { version: 17, future: { enabled: true } } } }, coverage: { complete: false } });
+    expect(designAuditFails(report)).toBe(true);
+    expect(io.sourceBlobText).toHaveBeenCalledWith({ canvasId: "prj_library", expectedHome: auditHome }, "hash_inherited", undefined);
+  });
+
   it("audits nested group members and inherited outside screens against their actual systems", async () => {
     const { io, run } = fixture();
     const report = await run();

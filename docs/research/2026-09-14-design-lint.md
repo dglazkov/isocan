@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals, context
-note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Phase 2 adds browser findings, local-file audits and conditional repair with honest write receipts. Scoped contracts, repository compatibility and agent lift follow the implementation walk.
+note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Phase 2 adds browser findings, local-file audits and conditional repair with honest write receipts. Phase 3 adds scoped recipe contracts, effective policy views and native/DTCG preservation. Repository compatibility and agent lift follow the implementation walk.
 ---
 # Design lint that explains the repair
 
@@ -337,3 +337,38 @@ and the [verified browser view](shadcn-lint/phase2-findings-2026-09-14.png).
 The final upstream rebase changed only a placement-test timeout; the full suite
 and typecheck passed again. This establishes the repair mechanism, not agent
 lift or visual quality: those remain the separately approved evaluation.
+
+
+## Implementation evidence, 14 September: phase 3
+
+Version 1 contracts now travel with the governing DESIGN.md. Recipes own
+specific physical padding, radius and typography properties; callers may
+change declared controls, choose approved treatments or name an exception
+with a preserved reason. Literal policy follows the governing document, so
+nested lanes and inherited systems remain separate. Reference checks require
+an actual exported CSS token, including a valid alias path and value.
+
+Native and DTCG round trips preserve unknown JSON-compatible extension data.
+DTCG import also retains the native token paths the contract references;
+preserving policy bytes while renaming their targets was not a working round
+trip. Unsupported syntax or conversion produces problems, and CSS exports
+explicitly disclose the loss of contracts and reasons.
+
+The conductor passed 34 independent contract cases and 11 preservation cases,
+then walked the real browser and CLI: inspect the effective contract and
+source, edit its document, observe changed findings, Undo the policy, and save
+an HTML repair without changing governing bytes. The full fast suite passed
+5,322 tests; typecheck and build passed; the strict emulator-backed suite
+passed all 578 files, with 5,879 tests and three opt-in model/sandbox skips.
+The initial entry grew by 9,648 raw / 3,495 gzip bytes; parser analysis remains
+lazy and the existing bundle limits remain unchanged.
+
+[Measured results](shadcn-lint/results-2026-09-14-phase3.json),
+[contract probe](shadcn-lint/probe-contracts.mts),
+[round-trip probe](shadcn-lint/probe-contract-roundtrips.mts), and
+[verified policy view](shadcn-lint/phase3-contract-2026-09-14.png) retain the
+synthetic inputs and outcomes. Run either probe from the repo with
+`node --import tsx <probe-path> [output.json]`. Escaped CSS identifier selectors
+and other unsupported cascade paths are explicit incomplete coverage. This
+proof establishes enforcement and preservation; paid agent lift and human
+intent ratings remain unmeasured.

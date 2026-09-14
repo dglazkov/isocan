@@ -1,3 +1,4 @@
+import { compileDesignContract } from "./design-contract.ts";
 import { CONTRAST_BODY, CONTRAST_UI, contrastRatio, parseHex } from "./contrast.ts";
 import { DESIGN_SECTIONS, unresolvedReferences, type DesignDoc } from "./designmd.ts";
 
@@ -40,6 +41,10 @@ export function checkDesign(doc: DesignDoc): DesignFinding[] {
 
   for (const problem of doc.problems) {
     findings.push({ severity: "error", where: "front matter", what: problem });
+  }
+
+  for (const problem of compileDesignContract(tokens).problems) {
+    findings.push({ severity: "error", where: problem.path, what: problem.message });
   }
 
   if (!tokens.name) {

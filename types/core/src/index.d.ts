@@ -65,7 +65,8 @@ export type { ScreenAudit, AuditDiagnostic, AuditUnexamined, AuditRepair, AuditR
 export * from "./preference.js";
 export * from "./extensions.js";
 export * from "./media.js";
-export * from "./designmd.js";
+export { DESIGN_SECTIONS, canonicalSection, parseFrontMatter, parseDesign, referencesIn, unresolvedReferences, resolveToken, serializeDesign } from "./designmd.js";
+export type { DesignTypography, DesignTokens, DesignDoc } from "./designmd.js";
 export * from "./contrast.js";
 export * from "./designcheck.js";
 export * from "./tokens.js";
@@ -110,3 +111,4 @@ export * from "./text-attention.js";
 export * from "./text-anchor.js";
 export { markdownResource, SOURCE_PATH_PROP } from "./markdown-resources.js";
 export * from "./inbox-api.js";
+export type { DesignRecipeContract, DesignContractException, EffectiveDesignContract, DesignPolicyProblem, DesignContractPolicy } from "./design-contract.js";

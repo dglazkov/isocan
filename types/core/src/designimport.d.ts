@@ -1,4 +1,4 @@
-import type { DesignTokens } from "./designmd.js";
+import { type DesignTokens } from "./designmd.js";
 /**
  * **Bringing somebody else's theme onto this canvas.**
  *
@@ -26,6 +26,8 @@ interface ImportedDesign {
     tokens: DesignTokens;
     /** What could not be read or placed, in the importer's own words. */
     problems: string[];
+    /** Conversion limits that apply even when all token values were read. */
+    notes: string[];
     /** Which shape it turned out to be, for the report. */
     format: "css" | "dtcg";
 }

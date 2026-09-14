@@ -16,3 +16,7 @@
 .design-lint code { overflow-wrap: anywhere; }
 .design-lint-prerequisite, .design-lint-unavailable { color: var(--ink-muted); }
 .design-lint-receipt { border-left: 2px solid var(--accent-text); padding-left: 8px; }
+.design-lint-policy { border-top: 1px solid var(--line-soft); margin-top: 9px; padding-top: 3px; }
+.design-lint-policy ul { padding-left: 18px; }
+.design-lint-policy-problems { border-left: 2px solid var(--accent-text); padding-left: 8px; }
+.design-lint-original pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }

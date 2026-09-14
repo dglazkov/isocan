@@ -16,7 +16,9 @@
  * library would land in every install of isocan to serve the canvases that
  * have a design system. What the schema actually uses is maps up to three deep,
  * scalar values, and one list of strings-or-small-maps — so that is what this
- * reads, and anything outside it is reported rather than guessed at.
+ * reads, and anything outside it is reported rather than guessed at. The
+ * isocan extension also accepts canonical JSON flow values for lossless,
+ * opaque storage of future policy data without a general YAML runtime.
  */
 export interface DesignTypography {
     fontFamily?: string;
@@ -28,6 +30,8 @@ export interface DesignTypography {
     fontVariation?: string;
 }
 export interface DesignTokens {
+    /** Opaque JSON-compatible vendor data; policy validation is separate. */
+    isocan?: unknown;
     version?: string;
     name?: string;
     description?: string;
@@ -59,8 +63,16 @@ export declare const DESIGN_SECTIONS: string[];
 /** The canonical name of a heading, or the heading itself when it is not one
  * of the spec's sections. */
 export declare function canonicalSection(heading: string): string;
-/** The subset parser. Exported for its own tests — it is the part most likely
- * to meet something it was not built for. */
+/** Reject values JSON would silently drop, execute, or change. Shared by the
+ * native and interchange writers; this does not interpret contract rules. */
+export declare function assertJsonCompatible(value: unknown, path?: string, ancestors?: Set<object>): void;
+/** JSON.parse itself erases duplicate members. Inspect its validated token
+ * stream first so even unknown future contract data cannot lose a rule. */
+export declare function parseDesignJson(text: string): unknown;
+/** A failed parse remains attached to its tokens so an ordinary read followed
+ * by export cannot silently turn a partial document into a weaker policy. */
+export declare function assertDesignConvertible(tokens: DesignTokens): void;
+/** The supported YAML subset, including canonical JSON flow values. */
 export declare function parseFrontMatter(yaml: string): {
     data: Record<string, unknown>;
     problems: string[];

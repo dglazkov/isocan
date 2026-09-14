@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals
-note: phases 1 and 2 deliver parsed native diagnostics, governing provenance, browser findings and conditional repair on both surfaces. Scoped contracts are next; optional repository checks and approved paid evaluation follow.
+note: phases 1–3 deliver parsed diagnostics, conditional repair and scoped recipe contracts on both surfaces, including policy edit/undo and native/DTCG preservation. Optional repository checks are next; approved paid evaluation follows the no-spend harness.
 ---
 # A design check that gives the next edit
 

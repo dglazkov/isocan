@@ -1,6 +1,7 @@
 import type { DesignTokens } from "./designmd.js";
+import { type DesignContractPolicy } from "./design-contract.js";
 /** Identifies the interpretation of a report so cached findings can be invalidated when rules change. */
-export declare const DESIGN_AUDIT_VERSION = "1.0.0";
+export declare const DESIGN_AUDIT_VERSION = "1.1.0";
 /** These token categories define the audit boundary; unrelated geometry is not a spacing decision. */
 export type DesignValueKind = "colour" | "type size" | "radius" | "spacing";
 /** Original-source coordinates let either editor select the same value after HTML entity decoding. */
@@ -43,6 +44,7 @@ export interface AuditUnexamined {
 export interface ScreenAudit {
     ruleVersion: typeof DESIGN_AUDIT_VERSION;
     diagnostics: AuditDiagnostic[];
+    policy: DesignContractPolicy;
     coverage: {
         /** Completeness within the declared categories, not visual or general CSS correctness. */
         complete: boolean;

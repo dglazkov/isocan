@@ -1,4 +1,4 @@
-import type { DesignTokens } from "./designmd.js";
+import { type DesignTokens } from "./designmd.js";
 /**
  * Design tokens, in and out.
  *
@@ -70,5 +70,8 @@ export declare function dtcgDimensionString(value: unknown): string | number | u
 /** `16px` / `0.5rem` → the object; anything else (a percentage, `auto`, a
  *  ratio) → null, so the caller says what it is rather than inventing a unit. */
 export declare function parseDimension(value: unknown): DtcgDimension | null;
+/** The loss boundary belongs with the converter so both surfaces say the
+ * same thing. Native and vendor-extended DTCG preserve the whole extension. */
+export declare function designConversionNotes(tokens: DesignTokens, format: "css" | "dtcg" | "native"): string[];
 /** Custom properties, ready to paste into the page being built. */
 export declare function toCss(tokens: DesignTokens): string;

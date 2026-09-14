@@ -6,6 +6,7 @@ import { getSnapshot } from "../lib/api.ts";
 import { readDesignAudit, saveDesignRepair } from "../lib/design-audit.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { everyWhileVisible } from "../lib/whilevisible.ts";
+import { DesignContractSummary } from "./DesignContractSummary.tsx";
 import "./design-lint.css";
 
 interface CheckedDraft { text: string; item: ItemDesignAudit }
@@ -147,6 +148,7 @@ export function DesignLintPanel({ canvasId, itemId, actor, text, baseVersionId, 
         <p>Draft based on {baseVersionId}. Design {audited.governing.itemId} / {audited.governing.versionId} · canvas {audited.governing.canvasId} · rules {audited.ruleVersion}.</p>
         {audited.input && <p>Checked HTML: {audited.input.sha256} ({audited.input.size} bytes).</p>}
       </details>
+      <DesignContractSummary policy={audited.policy} onSelect={range => onSelect(range, checked!.text)} />
       <ul className="design-lint-findings">
         {audited.diagnostics.map((finding, index) => <li key={`${finding.code}:${finding.range.start.offset}:${index}`} data-design-code={finding.code}>
           <button type="button" className="design-lint-location" onClick={() => onSelect(finding.range, checked!.text)} title="Select this value in the checked source">
