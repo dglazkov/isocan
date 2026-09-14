@@ -240,7 +240,13 @@ const keys = {
   origins: (actorId: string) => `origins:${actorId}`,
   gateSaid: (canvasId: string, key: string) => `said:${canvasId}:gate:${key}`,
   turnedAwaySaid: (canvasId: string, key: string) => `said:${canvasId}:turned-away:${key}`,
+  /** An agent another badge holds: its cursor was refused `not-your-actor`,
+   * and that was said. Deleted when a later start parks it. */
+  notHeldSaid: (canvasId: string, actorId: string) => `said:${canvasId}:not-held:${actorId}`,
 };
+
+/** The desk's refusal for an actor the presenting badge does not hold. */
+const NOT_YOUR_ACTOR = "not-your-actor";
 
 /** One canvas's whole rc — holds, cursors, dispatch, narration. */
 export function runRoom(deps: RoomDeps): Room {
@@ -291,6 +297,7 @@ async function room(
   };
   const reconcile = async (roster: Record<string, EnrolledAgent>) => {
     for (const record of Object.values(roster)) {
+      if (notHeld.has(record.actor.id)) continue;
       await rows.adopt({
         canvasId: p.id,
         actorId: record.actor.id,
@@ -307,6 +314,124 @@ async function room(
   const known = new Map<string, string>();
   const opening = await rosterOf();
   for (const [id, row] of Object.entries(opening)) known.set(id, row.actor.name);
+
+  /**
+   * **Dispatch** (on-demand phase 4). One quiet connection, fanned out: the
+   * room holds a cursor row per enrolled agent (adopting it — a plain `wait`
+   * park as the same actor is displaced), reads the log once per lap from the
+   * earliest of them, and applies core's `dispatchReason` per agent — the same
+   * composition `wait` imports, so the park and the dispatcher cannot drift. A
+   * summons carries every pending matched entry; ops landing mid-turn sit
+   * behind the cursor and become the next summons when the turn completes.
+   * The room sees `end_turn` directly, so completion is an explicit advance,
+   * not the park's inferred evidence.
+   */
+  interface AgentDispatch {
+    parkId: string;
+    cursor: number;
+    redeliverUpTo: number | null;
+    /** Matched entries awaiting a turn, in log order. */
+    pending: WatchedLogEntry[];
+    scannedTip: number;
+    busy: boolean;
+    /** After a failed turn: hold the pending batch until this passes —
+     * a broken adapter must not hot-loop; the thread already carries the
+     * refusal (phase 5). */
+    retryAfter: number;
+  }
+  const dispatches = new Map<string, AgentDispatch>();
+  /**
+   * **Not held by this machine** (docs/projects/room/design.md, the claim
+   * rule). The room claims, faces and dispatches only agents its badge may
+   * speak as. The cursor route requires the actor, so an agent another badge
+   * holds (or an orphan nobody holds, which the room cannot tell apart without
+   * claiming) comes back from `parkClaim` as `not-your-actor`: read once, at
+   * start or at the adoption that first meets it, and kept here for the room's
+   * life. Such an agent has no cursor, no row, no place in the hold, no face
+   * and no turn, and is said once, under `state`. A pass that hands it over is
+   * picked up at the next start; the room does not ask again before then.
+   */
+  const notHeld = new Set<string>();
+  const sayNotHeld = async (actorId: string): Promise<void> => {
+    const key = keys.notHeldSaid(p.id, actorId);
+    if (await state.get(key)) return;
+    await state.set(key, true);
+    const name = known.get(actorId) ?? actorId;
+    narrate(`${name} is not held by this machine — a pass minted for ${name} hands it over, or re-add it here`);
+  };
+  // Where each standing began — the floor for a cursor row that does not
+  // exist yet (a web add with no rc parked, and nothing to claim it since).
+  // One log read at start; the enrol verb and the live enroll event carry
+  // their own seqs.
+  const enrolSeqs = new Map<string, number>();
+  for (const entry of await routes.getLog(p.id, 0)) {
+    if (entry.envelope.op.type === "agent.enroll") {
+      enrolSeqs.set(entry.envelope.op.agent.id, entry.seq);
+    }
+  }
+  /**
+   * Park one agent's cursor. For an agent in this machine's own rows the
+   * actor is claimed first, under its own key, so a machine that re-badged
+   * still takes up its own agents; for any other, the park alone asks. What
+   * came back: held, not held by this badge, or a refusal of some other kind for
+   * the caller to say.
+   */
+  const parkAgent = async (
+    actorId: string,
+    own: boolean,
+    seedAt?: number,
+  ): Promise<"held" | "not-held" | { error: Error }> => {
+    if (dispatches.has(actorId)) return "held";
+    if (notHeld.has(actorId)) return "not-held";
+    const name = known.get(actorId);
+    if (own && name !== undefined) {
+      // A refusal here is read from the park that follows.
+      await routes
+        .claimActor({ type: "actor.claim", sessionKey: enrolmentKey(name), as: actorId })
+        .catch(() => {});
+    }
+    try {
+      const floor = seedAt ?? enrolSeqs.get(actorId);
+      const claim = await routes.parkClaim({
+        canvasId: p.id,
+        actorId,
+        ...(floor !== undefined ? { seedAt: floor } : {}),
+      });
+      dispatches.set(actorId, {
+        parkId: claim.parkId,
+        cursor: claim.cursor,
+        redeliverUpTo: claim.redeliverUpTo,
+        pending: [],
+        scannedTip: claim.cursor,
+        busy: false,
+        retryAfter: 0,
+      });
+      await state.delete(keys.notHeldSaid(p.id, actorId));
+      return "held";
+    } catch (err) {
+      if (err instanceof ApiError && err.code === NOT_YOUR_ACTOR) {
+        notHeld.add(actorId);
+        return "not-held";
+      }
+      return { error: err as Error };
+    }
+  };
+  const couldNotHold = (actorId: string, error: Error): void =>
+    narrate(`could not hold ${known.get(actorId) ?? actorId}'s cursor — ${error.message}`);
+  const ownRow = async (actorId: string): Promise<boolean> =>
+    (await rows.list()).some((r) => r.canvasId === p.id && r.actorId === actorId);
+  // Each agent's cursor is parked before anything else is done for it, so an
+  // agent this badge does not hold gets no row here and is never one of this
+  // machine's hands. What the parks have to say waits for the opening lines.
+  const openingSays: (() => Promise<void>)[] = [];
+  {
+    const mine = new Set((await rows.list()).filter((r) => r.canvasId === p.id).map((r) => r.actorId));
+    for (const actorId of Object.keys(opening)) {
+      const parked = await parkAgent(actorId, mine.has(actorId));
+      if (parked === "not-held") openingSays.push(() => sayNotHeld(actorId));
+      else if (parked !== "held") openingSays.push(async () => couldNotHold(actorId, parked.error));
+    }
+  }
   await reconcile(opening);
 
   /**
@@ -410,6 +535,8 @@ async function room(
   if (enrolledCount > 0) {
     const byWords = new Map<string, string[]>();
     for (const record of Object.values(opening)) {
+      // Whose word wakes an agent is this machine's to say only for its own.
+      if (notHeld.has(record.actor.id)) continue;
       const words = policyLine(record);
       byWords.set(words, [...(byWords.get(words) ?? []), record.actor.name]);
       await sayPolicy(record);
@@ -430,30 +557,8 @@ async function room(
     if (where !== null) narrate(where);
   }
 
-  /**
-   * **Dispatch** (on-demand phase 4). One quiet connection, fanned out: the
-   * room holds a cursor row per enrolled agent (adopting it — a plain `wait`
-   * park as the same actor is displaced), reads the log once per lap from the
-   * earliest of them, and applies core's `dispatchReason` per agent — the same
-   * composition `wait` imports, so the park and the dispatcher cannot drift. A
-   * summons carries every pending matched entry; ops landing mid-turn sit
-   * behind the cursor and become the next summons when the turn completes.
-   * The room sees `end_turn` directly, so completion is an explicit advance,
-   * not the park's inferred evidence.
-   */
-  interface AgentDispatch {
-    parkId: string;
-    cursor: number;
-    redeliverUpTo: number | null;
-    /** Matched entries awaiting a turn, in log order. */
-    pending: WatchedLogEntry[];
-    scannedTip: number;
-    busy: boolean;
-    /** After a failed turn: hold the pending batch until this passes —
-     * a broken adapter must not hot-loop; the thread already carries the
-     * refusal (phase 5). */
-    retryAfter: number;
-  }
+  for (const say of openingSays) await say();
+
   /** The ceiling's memory and the cycle guard's count — per AGENT, not per
    * room (standing agents phase 2): one key under `state` that every room
    * holding this agent hands to `gateTurn`, so six canvases are not six
@@ -494,40 +599,6 @@ async function room(
     const snapshot = await routes.snapshot(p.id).catch(() => null);
     return snapshot !== null && !snapshot.canvas.agents?.[actorId];
   };
-  const dispatches = new Map<string, AgentDispatch>();
-  // Where each standing began — the floor for a cursor row that does not
-  // exist yet (a web add with no rc parked, and nothing to claim it since).
-  // One log read at start; the enrol verb and the live enroll event carry
-  // their own seqs.
-  const enrolSeqs = new Map<string, number>();
-  for (const entry of await routes.getLog(p.id, 0)) {
-    if (entry.envelope.op.type === "agent.enroll") {
-      enrolSeqs.set(entry.envelope.op.agent.id, entry.seq);
-    }
-  }
-  const claimAgent = async (actorId: string, seedAt?: number): Promise<void> => {
-    if (dispatches.has(actorId)) return;
-    try {
-      const floor = seedAt ?? enrolSeqs.get(actorId);
-      const claim = await routes.parkClaim({
-        canvasId: p.id,
-        actorId,
-        ...(floor !== undefined ? { seedAt: floor } : {}),
-      });
-      dispatches.set(actorId, {
-        parkId: claim.parkId,
-        cursor: claim.cursor,
-        redeliverUpTo: claim.redeliverUpTo,
-        pending: [],
-        scannedTip: claim.cursor,
-        busy: false,
-        retryAfter: 0,
-      });
-    } catch (err) {
-      narrate(`could not hold ${known.get(actorId) ?? actorId}'s cursor — ${(err as Error).message}`);
-    }
-  };
-  for (const actorId of Object.keys(opening)) await claimAgent(actorId);
 
   /**
    * **The connection IS the fact** (on-demand phase 6). This hold, re-issued
@@ -538,28 +609,66 @@ async function room(
    * seconds; the gap between holds can only err toward "not answerable", the
    * permitted direction.
    */
+  const holdOnce = (): Promise<RcHoldResponse> => {
+    const actorIds = [...dispatches.keys()];
+    // The policy rides the hold (owner-only summons): the web and
+    // `isocan who` read whose word this rc takes from the same value
+    // dispatch applies, so the two cannot differ.
+    const policies: Record<string, RcPolicy> = {};
+    for (const actorId of actorIds) {
+      const record = policyState.roster[actorId];
+      if (record) policies[actorId] = policyOf(record);
+    }
+    return routes.rcHold({ canvasId: p.id, actorIds, waitMs: 10_000, owner, policies }, life);
+  };
+  /**
+   * **A hold refused `not-your-actor` mid-room** (the claim rule). The hold
+   * names only agents this room parked, so the refusal means the badge lost
+   * claims it had: a re-badge at the door re-claims the person alone. The
+   * room re-claims the agents in this machine's own rows under their keys and
+   * asks once more. Still refused, it says so once and keeps asking; these
+   * are its own agents, and they are never said to be held notHeld.
+   */
+  let holdRefusedSaid = false;
+  const holdAfterRefusal = async (): Promise<RcHoldResponse | null> => {
+    const mine = (await rows.list().catch(() => [] as RcAgentRow[])).filter(
+      (r) => r.canvasId === p.id && dispatches.has(r.actorId),
+    );
+    for (const row of mine) {
+      const name = known.get(row.actorId) ?? row.name;
+      await routes
+        .claimActor({ type: "actor.claim", sessionKey: enrolmentKey(name), as: row.actorId })
+        .catch(() => {});
+    }
+    try {
+      return await holdOnce();
+    } catch (again) {
+      if (life.aborted) return null;
+      if (!holdRefusedSaid) {
+        holdRefusedSaid = true;
+        const why = (again as Error).message;
+        const named = [...dispatches.keys()].find((id) => why.includes(id));
+        const who = named
+          ? (known.get(named) ?? named)
+          : [...dispatches.keys()].map((id) => known.get(id) ?? id).join(", ");
+        narrate(`could not hold ${who}'s cursor — ${why}`);
+      }
+      await sleep(10_000);
+      return null;
+    }
+  };
   void (async () => {
     while (!life.aborted) {
       try {
-        const actorIds = [...dispatches.keys()];
-        // The policy rides the hold (owner-only summons): the web and
-        // `isocan who` read whose word this rc takes from the same value
-        // dispatch applies, so the two cannot differ.
-        const policies: Record<string, RcPolicy> = {};
-        for (const actorId of actorIds) {
-          const record = policyState.roster[actorId];
-          if (record) policies[actorId] = policyOf(record);
+        let held: RcHoldResponse | null;
+        try {
+          held = await holdOnce();
+        } catch (err) {
+          if (!(err instanceof ApiError && err.code === NOT_YOUR_ACTOR) || life.aborted) throw err;
+          held = await holdAfterRefusal();
         }
-        const held = await routes.rcHold(
-          {
-            canvasId: p.id,
-            actorIds,
-            waitMs: 10_000,
-            owner,
-            policies,
-          },
-          life,
-        );
+        if (!held) continue;
+        holdRefusedSaid = false;
         /**
          * **The handshake's last hop** (agent-custody mechanism 2): the Web
          * UI's "add an agent" arrives inside the hold, and the host that will
@@ -812,12 +921,20 @@ async function room(
     for (const d of dispatches.values()) if (d.scannedTip < from) from = d.scannedTip;
     return from;
   };
-  /** Anybody the roster names that this room is not answering for: adopted
-   * and claimed, the same two things the enrol branch below does. Run on
-   * every lap that reads a roster, and once at start (below). */
+  /** Anybody the roster names that this room is not answering for, and has
+   * not been told another badge holds: claimed and adopted, the same two
+   * things the enrol branch below does. Run on every lap that reads a roster,
+   * and once at start (below). */
   const takeUp = async (roster: Record<string, EnrolledAgent>): Promise<void> => {
     for (const record of Object.values(roster)) {
-      if (dispatches.has(record.actor.id)) continue;
+      if (dispatches.has(record.actor.id) || notHeld.has(record.actor.id)) continue;
+      known.set(record.actor.id, record.actor.name);
+      // The cursor first: an agent this badge does not hold gets no row here.
+      const parked = await parkAgent(record.actor.id, await ownRow(record.actor.id));
+      if (parked === "not-held") {
+        await sayNotHeld(record.actor.id);
+        continue;
+      }
       /**
        * The SAME two things the enrol branch below does, and the first
        * version of this did only one of them.
@@ -838,7 +955,7 @@ async function room(
         sessionId: null,
       });
       if (adopted) narrate(`${record.actor.name} · where and how supplied — ${rcCwd}`);
-      await claimAgent(record.actor.id);
+      if (parked !== "held") couldNotHold(record.actor.id, parked.error);
     }
   };
   const startTip = (await routes.watchLog({ only: [p.id] })).cursors[p.id] ?? 0;
@@ -858,6 +975,7 @@ async function room(
   for (const [id, row] of Object.entries(settled)) known.set(id, row.actor.name);
   await reap(settled, "as this rc started");
   for (const actorId of [...dispatches.keys()]) if (!settled[actorId]) dispatches.delete(actorId);
+  for (const actorId of [...notHeld]) if (!settled[actorId]) notHeld.delete(actorId);
   await takeUp(settled);
   cursors = { [p.id]: lapFrom() };
   let lastRoster = settled;
@@ -940,7 +1058,7 @@ async function room(
      * ordering, because it asks the question that actually matters — *is
      * anybody enrolled here that I am not answering for?* — rather than
      * trying to catch every path by which they could have arrived.
-     * `claimAgent` returns early when a dispatch exists, so this costs
+     * `parkAgent` returns early when a dispatch exists, so this costs
      * nothing on a settled lap.
      */
     await takeUp(roster);
@@ -950,6 +1068,14 @@ async function room(
       if (op.type === "agent.enroll") {
         known.set(op.agent.id, op.agent.name);
         if (entry.seq > startTip) {
+          // Parked before anything is said or written for it (the lap's
+          // take-up above has usually done it already, and this is then
+          // nothing). An agent this badge does not hold is not "answerable here".
+          const parked = await parkAgent(op.agent.id, await ownRow(op.agent.id), entry.seq);
+          if (parked === "not-held") {
+            await sayNotHeld(op.agent.id);
+            continue;
+          }
           // Whose word wakes it, said with the enrolment — a gate changed
           // by `rc listen` arrives as exactly this op.
           const record = roster[op.agent.id];
@@ -964,8 +1090,13 @@ async function room(
             sessionId: null,
           });
           if (adopted) narrate(`${op.agent.name} · where and how supplied — ${rcCwd}`);
-          await claimAgent(op.agent.id, entry.seq);
+          if (parked !== "held") couldNotHold(op.agent.id, parked.error);
         }
+        continue;
+      }
+      if (op.type === "agent.withdraw" && entry.seq > startTip && notHeld.delete(op.actorId)) {
+        // An agent this machine does not hold, withdrawn: nothing here
+        // answered it.
         continue;
       }
       if (op.type === "agent.withdraw" && entry.seq > startTip) {

@@ -12,6 +12,7 @@ import {
   collect,
   dimitri,
   daemon,
+  holdOnThisMachine,
   home,
   isocan,
   nico,
@@ -361,7 +362,9 @@ describe("the web doors' mechanics (phase 2.5)", () => {
     await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
 
     // The dialog's exact record write: agent.enroll over HTTP. No CLI verb
-    // ran on this machine, so no rc half exists — the rc supplies it.
+    // ran on this machine, so no rc half exists — the rc supplies it. The
+    // actor is this machine's, as the ask makes it: an orphan is inert.
+    await holdOnThisMachine({ id: "usr_sian", name: "Sian" });
     await post("/api/ops", {
       canvasId: "prj_1",
       actor: dimitri,
@@ -467,7 +470,9 @@ describe("the web doors' mechanics (phase 2.5)", () => {
 
   it("an rc that starts late reconciles the enrolments it missed", async () => {
     // Enrolled from the web while NO rc ran — the record works with nothing
-    // running; the rc supplies where and how at its next start.
+    // running; the rc supplies where and how at its next start. The actor is
+    // this machine's, as the ask makes it: an orphan is inert.
+    await holdOnThisMachine({ id: "usr_percy", name: "Percy" });
     await post("/api/ops", {
       canvasId: "prj_1",
       actor: dimitri,
@@ -746,4 +751,88 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
     rc.kill("SIGINT");
     await done;
   }, 30_000);
+});
+
+/**
+ * **Two rcs answer one canvas** (room phase 3; journey 2). Two machines on one
+ * daemon, each with a badge of its own: this home is Nico's, `machine2` is
+ * Wren's. Each adds an agent, each runs `isocan rc`, and each roster names
+ * both. The cursor and hold routes require the actor, and the room parks
+ * before it does anything else for an agent, so each rc says the other's
+ * agent once and leaves it alone. Without the route check the second rc parks
+ * Percy and the two trade his cursor; without the room's rule it reads the
+ * refusal as a cursor it could not hold, every lap.
+ */
+describe("two rcs, one canvas (room phase 3)", () => {
+  it("each answers its own agent, says the other's once, and neither takes the other's cursor", async () => {
+    const machine2 = path.join(home, "machine2");
+    await fs.mkdir(machine2);
+    await fs.writeFile(
+      path.join(machine2, "identity.json"),
+      JSON.stringify({ id: "usr_wren", name: "Wren", createdAt: new Date().toISOString() }),
+    );
+    await fs.copyFile(path.join(home, "config.json"), path.join(machine2, "config.json"));
+    const wren = { ISOCAN_HOME: machine2 };
+    expect((await isocan("rc", "add", "Percy", ...TEAM)).code).toBe(0);
+    expect((await collect(spawnCli(["--canvas", "prj_1", "rc", "add", "Wendy", ...TEAM], wren))).code).toBe(0);
+    const ids = Object.fromEntries(Object.values(await snapshotAgents()).map((a) => [a.actor.name, a.actor.id]));
+    const percy = ids["Percy"]!;
+    const wendy = ids["Wendy"]!;
+
+    const started = (args: string[], env: Record<string, string> = {}) => {
+      const child = spawnCli(args, env);
+      const seen = { out: "" };
+      child.stdout!.setEncoding("utf8");
+      child.stdout!.on("data", (chunk) => (seen.out += chunk));
+      child.stderr!.setEncoding("utf8");
+      child.stderr!.on("data", (chunk) => (seen.out += chunk));
+      return { child, seen, done: new Promise<void>((resolve) => child.on("close", () => resolve())) };
+    };
+    const one = started(["rc"]);
+    await until(answeringFor, (a) => a.includes(percy), "the first rc to hold Percy");
+    const two = started(["--canvas", "prj_1", "rc"], wren);
+    // The second rc's hold names Wendy only after its start has said what it
+    // has to say, so this is the end of its start.
+    await until(answeringFor, (a) => a.includes(percy) && a.includes(wendy), "both agents answerable");
+
+    const summon = (threadId: string, body: string) =>
+      post("/api/ops", {
+        canvasId: "prj_1",
+        actor: dimitri,
+        op: { type: "thread.create", threadId, x: 0, y: 0, anchorItemId: null, comment: { id: `cmt_${threadId}`, body } },
+      });
+    // Both outputs, so a wait that times out shows what each machine said.
+    const both = async () => `=== first\n${one.seen.out}\n=== second\n${two.seen.out}`;
+    const second = (o: string) => o.slice(o.indexOf("=== second"));
+    await summon("th_percy", "@Percy the spacing looks wrong");
+    await until(both, (o) => o.slice(0, o.indexOf("=== second")).includes("Percy · turn ended"), "the first machine to answer Percy");
+    await summon("th_wendy", "@Wendy and the heading");
+    await until(both, (o) => second(o).includes("Wendy · turn ended"), "the second machine to answer Wendy");
+    // Long enough for a lap and a hold on each side after both turns.
+    await new Promise((r) => setTimeout(r, 3_000));
+
+    const threads = ((await (await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })).json()) as {
+      canvas: { threads: Record<string, { comments: { author: { name: string } }[] }> };
+    }).canvas.threads;
+    for (const [out, mine, theirs] of [
+      [one.seen.out, "Percy", "Wendy"],
+      [two.seen.out, "Wendy", "Percy"],
+    ] as const) {
+      expect(out).toContain(`${theirs} is not held by this machine — a pass minted for ${theirs} hands it over, or re-add it here`);
+      expect(out.split(`${theirs} is not held by this machine`).length - 1).toBe(1);
+      expect(out).not.toContain(`${theirs} ·`);
+      expect(out).not.toContain(`${mine} is not held by this machine`);
+      expect(out).not.toContain("another park adopted");
+      expect(out).not.toContain("could not hold");
+      expect(out).not.toContain("turn FAILED");
+    }
+    for (const threadId of ["th_percy", "th_wendy"]) {
+      expect(threads[threadId]!.comments.map((c) => c.author.name)).not.toContain("isocan");
+    }
+    expect(await answeringFor()).toEqual(expect.arrayContaining([percy, wendy]));
+
+    one.child.kill("SIGINT");
+    two.child.kill("SIGINT");
+    await Promise.all([one.done, two.done]);
+  }, 60_000);
 });

@@ -258,8 +258,12 @@ broken, not one:
    own agents. The refusal is read from a route `DaemonClient` does
    not heal, because the reclaim only answers `not-your-actor` by
    reclaiming the machine's own identity, which does not make the
-   badge hold somebody else's agent. If the code shows it does, phase
-   3 records that.
+   badge hold somebody else's agent. Phase 3 confirmed it: one
+   reclaim, then the refusal. A `not-your-actor` from `rcHold` in the
+   middle of a room means the badge lost claims it had, because a
+   re-badge re-claims only the person. So the room re-claims its own
+   rows' agents and retries once, and it never calls its own agents
+   not held.
 2. **Agent keys nobody else can derive** (phase 3.5). An agent's
    session key becomes a keyed hash of a secret kept in this machine's
    `~/.isocan` and the agent's name. The same machine derives the same

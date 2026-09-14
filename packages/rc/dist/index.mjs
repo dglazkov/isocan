@@ -2412,8 +2412,12 @@ var keys = {
   session: (actorId) => `session:${actorId}`,
   origins: (actorId) => `origins:${actorId}`,
   gateSaid: (canvasId, key) => `said:${canvasId}:gate:${key}`,
-  turnedAwaySaid: (canvasId, key) => `said:${canvasId}:turned-away:${key}`
+  turnedAwaySaid: (canvasId, key) => `said:${canvasId}:turned-away:${key}`,
+  /** An agent another badge holds: its cursor was refused `not-your-actor`,
+   * and that was said. Deleted when a later start parks it. */
+  notHeldSaid: (canvasId, actorId) => `said:${canvasId}:not-held:${actorId}`
 };
+var NOT_YOUR_ACTOR = "not-your-actor";
 function runRoom(deps) {
   const life = new AbortController();
   let announcement = null;
@@ -2452,6 +2456,7 @@ async function room(deps, life, announce) {
   };
   const reconcile = async (roster) => {
     for (const record of Object.values(roster)) {
+      if (notHeld.has(record.actor.id)) continue;
       await rows.adopt({
         canvasId: p.id,
         actorId: record.actor.id,
@@ -2466,6 +2471,66 @@ async function room(deps, life, announce) {
   const known = /* @__PURE__ */ new Map();
   const opening = await rosterOf();
   for (const [id, row] of Object.entries(opening)) known.set(id, row.actor.name);
+  const dispatches = /* @__PURE__ */ new Map();
+  const notHeld = /* @__PURE__ */ new Set();
+  const sayNotHeld = async (actorId) => {
+    const key = keys.notHeldSaid(p.id, actorId);
+    if (await state.get(key)) return;
+    await state.set(key, true);
+    const name = known.get(actorId) ?? actorId;
+    narrate(`${name} is not held by this machine \u2014 a pass minted for ${name} hands it over, or re-add it here`);
+  };
+  const enrolSeqs = /* @__PURE__ */ new Map();
+  for (const entry of await routes.getLog(p.id, 0)) {
+    if (entry.envelope.op.type === "agent.enroll") {
+      enrolSeqs.set(entry.envelope.op.agent.id, entry.seq);
+    }
+  }
+  const parkAgent = async (actorId, own, seedAt) => {
+    if (dispatches.has(actorId)) return "held";
+    if (notHeld.has(actorId)) return "not-held";
+    const name = known.get(actorId);
+    if (own && name !== void 0) {
+      await routes.claimActor({ type: "actor.claim", sessionKey: enrolmentKey(name), as: actorId }).catch(() => {
+      });
+    }
+    try {
+      const floor = seedAt ?? enrolSeqs.get(actorId);
+      const claim = await routes.parkClaim({
+        canvasId: p.id,
+        actorId,
+        ...floor !== void 0 ? { seedAt: floor } : {}
+      });
+      dispatches.set(actorId, {
+        parkId: claim.parkId,
+        cursor: claim.cursor,
+        redeliverUpTo: claim.redeliverUpTo,
+        pending: [],
+        scannedTip: claim.cursor,
+        busy: false,
+        retryAfter: 0
+      });
+      await state.delete(keys.notHeldSaid(p.id, actorId));
+      return "held";
+    } catch (err) {
+      if (err instanceof ApiError && err.code === NOT_YOUR_ACTOR) {
+        notHeld.add(actorId);
+        return "not-held";
+      }
+      return { error: err };
+    }
+  };
+  const couldNotHold = (actorId, error) => narrate(`could not hold ${known.get(actorId) ?? actorId}'s cursor \u2014 ${error.message}`);
+  const ownRow = async (actorId) => (await rows.list()).some((r) => r.canvasId === p.id && r.actorId === actorId);
+  const openingSays = [];
+  {
+    const mine = new Set((await rows.list()).filter((r) => r.canvasId === p.id).map((r) => r.actorId));
+    for (const actorId of Object.keys(opening)) {
+      const parked = await parkAgent(actorId, mine.has(actorId));
+      if (parked === "not-held") openingSays.push(() => sayNotHeld(actorId));
+      else if (parked !== "held") openingSays.push(async () => couldNotHold(actorId, parked.error));
+    }
+  }
   await reconcile(opening);
   const owner = { id: deps.owner.id, name: deps.owner.name };
   const keeping = { owner, hands: [owner.id] };
@@ -2518,6 +2583,7 @@ async function room(deps, life, announce) {
   if (enrolledCount > 0) {
     const byWords = /* @__PURE__ */ new Map();
     for (const record of Object.values(opening)) {
+      if (notHeld.has(record.actor.id)) continue;
       const words = policyLine(record);
       byWords.set(words, [...byWords.get(words) ?? [], record.actor.name]);
       await sayPolicy(record);
@@ -2534,6 +2600,7 @@ async function room(deps, life, announce) {
     const where = await deps.whereOf(row);
     if (where !== null) narrate(where);
   }
+  for (const say of openingSays) await say();
   const guardOf = async (actorId) => await state.get(keys.guard(actorId)) ?? { turnTimes: [], agentChain: 0, held: null };
   const originsOf = async (actorId) => {
     const said = await state.get(keys.origins(actorId));
@@ -2560,55 +2627,52 @@ async function room(deps, life, announce) {
     const snapshot = await routes.snapshot(p.id).catch(() => null);
     return snapshot !== null && !snapshot.canvas.agents?.[actorId];
   };
-  const dispatches = /* @__PURE__ */ new Map();
-  const enrolSeqs = /* @__PURE__ */ new Map();
-  for (const entry of await routes.getLog(p.id, 0)) {
-    if (entry.envelope.op.type === "agent.enroll") {
-      enrolSeqs.set(entry.envelope.op.agent.id, entry.seq);
+  const holdOnce = () => {
+    const actorIds = [...dispatches.keys()];
+    const policies = {};
+    for (const actorId of actorIds) {
+      const record = policyState.roster[actorId];
+      if (record) policies[actorId] = policyOf(record);
     }
-  }
-  const claimAgent = async (actorId, seedAt) => {
-    if (dispatches.has(actorId)) return;
+    return routes.rcHold({ canvasId: p.id, actorIds, waitMs: 1e4, owner, policies }, life);
+  };
+  let holdRefusedSaid = false;
+  const holdAfterRefusal = async () => {
+    const mine = (await rows.list().catch(() => [])).filter(
+      (r) => r.canvasId === p.id && dispatches.has(r.actorId)
+    );
+    for (const row of mine) {
+      const name = known.get(row.actorId) ?? row.name;
+      await routes.claimActor({ type: "actor.claim", sessionKey: enrolmentKey(name), as: row.actorId }).catch(() => {
+      });
+    }
     try {
-      const floor = seedAt ?? enrolSeqs.get(actorId);
-      const claim = await routes.parkClaim({
-        canvasId: p.id,
-        actorId,
-        ...floor !== void 0 ? { seedAt: floor } : {}
-      });
-      dispatches.set(actorId, {
-        parkId: claim.parkId,
-        cursor: claim.cursor,
-        redeliverUpTo: claim.redeliverUpTo,
-        pending: [],
-        scannedTip: claim.cursor,
-        busy: false,
-        retryAfter: 0
-      });
-    } catch (err) {
-      narrate(`could not hold ${known.get(actorId) ?? actorId}'s cursor \u2014 ${err.message}`);
+      return await holdOnce();
+    } catch (again) {
+      if (life.aborted) return null;
+      if (!holdRefusedSaid) {
+        holdRefusedSaid = true;
+        const why = again.message;
+        const named = [...dispatches.keys()].find((id) => why.includes(id));
+        const who = named ? known.get(named) ?? named : [...dispatches.keys()].map((id) => known.get(id) ?? id).join(", ");
+        narrate(`could not hold ${who}'s cursor \u2014 ${why}`);
+      }
+      await sleep(1e4);
+      return null;
     }
   };
-  for (const actorId of Object.keys(opening)) await claimAgent(actorId);
   void (async () => {
     while (!life.aborted) {
       try {
-        const actorIds = [...dispatches.keys()];
-        const policies = {};
-        for (const actorId of actorIds) {
-          const record = policyState.roster[actorId];
-          if (record) policies[actorId] = policyOf(record);
+        let held;
+        try {
+          held = await holdOnce();
+        } catch (err) {
+          if (!(err instanceof ApiError && err.code === NOT_YOUR_ACTOR) || life.aborted) throw err;
+          held = await holdAfterRefusal();
         }
-        const held = await routes.rcHold(
-          {
-            canvasId: p.id,
-            actorIds,
-            waitMs: 1e4,
-            owner,
-            policies
-          },
-          life
-        );
+        if (!held) continue;
+        holdRefusedSaid = false;
         for (const ask of held.asks ?? []) {
           if (!ownersWord(keeping, ask.from.id, policyState.joined)) {
             narrate(`${ask.from.name} asked from the canvas to add ${ask.name} \u2014 this rc takes that only from you; nothing enrolled`);
@@ -2786,7 +2850,13 @@ async function room(deps, life, announce) {
   };
   const takeUp = async (roster) => {
     for (const record of Object.values(roster)) {
-      if (dispatches.has(record.actor.id)) continue;
+      if (dispatches.has(record.actor.id) || notHeld.has(record.actor.id)) continue;
+      known.set(record.actor.id, record.actor.name);
+      const parked = await parkAgent(record.actor.id, await ownRow(record.actor.id));
+      if (parked === "not-held") {
+        await sayNotHeld(record.actor.id);
+        continue;
+      }
       const adopted = await rows.adopt({
         canvasId: p.id,
         actorId: record.actor.id,
@@ -2796,7 +2866,7 @@ async function room(deps, life, announce) {
         sessionId: null
       });
       if (adopted) narrate(`${record.actor.name} \xB7 where and how supplied \u2014 ${rcCwd}`);
-      await claimAgent(record.actor.id);
+      if (parked !== "held") couldNotHold(record.actor.id, parked.error);
     }
   };
   const startTip = (await routes.watchLog({ only: [p.id] })).cursors[p.id] ?? 0;
@@ -2805,6 +2875,7 @@ async function room(deps, life, announce) {
   for (const [id, row] of Object.entries(settled)) known.set(id, row.actor.name);
   await reap(settled, "as this rc started");
   for (const actorId of [...dispatches.keys()]) if (!settled[actorId]) dispatches.delete(actorId);
+  for (const actorId of [...notHeld]) if (!settled[actorId]) notHeld.delete(actorId);
   await takeUp(settled);
   cursors = { [p.id]: lapFrom() };
   let lastRoster = settled;
@@ -2858,6 +2929,11 @@ async function room(deps, life, announce) {
       if (op.type === "agent.enroll") {
         known.set(op.agent.id, op.agent.name);
         if (entry.seq > startTip) {
+          const parked = await parkAgent(op.agent.id, await ownRow(op.agent.id), entry.seq);
+          if (parked === "not-held") {
+            await sayNotHeld(op.agent.id);
+            continue;
+          }
           const record = roster[op.agent.id];
           narrate(`${by.name} enrolled ${op.agent.name} \u2014 answerable here${record ? ` \xB7 ${policyLine(record)}` : ""}`);
           if (record) await sayPolicy(record);
@@ -2870,8 +2946,11 @@ async function room(deps, life, announce) {
             sessionId: null
           });
           if (adopted) narrate(`${op.agent.name} \xB7 where and how supplied \u2014 ${rcCwd}`);
-          await claimAgent(op.agent.id, entry.seq);
+          if (parked !== "held") couldNotHold(op.agent.id, parked.error);
         }
+        continue;
+      }
+      if (op.type === "agent.withdraw" && entry.seq > startTip && notHeld.delete(op.actorId)) {
         continue;
       }
       if (op.type === "agent.withdraw" && entry.seq > startTip) {

@@ -99,6 +99,19 @@ class AcmeHome {
    * roster read, inside the window neither branch of the lap can see. */
   beforeStartTip: (() => void) | null = null;
   claims: string[] = [];
+  /**
+   * The claim rule (room phase 3). Null: the badge holds every actor, as
+   * before the cursor and hold routes checked. A set: the actors the room's
+   * badge holds, and `parkClaim` and `rcHold` refuse any other with
+   * `not-your-actor`, as the daemon does.
+   */
+  badgeHolds: Set<string> | null = null;
+  /** Actors a claim under the agent's own key wins for this badge: this
+   * machine's own agents. Anybody else's is refused, and holds nothing. */
+  claimable = new Set<string>();
+  /** Every claim, park and hold, in order: `claim:<id>`, `park:<id>`,
+   * `hold:<ids>` and `hold-refused:<ids>`. */
+  calls: string[] = [];
   private waiters: (() => void)[] = [];
   private nextSession = 1;
 
@@ -157,7 +170,15 @@ class AcmeHome {
     const routes = {
       snapshot: async () => home.snapshotNow(),
       actorBindings: async () => [],
-      claimActor: async () => ({}),
+      claimActor: async (op: { as?: string; sessionKey: string }) => {
+        home.calls.push(`claim:${op.as}`);
+        if (op.as && home.claimable.has(op.as) && op.sessionKey === `agent:${home.agents[op.as]?.actor.name}`) {
+          home.badgeHolds?.add(op.as);
+          return {};
+        }
+        if (home.badgeHolds) throw new ApiError(400, "that name is somebody else's", "name-taken");
+        return {};
+      },
       createSession: async (_canvasId: string, actor: Actor, _label?: string, harness?: string, kind?: string) => {
         const sessionId = `ses_${home.nextSession++}`;
         home.sessions.set(sessionId, { actor, ...(harness ? { harness } : {}), ...(kind ? { kind } : {}) });
@@ -174,6 +195,8 @@ class AcmeHome {
       },
       getLog: async () => [...home.log],
       parkClaim: async (request: { actorId: string; seedAt?: number }) => {
+        home.calls.push(`park:${request.actorId}`);
+        home.refuseUnheld([request.actorId]);
         home.claims.push(request.actorId);
         const cursor = home.parks.get(request.actorId) ?? request.seedAt ?? 0;
         home.parks.set(request.actorId, cursor);
@@ -188,7 +211,14 @@ class AcmeHome {
         home.append(actor, op);
         return { seq: home.tip };
       },
-      rcHold: (_request: unknown, signal?: AbortSignal) => {
+      rcHold: async (request: { actorIds: string[] }, signal?: AbortSignal) => {
+        try {
+          home.refuseUnheld(request.actorIds);
+        } catch (err) {
+          home.calls.push(`hold-refused:${request.actorIds.join(",")}`);
+          throw err;
+        }
+        home.calls.push(`hold:${request.actorIds.join(",")}`);
         home.holds.push(signal!);
         return home.wait(10_000, signal).then(() => ({ ok: true, asks: [] }));
       },
@@ -209,6 +239,13 @@ class AcmeHome {
       },
     };
     return routes as unknown as RoomRoutes;
+  }
+
+  refuseUnheld(actorIds: string[]): void {
+    const unheld = this.badgeHolds ? actorIds.find((id) => !this.badgeHolds!.has(id)) : undefined;
+    if (unheld !== undefined) {
+      throw new ApiError(400, `this badge does not speak for ${unheld} — claim that actor first`, "not-your-actor");
+    }
   }
 
   /** Until something is appended, `ms` pass on the hand clock, or the signal
@@ -583,5 +620,176 @@ describe("the room over in-memory deps", () => {
     }
     expect(lines.some((l) => l.startsWith("Percy is at its ceiling — 2 turns in the past hour."))).toBe(true);
     expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  /**
+   * **The claim rule** (room phase 3; docs/projects/room/design.md). The
+   * cursor and hold routes require the actor, and the room parks each agent
+   * before it does anything else for it. An agent its badge does not hold,
+   * whether another machine holds it or nobody does, is said once and is
+   * otherwise left alone.
+   */
+  const notHeld = (name: string) =>
+    `${name} is not held by this machine — a pass minted for ${name} hands it over, or re-add it here`;
+  const WENDY: Actor = { id: "act_wendy", name: "Wendy" };
+
+  it("an agent another badge holds is said once, and never held, faced or dispatched — not said again by a second runRoom over the same state", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    // Percy is the first machine's; this machine's rows name Wendy alone.
+    home.enrol(PERCY, OWNER, { listen: ["*"] });
+    home.enrol(WENDY, OWNER, { listen: ["*"] });
+    home.badgeHolds = new Set([WENDY.id]);
+    home.claimable = new Set([WENDY.id]);
+    const state = jsonState();
+    const wendyRow: RcAgentRow = { canvasId: CANVAS.id, actorId: WENDY.id, name: WENDY.name, harness: "claude-code", cwd: "/acme/wendy", sessionId: null };
+    const first = roomOver(home, clock, { state, rows: [wendyRow] });
+    const one = runRoom(first.deps);
+    await clock.advance(0);
+
+    expect(first.lines.filter((l) => l === notHeld("Percy"))).toHaveLength(1);
+    expect(first.lines).not.toContain(notHeld("Wendy"));
+    // No row for Percy, no claim for Percy, and the hold names Wendy alone.
+    expect(first.rows.map((r) => r.actorId)).toEqual([WENDY.id]);
+    expect(home.calls).not.toContain(`claim:${PERCY.id}`);
+    expect(home.calls.filter((c) => c.startsWith("hold")).every((c) => c === `hold:${WENDY.id}`)).toBe(true);
+    // Whose word wakes Percy is not this machine's to say.
+    expect(first.lines.some((l) => l.startsWith("Percy") && l !== notHeld("Percy"))).toBe(false);
+
+    // A summons for Percy: no turn, no face, no turn-away, no system voice.
+    const percyThread = home.mention(OWNER, PERCY, "@Percy the empty state reads wrong");
+    await clock.advance(61_000);
+    expect(first.turns).toHaveLength(0);
+    expect([...home.sessions.values()].some((s) => s.actor.id === PERCY.id)).toBe(false);
+    expect(home.threads[percyThread]!.comments.map((c) => c.author.name)).toEqual(["Ada"]);
+    expect(first.lines.some((l) => l.startsWith("Percy ·"))).toBe(false);
+    // A summons for Wendy is answered here.
+    home.mention(OWNER, WENDY, "@Wendy and the heading");
+    await clock.advance(0);
+    // (The in-memory adapter replies as Percy, which wakes Wendy once more in
+    // her own thread; every turn is hers.)
+    expect(first.turns.length).toBeGreaterThan(0);
+    expect(new Set(first.turns.map((t) => t.row.actorId))).toEqual(new Set([WENDY.id]));
+    // Read once: the laps did not park Percy again, nor say him again.
+    expect(home.calls.filter((c) => c === `park:${PERCY.id}`)).toHaveLength(1);
+    expect(first.lines.filter((l) => l === notHeld("Percy"))).toHaveLength(1);
+    await one.stop();
+    await one.done;
+
+    // The next start asks the park again (a pass may have handed Percy over),
+    // is refused again, and does not say it again.
+    const second = roomOver(home, clock, { state, rows: [wendyRow] });
+    const two = runRoom(second.deps);
+    await clock.advance(1_000);
+    expect(home.calls.filter((c) => c === `park:${PERCY.id}`)).toHaveLength(2);
+    expect(second.lines).toContain(`answering on "Acme Board" — https://acme.invalid/p/${CANVAS.id}`);
+    expect(second.lines).not.toContain(notHeld("Percy"));
+    await two.stop();
+    await two.done;
+
+    // Handed over (a pass): the start after that parks Percy and answers him.
+    home.badgeHolds.add(PERCY.id);
+    const third = roomOver(home, clock, { state, rows: [wendyRow] });
+    const three = runRoom(third.deps);
+    await clock.advance(1_000);
+    expect(third.lines).not.toContain(notHeld("Percy"));
+    expect(third.rows.map((r) => r.actorId).sort()).toEqual([PERCY.id, WENDY.id].sort());
+    expect(home.calls.some((c) => c.startsWith("hold:") && c.includes(PERCY.id))).toBe(true);
+    expect(await state.get(`said:${CANVAS.id}:not-held:${PERCY.id}`)).toBeUndefined();
+    await three.stop();
+    await three.done;
+  });
+
+  it("an agent in this machine's rows is claimed under its own key before its cursor is parked", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    // Re-badged: the badge holds nothing until it claims its own agents.
+    home.badgeHolds = new Set();
+    home.claimable = new Set([PERCY.id]);
+    const { deps, lines, turns } = roomOver(home, clock);
+    const room = runRoom(deps);
+    await clock.advance(0);
+    const claim = home.calls.indexOf(`claim:${PERCY.id}`);
+    const park = home.calls.indexOf(`park:${PERCY.id}`);
+    expect(claim).toBeGreaterThanOrEqual(0);
+    expect(park).toBeGreaterThan(claim);
+    expect(lines).not.toContain(notHeld("Percy"));
+    home.mention(OWNER, PERCY, "@Percy still yours?");
+    await clock.advance(0);
+    expect(turns).toHaveLength(1);
+    await room.stop();
+    await room.done;
+  });
+
+  it("an orphan enrolment, whose actor no badge holds, is inert: said once, no row, no dispatch, no turn-away", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    const QUINN: Actor = { id: "act_quinn", name: "Quinn" };
+    const RUE: Actor = { id: "act_rue", name: "Rue" };
+    // A raw enrolment, as web adds made before the ask: nobody holds Quinn.
+    home.enrol(QUINN);
+    home.badgeHolds = new Set();
+    const { deps, lines, turns, rows } = roomOver(home, clock, { rows: [] });
+    const room = runRoom(deps);
+    await clock.advance(0);
+    // And one landing while the room runs.
+    home.enrol(RUE);
+    await clock.advance(0);
+    for (const orphan of [QUINN, RUE]) {
+      expect(lines.filter((l) => l === notHeld(orphan.name))).toHaveLength(1);
+      expect(lines.some((l) => l.startsWith(`${orphan.name} ·`))).toBe(false);
+      expect(home.calls).not.toContain(`claim:${orphan.id}`);
+    }
+    expect(lines.some((l) => l.includes("enrolled Rue"))).toBe(false);
+    expect(rows).toEqual([]);
+    // A stranger and the owner both ask: nothing starts, nothing is said back.
+    const asked = home.mention(STRANGER, QUINN, "@Quinn can you look?");
+    const owned = home.mention(OWNER, QUINN, "@Quinn please");
+    await clock.advance(61_000);
+    expect(turns).toHaveLength(0);
+    expect(home.threads[asked]!.comments).toHaveLength(1);
+    expect(home.threads[owned]!.comments).toHaveLength(1);
+    expect([...home.sessions.values()].filter((s) => s.kind !== "rc")).toEqual([]);
+    await room.stop();
+    await room.done;
+  });
+
+  it("a hold refused mid-room re-claims this machine's agents and holds again; still refused, it says it could not hold, never that they are elsewhere", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    home.badgeHolds = new Set([PERCY.id]);
+    home.claimable = new Set([PERCY.id]);
+    const { deps, lines, turns } = roomOver(home, clock);
+    const room = runRoom(deps);
+    await clock.advance(0);
+    const before = home.calls.length;
+
+    // A 401 went to the door, and the door's badge was re-claimed as the
+    // person alone: the next hold naming Percy is refused.
+    home.badgeHolds.clear();
+    await clock.advance(10_000);
+    const after = home.calls.slice(before);
+    const refused = after.indexOf(`hold-refused:${PERCY.id}`);
+    expect(refused).toBeGreaterThanOrEqual(0);
+    expect(after.indexOf(`claim:${PERCY.id}`)).toBeGreaterThan(refused);
+    expect(after.indexOf(`hold:${PERCY.id}`)).toBeGreaterThan(after.indexOf(`claim:${PERCY.id}`));
+    expect(lines.some((l) => l.startsWith("could not hold"))).toBe(false);
+    expect(lines).not.toContain(notHeld("Percy"));
+    home.mention(OWNER, PERCY, "@Percy after the re-badge");
+    await clock.advance(0);
+    expect(turns).toHaveLength(1);
+
+    // Now the claim is refused too: said once, as a hold it could not make.
+    home.claimable.clear();
+    home.badgeHolds.clear();
+    await clock.advance(60_000);
+    const couldNot = lines.filter((l) => l.startsWith("could not hold Percy's cursor — this badge does not speak for act_percy"));
+    expect(couldNot).toHaveLength(1);
+    expect(lines).not.toContain(notHeld("Percy"));
+    expect(home.calls.filter((c) => c === `hold-refused:${PERCY.id}`).length).toBeGreaterThan(2);
+    await room.stop();
+    await room.done;
   });
 });

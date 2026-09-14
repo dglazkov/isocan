@@ -5472,6 +5472,11 @@ export function registerRoutes(
     const park = options.park;
     if (!park) return reply.code(501).send({ error: "this daemon holds no park cursors" });
     const body = req.body as import("@isocan/core").ParkClaimRequest;
+    // A cursor is read and moved in an actor's name, so it is checked like an
+    // op (docs/projects/room/design.md, the claim rule): a badge that does not
+    // hold the actor is refused `not-your-actor`, which is the refusal a second
+    // rc on this canvas reads for an agent another machine answers for.
+    await engine.requireActor(req.badge!.badgeId, body.actorId);
     const claim = await park.claim(body.canvasId, body.actorId, {
       since: body.since,
       seedAt: body.seedAt,
@@ -5530,6 +5535,9 @@ export function registerRoutes(
     const body = (req.body ?? {}) as Partial<import("@isocan/core").RcHoldRequest>;
     const canvasId = body.canvasId ?? "";
     const actorIds = new Set((body.actorIds ?? []).filter((a) => typeof a === "string"));
+    // A hold makes each named agent answerable, which is said in that agent's
+    // name: every one must be an actor this badge holds (the claim rule).
+    for (const actorId of actorIds) await engine.requireActor(req.badge!.badgeId, actorId);
     // **Whose rc this is** (owner-only summons), believed only for an actor
     // the holding badge may speak as — "Sian listens only to Nico" is said in
     // Nico's name, and an ask to add an agent is routed by it. A hold never

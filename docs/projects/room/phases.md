@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere, now decided (orphans inert): the cursor and hold routes require the actor, and phase 3.5 makes agent keys machine-keyed (design.md, the claim rule). Phase 4, the bundle a host installs, is CLOSED and walked against `release`; phase 5's walks follow phase 3.5.** Seven phases, none
+**Where we are: phases 0–3 and 4 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Phase 3, answered elsewhere, is CLOSED: the cursor and hold routes require the actor, and orphans are inert. Phase 4, the bundle a host installs, is CLOSED and walked. Next: room phase 3.5, keys nobody else derives; phase 5's walks follow it.** Seven phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -127,7 +127,7 @@ closure.
 
 ## Phase 3 — Answered elsewhere
 
-**Status: NOT STARTED.**
+**Status: CLOSED 2026-09-13.** `parkClaim` and `rcHold` refuse `not-your-actor` for an actor the badge does not hold. The room claims its own rows' agents before parking, and says once of any other agent that it is not held by this machine. Two real rcs on one canvas answer their own agents with no cursor trade.
 
 **Outcome:** the claim rule, as decided in design.md. `/api/park/claim`
 and `/api/rc/hold` refuse, with `not-your-actor`, an actor the
@@ -168,7 +168,9 @@ poll for it.
 
 - **2026-09-13** — Premise reversed: the desk accepts a second badge's `actor.claim` under the shared `agent:<name>` key (same-key vouch, lost-badge recovery), so the room never reads `not-your-actor`. Two rcs trade the cursor through unchecked `parkClaim`/`rcHold` instead. Probes against a real daemon; design.md, the claim rule.
 - **2026-09-13** — Decided (Dimitri): the refusal comes from `parkClaim`/`rcHold` requiring the actor, and derivable agent keys become machine-keyed (phase 3.5); the desk's same-key recovery stays. Tradeoffs in design.md, the claim rule.
-- **2026-09-13** — Orphan enrolments (an actor no badge holds) are inert, decided by Dimitri: the room cannot tell unheld from held elsewhere without claiming. The line becomes "not held by this machine", and three rc tests that relied on adopting orphans enrol through the ask.
+- **2026-09-13** — Orphan enrolments are inert (Dimitri): unheld cannot be told from held elsewhere without claiming. The line says "not held by this machine"; three rc tests that adopted orphans now claim the actor on the rc's badge first.
+- **2026-09-13** — A hold refused mid-room means this badge lost claims (a re-badge re-claims only the person). The room re-claims its own rows' agents under their keys and retries once, and never calls its own agents not held.
+- **2026-09-13** — Open: an rc from before this phase parks and holds before claiming, so against an upgraded home, a web-adopted agent it never summoned refuses its whole hold until its upgrade window lands. Phase 5's walk on dev.isocan.io checks it.
 
 **Formerly:** the room claimed each agent's actor at start and read
 `not-your-actor` from the claim. Re-cut on 13 Sep 2026, when the desk
