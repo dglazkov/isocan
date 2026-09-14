@@ -820,7 +820,7 @@ describe("two rcs, one canvas (room phase 3)", () => {
       [one.seen.out, "Percy", "Wendy"],
       [two.seen.out, "Wendy", "Percy"],
     ] as const) {
-      expect(out).toContain(`${theirs} is not held by this machine — a pass minted for ${theirs} hands it over, or re-add it here`);
+      expect(out).toContain(`${theirs} is not held by this machine — a pass from whoever holds ${theirs} hands it over`);
       expect(out.split(`${theirs} is not held by this machine`).length - 1).toBe(1);
       expect(out).not.toContain(`${theirs} ·`);
       expect(out).not.toContain(`${mine} is not held by this machine`);

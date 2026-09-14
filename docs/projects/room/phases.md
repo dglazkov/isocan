@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–3 and 4 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Phase 3, answered elsewhere, is CLOSED: the cursor and hold routes require the actor, and orphans are inert. Phase 4, the bundle a host installs, is CLOSED and walked. Phase 3.5, keys nobody else derives, is PART-DONE: built and proved here, its hosted measurement waits on a second dev badge. Phase 5 is PART-DONE: journeys 2 and 3 walked, and journey 1 on dev waits on Dimitri (it moves this laptop's real agents to machine keys, and it needs the sheep station).** Seven phases, none
+**Where we are: every phase CLOSED by 14 Sep 2026. The laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`; a worker bundles it from `#release`; a second rc leaves another machine's agents alone; agent keys are machine-keyed. Journeys 1, 2 and 3 are walked. What remains is Open, not a phase: isocan.io carrying phase 3.5, and an rc from before phase 3 against an upgraded home.** Seven phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -91,7 +91,7 @@ second by the clock.
 - **2026-09-13** — Reversed phase 0's subpath entry: `routes.ts` uses `Buffer` in its blob methods, so a room importing it fails the no-Node typecheck. The room declares its routes as an interface over core's types, `ApiError` moves to core, and nothing of `@isocan/api` is in the module's closure.
 - **2026-09-13** — `rc.test.ts` held two source-shape describes that read `main.ts`, so "passes unchanged" could not survive the move. They become behavioural tests in `room.test.ts`, where in-memory deps can force the startup window the spawned CLI could not.
 - **2026-09-13** — `RoomDeps` grew past design.md's list: `origin`, `cwd`, `whereOf`, `enrol`, and a two-stage `adapterFor`, because the face and the pointer loan sit between naming a harness and spawning it. `Room` gained `done`. design.md now lists them.
-- **2026-09-13** — Open: when an adapter's fence or spawn throws, the face stays on, its heartbeat never stops, and the session pointer is not taken back; true before the move and kept byte-for-byte. Waits on a decision about what a failed open owes the thread.
+- **2026-09-13** — Open: when an adapter's fence or spawn throws, the face stays on, its heartbeat never stops, and the session pointer is not taken back; true before the move and kept byte-for-byte. Waits on a decision about what a failed open owes the thread; [#298](https://github.com/dglazkov/isocan/issues/298).
 
 ## Phase 2 — The sheep over commands
 
@@ -135,8 +135,8 @@ presenting badge does not hold. The room parks each agent's cursor at
 start and at each adoption. For an agent in this machine's own rows it
 claims the actor under its own key first. It reads a `not-your-actor`
 from `parkClaim` and remembers it under `state`. It narrates `<name> is
-not held by this machine — a pass minted for <name> hands it over, or
-re-add it here` once, and
+not held by this machine — a pass from whoever holds <name> hands it
+over` once, and
 it holds, faces and dispatches nothing for that agent. An agent later
 handed over by a pass is picked up at the next start; the room does not
 poll for it.
@@ -170,7 +170,7 @@ poll for it.
 - **2026-09-13** — Decided (Dimitri): the refusal comes from `parkClaim`/`rcHold` requiring the actor, and derivable agent keys become machine-keyed (phase 3.5); the desk's same-key recovery stays. Tradeoffs in design.md, the claim rule.
 - **2026-09-13** — Orphan enrolments are inert (Dimitri): unheld cannot be told from held elsewhere without claiming. The line says "not held by this machine"; three rc tests that adopted orphans now claim the actor on the rc's badge first.
 - **2026-09-13** — A hold refused mid-room means this badge lost claims (a re-badge re-claims only the person). The room re-claims its own rows' agents under their keys and retries once, and never calls its own agents not held.
-- **2026-09-13** — Open: an rc from before this phase parks and holds before claiming, so against an upgraded home, a web-adopted agent it never summoned refuses its whole hold until its upgrade window lands. Phase 5's walk on dev.isocan.io checks it.
+- **2026-09-13** — Open: an rc from before this phase parks and holds before claiming, so against an upgraded home, a web-adopted agent it never summoned refuses its whole hold until its upgrade window lands. Not exercised by phase 5's walks (no pre-phase-3 rc was running); waits on the first such rc a person runs.
 
 **Formerly:** the room claimed each agent's actor at start and read
 `not-your-actor` from the claim. Re-cut on 13 Sep 2026, when the desk
@@ -178,7 +178,7 @@ turned out to accept that claim.
 
 ## Phase 3.5 — Keys nobody else derives
 
-**Status: PART-DONE 2026-09-13.** Agent keys are `agent:<mac>` from `~/.isocan/agent-secret`, agents move at `isocan rc` start and at enrolment, a second badge presenting `agent:<name>` is refused after the move, and a dual-held agent is not held here; the dev.isocan.io measurement waits on a second badge there.
+**Status: CLOSED 2026-09-14.** Agent keys are `agent:<mac>` from `~/.isocan/agent-secret`; agents move at `isocan rc` start (seven moved on Dimitri's home in the walk) and at enrolment; a second badge presenting `agent:<name>` is refused after the move; a dual-held agent is not held here; the hosted measurement ran on dev.
 
 **Outcome:** an agent's session key is a keyed hash of a secret kept in
 this machine's `~/.isocan` and the agent's name. Enrolment, the room's
@@ -210,8 +210,9 @@ key is refused.
 - **2026-09-13** — Retiring `agent:<name>` needs no desk op: `bindClaim` keeps one row per actor per badge, so claiming the machine key with `as` from the same badge drops the old row. The move runs at `isocan rc` start and at enrolment.
 - **2026-09-13** — An agent another badge also holds under `agent:<name>` cannot move, and its summons failed where it ran before. Decided (Dimitri): not held here, the phase 3 line, no claim or dispatch; transient refusals (the minute after, a live face) are not that.
 - **2026-09-13** — The desk's `name-taken` refusal of `as` now carries `reason` (`held-elsewhere`, `claimed-just-now`, `live`), held-elsewhere first; the room reads it rather than the sentence. A field on an existing refusal, not an op.
-- **2026-09-13** — Open: "or re-add it here" is untrue on the machine that still holds a dual-held agent under its old key; `rc add` there meets its own old row and is refused `name-taken`. Waits on a wording or remedy decision.
-- **2026-09-13** — Open: whether admission narrowed the old `agent:<name>` hole on a hosted home is unmeasured; it needs a second badge on dev.isocan.io, which needs a person.
+- **2026-09-14** — The line dropped "or re-add it here" (Dimitri), untrue on a machine still holding a dual-held agent under its old key: now "a pass from whoever holds <name> hands it over".
+- **2026-09-14** — Measured on dev.isocan.io: admission does not narrow the old hole; a fresh door badge claiming another badge's actor under the same derivable key got 200, a different key 400 `held-elsewhere`. Only agents moved to machine keys are closed.
+- **2026-09-14** — Open: an agent is closed only once the home runs phase 3.5 and its owner's rc has moved it; isocan.io and every rc not yet upgraded keep the old key. Waits on a prod deploy and on each owner's upgrade.
 
 ## Phase 4 — The bundle a host installs
 
@@ -269,7 +270,7 @@ this phase; the walks of journeys 1 and 2 are phase 5.
 
 ## Phase 5 — The walks
 
-**Status: PART-DONE 2026-09-14.** Journey 2 walked with two real rcs and real claude-code turns, and journey 3 walked again against `release` at c80959e. Journey 1 on dev.isocan.io waits on Dimitri: running it moves this laptop's real agents to machine keys, and its sheep turn needs the station.
+**Status: CLOSED 2026-09-14.** Journeys 1, 2 and 3 walked: journey 1 on dev.isocan.io from Dimitri's own home with a claude-code turn and a sheep turn on a redeployed sheep-2, journey 2 with two real rcs, journey 3 against `release`.
 
 **Outcome:** journeys 1 and 2 walked, after phases 3 and 3.5 land. Journey 1
 on this laptop against dev.isocan.io, with one agent on `claude-code`
@@ -299,6 +300,30 @@ that carries phase 3.
     lines).
   - Acceptance held: one sentence naming the agent and the pass, and
     never claimed, faced or dispatched.
+- **Journey 1.** On dev.isocan.io at c80959e, from Dimitri's own
+  `~/.isocan`, with the laptop's daemon restarted on 70b83aa. sheep-2
+  was redeployed at sheep d663fcb first, with Dimitri's yes.
+  - The rc opened on "Acme Room Walk": "5 harnesses here … every agent
+    enrolled here named its own", "7 agents moved to this machine's own
+    keys (Percy, Ziggy, Pepper, Timmy, Bramble, Shirley, Lamb)",
+    answering on the canvas, listen policy, and "Shaun's sheep will
+    live at https://sheep-2.dglazkov.workers.dev".
+  - `@Quill` on claude-code: summons, session started, a reply as Quill
+    ("Acknowledged — I'll take another pass at the empty-state copy…"),
+    turn ended.
+  - `@Shaun` on sheep: "sheep 01a08e18… is already in pasture
+    isocan-shaun — resuming it rather than birthing a second", "has
+    never run setup … installing isocan", "session resumed", "setup
+    running …", "setup ok (3m 10s)", a reply as Shaun, turn ended.
+  - `isocan rc remove Shaun` ended the sheep ("its container and
+    workspace are gone") and kept the pasture ("stays — it is yours").
+    Because the sheep was resumed and not born, no pass was recorded, so
+    the rc said the cell's badge is not known here and named `isocan
+    badges --kill`, and that badge was ended by hand. That path predates
+    this project: `bornPass` was set only at a birth before the move too.
+  - `rc-agents.json` had the same set of fields before and after
+    (`actorId, canvasId, cellPass, cwd, harness, name, sessionId,
+    sheep`), and the only row added was Quill's.
 - **Journey 3, again.** Against `release` at c80959e, which carries
   phases 3 and 3.5: the install exits 0, `import("isocan/rc")` gives 15
   exports (`enrolmentKey` left in phase 3.5), and the browser one-liner
@@ -307,7 +332,7 @@ that carries phase 3.
 
 **Trajectory:**
 
-- **2026-09-14** — Open: journey 1 on dev.isocan.io (now at c80959e, carrying phases 3 and 3.5). Running the upgraded `isocan rc` from this laptop's `~/.isocan` moves every agent it holds, on every home it speaks to, to machine keys, and the sheep turn needs sheep-2, which predates bleat and fold. Both wait on Dimitri.
+- **2026-09-14** — Walked on the real home by Dimitri's choice. The rc's first start moved seven agents across his homes to machine keys, as decided in phase 3.5.
 
 ## Later, and not here
 

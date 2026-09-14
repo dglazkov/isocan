@@ -377,7 +377,7 @@ async function room(
     if (await state.get(key)) return;
     await state.set(key, true);
     const name = known.get(actorId) ?? actorId;
-    narrate(`${name} is not held by this machine — a pass minted for ${name} hands it over, or re-add it here`);
+    narrate(`${name} is not held by this machine — a pass from whoever holds ${name} hands it over`);
   };
   /** A held agent found held by another badge too: out of the hold and the
    * dispatch, what waited for it dropped, and said once. Its row stays. */

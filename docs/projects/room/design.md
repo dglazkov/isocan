@@ -250,8 +250,8 @@ broken, not one:
    cursor at start, before it claims anything for that agent. A
    `not-your-actor` from `parkClaim` is the refusal the room reads. It
    is remembered under `state`, and the agent is narrated once:
-   `<name> is not held by this machine — a pass minted for <name>
-   hands it over, or re-add it here`. The room then parks no cursor, holds no answerability, puts
+   `<name> is not held by this machine — a pass from whoever holds
+   <name> hands it over`. The room then parks no cursor, holds no answerability, puts
    on no face and fails no turn for that agent. For an agent in this
    machine's own rows, the room first claims the actor under its own
    key, then parks, so a machine that re-badged still takes up its
@@ -287,7 +287,7 @@ another badge holding an agent under `agent:<name>` as well. This
 machine cannot move that agent to its own key, because the desk refuses
 it as held elsewhere. So the room treats it as it treats another
 machine's agent. It says once `<name> is not held by this machine — a
-pass minted for <name> hands it over, or re-add it here`, and it does
+pass from whoever holds <name> hands it over`, and it does
 not claim, park, hold, face or dispatch it, so no summons fails. A
 refusal that is only the minute after this badge's own claim, or the
 agent's live face, is transient and is not treated this way. If the
@@ -300,7 +300,10 @@ the ask, is refused at the park like any other actor this badge does
 not hold. The room cannot tell "nobody holds it" from "another badge
 holds it" without claiming, and claiming is what the rule forbids. So
 an orphan is answered by nobody, and the line is worded to be true in
-both cases. Re-adding the name from a machine mints it there. Web Add
+every case. It first offered "or re-add it here", which was false on a
+machine still holding a dual-held agent under its old key, and on any
+machine once another holds the agent under a machine key, so it was cut
+(Dimitri, 14 September). Web Add
 already goes through the ask, and the rc mints the actor on its own
 badge. Set aside: a distinct "unheld" refusal that the first rc to
 start adopts, which would be a new custody path, and refusing only an

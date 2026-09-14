@@ -122,7 +122,7 @@ async function commentsOn(threadId: string): Promise<number> {
 }
 
 const notHeldLine = (name: string) =>
-  `${name} is not held by this machine — a pass minted for ${name} hands it over, or re-add it here`;
+  `${name} is not held by this machine — a pass from whoever holds ${name} hands it over`;
 
 async function startRc(): Promise<{ out: () => string; stop: () => Promise<void> }> {
   const rc = spawnCli(["rc"]);

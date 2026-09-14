@@ -2483,7 +2483,7 @@ async function room(deps, life, announce) {
     if (await state.get(key)) return;
     await state.set(key, true);
     const name = known.get(actorId) ?? actorId;
-    narrate(`${name} is not held by this machine \u2014 a pass minted for ${name} hands it over, or re-add it here`);
+    narrate(`${name} is not held by this machine \u2014 a pass from whoever holds ${name} hands it over`);
   };
   const standDownNotHeld = async (actorId) => {
     dispatches.delete(actorId);

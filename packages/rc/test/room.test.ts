@@ -648,7 +648,7 @@ describe("the room over in-memory deps", () => {
    * otherwise left alone.
    */
   const notHeld = (name: string) =>
-    `${name} is not held by this machine — a pass minted for ${name} hands it over, or re-add it here`;
+    `${name} is not held by this machine — a pass from whoever holds ${name} hands it over`;
   const WENDY: Actor = { id: "act_wendy", name: "Wendy" };
 
   it("an agent another badge holds is said once, and never held, faced or dispatched — not said again by a second runRoom over the same state", async () => {
