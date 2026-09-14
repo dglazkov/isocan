@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { Operation } from "@isocan/core";
+import { fileBadgeStore } from "@isocan/server";
 import { DaemonRoutes } from "../src/routes.ts";
 import { CanvasHandle } from "../src/connect.ts";
 import type { Ctx } from "../src/ctx.ts";
@@ -14,7 +15,7 @@ afterEach(async () => { vi.unstubAllGlobals(); vi.restoreAllMocks(); for (const 
 it("carries the observed mode, an explicitly older origin and the independent undo label through real request serialization", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "isocan-origin-")); homes.push(home);
   const f = groupFixture(false);
-  const client = new DaemonRoutes("https://acme.invalid", home);
+  const client = new DaemonRoutes("https://acme.invalid", fileBadgeStore(home, "https://acme.invalid"));
   const bodies: any[] = [];
   vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (_url, opts) => {
     if (opts?.method === "GET") return Response.json(await f.client.snapshot());
@@ -58,7 +59,7 @@ it.each(["add", "edit"] as const)("keeps %s's legacy origin across a delayed upl
 it("keeps the original mode through identity recovery and reports a cutover refusal without refreshing the intent", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "isocan-origin-retry-")); homes.push(home);
   const f = groupFixture(false);
-  const client = new DaemonRoutes("https://acme.invalid", home);
+  const client = new DaemonRoutes("https://acme.invalid", fileBadgeStore(home, "https://acme.invalid"));
   let mode: "legacy" | "groups" = "legacy";
   const posted: any[] = [];
   vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (_url, opts) => {

@@ -1,52 +1,9 @@
-import type { UpgradeVerdict } from "../../core/src/index.js";
-/**
- * Which copy of isocan is this, and how old is it?
- *
- * The daemon outlives the command that started it — often across an upgrade,
- * because `ensureDaemon` only starts one when the port is silent. So a new CLI
- * talking to an old daemon is the normal outcome of `npm i -g …` or a moved
- * `main`, and until a build could say which one it was, nothing could notice.
- *
- * `root` is exact: an npx cache directory, a global install and a checkout are
- * three different paths. `codeAt` is a heuristic — the newest mtime among a
- * few files that every layout has — and it is a good one, because npm rewrites
- * the whole tree on install, so an in-place upgrade moves it even though the
- * path did not.
- */
-export interface BuildStamp {
-    version: string;
-    /** Package root this build runs from. */
-    root: string;
-    /** When this copy's code was last written (ISO). */
-    codeAt: string;
-    /**
-     * **The commit this build is of** — short sha, or null when nothing on disk
-     * can say.
-     *
-     * `version` cannot answer this and never could: every build this project has
-     * ever shipped says `0.1.0`, so the one field named after the question is
-     * the one field with no information in it. A person comparing two machines,
-     * or an agent asked what it is running, needs an identity that changes when
-     * the code changes.
-     *
-     * Two sources, because there are two kinds of copy. An INSTALL gets it from
-     * the manifest the release branch stamps (`scripts/release.mjs`) — the tree
-     * npm hands out has no `.git`, so nothing else could know. A CHECKOUT reads
-     * `.git` directly rather than shelling out to git: `buildStamp` is on the
-     * health route, `isocan status` is a command agents run dozens of times, and
-     * a subprocess per call is a subprocess per call.
-     */
-    commit: string | null;
-    /**
-     * When this build was cut (ISO), from the same two sources — or null.
-     *
-     * Distinct from `codeAt`, which is an mtime and therefore says when npm last
-     * rewrote the tree. That is the right heuristic for "has this copy changed
-     * under a running daemon" and the wrong answer to "how old is this code":
-     * reinstalling the same release moves `codeAt` and moves nothing else.
-     */
-    builtAt: string | null;
-}
+import type { BuildStamp, UpgradeVerdict } from "../../core/src/index.js";
+/** Which copy of isocan is this, and how old is it? The type lives in
+ * `@isocan/core` beside `UpgradeVerdict` (docs/projects/room/design.md: the
+ * route surface names it and must not import this package); this file keeps
+ * the function that reads it off the disk. */
+export type { BuildStamp } from "../../core/src/index.js";
 /** The package root, for anything else that has to find a file this build
  *  shipped with — `docs/changelog` is one. */
 export declare const buildRoot: () => string;

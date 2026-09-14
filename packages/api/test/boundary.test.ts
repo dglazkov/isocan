@@ -88,6 +88,10 @@ describe("the API/CLI seam", () => {
     // of daemon lifecycle. Three tells, each of which is the whole violation:
     // `node:child_process` (spawning is the daemon half's job), a call that
     // spawns, and `homes.json` (the machine record only the daemon reads).
+    // And a fourth since the room became a module (docs/projects/room): an
+    // import of `@isocan/server`, which reads the disk. The badge store is a
+    // constructor parameter and the door's helpers are core's, so the surface
+    // can be handed to a host with no disk at all.
     const src = path.join(repo, "packages", "api", "src");
     const surface = closureOf(path.join(src, "routes.ts"), src);
     expect(surface.map((file) => path.basename(file))).not.toContain("client.ts");
@@ -99,14 +103,14 @@ describe("the API/CLI seam", () => {
         // The surface's own doc comment names the things it must not do; the
         // rule is about doing them.
         if (lead.startsWith("//") || lead.startsWith("*") || lead.startsWith("/*")) continue;
-        if (/node:child_process|\bspawn\s*\(|homes\.json/.test(line)) {
+        if (/node:child_process|\bspawn\s*\(|homes\.json|["']@isocan\/server["'/]/.test(line)) {
           offenders.push(`${path.relative(repo, file)}:${i + 1}: ${line.trim()}`);
         }
       }
     }
     expect(
       offenders,
-      `the route surface must stay separable from daemon lifecycle (client.ts is where that lives):\n${offenders.join("\n")}`,
+      `the route surface must stay separable from daemon lifecycle and the disk (client.ts is where that lives):\n${offenders.join("\n")}`,
     ).toEqual([]);
   });
 });

@@ -94,8 +94,11 @@ push.
 
 ### `runRoom(deps): Room`
 
-The whole of `runRcRoom` minus the laptop. `Room` is `{ stop(): void }`,
-an abort that ends both long polls and the hold. `RoomDeps`:
+The whole of `runRcRoom` minus the laptop. `Room` is `{ stop(): Promise<void>;
+done: Promise<void> }`: `stop` aborts both long polls, the hold and every
+sleep, then ends the room's announcement session; `done` settles when the
+room ends, and rejects with what ended it, so a refusal the daemon
+answered still ends `isocan rc`. `RoomDeps`:
 
 - `routes`: the daemon routes the room calls, as an interface the module
   declares over `@isocan/core`'s request and response types:
@@ -129,9 +132,22 @@ an abort that ends both long polls and the hold. `RoomDeps`:
   verbs the room uses. The row type moves into the module; `rc.ts`
   keeps the file-backed implementation and re-exports the type, so
   `rc.test.ts`'s import of it survives.
-- `adapterFor(row)`: `{ ensureSession, prompt, close }`, the shape
-  `AcpAgentProcess` and `SheepAgent` share. The laptop's implementation
-  is where the fence, the scan and the spawn live.
+- `origin`, `cwd`: the address the canvas lives at, for the opening
+  line, and the directory an agent that arrives with no rc half runs
+  in. Values, where the laptop read `ctx.homeOf` and `process.cwd()`.
+- `adapterFor(row)`: two stages, `{ harness, open(turn) }`. The room
+  needs the harness's name, and the refusal when there is none, before
+  it claims the actor and puts the face on; the laptop's session
+  pointer needs the face's id before the spawn. `open` returns
+  `{ ensureSession, prompt, close }`, the shape `AcpAgentProcess` and
+  `SheepAgent` share. The laptop's implementation is where the fence,
+  the scan, the pointer loan and the spawn live.
+- `whereOf(row)`: where a row's sessions run, said once at start, or
+  null. The laptop's answers from `onPath("sheep")` and the kennel.
+- `enrol(ask)`: the last hop of the web's "add an agent" on this
+  machine, handed over by the hold: prepare the directory the ask
+  names, claim the actor, write the row, enroll. The laptop's reads a
+  template from disk.
 - `endSession(row, narrate)`: withdrawal's half for a session that
   outlives the process. Today that is `withdrawSheep`; for a local
   adapter it is nothing.
@@ -139,7 +155,8 @@ an abort that ends both long polls and the hold. `RoomDeps`:
 - `state`: a key-value, `get`, `set`, `delete`, string keys, JSON
   values, for what the room would like to survive a restart: the guard
   per agent, the sets of what has been said, the turned-away keys,
-  whose word each turn carried. The laptop hands it a `Map`, so nothing
+  whose word each turn carried (keys `guard:<actor>`, `session:<actor>`,
+  `origins:<actor>`, `said:<canvas>:…`). The laptop hands it a `Map`, so nothing
   survives a restart there, which is what happens today. The room reads
   its state back at start, so a host that persists the store gets a
   room that does not repeat itself.

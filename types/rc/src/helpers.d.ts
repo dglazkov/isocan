@@ -31,6 +31,20 @@ export declare function threadLocus(snapshot: CanvasSnapshotResponse, thread: Co
  */
 export declare function actorNamesOn(snapshot: CanvasSnapshotResponse): Map<string, string>;
 export declare function nameResolver(snapshot: CanvasSnapshotResponse): (actorId: string) => string | undefined;
+/**
+ * The session key the injected environment presents — and the exact key the
+ * enrol verb claims, which is the whole trick. Moved here from
+ * `packages/cli/src/acp.ts`, which re-exports it, because the room claims
+ * with it at every summons.
+ *
+ * **Scoped to the NAME, not to a canvas** (standing agents, phase 1). It was
+ * `agent:<canvasId>:<name>`, which made "Percy on a second canvas" a second
+ * session key on the same badge — refused by the desk as a name already worn,
+ * the same gate #89 hit. One machine answers for one Percy: the same key on
+ * every canvas resumes the same actor, so enrolling the name elsewhere hands
+ * the one Percy back, history intact, with no `as` and no vouch.
+ */
+export declare function enrolmentKey(agentName: string): string;
 /** The fixed brief around the wait-shaped payload (phase 4's door):
  * identical for fresh and loaded sessions — delivery differs, content
  * never does — with orientation and the guide pointer carrying the

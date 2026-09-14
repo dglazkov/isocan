@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
-import type { Actor, DoorResponse } from "@isocan/core";
-import { BADGE_SCHEME, DOOR_ROUTE, formatBadgeToken, normalizeHomeUrl } from "@isocan/core";
+import type { Actor, BadgeStore, StoredBadge } from "@isocan/core";
+import { askTheDoor, normalizeHomeUrl } from "@isocan/core";
 import { writeFileAtomic } from "./fsutil.ts";
 import { identityFile } from "./paths.ts";
 
@@ -25,34 +25,16 @@ import { identityFile } from "./paths.ts";
  */
 
 /**
- * One badge, as `identity.json`'s `auth` block holds it.
- *
- * Keyed by home address in that block, which is what makes a second badge
- * free: a machine holds its badge at `http://127.0.0.1:4441` (its own daemon)
- * AND its badge at `https://isocan.io` (the daemon's home) in the same file,
- * under two keys, with neither aware of the other.
- *
- * **From phase 10.3 the key is NORMALIZED** (`normalizeHomeUrl`), and here
- * rather than at each call site — house rule 4's ordinary argument, sharpened
- * by what this file already says: two answers to "which credential is in that
- * file" on one machine is the divergence the module exists to prevent, and a
- * trailing slash would have been exactly that. A daemon holds one badge per
- * home now, so an address that spelled itself two ways would knock on one
- * door twice and hold two badges, of which only one carries the admissions.
- *
- * **No on-disk migration, and that is measured rather than assumed.** The
- * `auth` block was already keyed per address, and the only spellings that
- * CHANGE under normalization are a trailing slash and a mixed-case host. A
- * machine whose config carried one re-badges exactly once: the fresh badge
- * holds no admissions, the local half of the sweep keeps every canvas, and the
- * machine is let back in by a pass. That cost belongs in 10.5's upgrade doc,
- * not in engineering around it.
+ * One badge, as `identity.json`'s `auth` block holds it — `StoredBadge`, with
+ * the door's knock (`askTheDoor`) and the header it is presented in
+ * (`bearerHeader`), lives in `@isocan/core` beside the door vocabulary it
+ * speaks (docs/projects/room/design.md): the typed route surface uses all
+ * three and must not import this package, and this package calls the knock
+ * itself, so neither of the other two could be their home. Re-exported here
+ * so every import of them from this file keeps working.
  */
-export interface StoredBadge {
-  badgeId: string;
-  secret: string;
-  at: string;
-}
+export { askTheDoor, bearerHeader } from "@isocan/core";
+export type { BadgeStore, DoorAnswer, StoredBadge } from "@isocan/core";
 
 /**
  * The `auth` block `identity.json` has stubbed since the beginning, read.
@@ -155,63 +137,14 @@ export async function knockOnDoor(base: string, timeoutMs = 10_000): Promise<Sto
 }
 
 /**
- * What the door said, refusal and all — the same knock, with the answer kept
- * instead of flattened to null.
- *
- * **Why this exists** (phase 13.7). The door is metered now, and a `null`
- * here becomes, one frame up the stack, the ORIGINAL 401 the caller was
- * recovering from: *"a badge is required — ask the door for one."* Told to a
- * person whose knock was just refused 429, that is this codebase's oldest
- * failure — the cheerful wrong answer — delivered as advice to do the one
- * thing that cannot work. So the refusal travels.
- *
- * `knockOnDoor` keeps its null contract for the callers whose recovery is
- * genuinely "give up quietly" (`HomeLink.ensureBadge`, where the replica's
- * next attempt is the retry), and the CLI takes this form because its caller
- * is a person reading a terminal.
+ * **The file-backed badge store** — `identity.json`'s `auth` block for one
+ * address, as the two verbs `DaemonRoutes` takes (docs/projects/room/design.md,
+ * `routes`). The CLI, the MCP server and every Node holder hand this one over;
+ * a host with no disk hands its own.
  */
-export type DoorAnswer =
-  | { badge: StoredBadge }
-  | { refused: { status: number; error: string; code?: string } };
-
-export async function askTheDoor(base: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<DoorAnswer> {
-  try {
-    const res = await fetch(`${base}${DOOR_ROUTE}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ carrier: "bearer" }),
-      signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
-    });
-    const body = (await res.json().catch(() => null)) as (DoorResponse & Refused) | null;
-    if (!res.ok) {
-      return {
-        refused: {
-          status: res.status,
-          error: body?.error ?? `the door refused: HTTP ${res.status}`,
-          ...(body?.code ? { code: body.code } : {}),
-        },
-      };
-    }
-    if (!body?.secret) {
-      // 200 with no secret is the door answering a caller it already knows —
-      // which this function's caller, by construction, is not. Nothing to
-      // keep, and nothing a retry improves.
-      return { refused: { status: res.status, error: "the door handed back no secret" } };
-    }
-    return { badge: { badgeId: body.badgeId, secret: body.secret, at: new Date().toISOString() } };
-  } catch (err) {
-    return { refused: { status: 0, error: `could not reach the door at ${base}: ${(err as Error).message}` } };
-  }
-}
-
-/** This file's `{error, code}` — the shape every refusal in `http.ts` uses. */
-interface Refused {
-  error?: string;
-  code?: string;
-}
-
-/** `Authorization: Bearer <badgeId>.<secret>` — the one place that spelling
- * is written, so a holder cannot get the separator wrong on its own. */
-export function bearerHeader(badge: StoredBadge): Record<string, string> {
-  return { Authorization: `${BADGE_SCHEME} ${formatBadgeToken(badge.badgeId, badge.secret)}` };
+export function fileBadgeStore(home: string, base: string): BadgeStore {
+  return {
+    read: () => readBadge(home, base),
+    keep: (badge) => writeBadge(home, base, badge),
+  };
 }

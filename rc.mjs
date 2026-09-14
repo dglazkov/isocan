@@ -24,10 +24,14 @@ export const {
   gateTurn,
   // helpers.ts — the pure helpers the room speaks with
   actorNamesOn,
+  enrolmentKey,
   itemCenter,
   nameResolver,
   summonsPrompt,
   threadLocus,
+  // room.ts — the room itself, over what a host hands it
+  mapState,
+  runRoom,
   // skill.ts — the collab skill's text, generated
   COLLAB_SKILL,
 } = rc;

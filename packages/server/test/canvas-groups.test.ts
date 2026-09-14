@@ -13,6 +13,7 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
 import { UndoStacks } from "../src/undo.ts";
 import { reachableHashes } from "../src/gc.ts";
 import { DaemonRoutes } from "../../api/src/routes.ts";
+import { fileBadgeStore } from "../src/badge-store.ts";
 import { exportCanvases, importExport } from "../../api/src/export.ts";
 
 const alice = { id: "usr_alice", name: "Alice" };
@@ -273,7 +274,7 @@ describe("canvas groups through the authoritative HTTP writer", () => {
     expect((await snapshot()).canvas).toEqual(saved.canvas);
 
     const out = path.join(home, "native-backup");
-    const client = new DaemonRoutes(base, path.join(home, "api-client"));
+    const client = new DaemonRoutes(base, fileBadgeStore(path.join(home, "api-client"), base));
     await exportCanvases(client, [saved.project], { out });
     const exported = JSON.parse(await fs.readFile(path.join(out, EXPORT_LAYOUT.canvases, canvasId, EXPORT_LAYOUT.snapshot), "utf8"));
     expect(exported.groupCohorts).toEqual(saved.canvas.groupCohorts);
@@ -282,7 +283,7 @@ describe("canvas groups through the authoritative HTTP writer", () => {
     try {
       const addr = second.app.server.address();
       const secondBase = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
-      const imported = await importExport(new DaemonRoutes(secondBase, path.join(secondHome, "client")), out);
+      const imported = await importExport(new DaemonRoutes(secondBase, fileBadgeStore(path.join(secondHome, "client"), secondBase)), out);
       expect(imported.refused).toEqual([]);
       expect(imported.restored).toHaveLength(1);
       expect((await second.engine.getSnapshot(canvasId)).canvas).toEqual(saved.canvas);

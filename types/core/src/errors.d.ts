@@ -36,6 +36,28 @@ type OpErrorCode = "unknown-item" | "unknown-version" | "unknown-thread" | "unkn
  * `name-taken`, because the remedy differs — a pass will not help, and the
  * message is the home's sentence, with the address to write to. */
  | "refused" | "bad-op";
+/**
+ * **A refusal the home answered.** Every refusal comes over the wire in one
+ * shape, `{ error, code?, reason? }`: the code is what a client branches on,
+ * the message is what a person reads. This is that body, thrown, with the
+ * HTTP status beside it.
+ *
+ * In core rather than beside the route surface that throws it
+ * (docs/projects/room/design.md, `routes`): the room module tells a refusal
+ * from a lost connection by it and imports nothing from `@isocan/api`, which
+ * re-exports this same class so every `instanceof` still agrees.
+ */
+export declare class ApiError extends Error {
+    readonly status: number;
+    readonly code?: string | undefined;
+    /** Why, when the code alone does not say — `withdrawn` on a
+     * `not-admitted` from a badge that had been inside (see `WITHDRAWN`). */
+    readonly reason?: string | undefined;
+    constructor(status: number, message: string, code?: string | undefined, 
+    /** Why, when the code alone does not say — `withdrawn` on a
+     * `not-admitted` from a badge that had been inside (see `WITHDRAWN`). */
+    reason?: string | undefined);
+}
 export declare class OpValidationError extends Error {
     readonly code: OpErrorCode;
     constructor(code: OpErrorCode, message: string);

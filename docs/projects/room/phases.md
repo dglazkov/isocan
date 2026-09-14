@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phase 0 CLOSED 13 Sep 2026; `packages/rc` exists and ships as `isocan/rc`. Next: room phase 1, the room over its deps.** Five phases, none
+**Where we are: phases 0–1 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` in `isocan/rc`. Next: room phase 2, the sheep over commands.** Five phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -49,7 +49,7 @@ passes over the moved `gateTurn`. A test over the manifest
 
 ## Phase 1 — The room over its deps
 
-**Status: NOT STARTED.**
+**Status: CLOSED 2026-09-13.** `runRoom(deps)` is the room; `main.ts` builds the laptop's deps around it, `routes.ts` no longer imports `@isocan/server`, `packages/rc/src` typechecks without Node's types, and `room.test.ts` runs eight cases over in-memory deps and a hand clock.
 
 **Outcome:** `runRoom(deps): Room` in the module, the whole of
 `runRcRoom` minus the laptop, with `RoomDeps` as design.md lists them:
@@ -90,6 +90,8 @@ second by the clock.
 
 - **2026-09-13** — Reversed phase 0's subpath entry: `routes.ts` uses `Buffer` in its blob methods, so a room importing it fails the no-Node typecheck. The room declares its routes as an interface over core's types, `ApiError` moves to core, and nothing of `@isocan/api` is in the module's closure.
 - **2026-09-13** — `rc.test.ts` held two source-shape describes that read `main.ts`, so "passes unchanged" could not survive the move. They become behavioural tests in `room.test.ts`, where in-memory deps can force the startup window the spawned CLI could not.
+- **2026-09-13** — `RoomDeps` grew past design.md's list: `origin`, `cwd`, `whereOf`, `enrol`, and a two-stage `adapterFor`, because the face and the pointer loan sit between naming a harness and spawning it. `Room` gained `done`. design.md now lists them.
+- **2026-09-13** — Open: when an adapter's fence or spawn throws, the face stays on, its heartbeat never stops, and the session pointer is not taken back; true before the move and kept byte-for-byte. Waits on a decision about what a failed open owes the thread.
 
 ## Phase 2 — The sheep over commands
 

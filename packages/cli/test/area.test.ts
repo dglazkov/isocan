@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { fileBadgeStore, startDaemon, type Daemon } from "@isocan/server";
 import { DaemonRoutes, harnessVars } from "@isocan/api";
 import { AREA_HEAD, AREA_INSET } from "@isocan/core";
 
@@ -121,7 +121,7 @@ describe("a group through the old area spelling", () => {
 
   it("keeps legacy receipts and centre-based reads in an explicitly legacy fixture", async () => {
     await isocan("canvas", "create", "Acme Legacy", "--legacy");
-    const client = new DaemonRoutes(base, home);
+    const client = new DaemonRoutes(base, fileBadgeStore(home, base));
     const canvas = (await client.listCanvases())[0]!;
     expect(canvas.groupMode).toBe("legacy");
     const upload = await client.uploadBlob(canvas.id, Buffer.from("\n"), "text/markdown", "area.md");

@@ -1,0 +1,587 @@
+import { describe, expect, it } from "vitest";
+import type {
+  Actor,
+  CanvasSnapshotResponse,
+  CommentThread,
+  EnrolledAgent,
+  Operation,
+  WatchLogRequest,
+  WatchedLogEntry,
+} from "@isocan/core";
+import { ApiError } from "@isocan/core";
+import {
+  mapState,
+  runRoom,
+  type RcAgentRow,
+  type RoomAdapter,
+  type RoomDeps,
+  type RoomRoutes,
+  type RoomRows,
+  type RoomState,
+} from "../src/index.ts";
+
+/**
+ * **The room over in-memory deps** (docs/projects/room/phases.md, phase 1's
+ * proof). No daemon, no disk, no process, no wall clock: a home that is a log
+ * and a roster in this file, rows in an array, adapters that reply through the
+ * routes they were handed, and a clock this file advances by hand — so a night
+ * of the guard's window runs in well under a second.
+ */
+
+const CANVAS = { id: "prj_acme", title: "Acme Board" };
+const OWNER: Actor = { id: "usr_ada", name: "Ada" };
+const STRANGER: Actor = { id: "usr_sam", name: "Sam" };
+const WRITER: Actor = { id: "usr_nico", name: "Nico" };
+const PERCY: Actor = { id: "act_percy", name: "Percy" };
+
+/** A clock and its timers, advanced by hand. `sleep` is the room's only way
+ * to wait, and every long poll below waits on it too. */
+class HandClock {
+  now = 1_000_000;
+  private timers: { at: number; fire: () => void }[] = [];
+
+  sleep = (ms: number, signal: AbortSignal): Promise<void> =>
+    new Promise((resolve) => {
+      if (signal.aborted) return resolve();
+      const timer = { at: this.now + ms, fire: () => done() };
+      const done = () => {
+        this.timers = this.timers.filter((t) => t !== timer);
+        signal.removeEventListener("abort", done);
+        resolve();
+      };
+      this.timers.push(timer);
+      signal.addEventListener("abort", done, { once: true });
+    });
+
+  /** Move time forward, firing every timer on the way in order, and letting
+   * whatever each one wakes run before the next. */
+  async advance(ms: number): Promise<void> {
+    const until = this.now + ms;
+    for (;;) {
+      await drain();
+      const next = [...this.timers].sort((a, b) => a.at - b.at)[0];
+      if (!next || next.at > until) break;
+      this.now = next.at;
+      next.fire();
+    }
+    this.now = until;
+    await settle();
+  }
+}
+
+/** Let every promise already queued move: nothing in the room or the home
+ * below waits on anything but promises and the hand clock. */
+async function drain(): Promise<void> {
+  for (let i = 0; i < 60; i++) await Promise.resolve();
+}
+
+/** And once more past a turn of the event loop, where a step ends. */
+async function settle(): Promise<void> {
+  await drain();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  await drain();
+}
+
+/** A home in memory: one canvas's log, roster and threads, the park rows, the
+ * presence sessions, and every long poll waiting on the hand clock. */
+class AcmeHome {
+  log: WatchedLogEntry[] = [];
+  agents: Record<string, EnrolledAgent> = {};
+  threads: Record<string, CommentThread> = {};
+  parks = new Map<string, number>();
+  sessions = new Map<string, { actor: Actor; harness?: string; kind?: string }>();
+  ended: string[] = [];
+  holds: AbortSignal[] = [];
+  polls: AbortSignal[] = [];
+  /** Lap polls to refuse as a lost connection before answering again. */
+  dropLaps = 0;
+  /** What lands just before the room's start tip is read — after its opening
+   * roster read, inside the window neither branch of the lap can see. */
+  beforeStartTip: (() => void) | null = null;
+  claims: string[] = [];
+  private waiters: (() => void)[] = [];
+  private nextSession = 1;
+
+  constructor(private clock: HandClock) {}
+
+  enrol(agent: Actor, writtenBy: Actor = OWNER, rules?: unknown): void {
+    this.agents[agent.id] = { actor: agent, writtenBy, ...(rules ? { rules } : {}) } as EnrolledAgent;
+    this.append(writtenBy, { type: "agent.enroll", agent } as Operation);
+  }
+
+  withdraw(agent: Actor, by: Actor = OWNER): void {
+    delete this.agents[agent.id];
+    this.append(by, { type: "agent.withdraw", actorId: agent.id } as Operation);
+  }
+
+  /** A comment, by `by`, mentioning `about`, on a new thread. */
+  mention(by: Actor, about: Actor, body: string): string {
+    const threadId = `thr_${this.log.length + 1}`;
+    this.append(by, {
+      type: "thread.create",
+      threadId,
+      x: 0,
+      y: 0,
+      comment: { id: `cmt_${this.log.length + 1}`, body, mentions: [about.id] },
+    } as unknown as Operation);
+    return threadId;
+  }
+
+  append(actor: Actor, op: Operation): void {
+    const seq = this.log.length + 1;
+    this.log.push({ seq, envelope: { actor, op, ts: new Date(this.clock.now).toISOString() } } as unknown as WatchedLogEntry);
+    if (op.type === "thread.create" || op.type === "thread.reply") {
+      const o = op as unknown as { threadId: string; comment: { id: string; body: string } };
+      const thread = (this.threads[o.threadId] ??= { id: o.threadId, createdBy: actor, comments: [] } as unknown as CommentThread);
+      thread.comments.push({ id: o.comment.id, body: o.comment.body, author: actor } as CommentThread["comments"][number]);
+    }
+    for (const wake of this.waiters.splice(0)) wake();
+  }
+
+  get tip(): number {
+    return this.log.length;
+  }
+
+  private snapshotNow(): CanvasSnapshotResponse {
+    return {
+      project: CANVAS,
+      canvas: { agents: structuredClone(this.agents), threads: structuredClone(this.threads), items: {}, trash: [] },
+      lastSeq: this.tip,
+      colors: {},
+      names: {},
+    } as unknown as CanvasSnapshotResponse;
+  }
+
+  routes(): RoomRoutes {
+    const home = this;
+    const routes = {
+      snapshot: async () => home.snapshotNow(),
+      actorBindings: async () => [],
+      claimActor: async () => ({}),
+      createSession: async (_canvasId: string, actor: Actor, _label?: string, harness?: string, kind?: string) => {
+        const sessionId = `ses_${home.nextSession++}`;
+        home.sessions.set(sessionId, { actor, ...(harness ? { harness } : {}), ...(kind ? { kind } : {}) });
+        return { sessionId };
+      },
+      updateSession: async (_canvasId: string, sessionId: string) => {
+        if (!home.sessions.has(sessionId)) throw new ApiError(404, "no such session");
+        return { ok: true };
+      },
+      endSession: async (_canvasId: string, sessionId: string) => {
+        home.sessions.delete(sessionId);
+        home.ended.push(sessionId);
+        return { ok: true };
+      },
+      getLog: async () => [...home.log],
+      parkClaim: async (request: { actorId: string; seedAt?: number }) => {
+        home.claims.push(request.actorId);
+        const cursor = home.parks.get(request.actorId) ?? request.seedAt ?? 0;
+        home.parks.set(request.actorId, cursor);
+        return { parkId: `park_${request.actorId}`, cursor, redeliverUpTo: null };
+      },
+      parkDelivered: async () => ({ ok: true }),
+      parkAdvance: async (request: { actorId: string; to: number }) => {
+        home.parks.set(request.actorId, Math.max(home.parks.get(request.actorId) ?? 0, request.to));
+        return { ok: true };
+      },
+      sendOp: async (_canvasId: string, actor: Actor, op: Operation) => {
+        home.append(actor, op);
+        return { seq: home.tip };
+      },
+      rcHold: (_request: unknown, signal?: AbortSignal) => {
+        home.holds.push(signal!);
+        return home.wait(10_000, signal).then(() => ({ ok: true, asks: [] }));
+      },
+      watchLog: async (request: WatchLogRequest, signal?: AbortSignal) => {
+        if (!request.cursors) {
+          home.beforeStartTip?.();
+          home.beforeStartTip = null;
+          return { entries: [], cursors: { [CANVAS.id]: home.tip } };
+        }
+        home.polls.push(signal!);
+        if (home.dropLaps > 0) {
+          home.dropLaps--;
+          throw new TypeError("fetch failed");
+        }
+        const from = request.cursors[CANVAS.id] ?? 0;
+        if (home.tip <= from) await home.wait(request.waitMs ?? 30_000, signal);
+        return { entries: home.log.filter((e) => e.seq > from), cursors: { [CANVAS.id]: home.tip } };
+      },
+    };
+    return routes as unknown as RoomRoutes;
+  }
+
+  /** Until something is appended, `ms` pass on the hand clock, or the signal
+   * aborts — which rejects, the way an aborted fetch does. */
+  private wait(ms: number, signal: AbortSignal | undefined): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeUp = new AbortController();
+      const finish = () => {
+        timeUp.abort();
+        signal?.removeEventListener("abort", aborted);
+        resolve();
+      };
+      const aborted = () => {
+        timeUp.abort();
+        reject(new DOMException("aborted", "AbortError"));
+      };
+      if (signal?.aborted) return aborted();
+      signal?.addEventListener("abort", aborted, { once: true });
+      this.waiters.push(finish);
+      void this.clock.sleep(ms, timeUp.signal).then(() => {
+        if (!timeUp.signal.aborted) finish();
+      });
+    });
+  }
+}
+
+/** Rows in an array, with the file-backed verbs' semantics. */
+function memoryRows(rows: RcAgentRow[]): RoomRows {
+  return {
+    list: async () => structuredClone(rows),
+    adopt: async (row) => {
+      if (rows.some((r) => r.canvasId === row.canvasId && r.actorId === row.actorId)) return false;
+      rows.push(row);
+      return true;
+    },
+    remove: async (canvasId, actorId) => {
+      const i = rows.findIndex((r) => r.canvasId === canvasId && r.actorId === actorId);
+      if (i >= 0) rows.splice(i, 1);
+    },
+    setSessionId: async (canvasId, actorId, sessionId) => {
+      const row = rows.find((r) => r.canvasId === canvasId && r.actorId === actorId);
+      if (!row) return false;
+      row.sessionId = sessionId;
+      return true;
+    },
+  };
+}
+
+/** State that keeps nothing by reference: every value goes through JSON, as a
+ * host's persisted store would. */
+function jsonState(): RoomState & { data: Map<string, string> } {
+  const data = new Map<string, string>();
+  return {
+    data,
+    get: async (key) => (data.has(key) ? JSON.parse(data.get(key)!) : undefined),
+    set: async (key, value) => {
+      data.set(key, JSON.stringify(value));
+    },
+    delete: async (key) => {
+      data.delete(key);
+    },
+  };
+}
+
+interface Turn {
+  row: RcAgentRow;
+  harness: string;
+  face: string | null;
+  prompt: string;
+  at: number;
+}
+
+/** The deps a test hands the room: Percy on `claude-code`, an adapter that
+ * replies in the thread through the routes, and narration collected. */
+function roomOver(
+  home: AcmeHome,
+  clock: HandClock,
+  options: { state?: RoomState; limits?: RoomDeps["limits"]; rows?: RcAgentRow[] } = {},
+) {
+  const lines: string[] = [];
+  const turns: Turn[] = [];
+  const ended: RcAgentRow[] = [];
+  const routes = home.routes();
+  const rows: RcAgentRow[] = options.rows ?? [
+    { canvasId: CANVAS.id, actorId: PERCY.id, name: PERCY.name, harness: "claude-code", cwd: "/acme/percy", sessionId: null },
+  ];
+  const deps: RoomDeps = {
+    routes,
+    canvas: CANVAS,
+    owner: OWNER,
+    origin: "https://acme.invalid",
+    cwd: "/acme",
+    rows: memoryRows(rows),
+    adapterFor: async (row) => ({
+      harness: row.harness ?? "claude-code",
+      open: async (turn): Promise<RoomAdapter> => ({
+        ensureSession: async (_cwd, stored) => ({ sessionId: stored ?? "acp_percy", resumed: stored !== null }),
+        prompt: async (_sessionId, text) => {
+          turns.push({ row, harness: row.harness ?? "claude-code", face: turn.face, prompt: text, at: clock.now });
+          if (turn.threadId) {
+            await routes.sendOp(CANVAS.id, PERCY, {
+              type: "thread.reply",
+              threadId: turn.threadId,
+              comment: { id: `cmt_reply_${turns.length}`, body: "The empty state now says what to do." },
+            } as Operation);
+          }
+          return { stopReason: "end_turn" };
+        },
+        close: () => {},
+      }),
+    }),
+    endSession: async (row) => {
+      ended.push(row);
+    },
+    whereOf: async () => null,
+    enrol: async () => {},
+    narrate: (line) => lines.push(line),
+    state: options.state ?? mapState(),
+    limits: options.limits ?? { turnsPerHour: 12, agentChain: 3 },
+    clock: { now: () => clock.now },
+    sleep: clock.sleep,
+  };
+  return { deps, lines, turns, rows, ended };
+}
+
+describe("the room over in-memory deps", () => {
+  it("dispatches a summons to the adapter the deps name, and the reply lands through routes", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const { deps, lines, turns } = roomOver(home, clock);
+    const room = runRoom(deps);
+    await clock.advance(0);
+    expect(lines).toContain(`answering on "Acme Board" — https://acme.invalid/p/${CANVAS.id}`);
+
+    const threadId = home.mention(OWNER, PERCY, "@Percy the empty state reads wrong");
+    await clock.advance(0);
+
+    expect(turns).toHaveLength(1);
+    expect(turns[0]!.row).toMatchObject({ actorId: PERCY.id, harness: "claude-code", cwd: "/acme/percy" });
+    expect(turns[0]!.prompt).toContain("@Percy the empty state reads wrong");
+    // The face went on under the harness the deps named, and came off.
+    expect(turns[0]!.face).not.toBeNull();
+    expect(home.ended).toContain(turns[0]!.face);
+    const thread = home.threads[threadId]!;
+    expect(thread.comments.map((c) => `${c.author.name}: ${c.body}`)).toEqual([
+      "Ada: @Percy the empty state reads wrong",
+      "Percy: The empty state now says what to do.",
+    ]);
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        "Percy · summons from Ada, 1 entry — starting a session",
+        "Percy · session started in /acme/percy",
+        "Percy · turn ended — end_turn",
+      ]),
+    );
+    // The cursor advanced past the summons the turn answered.
+    expect(home.parks.get(PERCY.id)).toBeGreaterThanOrEqual(2);
+    await room.stop();
+    await room.done;
+  });
+
+  /**
+   * **The startup window, from both sides** (sheep-harness phase 2). The room
+   * reads its opening roster, then its start tip; an enrolment or a
+   * withdrawal landing between the two is absent from the opening roster and
+   * at or below the tip, so neither the reconcile nor the lap's enrol and
+   * withdraw branches see it. The roster read after the tip is what does.
+   * These were source-shape checks over `main.ts` while the room lived there.
+   */
+  it("an enrolment landing between the opening roster and the start tip is adopted, claimed and said", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    // Nobody enrolled when the room opens — the web's first add, arriving as
+    // the room starts: no cursor sits below the tip to read the enrolment
+    // back, and the first lap's poll is a quiet thirty seconds.
+    const QUINN: Actor = { id: "act_quinn", name: "Quinn" };
+    home.beforeStartTip = () => home.enrol(QUINN);
+    const { deps, lines, rows } = roomOver(home, clock, { rows: [] });
+    const room = runRoom(deps);
+    // Well inside the first thirty-second poll: nothing else would take Quinn
+    // up before it ends.
+    await clock.advance(1_000);
+    expect(rows).toContainEqual({ canvasId: CANVAS.id, actorId: QUINN.id, name: "Quinn", harness: null, cwd: "/acme", sessionId: null });
+    expect(home.claims).toContain(QUINN.id);
+    expect(lines).toContain("Quinn · where and how supplied — /acme");
+    expect(lines).toContain("nobody is enrolled yet — Add an agent in the tray at that address; this rc picks it up without a restart");
+    // The same sentence the enrol branch says for an enrolment it does see.
+    const RUE: Actor = { id: "act_rue", name: "Rue" };
+    home.enrol(RUE);
+    await clock.advance(0);
+    expect(lines).toContain("Rue · where and how supplied — /acme");
+    await room.stop();
+    await room.done;
+  });
+
+  it("a withdrawal landing between the opening roster and the start tip is reaped, and its session ended", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    home.beforeStartTip = () => home.withdraw(PERCY);
+    const sheepRow: RcAgentRow = {
+      canvasId: CANVAS.id,
+      actorId: PERCY.id,
+      name: PERCY.name,
+      harness: "sheep",
+      cwd: "/acme/percy",
+      sessionId: "sheep_percy",
+      sheep: { kennel: "/acme/.sheep", home: "https://sheep.acme.invalid" },
+    };
+    const { deps, lines, rows, ended } = roomOver(home, clock, { rows: [sheepRow] });
+    const room = runRoom(deps);
+    await clock.advance(60_000);
+    expect(rows).toEqual([]);
+    expect(ended.map((r) => r.sessionId)).toEqual(["sheep_percy"]);
+    expect(lines).toContain("Percy was withdrawn as this rc started — ending what it left");
+    await room.stop();
+    await room.done;
+  });
+
+  it("stop() ends the hold and both polls within one tick", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const { deps } = roomOver(home, clock);
+    const room = runRoom(deps);
+    await clock.advance(0);
+    const hold = home.holds.at(-1)!;
+    const poll = home.polls.at(-1)!;
+    expect(hold.aborted).toBe(false);
+    expect(poll.aborted).toBe(false);
+    const announcement = [...home.sessions].find(([, s]) => s.kind === "rc")![0];
+
+    let stopped = false;
+    void room.done.then(() => (stopped = true));
+    const standing = room.stop();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(hold.aborted).toBe(true);
+    expect(poll.aborted).toBe(true);
+    expect(stopped).toBe(true);
+    await standing;
+    expect(home.ended).toContain(announcement);
+    // Nothing is parked afterwards: no new hold, no new poll, however long.
+    const holds = home.holds.length;
+    const polls = home.polls.length;
+    await clock.advance(3_600_000);
+    expect(home.holds.length).toBe(holds);
+    expect(home.polls.length).toBe(polls);
+  });
+
+  it("a second runRoom over the same state does not re-narrate what the first said, and keeps its guard", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    // A gate somebody else wrote, widening Percy to Sam: set aside, and said
+    // once, at start.
+    home.enrol(PERCY, WRITER, { listen: [STRANGER.id] });
+    const state = jsonState();
+    const limits = { turnsPerHour: 2, agentChain: 3 };
+    const setAside = expect.stringContaining("Percy's gate was last written by Nico, not you");
+
+    const first = roomOver(home, clock, { state, limits });
+    const one = runRoom(first.deps);
+    await clock.advance(0);
+    expect(first.lines).toEqual(expect.arrayContaining([setAside]));
+    // A stranger asks: turned away, said in words once.
+    home.mention(STRANGER, PERCY, "@Percy can you look?");
+    await clock.advance(0);
+    const turnedAway = "Percy · Sam asked; listens only to you — said so in the thread, nothing started";
+    expect(first.lines).toContain(turnedAway);
+    // Ada asks twice, a minute apart: two turns, the whole ceiling.
+    home.mention(OWNER, PERCY, "@Percy the empty state reads wrong");
+    await clock.advance(60_000);
+    home.mention(OWNER, PERCY, "@Percy and the heading above it");
+    await clock.advance(60_000);
+    expect(first.turns).toHaveLength(2);
+    await one.stop();
+    await one.done;
+
+    // The second room meets a home whose park rows are gone: its cursors seed
+    // at the enrolment, so the whole backlog comes back around.
+    home.parks.clear();
+    const second = roomOver(home, clock, { state, limits });
+    const two = runRoom(second.deps);
+    await clock.advance(5_000);
+    expect(second.lines).toContain(`answering on "Acme Board" — https://acme.invalid/p/${CANVAS.id}`);
+    expect(second.lines).not.toEqual(expect.arrayContaining([setAside]));
+    expect(second.lines).not.toContain(turnedAway);
+    // The replayed asks are held by the first room's two turns.
+    expect(second.turns).toHaveLength(0);
+    expect(second.lines).toContain("Percy is at its ceiling — 2 turns in the past hour. This summons waits (about 58 min).");
+    // And lifted when the hour the first room spent has passed.
+    await clock.advance(3_600_000);
+    expect(second.lines).toContain("Percy's hold lifted — dispatching what waited");
+    expect(second.turns).toHaveLength(1);
+    await two.stop();
+    await two.done;
+  });
+
+  it("a routes that refuses with a lost connection is retried, with no ensureDaemon in sight", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const { deps, lines, turns } = roomOver(home, clock);
+    expect("ensureDaemon" in deps.routes).toBe(false);
+    home.dropLaps = 2;
+    const room = runRoom(deps);
+    // Two refused laps, 400ms apart, and a third that is parked again.
+    await clock.advance(1_000);
+    expect(lines.filter((l) => l.startsWith("the daemon stopped answering"))).toEqual([
+      "the daemon stopped answering — retrying, and starting it if it is gone",
+    ]);
+    expect(home.polls).toHaveLength(3);
+    home.mention(OWNER, PERCY, "@Percy still there?");
+    await clock.advance(0);
+    expect(lines).toContain("daemon back after 1s — nothing missed");
+    expect(turns).toHaveLength(1);
+    await room.stop();
+    await room.done;
+  });
+
+  it("a refusal the daemon answered ends the room, as `isocan rc` exits on it", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const { deps } = roomOver(home, clock);
+    const routes = deps.routes;
+    let laps = 0;
+    const refusing = {
+      ...routes,
+      watchLog: async (request: WatchLogRequest, signal?: AbortSignal) => {
+        if (request.cursors && ++laps > 1) throw new ApiError(403, "not admitted", "not-admitted");
+        return routes.watchLog(request, signal);
+      },
+    } as RoomRoutes;
+    const room = runRoom({ ...deps, routes: refusing });
+    const ended = room.done.then(
+      () => null,
+      (err: unknown) => err,
+    );
+    await clock.advance(31_000);
+    expect(await ended).toBeInstanceOf(ApiError);
+    await room.stop();
+  });
+
+  it("runs a night of the guard's window in under a second by the clock", async () => {
+    const started = performance.now();
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const { deps, turns, lines } = roomOver(home, clock, { limits: { turnsPerHour: 2, agentChain: 3 } });
+    const room = runRoom(deps);
+    await clock.advance(0);
+    // Eight hours, Ada asking every twenty minutes: three asks an hour against
+    // a ceiling of two.
+    const asks = 24;
+    for (let i = 0; i < asks; i++) {
+      home.mention(OWNER, PERCY, `@Percy ask ${i + 1}`);
+      await clock.advance(20 * 60_000);
+    }
+    await clock.advance(2 * 3_600_000);
+    await room.stop();
+    await room.done;
+
+    // Never more than two turns in any sliding hour…
+    for (let i = 2; i < turns.length; i++) {
+      expect(turns[i]!.at - turns[i - 2]!.at).toBeGreaterThanOrEqual(3_600_000);
+    }
+    // …and nothing dropped: every ask reached a turn.
+    for (let i = 0; i < asks; i++) {
+      expect(turns.some((t) => t.prompt.includes(`@Percy ask ${i + 1}`))).toBe(true);
+    }
+    expect(lines.some((l) => l.startsWith("Percy is at its ceiling — 2 turns in the past hour."))).toBe(true);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+});

@@ -35,7 +35,12 @@ describe("the room module's boundary", () => {
         }
       }
     }
-    expect(reached.map((f) => path.relative(repo, f))).toContain("packages/core/src/index.ts");
+    const reachedPaths = reached.map((f) => path.relative(repo, f));
+    expect(reachedPaths).toContain("packages/core/src/index.ts");
+    // The room is reached, and nothing of `@isocan/api` is: the routes it
+    // speaks to the daemon through are its own interface over core's types.
+    expect(reachedPaths).toContain("packages/rc/src/room.ts");
+    expect(reachedPaths.filter((f) => f.startsWith("packages/api/"))).toEqual([]);
     expect(
       offenders,
       `isocan/rc is for hosts with no Node — nothing it reaches may import node:* or @isocan/server:\n${offenders.join("\n")}`,

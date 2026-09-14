@@ -2,8 +2,8 @@ import { type SourceRequestContext, type SourceClassificationRequest, type Sourc
 import { type InboxResponse } from "../../core/src/index.js";
 import { type RecapHeadResponse } from "../../core/src/index.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
-import type { UpgradeVerdict } from "../../core/src/index.js";
-import type { BuildStamp } from "../../server/src/index.js";
+import type { BadgeStore, BuildStamp, UpgradeVerdict } from "../../core/src/index.js";
+import { ApiError } from "../../core/src/index.js";
 import type { ContextPageOptions } from "./canvas-context.js";
 /** The health route: who is holding the port, and which build they are. */
 export interface Health extends Partial<BuildStamp> {
@@ -41,17 +41,9 @@ export interface Health extends Partial<BuildStamp> {
      */
     upgrade?: UpgradeVerdict;
 }
-export declare class ApiError extends Error {
-    readonly status: number;
-    readonly code?: string | undefined;
-    /** Why, when the code alone does not say — `withdrawn` on a
-     * `not-admitted` from a badge that had been inside. */
-    readonly reason?: string | undefined;
-    constructor(status: number, message: string, code?: string | undefined, 
-    /** Why, when the code alone does not say — `withdrawn` on a
-     * `not-admitted` from a badge that had been inside. */
-    reason?: string | undefined);
-}
+/** A refusal the home answered — the class lives in `@isocan/core`, and is
+ * re-exported here so every import of it from this surface keeps working. */
+export { ApiError };
 /** The platform's own fetch, named so that the Node half can fall back to it
  * by name — an instance field is not on the prototype, so `super.fetcher`
  * would be `undefined`, and one exported constant is clearer than that
@@ -71,10 +63,17 @@ export declare const platformFetch: typeof fetch;
  */
 export declare class DaemonRoutes {
     readonly base: string;
-    readonly home: string;
+    /**
+     * Where this holder keeps its badge for `base` — read once, kept after a
+     * knock at the door. A parameter rather than a file read
+     * (docs/projects/room/design.md, `routes`): this surface runs where there
+     * is no disk, and the Node holders hand `fileBadgeStore(home, base)` from
+     * `@isocan/server`, which is `identity.json`'s `auth` block as before.
+     */
+    protected readonly badgeStore: BadgeStore;
     /** Optional lifetime of a per-call connection, including its identity setup. */
     protected readonly lifetime?: AbortSignal | undefined;
-    /** Loaded once per process, from `identity.json`'s `auth` block. */
+    /** Loaded once per instance, from the badge store it was handed. */
     private badge;
     /**
      * How to make the home vouch for whoever this command speaks as: claim the
@@ -97,7 +96,15 @@ export declare class DaemonRoutes {
      * Callers holding an older placement preview pass its mode explicitly. */
     private observedGroupModes;
     private readonly sourceContext?;
-    constructor(base: string, home: string, 
+    constructor(base: string, 
+    /**
+     * Where this holder keeps its badge for `base` — read once, kept after a
+     * knock at the door. A parameter rather than a file read
+     * (docs/projects/room/design.md, `routes`): this surface runs where there
+     * is no disk, and the Node holders hand `fileBadgeStore(home, base)` from
+     * `@isocan/server`, which is `identity.json`'s `auth` block as before.
+     */
+    badgeStore: BadgeStore, 
     /** Optional lifetime of a per-call connection, including its identity setup. */
     lifetime?: AbortSignal | undefined, 
     /** A restriction captured before target resolution, shared by JSON and raw calls. */
@@ -451,7 +458,7 @@ export declare class DaemonRoutes {
      * the fact dies with the socket, which is the whole point. The response
      * carries any web asks that arrived while held (agent-custody) — the rc
      * enrolls each and keeps holding. */
-    rcHold(request: RcHoldRequest): Promise<RcHoldResponse>;
+    rcHold(request: RcHoldRequest, signal?: AbortSignal): Promise<RcHoldResponse>;
     /** Who a live rc answers for on this canvas — and whether any is parked at
      * all, here or relayed from a member's machine. */
     rcAnswering(canvasId: string): Promise<RcAnsweringResponse>;

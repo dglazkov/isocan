@@ -10,5 +10,18 @@
  */
 export { gateTurn, type GuardLimits, type GuardState, type GuardVerdict } from "./guards.ts";
 export type { RcAgentRow, SheepPlace } from "./rows.ts";
-export { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
+export { actorNamesOn, enrolmentKey, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
+export {
+  mapState,
+  runRoom,
+  type Room,
+  type RoomAdapter,
+  type RoomDeps,
+  type RoomHarness,
+  type RoomRoutes,
+  type RoomRows,
+  type RoomState,
+  type RoomTurn,
+  type RoomTurnEvent,
+} from "./room.ts";
 export { COLLAB_SKILL } from "./skill.ts";

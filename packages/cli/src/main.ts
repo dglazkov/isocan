@@ -13,7 +13,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 import type {
-  ActorJoins,
   AgentRules,
   EnrolledAgent,
   RcPolicy,
@@ -320,16 +319,11 @@ import {
   PARK_ADOPTED_CODE,
   dispatchReason,
   answerPolicy,
-  gateSetAside,
-  ownersWord,
   policyWords,
   mayWake,
   refusedMentions,
   sameActor,
-  speakersFor,
-  turnedAway,
   turnedAwayLine,
-  isSystemActor,
   LISTEN_ANYONE,
   listenWords,
   listenGrants,
@@ -337,10 +331,7 @@ import {
   listenUntil,
   spellListen,
   untilWords,
-  lapsedFor,
-  newId,
   rulesOf,
-  SYSTEM_ACTOR,
   docStatus,
   statusProblems,
   toJsonCanvas,
@@ -438,6 +429,7 @@ import {
   modulesDir,
   paths,
   plausibleSha,
+  fileBadgeStore,
   readConfigFile,
   readGoogleToken,
   stalenessOf,
@@ -488,8 +480,8 @@ import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
-import { adoptRcAgent, gateTurn, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type GuardState, type RcAgentRow } from "./rc.ts";
-import { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus } from "@isocan/rc";
+import { fileRcRows, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type RcAgentRow } from "./rc.ts";
+import { actorNamesOn, itemCenter, mapState, nameResolver, runRoom, threadLocus, type RoomAdapter, type RoomState, type RoomTurn } from "@isocan/rc";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
 import { openInBrowser } from "./browser.ts";
 import { proveInBrowser, summonedRefusal } from "./operator.ts";
@@ -7472,7 +7464,7 @@ program
             throw new Error("--all means every canvas at THIS daemon; a home address already means every canvas there");
           }
           const client: DaemonRoutes =
-            parsed.origin === ctx.client.base ? ctx.client : new DaemonRoutes(parsed.origin, ctx.home);
+            parsed.origin === ctx.client.base ? ctx.client : new DaemonRoutes(parsed.origin, fileBadgeStore(ctx.home, parsed.origin));
           if (parsed.kind === "home") {
             const canvases = await client.listCanvases();
             if (canvases.length === 0) {
@@ -7590,7 +7582,7 @@ program
     run(async (dir: string, opts: { to?: string; only?: string; dryRun?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const client: DaemonRoutes = opts.to
-        ? new DaemonRoutes(normalizeHomeUrl(opts.to), ctx.home)
+        ? new DaemonRoutes(normalizeHomeUrl(opts.to), fileBadgeStore(ctx.home, normalizeHomeUrl(opts.to)))
         : ctx.client;
       const say = ctx.json ? () => {} : (line: string) => console.log(line);
       const report = await importExport(client, path.resolve(process.cwd(), dir), {
@@ -13300,18 +13292,15 @@ interface RcShared {
    * lands before anything parks rather than at the first summons. */
   sandbox: boolean;
   codexSandbox: boolean;
-  guards: Map<string, GuardState>;
-  sessionIds: Map<string, string>;
   /**
-   * **Whose word each agent's latest turn carries** (owner-only summons) —
-   * agent actor id → the people whose asks started it, followed through
-   * agents that were themselves asked by somebody. Per agent across rooms,
-   * like the guards. It is what stops a stranger reaching an agent that
-   * listens only to its owner by way of one that listens to everyone: the
-   * open agent's reply is still its owner's machine talking, but the word
-   * in it is the stranger's, and the gate reads the word.
+   * What the rooms keep across one another (`RoomState`): the guards per
+   * agent, the session handle per agent, and whose word each agent's latest
+   * turn carries (owner-only summons) — per agent across rooms, so one Percy
+   * on six canvases is one budget and one conversation — and what each room
+   * has said. A `Map`, so nothing survives a restart, as before the room was
+   * a module.
    */
-  origins: Map<string, ReadonlySet<string>>;
+  state: RoomState;
   upgrade: { upgrading: boolean; upgraded: string | null };
   standDowns: (() => Promise<void>)[];
 }
@@ -13483,9 +13472,7 @@ rcCommand
       rooms: rooms.length,
       sandbox: fence,
       codexSandbox: nativeCodex,
-      guards: new Map(),
-      sessionIds: new Map(),
-      origins: new Map(),
+      state: mapState(),
       upgrade: { upgrading: false, upgraded: null },
       standDowns: [],
     };
@@ -13570,8 +13557,6 @@ async function settleDefaultHarness(ctx: Ctx, rooms: Canvas[], flag: string | un
   }
 }
 
-/** One canvas's whole rc — holds, cursors, dispatch, narration — sharing
- *  with its sibling rooms only what `RcShared` says. Never returns. */
 /**
  * **One shape for every rc line** (#82). The log used to be prompts and raw
  * adapter lines side by side, every one prefixed `rc:` — a word that said
@@ -13583,1040 +13568,236 @@ function rcLine(tag: string, text: string): string {
   return `${new Date().toTimeString().slice(0, 8)}  ${tag ? `${tag} ` : ""}${text}`;
 }
 
+/**
+ * **The laptop's host of the room** (docs/projects/room/design.md). One
+ * canvas's whole rc is `runRoom` in `@isocan/rc` now — holds, cursors,
+ * dispatch, narration — and this builds what it runs over from `ctx`, sharing
+ * with sibling rooms only what `RcShared` says. What stays here, by name: the
+ * upgrade window, the sandbox fence, the harness scan, the session pointer
+ * file loaned to the agent's own CLI, and the daemon restart. Never returns.
+ */
 async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> {
-    const tag = shared.rooms > 1 ? `[${p.title}]` : "";
-    const rosterOf = async () => {
-      const snapshot = await ctx.client.snapshot(p.id);
-      return snapshot.canvas.agents ?? {};
-    };
-    const rcCwd = process.cwd();
-    // The rc supplies WHERE and HOW for enrolments that arrived without an
-    // rc half — the web's adds, and any it missed while down. Quiet: this is
-    // record housekeeping, not an event. The home half stays authoritative:
-    // rc rows for this canvas with no standing enrolment are dead, reaped.
-    const reap = async (roster: Record<string, import("@isocan/core").EnrolledAgent>, when: string) => {
-      for (const row of await readRcAgents(ctx.home)) {
-        if (row.canvasId === p.id && !roster[row.actorId]) {
-          await removeRcAgent(ctx.home, p.id, row.actorId);
-          // A sheep the withdrawn agent left is ended now, and that is not
-          // housekeeping, so it is said.
-          if (row.harness === SHEEP_HARNESS && row.sessionId) {
-            console.log(rcLine(tag, `${row.name} was withdrawn ${when} — ending what it left`));
-            await withdrawSheep(ctx, row, (line) => console.log(rcLine(tag, `${row.name} · ${line}`)));
-          }
-        }
-      }
-    };
-    const reconcile = async (roster: Record<string, import("@isocan/core").EnrolledAgent>) => {
-      for (const record of Object.values(roster)) {
-        await adoptRcAgent(ctx.home, {
-          canvasId: p.id,
-          actorId: record.actor.id,
-          name: record.actor.name,
-          harness: null,
-          cwd: rcCwd,
-          sessionId: null,
-        });
-      }
-      await reap(roster, "while no rc ran here");
-    };
-    // Names for the withdraw narration: state drops the row before the op is
-    // read here, so remember every name this process has seen.
-    const known = new Map<string, string>();
-    const opening = await rosterOf();
-    for (const [id, row] of Object.entries(opening)) known.set(id, row.actor.name);
-    await reconcile(opening);
+  const tag = shared.rooms > 1 ? `[${p.title}]` : "";
+  const print = (line: string) => console.log(rcLine(tag, line));
+  const rcCwd = process.cwd();
+  /** The limits (on-demand phase 5): a ceiling on turns per agent per hour,
+   * and a bound on agent-to-agent chains. `config.json`'s `rcLimits` hook
+   * overrides either. */
+  const limitsConfig = await readConfigFile<{
+    rcLimits?: { turnsPerHour?: number; agentChain?: number };
+  }>(ctx.home);
+  const origin = (await ctx.homeOf(p.id).catch(() => null)) ?? ctx.client.base;
 
-    /**
-     * **Owner-only summons** (decided 11 Sep 2026 — issue #238, the rc
-     * research note's recommendation 6). A summoned turn runs HERE, on this
-     * person's machine and this person's tokens, so whose word may start one
-     * is this machine's to decide, and the default is this person alone.
-     *
-     * The owner is the rc's own person — `isocan rc` refuses inside a harness
-     * session, so `ctx.actor` is the home identity. Their hands are every
-     * actor this machine's badge speaks as (the agents it answers for, the
-     * person's own interactive sessions): run here, spending the same tokens,
-     * so their word counts as the owner's. Read again at most every ten
-     * seconds on a lap that carries something, because a new agent session
-     * on this machine is a new hand. `answerPolicy` (core) turns an
-     * enrolment's stored gate into what this rc does, and the same value is
-     * announced with the hold so the web and `isocan who` can say it.
-     */
-    const owner: Actor = { id: ctx.actor.id, name: ctx.actor.name };
-    const keeping: { owner: Actor; hands: string[] } = { owner, hands: [owner.id] };
-    let handsAt = 0;
-    const refreshHands = async (): Promise<void> => {
-      if (Date.now() - handsAt < 10_000) return;
-      handsAt = Date.now();
-      const bound = await ctx.client.actorBindings().catch(() => [] as { actor: Actor }[]);
-      const rows = await readRcAgents(ctx.home).catch(() => [] as { actorId: string }[]);
-      keeping.hands = [...new Set([owner.id, ...rows.map((r) => r.actorId), ...bound.map((b) => b.actor.id)])];
-    };
-    await refreshHands();
-    /** The roster and joins the hold's announcement reads — kept here because
-     * the hold loop starts before the dispatch loop's own variables exist. */
-    const policyState: {
-      roster: Record<string, EnrolledAgent>;
-      joined: ActorJoins | undefined;
-      nameOf: (actorId: string) => string | undefined;
-    } = {
-      roster: opening,
-      joined: undefined,
-      nameOf: (id) => known.get(id),
-    };
-    {
-      const first = await ctx.client.snapshot(p.id).catch(() => null);
-      policyState.joined = first?.joined;
-      if (first) policyState.nameOf = nameResolver(first);
-    }
-    const policyOf = (record: EnrolledAgent): RcPolicy =>
-      answerPolicy(rulesOf(record.rules), keeping, record.writtenBy?.id, policyState.joined);
-    const policyLine = (record: EnrolledAgent): string =>
-      policyWords(policyOf(record), (id) => known.get(id) ?? policyState.nameOf(id), owner.id, policyState.joined) ??
-      "listens to everyone";
-    /** Said once per agent per change, so a gate someone else wrote is never
-     * silently set aside. */
-    const setAsideSaid = new Set<string>();
-    const sayPolicy = (record: EnrolledAgent): void => {
-      const key = `${record.actor.id} ${record.writtenBy?.id ?? ""} ${JSON.stringify(rulesOf(record.rules).listen ?? null)}`;
-      if (setAsideSaid.has(key)) return;
-      setAsideSaid.add(key);
-      if (gateSetAside(rulesOf(record.rules), keeping, record.writtenBy?.id, policyState.joined)) {
-        console.log(
-          rcLine(
-            tag,
-            `${record.actor.name}'s gate was last written by ${record.writtenBy?.name ?? "somebody else"}, not you — ` +
-              `answering only you until you say otherwise: isocan rc listen ${record.actor.name} --to <names|everyone>`,
-          ),
-        );
-      }
-    };
-    /** Turned-away asks already answered in words — by thread, speaker and
-     * agent, so a person asking twice is told once. The thread itself is
-     * checked too, so a restarted rc does not say it again. */
-    const turnedAwaySaid = new Set<string>();
-    /**
-     * The parked rc announces itself: a presence session of kind "rc" —
-     * rendered nowhere (no cursor, no face, no roster row), it exists so the
-     * add-agent dialog can say "an rc is parked here" instead of guessing.
-     * TTL retires it if this process dies rudely; the heartbeat below keeps
-     * it alive while parked. This is a convenience signal, NOT the
-     * "answerable" truth — that is phase 6's, connection-bound.
-     */
-    const announced = await ctx.client
-      .createSession(p.id, ctx.actor, undefined, undefined, "rc")
-      .catch(() => null);
-    shared.standDowns.push(async () => {
-      if (announced) await ctx.client.endSession(p.id, announced.sessionId).catch(() => {});
-    });
-    // Quiet at start, the way `claude rc` is — but never mute about WHERE.
-    // The first real user's first stumble was exactly this: a title with no
-    // address is a place you cannot get to. Two lines: where this is, and
-    // what happens next (with the door named when the roster is empty — a
-    // how-to-add is not a roster listing). Names stay unlisted; `isocan
-    // who` is where rosters are read.
-    const origin = (await ctx.homeOf(p.id).catch(() => null)) ?? ctx.client.base;
-    console.log(rcLine(tag, `answering on "${p.title}" — ${canvasUrl(origin, p.id)}`));
-    const enrolledCount = Object.keys(opening).length;
-    console.log(
-      rcLine(
-        tag,
-        enrolledCount === 0
-          ? "nobody is enrolled yet — Add an agent in the tray at that address; this rc picks it up without a restart"
-          : `${enrolledCount} ${enrolledCount === 1 ? "agent" : "agents"} enrolled (\`isocan who\` names them) — quiet until something arrives (Ctrl-C stops answering)`,
-      ),
-    );
-    /**
-     * Whose word wakes them, said at start and grouped — the one place the
-     * person who pays is guaranteed to look, and the line that tells somebody
-     * upgrading past 11 Sep that their agents now answer them alone. Names
-     * are listed here, unlike the roster, because this is a consent fact and
-     * a count would hide whose it is.
-     */
-    if (enrolledCount > 0) {
-      const byWords = new Map<string, string[]>();
-      for (const record of Object.values(opening)) {
-        const words = policyLine(record);
-        byWords.set(words, [...(byWords.get(words) ?? []), record.actor.name]);
-        sayPolicy(record);
-      }
-      for (const [words, names] of byWords) {
-        const narrowed = words !== "listens to everyone";
-        console.log(
-          rcLine(
-            tag,
-            `${names.join(", ")} ${names.length === 1 ? words : words.replace(/^listens/, "listen")}` +
-              (narrowed ? " — `isocan rc listen <name> --to <names|everyone>` widens one" : ""),
-          ),
-        );
-      }
-    }
-    // An agent on the sheep harness runs somewhere else, and where is the
-    // one thing the person cannot see from here: said once, at start, as
-    // the home the row carries or the kennel would name — or why it can't.
-    const sheepOnPath = await onPath("sheep", process.env);
-    for (const row of await readRcAgents(ctx.home)) {
-      if (row.canvasId !== p.id || row.harness !== SHEEP_HARNESS || !opening[row.actorId]) continue;
-      const place = row.sheep ?? sheepPlaceFor(row.cwd);
-      console.log(
-        rcLine(
-          tag,
-          !sheepOnPath
-            ? `${noSheepLine(row.name)} — answering for everyone else`
-            : place
-              ? `${row.name}'s sheep ${row.sheep ? "live" : "will live"} at ${placeLine(place)}`
-              : `${row.name} names sheep, and the kennel for ${row.cwd} names no home — \`sheep home local\` or \`sheep home join <address>\` there`,
-        ),
-      );
-    }
-
-    /**
-     * **Dispatch** (phase 4). One quiet connection, fanned out: the rc holds
-     * a phase-1 cursor row per enrolled agent (adopting it — a plain `wait`
-     * park as the same actor is displaced, per the phase-1 door), reads the
-     * log once per lap from the earliest of them, and applies core's
-     * `dispatchReason` per agent — the same composition `wait` imports, so
-     * the park and the dispatcher cannot drift. A summons carries every
-     * pending matched entry; ops landing mid-turn sit behind the cursor and
-     * become the next summons when the turn completes. The rc sees
-     * `end_turn` directly, so completion is an explicit advance, not the
-     * park's inferred evidence.
-     */
-    interface AgentDispatch {
-      parkId: string;
-      cursor: number;
-      redeliverUpTo: number | null;
-      /** Matched entries awaiting a turn, in log order. */
-      pending: WatchedLogEntry[];
-      scannedTip: number;
-      busy: boolean;
-      /** After a failed turn: hold the pending batch until this passes —
-       * a broken adapter must not hot-loop; the thread already carries the
-       * refusal (phase 5). */
-      retryAfter: number;
-      /** The ceiling's memory and the cycle guard's count — per AGENT, not
-       * per room (phase 2): the same object every room holding this agent
-       * hands to `gateTurn`, so six canvases are not six budgets. */
-      guard: GuardState;
-    }
-    const guardFor = (actorId: string): GuardState => {
-      let guard = shared.guards.get(actorId);
-      if (!guard) {
-        guard = { turnTimes: [], agentChain: 0, held: null };
-        shared.guards.set(actorId, guard);
-      }
-      return guard;
-    };
-    /** The limits (phase 5): a ceiling on turns per agent per hour, and a
-     * bound on agent-to-agent chains. `config.json`'s `rcLimits` hook
-     * overrides either. */
-    const limitsConfig = await readConfigFile<{
-      rcLimits?: { turnsPerHour?: number; agentChain?: number };
-    }>(ctx.home);
-    const TURNS_PER_HOUR = limitsConfig.rcLimits?.turnsPerHour ?? 12;
-    const AGENT_CHAIN = limitsConfig.rcLimits?.agentChain ?? 3;
-    /** The system voice, into the thread where the person is looking —
-     * journey 5's acceptance. Never authored as the agent (words in a dead
-     * agent's mouth) and never as the person (sentences no person wrote). */
-    const sayInThread = async (threadId: string | null, body: string): Promise<void> => {
-      if (!threadId) return;
-      await ctx.client
-        .sendOp(p.id, SYSTEM_ACTOR, {
-          type: "thread.reply",
-          threadId,
-          comment: { id: newId("cmt"), body },
-        })
-        .catch(() => {});
-    };
-    const threadOf = (entries: WatchedLogEntry[]): string | null => {
-      const comment = entries.find(
-        (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
-      );
-      return comment ? (comment.envelope.op as { threadId: string }).threadId : null;
-    };
-    /** Whether this agent's standing here is gone, read from the home rather
-     * than from this process's dispatch table: the withdraw op and the turn
-     * it stopped reach this rc in either order. */
-    const withdrawnHere = async (actorId: string): Promise<boolean> => {
-      const snapshot = await ctx.client.snapshot(p.id).catch(() => null);
-      return snapshot !== null && !snapshot.canvas.agents?.[actorId];
-    };
-    const dispatches = new Map<string, AgentDispatch>();
-    // Where each standing began — the floor for a cursor row that does not
-    // exist yet (a web add with no rc parked, and nothing to claim it since).
-    // One log read at start; the enrol verb and the live enroll event carry
-    // their own seqs.
-    const enrolSeqs = new Map<string, number>();
-    for (const entry of await ctx.client.getLog(p.id, 0)) {
-      if (entry.envelope.op.type === "agent.enroll") {
-        enrolSeqs.set(entry.envelope.op.agent.id, entry.seq);
-      }
-    }
-    const claimAgent = async (actorId: string, seedAt?: number): Promise<void> => {
-      if (dispatches.has(actorId)) return;
-      try {
-        const floor = seedAt ?? enrolSeqs.get(actorId);
-        const claim = await ctx.client.parkClaim({
-          canvasId: p.id,
-          actorId,
-          ...(floor !== undefined ? { seedAt: floor } : {}),
-        });
-        dispatches.set(actorId, {
-          parkId: claim.parkId,
-          cursor: claim.cursor,
-          redeliverUpTo: claim.redeliverUpTo,
-          pending: [],
-          scannedTip: claim.cursor,
-          busy: false,
-          retryAfter: 0,
-          guard: guardFor(actorId),
-        });
-      } catch (err) {
-        console.log(rcLine(tag, `could not hold ${known.get(actorId) ?? actorId}'s cursor — ${(err as Error).message}`));
-      }
-    };
-    for (const actorId of Object.keys(opening)) await claimAgent(actorId);
-
-    /**
-     * **The connection IS the fact** (phase 6). This hold, re-issued
-     * back-to-back forever, is what makes the roster's `answerable` true:
-     * the daemon counts these agents answerable exactly while a hold is
-     * open, and a dead rc's socket closes instantly — no window, no TTL
-     * lie, per journey 7. Ten-second holds so a fresh enrolment joins the
-     * claim within seconds; the microsecond gap between holds can only err
-     * toward "not answerable", the permitted direction.
-     */
+  /**
+   * **The auto-upgrade window, restored** (the design's open question,
+   * settled at on-demand phase 4's door): `considerUpgrade` lost its park when
+   * summoned sessions stopped parking — but the rc IS the parked process
+   * now, and its quiet laps are the idle point. Same machinery as `wait`'s:
+   * concurrent, never blocking the poll. Considered as each lap's poll goes
+   * out (`routes` below), and one upgrade per PROCESS, not per room: the
+   * state is shared, so six rooms' quiet laps are one consideration.
+   */
+  const install = await whichInstall(path.resolve(myRoot()), ctx.home);
+  const parkedOn = shaOfRoot(ctx.home, myRoot());
+  const considerUpgrade = () => {
+    const state = shared.upgrade;
+    if (state.upgrading || state.upgraded) return;
+    state.upgrading = true;
     void (async () => {
-      for (;;) {
-        try {
-          const actorIds = [...dispatches.keys()];
-          // The policy rides the hold (owner-only summons): the web and
-          // `isocan who` read whose word this rc takes from the same value
-          // dispatch applies, so the two cannot differ.
-          const policies: Record<string, RcPolicy> = {};
-          for (const actorId of actorIds) {
-            const record = policyState.roster[actorId];
-            if (record) policies[actorId] = policyOf(record);
+      const health = await ctx.client.healthz().catch(() => null);
+      state.upgraded = await autoUpgrade({
+        home: ctx.home,
+        install,
+        health,
+        spec: INSTALL_SPEC,
+        ...(parkedOn ? { protect: [parkedOn] } : {}),
+      });
+      if (state.upgraded) print(`${state.upgraded}`);
+    })()
+      .catch(() => {})
+      .finally(() => {
+        state.upgrading = false;
+      });
+  };
+  /**
+   * **The daemon restart.** The room retries a poll that lost its
+   * connection; on this machine the daemon it lost is one we can start, so a
+   * lap's poll that fails without an answer starts it — once at a time, in
+   * the background, while the room says so and retries.
+   */
+  let restarting: Promise<void> | null = null;
+  const restart = () => {
+    restarting ??= ctx.client
+      .ensureDaemon()
+      .catch(() => {})
+      .finally(() => {
+        restarting = null;
+      });
+  };
+  const routes = new Proxy(ctx.client, {
+    get(target, prop) {
+      if (prop === "watchLog") {
+        return async (request: import("@isocan/core").WatchLogRequest, signal?: AbortSignal) => {
+          if (request.cursors) considerUpgrade();
+          try {
+            return await target.watchLog(request, signal);
+          } catch (err) {
+            if (!(err instanceof ApiError) && !signal?.aborted) restart();
+            throw err;
           }
-          const held = await ctx.client.rcHold({
-            canvasId: p.id,
-            actorIds,
-            waitMs: 10_000,
-            owner,
-            policies,
-          });
-          /**
-           * **The handshake's last hop** (agent-custody mechanism 2): the Web
-           * UI's "add an agent" arrives inside the hold, and THIS process —
-           * the one that will answer for the agent — makes the same moves
-           * `isocan agent add` makes, so the actor is born first-claim on
-           * this machine's badge and the relayed face vouches. The web
-           * dialog watches for the enroll op to land; a refusal here (a name
-           * already worn) is narrated where the rc's person is looking and
-           * surfaces at the dialog as its countdown running out.
-           */
-          for (const ask of held.asks ?? []) {
-            // Adding an agent to this machine is its owner's gesture. The
-            // home already routes only the owner's asks here; this is the
-            // same rule held where the machine is, for a home too old to.
-            if (!ownersWord(keeping, ask.from.id, policyState.joined)) {
-              console.log(
-                rcLine(tag, `${ask.from.name} asked from the canvas to add ${ask.name} — this rc takes that only from you; nothing enrolled`),
-              );
-              continue;
-            }
-            const via = ask.template ? ` from the template ${ask.template}` : "";
-            console.log(rcLine(tag, `${ask.from.name} asked from the canvas to add ${ask.name}${via} — enrolling here`));
-            try {
-              // A template ask (proposed: `templates`) prepares the agent's
-              // directory first — a module loaded HERE answers to the id or
-              // the ask is refused by name — and that directory is the cwd.
-              const prepared = ask.template
-                ? await prepareFromTemplate(ctx.home, p.id, ask.name, ask.template, ask.args ?? {})
-                : null;
-              await mintAndEnrol(ctx, p.id, ask.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null });
-            } catch (err) {
-              console.log(rcLine(tag, `could not enrol ${ask.name} — ${(err as Error).message}`));
-            }
-          }
-        } catch {
-          await new Promise((r) => setTimeout(r, 400));
-        }
-      }
-    })();
-
-
-    /**
-     * **The auto-upgrade window, restored** (the design's open question,
-     * settled at phase 4's door): `considerUpgrade` lost its park when
-     * summoned sessions stopped parking — but the rc IS the parked process
-     * now, and its quiet laps are the idle point. Same machinery as `wait`'s:
-     * concurrent, never blocking the poll.
-     */
-    const install = await whichInstall(path.resolve(myRoot()), ctx.home);
-    const parkedOn = shaOfRoot(ctx.home, myRoot());
-    // One upgrade per PROCESS, not per room: the state is shared, so six
-    // rooms' quiet laps are one consideration, not six installs.
-    const considerUpgrade = () => {
-      const state = shared.upgrade;
-      if (state.upgrading || state.upgraded) return;
-      state.upgrading = true;
-      void (async () => {
-        const health = await ctx.client.healthz().catch(() => null);
-        state.upgraded = await autoUpgrade({
-          home: ctx.home,
-          install,
-          health,
-          spec: INSTALL_SPEC,
-          ...(parkedOn ? { protect: [parkedOn] } : {}),
-        });
-        if (state.upgraded) console.log(rcLine(tag, `${state.upgraded}`));
-      })()
-        .catch(() => {})
-        .finally(() => {
-          state.upgrading = false;
-        });
-    };
-
-    /** One summoned turn: adapter up, session loaded-or-new, presence on
-     * while it runs and gone when it ends (journey 2's acceptance — the
-     * summoned equivalent of the park's `landPresence`). */
-    const runSummons = async (record: EnrolledAgent, dispatch: AgentDispatch): Promise<void> => {
-      const entries = dispatch.pending.splice(0);
-      const tip = dispatch.scannedTip;
-      try {
-        await runSummonsInner(record, dispatch, entries, tip);
-      } catch (err) {
-        // The batch goes back on the shelf: in-process it retries after the
-        // pause below; across a crash the un-advanced cursor row redelivers
-        // it marked. Either way nothing is silently dropped.
-        dispatch.pending.unshift(...entries);
-        throw err;
-      }
-    };
-
-    const runSummonsInner = async (
-      record: EnrolledAgent,
-      dispatch: AgentDispatch,
-      entries: WatchedLogEntry[],
-      tip: number,
-    ): Promise<void> => {
-      const flagged =
-        dispatch.redeliverUpTo === null
-          ? entries
-          : entries.map((e) => (e.seq <= dispatch.redeliverUpTo! ? { ...e, redelivered: true } : e));
-      dispatch.redeliverUpTo = null;
-      const summoned = flagged.some(
-        (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
-      );
-      const reason = summoned ? "summons" : "change";
-      const from = flagged[0]?.envelope.actor.name ?? "someone";
-      // Whose word this turn carries, recorded before anything it writes can
-      // land — what the gate reads when this agent's replies reach a sibling
-      // that listens only to its owner (owner-only summons).
-      shared.origins.set(
-        record.actor.id,
-        speakersFor(
-          flagged.map((e) => e.envelope.actor.id),
-          (id) => shared.origins.get(id),
-        ),
-      );
-      console.log(
-        rcLine(
-          tag,
-          `${record.actor.name} · ${reason} from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"} — starting a session`,
-        ),
-      );
-      try {
-        await ctx.client.parkDelivered({
-          canvasId: p.id,
-          actorId: record.actor.id,
-          parkId: dispatch.parkId,
-          tip,
-        });
-      } catch (err) {
-        if (err instanceof ApiError && err.code === PARK_ADOPTED_CODE) {
-          console.log(rcLine(tag, `another park adopted ${record.actor.name}'s cursor — standing down for it`));
-          dispatches.delete(record.actor.id);
-          return;
-        }
-        throw err;
-      }
-      const row =
-        (await readRcAgents(ctx.home)).find(
-          (r) => r.canvasId === p.id && r.actorId === record.actor.id,
-        ) ?? {
-          canvasId: p.id,
-          actorId: record.actor.id,
-          name: record.actor.name,
-          harness: null,
-          cwd: rcCwd,
-          sessionId: null,
         };
+      }
+      const value = Reflect.get(target, prop, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+
+  let sheepOnPath: boolean | undefined;
+  const room = runRoom({
+    routes,
+    canvas: p,
+    owner: ctx.actor,
+    origin,
+    cwd: rcCwd,
+    rows: fileRcRows(ctx.home),
+    adapterFor: async (row) => {
       const spec = await adapterFor(ctx.home, row.harness);
       if (!spec) {
         throw new Error(
           row.harness === null
-            ? `${record.actor.name} named no harness, and ${noDefaultLine(await scanHarnesses(ctx.home))}`
+            ? `${row.name} named no harness, and ${noDefaultLine(await scanHarnesses(ctx.home))}`
             : row.harness === SHEEP_HARNESS
-              ? noSheepLine(record.actor.name)
+              ? noSheepLine(row.name)
               : `no ACP adapter for harness "${row.harness}" — config.json's acpAdapters hook declares one`,
         );
       }
-      // The binding (phase 3): idempotent for CLI-added agents, the one
-      // rebinding a web-added one needs.
-      await ctx.client.claimActor({
-        type: "actor.claim",
-        sessionKey: enrolmentKey(record.actor.name),
-        as: record.actor.id,
-      });
-      // Presence: the summoned session is SEEN — it appears when the turn
-      // starts and fades when it ends, because the session ends, not a TTL.
-      const firstComment = flagged.find(
-        (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
-      );
-      const face = await ctx.client
-        .createSession(p.id, record.actor, undefined, spec.harness)
-        .catch(() => null);
-      // Where the summons points, so the face lands somewhere rather than
-      // floating unplaced: the summoning thread, or (a routed change) the
-      // first changed item. `working` is re-asserted on every beat below —
-      // it is what animates the cursor, and each applied op retires it.
-      const threadId = firstComment
-        ? (firstComment.envelope.op as { threadId: string }).threadId
+      return { harness: spec.harness, open: (turn) => openAdapter(ctx, p, shared, spec, row, turn) };
+    },
+    endSession: (row, narrate) => withdrawSheep(ctx, row, narrate),
+    // An agent on the sheep harness runs somewhere else, and where is the
+    // one thing the person cannot see from here: said once, at start, as
+    // the home the row carries or the kennel would name — or why it can't.
+    whereOf: async (row) => {
+      if (row.harness !== SHEEP_HARNESS) return null;
+      sheepOnPath ??= await onPath("sheep", process.env);
+      const place = row.sheep ?? sheepPlaceFor(row.cwd);
+      return !sheepOnPath
+        ? `${noSheepLine(row.name)} — answering for everyone else`
+        : place
+          ? `${row.name}'s sheep ${row.sheep ? "live" : "will live"} at ${placeLine(place)}`
+          : `${row.name} names sheep, and the kennel for ${row.cwd} names no home — \`sheep home local\` or \`sheep home join <address>\` there`;
+    },
+    enrol: async (ask) => {
+      // A template ask (proposed: `templates`) prepares the agent's
+      // directory first — a module loaded HERE answers to the id or the ask
+      // is refused by name — and that directory is the cwd.
+      const prepared = ask.template
+        ? await prepareFromTemplate(ctx.home, p.id, ask.name, ask.template, ask.args ?? {})
         : null;
-      const changedItemId = (flagged[0]?.envelope.op as { itemId?: string }).itemId ?? null;
-      let working: import("@isocan/core").PresenceActivity | null = null;
-      if (face) {
-        const snapshot = await ctx.client.snapshot(p.id).catch(() => null);
-        const thread = threadId ? snapshot?.canvas.threads[threadId] : undefined;
-        const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : undefined;
-        working = threadId
-          ? { kind: "working", threadId }
-          : item
-            ? { kind: "working", itemId: item.id }
-            : null;
-        await ctx.client
-          .updateSession(p.id, face.sessionId, {
-            status: threadId ? "reading your comment…" : "looking at what changed…",
-            statusSource: "lifecycle",
-            ...(working ? { activity: working } : {}),
-            ...(threadId ? { onThread: threadId } : {}),
-            ...(snapshot && thread ? { cursor: threadLocus(snapshot, thread) } : {}),
-            ...(item ? { cursor: itemCenter(item) } : {}),
-          })
-          .catch(() => {});
-        // The face's id goes into the actor's session pointer file — the
-        // loan that makes the agent's OWN CLI commands presence-visible
-        // inside the turn: `narrate` finds a session and speaks, and every
-        // op carries a clientId, so the cursor traces the real work. This
-        // is the same wiring `session start` does for a direct agent; a
-        // summoned one just has it done for it. Taken back in the finally
-        // below: a dangling pointer would have the actor's NEXT direct
-        // command revive a face nobody ended.
-        const before = await readSessionFile(ctx.home, record.actor.id);
-        if (before && !(before.canvasId === p.id && before.sessionId === face.sessionId)) {
-          await ctx.client.endSession(before.canvasId, before.sessionId).catch(() => {});
-        }
-        await writeSessionFile(ctx.home, record.actor.id, {
-          canvasId: p.id,
-          sessionId: face.sessionId,
-          ...(threadId ? { onThread: threadId, onThreadAt: new Date().toISOString() } : {}),
-        }).catch(() => {});
-      }
-      const beat = (patch: import("@isocan/core").UpdateSessionRequest): void => {
-        if (!face) return;
-        void ctx.client
-          .updateSession(p.id, face.sessionId, { actor: record.actor, ...patch })
-          .catch(() => {});
-      };
-      // A turn's ceiling (10 min) outlives the presence TTL (5), so a face
-      // with no beats would be swept away mid-work — the "mostly idle" bug's
-      // silent half. The interval is the floor under everything else.
-      const heartbeat = setInterval(() => beat({}), 60_000);
-      heartbeat.unref?.();
-      // The fence, if the rc was started with one (`sandbox.ts`). The start
-      // was already refused if it could not be built here, so this cannot
-      // fail for want of `bwrap` at the doorbell.
-      const fence = await fenceSpec(ctx, spec, row, shared.sandbox, shared.codexSandbox);
-      console.log(rcLine(tag, `${record.actor.name} · ${spec.harness}${fenceNote(fence)}`));
-      const agent =
-        spec.harness === SHEEP_HARNESS
-          ? await SheepAgent.spawn(spec, {
-              name: record.actor.name,
-              cwd: row.cwd,
-              stored: row.sheep ?? null,
-              narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
-              birth: await sheepBirth(ctx, p, record.actor.id),
-            })
-          : await AcpAgentProcess.spawn(fence.spec, {
-              cwd: row.cwd,
-              env: adapterEnv(p.id, record.actor.name, { pass: await passedEnv(ctx.home) }),
-              narrate: (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
-            });
-      try {
-        // One session handle per AGENT (phase 2): a summons on any canvas
-        // resumes the same conversation — this row's handle, else the one
-        // another room minted for the same actor — and `ISOCAN_CANVAS` in
-        // the adapter's environment says which canvas is asking this time.
-        const session = await agent.ensureSession(row.cwd, row.sessionId ?? shared.sessionIds.get(record.actor.id) ?? null);
-        shared.sessionIds.set(record.actor.id, session.sessionId);
-        const recorded = await setRcSessionId(
-          ctx.home,
-          p.id,
-          record.actor.id,
-          session.sessionId,
-          agent instanceof SheepAgent ? agent.place : undefined,
-          bornPassOf(agent, p.id),
-        );
-        /**
-         * **Withdrawn while its sheep was being found or born** (sheep-harness
-         * phase 2). The row is gone, so whoever reaped it ended the sheep the
-         * row named — if it named one. A sheep this summons birthed, or
-         * found in the herd under another id, is known only here, and ending
-         * it is this summons's job; then there is no turn to run.
-         */
-        if (!recorded && agent instanceof SheepAgent && (await withdrawnHere(record.actor.id))) {
-          shared.sessionIds.delete(record.actor.id);
-          console.log(rcLine(tag, `${record.actor.name} · withdrawn before its turn — no turn runs`));
-          if (session.sessionId !== row.sessionId) {
-            const born = bornPassOf(agent, p.id);
-            const { cellPass: _stale, ...rest } = row;
-            await withdrawSheep(
-              ctx,
-              { ...rest, harness: SHEEP_HARNESS, sessionId: session.sessionId, sheep: agent.place, ...(born ? { cellPass: born } : {}) },
-              (line) => console.log(rcLine(tag, `${record.actor.name} · ${line}`)),
-            );
-          }
-          return;
-        }
-        const where = agent instanceof SheepAgent ? `at ${describePlace(agent.place)}` : `in ${row.cwd}`;
-        console.log(rcLine(tag, `${record.actor.name} · session ${session.resumed ? "resumed" : "started"} ${where}`));
-        // The event stream the adapter is already sending, spent on the face:
-        // each tool call becomes an inferred status (so it never displaces
-        // anything the agent said with `--say`) and re-asserts `working`.
-        // Throttled — a busy turn fires tools faster than a status is worth
-        // repainting.
-        let lastToolBeat = 0;
-        const turn = await agent.prompt(
-          session.sessionId,
-          summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }),
-          (event) => {
-            if (event.kind === "permission") console.log(rcLine(tag, `${record.actor.name} · permission ${event.detail}`));
-            if (event.kind === "tool" && event.detail && Date.now() - lastToolBeat >= 2_000) {
-              lastToolBeat = Date.now();
-              const title = event.detail.length > 80 ? `${event.detail.slice(0, 79)}…` : event.detail;
-              beat({
-                status: title,
-                statusSource: "inferred",
-                ...(working ? { activity: working } : {}),
-              });
-            }
-          },
-        );
-        /**
-         * **A turn stopped by withdrawal is not a failed turn** (sheep-harness
-         * phase 2). Ending a sheep aborts its running turn, so `sheep attach`
-         * exits non-zero under a summons whose agent is already gone. An ACP
-         * turn runs on to its own end when its agent is withdrawn; a sheep's
-         * is stopped, and it is said as that: no failure, no system voice in
-         * the thread, nothing held for a retry. A home too old to end a sheep
-         * gets `sheep abort`, and an aborted turn exits cleanly — so a
-         * dispatch the withdraw branch already dropped says the same, whatever
-         * the stop reason (walked on such a station, 11 Sep 2026).
-         */
-        if (
-          !dispatches.has(record.actor.id) ||
-          (turn.stopReason !== "end_turn" && (await withdrawnHere(record.actor.id)))
-        ) {
-          console.log(rcLine(tag, `${record.actor.name} · turn stopped — ${record.actor.name} was withdrawn`));
-          return;
-        }
-        console.log(rcLine(tag, `${record.actor.name} · turn ended — ${turn.stopReason}`));
-        // Completion, explicitly: the rc SAW the turn end, so the cursor
-        // advances now rather than waiting for the park's inferred evidence.
-        await ctx.client
-          .parkAdvance({ canvasId: p.id, actorId: record.actor.id, parkId: dispatch.parkId, to: tip })
-          .then(() => {
-            dispatch.cursor = tip;
-          })
-          .catch(() => {});
-      } finally {
-        clearInterval(heartbeat);
-        agent.close();
-        // The loan comes back: whatever session the pointer names on this
-        // canvas ends with the turn (the CLI inside may have revived an
-        // expired face under a NEW id — end that one too, not just ours),
-        // and the pointer itself is removed so nothing dangles.
-        const left = await readSessionFile(ctx.home, record.actor.id);
-        if (left && left.canvasId === p.id) {
-          if (face && left.sessionId !== face.sessionId) {
-            await ctx.client.endSession(p.id, left.sessionId).catch(() => {});
-          }
-          await writeSessionFile(ctx.home, record.actor.id, null).catch(() => {});
-        }
-        if (face) await ctx.client.endSession(p.id, face.sessionId).catch(() => {});
-      }
-    };
+      await mintAndEnrol(ctx, p.id, ask.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null });
+    },
+    narrate: print,
+    state: shared.state,
+    limits: {
+      turnsPerHour: limitsConfig.rcLimits?.turnsPerHour ?? 12,
+      agentChain: limitsConfig.rcLimits?.agentChain ?? 3,
+    },
+    clock: { now: () => Date.now() },
+    sleep: (ms, signal) =>
+      new Promise<void>((resolve) => {
+        if (signal.aborted) return resolve();
+        const done = () => {
+          clearTimeout(timer);
+          signal.removeEventListener("abort", done);
+          resolve();
+        };
+        const timer = setTimeout(done, ms);
+        signal.addEventListener("abort", done, { once: true });
+      }),
+  });
+  shared.standDowns.push(() => room.stop());
+  await room.done;
+  return new Promise<never>(() => {});
+}
 
-    let cursors: Record<string, number> = { [p.id]: 0 };
-    const lapFrom = () => {
-      // One shared read from the earliest cursor any agent still needs;
-      // narration (enrolments, withdrawals) keys off startTip below so old
-      // history is never re-told.
-      let from = startTip;
-      for (const d of dispatches.values()) if (d.scannedTip < from) from = d.scannedTip;
-      return from;
-    };
-    /** Anybody the roster names that this rc is not answering for: adopted
-     * and claimed, the same two things the enrol branch below does. Run on
-     * every lap that reads a roster, and once at start (below). */
-    const takeUp = async (roster: Record<string, import("@isocan/core").EnrolledAgent>): Promise<void> => {
-      for (const record of Object.values(roster)) {
-        if (dispatches.has(record.actor.id)) continue;
-        /**
-         * The SAME two things the enrol branch below does, and the first
-         * version of this did only one of them.
-         *
-         * Claiming a cursor makes the rc dispatch to the agent; `adoptRcAgent`
-         * records where and how it runs. An agent picked up here without the
-         * adoption has a cursor and no record — which is why the test watching
-         * for "· where and how supplied" kept timing out with the fix in
-         * place, and it was right to: the line is missing because the RECORD
-         * is missing, not because the narration is.
-         */
-        const adopted = await adoptRcAgent(ctx.home, {
-          canvasId: p.id,
-          actorId: record.actor.id,
-          name: record.actor.name,
-          harness: null,
-          cwd: rcCwd,
-          sessionId: null,
-        });
-        if (adopted) console.log(rcLine(tag, `${record.actor.name} · where and how supplied — ${rcCwd}`));
-        await claimAgent(record.actor.id);
-      }
-    };
-    const startTip = (await ctx.client.watchLog({ only: [p.id] })).cursors[p.id] ?? 0;
-    /**
-     * **The startup window, closed from both sides** (sheep-harness phase 2).
-     * `opening` was read before this tip, and the enrol and withdraw branches
-     * below only read ops above it, so an enrolment or a withdrawal landing
-     * between the two was seen by neither. A withdrawal left its row, and
-     * for an agent on the sheep harness its sheep. An enrolment waited for
-     * the first lap that read a roster, which on a quiet canvas is the end
-     * of a thirty-second poll: `rc.test.ts`'s "a web add gets its rc half"
-     * failed on CI twice in three runs of phase 2's commit on exactly that.
-     * The roster read now includes both, so it is reaped and taken up here.
-     */
-    const settled = await rosterOf();
-    policyState.roster = settled;
-    for (const [id, row] of Object.entries(settled)) known.set(id, row.actor.name);
-    await reap(settled, "as this rc started");
-    for (const actorId of [...dispatches.keys()]) if (!settled[actorId]) dispatches.delete(actorId);
-    await takeUp(settled);
-    cursors = { [p.id]: lapFrom() };
-    let lastRoster = settled;
-    let offlineSince: number | null = null;
-    for (;;) {
-      considerUpgrade();
-      let batch;
-      try {
-        // A held or busy agent must not wait a full poll window for its
-        // next chance: an op is not the only thing that changes the answer
-        // — a turn ending does too, and the log says nothing about that.
-        const eager = [...dispatches.values()].some((d) => d.busy || d.pending.length > 0);
-        batch = await ctx.client.watchLog({ cursors, waitMs: eager ? 2_000 : 30_000, only: [p.id] });
-        if (offlineSince !== null) {
-          console.log(rcLine(tag, `daemon back after ${Math.round((Date.now() - offlineSince) / 1000)}s — nothing missed`));
-          offlineSince = null;
-        }
-      } catch (err) {
-        // The same pause-not-end rule the park earned: a daemon restart
-        // severs the poll under a process that did nothing wrong.
-        if (err instanceof ApiError) throw err;
-        if (offlineSince === null) {
-          offlineSince = Date.now();
-          console.log(rcLine(tag, "the daemon stopped answering — retrying, and starting it if it is gone"));
-        }
-        await ctx.client.ensureDaemon().catch(() => {});
-        await new Promise((r) => setTimeout(r, 400));
-        continue;
-      }
-      cursors = batch.cursors;
-      // The announcement's heartbeat, every lap (≤30s against a 5-minute
-      // TTL) — and re-made when a daemon restart took the session with it.
-      if (announced) {
-        await ctx.client.updateSession(p.id, announced.sessionId, {}).catch(async () => {
-          const again = await ctx.client
-            .createSession(p.id, ctx.actor, undefined, undefined, "rc")
-            .catch(() => null);
-          if (again) announced.sessionId = again.sessionId;
-        });
-      }
-      const lapTip = batch.cursors[p.id] ?? 0;
-      /**
-       * **Also when we are answering for nobody** (7 Sep 2026).
-       *
-       * The roster is otherwise only re-read on a lap that carried entries,
-       * and that leaves the startup window unrecoverable. `opening` is read
-       * four hundred lines before `startTip`; an enrolment landing between
-       * them is absent from `opening` AND at or below the tip, so the
-       * long-poll delivers nothing for it — no entries, no snapshot, and
-       * `lastRoster` stays as the roster that never had them. The reconcile
-       * below then iterates a list that cannot contain the agent it is looking
-       * for, which is why the first attempt at this fix did not stop the
-       * failure it was written for.
-       *
-       * An rc with no dispatches is doing nothing else, so re-reading costs
-       * nothing where it matters, and "nobody is enrolled yet" is exactly the
-       * state that has to be able to heal itself — the line the rc prints
-       * promises it does.
-       */
-      const snapshot =
-        batch.entries.length > 0 || dispatches.size === 0 ? await ctx.client.snapshot(p.id) : null;
-      // The roster survives quiet laps. The instrumented CI failure that
-      // forced this: both agents mid-turn, both replies landing in ONE lap
-      // — consumed into pending — and every later lap empty, so a
-      // lap-scoped roster read as {} and the dispatch loop below skipped
-      // every agent forever. A quiet machine staggers the replies and
-      // never meets this; a loaded one meets it in one run out of four.
-      if (snapshot) {
-        lastRoster = snapshot.canvas.agents ?? {};
-        policyState.roster = lastRoster;
-        policyState.joined = snapshot.joined;
-        policyState.nameOf = nameResolver(snapshot);
-        for (const [id, row] of Object.entries(lastRoster)) known.set(id, row.actor.name);
-        // A word from somebody this rc does not know yet may be a new
-        // session on this very machine — its hands are read again first.
-        if (batch.entries.some((e) => !ownersWord(keeping, e.envelope.actor.id, snapshot.joined))) {
-          await refreshHands();
-        }
-      }
-      const roster = lastRoster;
-      /**
-       * **Anybody the roster names and nobody has claimed** (6 Sep 2026).
-       *
-       * `claimAgent` used to run in exactly two places: once at start for
-       * `opening`, and inside the `agent.enroll` branch below — which is
-       * guarded by `entry.seq > startTip`. Between reading `opening` (the
-       * roster) and computing `startTip` sit four hundred lines and several
-       * round trips to the daemon, so an enrolment landing in that window is
-       * in NEITHER set: absent from `opening`, and at or below `startTip` so
-       * the branch skips it. The roster read above then learns the agent's
-       * name and never claims a cursor for it, and the dispatch loop below
-       * skips every agent with no dispatch row — forever.
-       *
-       * The visible result is an rc that says *"answering on X"*, looks
-       * healthy, and silently never answers for that agent, while the line it
-       * printed promises *"this rc picks it up without a restart"*. It is the
-       * suspected cause of `rc.test.ts`'s "a web add gets its rc half from the
-       * parked rc" failing on CI three times, each on an unrelated commit and
-       * each passing locally — a loaded machine widens the window.
-       *
-       * Reconciling from the roster closes it whatever the ordering, because
-       * it asks the question that actually matters — *is anybody enrolled here
-       * that I am not answering for?* — rather than trying to catch every path
-       * by which they could have arrived. `claimAgent` returns early when a
-       * dispatch exists, so this costs nothing on a settled lap.
-       */
-      await takeUp(roster);
-      for (const entry of batch.entries) {
-        const op = entry.envelope.op;
-        const by = entry.envelope.actor;
-        if (op.type === "agent.enroll") {
-          known.set(op.agent.id, op.agent.name);
-          if (entry.seq > startTip) {
-            // Whose word wakes it, said with the enrolment — a gate changed
-            // by `rc listen` arrives as exactly this op.
-            const record = roster[op.agent.id];
-            console.log(
-              rcLine(
-                tag,
-                `${by.name} enrolled ${op.agent.name} — answerable here${record ? ` · ${policyLine(record)}` : ""}`,
-              ),
-            );
-            if (record) sayPolicy(record);
-            const adopted = await adoptRcAgent(ctx.home, {
-              canvasId: p.id,
-              actorId: op.agent.id,
-              name: op.agent.name,
-              harness: null,
-              cwd: rcCwd,
-              sessionId: null,
-            });
-            if (adopted) console.log(rcLine(tag, `${op.agent.name} · where and how supplied — ${rcCwd}`));
-            await claimAgent(op.agent.id, entry.seq);
-          }
-          continue;
-        }
-        if (op.type === "agent.withdraw" && entry.seq > startTip) {
-          const name = known.get(op.actorId) ?? op.actorId;
-          console.log(rcLine(tag, `${by.name} dismissed ${name} — no longer answering here`));
-          // Read before it is reaped: the row names the sheep to end. A verb
-          // on this machine may have reaped it first and ended the sheep
-          // itself; then there is nothing here to do.
-          const row = (await readRcAgents(ctx.home)).find((r) => r.canvasId === p.id && r.actorId === op.actorId);
-          await removeRcAgent(ctx.home, p.id, op.actorId);
-          dispatches.delete(op.actorId);
-          shared.sessionIds.delete(op.actorId);
-          await withdrawSheep(ctx, row, (line) => console.log(rcLine(tag, `${name} · ${line}`)));
-          continue;
-        }
-        // Route to every enrolled agent whose composition matches — the
-        // same `dispatchReason` a `wait` park applies.
-        for (const record of Object.values(roster)) {
-          const dispatch = dispatches.get(record.actor.id);
-          if (!dispatch || entry.seq <= dispatch.scannedTip) continue;
-          const joined = snapshot?.joined;
-          // An agent this rc runs speaks with the word of whoever started
-          // its turn (`shared.origins`), so a stranger turned away here is
-          // not let in one hop later by an open sibling's reply.
-          const carried = shared.origins.get(by.id);
-          const agent = {
-            actorId: record.actor.id,
-            names: [{ id: record.actor.id, name: record.actor.name }],
-            rules: rulesOf(record.rules),
-            policy: policyOf(record),
-            hands: keeping.hands,
-            ...(joined ? { joined } : {}),
-            ...(carried && carried.size > 0 ? { onBehalfOf: [...carried] } : {}),
-          };
-          const reason = dispatchReason(op, by.id, agent, snapshot?.canvas ?? null);
-          if (reason) {
-            dispatch.pending.push(entry);
-            continue;
-          }
-          /**
-           * **Turned away, in words** (owner-only summons). A mention the
-           * gate refused is answered in the thread by the system voice —
-           * never the agent's (it did not run) and never silence (the
-           * sheepdog design's first failure mode). Once per thread, asker
-           * and agent, and not again if the thread already says it: a
-           * restarted rc re-reading its backlog must not repeat itself.
-           * Nothing is pending, nothing counts against the ceiling, and
-           * nothing was spent.
-           */
-          if (turnedAway(op, by.id, agent) && (op.type === "thread.create" || op.type === "thread.reply")) {
-            const key = `${op.threadId} ${by.id} ${record.actor.id}`;
-            if (turnedAwaySaid.has(key)) continue;
-            turnedAwaySaid.add(key);
-            const nameOf = snapshot ? nameResolver(snapshot) : (id: string) => known.get(id);
-            // Through an agent, the asker is whoever that agent speaks for.
-            const askers = agent.onBehalfOf
-              ? agent.onBehalfOf.filter((id) => !mayWake(agent.policy, id, joined, keeping.hands)).map((id) => nameOf(id) ?? id)
-              : [by.name];
-            const asker = askers.join(",") || by.name;
-            // A grant that ran out refuses in the same words as a gate that
-            // never had one, plus the one clause that says which this is:
-            // "you were never let in" and "you were, until Tuesday" are
-            // different facts, and only the second has an obvious next move.
-            const askerIds = agent.onBehalfOf ?? [by.id];
-            const ran = askerIds
-              .map((id) => lapsedFor(agent.policy, id, joined))
-              .find((at) => at !== undefined);
-            const line = turnedAwayLine(record.actor.name, agent.policy, nameOf, asker, { lapsed: ran });
-            const already = snapshot?.canvas.threads[op.threadId]?.comments.some(
-              (c) => isSystemActor(c.author.id) && c.body === line,
-            );
-            const who = agent.onBehalfOf ? `${by.name}, for ${askers.join(" and ")},` : by.name;
-            console.log(rcLine(tag, `${record.actor.name} · ${who} asked; ${policyLine(record)} — said so in the thread, nothing started`));
-            if (!already) await sayInThread(op.threadId, line);
-          }
-        }
-      }
-      // Every agent has now been shown everything up to the lap tip — the
-      // evaluated watermark moves for busy agents too, or a long turn would
-      // re-read (and re-queue) the same entries every lap. The park ROW
-      // settles only for quiet, idle agents; a busy agent's row advances at
-      // its turn's end.
-      for (const [actorId, dispatch] of dispatches) {
-        const before = dispatch.scannedTip;
-        dispatch.scannedTip = Math.max(dispatch.scannedTip, lapTip);
-        if (!dispatch.busy && dispatch.pending.length === 0 && dispatch.scannedTip > before) {
-          await ctx.client
-            .parkAdvance({ canvasId: p.id, actorId, parkId: dispatch.parkId, to: dispatch.scannedTip })
-            .then(() => {
-              dispatch.cursor = dispatch.scannedTip;
-            })
-            .catch(() => {});
-        }
-      }
-      for (const [actorId, dispatch] of dispatches) {
-        if (dispatch.busy || dispatch.pending.length === 0) continue;
-        if (Date.now() < dispatch.retryAfter) continue;
-        const record = roster[actorId];
-        if (!record) continue;
-
-        /**
-         * **A limit and a reason** (phase 5). The decision is `gateTurn` in
-         * rc.ts — pure arithmetic, unit-tested there — and this loop only
-         * gathers the inputs and obeys: every hold leaves its trace where
-         * somebody is looking (the system voice in the thread, the same
-         * fact in the narration, once per hold), and nothing is dropped —
-         * a held batch stays pending and dispatches the moment the limit
-         * lifts.
-         */
-        const enrolledIds = new Set(Object.keys(roster));
-        const hasPersonWord = dispatch.pending.some(
-          (e) => !enrolledIds.has(e.envelope.actor.id) && !isSystemActor(e.envelope.actor.id),
-        );
-        const wasHeld = dispatch.guard.held !== null;
-        const verdict = gateTurn(
-          dispatch.guard,
-          hasPersonWord,
-          { turnsPerHour: TURNS_PER_HOUR, agentChain: AGENT_CHAIN },
-          Date.now(),
-        );
-        if (verdict.verdict === "hold-cycle") {
-          if (verdict.announce) {
-            const line = `${record.actor.name} paused after ${dispatch.guard.agentChain} agent-to-agent ${dispatch.guard.agentChain === 1 ? "turn" : "turns"} with no person in the conversation — a human word resumes it.`;
-            console.log(rcLine(tag, `${line}`));
-            await sayInThread(threadOf(dispatch.pending), line);
-          }
-          continue;
-        }
-        if (verdict.verdict === "hold-ceiling") {
-          dispatch.retryAfter = verdict.retryAfter;
-          if (verdict.announce) {
-            const line = `${record.actor.name} is at its ceiling — ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((verdict.freesAt - Date.now()) / 60_000))} min).`;
-            console.log(rcLine(tag, `${line}`));
-            await sayInThread(threadOf(dispatch.pending), line);
-          }
-          continue;
-        }
-        if (wasHeld) {
-          console.log(rcLine(tag, `${record.actor.name}'s hold lifted — dispatching what waited`));
-        }
-        const failedThread = threadOf(dispatch.pending);
-        dispatch.busy = true;
-        void runSummons(record, dispatch)
-          .catch(async (err) => {
-            // Withdrawn under the turn (ending a sheep stops its turn): not a
-            // failure, and nothing is held for a retry.
-            if (await withdrawnHere(actorId)) {
-              dispatch.pending.length = 0;
-              console.log(rcLine(tag, `${record.actor.name} · turn stopped — ${record.actor.name} was withdrawn`));
-              return;
-            }
-            // Silence surfaced (journey 5): the failure reaches the thread
-            // it failed FOR, in the system voice — never as the agent, which
-            // never ran, and never silently. The batch is not advanced; a
-            // minute's pause keeps a broken adapter off a hot loop.
-            const why = (err as Error).message;
-            console.log(rcLine(tag, `${record.actor.name} · turn FAILED — ${why} (retrying in 60s)`));
-            await sayInThread(
-              failedThread,
-              `${record.actor.name} couldn't answer — ${why}. The summons is held and will be retried; \`isocan rc\`'s log has the detail.`,
-            );
-            dispatch.retryAfter = Date.now() + 60_000;
-          })
-          .finally(() => {
-            dispatch.busy = false;
-          });
-      }
+/**
+ * **One turn's adapter, on this machine**: the session pointer loaned, the
+ * fence applied, and the spawn — the laptop's half of `RoomHarness.open`.
+ */
+async function openAdapter(
+  ctx: Ctx,
+  p: Canvas,
+  shared: RcShared,
+  spec: AdapterSpec,
+  row: RcAgentRow,
+  turn: RoomTurn,
+): Promise<RoomAdapter> {
+  const actorId = row.actorId;
+  if (turn.face) {
+    // The face's id goes into the actor's session pointer file — the
+    // loan that makes the agent's OWN CLI commands presence-visible
+    // inside the turn: `narrate` finds a session and speaks, and every
+    // op carries a clientId, so the cursor traces the real work. This
+    // is the same wiring `session start` does for a direct agent; a
+    // summoned one just has it done for it. Taken back in `close` below:
+    // a dangling pointer would have the actor's NEXT direct command
+    // revive a face nobody ended.
+    const before = await readSessionFile(ctx.home, actorId);
+    if (before && !(before.canvasId === p.id && before.sessionId === turn.face)) {
+      await ctx.client.endSession(before.canvasId, before.sessionId).catch(() => {});
     }
+    await writeSessionFile(ctx.home, actorId, {
+      canvasId: p.id,
+      sessionId: turn.face,
+      ...(turn.threadId ? { onThread: turn.threadId, onThreadAt: new Date().toISOString() } : {}),
+    }).catch(() => {});
+  }
+  // The fence, if the rc was started with one (`sandbox.ts`). The start
+  // was already refused if it could not be built here, so this cannot
+  // fail for want of `bwrap` at the doorbell.
+  const fence = await fenceSpec(ctx, spec, row, shared.sandbox, shared.codexSandbox);
+  turn.narrate(`${spec.harness}${fenceNote(fence)}`);
+  const agent =
+    spec.harness === SHEEP_HARNESS
+      ? await SheepAgent.spawn(spec, {
+          name: row.name,
+          cwd: row.cwd,
+          stored: row.sheep ?? null,
+          narrate: turn.narrate,
+          birth: await sheepBirth(ctx, p, actorId),
+        })
+      : await AcpAgentProcess.spawn(fence.spec, {
+          cwd: row.cwd,
+          env: adapterEnv(p.id, row.name, { pass: await passedEnv(ctx.home) }),
+          narrate: turn.narrate,
+        });
+  return {
+    ensureSession: (cwd, stored) => agent.ensureSession(cwd, stored),
+    prompt: (sessionId, text, onEvent) => agent.prompt(sessionId, text, onEvent),
+    get place() {
+      return agent instanceof SheepAgent ? agent.place : undefined;
+    },
+    get where() {
+      return agent instanceof SheepAgent ? `at ${describePlace(agent.place)}` : undefined;
+    },
+    get bornPass() {
+      return agent instanceof SheepAgent ? agent.bornPass : undefined;
+    },
+    close: async () => {
+      agent.close();
+      // The loan comes back: whatever session the pointer names on this
+      // canvas ends with the turn (the CLI inside may have revived an
+      // expired face under a NEW id — end that one too, not just ours),
+      // and the pointer itself is removed so nothing dangles.
+      const left = await readSessionFile(ctx.home, actorId);
+      if (left && left.canvasId === p.id) {
+        if (turn.face && left.sessionId !== turn.face) {
+          await ctx.client.endSession(p.id, left.sessionId).catch(() => {});
+        }
+        await writeSessionFile(ctx.home, actorId, null).catch(() => {});
+      }
+    },
+  };
 }
 
 program

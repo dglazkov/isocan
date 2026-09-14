@@ -5,6 +5,7 @@ import path from "node:path";
 import { contextContentPage, resolveContextOperation } from "@isocan/core";
 import { CanvasHandle } from "../src/connect.ts";
 import type { Ctx } from "../src/ctx.ts";
+import { fileBadgeStore } from "@isocan/server";
 import { DaemonRoutes } from "../src/routes.ts";
 import { readContextItem } from "../src/canvas-context.ts";
 import { groupFixture } from "./group-fixture.ts";
@@ -79,7 +80,7 @@ describe("saved version transport and bounded byte pages", () => {
     const manifest = (await handle.say("Review", { in: group })).context!;
     const page = contextContentPage(manifest, { offset: 1, limit: 1 });
     const home = await mkdtemp(path.join(os.tmpdir(), "isocan-context-transport-")); homes.push(home);
-    const client = new DaemonRoutes("https://acme.invalid", home);
+    const client = new DaemonRoutes("https://acme.invalid", fileBadgeStore(home, "https://acme.invalid"));
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(manifest)).mockResolvedValueOnce(Response.json(page)).mockResolvedValueOnce(Response.json({ error: "Acme access ended", code: "canvas-access-ended", reason: "revoked" }, { status }));
     vi.stubGlobal("fetch", fetcher);
     const read = readContextItem(client, manifest.canvasId, "thr_saved", "cmt_saved", card.id);

@@ -1,3 +1,4 @@
+import type { SourceRequestContext } from "../../core/src/index.js";
 import { DaemonRoutes } from "./routes.js";
 /**
  * **The Node-only half of the client** — how a daemon comes to exist on this
@@ -8,6 +9,10 @@ import { DaemonRoutes } from "./routes.js";
  * and nothing in `DaemonRoutes` may.
  */
 export declare class DaemonClient extends DaemonRoutes {
+    /** The client home directory: where this machine's badge, daemon log and
+     * managed builds live. The route surface takes the badge store alone. */
+    readonly home: string;
+    constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext);
     /**
      * The Node half's one addition to how a request is MADE, rather than to
      * what is in it: on this machine, a bounded connect and a bounded retry;

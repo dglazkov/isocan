@@ -24,11 +24,6 @@ import type { EndReach } from "./ended.js";
  * and the hosted home are the same code. `__Host-isocan_badge` is the hosted
  * home's tightening, in phase 5, where the daemon knows it is HTTPS-only. */
 export declare const BADGE_COOKIE = "isocan_badge";
-/** Daemons and CLIs carry it as an ordinary bearer token. Bearer WINS over
- * cookie when both arrive: an explicit credential beats an ambient one, and a
- * request carrying a bearer is by construction not a cookie-driven request,
- * so it needs no Origin check. */
-export declare const BADGE_SCHEME = "Bearer";
 /** Which carrier a caller is asking the door for. Stated, never sniffed:
  * `Origin` presence and `Sec-Fetch-Mode` are guessable and wrong at the
  * edges, and one field in a body is honest and costs nothing. */
@@ -115,6 +110,73 @@ export interface DoorResponse {
 }
 /** Where a caller with no badge goes to get one. */
 export declare const DOOR_ROUTE = "/api/door";
+/**
+ * One badge, as `identity.json`'s `auth` block holds it.
+ *
+ * Keyed by home address in that block, which is what makes a second badge
+ * free: a machine holds its badge at `http://127.0.0.1:4441` (its own daemon)
+ * AND its badge at `https://isocan.io` (the daemon's home) in the same file,
+ * under two keys, with neither aware of the other.
+ *
+ * **From phase 10.3 the key is NORMALIZED** (`normalizeHomeUrl`), and here
+ * rather than at each call site — house rule 4's ordinary argument, sharpened
+ * by what this file already says: two answers to "which credential is in that
+ * file" on one machine is the divergence the module exists to prevent, and a
+ * trailing slash would have been exactly that. A daemon holds one badge per
+ * home now, so an address that spelled itself two ways would knock on one
+ * door twice and hold two badges, of which only one carries the admissions.
+ *
+ * **No on-disk migration, and that is measured rather than assumed.** The
+ * `auth` block was already keyed per address, and the only spellings that
+ * CHANGE under normalization are a trailing slash and a mixed-case host. A
+ * machine whose config carried one re-badges exactly once: the fresh badge
+ * holds no admissions, the local half of the sweep keeps every canvas, and the
+ * machine is let back in by a pass. That cost belongs in 10.5's upgrade doc,
+ * not in engineering around it.
+ */
+export interface StoredBadge {
+    badgeId: string;
+    secret: string;
+    at: string;
+}
+/**
+ * Where a holder keeps its badge, as the two verbs the route surface uses. On
+ * the laptop that is `identity.json` (`fileBadgeStore` in `@isocan/server`); a
+ * host with no disk keeps it wherever it keeps things.
+ */
+export interface BadgeStore {
+    read(): Promise<StoredBadge | null>;
+    keep(badge: StoredBadge): Promise<void>;
+}
+/**
+ * What the door said, refusal and all — the same knock, with the answer kept
+ * instead of flattened to null.
+ *
+ * **Why this exists** (phase 13.7). The door is metered now, and a `null`
+ * here becomes, one frame up the stack, the ORIGINAL 401 the caller was
+ * recovering from: *"a badge is required — ask the door for one."* Told to a
+ * person whose knock was just refused 429, that is this codebase's oldest
+ * failure — the cheerful wrong answer — delivered as advice to do the one
+ * thing that cannot work. So the refusal travels.
+ *
+ * `knockOnDoor` keeps its null contract for the callers whose recovery is
+ * genuinely "give up quietly" (`HomeLink.ensureBadge`, where the replica's
+ * next attempt is the retry), and the CLI takes this form because its caller
+ * is a person reading a terminal.
+ */
+export type DoorAnswer = {
+    badge: StoredBadge;
+} | {
+    refused: {
+        status: number;
+        error: string;
+        code?: string;
+    };
+};
+export declare function askTheDoor(base: string, timeoutMs?: number, signal?: AbortSignal): Promise<DoorAnswer>;
+/** `Authorization: Bearer <badgeId>.<secret>` — the one place that spelling
+ * is written, so a holder cannot get the separator wrong on its own. */
+export declare function bearerHeader(badge: StoredBadge): Record<string, string>;
 /** A CLI from before the door, talking to a daemon that has one, gets 401 on
  * everything. That is an accepted break — the two ship as one build — but a
  * break that explains itself is a different thing from a break, so the body

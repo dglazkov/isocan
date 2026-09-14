@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileBadgeStore } from "@isocan/server";
 import { ApiError, DaemonRoutes } from "../src/routes.ts";
 
 let home: string;
@@ -20,7 +21,7 @@ describe("a definitive refusal while recovering a badge", () => {
     { status: 403, code: "not-admitted", error: "Acme home refuses this network. Write to acme@example.invalid." },
     { status: 429, code: "mint-limited", error: "Acme home is metering new badges. Try again in 60 seconds." },
   ])("reports the door's $status and never retries the group write", async (refusal) => {
-    const client = new DaemonRoutes("https://acme.invalid", home);
+    const client = new DaemonRoutes("https://acme.invalid", fileBadgeStore(home, "https://acme.invalid"));
     const reclaim = vi.fn(async () => {});
     client.reclaimWith(reclaim);
     const request = vi.fn<typeof fetch>()

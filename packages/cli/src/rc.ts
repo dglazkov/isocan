@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { ApiError } from "@isocan/api";
-import type { RcAgentRow, SheepPlace } from "@isocan/rc";
+import type { RcAgentRow, RoomRows, SheepPlace } from "@isocan/rc";
 
 /**
  * **The enrolment record's rc half** (agents-on-demand phase 2).
@@ -187,4 +187,16 @@ export async function removeRcAgent(
     const index = rows.findIndex((r) => r.canvasId === canvasId && r.actorId === actorId);
     if (index >= 0) rows.splice(index, 1);
   });
+}
+
+/** The rows as the room reads them (docs/projects/room/design.md, `rows`):
+ * this file's verbs over `~/.isocan/rc-agents.json`, bound to one home. */
+export function fileRcRows(home: string): RoomRows {
+  return {
+    list: () => readRcAgents(home),
+    adopt: (row) => adoptRcAgent(home, row),
+    remove: (canvasId, actorId) => removeRcAgent(home, canvasId, actorId),
+    setSessionId: (canvasId, actorId, sessionId, place, cellPass) =>
+      setRcSessionId(home, canvasId, actorId, sessionId, place, cellPass),
+  };
 }
