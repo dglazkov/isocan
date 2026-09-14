@@ -1,0 +1,161 @@
+# The room — the walk
+
+**13 September 2026.** The order of work for [design.md](design.md).
+Each phase ends with **Trajectory**: only what the phase discovered
+that changes the project's course. A phase that went as planned leaves
+it empty.
+
+**Where we are: NOT STARTED. Next: room phase 0.** Five phases, none
+needing a person: no ⚑ step, no cloud resource, no second machine
+except journey 2's walk, which two loopback badges on one laptop can
+stand in for (the roles project's proof recipe). The rule for every
+phase: `packages/cli/test/rc.test.ts`, `rc-sheep.test.ts` and
+`rc-sheep-withdrawal.test.ts` pass unchanged, and the boundary test is
+in the suite from phase 0 on, so a `node:` import cannot land in the
+module by accident at any later phase.
+
+## Phase 0 — The workspace
+
+**Status: NOT STARTED.**
+
+**Outcome:** `packages/rc` exists, is exported from the root manifest as
+`isocan/rc` beside `.`, resolves through `packages/cli/bin/workspace-loader.mjs`
+on main, and survives `scripts/release.mjs`'s pruning of the release
+manifest. It holds what needs no design to move: `gateTurn` and the
+guard types from `rc.ts`, `RcAgentRow` and `SheepPlace` as types,
+`itemCenter`, `threadLocus`, `nameResolver`, `summonsPrompt` from
+`main.ts`, and the collab skill's text as a generated constant. `rc.ts`
+and `main.ts` import them back from `@isocan/rc`. `rc.mjs` at the root
+mirrors `index.mjs`.
+
+**Proof:** `packages/rc/test/boundary.test.ts`: the transitive closure
+of `packages/rc/src/index.ts` names no `node:` module and no
+`@isocan/server` export, and an esbuild browser-platform bundle of the
+entry builds with no `node:` in its output; falsified by adding
+`import "node:fs"` under `packages/rc/src`. `packages/cli/test/guards.test.ts`
+passes over the moved `gateTurn`. A test over the manifest
+`scripts/release.mjs` writes: `exports["./rc"]` is present with its
+`types` re-aimed at the emitted `.d.ts`, and the emitted types include
+`packages/rc`. A test that the skill constant equals
+`.agents/skills/isocan-collab/SKILL.md`. `npm test` and
+`npm run typecheck` whole.
+
+**Trajectory:** to be written at close.
+
+## Phase 1 — The room over its deps
+
+**Status: NOT STARTED.**
+
+**Outcome:** `runRoom(deps): Room` in the module, the whole of
+`runRcRoom` minus the laptop, with `RoomDeps` as design.md lists them:
+`routes`, `canvas`, `owner`, `rows`, `adapterFor`, `endSession`,
+`narrate`, `state`, `limits`, `clock`, `sleep`. `DaemonRoutes` takes its
+badge store as a constructor parameter, `askTheDoor` and `bearerHeader`
+move to `@isocan/api` with `@isocan/server` importing them from there,
+and `@isocan/api` no longer imports `@isocan/server` at all. `main.ts`'s
+`runRcRoom` becomes the laptop's consumer: it builds the deps from
+`ctx`, the file-backed rows, the file-backed badge store, an
+`adapterFor` that fences, scans and spawns, a `narrate` that prints, a
+`Map` for state, and wraps the call with the upgrade window, the
+session pointer file and the daemon restart. The `rc` command's action
+is unchanged.
+
+**Proof:** `rc.test.ts` passes unchanged. The boundary test now covers
+the room and still passes. `packages/api/test/boundary.test.ts` gains
+`@isocan/server` to its forbidden list for `routes.ts`. A new
+`packages/rc/test/room.test.ts` over in-memory deps and a hand-advanced
+clock: a summons is dispatched to the adapter the deps name and the
+reply lands through `routes`; `stop()` ends the hold and both polls
+within one tick; a second `runRoom` over the same `state` does not
+re-narrate what the first said and keeps the first's guard; a
+`routes` that refuses with a lost connection is retried with no
+`ensureDaemon` in sight. A night of the guard's window in under a
+second by the clock.
+
+**Trajectory:** to be written at close.
+
+## Phase 2 — The sheep over commands
+
+**Status: NOT STARTED.**
+
+**Outcome:** `SheepAgent` moves from `packages/cli/src/sheep.ts` into
+the module, rewritten over `SheepCommands` as design.md gives it, so
+the pasture, the setup script, the brief, the skill, the secret with
+its fallback, the herd read before a birth, the beats from `attach`'s
+stream, and `rm` with `abort` for a home from before are written once.
+`sheep.ts` keeps the laptop's half: `findKennel`, `kennelHome`,
+`sheepPlaceFor`, the `loopbackFromCell` read, and a `SheepCommands`
+implementation over `spawn("sheep", …)` with `SHEEP_HOME` and
+`SHEEP_TOKEN` stripped and the kennel's directory as cwd. The laptop's
+`adapterFor` returns the module's `SheepAgent` over that implementation
+for a row naming `sheep`, and `endSession` is `withdrawSheep` over the
+same.
+
+**Proof:** `rc-sheep.test.ts` and `rc-sheep-withdrawal.test.ts` pass
+unchanged against the fake `sheep` on PATH. `packages/rc/test/sheep.test.ts`
+over an in-memory `SheepCommands` that records its calls: a birth is
+`mint` with the pass among the secrets and no prompt, then `attach`
+with the summons; a sheep found in the herd is resumed with no `mint`;
+a home that drops the secret gets `pastureSecret` and one sentence;
+withdrawal is `abort` during a turn, then `rm`, and the pasture is
+never removed. The boundary test still passes with `SheepAgent` in the
+closure.
+
+**Trajectory:** to be written at close.
+
+## Phase 3 — Answered elsewhere
+
+**Status: NOT STARTED.**
+
+**Outcome:** the claim rule. At start and at each adoption the room
+claims each agent's actor once, reads `not-your-actor`, remembers it
+under `state`, narrates `<name> is answered elsewhere; a pass minted for
+<name> hands it over` once, and parks no cursor, puts on no face and
+fails no turn for that agent. The room reads the refusal itself: either
+the claim goes through a route the client does not heal, or the
+client's `reclaimIdentity` is told the claim is the room's, decided by
+what `DaemonClient` allows and recorded here. An agent later handed
+over by a pass is picked up at the next start, since the pass is a
+later issue and the room does not poll for it.
+
+**Proof:** a new case in `rc.test.ts`: two rc processes on one canvas
+with two badges, the second's roster holding an agent the first's badge
+claimed; the second narrates the line once and never dispatches, a
+summons for that agent gets no failed turn and no system-voice reply
+from the second, and a summons for the second's own agent is answered.
+Falsified by dropping the rule, which reads a failed turn where the
+line should be. `room.test.ts` gains the same over in-memory deps with
+a `routes` that refuses the claim, and checks the refusal is
+remembered across a second `runRoom` over the same `state`.
+
+**Trajectory:** to be written at close.
+
+## Phase 4 — The bundle, and the walk
+
+**Status: NOT STARTED.**
+
+**Outcome:** journeys 1, 2 and 3 walked. Journey 3's install and bundle
+from a scratch directory against the `release` branch, which CI
+rebuilds from every push to main, so this phase waits one CI run after
+phase 3 lands. Journey 1 on this laptop against dev.isocan.io with one
+agent on `claude-code` and one on `sheep`, a turn each, then the sheep
+agent withdrawn: the narration and the record on disk read as before.
+Journey 2 with two rcs on one canvas, two loopback badges on this
+laptop standing in for the second machine.
+
+**Proof:** from a scratch directory, `npm install
+github:dglazkov/isocan#release`, then `node -e 'import("isocan/rc")'`
+exits 0, then `esbuild --bundle --platform=browser` over a one-line
+file importing `isocan/rc` exits 0 with no `node:` among the bundle's
+externals, output recorded here. The three walks, recorded against the
+journeys' acceptance lines. `npm test` and `npm run typecheck` whole.
+
+**Trajectory:** to be written at close.
+
+## Later, and not here
+
+The host: a Worker with a Durable Object beside a sheep station,
+sheep#12, and the custody argument for a room nobody started. `isocan
+pass --agent <name>`, the hand-over. Each is a project or an issue of
+its own; this one ends when the laptop's rc runs over the module and a
+browser-platform bundle of it builds.
