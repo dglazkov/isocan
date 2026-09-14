@@ -73,9 +73,18 @@ click rather than a path.
 
 ## Reaching it
 
-- **Talk to it**: open the page, press Listen.
-- **Supervise it**: `npx isocan rc` — it resolves the agent from the enrolment record and
-  starts this same entry point (the declaration this harness wrote for itself).
+- **Talk to it directly**: open the page (`http://127.0.0.1:7654/` by default), press **Listen**, and speak.
+- **Supervise it via `@mentions`**:
+  1. Enrol your voice agent on a canvas so `rc` knows to summon it:
+     ```bash
+     isocan rc add VoiceAgent --harness voice --canvas <canvas-id>
+     ```
+     *(Or click **"Enrol from here"** directly in the Voice UI Settings drawer under Actor / Enrolment).*
+  2. Run `isocan rc` to watch for mentions:
+     ```bash
+     isocan rc --all
+     ```
+  3. When someone mentions `@VoiceAgent` in a canvas comment thread, `isocan rc` automatically wakes up the voice agent (connecting to your running harness or spawning one detached) and posts its reply to the thread.
 - **Default port**: 7654. The daemon it attaches to is chosen when the harness starts.
 
 ## What it needs
