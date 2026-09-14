@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Phase 3, answered elsewhere, waits on Dimitri: the desk accepts a second badge's claim, so where the refusal comes from is a custody decision (design.md, the claim rule). Next: room phase 4, the bundle a host installs, which needs no answer; phase 5's walks wait on phase 3.** Six phases, none
+**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere, now decided: the cursor and hold routes require the actor, and phase 3.5 makes agent keys machine-keyed (design.md, the claim rule). Phase 4, the bundle a host installs, is built and waits on its walk against `release` after CI; phase 5's walks follow phase 3.5.** Seven phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -127,38 +127,80 @@ closure.
 
 ## Phase 3 — Answered elsewhere
 
-**Status: NOT STARTED.** Nothing built; the premise was measured false before any code, and the phase waits on a custody decision.
+**Status: NOT STARTED.**
 
-**Outcome:** the claim rule. At start and at each adoption the room
-claims each agent's actor once, reads `not-your-actor`, remembers it
-under `state`, narrates `<name> is answered elsewhere; a pass minted for
-<name> hands it over` once, and parks no cursor, puts on no face and
-fails no turn for that agent. The room reads the refusal itself: either
-the claim goes through a route the client does not heal, or the
-client's `reclaimIdentity` is told the claim is the room's, decided by
-what `DaemonClient` allows and recorded here. An agent later handed
-over by a pass is picked up at the next start, since the pass is a
-later issue and the room does not poll for it.
+**Outcome:** the claim rule, as decided in design.md. `/api/park/claim`
+and `/api/rc/hold` refuse, with `not-your-actor`, an actor the
+presenting badge does not hold. The room parks each agent's cursor at
+start and at each adoption. For an agent in this machine's own rows it
+claims the actor under its own key first. It reads a `not-your-actor`
+from `parkClaim` and remembers it under `state`. It narrates `<name> is
+answered elsewhere; a pass minted for <name> hands it over` once, and
+it holds, faces and dispatches nothing for that agent. An agent later
+handed over by a pass is picked up at the next start; the room does not
+poll for it.
 
-**Proof:** a new case in `rc.test.ts`: two rc processes on one canvas
-with two badges, the second's roster holding an agent the first's badge
-claimed; the second narrates the line once and never dispatches, a
-summons for that agent gets no failed turn and no system-voice reply
-from the second, and a summons for the second's own agent is answered.
-Falsified by dropping the rule, which reads a failed turn where the
-line should be. `room.test.ts` gains the same over in-memory deps with
-a `routes` that refuses the claim, and checks the refusal is
-remembered across a second `runRoom` over the same `state`.
+**Proof:**
+- `packages/server` gains a test that a badge refused the actor gets
+  `not-your-actor` from `parkClaim` and from an `rcHold` naming it, and
+  that a badge holding the actor is unaffected.
+- A new case in `rc.test.ts` runs two rc processes on one canvas with
+  two badges, the second's roster holding an agent the first's badge
+  claimed. The second narrates the line once and never dispatches. A
+  summons for that agent is answered by the first, with no failed turn,
+  no turn-away and no system-voice reply from the second. A summons
+  for the second's own agent is answered by the second. The cursor
+  never changes hands. Dropping the route check reads the tug of war.
+- `room.test.ts` gains the same over in-memory deps, with a `routes`
+  that refuses the park. It also checks the refusal is remembered
+  across a second `runRoom` over the same `state`, and that an agent in
+  this machine's rows is claimed before it is parked.
+- Existing `rc.test.ts`, `rc-sheep` and `rc-sheep-withdrawal` cases
+  pass unchanged.
 
 **Trajectory:**
 
 - **2026-09-13** — Premise reversed: the desk accepts a second badge's `actor.claim` under the shared `agent:<name>` key (same-key vouch, lost-badge recovery), so the room never reads `not-your-actor`. Two rcs trade the cursor through unchecked `parkClaim`/`rcHold` instead. Probes against a real daemon; design.md, the claim rule.
-- **2026-09-13** — Open: where the refusal comes from — the desk's same-key vouch, a new desk query beside `actorBindings()`, and/or `parkClaim`/`rcHold` refusing an actor the badge does not hold. A custody rule; waits on Dimitri.
-- **2026-09-13** — Open: because an agent's session key is derivable from its name, the same-key recovery path lets a badge other than the enrolling one take up the agent's actor; seen on a solo loopback daemon, unmeasured on a hosted home. Waits on Dimitri.
+- **2026-09-13** — Decided (Dimitri): the refusal comes from `parkClaim`/`rcHold` requiring the actor, and derivable agent keys become machine-keyed (phase 3.5); the desk's same-key recovery stays. Tradeoffs in design.md, the claim rule.
+
+**Formerly:** the room claimed each agent's actor at start and read
+`not-your-actor` from the claim. Re-cut on 13 Sep 2026, when the desk
+turned out to accept that claim.
+
+## Phase 3.5 — Keys nobody else derives
+
+**Status: NOT STARTED.**
+
+**Outcome:** an agent's session key is a keyed hash of a secret kept in
+this machine's `~/.isocan` and the agent's name. Enrolment, the room's
+claim and the environment injected into a turn all present it. The
+same machine derives the same key, so re-enrolling after a withdrawal,
+enrolling on a second canvas and lost-badge recovery hand back the same
+actor. Existing agents are rebound to the new key by the badge that
+holds them, and their rows under `agent:<name>` are retired, so the old
+key stops working. Another machine's claim under the old or the new
+key is refused.
+
+**Proof:**
+- A server or CLI test: a second badge presenting `agent:<name>` for an
+  enrolled agent is refused after migration, while it was allowed
+  before.
+- The machine that enrolled the agent still claims it after a
+  re-badge.
+- Re-enrolling the same name from the same machine returns the same
+  actor.
+- A turn's injected environment speaks as the agent.
+- The rc tests pass unchanged except where they spell `agent:<name>`,
+  and each such change is named.
+- Measured once on dev.isocan.io with a second badge, as an Open entry
+  if that badge needs a person: whether admission narrowed the old
+  hole there.
+
+**Trajectory:** to be written at close.
 
 ## Phase 4 — The bundle a host installs
 
-**Status: NOT STARTED.**
+**Status: PART-DONE 2026-09-13.** The `browser` condition and the release-built bundle (`packages/rc/dist/index.mjs`, 143 KB, core inlined) are in, and the installed-tree test bundles through them and fails without the condition; the walk waits on CI rebuilding `release`.
 
 **Outcome:** a host that installs `isocan` from `release` and bundles
 `import "isocan/rc"` for the browser platform gets the module, not the
@@ -186,7 +228,9 @@ exits 0, and `esbuild --bundle --platform=browser` over a one-line
 file importing `isocan/rc` exits 0 with no `node:` among the bundle's
 externals, output recorded here.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-13** — Open: the walk against `release` — install, Node import, one-line browser bundle — waits on the CI run that rebuilds `release` from this phase's commit.
 
 **Formerly:** phase 4 was "The bundle, and the walk": journeys 1, 2 and 3
 walked together after phase 3. Re-cut 13 Sep 2026, when journey 3's
@@ -200,7 +244,7 @@ this phase; the walks of journeys 1 and 2 are phase 5.
 
 **Status: NOT STARTED.**
 
-**Outcome:** journeys 1 and 2 walked, after phase 3 lands. Journey 1
+**Outcome:** journeys 1 and 2 walked, after phases 3 and 3.5 land. Journey 1
 on this laptop against dev.isocan.io, with one agent on `claude-code`
 and one on `sheep`, a turn each, then the sheep agent withdrawn: the
 narration and the record on disk read as before. Journey 2 with two

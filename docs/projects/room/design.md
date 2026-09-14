@@ -222,35 +222,61 @@ laptop that is rare. For a second rc answering the same canvas, which
 is the point of a room a host can run, it is the common case.
 
 The rule the laptop never needed: **the room claims, faces and
-dispatches only agents its badge may speak as.** At start, and again
-when a row is adopted, the room claims each agent's actor once. A
-`not-your-actor` refusal is remembered under `state`, the agent is
-narrated once, `<name> is answered elsewhere; a pass minted for <name>
-hands it over`, and no cursor is parked, no face put on, no turn
-failed for it. The client's automatic reclaim is not a substitute: the
-room reads the refusal before the client's healing would have hidden
-it, or the client's retry is told not to, and phase 3 decides which by
-what the code allows.
+dispatches only agents its badge may speak as.**
 
 **Measured 13 September, before phase 3 built anything: the desk does
-not refuse.** Both machines claim an agent under the same key,
-`agent:<name>`, and `Engine.vouch` does not count a row under the same
-session key as held elsewhere, because that is lost-badge recovery.
-So a second badge's `actor.claim` gets 200 and becomes a second holder,
-and `not-your-actor` only appears for an actor a badge never claimed.
-Two real rcs on one canvas never fail a turn. Instead they trade the
-cursor, because `parkClaim` and `rcHold` do not check who holds the
-actor, and the second posts a turn-away in the system voice. Where the
-refusal should come from changes a custody rule, which this project
-set out not to change, so it waits on a decision. The three options
-measured:
-- The desk stops treating `agent:<name>` as a vouch across badges.
-  This costs same-key recovery while the old badge lives.
-- The room claims only what `actorBindings()` says this badge already
-  holds, and asks a new desk query about the rest.
-- `parkClaim` and `rcHold` refuse an actor the badge does not hold.
-  That alone ends the tug of war, and it can sit beside either option
-  above.
+not refuse a second badge's claim.** Both machines claim an agent under
+the same key, `agent:<name>`, and `Engine.vouch` does not count a row
+under the same session key as held elsewhere, because that is how a
+badge that lost its credential gets its actor back. So a second badge's
+`actor.claim` gets 200 and becomes a second holder, and
+`not-your-actor` appears only for an actor a badge never claimed. Two
+real rcs on one canvas never fail a turn. Instead they trade the
+cursor, because `parkClaim` and `rcHold` check nothing about the actor,
+and the second posts a turn-away in the system voice. Three things were
+broken, not one:
+- The cursor and hold routes check nothing.
+- An agent's session key can be derived from its name, which anyone
+  admitted to the canvas can see. Same-key recovery assumes a key is
+  secret, as a harness's session id is.
+- There was no refusal for a room to read.
+
+**Decided 13 September (Dimitri), two changes:**
+
+1. **The cursor and hold routes require the actor** (phase 3).
+   `/api/park/claim` and `/api/rc/hold` refuse, with `not-your-actor`,
+   an actor the presenting badge does not hold, as every other route
+   that names an actor already does. The room parks each agent's
+   cursor at start, before it claims anything for that agent. A
+   `not-your-actor` from `parkClaim` is the refusal the room reads. It
+   is remembered under `state`, and the agent is narrated once:
+   `<name> is answered elsewhere; a pass minted for <name> hands it
+   over`. The room then parks no cursor, holds no answerability, puts
+   on no face and fails no turn for that agent. For an agent in this
+   machine's own rows, the room first claims the actor under its own
+   key, then parks, so a machine that re-badged still takes up its
+   own agents. The refusal is read from a route `DaemonClient` does
+   not heal, because the reclaim only answers `not-your-actor` by
+   reclaiming the machine's own identity, which does not make the
+   badge hold somebody else's agent. If the code shows it does, phase
+   3 records that.
+2. **Agent keys nobody else can derive** (phase 3.5). An agent's
+   session key becomes a keyed hash of a secret kept in this machine's
+   `~/.isocan` and the agent's name. The same machine derives the same
+   key every time, so re-enrolment, a second canvas, the environment
+   injected into a turn and lost-badge recovery all behave as before.
+   Another machine cannot derive the key, so its claim is refused as
+   `name-taken`, unless it holds a pass or a vouch. Existing agents are
+   rebound to the new key by the badge that holds them, and their rows
+   under `agent:<name>` are retired. The desk's custody rules do not
+   change.
+
+Given up, knowingly: the option of having the desk stop same-key
+recovery across badges, which would cost that recovery for people too;
+"any machine picks up Percy by name", which was never designed; and a
+machine that loses `~/.isocan` entirely keeps its agents only through a
+pass. A liveness rule, where the second rc takes over when the first
+stops, was set aside, because journey 2 step 5 chooses custody.
 
 What hands an agent over is `isocan pass --agent <name>`, a pass that
 arrives as an agent this badge holds. The desk already allows the mint;

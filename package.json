@@ -14,11 +14,12 @@
     },
     "./rc": {
       "types": "./types/rc/src/index.d.ts",
+      "browser": "./packages/rc/dist/index.mjs",
       "default": "./rc.mjs"
     },
     "./package.json": "./package.json"
   },
-  "//": "GENERATED BRANCH — `npm run release` builds it from 4f85e86 on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
+  "//": "GENERATED BRANCH — `npm run release` builds it from d8ec18b on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^22.13.1",
@@ -46,7 +47,7 @@
     "vitest": "^3.0.5"
   },
   "isocan": {
-    "commit": "4f85e86",
-    "builtAt": "2026-09-13T19:23:09-07:00"
+    "commit": "d8ec18b",
+    "builtAt": "2026-09-13T19:48:58-07:00"
   }
 }

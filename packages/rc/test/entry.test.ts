@@ -33,11 +33,18 @@ describe("the isocan/rc module entry", () => {
 
   it("the manifest exports ./rc beside ., at files the tree carries", () => {
     const manifest = JSON.parse(readFileSync(path.join(repo, "package.json"), "utf8")) as {
-      exports: Record<string, { types: string; default: string }>;
+      exports: Record<string, { types: string; browser: string; default: string }>;
     };
     expect(manifest.exports["."]).toBeDefined();
-    expect(manifest.exports["./rc"]).toEqual({ types: "./packages/rc/src/index.ts", default: "./rc.mjs" });
-    for (const target of [manifest.exports["./rc"]!.types, manifest.exports["./rc"]!.default]) {
+    // `browser` ahead of `default` (room phase 4): a browser-platform bundler
+    // in the checkout takes the source entry, Node takes `rc.mjs`. Key order
+    // is what a resolver reads, so the order is asserted, not only the values.
+    expect(Object.entries(manifest.exports["./rc"]!)).toEqual([
+      ["types", "./packages/rc/src/index.ts"],
+      ["browser", "./packages/rc/src/index.ts"],
+      ["default", "./rc.mjs"],
+    ]);
+    for (const target of [manifest.exports["./rc"]!.types, manifest.exports["./rc"]!.browser, manifest.exports["./rc"]!.default]) {
       expect(existsSync(path.join(repo, target)), `${target} missing`).toBe(true);
     }
   });

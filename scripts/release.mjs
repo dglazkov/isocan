@@ -71,11 +71,28 @@ export function releaseManifest(pkg, sourceCommit = "", builtAt = "") {
    * (TS2307) — measured 31 Aug, the turn design.md predicted. So the release
    * carries `types/` (emitTypes below) and ships the manifest aimed at it.
    */
+  /**
+   * **And the `browser` conditions move to the bundles** (room phase 4). On
+   * main `./rc`'s `browser` names the source entry, which a bundler in the
+   * checkout resolves through the workspace links. An install has no links,
+   * and its `default` is `rc.mjs`, which registers tsx: a browser-platform
+   * bundler that reaches it reads `node:module` and fails. So the release
+   * carries the ESM bundle buildBrowserBundles writes, and the condition names
+   * it. Spreading `entry` first keeps the keys in main's order, and order is
+   * what a resolver reads: `types`, then `browser`, then `default`.
+   */
   const exportsMap = rest.exports
     ? Object.fromEntries(
         Object.entries(rest.exports).map(([key, entry]) =>
-          entry && typeof entry === "object" && typeof entry.types === "string"
-            ? [key, { ...entry, types: releasedTypesPath(entry.types) }]
+          entry && typeof entry === "object"
+            ? [
+                key,
+                {
+                  ...entry,
+                  ...(typeof entry.types === "string" ? { types: releasedTypesPath(entry.types) } : {}),
+                  ...(typeof entry.browser === "string" ? { browser: releasedBrowserPath(entry.browser) } : {}),
+                },
+              ]
             : [key, entry],
         ),
       )
@@ -111,6 +128,62 @@ export function releasedTypesPath(source) {
   const m = /^\.\/packages\/(.+)\.tsx?$/.exec(source);
   if (!m) throw new Error(`cannot map the types condition ${source} into types/ — expected ./packages/<ws>/src/<file>.ts`);
   return `./types/${m[1]}.d.ts`;
+}
+
+/**
+ * **The browser bundles the release builds**, keyed by the source entry main's
+ * `browser` condition names, valued by where the bundle lands in the release
+ * tree. One today: `isocan/rc`, for a host with `fetch` and no Node (room
+ * journey 3). Under `packages/rc/dist`, beside `packages/web/dist`, and like
+ * it gitignored on main and force-added onto the release commit; `.npmignore`
+ * does not drop `dist`, so an install carries it.
+ */
+export const RELEASE_BROWSER_BUNDLES = {
+  "./packages/rc/src/index.ts": "./packages/rc/dist/index.mjs",
+};
+
+/** Where an export's `browser` condition points on the release branch. A
+ * source entry with no bundle built for it is a manifest this script does not
+ * know how to ship, and says so. */
+export function releasedBrowserPath(source) {
+  const bundle = RELEASE_BROWSER_BUNDLES[source];
+  if (!bundle) throw new Error(`no browser bundle is built for ${source} — add it to RELEASE_BROWSER_BUNDLES`);
+  return bundle;
+}
+
+/**
+ * **Build every browser bundle** into `out` (the repo root by default, so the
+ * paths in RELEASE_BROWSER_BUNDLES land where the manifest names them).
+ *
+ * esbuild, browser platform, ESM, everything inlined: `@isocan/core` and the
+ * npm packages it reaches, because an installed tree has no workspace links
+ * and a host's bundler must not need any. No `external`, so a `node:` import
+ * anywhere in the closure fails this build rather than shipping. Not minified,
+ * no sourcemap, and `absWorkingDir` is the repo, so the path comments esbuild
+ * writes are repo-relative and a release commit's bundle changes only when
+ * its sources do. Returns the files written.
+ */
+export async function buildBrowserBundles(out = root) {
+  const { build } = await import("esbuild");
+  const written = [];
+  for (const [source, bundle] of Object.entries(RELEASE_BROWSER_BUNDLES)) {
+    const outfile = path.join(out, bundle);
+    await fs.rm(outfile, { force: true });
+    await build({
+      absWorkingDir: root,
+      entryPoints: [path.join(root, source)],
+      outfile,
+      bundle: true,
+      platform: "browser",
+      format: "esm",
+      minify: false,
+      sourcemap: false,
+      legalComments: "inline",
+      logLevel: "warning",
+    });
+    written.push(outfile);
+  }
+  return written;
 }
 
 /**
@@ -264,6 +337,10 @@ async function main() {
   // an editor on an installed copy can answer what `connect()` returns.
   await emitTypes();
 
+  // And the third: the browser bundles a host with no Node resolves through
+  // the manifest's `browser` conditions (room phase 4).
+  const bundles = (await buildBrowserBundles()).map((file) => path.relative(root, file));
+
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-release-"));
   try {
     // A temporary index: HEAD's tree, plus dist (gitignored, hence -f), plus
@@ -272,6 +349,7 @@ async function main() {
     git("read-tree", head, { env });
     git("add", "-f", "packages/web/dist", { env });
     git("add", "-f", "types", { env });
+    for (const bundle of bundles) git("add", "-f", bundle, { env });
     /**
      * **`.github/` does not ship.**
      *
@@ -325,6 +403,12 @@ async function main() {
     // working tree — and they cannot be gitignored (see emitTypes), so they
     // are cleaned up rather than left as untracked noise.
     await fs.rm(path.join(root, "types"), { recursive: true, force: true });
+    // The bundles are gitignored, so they would be no noise; they go anyway,
+    // because nothing on main resolves them and a stale one could mislead.
+    for (const bundle of Object.values(RELEASE_BROWSER_BUNDLES)) {
+      await fs.rm(path.join(root, bundle), { force: true });
+      await fs.rmdir(path.dirname(path.join(root, bundle))).catch(() => {});
+    }
   }
 }
 
