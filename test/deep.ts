@@ -4,16 +4,22 @@ import path from "node:path";
 /**
  * **The deep lane: the tests that spawn real processes per case.**
  *
- * `npm test` ran everything, and everything is 5,168 tests of which a third of
- * the CPU is spent starting processes — a file that spawns
+ * `npm test` ran everything, and everything is 5,218 tests of which most of the
+ * CPU is spent starting processes — a file that spawns
  * `packages/cli/bin/isocan.js`, or `scripts/canvas-board.mjs`, or `npx`, once
  * per case, each spawn a Node start, a daemon knock and a real HTTP round trip.
- * Measured on the full run of 13 September: 522 files, 5,168 tests, 240s of
- * wall clock over 2,171s of CPU. The files below are most of that CPU, and
- * one of them — `test/canvas-board.test.ts`, 37 cases each blocking a worker
- * on `execFileSync` — is 238s on its own, which is the whole wall clock of a
- * run. They are also, not by coincidence, where every flake this repo has
- * chased lived.
+ * Measured on the full run of 13 September: 531 files, 5,218 tests, 185s of
+ * wall clock over 2,153s of CPU. The files below are most of that CPU. They
+ * are also, not by coincidence, where every flake this repo has chased lived.
+ *
+ * **The seconds below moved once for a reason worth keeping.** Until 13
+ * September `test/canvas-board.test.ts` was 238s — the whole wall clock of a
+ * run, in one file — and the lane was built around it. It was not the board:
+ * `eslint .` had no `ignores`, so it walked `.claude/worktrees/`, twenty other
+ * checkouts of this repository, 6,056 files. One line in `eslint.config.js`
+ * took the lint from 50s to 1.5s, that file from 238s to 73s, and the whole
+ * deep run from 246s to 185s. A long pole is worth asking about before it is
+ * worth planning around.
  *
  * So they are their own lane. `npm test` runs the fast one; `npm run test:deep`
  * runs everything, and **CI always runs everything** — `ISOCAN_REQUIRE_DEEP`
@@ -62,7 +68,8 @@ import path from "node:path";
  * `packages/cli/test/board.test.ts` was handed `test/canvas-board.test.ts`'s
  * 95 seconds and the real long pole was not in the lane at all. The fast lane
  * saved a third of the CPU and nine seconds of wall clock. Rebuilt from exact
- * paths.
+ * paths, and re-measured whole on 13 September after the lint walk was fixed;
+ * every file kept its lane, and `dispatch` is the long pole now.
  */
 export interface DeepFile {
   /** Path from the repo root, as vitest names it. */
@@ -72,43 +79,43 @@ export interface DeepFile {
 }
 
 export const DEEP: readonly DeepFile[] = [
-  { file: "test/canvas-board.test.ts", secs: 238 },
+  { file: "test/canvas-board.test.ts", secs: 73 },
   { file: "packages/cli/test/dispatch.test.ts", secs: 77 },
   { file: "packages/cli/test/rc.test.ts", secs: 66 },
-  { file: "packages/cli/test/direct.test.ts", secs: 61 },
-  { file: "packages/cli/test/session-identity.test.ts", secs: 60 },
-  { file: "packages/cli/test/shelf.test.ts", secs: 56 },
-  { file: "packages/cli/test/rc-sheep-withdrawal.test.ts", secs: 56 },
-  { file: "packages/cli/test/pass.test.ts", secs: 52 },
-  { file: "packages/cli/test/share.test.ts", secs: 50 },
-  { file: "packages/cli/test/space.test.ts", secs: 46 },
-  { file: "packages/cli/test/home.test.ts", secs: 46 },
-  { file: "packages/cli/test/wait.test.ts", secs: 42 },
-  { file: "packages/cli/test/ground.test.ts", secs: 41 },
-  { file: "packages/cli/test/one-hour.test.ts", secs: 33 },
+  { file: "packages/cli/test/direct.test.ts", secs: 63 },
+  { file: "packages/cli/test/session-identity.test.ts", secs: 64 },
+  { file: "packages/cli/test/shelf.test.ts", secs: 59 },
+  { file: "packages/cli/test/rc-sheep-withdrawal.test.ts", secs: 57 },
+  { file: "packages/cli/test/pass.test.ts", secs: 56 },
+  { file: "packages/cli/test/share.test.ts", secs: 55 },
+  { file: "packages/cli/test/space.test.ts", secs: 51 },
+  { file: "packages/cli/test/home.test.ts", secs: 51 },
+  { file: "packages/cli/test/wait.test.ts", secs: 44 },
+  { file: "packages/cli/test/ground.test.ts", secs: 46 },
+  { file: "packages/cli/test/one-hour.test.ts", secs: 29 },
   { file: "packages/cli/test/park.test.ts", secs: 31 },
-  { file: "packages/modules/design-competition/test/bout.test.ts", secs: 28 },
-  { file: "packages/cli/test/acp.test.ts", secs: 28 },
-  { file: "packages/cli/test/rc-sheep.test.ts", secs: 27 },
-  { file: "packages/cli/test/setup-npx.test.ts", secs: 26 },
-  { file: "packages/cli/test/binding.test.ts", secs: 26 },
-  { file: "packages/cli/test/restart.test.ts", secs: 26 },
-  { file: "packages/cli/test/identity.test.ts", secs: 25 },
-  { file: "packages/cli/test/daemon-takeover.test.ts", secs: 23 },
-  { file: "packages/cli/test/dualface.test.ts", secs: 22 },
-  { file: "packages/cli/test/group.test.ts", secs: 22 },
-  { file: "packages/cli/test/export.test.ts", secs: 19 },
-  { file: "packages/cli/test/personal-context.test.ts", secs: 19 },
-  { file: "packages/cli/test/area.test.ts", secs: 18 },
+  { file: "packages/modules/design-competition/test/bout.test.ts", secs: 24 },
+  { file: "packages/cli/test/acp.test.ts", secs: 25 },
+  { file: "packages/cli/test/rc-sheep.test.ts", secs: 25 },
+  { file: "packages/cli/test/setup-npx.test.ts", secs: 39 },
+  { file: "packages/cli/test/binding.test.ts", secs: 24 },
+  { file: "packages/cli/test/restart.test.ts", secs: 31 },
+  { file: "packages/cli/test/identity.test.ts", secs: 23 },
+  { file: "packages/cli/test/daemon-takeover.test.ts", secs: 22 },
+  { file: "packages/cli/test/dualface.test.ts", secs: 20 },
+  { file: "packages/cli/test/group.test.ts", secs: 21 },
+  { file: "packages/cli/test/export.test.ts", secs: 17 },
+  { file: "packages/cli/test/personal-context.test.ts", secs: 17 },
+  { file: "packages/cli/test/area.test.ts", secs: 19 },
   { file: "packages/cli/test/wait-cursor.test.ts", secs: 18 },
-  { file: "packages/cli/test/operator.test.ts", secs: 18 },
+  { file: "packages/cli/test/operator.test.ts", secs: 19 },
   { file: "packages/cli/test/upgrade-notice.test.ts", secs: 17 },
-  { file: "packages/cli/test/place.test.ts", secs: 17 },
-  { file: "packages/cli/test/deckexport.test.ts", secs: 13 },
+  { file: "packages/cli/test/place.test.ts", secs: 15 },
+  { file: "packages/cli/test/deckexport.test.ts", secs: 15 },
   { file: "packages/cli/test/claiming.test.ts", secs: 12 },
   { file: "packages/cli/test/desk.test.ts", secs: 11 },
   { file: "packages/cli/test/documents.test.ts", secs: 11 },
-  { file: "packages/cli/test/sprint.test.ts", secs: 11 },
+  { file: "packages/cli/test/sprint.test.ts", secs: 10 },
 ];
 
 /**
@@ -137,24 +144,24 @@ export interface FastSpawner {
 }
 
 export const FAST_SPAWNERS: readonly FastSpawner[] = [
-  { file: "packages/cli/test/migration.test.ts", secs: 9.4, why: "left the deep lane on the measurement that built this list — recorded at 11s, measured at 9.4" },
-  { file: "packages/cli/test/correspondence.test.ts", secs: 9.8, why: "two cases, two walks — and the closest file to the line, so the one to watch" },
-  { file: "packages/cli/test/grid.test.ts", secs: 9.1, why: "a single case that walks once" },
-  { file: "packages/cli/test/tools.test.ts", secs: 8.1, why: "three cases sharing one daemon" },
-  { file: "packages/cli/test/board.test.ts", secs: 8.0, why: "one case; the file the first version of this list mistook for `test/canvas-board.test.ts`" },
-  { file: "packages/cli/test/setup.test.ts", secs: 7.5, why: "five cases, and the first thing a new person runs — worth keeping in the ordinary run" },
-  { file: "packages/cli/test/rehome.test.ts", secs: 6.8, why: "eight cases, one command each" },
-  { file: "packages/cli/test/runtimemodules.test.ts", secs: 6.1, why: "three cases" },
+  { file: "packages/cli/test/migration.test.ts", secs: 9.8, why: "left the deep lane on the measurement that built this list — recorded at 11s, measured at 9.4" },
+  { file: "packages/cli/test/correspondence.test.ts", secs: 9.9, why: "two cases, two walks — and the closest file to the line, so the one to watch" },
+  { file: "packages/cli/test/grid.test.ts", secs: 9.4, why: "a single case that walks once" },
+  { file: "packages/cli/test/tools.test.ts", secs: 7.7, why: "three cases sharing one daemon" },
+  { file: "packages/cli/test/board.test.ts", secs: 7.9, why: "one case; the file the first version of this list mistook for `test/canvas-board.test.ts`" },
+  { file: "packages/cli/test/setup.test.ts", secs: 7.8, why: "five cases, and the first thing a new person runs — worth keeping in the ordinary run" },
+  { file: "packages/cli/test/rehome.test.ts", secs: 7.3, why: "eight cases, one command each" },
+  { file: "packages/cli/test/runtimemodules.test.ts", secs: 6.0, why: "three cases" },
   { file: "packages/cli/test/heatmap.test.ts", secs: 5.9, why: "a single case" },
-  { file: "packages/cli/test/ended.test.ts", secs: 5.2, why: "a single case" },
-  { file: "packages/cli/test/operator-revoke.test.ts", secs: 4.1, why: "two cases" },
-  { file: "packages/cli/test/second-device.test.ts", secs: 3.8, why: "a single case" },
-  { file: "packages/cli/test/managed.test.ts", secs: 3.8, why: "21 cases and under four seconds, because only the two that need a server spawn one" },
-  { file: "packages/cli/test/operator-end.test.ts", secs: 2.6, why: "a single case" },
-  { file: "packages/cli/test/browse.test.ts", secs: 2.3, why: "two cases, one command each" },
-  { file: "packages/cli/test/agent-help.test.ts", secs: 2.0, why: "four cases; the guard that a verb reached the agent guide, and the one this file's header has always held up as the cheap walk" },
-  { file: "test/roadmap.test.ts", secs: 1.8, why: "spawns `doc status` three times, not once per document — deliberately, and it says so" },
-  { file: "test/deeplist.test.ts", secs: 1.7, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
+  { file: "packages/cli/test/ended.test.ts", secs: 5.3, why: "a single case" },
+  { file: "packages/cli/test/operator-revoke.test.ts", secs: 4.0, why: "two cases" },
+  { file: "packages/cli/test/second-device.test.ts", secs: 3.7, why: "a single case" },
+  { file: "packages/cli/test/managed.test.ts", secs: 6.0, why: "21 cases and under four seconds, because only the two that need a server spawn one" },
+  { file: "packages/cli/test/operator-end.test.ts", secs: 3.0, why: "a single case" },
+  { file: "packages/cli/test/browse.test.ts", secs: 2.1, why: "two cases, one command each" },
+  { file: "packages/cli/test/agent-help.test.ts", secs: 1.6, why: "four cases; the guard that a verb reached the agent guide, and the one this file's header has always held up as the cheap walk" },
+  { file: "test/roadmap.test.ts", secs: 1.7, why: "spawns `doc status` three times, not once per document — deliberately, and it says so" },
+  { file: "test/deeplist.test.ts", secs: 0.2, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },
 ];
 

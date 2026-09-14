@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere.** Five phases, none
+**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere, which waits on Dimitri: the desk accepts a second badge's claim, so where the refusal comes from is a custody decision (design.md, the claim rule).** Five phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -127,7 +127,7 @@ closure.
 
 ## Phase 3 — Answered elsewhere
 
-**Status: NOT STARTED.**
+**Status: NOT STARTED.** Nothing built; the premise was measured false before any code, and the phase waits on a custody decision.
 
 **Outcome:** the claim rule. At start and at each adoption the room
 claims each agent's actor once, reads `not-your-actor`, remembers it
@@ -150,7 +150,11 @@ line should be. `room.test.ts` gains the same over in-memory deps with
 a `routes` that refuses the claim, and checks the refusal is
 remembered across a second `runRoom` over the same `state`.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-13** — Premise reversed: the desk accepts a second badge's `actor.claim` under the shared `agent:<name>` key (same-key vouch, lost-badge recovery), so the room never reads `not-your-actor`. Two rcs trade the cursor through unchecked `parkClaim`/`rcHold` instead. Probes against a real daemon; design.md, the claim rule.
+- **2026-09-13** — Open: where the refusal comes from — the desk's same-key vouch, a new desk query beside `actorBindings()`, and/or `parkClaim`/`rcHold` refusing an actor the badge does not hold. A custody rule; waits on Dimitri.
+- **2026-09-13** — Open: because an agent's session key is derivable from its name, the same-key recovery path lets a badge other than the enrolling one take up the agent's actor; seen on a solo loopback daemon, unmeasured on a hosted home. Waits on Dimitri.
 
 ## Phase 4 — The bundle, and the walk
 

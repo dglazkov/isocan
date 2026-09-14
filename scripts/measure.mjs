@@ -34,8 +34,30 @@ import { CEILING } from "./bundle-ceiling.mjs";
 import { operationMembers } from "./isomorphism.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
+/**
+ * **The buffer is large because a full answer is not a broken instrument.**
+ *
+ * `execFileSync` defaults to one megabyte of stdout and KILLS the child past
+ * it, handing back what fitted. `lint-violations` asks eslint for JSON, and
+ * when the walk reached `.claude/worktrees/` that report was 6,056 files —
+ * far past a megabyte. The metric got valid JSON with its end cut off, threw
+ * parsing it, and `take()` in `canvas-board.mjs` read the crash the only way
+ * it can: **"instrument would not run"**, printed on the board beside
+ * qa-tester for months. The instrument ran perfectly; the answer did not fit.
+ *
+ * The eslint walk is fixed in `eslint.config.js`, which is the real cause. The
+ * buffer is raised anyway, because "the output was too big" and "the command
+ * is broken" are different sentences and this one said the wrong sentence for
+ * a long time without anybody being able to tell.
+ */
 const run = (cmd, args, opts = {}) =>
-  execFileSync(cmd, args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+  execFileSync(cmd, args, {
+    cwd: repo,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 64 * 1024 * 1024,
+    ...opts,
+  });
 
 /**
  * Each metric: what it counts, how, and — for the selftest — a mutation that

@@ -232,6 +232,26 @@ room reads the refusal before the client's healing would have hidden
 it, or the client's retry is told not to, and phase 3 decides which by
 what the code allows.
 
+**Measured 13 September, before phase 3 built anything: the desk does
+not refuse.** Both machines claim an agent under the same key,
+`agent:<name>`, and `Engine.vouch` does not count a row under the same
+session key as held elsewhere, because that is lost-badge recovery.
+So a second badge's `actor.claim` gets 200 and becomes a second holder,
+and `not-your-actor` only appears for an actor a badge never claimed.
+Two real rcs on one canvas never fail a turn. Instead they trade the
+cursor, because `parkClaim` and `rcHold` do not check who holds the
+actor, and the second posts a turn-away in the system voice. Where the
+refusal should come from changes a custody rule, which this project
+set out not to change, so it waits on a decision. The three options
+measured:
+- The desk stops treating `agent:<name>` as a vouch across badges.
+  This costs same-key recovery while the old badge lives.
+- The room claims only what `actorBindings()` says this badge already
+  holds, and asks a new desk query about the rest.
+- `parkClaim` and `rcHold` refuse an actor the badge does not hold.
+  That alone ends the tug of war, and it can sit beside either option
+  above.
+
 What hands an agent over is `isocan pass --agent <name>`, a pass that
 arrives as an agent this badge holds. The desk already allows the mint;
 it is words and a flag, and a second issue once the module exists.
