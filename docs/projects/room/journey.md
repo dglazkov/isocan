@@ -57,8 +57,8 @@ agents. It says, once, whose they are.*
 1. On a second machine, with a badge of its own, `isocan rc add Wendy
    --harness claude-code` on the same canvas, then `isocan rc`. The
    roster the rc reads has Percy, Shaun and Wendy.
-2. The rc narrates, once each: *Percy is answered elsewhere; a pass
-   minted for Percy hands it over* and the same for Shaun. It claims
+2. The rc narrates, once each: *Percy is not held by this machine — a
+   pass minted for Percy hands it over, or re-add it here* and the same for Shaun. It claims
    neither, faces neither, and parks a cursor for Wendy alone.
 3. Comment `@Percy`. The first machine answers. On the second, nothing:
    no failed turn, no *retrying in 60s*, no system-voice line in the

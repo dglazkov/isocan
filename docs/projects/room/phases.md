@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere, now decided: the cursor and hold routes require the actor, and phase 3.5 makes agent keys machine-keyed (design.md, the claim rule). Phase 4, the bundle a host installs, is built and waits on its walk against `release` after CI; phase 5's walks follow phase 3.5.** Seven phases, none
+**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere, now decided (orphans inert): the cursor and hold routes require the actor, and phase 3.5 makes agent keys machine-keyed (design.md, the claim rule). Phase 4, the bundle a host installs, is built and waits on its walk against `release` after CI; phase 5's walks follow phase 3.5.** Seven phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -135,7 +135,8 @@ presenting badge does not hold. The room parks each agent's cursor at
 start and at each adoption. For an agent in this machine's own rows it
 claims the actor under its own key first. It reads a `not-your-actor`
 from `parkClaim` and remembers it under `state`. It narrates `<name> is
-answered elsewhere; a pass minted for <name> hands it over` once, and
+not held by this machine — a pass minted for <name> hands it over, or
+re-add it here` once, and
 it holds, faces and dispatches nothing for that agent. An agent later
 handed over by a pass is picked up at the next start; the room does not
 poll for it.
@@ -156,12 +157,18 @@ poll for it.
   across a second `runRoom` over the same `state`, and that an agent in
   this machine's rows is claimed before it is parked.
 - Existing `rc.test.ts`, `rc-sheep` and `rc-sheep-withdrawal` cases
-  pass unchanged.
+  pass unchanged, except the three that enrol an orphan and expect it
+  adopted ("a web add … gets its rc half", "an rc that starts late
+  reconciles the enrolments it missed", "the web's withdraw, seen by a
+  parked rc, ends the sheep"). Those now enrol the way web Add does.
+  `home-link.test.ts`'s hold of an actor its badge does not hold now
+  claims that actor first.
 
 **Trajectory:**
 
 - **2026-09-13** — Premise reversed: the desk accepts a second badge's `actor.claim` under the shared `agent:<name>` key (same-key vouch, lost-badge recovery), so the room never reads `not-your-actor`. Two rcs trade the cursor through unchecked `parkClaim`/`rcHold` instead. Probes against a real daemon; design.md, the claim rule.
 - **2026-09-13** — Decided (Dimitri): the refusal comes from `parkClaim`/`rcHold` requiring the actor, and derivable agent keys become machine-keyed (phase 3.5); the desk's same-key recovery stays. Tradeoffs in design.md, the claim rule.
+- **2026-09-13** — Orphan enrolments (an actor no badge holds) are inert, decided by Dimitri: the room cannot tell unheld from held elsewhere without claiming. The line becomes "not held by this machine", and three rc tests that relied on adopting orphans enrol through the ask.
 
 **Formerly:** the room claimed each agent's actor at start and read
 `not-your-actor` from the claim. Re-cut on 13 Sep 2026, when the desk

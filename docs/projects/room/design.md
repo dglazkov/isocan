@@ -250,8 +250,8 @@ broken, not one:
    cursor at start, before it claims anything for that agent. A
    `not-your-actor` from `parkClaim` is the refusal the room reads. It
    is remembered under `state`, and the agent is narrated once:
-   `<name> is answered elsewhere; a pass minted for <name> hands it
-   over`. The room then parks no cursor, holds no answerability, puts
+   `<name> is not held by this machine — a pass minted for <name>
+   hands it over, or re-add it here`. The room then parks no cursor, holds no answerability, puts
    on no face and fails no turn for that agent. For an agent in this
    machine's own rows, the room first claims the actor under its own
    key, then parks, so a machine that re-badged still takes up its
@@ -270,6 +270,19 @@ broken, not one:
    rebound to the new key by the badge that holds them, and their rows
    under `agent:<name>` are retired. The desk's custody rules do not
    change.
+
+**Orphans, decided 13 September (Dimitri): inert.** An enrolment whose
+actor no badge holds, from a raw `agent.enroll` as web adds made before
+the ask, is refused at the park like any other actor this badge does
+not hold. The room cannot tell "nobody holds it" from "another badge
+holds it" without claiming, and claiming is what the rule forbids. So
+an orphan is answered by nobody, and the line is worded to be true in
+both cases. Re-adding the name from a machine mints it there. Web Add
+already goes through the ask, and the rc mints the actor on its own
+badge. Set aside: a distinct "unheld" refusal that the first rc to
+start adopts, which would be a new custody path, and refusing only an
+actor held elsewhere, which would bring back two rcs trading an
+orphan's cursor.
 
 Given up, knowingly: the option of having the desk stop same-key
 recovery across badges, which would cost that recovery for people too;
