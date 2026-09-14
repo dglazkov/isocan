@@ -782,6 +782,19 @@ isocan import <dir> [--to <home>] [--only <id>] [--dry-run]
 Items and threads resolve by id, id prefix, or title prefix. `--json`
 everywhere for scripting.
 
+For optional Tailwind v4 repository checks, run this standalone script from an
+isocan source checkout:
+
+```sh
+node scripts/design-lint-repo.mjs --repo /path/to/project --json -- src/example.tsx
+```
+
+It uses the target repository's existing ESLint configuration and dependencies,
+without installing packages or applying fixes. Reports are advisory and expose
+incomplete coverage; zero findings does not establish design-policy compliance.
+The [optional-tool research](docs/research/2026-09-14-optional-project-linters.md)
+records compatibility proofs, limits and recommendations for other technologies.
+
 ## Architecture
 
 npm-workspaces monorepo, source-mode TypeScript (tsx + Vite consume `.ts`

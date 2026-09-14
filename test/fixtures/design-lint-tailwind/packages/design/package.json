@@ -1,0 +1,1 @@
+{"name":"@acme/design","private":true,"type":"module","exports":{"./controls":"./controls/index.ts","./controls/*":"./controls/*.tsx"}}

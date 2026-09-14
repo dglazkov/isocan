@@ -1,9 +1,9 @@
 # Design lint: the implementation walk
 
 **Where we are — 14 September 2026:** Research and issues #299–303 are published.
-Design-lint phases 1–3 are CLOSED on current `origin/main`; phase 4 is next.
-Paid evaluation and human ratings wait on a person; repository compatibility
-and the no-spend evaluation harness do not.
+Design-lint phases 1–4 are CLOSED on current `origin/main`; phase 5 is next.
+The no-spend evaluation harness remains work to do. Model-run approval and
+human ratings remain separate person-dependent steps.
 
 The [journeys](journey.md) are acceptance and [design](design.md) names the
 mechanisms. Each phase closes only on its named proof, with a full suite,
@@ -175,7 +175,7 @@ intent rating is claimed.
 
 ## Phase 4 — Optional repository checks and Tailwind proof (#303)
 
-**Status: NOT STARTED.** 2026-09-14 — Uses phase 1 report shape; no native blocker.
+**Status: CLOSED.** 2026-09-14 — Pinned repository and web-tool proofs passed independently; Tailwind is advisory with explicit incomplete coverage and no application dependency cost.
 
 **Work:** Build the pinned local Tailwind runner and reproducible fixture,
 isolated from browser dependencies. Measure monorepo/config/component behavior,
@@ -193,7 +193,56 @@ go/no-go, including a negative control that cannot report a false clean result.
 
 **Trajectory:**
 
-*nothing — implementation has not begun.*
+- **2026-09-14** — An opaque props spread and a plain element's dynamic class
+  produce zero upstream findings with all six rules enabled. Rule execution
+  and complete styling coverage therefore remain separate: advisory use is a
+  go, while a strict design gate is a no-go.
+
+**Proof record:** On base `531733c8`, the full four-worker
+suite passed 5,341 tests (108 skipped); typecheck and build exited 0. The strict
+local `npm run test:ci -- --maxWorkers=6` passed all 579 files: 5,898 tests passed,
+three opt-in model/sandbox tests skipped. The initial app entry is byte-identical
+to design-lint phase 3: 762,562 raw / 258,847 gzip bytes. No app dependency,
+configuration, core code or bundle threshold changed.
+
+The conductor independently installed both portable fixture locks in fresh
+scratch directories. The Tailwind proof passed eight scenarios over sixteen
+baseline files in 2,708.00 ms; the CSS/HTML/axe proof passed 23 assertions across
+21 actual results in 2,268.51 ms. The latter used a real Chrome browser and
+revealed a previously hidden label fault through an actual button click.
+Missing web tooling returns unavailable with exit 2. Real standalone Tailwind
+JSON and human invocations passed; its optional `--fail` returns 2 even on the
+zero-finding control because complete coverage cannot be established.
+
+The Tailwind inputs prove custom theme/components, workspace alias/barrel and
+variants, effective project settings/severities/overrides, missing dependencies
+and config, ignored/suppressed rules, unsupported HTML/CSS, missing theme and a
+readable theme with a compiler-failing import. Fresh invocations observe config
+and theme edits. Nine independently checked real diagnostic/suggestion spans
+cover Unicode, a BOM and every JavaScript line terminator. Actual Tailwind
+compilation retains 13px for `p-3.25`; native analysis rejects that against the
+16px discrete policy.
+
+Independent review corrected nonportable fixture locks and source mapping.
+The first full suite exposed missing cleanup retries and unintended discovery
+of the optional ESLint config; the config now stays inert until copied into
+scratch. A subsequent full run hit the unchanged replica-admission assertion
+in `packages/server/test/passes.test.ts`; all 25 tests in that file passed
+alone, then the complete fast and strict runs above passed. No server code or
+test limit was changed.
+
+Before publication, upstream `d25c478b` changed the identity-menu/peek-card
+interaction. The combined tree passed the full four-worker suite (5,346 tests,
+108 skipped), typecheck and build. Its entry is 762,574 raw / 258,864 gzip bytes;
+the strict proof above predates that upstream UI-only change. Fifteen record
+guards passed. No phase-4 runtime file changed during this refresh.
+
+Operations, core and the browser are deliberately unchanged by phase 4. The source-checkout
+runner has a documented command in README and the agent guide; it adds no native
+CLI verb. Stylelint, HTML-validate and axe remain measured compatibility probes,
+with other technology checks explicitly recommendations.
+[Full evidence](../../research/shadcn-lint/results-2026-09-14-phase4.json) and
+[adoption guidance](../../research/2026-09-14-optional-project-linters.md).
 
 ## Phase 5 — Controlled repair evaluation (#302)
 

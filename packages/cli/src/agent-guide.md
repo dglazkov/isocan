@@ -2098,6 +2098,20 @@ isocan fit <items...>                  # grow items to the size their content wa
   lint compliance alone does not approve the design. Never add tokens or weaken
   a governing policy merely to clear a finding.
 
+  For an optional Tailwind v4 repository audit, run from an isocan source
+  checkout:
+
+  ```sh
+  node scripts/design-lint-repo.mjs --repo /path/to/project --json -- src/example.tsx
+  ```
+
+  This standalone script uses the target repository's existing ESLint config
+  and dependencies, with no installs or fixes. Its advisory report includes
+  explicit incomplete coverage; zero findings does not establish compliance
+  with a DESIGN.md policy. See the
+  [optional-tool research](../../../docs/research/2026-09-14-optional-project-linters.md)
+  for measured compatibility, limits and conditional recommendations.
+
   **Past six screens with no design system, `isocan add` refuses an HTML file.**
   Two screens gets you a note, because the second screen is where a choice
   becomes a convention. Six is where a note that has been ignored stops being

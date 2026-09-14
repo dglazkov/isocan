@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals, context
-note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Phase 2 adds browser findings, local-file audits and conditional repair with honest write receipts. Phase 3 adds scoped recipe contracts, effective policy views and native/DTCG preservation. Repository compatibility and agent lift follow the implementation walk.
+note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Phase 2 adds browser findings, local-file audits and conditional repair with honest write receipts. Phase 3 adds scoped recipe contracts, effective policy views and native/DTCG preservation. Phase 4 adds a measured advisory Tailwind repository runner and isolated CSS/HTML/accessibility probes. Controlled agent evaluation remains next.
 ---
 # Design lint that explains the repair
 
@@ -92,7 +92,7 @@ not reproduce paid runs. The important experimental pattern is a rules-only
 control with equal correction budgets, and separate compliance and fidelity
 outcomes. [Evals and limitations](https://github.com/shadcn-ui/lint/blob/53de86f0e7dcc341a9cb45c383a9f2c454d1e958/docs/evals.md)
 
-## Where isocan already stands
+## Where isocan stood before implementation
 
 The [24 August token research](2026-08-24-design-systems-and-tokens.md) is built:
 DESIGN.md, CSS export, DTCG import/export and design-document checks exist.
@@ -110,7 +110,7 @@ This is a new checking problem, not a reopening of that format decision.
 | [`isocan design audit`](../../packages/cli/src/main.ts) has JSON output; arrival scoring prints a short warning | Add parity and repair guidance to the existing verb and lifecycle |
 | [`DesignSystemView`](../../packages/web/src/components/DesignSystemView.tsx) shows system findings; [`tokens.test.ts`](../../packages/web/test/tokens.test.ts) guards the app's own CSS | Give screen findings a browser surface while retaining app-specific guards |
 
-Source inspection found no `auditScreen` caller in the web app, API or server.
+Baseline source inspection found no `auditScreen` caller in the web app, API or server.
 Arrival scoring is CLI-only, skips `--json`, and runs after storage as a
 best-effort warning. `design audit` reports findings without a nonzero exit for
 them. It checks local scoped systems, but its initial canvas-wide lookup can
@@ -129,7 +129,7 @@ where evidence warrants it; do not change the app's styling stack for a linter.
 The synthetic system names two colors, a 16px body size, an 8px radius and a
 16px spacing token. The full source of each case is in the recorded output.
 
-| HTML input | Current reading | Implication |
+| HTML input | Baseline reading | Implication |
 | --- | --- | --- |
 | Known `#112233` literal | 1 on-system, 0 off-system | A literal may conform today; token identity is a separate future policy |
 | Off-system `#ff0000` literal | 0 on-system, 1 off-system | Positive control: the current check catches its intended case |
@@ -212,8 +212,9 @@ start advisory, baseline measured violations, and tighten deliberate rules.
 
 The implementation walk is [design-lint/phases.md](../projects/design-lint/phases.md).
 The execution queue is [#299](https://github.com/dglazkov/isocan/issues/299).
-The research is **designed**;
-the product changes and the paid agent experiment have not been performed.
+Phases 1–4 are implemented and independently verified; the evidence sections
+below distinguish them from the original baseline. The controlled model
+experiment and human intent ratings remain pending.
 
 | Step | Scope | Proof needed |
 | --- | --- | --- |
@@ -249,8 +250,8 @@ owed. Linting must not mark that acceptance complete. Relate the experiment to
 Implementation acceptance must cover the repo's two surfaces: shared core
 analysis; CLI verb/options and agent-guide reference; browser interaction
 proved in a real browser; README updated only when features ship; existing
-operations for edits; `npm test` and `npm run typecheck`. This session changes
-research, evidence and roadmap records only.
+operations for edits; `npm test` and `npm run typecheck`. The original research step changed
+research, evidence and roadmap records only; later implementation is recorded below.
 
 ## Reproduce the bounded probe
 
@@ -372,3 +373,35 @@ synthetic inputs and outcomes. Run either probe from the repo with
 and other unsupported cascade paths are explicit incomplete coverage. This
 proof establishes enforcement and preservation; paid agent lift and human
 intent ratings remain unmeasured.
+
+
+## Implementation evidence, 14 September: phase 4
+
+The optional source-repository runner executes the target project's existing
+ESLint configuration and pinned public `@shadcn/lint` API in a fresh process,
+without fixes or installation. Eight independently replayed scenarios cover
+sixteen baseline files, including actual theme compilation, custom component
+aliases, disabled rules, broken theme imports and exact Unicode/BOM/line-ending
+source mappings. An opaque props spread remains an upstream blind spot:
+completed rule execution is distinct from complete design coverage. The verdict
+is advisory adoption, with no claim of a strict complete-design gate.
+
+Separate fresh Stylelint, HTML-validate and axe/Playwright fixtures passed 23
+assertions across 21 results, including a real click revealing an accessibility
+fault and explicit unavailable tooling. These are compatibility probes, not
+additional installed application dependencies or general repository adapters.
+The [full optional-tool report](2026-09-14-optional-project-linters.md) retains
+the technology shortlist, primary sources, exact versions and reproduction.
+
+The final fast suite passed 5,341 tests; the strict emulator-backed suite passed
+5,898 tests across 579 files with three opt-in model/sandbox skips. Typecheck
+and build passed. Before the final upstream identity-menu change, the browser entry was byte-for-byte
+unchanged from phase 3; the combined entry is 762,574 raw / 258,864 gzip bytes.
+[Combined evidence](shadcn-lint/results-2026-09-14-phase4.json) records successful
+proofs, earlier corrected failures and the unrelated server-test intermittency.
+No model call or cloud resource was used. Phase 5's controlled harness remains
+next; lint compliance alone has not established agent lift or visual intent.
+
+Publication incorporated upstream identity-menu change `d25c478b`; all 5,346
+fast tests, typecheck and build passed on the combined tree. The strict
+5,898-test result above predates that upstream UI-only change.
