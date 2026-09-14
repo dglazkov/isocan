@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals
-note: phase 1 delivers parsed native HTML diagnostics and governing provenance through shared CLI/API/browser readers. Next is visible findings and conditional repair; contracts, optional repository checks and approved paid evaluation follow.
+note: phases 1–4 deliver parsed diagnostics, conditional repair and scoped contracts on both surfaces, plus an advisory repository runner and measured optional-tool fixtures. The controlled repair harness is next; model-run approval and human ratings remain separate.
 ---
 # A design check that gives the next edit
 

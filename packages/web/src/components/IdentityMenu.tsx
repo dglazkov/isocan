@@ -266,12 +266,24 @@ export function IdentityMenu({
             }}
           />
         )}
+        {/* **Not a credential, and the password managers have to be told.**
+            A single focused text field beside a submit button is the shape
+            they all look for, so 1Password parks its inline button on top of
+            the name you are typing. Each vendor reads its own opt-out
+            attribute and ignores the others, so all three are here; they cost
+            nothing and they fix it for everybody, where the extension's own
+            setting fixes it for one person on one machine. */}
         <input
           className="text-input"
           autoFocus
           aria-label="Your name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore="true"
+          data-form-type="other"
         />
         <button className="btn primary" type="submit" disabled={!renames}>
           Rename

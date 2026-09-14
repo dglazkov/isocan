@@ -48,6 +48,17 @@ export function Presence({ actor }: { actor: Actor }) {
   const joined = useCanvasStore((s) => s.actorJoins);
   const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
+  // **The identity menu opens where the peek card already is.** Clicking your
+  // own face toggles the menu, and the pointer is still on the face that
+  // opened it — so both drew, one over the other, about the same person.
+  //
+  // Suppressed while the menu is open, rather than cleared: `peek` survives,
+  // so closing the menu with a second click on the same face puts the card
+  // straight back, and clicking away closes the menu with the pointer already
+  // gone from the pile, so `onPointerLeave` has cleared `peek` and nothing
+  // returns. Both behaviours fall out of hover meaning hover; neither needs a
+  // rule remembering that a click happened.
+  const identityOpen = useUiStore((s) => s.identityOpen);
   const canvasId = useCanvasStore((s) => s.canvasId);
   // Who could be woken right now: enrolled AND held by a live rc — the same
   // connection-bound set the agent tray reads, so the facepile and the tray
@@ -142,7 +153,9 @@ export function Presence({ actor }: { actor: Actor }) {
           <span className="face-mark face-more">+{overflow}</span>
         </span>
       )}
-      {peeked && <FaceCard face={peeked} names={names} colors={colors} onGo={goTo} />}
+      {peeked && !identityOpen && (
+        <FaceCard face={peeked} names={names} colors={colors} onGo={goTo} />
+      )}
     </div>
   );
 }

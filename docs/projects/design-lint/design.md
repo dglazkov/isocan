@@ -74,23 +74,150 @@ the screen's edit operation; provenance records what was checked and a changed
 governing version invalidates the result. Ordinary editor saves keep their
 existing version-stack behavior; the explicit repair action carries the fence.
 
+The write receipt distinguishes accepted, refused and pending/unconfirmed.
+A queued operation can still land, and a lost response can follow acceptance;
+neither is a refusal. Only an accepted receipt may report a saved repair and
+clear its unchanged draft. Pending results retain the proposed version identity
+and the draft while the client waits for confirmation or reads fresh evidence.
+An authoritative conflict is a refusal. Read failures after an accepted write
+remain unavailable audit evidence, never a failed content save. Captures include
+the rule version as well as content and governing provenance. A draft's opened
+base version stays distinct from a newer current version discovered by a check.
+
 ## Contract schema, version 1
 
-DESIGN.md stores a namespaced `isocan` extension with a versioned `lint` object.
-The exact serialized shape and parser preservation path must be verified and
-recorded before phase 3 implementation. Version 1 is declarative data:
-`version: 1`, a literal/reference policy, recipe identities, owned properties,
-allowed caller properties, named treatments and scoped exceptions with reasons.
-An explicit `data-isocan-recipe` marker selects identity; a separate treatment
-marker selects an approved declaration set. Generic class names confer no
-ownership. Unsupported selector/cascade cases are unexamined, not inferred.
+The `isocan` field is an isocan-specific extension, not a DESIGN.md or DTCG
+standard field. The entire selected governing document supplies the policy;
+contracts never merge across lanes. The smallest useful version is:
 
-Policies follow the selected governing document wholesale; there is no hidden
-global style and no merging across competing lanes. Unknown fields/rules are
-preserved in the native document and reported unsupported; a conversion that
-cannot preserve them must report the loss rather than silently discard data.
-The extension is isocan-specific, not a claimed DESIGN.md/DTCG standard field.
-Existing document edit/version/property operations expose it to both surfaces.
+```yaml
+isocan:
+  lint:
+    version: 1
+    literals: require-references
+    recipes:
+      Button:
+        owns:
+          padding: "{spacing.md}"
+          border-radius: "{rounded.control}"
+        allow:
+          - margin
+          - align-self
+        treatments:
+          compact:
+            padding: "{spacing.sm}"
+      Title:
+        owns:
+          font-weight: "{typography.title.fontWeight}"
+        allow:
+          - font-size
+    exceptions:
+      hero-spacing:
+        recipe: Button
+        properties:
+          - padding
+        reason: "Acme #1 needs additional room for its two-line label."
+```
+
+`lint.version` is the integer 1. Missing `isocan.lint` means the existing token
+policy with exact literals allowed. Within version 1, `literals` defaults to
+`allow`, and recipes/exceptions default to empty maps. The other literal mode
+is `require-references`. Recipe, treatment and exception names are nonempty
+plain identifiers. Property names are lowercase CSS names. Values in `owns`
+and treatment maps are nonempty strings of CSS values and/or DESIGN.md token
+references; unresolved or non-scalar references make that rule unsupported.
+Unknown fields within `lint`, versions, invalid types and unsupported property/value forms
+remain visible as policy problems and incomplete coverage, not a default-pass
+interpretation. No policy data is executable.
+
+An element opts into `data-isocan-recipe="Button"`. An optional
+`data-isocan-treatment="compact"` chooses one treatment of that recipe;
+its declared values replace only named owned properties. A treatment cannot
+silently extend ownership or exempt unrelated rules. An optional
+`data-isocan-exception="hero-spacing"` selects one exception that must name
+that same recipe and specific properties and carry a nonempty reason. It
+relaxes ownership/reference checks only for those properties on that marked
+element. Existing token-membership checks still apply, including on the exempted
+properties; an exception does not silently add an off-scale token. The effective report shows
+which exception and reason were used. Unknown markers are findings under a supported policy, never an
+implicit grant. An unsupported policy version instead reports that its marker
+meaning is unexamined. Generic class names confer no recipe identity.
+
+Version 1 supports ownership of `padding` and its four physical longhands,
+`border-radius` and its four physical corner longhands, `font-size` and
+`font-weight`. Other owned properties are preserved and reported unsupported.
+The `allow` list may name other caller CSS properties; their values still
+follow the existing native token audit. Logical-direction ownership and other
+property families wait for explicit expansion of the supported rule set.
+
+`owns` specifies the expected effective declarations on a marked element;
+those values must be present and match the recipe or selected treatment.
+Equivalent supported shorthand/longhand declarations are checked together so
+`padding-top` cannot bypass ownership of `padding`. Properties in `allow`
+are documented caller controls; they remain subject to the governing token
+policy. Other explicitly authored properties on a marked element are outside
+its approved caller controls and receive a contract finding. A normal base
+style should therefore put its fixed properties in `owns` and its caller
+controls in `allow`. Inherited browser defaults do not count as authored
+caller declarations. Missing owned styling reports only where the supported
+static model can establish absence. Unresolved external, conditional,
+pseudo-class or competing cascade paths remain unexamined.
+
+Version 1 must support explicit inline declarations and direct, unambiguous
+static selectors for the marked element, including simple type, class, ID and
+exact attribute selectors and their compounds without combinators. A clear
+inline override of one matching rule must be checked, not dismissed as wholly
+unknown cascade. It does not infer a component
+implementation or simulate the browser cascade. Any selector or competing
+rule it cannot safely assign and order is reported as incomplete contract
+coverage. The report and UI must label this boundary rather than suggesting
+that a matching inline value proves external styling safe. CSS identifier
+escapes retained by the parser are unexamined in this version; quoted attribute
+strings already decoded by the parser remain supported.
+
+`require-references` applies to governed color, spacing, radius and type-size
+uses, and to governed owned values when a named token is available. Actual
+exported custom-property definitions may contain the token literals; that is
+how the browser receives the values. A local `var(--alias)` is allowed when
+its static resolution actually passes through the corresponding declared
+exported token and resolves to that token's expected value. A local literal
+alias is not proof of token use, and an exported name shadowed with an
+off-system value does not pass. Neutral CSS values retain the analyzer's
+existing boundary. `allow` retains phase 1's exact-literal behavior.
+
+The report carries the effective normalized contract, original extension,
+policy problems, applied treatments/exceptions and governing provenance.
+CLI human and JSON audit output and the browser's Design check expose it.
+Editing the linked governing DESIGN.md uses the existing document editor or
+`design set --in`, creating an ordinary version and normal undo. Saving an
+HTML repair can change only that HTML item; it cannot add a token, edit the
+policy or manufacture an exception in the governing document.
+
+### Preservation before enforcement
+
+The preimplementation round-trip probe found silent loss in the old YAML
+subset: a quoted `#` truncated an exception reason, quoted quotes acquired
+escapes, and unknown booleans, null and nested list maps changed type or value.
+A type cast preserving the `isocan` key was therefore insufficient.
+
+Native serialization must preserve JSON-compatible extension data recursively.
+A canonical JSON flow value for the `isocan` field is valid YAML and provides
+an opaque preservation path without adding a general YAML runtime to the
+initial app. The parser supports that flow form and the documented block-map
+version 1 form, including quoted reasons and string lists. Unknown constructs
+outside its supported YAML subset must produce parse problems; subsequent
+conversions refuse or expose those problems rather than emitting a silently
+weakened document. Round trips compare structured values, not source formatting.
+Unsupported non-JSON runtime values and unsafe or duplicate keys are rejected
+with a reason instead of being coerced or lost.
+
+DTCG export/import carries the whole native extension under
+`$extensions["io.isocan"].isocan`, alongside existing component metadata.
+Unknown nested JSON data survives this path. CSS export remains a derived
+set of custom properties: it cannot carry recipes, reasons or unknown contract
+fields. Callers present a conversion note when such data is present; CSS
+import cannot claim to restore a lost policy. The native document and DTCG
+extension are the supported contract round-trip formats.
 
 ## Optional project tooling
 
@@ -115,3 +242,11 @@ criteria before paid runs. A dry-run harness and rendered fixture review can
 be completed locally. Actual model spend requires a separately stated budget
 and approval; human intent ratings require a person. Record both as open
 until performed rather than fabricating a favorable lift measurement.
+
+
+The phase-5 mechanism is fixed in [evaluation.md](evaluation.md): the model has
+an empty toolset and supplies HTML, while the host exercises the real captured
+repair API on a fresh synthetic daemon. Actual DOM and interaction checks grade
+stored bytes. This bounds the measured claim to correction feedback rather than
+autonomous tool use. On the available Claude Max login, reported dollar cost is
+API-equivalent; actual billed spend remains unavailable without billing evidence.

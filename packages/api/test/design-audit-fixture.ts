@@ -3,6 +3,17 @@ import { canvasItemOf, designSystemProperties, emptyCanvas, type CanvasContents,
 export const auditHome = "https://acme.invalid";
 export const auditHtml = '<p style="color:var(--missing);padding:13px">A prose #ff0000</p>';
 export const auditDesign = (name = "Acme", spacing = "16px") => `---\nname: ${name}\ncolors:\n  ink: "#112233"\nspacing:\n  md: ${spacing}\ntypography:\n  body:\n    fontSize: 16px\nrounded:\n  card: 8px\n---\n## Usage\nSynthetic fixture.\n`;
+/** Two policies share token values so a lane difference can only come from its governing contract. */
+export function auditContractDesign(literals: "allow" | "require-references" = "allow", extension?: unknown): string {
+  const isocan = extension ?? { lint: { version: 1, literals, recipes: {
+    Button: { owns: { padding: "{spacing.md}", "border-radius": "{rounded.card}" }, allow: ["margin", "align-self"], treatments: { compact: { padding: "{spacing.sm}" } } },
+    Title: { owns: { "font-weight": "{typography.body.fontWeight}" }, allow: ["font-size"] },
+  }, exceptions: { "hero-spacing": { recipe: "Button", properties: ["padding"], reason: 'Acme #1 needs room for its "two-line" label.' } } } };
+  return auditDesign(`Acme ${literals}`).replace("  md: 16px", "  md: 16px\n  sm: 8px").replace("    fontSize: 16px", "    fontSize: 16px\n    fontWeight: 700").replace("---\nname:", `---\nisocan: ${JSON.stringify(isocan)}\nname:`);
+}
+
+/** Explicit markers and inline ownership exercise policy without unknown selector paths. */
+export const auditContractHtml = '<button data-isocan-recipe="Button" style="padding:16px;border-radius:8px;margin:16px;align-self:center">Acme</button><h1 data-isocan-recipe="Title" style="font-size:16px;font-weight:700">Acme title</h1>';
 export function auditItem(id: string, mime = "text/html", properties: Record<string, string> = {}, parent?: string): Item {
   const actor = { id: "usr_acme", name: "Acme" };
   const ts = "2026-09-14T12:00:00.000Z";

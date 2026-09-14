@@ -2033,16 +2033,84 @@ isocan fit <items...>                  # grow items to the size their content wa
   screen's governing system: colours, type sizes, radii and declared spacing.
   Findings include original source locations, missing references and candidate
   token repairs. External styles, dynamic expressions and ambiguous CSS remain
-  visibly unexamined; matching literals are allowed. `--json` includes screen
+  visibly unexamined; matching literals are allowed unless the governing
+  contract requires references. `--json` includes screen
   item/version/blob identity, governing item/version/source canvas, rule version,
   diagnostics and coverage, alongside the existing `system`, `screens`,
   `offSystem`, `items` and per-screen `onSystem`/`offSystem` fields. An unavailable
   item has a reason instead of a fabricated clean score. Ordinary auditing is
-  advisory and does not change content. Adding an HTML screen also prints a
-  brief best-effort token warning; run the full audit for coverage and provenance.
+  advisory and does not change content. HTML `add` and `edit` return an `audit`
+  evidence field even under `--json`; a failed later audit reports unavailable
+  while the successful stored version remains successful.
   A DESIGN.md names expected values; it does not inject CSS into a screen.
   Token-reference repairs may require including the exported declarations in
   the artifact. Read each candidate's prerequisites before applying it.
+
+  Each report exposes `policy`: the effective contract, original `isocan`
+  extension, unsupported rules and applied treatments/exceptions with reasons.
+  A governing DESIGN.md may declare `isocan.lint.version: 1` and
+  `literals: require-references`, plus recipes with `owns`, `allow` and
+  `treatments` maps, and reasoned exceptions. HTML opts in explicitly with
+  `data-isocan-recipe="Button"`, `data-isocan-treatment="compact"` or
+  `data-isocan-exception="hero-spacing"`. Generic class names grant nothing.
+  Version 1 checks owned padding, physical border radii, font size and weight;
+  its report states the supported selector/cascade boundary. Exceptions relax
+  only their named ownership/reference checks; off-scale values still fail.
+  Unsupported contracts remain visible with incomplete coverage.
+
+  The nearest governing document supplies the whole contract; lane policies
+  do not merge. Change that document through its ordinary editor or
+  `isocan design set DESIGN.md --in <group>`, then refresh the audit.
+  `isocan undo` restores its prior version. HTML repair changes only the screen.
+  Native DESIGN.md and DTCG `--tokens` exports preserve extension data;
+  `--css` exports token values and carries a note that contracts are omitted.
+  `design import --dry-run --json` includes conversion `notes` and `problems`.
+
+  Select a screen with `isocan design audit --item <item>`. Check a file without
+  saving it with `isocan design audit --file screen.html --item <item>` or
+  `--in <group>` for that scope's context. For entirely local checking, use
+  `isocan design audit --file screen.html --design DESIGN.md`; this needs no
+  canvas or identity. File and editor-draft reports identify the actual input
+  hash, separately from stored versions. `--fail` opts into exit 2 for findings,
+  incomplete/unavailable coverage, omitted token categories or no checked values;
+  command and file-read errors exit 1. An ordinary audit stays advisory.
+
+  An explicit repair carries the version and governing source you reviewed:
+
+  ```sh
+  isocan design audit --item itm_acme --json > audit.json
+  # Write the replacement HTML, retaining the task's content and behavior.
+  isocan design repair itm_acme repaired.html --from-audit audit.json --json
+  ```
+
+  The repair refreshes the system before committing one conditional `item.edit`.
+  Stale screen, governing source or rule versions are refused; read a fresh
+  report before deciding again. Its result contains `before`, `proposed` and
+  post-save `after` evidence. `status: pending` (exit 3) means acceptance is
+  unconfirmed: keep the draft and inspect the reported version before retrying.
+  `status: saved` remains saved if its later audit is unavailable. A changed
+  system or newer screen discovered after saving is explicitly reported. One
+  `isocan undo` restores the prior version. Ordinary `edit` still appends a
+  version; the explicit repair is the action with the captured-version fence.
+
+  Limit an agent's correction loop to **two repair rounds**, refreshing the
+  report after each. Then render and review the screen's intent and interactions;
+  lint compliance alone does not approve the design. Never add tokens or weaken
+  a governing policy merely to clear a finding.
+
+  For an optional Tailwind v4 repository audit, run from an isocan source
+  checkout:
+
+  ```sh
+  node scripts/design-lint-repo.mjs --repo /path/to/project --json -- src/example.tsx
+  ```
+
+  This standalone script uses the target repository's existing ESLint config
+  and dependencies, with no installs or fixes. Its advisory report includes
+  explicit incomplete coverage; zero findings does not establish compliance
+  with a DESIGN.md policy. See the
+  [optional-tool research](../../../docs/research/2026-09-14-optional-project-linters.md)
+  for measured compatibility, limits and conditional recommendations.
 
   **Past six screens with no design system, `isocan add` refuses an HTML file.**
   Two screens gets you a note, because the second screen is where a choice
@@ -2495,7 +2563,8 @@ on the thread before putting one on somebody else's canvas,
 `inbox [--mentions] [--new]`, `seen [--mark] [--canvas <name>]`,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
-`design [--css|--tokens] [set|check]`,
+`design [--css|--tokens] [set|check]`, `design audit [--item|--in|--file|--fail]`,
+`design repair <item> <file> --from-audit <report.json>`,
 `add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle

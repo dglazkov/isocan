@@ -145,9 +145,10 @@ describe("the editor's bar earns its buttons", () => {
   it("offers Save and Revert only over a dirty buffer", () => {
     // A Save button over a clean buffer is a question with no answer — and
     // the habitual ⌘S must not mint an identical version either, so the
-    // guard is in save() as well as in the render.
+    // guard is in save() as well as in the render. The keymap is created
+    // once, so the live writing ref also excludes pending saves and repairs.
     expect(editor).toMatch(/\{dirty && \(/);
-    expect(editor).toMatch(/saving \|\| !dirtyRef\.current\) return;/);
+    expect(editor).toMatch(/writing\.current \|\| !dirtyRef\.current\) return;/);
   });
 });
 

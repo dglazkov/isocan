@@ -21,7 +21,7 @@ describe("the seven recorded native HTML probes", () => {
     expect(report.onSystem).toBe(onSystem);
     expect(report.offSystem.map(v => v.value)).toEqual(off);
     expect(codes(report)).toEqual(expectedCodes);
-    expect(report.ruleVersion).toBe("1.0.0");
+    expect(report.ruleVersion).toBe("1.1.0");
   });
 });
 

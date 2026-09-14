@@ -637,6 +637,16 @@ img { height: auto; }
   width: 260px; padding: 12px;
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop);
+  /* **It hangs off a bar on a page that does not scroll.** `.canvas-page` is
+     `position: fixed; inset: 0; overflow: hidden`, so anything this menu puts
+     below the viewport is not reachable by any gesture — measured at 1280x720
+     it ran 160px past the bottom edge on the canvas LIST, which is the short
+     version of this menu; on a canvas it carries the Controls rows and the
+     experiments too. The list page happened to scroll and hide the bug.
+     `dvh` because a phone's address bar is the case where the last row is the
+     one that goes. */
+  max-height: calc(100dvh - 88px);
+  overflow-y: auto; overscroll-behavior: contain;
 }
 .identity-menu { display: flex; flex-direction: column; gap: 10px; }
 /* The face, left of the name it stands in for — same disc as everywhere else,

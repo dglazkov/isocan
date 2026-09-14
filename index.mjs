@@ -41,6 +41,13 @@ export const {
   readDesignAudit,
   designAuditPort,
   readCanvasDesignAudit,
+  designAuditInput,
+  readDesignAuditAdvisory,
+  auditDesignSource,
+  readDesignSourceAudit,
+  designAuditFails,
+  repairDesignScreen,
+  repairDesignItem,
   waitForFeedback,
   waitForResolvedFeedback,
   // canvas-groups.ts — explicit membership and resolved dry-run reports

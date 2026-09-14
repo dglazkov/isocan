@@ -23,6 +23,16 @@ second week.
 
 ## 14 September 2026
 
+- A DESIGN.md can now declare recipe-owned styling, caller controls, approved
+  treatments and exceptions with reasons. Design check and the CLI show the
+  effective policy for each screen. Edit the governing document and Undo as
+  usual; native and DTCG round trips preserve its contract and unknown metadata.
+
+- Open **Design check** beside an HTML screen to inspect findings and select
+  their source. **Save repair** keeps one undoable version and refuses a stale
+  edit while retaining your draft. Agents can check local files and submit
+  captured repairs through `isocan design audit` and `isocan design repair`.
+
 - `isocan design audit` points to the styling that needs attention: missing
   CSS variables, off-scale spacing and type, and the existing tokens that may
   repair them. Reports follow each screen's scoped or inherited design system

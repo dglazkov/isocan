@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { toDtcg } from "../src/tokens.ts";
+import { compileDesignContract } from "../src/design-contract.ts";
+import { parseDesign, serializeDesign } from "../src/designmd.ts";
 import { classifyToken, detectFormat, importDesign, readCssTokens } from "../src/designimport.ts";
 
 /**
@@ -148,4 +151,64 @@ describe("reading a W3C token file", () => {
     expect(importDesign("{ not json").problems[0]).toContain("not valid JSON");
     expect(importDesign(":root {}").problems[0]).toContain("no custom properties");
   });
+});
+
+describe("policy preservation in imports", () => {
+  it("retains unknown JSON policy data in native DTCG vendor metadata", () => {
+    const isocan = { lint: { version: 2, future: [true, false, null, { why: 'Acme #1 keeps "quotes"', next: [{ enabled: true }] }] } };
+    const imported = importDesign(JSON.stringify({
+      $extensions: { "io.isocan": { isocan } },
+      spacing: { md: { $type: "dimension", $value: { value: 16, unit: "px" } } },
+    }));
+    expect(imported.problems).toEqual([]);
+    expect(imported.notes).toEqual([]);
+    expect(imported.tokens.isocan).toEqual(isocan);
+    expect(imported.tokens.spacing).toEqual({ md: "16px" });
+  });
+
+  it("warns that a CSS import cannot restore the original policy", () => {
+    const imported = importDesign(":root { --spacing-md: 16px; }");
+    expect(imported.problems).toEqual([]);
+    expect(imported.tokens.isocan).toBeUndefined();
+    expect(imported.notes.join(" ")).toMatch(/cannot restore isocan policies/);
+  });
+
+  it.each([
+    '{"$extensions":{"io.isocan":{"isocan":{"lint":{"version":1,"version":2}}}}}',
+    '{"$extensions":{"io.isocan":{"isocan":{"__proto__":{"x":true}}}}}',
+    '{"$extensions":{"io.isocan":{"isocan":{"constructor":null}}}}',
+  ])("rejects unsafe or duplicate keys in imported policy JSON", json => {
+    const imported = importDesign(json);
+    expect(imported.problems.join(" ")).toMatch(/duplicate key|unsafe key/);
+    expect(imported.tokens.isocan).toBeUndefined();
+  });
+});
+
+it("keeps the effective native contract usable after export, generic import and serialization", () => {
+  const tokens = {
+    spacing: { sm: "8px", md: "16px" }, rounded: { control: "4px" }, typography: { title: { fontWeight: 600 } },
+    isocan: { lint: { version: 1, literals: "require-references", recipes: {
+      Button: { owns: { padding: "{spacing.md}", "border-radius": "{rounded.control}" }, allow: ["margin"], treatments: { compact: { padding: "{spacing.sm}" } } },
+      Title: { owns: { "font-weight": "{typography.title.fontWeight}" }, allow: ["font-size"] },
+    }, exceptions: { hero: { recipe: "Button", properties: ["padding"], reason: 'Acme #1 needs "room".' } } } },
+  };
+  const before = compileDesignContract(tokens);
+  expect(before.status).toBe("supported");
+  const imported = importDesign(JSON.stringify(toDtcg(tokens)));
+  expect(imported.problems).toEqual([]);
+  const native = parseDesign(serializeDesign(imported.tokens, "## Overview\n\nSynthetic."));
+  expect(native.problems).toEqual([]);
+  const after = compileDesignContract(native.tokens);
+  expect(after.problems).toEqual([]);
+  expect(after).toEqual(before);
+});
+
+it("reports malformed vendor metadata and unrepresentable native token shapes instead of discarding them silently", () => {
+  expect(importDesign('{"$extensions":{"io.isocan":true}}').problems.join(" ")).toMatch(/expected an object/);
+  const nested = importDesign(JSON.stringify({
+    $extensions: { "io.isocan": { isocan: { lint: { version: 2 } } } },
+    color: { nested: { brand: { $type: "color", $value: "#112233" } } },
+  }));
+  expect(nested.tokens.isocan).toEqual({ lint: { version: 2 } });
+  expect(nested.problems).toEqual(["color.nested.brand: unsupported native DTCG value could not be restored; preserved contract references may be unresolved"]);
 });

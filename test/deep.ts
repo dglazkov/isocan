@@ -1,3 +1,4 @@
+import { withoutComments } from "./source.ts";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -184,13 +185,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
  * whose cases quote those strings in code; that file is declared in
  * `FAST_SPAWNERS`, which is the honest answer rather than an exception.
  */
-export function withoutProse(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .split("\n")
-    .filter((line) => !/^\s*(\/\/|\*)/.test(line))
-    .join("\n");
-}
+export const withoutProse = withoutComments;
 
 /** The `./` imports of a file — a fixture beside it counts as part of it. */
 export function siblingsOf(source: string): string[] {
