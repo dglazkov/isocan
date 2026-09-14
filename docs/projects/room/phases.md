@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–3 and 4 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Phase 3, answered elsewhere, is CLOSED: the cursor and hold routes require the actor, and orphans are inert. Phase 4, the bundle a host installs, is CLOSED and walked. Phase 3.5, keys nobody else derives, is PART-DONE: built and proved here, its hosted measurement waits on a second dev badge. Next: room phase 5, the walks.** Seven phases, none
+**Where we are: phases 0–3 and 4 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Phase 3, answered elsewhere, is CLOSED: the cursor and hold routes require the actor, and orphans are inert. Phase 4, the bundle a host installs, is CLOSED and walked. Phase 3.5, keys nobody else derives, is PART-DONE: built and proved here, its hosted measurement waits on a second dev badge. Phase 5 is PART-DONE: journeys 2 and 3 walked, and journey 1 on dev waits on Dimitri (it moves this laptop's real agents to machine keys, and it needs the sheep station).** Seven phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -269,7 +269,7 @@ this phase; the walks of journeys 1 and 2 are phase 5.
 
 ## Phase 5 — The walks
 
-**Status: NOT STARTED.**
+**Status: PART-DONE 2026-09-14.** Journey 2 walked with two real rcs and real claude-code turns, and journey 3 walked again against `release` at c80959e. Journey 1 on dev.isocan.io waits on Dimitri: running it moves this laptop's real agents to machine keys, and its sheep turn needs the station.
 
 **Outcome:** journeys 1 and 2 walked, after phases 3 and 3.5 land. Journey 1
 on this laptop against dev.isocan.io, with one agent on `claude-code`
@@ -282,7 +282,32 @@ that carries phase 3.
 **Proof:** the walks, recorded against the journeys' acceptance lines.
 `npm test`, `npm run test:deep` and `npm run typecheck` pass whole.
 
-**Trajectory:** to be written at close.
+**Walked 13–14 Sep 2026.**
+
+- **Journey 2.** A scratch daemon on port 4571 served two homes, one
+  per machine: Nico's with Percy and Wren's with Wendy, both on
+  `claude-code` and started with the checkout's CLI.
+  - Each rc said the other's agent exactly once: "Wendy is not held by
+    this machine — a pass minted for Wendy hands it over, or re-add it
+    here", and the same for Percy.
+  - `@Percy` from Nico was answered by the first rc ("Hello Nico, Percy
+    here…"). `@Wendy` from Wren was answered by the second.
+  - Neither log has a failed turn, "could not hold", "another park
+    adopted", "retrying" or a system-voice comment.
+  - The first rc was then stopped, and a new `@Percy` got nothing from
+    the second, which had stayed quiet overnight (about 10 hours, 18
+    lines).
+  - Acceptance held: one sentence naming the agent and the pass, and
+    never claimed, faced or dispatched.
+- **Journey 3, again.** Against `release` at c80959e, which carries
+  phases 3 and 3.5: the install exits 0, `import("isocan/rc")` gives 15
+  exports (`enrolmentKey` left in phase 3.5), and the browser one-liner
+  exits 0 with inputs `entry.mjs` and the bundle, externals `[]` and no
+  `node:`.
+
+**Trajectory:**
+
+- **2026-09-14** — Open: journey 1 on dev.isocan.io (now at c80959e, carrying phases 3 and 3.5). Running the upgraded `isocan rc` from this laptop's `~/.isocan` moves every agent it holds, on every home it speaks to, to machine keys, and the sheep turn needs sheep-2, which predates bleat and fold. Both wait on Dimitri.
 
 ## Later, and not here
 
