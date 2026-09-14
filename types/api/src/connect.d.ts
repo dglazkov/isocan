@@ -3,7 +3,7 @@ import { type ActivityEntry } from "../../core/src/index.js";
 import { type Ctx } from "./ctx.js";
 import { type ExplicitIdentity } from "./identity.js";
 import { type ContextSummaryOptions } from "./context-summary.js";
-import type { CanvasDesignAudit, DesignAuditOptions } from "./design-audit-reader.js";
+import type { CanvasDesignAudit, DesignAuditOptions, DesignRepairRequest, DesignRepairResult } from "./design-audit-reader.js";
 import { type FeedbackOptions, type FeedbackResult } from "./feedback.js";
 import type { ContextExtras, ContextLayer } from "../../core/src/index.js";
 import { type DaemonRoutes } from "./routes.js";
@@ -201,6 +201,8 @@ export declare class CanvasHandle {
     contextSummary(extras?: ContextExtras, options?: ContextSummaryOptions): Promise<ContextLayer[]>;
     /** Parsed HTML diagnostics with per-screen governing provenance and explicit coverage. */
     designAudit(options?: DesignAuditOptions): Promise<CanvasDesignAudit>;
+    /** Submit an explicitly authored, version-checked repair and retain its before/after audit evidence. */
+    designRepair(itemId: string, request: Omit<DesignRepairRequest, "canvasId" | "itemId">): Promise<DesignRepairResult>;
     /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */
     waitForFeedback(options?: FeedbackOptions): Promise<FeedbackResult>;
     contextPage(options: ContextPageOptions): Promise<ContextContentPage>;

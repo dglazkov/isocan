@@ -1,5 +1,4 @@
 import { classifyAutomaticSource } from "@isocan/api/context";
-import { auditScreen } from "@isocan/core/design-audit";
 import { registerPersonalContext } from "./personal-context.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
@@ -468,6 +467,16 @@ import {
   claimSessionIdentity,
   linkedCanvasesOf,
   readDesignAudit,
+  readDesignAuditAdvisory,
+  readDesignSourceAudit,
+  auditDesignSource,
+  designAuditFails,
+  designAuditPort,
+  contextHome,
+  repairDesignItem,
+  type DesignAuditEvidence,
+  type CanvasDesignAudit,
+  type SourceDesignAudit,
   HOME_CLAIM_KEY,
   noIdentityHere,
   reclaimIdentity,
@@ -476,6 +485,7 @@ import {
   writeIdentity,
 } from "@isocan/api";
 import { agentGuide } from "./agent-guide.ts";
+import { printDesignAudit, designRepairCapture } from "./design-audit.ts";
 import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
@@ -6282,67 +6292,19 @@ function pickOne<T extends string>(
   return found;
 }
 
-/**
- * **The audit runs when the screen lands, not when somebody remembers.**
- *
- * > "When I ask for screens I would love for an audit to run after and get
- * > scores as well as instructions on how to improve"
- *
- * `/design-audit` produced zero documents on six canvases because it is a step
- * a person has to type. This is the same question asked at the only moment it
- * is free: the screen is in hand, the system is one fetch away, and whoever
- * added it is still here.
- *
- * It scores ONLY the screen that just arrived. `isocan design audit` scores the
- * canvas, and a wall of other people's findings after adding one file is a wall
- * somebody learns to scroll past.
- *
- * Silent on a clean screen. A line that says "nothing wrong" after every add is
- * how a person stops reading the ones that say something — and silence here is
- * unambiguous, because the add already printed its own success.
- *
- * Best-effort throughout, on stderr, and never a reason the add fails: the item
- * is stored by the time this runs, so an error here would report a failure that
- * did not happen.
- */
-async function scoreScreenOnArrival(
-  ctx: Ctx,
-  canvasId: string,
-  itemId: string,
-  mimeType: string,
-  data: Buffer,
-): Promise<void> {
-  if (ctx.json || mimeType !== "text/html") return;
-  try {
-    const snapshot = await ctx.client.snapshot(canvasId);
-    // The system that governs where the screen LANDED (scoped design
-    // systems): a lane's screen is scored against the lane's.
-    const landed = snapshot.canvas.items[itemId];
-    const system = designSystem(snapshot.canvas, landed ? { at: landed } : {});
-    if (!system) return;
-    const lane = landed ? canvasScopes(snapshot.canvas, system)[0] : null;
-    const version = system.versions.find((v) => v.id === system.currentVersionId) ?? system.versions[0];
-    if (!version) return;
-    const doc = parseDesign((await ctx.client.downloadBlob(canvasId, version.blobHash)).toString("utf8"));
-    const audit = auditScreen(data.toString("utf8"), doc.tokens);
-    if (audit.offSystem.length === 0) return;
-    console.error(
-      `note: ${audit.offSystem.length} value${audit.offSystem.length === 1 ? "" : "s"} here that ` +
-        `${doc.tokens.name ?? system.title} never named ` +
-        `(${audit.onSystem} on-system). Worst first:`,
-    );
-    for (const off of audit.offSystem.slice(0, 4)) {
-      console.error(`  ${off.value}  ${off.kind}, ${off.count}x, line ${off.line}`);
-    }
-    if (audit.offSystem.length > 4) console.error(`  …and ${audit.offSystem.length - 4} more`);
-    console.error(
-      lane
-        ? `  isocan design --css --in "${lane.title}"   the tokens to build against, ready to paste`
-        : `  isocan design --css   the tokens to build against, ready to paste`,
-    );
-    console.error(`  isocan get ${itemId} screen.html   to fix it in place`);
-  } catch {
-    // Scoring is a courtesy. It must never be the reason an add reports failure.
+/** A stored HTML write receives advisory evidence on both JSON and human paths. */
+async function scoreScreenOnArrival(ctx: Ctx, canvasId: string, itemId: string, mimeType: string): Promise<DesignAuditEvidence | undefined> {
+  if (mimeType !== "text/html") return undefined;
+  return readDesignAuditAdvisory(() => readDesignAudit(ctx, canvasId, { itemIds: [itemId] }));
+}
+
+/** Output stays on stderr after the successful write's ordinary receipt. */
+function printArrivalAudit(audit: DesignAuditEvidence | undefined): void {
+  if (!audit) return;
+  if (audit.status === "unavailable") { console.error(`note: saved; design audit unavailable: ${audit.reason}`); return; }
+  if (designAuditFails(audit.report)) {
+    console.error("note: saved; design audit is advisory:");
+    printDesignAudit(audit.report, console.error);
   }
 }
 
@@ -6520,7 +6482,6 @@ program
 
         // Check if there is a distinct visual face (explicit --visual, or HTML with inlined assets)
         let visualFace: VisualFace | undefined;
-        let visualData: Buffer | undefined;
         if (opts.visual) {
           const visRaw = await fs.readFile(opts.visual);
           const visFilename = path.basename(opts.visual);
@@ -6540,7 +6501,6 @@ program
             filename: visFilename,
             size: visUpload.size,
           };
-          visualData = visData;
         } else if (mimeType === "text/html" || mimeType === "text/markdown") {
           const inlined = await (mimeType === "text/markdown" ? inlineMarkdownAssets : inlineHtmlAssets)(file, rawSource.toString("utf8"));
           if (inlined !== rawSource.toString("utf8")) {
@@ -6552,7 +6512,6 @@ program
               filename,
               size: visUpload.size,
             };
-            visualData = inlinedData;
           }
         }
 
@@ -6594,11 +6553,12 @@ program
           ? (groupPlacementFor(snapshot, { ...opts, at: `${Math.floor(inkBox.minX)},${Math.floor(inkBox.minY)}` }) ?? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) })
           : placementFor(snapshot, opts, { width, height });
         const itemId = newItemId();
+        const versionId = newVersionId();
         const result = await sendOp(ctx, p.id, {
           type: "item.add",
           itemId,
           version: {
-            id: newVersionId(),
+            id: versionId,
             blobHash: upload.blobHash,
             mimeType,
             filename,
@@ -6613,16 +6573,11 @@ program
           ...(Object.keys(properties).length > 0 ? { properties } : {}),
         });
         const placed = insertionReceiptPlacement(result.envelope.op, itemId);
-        if (ctx.json) return printJson({ itemId, placement: placed });
+        const audit = await scoreScreenOnArrival(ctx, p.id, itemId, mimeType);
+        if (ctx.json) return printJson({ itemId, versionId, blobHash: upload.blobHash, placement: placed, ...(audit ? { audit } : {}) });
         console.log(`added ${itemId} (${filename}) at ${placed.x},${placed.y}`);
         await noteMissingDesignSystem(ctx, p.id);
-        await scoreScreenOnArrival(
-          ctx,
-          p.id,
-          itemId,
-          visualFace ? visualFace.mimeType : mimeType,
-          visualData ?? rawSource,
-        );
+        printArrivalAudit(audit);
       },
     ),
   );
@@ -8769,7 +8724,10 @@ program
           ...(visualFace ? { visual: visualFace } : {}),
         },
       });
+      const audit = await scoreScreenOnArrival(ctx, p.id, item.id, mimeType);
+      if (ctx.json) return printJson({ itemId: item.id, versionId, blobHash: upload.blobHash, versions: item.versions.length + 1, ...(audit ? { audit } : {}) });
       console.log(`new version ${versionId} of ${item.id} (${item.versions.length + 1} total)`);
+      printArrivalAudit(audit);
     }),
   );
 
@@ -10333,46 +10291,58 @@ somebody invented and imposed.`,
  */
 style
   .command("audit")
-  .description("Which values the screens here use that the design system never named")
-  .option("--in <area>", "only the screens in this area, against the system that governs it")
+  .description("Parsed screen styling, source locations, repairs and coverage")
+  .option("--item <item>", "audit this HTML item only")
+  .option("--in <area>", "audit screens in this group or legacy area")
+  .option("--file <file>", "audit local HTML bytes without saving them")
+  .option("--design <file>", "use a local DESIGN.md with --file; no canvas connection")
+  .option("--fail", "exit 2 for findings, unavailable/incomplete or empty coverage (read/command errors exit 1)")
   .action(
-    run(async (opts: { in?: string }, cmd: Command) => {
+    run(async (opts: { item?: string; in?: string; file?: string; design?: string; fail?: boolean }, cmd: Command) => {
+      if (opts.item && opts.in) throw new Error("Choose --item or --in for the governing source location.");
+      if (opts.design && (!opts.file || opts.item || opts.in)) throw new Error("--design requires --file and cannot also select canvas context.");
+      let report: CanvasDesignAudit | SourceDesignAudit;
+      if (opts.file && opts.design) {
+        const [text, designText] = await Promise.all([fs.readFile(opts.file, "utf8"), fs.readFile(opts.design, "utf8")]);
+        report = await auditDesignSource(text, designText, { label: opts.file, designLabel: opts.design });
+      } else {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const item = opts.item ? resolveItem(snapshot, opts.item) : null;
+        const scope = designScope(snapshot, opts.in);
+        const within = scope.at && "id" in scope.at ? scope.at : null;
+        if (opts.file) report = await readDesignSourceAudit(designAuditPort(ctx), {
+          canvasId: p.id, canvas: snapshot.canvas, home: await contextHome(ctx, p.id), text: await fs.readFile(opts.file, "utf8"), label: opts.file,
+          ...(item || within ? { atId: (item ?? within)!.id } : {}),
+        });
+        else report = await readDesignAudit(ctx, p.id, { ...(item ? { itemIds: [item.id] } : {}), ...(within ? { scopeId: within.id } : {}) }, snapshot);
+      }
+      if (cmd.optsWithGlobals().json) printJson(report); else printDesignAudit(report);
+      if (opts.fail && designAuditFails(report)) process.exitCode = 2;
+    }),
+  );
+
+style
+  .command("repair <item> <file>")
+  .description("Save an authored HTML repair against captured screen and design versions")
+  .requiredOption("--from-audit <file>", "JSON captured by design audit --item <item> --json")
+  .action(
+    run(async (ref: string, file: string, opts: { fromAudit: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const scope = designScope(snapshot, opts.in);
-      const within = scope.at && "id" in scope.at ? scope.at : null;
-      const report = await readDesignAudit(ctx, p.id, within ? { scopeId: within.id } : {}, snapshot);
-      if (ctx.json) return printJson(report);
-      if (report.screens === 0) return console.log(`no screens on ${p.title} yet`);
-      console.log(
-        `${report.offSystem} off-system value${report.offSystem === 1 ? "" : "s"} across ${report.screens} screen${report.screens === 1 ? "" : "s"}, ` +
-          `${report.audited} audited${report.system ? ` against ${report.system}` : ""}`,
-      );
-      for (const row of [...report.items].sort((a, b) =>
-        (b.status === "audited" ? b.diagnostics.length : 0) - (a.status === "audited" ? a.diagnostics.length : 0))) {
-        if (row.status === "unavailable") {
-          console.log(`\n  ${row.title} — not audited: ${row.reason}`);
-          continue;
-        }
-        const warnings = row.diagnostics.filter(one => one.severity === "warning");
-        console.log(`\n  ${row.title} — ${warnings.length} finding${warnings.length === 1 ? "" : "s"}, ${row.onSystem} on-system values`);
-        console.log(`    ${row.governing.name}${row.governing.inherited ? `, inherited from ${row.governing.canvasId}` : ""} (${row.governing.itemId}, ${row.governing.versionId})`);
-        for (const finding of row.diagnostics.slice(0, 8)) {
-          console.log(`    ${finding.code}  line ${finding.range.start.line}:${finding.range.start.column}: ${finding.explanation}`);
-          for (const candidate of finding.candidates.slice(0, 3)) {
-            console.log(`      consider ${candidate.value} — ${candidate.explanation}`);
-            for (const prerequisite of candidate.prerequisites) console.log(`        ${prerequisite}`);
-          }
-        }
-        if (row.diagnostics.length > 8) console.log(`    …and ${row.diagnostics.length - 8} more`);
-        if (!row.coverage.complete) {
-          console.log(`    Coverage incomplete: ${row.coverage.unexamined.length} unexamined region${row.coverage.unexamined.length === 1 ? "" : "s"}`);
-          for (const region of row.coverage.unexamined.slice(0, 4)) console.log(`      ${region.code}  line ${region.range.start.line}:${region.range.start.column}: ${region.explanation}`);
-          if (row.coverage.unexamined.length > 4) console.log(`      …and ${row.coverage.unexamined.length - 4} more unexamined regions`);
-        }
-        if (row.coverage.omittedCategories.length) console.log(`    Not governed: no tokens for ${row.coverage.omittedCategories.join(", ")}`);
-      }
-      for (const source of report.refusedSources) console.log(`\n  Inheritance unavailable (${source.canvasId}): ${source.reason}`);
+      const item = resolveItem(snapshot, ref);
+      const capture = designRepairCapture(JSON.parse(await fs.readFile(opts.fromAudit, "utf8")), p.id, item.id);
+      const result = await repairDesignItem(ctx, { ...capture, canvasId: p.id, itemId: item.id, text: await fs.readFile(file, "utf8") });
+      if (ctx.json) printJson(result);
+      else if (result.status === "saved") {
+        console.log(`saved repair ${result.versionId} of ${item.id}; one undo restores the prior version`);
+        if (result.governingChanged) console.error("note: the governing design changed during the save; review the fresh report.");
+        if (result.superseded) console.error("note: another version is now current; the accepted repair remains in the version stack.");
+        if (result.after.status === "available") printDesignAudit(result.after.report); else console.error(`note: saved; post-save design audit unavailable: ${result.after.reason}`);
+      } else if (result.status === "pending") console.error(`repair ${result.versionId} is unconfirmed: ${result.reason}. Check that version before retrying.`);
+      else console.error(`repair refused: ${result.reason}`);
+      if (result.status === "refused") process.exitCode = 1;
+      if (result.status === "pending") process.exitCode = 3;
     }),
   );
 

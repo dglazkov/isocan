@@ -32,8 +32,8 @@
  * the server holds — never on an animation having visibly run. A checker that
  * cannot tell its own limits from a defect generates confident nonsense.
  */
-import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -185,6 +185,7 @@ async function rig() {
 
   return {
     origin,
+    home,
     b,
     click: rigClick,
     /**
@@ -338,6 +339,148 @@ async function makeCanvas(rig, title) {
 const IDLE_BOUND = 15;
 
 export const JOURNEYS = [
+  {
+    name: "design-lint",
+    what: "CLI and browser findings agree; source selection, one-version repair, undo and stale refusal preserve edits",
+    async run(rig) {
+      await rig.b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme design lint");
+      const { b } = rig;
+      const bad = '<p style="color:var(--missing);padding:13px">A prose #ff0000</p>';
+      const good = '<p style="color:#112233;padding:16px">A prose #ff0000</p>';
+      const newer = good.replace("A prose", "Acme newer");
+      const htmlFile = path.join(rig.home, "acme-screen.html");
+      const designFile = path.join(rig.home, "DESIGN.md");
+      const newerFile = path.join(rig.home, "acme-newer.html");
+      writeFileSync(htmlFile, bad);
+      writeFileSync(newerFile, newer);
+      writeFileSync(designFile, '---\nname: Acme system\ncolors:\n  ink: "#112233"\nspacing:\n  md: 16px\ntypography:\n  body:\n    fontSize: 16px\nrounded:\n  card: 8px\n---\n## Usage\nSynthetic fixture.\n');
+      const runCli = (...args) => { const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+        cwd: rig.home, encoding: "utf8", env: { ...process.env, ISOCAN_HOME: rig.home,
+          ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-lint-journey", ISOCAN_HARNESS: "test" },
+      }); return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out; };
+      runCli("identity", "--session", "--name", "Acme Lint CLI");
+      runCli("--canvas", id, "design", "set", designFile);
+      const added = runCli("--canvas", id, "add", htmlFile, "--title", "Acme CLI screen");
+      const cliAudit = runCli("--canvas", id, "design", "audit").items.find(item => item.itemId === added.itemId);
+      const expected = ["design/missing-variable", "design/off-scale-spacing"];
+      const same = (actual, wanted, label) => { if (JSON.stringify(actual) !== JSON.stringify(wanted)) throw new Error(`${label}: ${JSON.stringify(actual)} != ${JSON.stringify(wanted)}`); };
+      same(cliAudit?.diagnostics.map(f => f.code), expected, "the CLI's two seeded findings");
+      const snapshot = async () => { const result = await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json())`); if (!result?.canvas) throw new Error(`snapshot response: ${JSON.stringify(result)}`); return result.canvas; };
+      const beforeAdd = Object.keys((await snapshot()).items);
+      // The native chooser is opened through real UI controls, then receives
+      // a filesystem selection through CDP (never a synthetic element.click).
+      await rig.press("k", { meta: true });
+      await until(b, `!!document.querySelector('.palette')`, "launcher");
+      await rig.type("Add");
+      await rig.clickText(".palette-row", "Add…");
+      await until(b, `!!document.querySelector('.add-kinds')`, "Add kinds");
+      await b.send("Page.setInterceptFileChooserDialog", { enabled: true });
+      const chosen = b.once("Page.fileChooserOpened");
+      await rig.clickText(".add-kind", "Files");
+      const chooser = await Promise.race([chosen, sleep(5000).then(() => { throw new Error("native file picker did not open"); })]);
+      await b.send("DOM.setFileInputFiles", { files: [htmlFile], backendNodeId: chooser.backendNodeId });
+      await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.keys(r.canvas.items).some(id => !${JSON.stringify(beforeAdd)}.includes(id)))`, "browser HTML upload");
+      const webItem = Object.values((await snapshot()).items).find(item => !beforeAdd.includes(item.id));
+      const original = webItem.currentVersionId;
+      await rig.go(`/p/${id}/w/${webItem.id}`);
+      await until(b, `!!document.querySelector('.stage-preview-toolbar') || !!document.querySelector('.stage-editor')`, "HTML workbench");
+      if (!await b.ev(`!!document.querySelector('.stage-editor')`)) await rig.clickText("button", "Design check");
+      await until(b, `document.querySelector('.design-lint-summary')?.dataset.designFindings === '2'`, "browser's two seeded findings");
+      const screenshot = path.join(tmpdir(), `isocan-design-lint-${Date.now()}.png`);
+      writeFileSync(screenshot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+      const webCodes = await b.ev(`[...document.querySelectorAll('[data-design-code]')].map(el => el.dataset.designCode)`);
+      same(webCodes, expected, "browser seeded findings");
+      same(webCodes, cliAudit.diagnostics.map(f => f.code), "CLI/browser findings");
+      const webLocations = await b.ev(`[...document.querySelectorAll('[data-design-code] .design-lint-location')].map(el => el.textContent.trim())`);
+      same(webLocations, cliAudit.diagnostics.map(f => `Line ${f.range.start.line}:${f.range.start.column} · ${f.actual}`), "CLI/browser actual values and source positions");
+      if (!await b.ev(`document.querySelector('.design-lint-source').textContent.includes(${JSON.stringify(cliAudit.input.sha256)})`)) throw new Error("browser checked hash differs from CLI bytes");
+      const suggestions = '[data-design-code="design/off-scale-spacing"] details summary';
+      await b.ev(`document.querySelector(${JSON.stringify(suggestions)}).scrollIntoView({block:'center'})`);
+      await rig.click(suggestions, "spacing repair suggestions");
+      if (!await b.ev(`document.querySelector('[data-design-code="design/off-scale-spacing"] details[open]')?.textContent.includes('isocan design --css')`)) throw new Error("missing CSS declaration prerequisite is not reachable");
+      await rig.click(suggestions, "close spacing suggestions");
+      const location = '[data-design-code="design/off-scale-spacing"] .design-lint-location';
+      await b.ev(`document.querySelector(${JSON.stringify(location)}).scrollIntoView({block:'center'})`);
+      await rig.click(location, "spacing finding source");
+      const selected = await b.ev(`window.getSelection().toString()`);
+      same(selected, "13px", "selected source text");
+      await b.send("Input.insertText", { text: "16px" });
+      await until(b, `document.querySelector('.design-lint-summary')?.dataset.designFindings === '1'`, "spacing draft recheck");
+      await b.ev(`document.querySelector('[data-design-code="design/missing-variable"] .design-lint-location').scrollIntoView({block:'center'})`);
+      await rig.click('[data-design-code="design/missing-variable"] .design-lint-location', "missing variable source");
+      same(await b.ev(`window.getSelection().toString()`), "var(--missing)", "missing variable selection");
+      await b.send("Input.insertText", { text: "#112233" });
+      await until(b, `document.querySelector('.design-lint-summary')?.dataset.designFindings === '0'`, "repaired draft check");
+      await rig.clickText(".design-lint button", "Save repair");
+      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair saved as one version')`, "accepted repair receipt");
+      let item = (await snapshot()).items[webItem.id];
+      same(item.versions.length, webItem.versions.length + 1, "repair version count");
+      const savedVersion = item.currentVersionId;
+      const readItem = async current => {
+        const hash = current.versions.find(v => v.id === current.currentVersionId).blobHash;
+        return b.ev(`fetch('/api/projects/${id}/blobs/${hash}').then(r => r.text())`);
+      };
+      same(await readItem(item), good, "accepted repaired bytes");
+      await rig.go(`/p/${id}`);
+      await until(b, `!!document.querySelector('.zoom-controls')`, "canvas undo controls");
+      await rig.click('button[title="Undo (⌘Z)"]', "canvas version Undo");
+      await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.canvas.items['${webItem.id}'].currentVersionId === '${original}')`, "repair undo");
+      same(await readItem((await snapshot()).items[webItem.id]), bad, "undo restored original bytes");
+      await rig.go(`/p/${id}/w/${webItem.id}`);
+      await until(b, `!!document.querySelector('.cm-content')`, "editor after undo");
+      await rig.click(".cm-content", "HTML editor");
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
+      await b.send("Input.insertText", { text: good });
+      await until(b, `document.querySelector('.design-lint-summary')?.dataset.designFindings === '0'`, "new repair draft");
+      runCli("--canvas", id, "edit", webItem.id, newerFile);
+      await until(b, `document.querySelector('.stage-editor-note')?.textContent.includes('landed')`, "concurrent version arrival");
+      await until(b, `[...document.querySelectorAll('.design-lint button')].some(el => el.textContent === 'Save repair' && !el.disabled)`, "fresh draft report retaining opened base");
+      const concurrent = (await snapshot()).items[webItem.id];
+      await rig.clickText(".design-lint button", "Save repair");
+      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair not saved')`, "stale repair refusal");
+      item = (await snapshot()).items[webItem.id];
+      same(item.currentVersionId, concurrent.currentVersionId, "stale repair kept concurrent version");
+      same(item.versions.length, concurrent.versions.length, "stale repair added no version");
+      same(await readItem(item), newer, "stale repair kept newer bytes");
+      same(await b.ev(`document.querySelector('.cm-content').textContent`), good, "stale repair kept editor draft");
+      if (!await b.ev(`!!document.querySelector('.stage-editor-dirty')`)) throw new Error("stale draft lost its unsaved label");
+      // Hold the actual upload while typing continues. Normal Save still
+      // stacks a version, and confirmation may clean only submitted bytes.
+      await b.send("Fetch.enable", { patterns: [{ urlPattern: `*/api/projects/${id}/blobs`, requestStage: "Request" }] });
+      const uploadPaused = b.once("Fetch.requestPaused");
+      await rig.clickText(".stage-editor-bar button", "Save version");
+      const upload = await Promise.race([uploadPaused, sleep(5000).then(() => { throw new Error("normal save did not upload"); })]);
+      const laterDraft = `${good}<!-- typed during upload -->`;
+      await rig.click(".cm-content", "editable source during upload");
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
+      await b.send("Input.insertText", { text: laterDraft });
+      await b.send("Fetch.continueRequest", { requestId: upload.requestId });
+      await b.send("Fetch.disable");
+      await until(b, `[...document.querySelectorAll('.stage-editor-bar button')].some(el => el.textContent === 'Save version' && !el.disabled)`, "normal save accepted while later draft remains");
+      const stacked = (await snapshot()).items[webItem.id];
+      same(stacked.versions.length, concurrent.versions.length + 1, "normal save retained concurrent stack");
+      same(await readItem(stacked), good, "normal save stored captured bytes");
+      same(await b.ev(`document.querySelector('.cm-content').textContent`), laterDraft, "typing during save preserved");
+      if (!await b.ev(`!!document.querySelector('.stage-editor-dirty')`)) throw new Error("accepted save incorrectly cleaned newer typing");
+      // Inject a home refusal at the transport boundary, with the real UI
+      // still producing its ordinary item.addVersion operation.
+      await b.send("Fetch.enable", { patterns: [{ urlPattern: "*/api/ops", requestStage: "Request" }] });
+      const writePaused = b.once("Fetch.requestPaused");
+      await rig.clickText(".stage-editor-bar button", "Save version");
+      const write = await Promise.race([writePaused, sleep(5000).then(() => { throw new Error("normal save did not submit an operation"); })]);
+      same(JSON.parse(write.request.postData).op.type, "item.addVersion", "normal save operation");
+      await b.send("Fetch.fulfillRequest", { requestId: write.requestId, responseCode: 403, responseHeaders: [{ name: "Content-Type", value: "application/json" }], body: Buffer.from(JSON.stringify({ error: "Acme save refused", code: "test-refused" })).toString("base64") });
+      await b.send("Fetch.disable");
+      await until(b, `document.body.innerText.includes('Acme save refused')`, "normal save refusal notice");
+      same((await snapshot()).items[webItem.id].currentVersionId, stacked.currentVersionId, "refused save kept stored version");
+      same(await b.ev(`document.querySelector('.cm-content').textContent`), laterDraft, "refused save kept draft");
+      if (!await b.ev(`!!document.querySelector('.stage-editor-dirty')`)) throw new Error("refused save cleaned the draft");
+      return { screenshot, seededFindings: webCodes, selectedSource: selected, repairVersions: 1, savedVersion, undo: true, staleRefused: true, draftPreserved: true, normalSaveKeepsTyping: true, refusedNormalSaveKeepsDraft: true };
+    },
+  },
   {
     name: "idle-at-rest",
     /**
@@ -824,8 +967,8 @@ async function main() {
     for (const journey of list) {
       const started = Date.now();
       try {
-        await journey.run(r);
-        results.push({ name: journey.name, what: journey.what, ok: true, ms: Date.now() - started });
+        const proof = await journey.run(r);
+        results.push({ name: journey.name, what: journey.what, ok: true, ms: Date.now() - started, ...(proof ? { proof } : {}) });
       } catch (err) {
         results.push({
           name: journey.name,

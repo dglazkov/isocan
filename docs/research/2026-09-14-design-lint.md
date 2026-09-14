@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals, context
-note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Visible repair, contracts, repository compatibility and agent lift follow the implementation walk.
+note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Phase 2 adds browser findings, local-file audits and conditional repair with honest write receipts. Scoped contracts, repository compatibility and agent lift follow the implementation walk.
 ---
 # Design lint that explains the repair
 
@@ -308,3 +308,32 @@ Those isolated bundle measurements precede the upstream drawer/settings change
 254,290 gzip initial entry; the standalone analyzer remains 237,875 raw /
 68,918 gzip. The evidence identifies both source baselines rather than
 attributing the unrelated interface change to the analyzer.
+
+
+## Implementation evidence, 14 September: phase 2
+
+The Design check beside an HTML screen now exposes the same diagnostics as the
+CLI, with exact source selection, governing provenance, repair prerequisites
+and incomplete coverage. Local HTML can also be checked against a local
+DESIGN.md without a daemon. `--fail` is opt-in and distinguishes findings or
+missing coverage from command errors; JSON add/edit callers receive the stored
+version identity plus advisory audit evidence.
+
+An explicit repair captures the opened screen version, governing source, rule
+version and input hash. Fresh reads surround upload, and one conditional
+`item.edit` creates one undoable version. A lost response or offline queue is
+pending, not a refusal: the proposed version stays identifiable and the draft
+stays present. A confirmed write remains successful when its subsequent audit
+fails. Ordinary editor Save keeps its existing version stacking and preserves
+text typed during upload.
+
+The conductor's fresh-browser walk and twelve real CLI commands verified these
+paths, including stale edits, real Undo and a successful storage operation
+followed by an unavailable audit. All 576 files in the strict local CI suite
+passed (5,772 tests, three opt-in real-model/sandbox skips), using temporary
+local Java and Firestore tools. No paid model or cloud resource was used.
+[Actual proof and bundle measurements](shadcn-lint/results-2026-09-14-phase2.json)
+and the [verified browser view](shadcn-lint/phase2-findings-2026-09-14.png).
+The final upstream rebase changed only a placement-test timeout; the full suite
+and typecheck passed again. This establishes the repair mechanism, not agent
+lift or visual quality: those remain the separately approved evaluation.

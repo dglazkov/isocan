@@ -74,6 +74,16 @@ the screen's edit operation; provenance records what was checked and a changed
 governing version invalidates the result. Ordinary editor saves keep their
 existing version-stack behavior; the explicit repair action carries the fence.
 
+The write receipt distinguishes accepted, refused and pending/unconfirmed.
+A queued operation can still land, and a lost response can follow acceptance;
+neither is a refusal. Only an accepted receipt may report a saved repair and
+clear its unchanged draft. Pending results retain the proposed version identity
+and the draft while the client waits for confirmation or reads fresh evidence.
+An authoritative conflict is a refusal. Read failures after an accepted write
+remain unavailable audit evidence, never a failed content save. Captures include
+the rule version as well as content and governing provenance. A draft's opened
+base version stays distinct from a newer current version discovered by a check.
+
 ## Contract schema, version 1
 
 DESIGN.md stores a namespaced `isocan` extension with a versioned `lint` object.

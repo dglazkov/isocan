@@ -1,6 +1,6 @@
 import {
-  designSystem, governingDesign, inCanvasScope, itemKind, normalizeHomeUrl, parseDesign, sourceFaceOf,
-  type CanvasContents, type LinkedCanvas, type SourceClassificationRequest,
+  designSystem, governingDesign, inCanvasScope, itemKind, newVersionId, normalizeHomeUrl, parseDesign, sourceFaceOf,
+  type CanvasContents, type CanvasSnapshotResponse, type LinkedCanvas, type Operation, type SourceClassificationRequest,
 } from "@isocan/core";
 import type { ScreenAudit } from "@isocan/core/design-audit";
 import { readInheritedCanvases, type ContextReadPort } from "./context-reader.ts";
@@ -16,6 +16,8 @@ export interface DesignAuditOptions {
   /** Exact ids; reference resolution belongs to the caller. Omission selects all screens. */
   itemIds?: string[];
   scopeId?: string;
+  /** The editor supplies its actual base; a fresh current version must never replace that identity. */
+  draft?: { itemId: string; text: string; baseVersionId: string; label?: string };
   signal?: AbortSignal;
 }
 
@@ -30,12 +32,23 @@ export interface DesignAuditProvenance {
   inherited: boolean;
 }
 
+/** A digest of the decoded UTF-8 source actually supplied to the analyzer, independent of storage. */
+export interface DesignAuditInput {
+  kind: "stored" | "draft" | "file";
+  sha256: string;
+  size: number;
+  label: string;
+  baseVersionId?: string;
+}
+
 interface ItemAuditIdentity {
   canvasId: string;
   itemId: string;
   title: string;
+  /** Stored current version, or the explicitly captured editor base when input.kind is draft. */
   versionId: string;
   blobHash: string | null;
+  input: DesignAuditInput | null;
 }
 
 /** Unavailable source or policy reads remain explicit instead of yielding a conforming audit. */
@@ -68,7 +81,9 @@ export async function readCanvasDesignAudit(
   signal?.throwIfAborted();
   const scope = options.scopeId === undefined ? null : canvas.items[options.scopeId];
   if (options.scopeId !== undefined && !scope) throw new Error(`No scope ${options.scopeId} on this canvas.`);
-  const chosen = options.itemIds === undefined ? Object.values(canvas.items).filter(item => itemKind(item) === "screen") : options.itemIds.map(id => {
+  if (options.draft && (!options.draft.baseVersionId || (options.itemIds && (options.itemIds.length !== 1 || options.itemIds[0] !== options.draft.itemId)))) throw new Error("A draft needs its captured base version and exactly its own item selection.");
+  const selectedIds = options.draft ? [options.draft.itemId] : options.itemIds;
+  const chosen = selectedIds === undefined ? Object.values(canvas.items).filter(item => itemKind(item) === "screen") : selectedIds.map(id => {
     const item = canvas.items[id];
     if (!item) throw new Error(`No item ${id} on this canvas.`);
     if (itemKind(item) !== "screen") throw new Error(`${item.title} is not an HTML screen.`);
@@ -86,7 +101,8 @@ export async function readCanvasDesignAudit(
   for (const item of screens) {
     signal?.throwIfAborted();
     const version = item.versions.find(one => one.id === item.currentVersionId);
-    const identity: ItemAuditIdentity = { canvasId, itemId: item.id, title: item.title, versionId: item.currentVersionId, blobHash: version?.blobHash ?? null };
+    const draft = options.draft;
+    const identity: ItemAuditIdentity = { canvasId, itemId: item.id, title: item.title, versionId: draft?.baseVersionId ?? item.currentVersionId, blobHash: draft ? null : version?.blobHash ?? null, input: draft ? await designAuditInput(draft.text, { kind: "draft", label: draft.label ?? item.title, baseVersionId: draft.baseVersionId }) : null };
     let provenance: DesignAuditProvenance | null = null;
     try {
       if (!version) throw new Error("The screen's current version is unavailable.");
@@ -110,8 +126,9 @@ export async function readCanvasDesignAudit(
       signal?.throwIfAborted();
       if (doc.problems.length) throw new Error(`The governing design document could not be parsed: ${doc.problems.join("; ")}`);
       provenance.name = doc.tokens.name ?? system.title;
-      const source = await io.blobText(canvasId, version.blobHash, signal);
+      const source = draft?.text ?? await io.blobText(canvasId, version.blobHash, signal);
       signal?.throwIfAborted();
+      identity.input ??= await designAuditInput(source, { kind: "stored", label: version.filename });
       items.push({ ...identity, status: "audited", governing: provenance, ...auditScreen(source, doc.tokens) });
     } catch (error) {
       signal?.throwIfAborted();
@@ -127,4 +144,156 @@ export async function readCanvasDesignAudit(
     unavailable: items.length - audited.length, items,
     refusedSources: linked.filter(link => link.refused).map(link => ({ canvasId: link.canvasId, itemId: link.item.id, reason: link.refused! })),
   };
+}
+
+/** Hash exact source text so a changed editor buffer cannot reuse earlier source selections or repairs. */
+export async function designAuditInput(text: string, options: Pick<DesignAuditInput, "kind" | "label" | "baseVersionId">): Promise<DesignAuditInput> {
+  const bytes = new TextEncoder().encode(text);
+  const hash = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return { ...options, size: bytes.byteLength, sha256: [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, "0")).join("") };
+}
+
+/** A saved write's subsequent audit is advisory; an unavailable read cannot reverse its receipt. */
+export type DesignAuditEvidence = { status: "available"; report: CanvasDesignAudit } | { status: "unavailable"; reason: string };
+
+/** Convert a later analysis/read failure into evidence without misreporting an already stored write. */
+export async function readDesignAuditAdvisory(read: () => Promise<CanvasDesignAudit>): Promise<DesignAuditEvidence> {
+  try { return { status: "available", report: await read() }; }
+  catch (error) { return { status: "unavailable", reason: error instanceof Error ? error.message : String(error) }; }
+}
+
+/** A local or contextual file is analyzed as its own input, without invented stored item identity. */
+export type SourceDesignAudit = { input: DesignAuditInput; governing: DesignAuditProvenance | { kind: "file"; input: DesignAuditInput } | null } & (
+  | (ScreenAudit & { status: "audited" })
+  | { status: "unavailable"; reason: string; ruleVersion: string }
+);
+
+/** Analyze supplied HTML and DESIGN.md bytes without a canvas or any transport reads. */
+export async function auditDesignSource(text: string, designText: string, options: { label: string; designLabel: string }): Promise<SourceDesignAudit> {
+  const { auditScreen, DESIGN_AUDIT_VERSION } = await import("@isocan/core/design-audit");
+  const input = await designAuditInput(text, { kind: "file", label: options.label });
+  const governing = { kind: "file" as const, input: await designAuditInput(designText, { kind: "file", label: options.designLabel }) };
+  try {
+    const doc = parseDesign(designText);
+    if (doc.problems.length) throw new Error(`The governing design document could not be parsed: ${doc.problems.join("; ")}`);
+    return { input, governing, status: "audited", ...auditScreen(text, doc.tokens) };
+  } catch (error) { return { input, governing, status: "unavailable", ruleVersion: DESIGN_AUDIT_VERSION, reason: error instanceof Error ? error.message : String(error) }; }
+}
+
+/** Read a file against an item's/group's effective context without pretending the file is stored there. */
+export async function readDesignSourceAudit(io: DesignAuditReadPort, options: { canvasId: string; canvas: CanvasContents; home: string; text: string; label: string; atId?: string; signal?: AbortSignal }): Promise<SourceDesignAudit> {
+  const { DESIGN_AUDIT_VERSION } = await import("@isocan/core/design-audit");
+  const input = await designAuditInput(options.text, { kind: "file", label: options.label });
+  let provenance: DesignAuditProvenance | null = null;
+  try {
+    options.signal?.throwIfAborted();
+    const at = options.atId === undefined ? undefined : options.canvas.items[options.atId];
+    if (options.atId !== undefined && !at) throw new Error(`No item or scope ${options.atId} on this canvas.`);
+    const scope = at ? { at } : undefined;
+    const linked = designSystem(options.canvas, scope) ? [] : await readInheritedCanvases(io, options.canvas, options.home, options.signal);
+    const governing = governingDesign(options.canvas, linked, scope);
+    if (!governing) throw new Error("No readable design system governs this source location.");
+    const version = governing.item.versions.find(one => one.id === governing.item.currentVersionId);
+    if (!version) throw new Error("The governing design's current version is unavailable.");
+    const id = governing.from?.canvasId ?? options.canvasId;
+    provenance = { canvasId: id, itemId: governing.item.id, versionId: version.id, blobHash: version.blobHash, title: governing.item.title, name: governing.item.title, inherited: governing.from !== null };
+    const text = governing.from ? await io.sourceBlobText({ canvasId: id, expectedHome: normalizeHomeUrl(options.home) }, version.blobHash, options.signal) : await io.blobText(id, version.blobHash, options.signal);
+    options.signal?.throwIfAborted();
+    const report = await auditDesignSource(options.text, text, { label: options.label, designLabel: governing.item.title });
+    provenance.name = parseDesign(text).tokens.name ?? governing.item.title;
+    return { ...report, governing: provenance };
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    return { input, governing: provenance, status: "unavailable", ruleVersion: DESIGN_AUDIT_VERSION, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** Opt-in automation failure includes unknown/empty coverage; it is never a visual approval signal. */
+export function designAuditFails(report: CanvasDesignAudit | SourceDesignAudit): boolean {
+  const failed = (one: ItemDesignAudit | SourceDesignAudit) => one.status !== "audited" || one.diagnostics.length > 0 || !one.coverage.complete || one.coverage.checkedValues === 0 || one.coverage.omittedCategories.length > 0;
+  return "items" in report ? report.items.length === 0 || report.refusedSources.length > 0 || report.items.some(failed) : failed(report);
+}
+
+/** Explicit repair transport distinguishes an accepted edit from an offline queue or refused write. */
+export interface DesignRepairPort extends DesignAuditReadPort {
+  snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
+  home(canvasId: string, signal?: AbortSignal): Promise<string>;
+  upload(canvasId: string, text: string, filename: string, signal?: AbortSignal): Promise<{ blobHash: string; size: number }>;
+  edit(canvasId: string, operation: Extract<Operation, { type: "item.edit" }>, signal?: AbortSignal): Promise<{ accepted: true } | { accepted: false; status: "refused" | "pending"; reason: string }>;
+}
+
+/** Captured policy and source versions accompany an authored replacement; no token policy edit is implicit. */
+export interface DesignRepairRequest {
+  canvasId: string;
+  itemId: string;
+  text: string;
+  expectedVersionId: string;
+  expectedGoverning: DesignAuditProvenance;
+  expectedRuleVersion: string;
+  filename?: string;
+  signal?: AbortSignal;
+}
+
+/** Accepted content remains saved even when its post-save audit is unavailable or superseded. */
+export type DesignRepairResult =
+  | { status: "saved"; itemId: string; versionId: string; blobHash: string; before: ItemDesignAudit; proposed: ItemDesignAudit; after: DesignAuditEvidence; governingChanged: boolean | null; superseded: boolean | null }
+  | { status: "pending"; itemId: string; versionId: string; blobHash: string; reason: string; before: ItemDesignAudit; proposed: ItemDesignAudit }
+  | { status: "refused"; code: "stale-version" | "governing-changed" | "rule-version-changed" | "audit-unavailable" | "write-refused"; reason: string; before?: ItemDesignAudit };
+
+function sameGoverning(a: DesignAuditProvenance | null, b: DesignAuditProvenance | null): boolean {
+  return !!a && !!b && a.canvasId === b.canvasId && a.itemId === b.itemId && a.versionId === b.versionId && a.blobHash === b.blobHash;
+}
+
+/** Refresh policy before conditional item.edit, then report current evidence without claiming a cross-canvas lock. */
+export async function repairDesignScreen(io: DesignRepairPort, request: DesignRepairRequest): Promise<DesignRepairResult> {
+  const { canvasId, itemId, signal } = request;
+  const { DESIGN_AUDIT_VERSION } = await import("@isocan/core/design-audit");
+  signal?.throwIfAborted();
+  if (request.expectedRuleVersion !== DESIGN_AUDIT_VERSION) return { status: "refused", code: "rule-version-changed", reason: "The audit rules changed; capture a fresh report before repairing." };
+  const read = async (draft?: DesignAuditOptions["draft"]) => {
+    const snapshot = await io.snapshot(canvasId, signal);
+    const home = await io.home(canvasId, signal);
+    const report = await readCanvasDesignAudit(io, { canvasId, canvas: snapshot.canvas, home, itemIds: [itemId], ...(draft ? { draft } : {}), ...(signal ? { signal } : {}) });
+    return { snapshot, report, item: report.items[0]! };
+  };
+  const initial = await read();
+  const before = initial.item;
+  const refusal = (item: ItemDesignAudit): Extract<DesignRepairResult, { status: "refused" }> | null => {
+    if (item.versionId !== request.expectedVersionId) return { status: "refused", code: "stale-version", reason: "The screen changed after this draft was based on it. Read the newer version before repairing.", before: item };
+    if (item.status !== "audited") return { status: "refused", code: "audit-unavailable", reason: item.reason, before: item };
+    if (!sameGoverning(item.governing, request.expectedGoverning)) return { status: "refused", code: "governing-changed", reason: "The governing design changed. Review a fresh audit before repairing.", before: item };
+    return null;
+  };
+  const refused = refusal(before);
+  if (refused) return refused;
+  const original = initial.snapshot.canvas.items[itemId]!;
+  const version = original.versions.find(one => one.id === original.currentVersionId)!;
+  const filename = request.filename ?? version.filename;
+  const proposedRead = await read({ itemId, text: request.text, baseVersionId: request.expectedVersionId, label: filename });
+  if (proposedRead.snapshot.canvas.items[itemId]?.currentVersionId !== request.expectedVersionId) return { status: "refused", code: "stale-version", reason: "The screen changed while auditing the replacement.", before };
+  const proposed = proposedRead.item;
+  const proposalRefused = refusal(proposed);
+  if (proposalRefused) return proposalRefused;
+  signal?.throwIfAborted();
+  const upload = await io.upload(canvasId, request.text, filename, signal);
+  if (upload.blobHash !== proposed.input?.sha256) throw new Error("The uploaded blob does not match the audited replacement text; no edit was submitted.");
+  // Uploading bytes is not a content mutation. Repeat the version/policy check after that I/O.
+  const latest = await read();
+  const lateRefusal = refusal(latest.item);
+  if (lateRefusal) return lateRefusal;
+  const versionId = newVersionId();
+  signal?.throwIfAborted();
+  let accepted: Awaited<ReturnType<DesignRepairPort["edit"]>>;
+  try { accepted = await io.edit(canvasId, { type: "item.edit", itemId, expectedVersionId: request.expectedVersionId, patch: {}, version: { id: versionId, blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, signal); }
+  catch (error) { accepted = { accepted: false, status: "pending", reason: error instanceof Error ? error.message : String(error) }; }
+  if (!accepted || accepted.accepted !== true) {
+    if (accepted?.status === "refused") return { status: "refused", code: "write-refused", reason: accepted.reason, before };
+    return { status: "pending", itemId, versionId, blobHash: upload.blobHash, before, proposed, reason: accepted?.reason ?? "The repair has no accepted write receipt. Check this version before retrying." };
+  }
+  // All errors after this confirmed write are advisory, including cancellation and source refusal.
+  const after = await readDesignAuditAdvisory(async () => (await read()).report);
+  const current = after.status === "available" ? after.report.items[0] : undefined;
+  return { status: "saved", itemId, versionId, blobHash: upload.blobHash, before, proposed, after,
+    governingChanged: current?.status === "audited" ? !sameGoverning(current.governing, request.expectedGoverning) : null,
+    superseded: current ? current.versionId !== versionId : null };
 }

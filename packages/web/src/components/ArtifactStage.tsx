@@ -471,6 +471,9 @@ function OrdinaryArtifactStage({
                   {surface === "fullscreen" && (
                     <NeighbourPad canvasId={canvasId} itemId={item.id} />
                   )}
+                  {sourceFaceOf(current).mimeType === "text/html" && surface !== "fullscreen" && !panes.edit && (
+                    <button className="stage-editor-btn" onClick={() => fold("edit")} title="Check this screen against its governing design and select findings in source">Design check</button>
+                  )}
                   {offerTextEdit && !hasVisual && (
                     <button
                       className="stage-editor-btn"

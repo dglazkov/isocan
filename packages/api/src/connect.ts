@@ -50,8 +50,8 @@ import { matchRef, resolveCanvas, resolveCanvasRef, resolveCtx, readHomeRecord, 
 import { DaemonClient } from "./client.ts";
 import { claimSessionIdentity, noIdentityHere, type ExplicitIdentity } from "./identity.ts";
 import { readContextSummary, type ContextSummaryOptions } from "./context-summary.ts";
-import { readDesignAudit } from "./design-audit.ts";
-import type { CanvasDesignAudit, DesignAuditOptions } from "./design-audit-reader.ts";
+import { readDesignAudit, repairDesignItem } from "./design-audit.ts";
+import type { CanvasDesignAudit, DesignAuditOptions, DesignRepairRequest, DesignRepairResult } from "./design-audit-reader.ts";
 import { waitForFeedback, type FeedbackOptions, type FeedbackResult } from "./feedback.ts";
 import type { ContextExtras, ContextLayer } from "@isocan/core";
 import { ApiError, type DaemonRoutes } from "./routes.ts";
@@ -419,6 +419,11 @@ export class CanvasHandle {
   /** Parsed HTML diagnostics with per-screen governing provenance and explicit coverage. */
   designAudit(options: DesignAuditOptions = {}): Promise<CanvasDesignAudit> {
     return this.reach(() => readDesignAudit(this.ctx, this.id, options));
+  }
+
+  /** Submit an explicitly authored, version-checked repair and retain its before/after audit evidence. */
+  designRepair(itemId: string, request: Omit<DesignRepairRequest, "canvasId" | "itemId">): Promise<DesignRepairResult> {
+    return this.reach(() => repairDesignItem(this.ctx, { ...request, canvasId: this.id, itemId }));
   }
 
   /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */

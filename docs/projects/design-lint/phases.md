@@ -1,7 +1,7 @@
 # Design lint: the implementation walk
 
 **Where we are — 14 September 2026:** Research and issues #299–303 are published.
-Design-lint phase 1 is CLOSED on current `origin/main`; phase 2 is next.
+Design-lint phases 1 and 2 are CLOSED on current `origin/main`; phase 3 is next.
 Paid evaluation and human ratings wait on a person; native repair, contracts
 and repository compatibility do not.
 
@@ -11,6 +11,10 @@ typecheck and the deep suite before push. Shared computation belongs in core;
 reads need no operation, and a repair uses conditional `item.edit`. Fixtures are
 synthetic. A passing lint report is not visual approval. The conductor owns
 these records and independently verifies the builder's output.
+When a local JRE, Firestore emulator and production build are available,
+`npm run test:ci -- --maxWorkers=6` may supply the deep proof: it runs the same
+deep lane and additionally refuses emulator or bundle skips. Record the actual
+command and skips; this substitution strengthens the gate.
 
 ## Phase 1 — Parsed diagnostics and governing provenance (#300)
 
@@ -59,7 +63,7 @@ preceded those upstream additions; the audit implementation stayed unchanged.
 
 ## Phase 2 — Findings and conditional repair on both surfaces (#302)
 
-**Status: NOT STARTED.** 2026-09-14 — Depends on design-lint phase 1.
+**Status: CLOSED.** 2026-09-14 — Browser findings, exact-input audits and conditional repair passed both real surfaces, full verification and the strict emulator-backed deep suite.
 
 **Work:** Add item/file audit selection and opt-in failing exits, structured
 advisory arrival evidence, browser findings with source selection, and explicit
@@ -74,7 +78,40 @@ and that audit errors after storage never misreport a successful write.
 
 **Trajectory:**
 
-*nothing — implementation has not begun.*
+- **2026-09-14** — A fulfilled write promise can mean queued, and an HTTP
+  timeout can follow acceptance. Repairs now distinguish accepted, refused
+  and pending receipts; pending keeps the draft and proposed version identity
+  until authoritative confirmation. Ordinary editor saves follow the same
+  receipt discipline without changing their version-stacking operation.
+- **2026-09-14** — Refreshing a draft's audit must not relabel it with the
+  current stored version. Captures retain the opened base, governing identity,
+  rule version and exact input hash; the real-browser stale-edit walk preserves
+  both the newer stored version and the unsaved buffer.
+
+**Proof record:** On the combined tree through `f2632c90`, `npm test --
+--maxWorkers=4` passed 5,214 tests, `npm run typecheck` and `npm run build`
+exited 0, and `npm run test:ci -- --maxWorkers=6` passed all 576 files:
+5,772 tests passed, three opt-in real-model/sandbox tests skipped. A temporary
+JRE 21 and Firestore emulator 1.22.0 enabled the stricter deep proof; no cloud
+resource or model call was used. The initial app entry measured 752,914 raw /
+255,352 gzip bytes; the analyzer remains a separate lazy chunk.
+
+The conductor independently ran `node scripts/journeys.mjs --only design-lint
+--json` against a fresh daemon and real browser: matching CLI/browser findings,
+values, source ranges and input hash; source selection and CSS prerequisites;
+one-version repair, canvas Undo and stale-write refusal; delayed ordinary Save
+preserving newer typing; and refused Save retaining the draft. A separate
+12-command CLI walk covered local and contextual files, failing exits,
+structured arrival evidence, repair/undo and post-storage audit failure.
+[Measured evidence](../../research/shadcn-lint/results-2026-09-14-phase2.json).
+
+The final rebase added only upstream `b2c0abcb`'s placement-test timeout change;
+all product code and assertions were unchanged from the successful stricter
+run. The full four-worker suite passed 5,214 tests again and typecheck passed.
+The earlier first run found an obsolete editor source guard, which was updated,
+and a 30-second MCP transport timeout during concurrent tool installation.
+That transport case passed alone in six seconds and in subsequent complete
+runs; no timeout was changed by this phase.
 
 ## Phase 3 — Scoped declarative recipe contracts (#301)
 

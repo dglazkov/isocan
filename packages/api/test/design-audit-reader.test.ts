@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import type { CanvasSnapshotResponse } from "@isocan/core";
-import { readCanvasDesignAudit, type DesignAuditReadPort } from "../src/design-audit-reader.ts";
+import { auditDesignSource, designAuditFails, readCanvasDesignAudit, readDesignAuditAdvisory, readDesignSourceAudit, type DesignAuditReadPort } from "../src/design-audit-reader.ts";
 import { auditDesign, auditFixture, auditHome, auditItem } from "./design-audit-fixture.ts";
 
 function fixture() {
@@ -96,5 +96,39 @@ describe("shared design audit reads", () => {
     expect(first).toBeDefined();
     expect(Object.keys(first.inputs).some(input => /css-tree|parse5|designaudit\.ts/.test(input))).toBe(false);
     expect(Object.values(result.metafile!.outputs).some(output => Object.keys(output.inputs).some(input => /css-tree/.test(input)))).toBe(true);
+  });
+
+  it("draft identity names checked bytes and the editor's older base rather than the current version", async () => {
+    const { run, canvas, io } = fixture();
+    const text = '<p style="padding:16px">Acme draft</p>';
+    canvas.items.nested!.versions.push({ ...canvas.items.nested!.versions[0]!, id: "ver_newer", blobHash: "hash_newer" });
+    canvas.items.nested!.currentVersionId = "ver_newer";
+    const report = await run({ draft: { itemId: "nested", baseVersionId: "ver_nested", text, label: "buffer.html" } });
+    expect(report.items[0]).toMatchObject({ status: "audited", versionId: "ver_nested", blobHash: null, input: { kind: "draft", baseVersionId: "ver_nested", label: "buffer.html", size: new TextEncoder().encode(text).byteLength }, offSystem: [], onSystem: 1 });
+    expect(report.items[0]!.input?.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(io.blobText.mock.calls.map(([, hash]) => hash)).not.toContain("hash_newer");
+    const changed = await run({ draft: { itemId: "nested", baseVersionId: "ver_nested", text: text + "x" } });
+    expect(changed.items[0]!.input?.sha256).not.toBe(report.items[0]!.input?.sha256);
+  });
+
+  it("local and inherited-context file reports carry file identities without invented stored items", async () => {
+    const { io, canvas } = fixture();
+    const source = '<p style="padding:13px">Acme file</p>';
+    const local = await auditDesignSource(source, auditDesign(), { label: "screen.html", designLabel: "DESIGN.md" });
+    expect(local).toMatchObject({ status: "audited", input: { kind: "file" }, governing: { kind: "file", input: { kind: "file" } }, offSystem: [{ value: "13px" }] });
+    expect(local).not.toHaveProperty("itemId");
+    expect(local).not.toHaveProperty("blobHash");
+    const inherited = await readDesignSourceAudit(io, { canvasId: "prj_dest", canvas, home: auditHome, text: source, label: "screen.html", atId: "outside" });
+    expect(inherited).toMatchObject({ status: "audited", input: local.input, governing: { canvasId: "prj_library", itemId: "inherited" }, offSystem: [], onSystem: 1 });
+  });
+
+  it("opt-in failing exits include no checked values, omitted categories and unsupported styling", async () => {
+    const check = (text: string, design = auditDesign()) => auditDesignSource(text, design, { label: "Acme.html", designLabel: "DESIGN.md" });
+    expect(designAuditFails(await check('<p style="padding:16px">Acme</p>'))).toBe(false);
+    expect(designAuditFails(await check('<p style="padding:13px">Acme</p>'))).toBe(true);
+    expect(designAuditFails(await check('<p>Acme</p>'))).toBe(true);
+    expect(designAuditFails(await check('<p style="padding:16px">Acme</p><link rel="stylesheet" href="https://acme.invalid/a.css">'))).toBe(true);
+    expect(designAuditFails(await check('<p style="color:#112233">Acme</p>', '---\ncolors:\n  ink: "#112233"\n---'))).toBe(true);
+    expect(await readDesignAuditAdvisory(async () => { throw new Error("synthetic read failure after save"); })).toEqual({ status: "unavailable", reason: "synthetic read failure after save" });
   });
 });
