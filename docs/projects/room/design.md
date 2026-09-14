@@ -276,9 +276,19 @@ imports transitively from the entry, scan each file's non-comment lines
 for `from "node:` and `@isocan/server`, and expect no offenders. Beside
 it, the method of `packages/api/test/context-reader.test.ts`: esbuild
 the entry with `bundle: true, platform: "browser"` and expect no
-`node:` in the output. The two together are journey 3's acceptance
-inside the suite; the scratch-directory install and the one-line
-bundle against `release` are its walk.
+`node:` in the output. Those two test the source. A host tests the
+package, and the package's `./rc` default is `rc.mjs`, which registers
+tsx and a loader: `esbuild --platform=browser` over an installed
+`isocan/rc` reads `node:module` and cannot resolve `@isocan/rc`
+(measured against `release` at e4af490). So the export gains a
+`browser` condition ahead of `default`. On main it names the source
+entry. On `release` it names an ESM bundle of that entry with
+`@isocan/core` inlined, which `scripts/release.mjs` builds with
+esbuild and commits beside `packages/web/dist`. A test lays the
+release manifest and that bundle out as an installed tree and bundles
+a one-line import through it. That test, with the two above, is
+journey 3's acceptance inside the suite. The scratch-directory install
+and the one-line bundle against `release` are its walk.
 
 The existing tests are indifferent to where the room lives, with one
 exception. `rc-fixture.ts` starts a real in-process daemon and `spawn`s

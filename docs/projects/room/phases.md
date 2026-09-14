@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere, which waits on Dimitri: the desk accepts a second badge's claim, so where the refusal comes from is a custody decision (design.md, the claim rule).** Five phases, none
+**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Phase 3, answered elsewhere, waits on Dimitri: the desk accepts a second badge's claim, so where the refusal comes from is a custody decision (design.md, the claim rule). Next: room phase 4, the bundle a host installs, which needs no answer; phase 5's walks wait on phase 3.** Six phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -156,25 +156,60 @@ remembered across a second `runRoom` over the same `state`.
 - **2026-09-13** — Open: where the refusal comes from — the desk's same-key vouch, a new desk query beside `actorBindings()`, and/or `parkClaim`/`rcHold` refusing an actor the badge does not hold. A custody rule; waits on Dimitri.
 - **2026-09-13** — Open: because an agent's session key is derivable from its name, the same-key recovery path lets a badge other than the enrolling one take up the agent's actor; seen on a solo loopback daemon, unmeasured on a hosted home. Waits on Dimitri.
 
-## Phase 4 — The bundle, and the walk
+## Phase 4 — The bundle a host installs
 
 **Status: NOT STARTED.**
 
-**Outcome:** journeys 1, 2 and 3 walked. Journey 3's install and bundle
-from a scratch directory against the `release` branch, which CI
-rebuilds from every push to main, so this phase waits one CI run after
-phase 3 lands. Journey 1 on this laptop against dev.isocan.io with one
-agent on `claude-code` and one on `sheep`, a turn each, then the sheep
-agent withdrawn: the narration and the record on disk read as before.
-Journey 2 with two rcs on one canvas, two loopback badges on this
-laptop standing in for the second machine.
+**Outcome:** a host that installs `isocan` from `release` and bundles
+`import "isocan/rc"` for the browser platform gets the module, not the
+Node shim. The root manifest's `./rc` export gains a `browser`
+condition, ahead of `default`, that names an ESM bundle of
+`packages/rc/src/index.ts`. `@isocan/core` is inlined, and the bundle
+has no `node:` import. `scripts/release.mjs` builds that bundle with
+esbuild and commits it to the release branch, the way it commits
+`packages/web/dist`. On main the `browser` condition names the source
+entry, which a bundler in the checkout can resolve. `default` stays
+`rc.mjs` for Node.
 
-**Proof:** from a scratch directory, `npm install
-github:dglazkov/isocan#release`, then `node -e 'import("isocan/rc")'`
-exits 0, then `esbuild --bundle --platform=browser` over a one-line
+**Proof:** a test over the release half, run against a scratch
+installed tree: the manifest `releaseManifest` writes, and the bundle
+the release step builds, laid out as `node_modules/isocan`. A one-line
+`import "isocan/rc"` then bundles through esbuild with
+`platform: "browser"` and no `node:*` external allowed, and exits
+clean. It is falsified by removing the `browser` condition, which
+reads `node:module` from `rc.mjs`. The boundary test and the no-Node
+typecheck still pass. `npm test`, `npm run test:deep` and
+`npm run typecheck` pass whole. Walked after it lands and CI rebuilds
+`release`: from a scratch directory, `npm install
+github:dglazkov/isocan#release`, `node -e 'import("isocan/rc")'`
+exits 0, and `esbuild --bundle --platform=browser` over a one-line
 file importing `isocan/rc` exits 0 with no `node:` among the bundle's
-externals, output recorded here. The three walks, recorded against the
-journeys' acceptance lines. `npm test` and `npm run typecheck` whole.
+externals, output recorded here.
+
+**Trajectory:** to be written at close.
+
+**Formerly:** phase 4 was "The bundle, and the walk": journeys 1, 2 and 3
+walked together after phase 3. Re-cut 13 Sep 2026, when journey 3's
+walk against `release` at e4af490 failed. `esbuild --platform=browser`
+resolved `isocan/rc` to `rc.mjs` and could not resolve `node:module`,
+`node:crypto` (tsx) or `@isocan/rc`. The boundary test bundled the
+source entry, never the package as a host installs it. The bundle is
+this phase; the walks of journeys 1 and 2 are phase 5.
+
+## Phase 5 — The walks
+
+**Status: NOT STARTED.**
+
+**Outcome:** journeys 1 and 2 walked, after phase 3 lands. Journey 1
+on this laptop against dev.isocan.io, with one agent on `claude-code`
+and one on `sheep`, a turn each, then the sheep agent withdrawn: the
+narration and the record on disk read as before. Journey 2 with two
+rcs on one canvas, two loopback badges on this laptop standing in for
+the second machine. Journey 3 is walked again against the `release`
+that carries phase 3.
+
+**Proof:** the walks, recorded against the journeys' acceptance lines.
+`npm test`, `npm run test:deep` and `npm run typecheck` pass whole.
 
 **Trajectory:** to be written at close.
 
