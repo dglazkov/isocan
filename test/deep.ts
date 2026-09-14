@@ -106,6 +106,7 @@ export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/group.test.ts", secs: 21 },
   { file: "packages/cli/test/export.test.ts", secs: 17 },
   { file: "packages/cli/test/personal-context.test.ts", secs: 17 },
+  { file: "packages/modules/anatomy/test/cli.test.ts", secs: 19 },
   { file: "packages/cli/test/area.test.ts", secs: 19 },
   { file: "packages/cli/test/wait-cursor.test.ts", secs: 18 },
   { file: "packages/cli/test/operator.test.ts", secs: 19 },

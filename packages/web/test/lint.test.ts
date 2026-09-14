@@ -1,3 +1,4 @@
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ESLint } from "eslint";
@@ -87,19 +88,27 @@ describe("the hooks rules hold across the web app", () => {
    * `syncexec.test.ts` calls "a search over nothing always passes".
    */
   it("walks this checkout's source and nothing else", async () => {
-    const eslint = new ESLint({ cwd: fileURLToPath(new URL("../../..", import.meta.url)) });
-    const walked = (await eslint.lintFiles(["."])).map((r) => r.filePath);
+    /* Relative to the repo root, never absolute. A checkout of this repo can
+       itself live at `.claude/worktrees/<name>/`, and the first version of
+       this case matched `/.claude/` in the absolute path — so every file in
+       an agent's worktree looked like a violation and the guard failed on a
+       tree that was perfectly ignored. What is being asserted is where a file
+       sits INSIDE the checkout; the checkout's own address is not the
+       subject. */
+    const root = fileURLToPath(new URL("../../..", import.meta.url));
+    const eslint = new ESLint({ cwd: root });
+    const walked = (await eslint.lintFiles(["."])).map((r) => path.relative(root, r.filePath));
     expect(
-      walked.filter((f) => f.includes("/.claude/")),
+      walked.filter((f) => f.split("/").includes(".claude")),
       "another session's worktree is not this commit's lint",
     ).toEqual([]);
-    expect(walked.filter((f) => f.includes("/dist/")), "nobody fixes a hook in a bundle").toEqual([]);
+    expect(walked.filter((f) => f.split("/").includes("dist")), "nobody fixes a hook in a bundle").toEqual([]);
     expect(
-      walked.filter((f) => f.includes("/packages/web/src/")).length,
+      walked.filter((f) => f.startsWith("packages/web/src/")).length,
       "the ignore list has eaten the source it exists to protect",
     ).toBeGreaterThan(100);
     expect(
-      walked.some((f) => f.endsWith("/packages/web/src/components/OwnCursor.tsx")),
+      walked.includes("packages/web/src/components/OwnCursor.tsx"),
       "the file the linter was added for",
     ).toBe(true);
   }, 60_000);

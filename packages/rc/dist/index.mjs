@@ -839,6 +839,7 @@ function itemsTouchedBy(op, canvas) {
     case "item.resize":
     case "item.update":
     case "item.addVersion":
+    case "item.edit":
     case "item.setCurrentVersion":
     case "item.removeVersion":
     case "item.restoreVersion":

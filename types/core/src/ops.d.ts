@@ -273,6 +273,19 @@ export type Operation = {
     version: NewVersion;
     briefHeight?: number;
 } | {
+    /** Replace content and its metadata as one conditional, undoable act.
+     * A distinct type makes older daemons refuse instead of ignoring a
+     * precondition they do not implement. Geometry remains independent. */
+    type: "item.edit";
+    itemId: string;
+    version: NewVersion;
+    patch: MetaPatch;
+    expectedVersionId: string;
+    expectedMetadata?: {
+        title: string;
+        properties: Record<string, string>;
+    };
+} | {
     type: "item.setCurrentVersion";
     itemId: string;
     versionId: string;
@@ -282,10 +295,12 @@ export type Operation = {
     itemId: string;
     versionId: string;
     prevCurrentVersionId: string;
+    patch?: MetaPatch;
 } | {
     type: "item.restoreVersion";
     itemId: string;
     version: ItemVersion;
+    patch?: MetaPatch;
 } | {
     type: "item.delete";
     itemId: string;

@@ -98,6 +98,8 @@ claim must not wait for that promise. Claims may repair a badge, but never
 recursively repair identity. Actual HTTP cases in `inbox-setup.test.ts` prove
 one claim for concurrent reads and no replay by a cancelled waiter.
 
+| 64 | **A modification timestamp is broader than the content a form replaces.** Geometry, redundant echoes and text changes can all stamp the same field. | Anatomy initially refused a fresh concept draft after a native move or the metadata half of a grouped edit; comparing `updatedAt` could not tell independent changes from overwrites. | `packages/modules/anatomy/test/core.test.ts` checks both sides: a collaborator content change refuses the stale save; movement and redundant metadata allow it and preserve the new position. Browser acceptance also keeps a draft open across a real CLI edit. |
+
 ## The habits, from bugs with no test to give
 
 - **An asset is not what its extension says, and nothing checks until it is

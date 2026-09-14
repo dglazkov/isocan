@@ -14,6 +14,7 @@ import {
   themeOf,
   themePatch,
   workbenchPath,
+  modulePagePath,
   type Actor,
 } from "@isocan/core";
 import { sendOp, uploadBlob } from "../lib/api.ts";
@@ -28,6 +29,7 @@ import { CanvasEditor } from "./CanvasEditor.tsx";
 import { IdentityMenu } from "./IdentityMenu.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
+import { moduleProjectViews } from "../modules.ts";
 
 /**
  * The top bar: where you are (canvas name, whether you're live, who's here) and
@@ -130,6 +132,8 @@ export function Toolbar({
               // Read the button's box before the await: the element is still
               // here, but `currentTarget` is not once the handler yields.
               const { chromeMenu } = await import("../lib/menuentries.tsx");
+              const contents = useCanvasStore.getState().canvas;
+              const views = contents ? moduleProjectViews(canvas, contents) : [];
               useUiStore.getState().setContextMenu({
                 // Under the handle, aligned to its left edge — a menu that
                 // opens where the pointer happened to be is right for a
@@ -181,6 +185,7 @@ export function Toolbar({
                   },
                   canEdit,
                   toWorkbench: () => navigate(workbenchPath(canvas.id)),
+                  projectViews: views.map((view) => ({ label: view.label, run: () => navigate(modulePagePath(canvas.id, view.segment)) })),
                 }),
               });
             }}

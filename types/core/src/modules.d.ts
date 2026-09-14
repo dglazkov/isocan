@@ -1,5 +1,5 @@
 import type { ContextPiece } from "./context.js";
-import type { CanvasContents, Item } from "./model.js";
+import type { Canvas, CanvasContents, Item } from "./model.js";
 import type { Operation } from "./ops.js";
 import type { SlashCommand } from "./commands.js";
 /**
@@ -294,6 +294,9 @@ export declare function askTemplate(raw: {
  */
 export interface UnderlayFacts {
     canvas: CanvasContents;
+    presentation?: WorkspacePresentation["items"] | undefined;
+    /** Workspace-scoped activation, e.g. following a graph connection. */
+    activateItem?: ((itemId: string) => boolean) | undefined;
     /** The live drag, so a line can ride the gesture before the replica moves. */
     drag: {
         itemIds: readonly string[];
@@ -374,6 +377,13 @@ export interface ModuleDialog<D> {
  * blob path.
  */
 export interface RendererFacts {
+    /** Local workspace emphasis; saved file content and native geometry are unchanged. */
+    presentation?: {
+        detail: "full" | "compact" | "marker";
+        emphasis?: boolean;
+    } | undefined;
+    /** Native metadata for structured files whose title lives on the item. */
+    item?: Item | undefined;
     canvasId: string;
     blobHash: string;
     mimeType: string;
@@ -424,6 +434,70 @@ export interface ModulePage<P> {
     label: string;
     hint?: string;
     component: P;
+}
+/** A module can frame the native canvas without owning its replica or camera. */
+export interface WorkspaceHost extends WebHost {
+    /** Temporary bounds for native items. Null restores their saved canvas layout.
+     * The host resolves animation, hit targets, edges and anchored discussion. */
+    present: (view: WorkspacePresentation | null) => void;
+    /** Addressable local exploration state. Null removes a key; one call is one Back step. */
+    navigateView: (state: Record<string, string | null>, replace?: boolean) => void;
+    readText: (blobHash: string) => Promise<string>;
+    getCanvas: () => CanvasContents;
+    select: (itemIds: readonly string[]) => void;
+    focus: (itemIds: readonly string[]) => void;
+    openItem: (itemId: string) => void;
+    openChat: () => void;
+    /** Handle native item double-clicks and underlay links. Return true to consume
+     * the activation; false preserves the normal viewer. Unsubscribe on cleanup. */
+    onActivateItem: (handler: (itemId: string) => boolean) => () => void;
+}
+/** A local layout over existing item IDs; it never mutates the shared canvas. */
+export interface WorkspacePresentation {
+    /** Show just this view’s items, keeping other analyses and attachments out of the stage. */
+    isolate?: boolean;
+    items: Record<string, {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        detail: "full" | "compact" | "marker";
+        emphasis?: boolean;
+    }>;
+    /** Only a navigation act frames the camera. Live content changes omit this. */
+    focusIds?: string[];
+    /** Cap framing magnification without forcing distant context onto the screen. */
+    maxScale?: number;
+}
+/** Reactive facts plus one host-created viewport, mounted wherever the module needs it. */
+export interface WorkspaceFacts<Surface> {
+    viewState: Readonly<Record<string, string>>;
+    canvasId: string;
+    project: Canvas;
+    canvas: CanvasContents;
+    selection: readonly string[];
+    canEdit: boolean;
+    host: WorkspaceHost;
+    /** Place this once in the workspace layout. The host owns its lifecycle. */
+    canvasView: Surface;
+}
+/** An addressable workspace composes module chrome around the existing canvas. */
+export interface ModuleWorkspace<W> {
+    segment: string;
+    label: string;
+    hint?: string;
+    /** The terminal question this workspace answers. */
+    cli: string;
+    component: W;
+    /** A project-specific door, shared by its More menu and right tool rail.
+     * Returning null hides it when this module has no work on that project. */
+    projectEntry?: (facts: {
+        project: Canvas;
+        canvas: CanvasContents;
+    }) => {
+        label: string;
+        glyph: string;
+    } | null;
 }
 /**
  * **What an overlay is handed**: the canvas, and the way to change it.
@@ -502,7 +576,7 @@ interface ModuleOverlay<O> {
     label: string;
     component: O;
 }
-export interface WebModule<C, R = never, I = never, P = never, O = never, D = never> {
+export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never> {
     core: CoreModule;
     /** Drawn inside `.world`, under the items, in world units. */
     underlays?: readonly C[];
@@ -515,6 +589,8 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
     inspectors?: readonly ModuleInspector<I>[];
     /** Whole sections of the app, each a cover route with an address. */
     pages?: readonly ModulePage<P>[];
+    /** Proposed: a module's UI around one native canvas, at an x/ route. */
+    workspaces?: readonly ModuleWorkspace<W>[];
     /** Screen-space chrome above the viewport, against a named edge. */
     overlays?: readonly ModuleOverlay<O>[];
     /** Drags this module catches on the canvas, by mime. */
@@ -602,7 +678,7 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * `^0.2.0` still loads; one that uses the new parts says `^0.2.1` and names
  * them in `proposed`.
  */
-export declare const MODULE_API_VERSION = "0.2.1";
+export declare const MODULE_API_VERSION = "0.2.2";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.
@@ -616,7 +692,7 @@ export declare const MODULE_API_VERSION = "0.2.1";
  * one caller. That is not stability, and calling it stable because it shipped
  * is how an API gets frozen by accident.
  */
-export declare const PROPOSED: readonly ["overlays", "drops", "host", "assets", "points", "dialogs", "templates", "rounds"];
+export declare const PROPOSED: readonly ["overlays", "drops", "host", "assets", "points", "dialogs", "templates", "rounds", "workspaces"];
 /** Which of a manifest's proposals this build does not recognise. A module
  *  asking for something that no longer exists is a refusal with a name, not a
  *  module that quietly loads without the thing it needed. */

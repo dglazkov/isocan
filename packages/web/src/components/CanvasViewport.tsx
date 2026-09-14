@@ -85,7 +85,12 @@ const INK_WIDTH = 3;
 const INK_MIN_STEP = 2;
 
 
+import { usePresentation, currentPresentation, freezePresentation } from "../lib/canvasPresentation.ts";
+import { presentedCanvas, presentedItem } from "../lib/presentation.ts";
+import { stopGlide } from "../lib/zoomactions.ts";
+
 export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { canvasId: string; actor: Actor; onPlanItem?: (id: string) => void; currentNode?: string | undefined }) {
+  const presentation = usePresentation();
   /**
    * **The past wins when there is one.** The scrubber folds a moment with
    * core's `at` and parks it beside the live replica (`canvasStore.past`);
@@ -237,6 +242,8 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     }
 
     function onWheel(e: WheelEvent) {
+      stopGlide();
+      freezePresentation();
       const target = e.target as HTMLElement;
       if (e.ctrlKey || e.metaKey) {
         // Pinch (or ctrl+wheel): always own it, wherever the cursor is, so the
@@ -583,6 +590,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
   }
 
   function onPointerDown(e: React.PointerEvent) {
+    stopGlide();
     const isBackground = Boolean(onPlanItem) || e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
     // through activeTool too.) The Hand tool pans from anywhere — an item
@@ -685,6 +693,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     }
 
     if (isBackground && commentMode && e.button === 0 && !wantsPan) {
+      if (currentPresentation()?.isolate) { setNotice("Click a concept to pin a comment in this view."); return; }
       const ui = useUiStore.getState();
       const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
       ui.setPendingComment({ x: world.x, y: world.y, anchorItemId: null });
@@ -966,7 +975,8 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       const maxX = Math.max(startWorld.x, current.x);
       const minY = Math.min(startWorld.y, current.y);
       const maxY = Math.max(startWorld.y, current.y);
-      const currentCanvas = useCanvasStore.getState().canvas;
+      const snapshot = useCanvasStore.getState().canvas;
+      const currentCanvas = snapshot ? presentedCanvas(snapshot, currentPresentation()) : undefined;
       const eligible = currentCanvas && groupsEnabled() ? groupScopeRoots(currentCanvas, state.activeGroupId) : Object.values(currentCanvas?.items ?? {});
       const hit = eligible
         .filter(
@@ -1109,7 +1119,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
   // siblings at one z-index, and DOM order is the only order there is. A
   // stable sort keeps the rest as they were.
   const items = canvas
-    ? Object.values(canvas.items).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
+    ? Object.values(canvas.items).filter((item) => !presentation?.isolate || presentation.items[item.id]).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
     : [];
 
   return (
@@ -1124,6 +1134,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
       }}
       onPointerDownCapture={(e) => {
+        stopGlide(); freezePresentation();
         if (onPlanItem) {
           hold.current?.down(e);
           const id = (e.target as HTMLElement).closest("[data-item-id]")?.getAttribute("data-item-id");
@@ -1146,7 +1157,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       onContextMenu={onContextMenu}
       onPointerMove={(e) => {
         const ui = useUiStore.getState();
-        publishCursor(screenToWorld(ui.viewport, e.clientX, e.clientY));
+        publishCursor(currentPresentation() ? null : screenToWorld(ui.viewport, e.clientX, e.clientY));
       }}
       onPointerLeave={() => publishCursor(null)}
       /**
@@ -1216,17 +1227,17 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         ))}
         {fannedItemId && canvas?.items[fannedItemId] && (
           <Suspense fallback={null}>
-            <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />
+            <VersionFanOut item={presentedItem(canvas.items[fannedItemId]!, presentation)} canvasId={canvasId} actor={actor} />
           </Suspense>
         )}
         <InkLayer />
         {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}
       </div>
       <CommentLayer canvasId={canvasId} actor={actor} />
-      <CursorLayer />
+      {!presentation && <CursorLayer />}
       <MarqueeRect />
       <GuideLines />
-      <EdgeRadar canvasId={canvasId} />
+      {!presentation && <EdgeRadar canvasId={canvasId} />}
       <SketchBar canvasId={canvasId} actor={actor} />
       {dropping && <div className="drop-overlay">{dropMessage}</div>}
       {menu && (

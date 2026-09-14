@@ -842,3 +842,41 @@ renderer (including React's table-whitespace removal). Receivers resolve local
 DOM ranges; CSS Custom Highlights never replace native selection. Older
 browsers retain the named attention status and explicit Show selection action.
 Version changes clear the highlight instead of guessing at another sentence.
+
+
+### Module workspaces
+
+The web and CLI module lists are the only host imports of a module. Anatomy
+adds no graph daemon: project records, concepts and checkpoints are ordinary
+versioned JSON items; membership and relationships are namespaced properties.
+Its CLI and React views use the same graph adapter and operation builders.
+
+`WebModule.workspaces` composes chrome around the host's native viewport at
+an existing module route. `ModuleWorkspace` owns capability, selection,
+navigation, history shortcuts, lazy/error boundaries and measured stage bounds.
+A fixed viewport clipped to the measured slot keeps screen-coordinate drag
+math unchanged. `WorkspaceHost` promotes authenticated blob reads and native
+selection/focus/navigation; modules still import no web stores. The API and
+proposed declaration live in `core/modules.ts`; the full contract is in
+[the module authoring guide](projects/modules/authoring.md).
+
+A workspace can supply a project-specific menu and right-rail entry from the
+canvas record's properties. Anatomy uses `anatomy.analysis` and
+`anatomy.repository`; requesting a repository read posts an ordinary `/anatomy`
+Chat message for an agent. Workspace-scoped activation routes native card
+double-clicks and underlay links without putting module semantics in ItemView.
+
+
+Anatomy’s fluid exploration adds a workspace-local presentation store in the
+web host. Modules provide target bounds and semantic detail over native IDs;
+React consumers and imperative gestures read the same interpolated frame.
+Canonical geometry remains in the daemon’s replica. The host maps item-anchored
+comments between saved and displayed coordinates, while unscoped presence is
+not projected across different local layouts. Module API 0.2.2 also makes local
+view state addressable through host navigation. See the [workspace contract](projects/modules/authoring.md).
+
+`item.edit` is a conditional body-and-metadata replacement. The reducer checks
+the version originally read and optional title/property preconditions before
+changing either field. Anatomy’s form and guarded CLI drafts use it; undo and
+redo restore body and metadata together. An older daemon rejects the new op
+rather than silently dropping a precondition it does not understand.

@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere, now decided (orphans inert): the cursor and hold routes require the actor, and phase 3.5 makes agent keys machine-keyed (design.md, the claim rule). Phase 4, the bundle a host installs, is built and waits on its walk against `release` after CI; phase 5's walks follow phase 3.5.** Seven phases, none
+**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere, now decided (orphans inert): the cursor and hold routes require the actor, and phase 3.5 makes agent keys machine-keyed (design.md, the claim rule). Phase 4, the bundle a host installs, is CLOSED and walked against `release`; phase 5's walks follow phase 3.5.** Seven phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -207,7 +207,7 @@ key is refused.
 
 ## Phase 4 — The bundle a host installs
 
-**Status: PART-DONE 2026-09-13.** The `browser` condition and the release-built bundle (`packages/rc/dist/index.mjs`, 143 KB, core inlined) are in, and the installed-tree test bundles through them and fails without the condition; the walk waits on CI rebuilding `release`.
+**Status: CLOSED 2026-09-13.** A host that installs `isocan` from `release` and bundles `import "isocan/rc"` for the browser gets the module: the `browser` condition names the release-built bundle, the installed-tree test holds it, and the walk below passed.
 
 **Outcome:** a host that installs `isocan` from `release` and bundles
 `import "isocan/rc"` for the browser platform gets the module, not the
@@ -237,7 +237,19 @@ externals, output recorded here.
 
 **Trajectory:**
 
-- **2026-09-13** — Open: the walk against `release` — install, Node import, one-line browser bundle — waits on the CI run that rebuilds `release` from this phase's commit.
+*nothing beyond the re-cut recorded under Formerly.*
+
+**Walked 13 Sep 2026** against `release` at d8ec18b, from a scratch
+directory:
+- `npm install github:dglazkov/isocan#release` exits 0. The `./rc`
+  export is `{ types: ./types/rc/src/index.d.ts, browser:
+  ./packages/rc/dist/index.mjs, default: ./rc.mjs }`, and the bundle
+  is 143,431 bytes.
+- `node -e 'import("isocan/rc")'` gives 16 exports and exits 0.
+- `esbuild entry.mjs --bundle --platform=browser --format=esm
+  --metafile=meta.json` over `import "isocan/rc";` builds `out.js` at
+  82.8 KB and exits 0. The inputs are `entry.mjs` and the bundle, the
+  externals list is `[]`, and `node:` appears 0 times in the output.
 
 **Formerly:** phase 4 was "The bundle, and the walk": journeys 1, 2 and 3
 walked together after phase 3. Re-cut 13 Sep 2026, when journey 3's

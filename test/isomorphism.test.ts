@@ -60,6 +60,11 @@ describe("every shared fact is an operation either surface can send", () => {
     expect(orphans, "in the vocabulary, sent by nothing").toEqual([]);
   });
 
+  it("follows both module entry points into their shared operation helpers", () => {
+    expect(audit().find((row: { op: string }) => row.op === "item.edit"))
+      .toMatchObject({ web: true, cli: true, unreachable: false });
+  });
+
   it("counts inversion as a way an operation is reached", () => {
     /**
      * The mistake that would have deleted working code. `comment.restore`,

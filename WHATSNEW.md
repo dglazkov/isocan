@@ -23,6 +23,11 @@ second week.
 
 ## 13 September 2026
 
+- Write your own host for the rc. `import { runRoom } from "isocan/rc"`
+  is the loop `isocan rc` runs, with the machine handed in: routes, a
+  key-value store, a clock and a harness per agent. It bundles for the
+  browser platform from a `#release` install, with nothing from Node
+  inside, so a worker or an edge runtime can carry it.
 - Catch up on a shared source from Context. **Recent work** shows its latest
   activity beside its design and pins, with the source and covered range.
   Busy sources say what was left out; an unavailable history keeps the

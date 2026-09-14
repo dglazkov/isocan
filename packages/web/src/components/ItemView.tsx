@@ -1,6 +1,7 @@
 import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, groupAncestors, groupScopedRoot, groupDropTarget, groupDropPolicy, groupTransformClosure, isGroupItem } from "@isocan/core";
 import { groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
-import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
 import {
@@ -104,6 +105,9 @@ const TITLE_STRIP_PX = 16;
  *  does not touch the thing it yielded to. */
 const TITLE_GAP_PX = 8;
 
+import { usePresentation, currentPresentation } from "../lib/canvasPresentation.ts";
+import { presentedItem, presentedCanvas, presentedOffset } from "../lib/presentation.ts";
+
 function ItemViewInner({
   item,
   canvasId,
@@ -124,6 +128,10 @@ function ItemViewInner({
   settling?: boolean;
 }) {
   const navigate = useNavigate();
+  const activateItem = useContext(CanvasActivation);
+  const presentation = usePresentation();
+  const detail = presentation?.items[item.id]?.detail;
+  const display = presentedItem(item, presentation);
   /**
    * **A live item is only live while it is somewhere near the window** (the
    * 6 September freeze, second half).
@@ -185,13 +193,25 @@ function ItemViewInner({
     return holder ? holder.actor.id : null;
   });
   const worker = useWorkingSession(item.id);
+  const seenVersion = useRef(item.currentVersionId);
+  const [contentChanged, setContentChanged] = useState(false);
+  useEffect(() => {
+    const changed = seenVersion.current !== item.currentVersionId;
+    seenVersion.current = item.currentVersionId;
+    if (changed && item.updatedBy.id !== actor.id) setContentChanged(true);
+  }, [item.currentVersionId, item.updatedBy.id, actor.id]);
+  useEffect(() => {
+    if (!contentChanged) return;
+    const timer = setTimeout(() => setContentChanged(false), 2400);
+    return () => clearTimeout(timer);
+  }, [contentChanged, item.currentVersionId]);
   // When the label was last pressed, for spotting a double-press on it.
   const labelPress = useRef(0);
 
-  const x = groupBox?.x ?? (drag ? item.x + drag.dx : item.x) + (resize?.dx ?? 0);
-  const y = groupBox?.y ?? (drag ? item.y + drag.dy : item.y) + (resize?.dy ?? 0);
-  const width = groupBox?.width ?? resize?.width ?? item.width;
-  const height = groupBox?.height ?? resize?.height ?? item.height;
+  const x = groupBox?.x ?? display.x + (drag?.dx ?? 0) + (resize?.dx ?? 0);
+  const y = groupBox?.y ?? display.y + (drag?.dy ?? 0) + (resize?.dy ?? 0);
+  const width = groupBox?.width ?? resize?.width ?? display.width;
+  const height = groupBox?.height ?? resize?.height ?? display.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const visual = visualFaceOf(current);
   const stackDepth = Math.min(item.versions.length - 1, 2);
@@ -442,7 +462,7 @@ function ItemViewInner({
     if (commentMode) {
       // Anchored comment: store the click as an offset from the item origin.
       const world = screenToWorldPoint(e.clientX, e.clientY);
-      ui.setPendingComment({ x: world.x - item.x, y: world.y - item.y, anchorItemId: item.id });
+      ui.setPendingComment({ ...presentedOffset(item, currentPresentation(), world, true), anchorItemId: item.id });
       ui.setCommentMode(false);
       return;
     }
@@ -541,8 +561,12 @@ function ItemViewInner({
       // Align to what is already on the canvas. Shift is read from the MOVE,
       // not the press — a shift-press is "add to selection", so the magnet has
       // to be something you reach for mid-gesture.
-      const items = capturedItems ?? useCanvasStore.getState().canvas?.items ?? {};
-      const moving = semantic ? capturedMoving : unionBox(dragIds.map((id) => items[id]).filter((one) => one !== undefined));
+      const snapshot = useCanvasStore.getState().canvas;
+      const presented = snapshot ? presentedCanvas(snapshot, currentPresentation()).items : {};
+      const items = capturedItems ?? presented;
+      const moving = semantic
+        ? capturedMoving
+        : unionBox(dragIds.map((id) => items[id]).filter((one) => one !== undefined));
       if (moving) {
         const others = capturedOthers ?? Object.values(items).filter((other) => !draggingIds.has(other.id));
         const threshold = (ev.shiftKey ? SNAP_PX_MAGNETIC : SNAP_PX) / scale;
@@ -743,6 +767,7 @@ function ItemViewInner({
     const hitId = scopedHit(item.id);
     const hit = useCanvasStore.getState().canvas?.items[hitId];
     if (hit && isGroupItem(hit)) { enterCanvasGroup(hit.id); e.stopPropagation(); return; }
+    if (activateItem?.(item.id)) return;
     // A canvas is a place you go, not a thing you step inside of: the same
     // gesture opens it in a tab. Never in place — a canvas inside a canvas
     // inside a canvas is a maze, and a tab is where a place belongs.
@@ -795,6 +820,18 @@ function ItemViewInner({
       className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? " canvas-group" : ""}${dropTarget ? " group-drop-target" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       data-group-id={isCanvasGroup ? item.id : undefined}
+      data-presentation={detail}
+      data-content-changed={contentChanged || undefined}
+      data-emphasis={presentation?.items[item.id]?.emphasis || undefined}
+      tabIndex={detail ? (detail === "marker" ? -1 : 0) : undefined}
+      aria-label={detail ? `Explore ${item.title}` : undefined}
+      title={detail === "marker" ? item.title : undefined}
+      onKeyDown={detail ? (event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault(); event.stopPropagation(); activateItem?.(item.id);
+        }
+      } : undefined}
       /* One id in the store rather than a flag per item: moving the pointer
          across a canvas re-renders the two items whose state changed, not
          every item on screen. */
@@ -826,6 +863,7 @@ function ItemViewInner({
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
     >
+      {detail && (worker || remoteHolder) && <span className="presentation-presence">{worker?.name ?? names[remoteHolder!] ?? "Viewing"}</span>}
       {stackDepth >= 1 && <span className="ply" style={{ transform: "translate(5px, 5px)", opacity: 0.75 }} />}
       {stackDepth >= 2 && <span className="ply" style={{ transform: "translate(10px, 10px)", opacity: 0.45 }} />}
       {item.versions.length > 1 && roomy && (
@@ -1126,7 +1164,7 @@ function ItemViewInner({
          * node would misdescribe the canvas, and at the zoom where dozens of
          * nodes are marks that is the same smear in a different hat.
          */}
-        {isText && !textLegible ? (
+        {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
           <span
             className="text-mark"
             aria-label={item.title}
@@ -1277,6 +1315,7 @@ function ItemViewInner({
         </div>
       )}
       {soleSelection && !entered && canEdit && (
+        !detail &&
         <>
           <span className="resize-handle resize-handle-nw" onPointerDown={(e) => onResizeDown("nw", e)} />
           <span className="resize-handle resize-handle-ne" onPointerDown={(e) => onResizeDown("ne", e)} />
@@ -1470,10 +1509,12 @@ function VersionFace({
    *  than as the text that declares them. */
   designSystem?: boolean;
 }) {
+  const presentation = usePresentation();
   const url = blobUrl(canvasId, blobHash);
   // Stable per blob, so a module renderer keying an effect on it does not
   // refetch on every shell render (see modules/mermaid/src/diagram.tsx).
   const readText = useCallback(() => readBlobText(canvasId, blobHash), [canvasId, blobHash]);
+  const moduleItem = useCanvasStore((s) => itemId ? (s.past?.canvas ?? s.canvas)?.items[itemId] : undefined);
   // A runtime module that arrived after first paint may own this mime now.
   useUiStore((s) => s.modulesGeneration);
   if (liveDoc) {
@@ -1490,6 +1531,8 @@ function VersionFace({
   if (ModuleRenderer) {
     return (
       <Suspense fallback={null}><ModuleRenderer
+        item={moduleItem}
+        presentation={itemId ? presentation?.items[itemId] : undefined}
         canvasId={canvasId}
         blobHash={blobHash}
         mimeType={mimeType}

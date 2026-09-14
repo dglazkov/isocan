@@ -125,6 +125,27 @@ distribute`, `isocan mv --by`, `isocan set --title` (which renames the file
 too), `isocan add --drawing`, `isocan ls --kind`, `isocan identity --color`.
 That parity is a house rule with a test behind it: see AGENTS.md.
 
+- **Anatomy project exploration**: Blueprint puts goal, structure, data and rule
+  concepts on native canvas cards, with a searchable hierarchy and resizable inspector.
+  Double-click a concept or follow a connection to explore its neighborhood:
+  the focused card expands, neighbors move into compact cards, and distant
+  concepts become markers. This temporary view preserves saved canvas positions,
+  native selection, anchored discussion and item-focused collaboration. Browser
+  Back retraces exploration; the project shortcut resumes it. Existing concept
+  edits use `anatomy draft` and a conditional save to preserve concurrent changes.
+  Broken files have item-scoped diagnostics and version recovery; healthy concepts
+  stay readable. `anatomy validate` and `recover` provide the same repair path.
+  Overview, Open Decisions and Coverage show the same graph through different
+  lenses. Import/export Anatomy JSON, discuss concepts, attach source evidence,
+  propose HTML mocks, and save or restore checkpoints. Associate a repository
+  and ask an agent to analyze it through `/anatomy` in Chat. Requests record their
+  target, Chat delivery, executor reports, reviewed revision and result; inspect
+  them with `anatomy runs` or the workspace. Retries and cancellation preserve
+  the original receipt. Attached analyses
+  expose **View Anatomy** in the project menu and right rail. Open **Anatomy** from
+  the command palette, or `isocan open --page anatomy`; the `isocan anatomy`
+  command family provides the same reads and edits. This is a removable module
+  using the proposed workspace API. [Design and phased plan](docs/projects/anatomy/phases.md).
 - **Canvas**: infinite pan/zoom surface with a minimap; items are files —
   markdown, images, video, and HTML rendered live in sandboxed iframes
   (`allow-scripts` without `allow-same-origin`). "Double-click to interact"

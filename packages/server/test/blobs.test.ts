@@ -488,6 +488,14 @@ describe("bytes that look like something else", () => {
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
   }
 
+  it("keeps plain text source bytes intact instead of applying Fastify's text parser", async () => {
+    const text = "export const states = ['intake', 'delivery'];\n";
+    const { status, body } = await put(text, "text/plain");
+    expect(status).toBe(200);
+    expect(body.mimeType).toBe("text/plain");
+    expect(body.size).toBe(Buffer.byteLength(text));
+  });
+
   it("takes a JSON file as a file, not as a request body", async () => {
     const text = JSON.stringify({ kind: "tool", label: "Tidy" });
     const { status, body } = await put(text, "application/json");
