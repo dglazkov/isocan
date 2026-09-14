@@ -97,7 +97,20 @@ push.
 The whole of `runRcRoom` minus the laptop. `Room` is `{ stop(): void }`,
 an abort that ends both long polls and the hold. `RoomDeps`:
 
-- `routes`: `DaemonRoutes` over a `fetch`. `DaemonRoutes` is fetch-only
+- `routes`: the daemon routes the room calls, as an interface the module
+  declares over `@isocan/core`'s request and response types:
+  `snapshot`, `getLog`, `watchLog`, `sendOp`, `claimActor`,
+  `actorBindings`, `createSession`, `updateSession`, `endSession`,
+  `parkClaim`, `parkDelivered`, `parkAdvance`, `rcHold`. The module
+  imports nothing from `@isocan/api`: `routes.ts` names `Buffer` in its
+  blob methods and calls `Buffer.from` at run time, which a host has
+  no use for and a no-Node typecheck refuses. The laptop hands the room
+  `ctx.client`, and the compiler checks `DaemonClient` against the
+  interface at that call, so the two cannot drift. `ApiError`, which the
+  room reads refusals by, moves to core with `@isocan/api` re-exporting
+  it, so `instanceof` still holds. A host implements the interface over
+  its `fetch`, or constructs `DaemonRoutes` if it can carry it.
+  `DaemonRoutes` itself is still made host-shaped here: it is fetch-only
   by its own rule and by `packages/api/test/boundary.test.ts`, but it
   still imports four things from `@isocan/server`: `readBadge` and
   `writeBadge`, which read a file, and `askTheDoor` and `bearerHeader`,
@@ -224,14 +237,19 @@ the entry with `bundle: true, platform: "browser"` and expect no
 inside the suite; the scratch-directory install and the one-line
 bundle against `release` are its walk.
 
-The existing tests are indifferent to where the room lives.
-`rc-fixture.ts` starts a real in-process daemon and `spawn`s the real
-CLI binary; every assertion is against the child's output and
-`rc-agents.json`. "Pass unchanged" therefore measures exactly what
-journey 1 asks, that the narration and the record are byte-identical,
-and costs nothing beyond keeping two import paths alive
+The existing tests are indifferent to where the room lives, with one
+exception. `rc-fixture.ts` starts a real in-process daemon and `spawn`s
+the real CLI binary, and every behavioural assertion is against the
+child's output and `rc-agents.json`. "Pass unchanged" therefore measures
+exactly what journey 1 asks, that the narration and the record are
+byte-identical, and costs nothing beyond keeping two import paths alive
 (`adoptRcAgent` and `RcAgentRow` from `../src/rc.ts` in `rc.test.ts`,
-`gateTurn` in `guards.test.ts`).
+`gateTurn` in `guards.test.ts`). The exception is two describes in
+`rc.test.ts` that read `main.ts`'s text, because the startup window they
+guard (an enrolment or a withdrawal landing between the opening and
+the start tip) could not be forced through a spawned CLI. Over in-memory
+deps it can, so they leave `rc.test.ts` for `room.test.ts` as
+behavioural tests of that window, and every other case stays as it is.
 
 ## Open doors
 
@@ -245,5 +263,8 @@ and costs nothing beyond keeping two import paths alive
   remembers what it said and whose word a turn carried. Whether the
   guard's window should survive a restart, and for how long, is
   decided when a host exists to ask.
+- **Bytes on a host.** `DaemonRoutes`'s blob methods speak `Buffer`. The
+  room never calls them; a host that wants them decides how bytes cross
+  its `fetch`.
 - **A pasture per canvas.** Unchanged from sheep-harness's door; the
   `SheepCommands` interface does not decide it.

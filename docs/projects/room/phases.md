@@ -10,7 +10,8 @@ needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
 phase: `packages/cli/test/rc.test.ts`, `rc-sheep.test.ts` and
-`rc-sheep-withdrawal.test.ts` pass unchanged, and the boundary test is
+`rc-sheep-withdrawal.test.ts` pass unchanged (save `rc.test.ts`'s two
+source-shape describes, which phase 1 moves to `room.test.ts`), and the boundary test is
 in the suite from phase 0 on, so a `node:` import cannot land in the
 module by accident at any later phase.
 
@@ -57,10 +58,10 @@ passes over the moved `gateTurn`. A test over the manifest
 badge store as a constructor parameter, `askTheDoor` and `bearerHeader`
 move to `@isocan/core` with `@isocan/server` re-exporting them, and
 `routes.ts`, with everything it reaches, no longer imports
-`@isocan/server`. The room
-imports `DaemonRoutes` from an `@isocan/api` subpath whose closure is
-`routes.ts` and what it needs, since the api root reaches `client.ts`
-(phase 0's trajectory). `main.ts`'s
+`@isocan/server`. The room imports nothing from `@isocan/api`: its
+`routes` is an interface the module declares over core's types,
+`ApiError` moves to core, and the laptop's `ctx.client` is checked
+against the interface where it is passed. `main.ts`'s
 `runRcRoom` becomes the laptop's consumer: it builds the deps from
 `ctx`, the file-backed rows, the file-backed badge store, an
 `adapterFor` that fences, scans and spawns, a `narrate` that prints, a
@@ -68,7 +69,11 @@ imports `DaemonRoutes` from an `@isocan/api` subpath whose closure is
 session pointer file and the daemon restart. The `rc` command's action
 is unchanged.
 
-**Proof:** `rc.test.ts` passes unchanged. The boundary test now covers
+**Proof:** `rc.test.ts` passes unchanged but for its two source-shape
+describes of the startup window, which become behavioural cases in
+`room.test.ts`: an enrolment landing between the opening and the start
+tip is adopted and claimed with the same sentence as any other, and a
+withdrawal there is reaped. The boundary test now covers
 the room and still passes, and `packages/rc/src` typechecks under a
 tsconfig with no Node types, falsified by a bare `process.env` there. `packages/api/test/boundary.test.ts` gains
 `@isocan/server` to its forbidden list for `routes.ts`. A new
@@ -81,7 +86,10 @@ re-narrate what the first said and keeps the first's guard; a
 `ensureDaemon` in sight. A night of the guard's window in under a
 second by the clock.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-13** — Reversed phase 0's subpath entry: `routes.ts` uses `Buffer` in its blob methods, so a room importing it fails the no-Node typecheck. The room declares its routes as an interface over core's types, `ApiError` moves to core, and nothing of `@isocan/api` is in the module's closure.
+- **2026-09-13** — `rc.test.ts` held two source-shape describes that read `main.ts`, so "passes unchanged" could not survive the move. They become behavioural tests in `room.test.ts`, where in-memory deps can force the startup window the spawned CLI could not.
 
 ## Phase 2 — The sheep over commands
 
