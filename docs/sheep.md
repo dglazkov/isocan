@@ -54,11 +54,32 @@ what it costs, and what sheep does with it; `?` again closes them.
 | **next** | nothing — it prints the address and where the two values are kept |
 
 **The Cloudflare token** is made at
-<https://dash.cloudflare.com/?to=/:account/api-tokens> with seven permissions:
+<https://dash.cloudflare.com/?to=/:account/api-tokens> → *Create Custom Token*.
+Add five rows, every one of them **Account** scope:
 
-> Workers Scripts (edit), Durable Objects (edit), Containers (edit), Workers
-> Subdomain (edit), Workers KV Storage (edit), Account Settings (read),
-> Billing (read).
+| Permission | Level |
+| --- | --- |
+| Workers Scripts | Edit |
+| Workers KV Storage | Edit |
+| Containers | Edit |
+| Account Settings | Read |
+| Billing | Read |
+
+Under **Account Resources**, *Include* the account your home will live on. The
+IP filter and the TTL are optional; leave them alone.
+
+**Sheep's own setup names seven, and two of them are not permissions.**
+Cloudflare's account permission list has no *Durable Objects* row and no
+*Workers Subdomain* row — searching for either finds nothing, which is the
+list being right rather than the dashboard hiding something. Both are carried
+by **Workers Scripts (edit)**: a Durable Object namespace and its migration
+are part of a script upload, and so is the `workers.dev` subdomain. The five
+above are the whole of it.
+
+Faster, if you would rather not assemble it: start from the **Edit Cloudflare
+Workers** template and add *Containers (edit)* and *Billing (read)*. It works,
+and it also hands over R2, Tail, zone Workers Routes and your user details,
+which this does not need.
 
 Both values land in `~/.sheep/credentials`, mode 600, and nowhere else. They
 are never printed, never in a process's arguments, and the Anthropic key is
