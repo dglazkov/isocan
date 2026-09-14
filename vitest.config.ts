@@ -20,6 +20,10 @@ export default defineConfig({
     // Runs in every worker, before every test file: see test/setup.ts for what
     // a run leaves behind without it.
     setupFiles: ["test/setup.ts"],
+    /* The default reporter prints the duration; `timing-reporter.ts` is what
+       remembers it. Every run, no flag — `scripts/timings.mjs` reads them back
+       and says which kind of run is getting slower. */
+    reporters: ["default", "./test/timing-reporter.ts"],
     /**
      * NOT the 5-second default, and this is the third time it has been paid
      * for.

@@ -53,3 +53,52 @@ describe("every workflow that runs the suite", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * **A sharded gate can leave a quarter of the suite unrun and still be green.**
+ *
+ * `release.yml` splits the suite four ways because it was 82% of a release
+ * run. `vitest --shard=N/M` runs the Nth of M pieces, and the two numbers live
+ * in two places: `M` in the command, `N` in the job matrix. Add a fifth shard
+ * to the matrix and forget the denominator and shard 5 runs nothing while
+ * shards 1–4 still cover everything — harmless. Take one AWAY and leave the
+ * denominator at 4, and a quarter of the suite is never run by anybody, every
+ * job passes, and `green` advances on a commit nothing tested.
+ *
+ * That is the same shape as every other hole this repo has found: not a
+ * failure, an absence reported as a success. So the two numbers are checked
+ * against each other.
+ */
+describe("the sharded gate covers the whole suite", () => {
+  const release = read("release.yml");
+
+  it("is sharded at all — otherwise the cases below say nothing", () => {
+    expect(release).toMatch(/--shard=\$\{\{ matrix\.shard \}\}\/\d+/);
+  });
+
+  it("runs as many shards as the command says there are", () => {
+    const denominator = Number(/--shard=\$\{\{ matrix\.shard \}\}\/(\d+)/.exec(release)?.[1]);
+    const matrix = /shard: \[([^\]]+)\]/.exec(release)?.[1] ?? "";
+    const shards = matrix.split(",").map((one) => Number(one.trim()));
+    expect(shards.length, `the matrix runs ${shards.length} shards of ${denominator}`).toBe(denominator);
+    // And they are 1..M exactly: a duplicate would double-run one piece while
+    // another went missing, which the count alone cannot see.
+    expect([...shards].sort((a, b) => a - b)).toEqual(
+      Array.from({ length: denominator }, (_, index) => index + 1),
+    );
+  });
+
+  it("shards the command that sets the anti-skip switches, not bare vitest", () => {
+    // `npm run test:ci` is what turns a skip into a failure. A shard that
+    // called `vitest` directly would run a quarter of the suite AND let the
+    // emulator, bundle and deep suites skip themselves inside it.
+    expect(release).toMatch(/npm run test:ci -- --shard=/);
+  });
+
+  it("moves the refs only after every shard and every check", () => {
+    // `needs` is the whole gate now. Without it the publish job races the
+    // suite and `green` means nothing at all.
+    expect(release).toMatch(/needs: \[suite, checks\]/);
+    expect(release).toMatch(/fail-fast: false/);
+  });
+});

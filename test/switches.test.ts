@@ -42,8 +42,13 @@ const workflows = [".github/workflows/release.yml", ".github/workflows/pr.yml"];
 describe("the anti-skip switches", () => {
   it("are set by the one command both workflows run", () => {
     for (const workflow of workflows) {
+      /* Arguments allowed, and only arguments. `release.yml` shards with
+         `-- --shard=N/4`; what this case is about is that the suite goes
+         through the command that sets the switches, not that it is called
+         bare. A `vitest` invoked directly would run tests AND let the
+         emulator, bundle and deep suites skip themselves inside it. */
       expect(read(workflow), `${workflow} should run the suite through npm run test:ci`).toMatch(
-        /^\s*- run: npm run test:ci\s*$/m,
+        /^\s*- run: npm run test:ci(\s+--.*)?\s*$/m,
       );
     }
   });

@@ -17,6 +17,28 @@ goal:
   # perfectly by themselves. Audited 8 Sep 2026 and it was already zero, which
   # is why this is a bound rather than a ratchet: a guard is cheapest to
   # install at the moment the thing it guards is already true.
+  # **The doors the work queues at** (13 Sep 2026). Measured because Dimitri
+  # noticed the work had slowed and the repository's size turned out not to be
+  # the reason: 143k lines of source, a 4.4s build, a 29s typecheck — none of
+  # that is a codebase too big to work in. What had slowed was every unit of
+  # work passing through the same few files. In the fortnight to 13 September,
+  # `main.ts` took 120 touches, `styles.css` 108 and `agent-guide.md` 81, so
+  # parallel branches conflicted by construction rather than by accident.
+  #
+  # Lines are a crude stand-in for "how much has to go through one door" and
+  # that is the right crudeness: it cannot be argued with, it moves the moment
+  # somebody adds to a crowded file, and it goes DOWN when the thing that
+  # actually fixes it happens — a command family moving to its own module, a
+  # component taking its own stylesheet.
+  #
+  # The bound is where it stands today, so the number can only be paid down.
+  # Not a gate: a missed bound here is news in the nightly queue, because a
+  # hard stop on this would be switched off by the first person who needed one
+  # more line at midnight. `--names` says which door is worst.
+  - name: lines in the files every feature must edit
+    at most: 24058
+    measured by: node scripts/measure.mjs registry-lines
+    baseline: 24058, 2026-09-13, b1644894
   - name: operations a person can send and an agent cannot
     at most: 0
     measured by: node scripts/measure.mjs web-only-ops
