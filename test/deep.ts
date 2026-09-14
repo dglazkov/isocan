@@ -118,6 +118,7 @@ export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/desk.test.ts", secs: 11 },
   { file: "packages/cli/test/documents.test.ts", secs: 11 },
   { file: "packages/cli/test/sprint.test.ts", secs: 10 },
+  { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
 ];
 
 /**
@@ -165,6 +166,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "test/roadmap.test.ts", secs: 1.7, why: "spawns `doc status` three times, not once per document — deliberately, and it says so" },
   { file: "test/deeplist.test.ts", secs: 0.2, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },
+  { file: "packages/voice-agent/test/voice-model.test.ts", secs: 9.8, why: "nineteen cases over one daemon, and the closest file to the line: only the model verbs it cannot drive from the page walk the CLI at all" },
 ];
 
 /**

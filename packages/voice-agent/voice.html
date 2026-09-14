@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <title>Voice</title>
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url("/fonts/inter-latin.woff2") format("woff2");
+      }
+    </style>
+    <script>
+      // The canvas's existing preference/root-attribute contract, before
+      // first paint and on OS changes. Storage refusal must not hide Voice.
+      const themeMedia = matchMedia("(prefers-color-scheme: dark)");
+      function applyVoiceTheme() {
+        let pref = "system";
+        try { pref = localStorage.getItem("isocan.theme") || "system"; } catch {}
+        document.documentElement.dataset.theme = pref === "dark" ||
+          (pref !== "light" && themeMedia.matches) ? "dark" : "light";
+      }
+      applyVoiceTheme();
+      themeMedia.addEventListener("change", applyVoiceTheme);
+    </script>
+  </head>
+  <body>
+    <!--
+      Conversation stays first. Connection and key controls live intact in
+      Settings, the transcript and tool calls in Logs — both one press away,
+      so the page itself is the conversation and the record is not. Missing
+      prerequisites remain visible inline without opening either.
+
+      Vite serves this file directly (HMR included) and `src/voice/main.ts` is
+      its only script; there is no identity gate, no router and no React.
+    -->
+    <div class="voice">
+      <svg class="voice-atmosphere" viewBox="0 0 1200 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+        <ellipse cx="600" cy="440" rx="380" ry="300" />
+        <ellipse cx="600" cy="440" rx="520" ry="420" />
+        <ellipse cx="600" cy="440" rx="680" ry="555" />
+      </svg>
+      <div class="voice-stage">
+      <header class="voice-head">
+        <h1>Voice</h1>
+        <!-- The build this page was served from: Paul uses it to know he is
+             testing the right branch. Vite injects `__VOICE_BUILD_INFO__` on
+             the integration build; a build without it says so rather than
+             showing a tag that is not true. -->
+        <span class="voice-build" id="build-tag" title="the build this page was served from"></span>
+        <div class="voice-head-actions">
+          <!-- The record of the conversation, one press away, like the cog.
+               Both dialogs are the same native element with the same
+               closedby behaviour and the same light-dismiss fallback. -->
+          <button class="voice-head-button" id="logs-open" type="button" aria-label="Logs" aria-haspopup="dialog" aria-controls="logs" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="4.5" y="3.5" width="15" height="17" rx="2" />
+              <path d="M8.5 9h7M8.5 13h7M8.5 17h4" />
+            </svg>
+          </button>
+          <button class="voice-head-button" id="settings-open" type="button" aria-label="Voice settings" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M10 2h4l.5 3 2.5 1.5 2.8-1 2 3.5-2.4 2v2l2.4 2-2 3.5-2.8-1L14.5 19 14 22h-4l-.5-3L7 17.5l-2.8 1-2-3.5 2.4-2v-2l-2.4-2 2-3.5 2.8 1L9.5 5Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="voice-hero" id="hero" data-state="idle" data-activity="idle" aria-label="Microphone">
+        <div class="voice-caption-slot">
+          <p id="broker-note" class="voice-shortcut" role="status" hidden></p>
+          <div class="voice-captions" id="captions" role="log" aria-live="polite" aria-relevant="additions" aria-atomic="false" aria-label="Voice captions"></div>
+          <div class="voice-setup-callout" id="setup-callout" hidden>
+            <p id="setup-status" role="status"></p>
+            <button id="setup-open" type="button" aria-haspopup="dialog" aria-controls="settings">Open settings</button>
+          </div>
+        </div>
+
+        <p class="voice-state" id="state" role="status">idle — press Listen to start</p>
+
+        <p class="voice-shortcut" id="shortcut">Space toggles the microphone</p>
+        <div class="voice-controls">
+        <div class="voice-mic">
+          <svg class="voice-ring" viewBox="0 0 240 240" aria-hidden="true" focusable="false">
+            <circle class="voice-orbit" cx="120" cy="120" r="103" />
+            <path id="output-wave" />
+          </svg>
+          <button id="listen" type="button" aria-label="Listen" title="Start listening" aria-keyshortcuts="Space" aria-describedby="shortcut broker-note">
+            <svg class="voice-input" viewBox="0 0 128 128" aria-hidden="true" focusable="false"><path id="input-wave" /></svg>
+            <svg class="voice-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 3.5a2.75 2.75 0 0 0-2.75 2.75v5a2.75 2.75 0 0 0 5.5 0v-5A2.75 2.75 0 0 0 12 3.5Z" />
+              <path d="M5.5 11.25a6.5 6.5 0 0 0 13 0" />
+              <path d="M12 17.75V21" />
+              <path class="voice-muted-slash" d="M4 4 20 20" />
+            </svg>
+          </button>
+        </div>
+        <!--
+          Both ends of the sound, immediately under the ring rather than under
+          two lines of text: choosing a device is part of using voice, not
+          configuring it, and a row two lines away from the microphone reads as
+          detached from it. Side by side at every width and small, and on a
+          wide window the pair sits BESIDE the ring instead (styles.css),
+          which is the same intent on the axis where there is room for it.
+          Every state that is not "as chosen" is said in #device-note below
+          rather than left to a silent default.
+        -->
+        <div class="voice-devices">
+          <div class="voice-device">
+            <svg class="voice-device-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 3.5a2.75 2.75 0 0 0-2.75 2.75v5a2.75 2.75 0 0 0 5.5 0v-5A2.75 2.75 0 0 0 12 3.5Z" />
+              <path d="M5.5 11.25a6.5 6.5 0 0 0 13 0" />
+              <path d="M12 17.75V21" />
+            </svg>
+            <label class="voice-only" for="device">Microphone</label>
+            <select id="device" aria-describedby="help-microphone">
+              <button><selectedcontent></selectedcontent></button>
+            </select>
+          </div>
+          <div class="voice-device">
+            <svg class="voice-device-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" />
+              <path d="M16 9a4.5 4.5 0 0 1 0 6" />
+              <path d="M18.75 6.25a8 8 0 0 1 0 11.5" />
+            </svg>
+            <label class="voice-only" for="output">Output</label>
+            <!-- The authored button is what lets the closed control truncate a
+                 long name (`selectedcontent` below) while the LIST shows it in
+                 full. A browser without the customizable select ignores both
+                 elements and reads the options exactly as before. -->
+            <select id="output">
+              <button><selectedcontent></selectedcontent></button>
+            </select>
+          </div>
+        </div>
+        <p class="voice-device-note" id="device-note" role="status" hidden></p>
+        <div class="voice-session">
+          <button id="mute" type="button" disabled>Mute</button>
+          <button id="end" type="button" disabled>End</button>
+        </div>
+        </div>
+        <p class="voice-bad voice-complaint" id="complaint" role="alert" hidden></p>
+
+        <!-- The permission gate, when the harness asks. It is not a dialog on
+             purpose — and it is a FIXED tray above the microphone rather than a
+             block in this stack: measured, in the flow it sat below the ring and
+             at 844×390 landed at y=650 in a 390px window, offscreen, which is a
+             gate nobody can answer. Fixed, it occupies space that already
+             exists and displaces nothing. -->
+        <section class="voice-confirm" id="confirm" hidden aria-live="assertive" aria-labelledby="confirm-what">
+          <div class="voice-confirm-say">
+            <p class="voice-confirm-what" id="confirm-what" tabindex="-1"></p>
+            <p class="voice-hint" id="confirm-note" role="status" hidden></p>
+          </div>
+          <div class="voice-confirm-acts">
+            <button id="confirm-allow" type="button">Allow</button>
+            <button id="confirm-deny" type="button">Deny</button>
+          </div>
+        </section>
+      </section>
+      </div>
+
+      <!-- closedby="any" is the platform's own light dismiss: a click on the
+           backdrop, plus Escape and the mobile back gesture. Its trap is that
+           a backdrop click reports the DIALOG as the event target — so the
+           browsers without closedBy get the same rule by hand in main.ts,
+           hit-tested against this box rather than against the target. -->
+      <dialog class="voice-dialog" id="logs" closedby="any" aria-labelledby="logs-title">
+        <header class="voice-dialog-head">
+          <h2 id="logs-title" tabindex="-1" autofocus>Logs</h2>
+          <button id="logs-close" type="button">Close logs</button>
+        </header>
+
+        <!-- Flat, like Settings: a person reads the whole record by scrolling
+             once. The transcript keeps its nodes across a close (renderTranscript
+             reuses the rows it made), and the log keeps recording the same
+             entries whether or not anybody has this open. -->
+        <section class="voice-dialog-part" id="transcript-panel" aria-labelledby="transcript-title">
+          <h3 class="voice-dialog-part-title" id="transcript-title">Recent transcript</h3>
+          <ol class="voice-transcript" id="transcript" aria-label="Recent transcript"></ol>
+        </section>
+
+        <section class="voice-dialog-part" id="log-panel" aria-labelledby="log-title">
+          <h3 class="voice-dialog-part-title" id="log-title">
+            <span class="voice-summary-first">Tool calls</span>
+            <button id="copy-log" type="button">Copy</button>
+          </h3>
+          <p class="voice-hint" id="copy-note" role="status"></p>
+          <ol class="voice-log" id="log"></ol>
+        </section>
+      </dialog>
+
+      <dialog class="voice-dialog" id="settings" closedby="any" aria-labelledby="settings-title">
+        <header class="voice-dialog-head">
+          <h2 id="settings-title" tabindex="-1" autofocus>Voice settings</h2>
+          <button id="settings-close" type="button">Close settings</button>
+        </header>
+        <!-- Flat on purpose: one scroll, no disclosure. Everything the cog
+             holds is readable by scrolling, so nothing has to be opened. -->
+        <section class="voice-dialog-part" id="mode-panel">
+          <label class="voice-pick" for="input-mode">
+            Microphone mode
+            <select id="input-mode" aria-describedby="mode-note">
+              <option value="toggle">Toggle</option>
+              <option value="push-to-talk">Push to talk</option>
+            </select>
+          </label>
+          <p class="voice-hint" id="mode-note">Push to talk stops the microphone on release. It does not send or end a turn.</p>
+        </section>
+
+        <section class="voice-dialog-part" id="connection-panel" aria-labelledby="connection-title">
+          <div class="voice-dialog-part-title">
+            <h3 id="connection-title">
+              Connected to
+              <span class="voice-summary" id="connection-summary">unknown</span>
+            </h3>
+          </div>
+          <section class="voice-facts-strip" aria-label="Connection">
+            <div class="voice-setup" id="setup" hidden>
+              <h3>Set this up</h3>
+              <p class="voice-hint" id="setup-note"></p>
+              <ul class="voice-steps" id="setup-steps"></ul>
+            </div>
+
+            <dl class="voice-facts">
+              <div>
+                <dt>Canvas <button class="voice-help" type="button" commandfor="help-canvas" command="toggle-popover" aria-label="About the canvas" aria-describedby="help-canvas"><span class="voice-help-glyph" aria-hidden="true">?</span></button></dt>
+                <dd>
+                  <span id="canvas-title">unknown</span> <span class="voice-id" id="canvas-id">no id</span>
+                  <button id="open-project" class="voice-open" type="button" aria-describedby="help-canvas">Open the project ↗</button>
+                  <div class="voice-keyrow" id="canvas-row" hidden>
+                    <select id="canvas-select" aria-label="Canvas"></select>
+                    <button id="canvas-use" type="button">Use this canvas</button>
+                  </div>
+                  <div class="voice-help-card" popover="hint" id="help-canvas">
+                    <p>The canvas every command in this conversation lands on. The agent switches it when you ask it to, so if work appears somewhere you were not looking, this is the line that says where it went.</p>
+                  </div>
+                </dd>
+              </div>
+              <div>
+                <dt>Daemon <button class="voice-help" type="button" commandfor="help-daemon" command="toggle-popover" aria-label="About the daemon" aria-describedby="help-daemon"><span class="voice-help-glyph" aria-hidden="true">?</span></button></dt>
+                <dd>
+                  <span id="daemon">unknown</span>
+                  <span class="voice-id" id="daemon-note"></span>
+                  <!-- The microphone picker's pattern, for the daemon: a
+                       choice remembered in this browser, with a way out of a
+                       bad value. The page reaches the harness through the
+                       same-origin /harness proxy, so this is the daemon the
+                       SESSION attaches to, not a new address for the page. -->
+                  <div class="voice-keyrow">
+                    <input id="daemon-field" type="text" aria-label="daemon address" aria-describedby="help-daemon" placeholder="http://127.0.0.1:4441" autocomplete="off" />
+                    <button id="daemon-use" type="button">Use this daemon</button>
+                    <button id="daemon-reset" type="button" hidden>Reset</button>
+                  </div>
+                  <div class="voice-help-card" popover="hint" id="help-daemon">
+                    <p>The daemon this harness attaches to — normally the one on this machine. Point it somewhere else only when the harness runs elsewhere; a daemon that does not answer is why a session refuses to start.</p>
+                  </div>
+                </dd>
+              </div>
+              <div>
+                <dt>Home <button class="voice-help" type="button" commandfor="help-home" command="toggle-popover" aria-label="About home" aria-describedby="help-home"><span class="voice-help-glyph" aria-hidden="true">?</span></button></dt>
+                <dd id="home">none configured</dd>
+                <div class="voice-help-card" popover="hint" id="help-home">
+                  <p>Which isocan installation this daemon reads: its identity, its key file, its log. Two daemons on one machine is the confusion this answers. It is not set here — a daemon is started with a home, and this is what it was given.</p>
+                </div>
+              </div>
+              <div>
+                <dt>Actor <button class="voice-help" type="button" commandfor="help-actor" command="toggle-popover" aria-label="About the actor" aria-describedby="help-actor"><span class="voice-help-glyph" aria-hidden="true">?</span></button></dt>
+                <dd>
+                  <span id="actor-name">unknown</span> <span class="voice-id" id="actor-id">no id</span>
+                  <span id="actor-standing" class="voice-bad">not enrolled — nothing can summon it</span>
+                  <div class="voice-keyrow" id="actor-row">
+                    <input id="actor-name-field" type="text" placeholder="a name, e.g. Voice" aria-label="actor name" autocomplete="off" />
+                    <button id="actor-claim-btn" type="button">Claim this name</button>
+                  </div>
+                  <div class="voice-help-card" popover="hint" id="help-actor">
+                    <p>The name your edits are attributed to, and whether anything can summon it. Enrolled means the daemon accepts work under that name; not enrolled still speaks from the microphone, but no other harness can hand it a job.</p>
+                  </div>
+                </dd>
+              </div>
+              <div>
+                <!-- The model the voice WILL use, and the one a running session
+                     IS using when they differ: never inferred from the picker,
+                     and never left to a person to remember. -->
+                <dt>Model</dt>
+                <dd id="model-fact">unknown</dd>
+              </div>
+              <div>
+                <dt>Audio <button class="voice-help" type="button" commandfor="help-audio" command="toggle-popover" aria-label="About the audio" aria-describedby="help-audio"><span class="voice-help-glyph" aria-hidden="true">?</span></button></dt>
+                <dd id="audio">no provider · no model · no key stored</dd>
+                <div class="voice-help-card" popover="hint" id="help-audio">
+                  <p>Which provider and model are on the other end of the conversation, and whether a key has been stored for them. The model decides how fast replies come back and what they cost; it is chosen where the harness starts, so this line is what you have rather than something you pick here.</p>
+                </div>
+              </div>
+              <div>
+                <dt>Version <button class="voice-help" type="button" commandfor="help-version" command="toggle-popover" aria-label="About the version" aria-describedby="help-version"><span class="voice-help-glyph" aria-hidden="true">?</span></button></dt>
+                <dd><span id="version">unknown</span> <span class="voice-id" id="updated">updated unknown</span></dd>
+                <div class="voice-help-card" popover="hint" id="help-version">
+                  <p>The build this page was served from, and when the code behind it last changed. If a fix you merged is not visible here, this is the comparison that says the harness is older than the branch.</p>
+                </div>
+              </div>
+              <div>
+                <dt>Local files <button class="voice-help" type="button" commandfor="help-localfiles" command="toggle-popover" aria-label="About local files" aria-describedby="help-localfiles"><span class="voice-help-glyph" aria-hidden="true">?</span></button></dt>
+                <dd>
+                  <span id="folder-name">no folder granted</span>
+                  <span class="voice-id" id="folder-note"></span>
+                  <!-- The capability the page alone can ask for: a folder the
+                       person picks with a click. The handle never leaves this
+                       tab; the harness is told the folder's NAME and nothing
+                       that could read it. -->
+                  <div class="voice-keyrow">
+                    <button id="folder-pick" type="button" aria-describedby="help-localfiles">Choose a folder…</button>
+                    <button id="folder-reconnect" type="button" hidden>Reconnect</button>
+                    <button id="folder-forget" type="button" hidden>Forget</button>
+                  </div>
+                  <div class="voice-help-card" popover="hint" id="help-localfiles">
+                    <p>The one folder the agent may read and write when a job needs files. The permission lives in this tab, so a reload can leave it needing to be reconnected — without it the file tools refuse with an explanation rather than an empty listing.</p>
+                  </div>
+                </dd>
+              </div>
+              <div>
+                <dt>Microphone <button class="voice-help" type="button" commandfor="help-microphone" command="toggle-popover" aria-label="About the microphone" aria-describedby="help-microphone"><span class="voice-help-glyph" aria-hidden="true">?</span></button></dt>
+                <dd id="mic-fact">unknown</dd>
+                <div class="voice-help-card" popover="hint" id="help-microphone">
+                  <p>Which input the page captures. The list holds everything the machine offers, including a muted headset and any virtual device another app installed — the wrong pick is why the agent answers room noise instead of you.</p>
+                </div>
+              </div>
+              <div>
+                <dt>Output</dt>
+                <dd id="output-fact">unknown</dd>
+              </div>
+            </dl>
+
+          </section>
+        </section>
+
+        <section class="voice-dialog-part" id="model-panel" aria-labelledby="model-title">
+          <div class="voice-dialog-part-title">
+            <h3 id="model-title">
+              Model
+              <span class="voice-summary" id="model-summary">unknown</span>
+            </h3>
+          </div>
+          <p class="voice-hint">
+            The conversation <b>is</b> Gemini Live, so the model has to take audio in and send audio
+            back. A text-only model looks like a plausible name in this field and cannot work here —
+            the provider refuses it, and the refusal says so. The list is the provider's own, fetched
+            live; a beta model you have access to is often missing from it, which is why the field
+            takes any exact name.
+          </p>
+          <div class="voice-keyrow">
+            <label class="voice-only" for="model-list">the provider's model list</label>
+            <select id="model-list" aria-label="model"></select>
+            <button id="model-refresh" type="button">Refresh list</button>
+          </div>
+          <div class="voice-keyrow">
+            <input
+              id="model-field"
+              type="text"
+              aria-label="model name"
+              placeholder="models/gemini-…-live-preview"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button id="model-use" type="button">Use this model</button>
+            <button id="model-check" type="button">Test model</button>
+            <button id="model-reset" type="button" hidden>Reset</button>
+          </div>
+          <p class="voice-hint" id="model-note" role="status" hidden></p>
+        </section>
+
+        <section class="voice-dialog-part" id="key-panel" aria-labelledby="key-title">
+          <div class="voice-dialog-part-title">
+            <h3 id="key-title">Key</h3>
+            <button class="voice-help" type="button" commandfor="help-key" command="toggle-popover" aria-label="About the provider key" aria-describedby="help-key"><span class="voice-help-glyph" aria-hidden="true">?</span></button>
+          </div>
+          <p class="voice-hint">
+            The key drives <b>Gemini Live</b> — the conversation itself. The harness stores it at
+            <code>~/.isocan/voice/key.json</code> (0600); this page posts it once over loopback and keeps no copy. The
+            provider checks the key when you press Test key. This harness uses Gemini Live only.
+          </p>
+          <div class="voice-keyrow">
+            <input id="key" type="password" aria-label="provider key" aria-describedby="help-key" placeholder="paste your Gemini API key" autocomplete="off" />
+          </div>
+          <div class="voice-keyrow">
+            <button id="save-key" type="button" disabled>Save key</button>
+            <button id="test-key" type="button">Test key</button>
+            <button id="forget-key" type="button">Forget</button>
+          </div>
+          <div class="voice-help-card" popover="hint" id="help-key">
+            <p>Sent once to the provider to open the conversation, and stored 0600 under your isocan home. You would change it when the key is revoked, out of quota or from another account; Test key is the check that says so before it fails halfway through a sentence.</p>
+          </div>
+          <p class="voice-hint" id="key-note" role="status" hidden></p>
+        </section>
+
+        <!-- The one preference here that is about this page rather than about
+             the harness: the theme. Radios, not a button group, so the arrow
+             keys and the announced state are the platform's. -->
+        <section class="voice-dialog-part" id="theme-panel" aria-labelledby="theme-title">
+          <div class="voice-dialog-part-title">
+            <h3 id="theme-title">Theme</h3>
+            <button class="voice-help" type="button" commandfor="help-theme" command="toggle-popover" aria-label="About the theme" aria-describedby="help-theme"><span class="voice-help-glyph" aria-hidden="true">?</span></button>
+          </div>
+          <fieldset class="voice-theme" id="theme-choices" aria-labelledby="theme-title" aria-describedby="help-theme">
+            <label class="voice-theme-choice"><input type="radio" name="theme" value="light" />Light</label>
+            <label class="voice-theme-choice"><input type="radio" name="theme" value="dark" />Dark</label>
+            <label class="voice-theme-choice"><input type="radio" name="theme" value="system" />Use system</label>
+          </fieldset>
+          <p class="voice-hint" id="theme-now" role="status"></p>
+          <div class="voice-help-card" popover="hint" id="help-theme">
+            <p>Use system follows your device's setting and keeps following it when the device changes; Light and Dark pin this page to one of them until you pick Use system again. Pinning is what you want when the device's choice is wrong for where you are — a phone that turns dark at sunset, a projector that needs light.</p>
+          </div>
+        </section>
+
+        <section class="voice-dialog-part" id="memory-panel">
+          <h3 class="voice-dialog-part-title">
+            <span>Memory</span>
+            <span class="voice-summary" id="memory-summary">nothing stored</span>
+          </h3>
+          <!-- The agent's own state: OPFS, this browser, this origin. The
+               person can see every entry and remove it, because a store the
+               operator cannot inspect is one they cannot trust. -->
+          <p class="voice-hint" id="memory-note"></p>
+          <ol class="voice-log" id="memory-list"></ol>
+          <div class="voice-keyrow">
+            <button id="memory-forget-all" type="button" hidden>Forget everything</button>
+          </div>
+        </section>
+
+        <section class="voice-dialog-part" id="prompt-panel">
+          <h3 class="voice-dialog-part-title">
+            <span>System prompt</span>
+            <span class="voice-summary" id="prompt-summary">not read yet</span>
+          </h3>
+          <!-- What the model is actually told, and the one part of it a person
+               owns. The rules are editable; the project instructions and the
+               canvas snapshot are generated for each session and are shown,
+               not hidden — an inspector that displayed a fragment would be
+               worse than one that said it could not show it. -->
+          <p class="voice-hint" id="prompt-note" role="status"></p>
+          <div class="voice-prompt-field">
+            <label class="voice-prompt-label" for="prompt-rules">Rules — yours to edit</label>
+            <textarea id="prompt-rules" class="voice-prompt-text" rows="8" spellcheck="false" autocomplete="off"></textarea>
+          </div>
+          <div class="voice-keyrow">
+            <button id="prompt-save" type="button" disabled>Save rules</button>
+            <button id="prompt-reset" type="button">Reset to default</button>
+          </div>
+          <dl class="voice-facts voice-prompt-parts" id="prompt-generated"></dl>
+        </section>
+          </div>
+        </section>
+      </dialog>
+    </div>
+
+    <script type="module">
+      import { wireVoice } from "/src/main.ts";
+      const page = wireVoice();
+      addEventListener("pagehide", () => page.stop(), { once: true });
+      // A bfcache return restores a disposed controller; start a fresh page.
+      addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
+      if (import.meta.hot) import.meta.hot.dispose(() => page.stop());
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1168 @@
+/* isocan voice page — the page's own stylesheet, and only what the page uses.
+ *
+ * **Where this file came from, and why it is not a copy of the app's.** Until
+ * the page became `packages/voice-agent` its styles were the tail of the app's
+ * `packages/web/src/styles.css`, and `src/main.ts` imported that entire
+ * 7,570-line sheet to use 1,054 of them. The page's real coupling to the app was
+ * never React and never a store — it was that one import. What is here is what
+ * the page uses and nothing else:
+ *
+ *   1. **the voice block**, byte for byte: every `.voice*` rule from the app's
+ *      sheet, with the page's own type and space scales, which it declares for
+ *      itself;
+ *   2. **the twelve app tokens** those rules reference, copied with BOTH themes'
+ *      values from the app's `:root` blocks — copied deliberately rather than
+ *      shared, because after this the page has to be able to ship without the
+ *      app, and `--radius` and `--z-toast` are the same in both themes so they
+ *      are declared once;
+ *   3. **the base element rules the page never declared and silently relied
+ *      on**: the body's margin, font, colour and ground; the button's inherit
+ *      and cursor; the input's inherit — and `box-sizing: border-box`, without
+ *      which every 44px touch target in this page is 44px plus its padding;
+ *   4. **`color-scheme`**, so the browser draws native controls, scrollbars and
+ *      the device select's own popup in the theme the page is actually wearing.
+ *
+ * **What this file is not.** It is not the app's sheet with a heading. The
+ * other ~6,500 lines — canvas chrome, components, the front page, every module
+ * — are still in `packages/web/src/styles.css`, where they belong. Importing
+ * that sheet from here, or copying it wholesale, is the one thing that would
+ * make this move look finished while leaving the coupling in place.
+ *
+ * **Two things deliberately live elsewhere.** The theme RESOLVER is the inline
+ * script in `voice.html`'s head: it reads the stored preference, resolves
+ * "system" against `prefers-color-scheme`, and stamps `data-theme` before the
+ * first paint so there is no flash of the wrong theme. That is the only place it
+ * can live — a stylesheet cannot run before the paint it is deciding — and the
+ * tokens below are keyed off the attribute it writes. And the design guards
+ * (`tokens.test.ts`, `scale.test.ts`, `oneblock.test.ts`, `copied-rules`) read
+ * the APP's sheet; the block below shares their vocabulary but is not in their
+ * scope, which is a fact worth knowing before trusting a green suite here.
+ */
+
+/* ---------- the tokens the voice block references ----------
+   Eleven colours and one shadow, at both themes' values, read off the app's
+   `:root` blocks. A token whose two values are equal in both themes should say
+   so rather than inherit; none of these are. */
+:root,
+:root[data-theme="light"] {
+  /* The theme, told to the BROWSER as well as to the page: without it native
+     form controls, scrollbars and spellcheck underlines are drawn light under
+     a dark page — the browser saying nobody told it. */
+  color-scheme: light;
+  --good: #2e8540;
+  --ground: #fbfbf9;
+  --card: #ffffff;
+  --line: #e2e3dd;
+  --line-soft: #eff0ea;
+  --ink: #23262b;
+  --ink-muted: #646d76;
+  --accent: #1f3fd0;
+  --accent-text: #1f3fd0;
+  --warn: #a06000;
+  --danger: #b3261e;
+  --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --good: #56b06a;
+  --ground: #0e0f12;
+  --card: #1b1e23;
+  --line: #2c313a;
+  --line-soft: #23272e;
+  --ink: #e7e9ec;
+  --ink-muted: #8b929d;
+  --accent: #4059d8;
+  --accent-text: #8fa8ff;
+  --warn: #d99a3a;
+  --danger: #f26a60;
+  --shadow-pop: 0 14px 30px -14px rgba(0, 0, 0, 0.75);
+}
+
+/* Theme-independent, so declared once. */
+:root {
+  --radius: 8px;
+  --z-toast: 45;
+}
+
+/* ---------- the elements the page does not style itself ----------
+   Four rules that were never the page's own. They came from the app's sheet,
+   which is exactly why they are easy to lose in a move and why they are
+   spelled out: a body with a default margin, a button drawn in the UA's font
+   and not the page's, and hit targets measured without their padding are all
+   silent changes rather than visible breakage. */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Inter sets a touch wide at interface sizes — this is the tracking its
+     own designer specifies for 14px, and without it the chrome reads
+     looser than the design it is copied from. */
+  letter-spacing: -0.006em;
+  color: var(--ink);
+  background: var(--ground);
+}
+button { font: inherit; cursor: pointer; }
+input, textarea { font: inherit; color: var(--ink); }
+
+/*
+ * **The voice page: one microphone, and everything else behind a drawer.**
+ *
+ * The first version was six equal boxes holding one value each, which reads as
+ * "here is some information" rather than "speak", and the second made the
+ * microphone a wide bar inside a card with the meter beside it — still a form,
+ * still scrolled past. What Paul asked for is the shape the voice modes in the
+ * LLM apps already have: **one dominant element, centred** (the microphone),
+ * a visible state (idle / listening / thinking / speaking), a quiet waveform,
+ * the last exchange compactly, and the facts, the key and the log behind
+ * disclosures at the bottom. Nothing was deleted to get there.
+ *
+ * The state is one attribute — `data-activity` on the hero — and everything
+ * that moves is a child of it: the ring around the microphone, the dot beside
+ * the words, and which meter the waveform is showing. `data-state` stays the
+ * session's own word (idle / live / muted / ended) because that is the
+ * harness's vocabulary and the wire's, and two vocabularies must not be
+ * quietly merged into one.
+ *
+ * Written in this stylesheet's own terms rather than its own scale: the type
+ * and space tokens are declared here, every radius is var(--radius), and every
+ * colour is a token, because `tokens.test.ts`, `scale.test.ts` and
+ * `oneblock.test.ts` all refuse a page that invents its own steps. That is the
+ * right rule: a page that brings its own numbers is the drift those guards
+ * exist to catch.
+ */
+.voice {
+  /* Type: five steps, one per role. Space: a 4px unit, six values. Both are
+     tokens, so a declaration that uses them is not a new step in the scales
+     the rest of the app is measured in. */
+  --t-xs: 0.75rem;
+  --t-sm: 0.8125rem;
+  --t-md: 0.9375rem;
+  --t-lg: 1.25rem;
+  --t-xl: 1.75rem;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: var(--s4);
+  min-block-size: 100dvb;
+  isolation: isolate;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--s4);
+  color: var(--ink);
+}
+.voice > * { min-width: 0; }
+body:has(> .voice) { overflow: auto; }
+.voice::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 35% 30%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+    radial-gradient(ellipse at 75% 65%, color-mix(in srgb, var(--good) 8%, transparent), transparent 55%),
+    var(--ground);
+}
+.voice-atmosphere {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvb;
+  z-index: -1;
+  pointer-events: none;
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink) 7%, transparent);
+  stroke-width: 1;
+}
+.voice ::selection { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+.voice :is(input, select) { caret-color: var(--accent-text); accent-color: var(--accent); }
+.voice :is(button, input, select, summary, [tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 4px;
+}
+.voice :is(input, select)::placeholder { color: var(--ink-muted); opacity: 1; }
+.voice :is(.voice-captions, .voice-transcript) { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
+/* `hidden` loses to a display declaration; the setup block shipped visible
+   with no session to set up. Say it once, for everything in the page. */
+.voice [hidden] { display: none; }
+.voice-stage { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.voice-stage > * { min-width: 0; }
+.voice-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+/* The cog and the logs button travel together, so one wrapper keeps them
+   adjacent however wide the header is — space-between would push them apart
+   into the gaps instead. */
+.voice-head-actions { display: flex; align-items: center; gap: var(--s2); }
+.voice-head-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  block-size: 44px;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+.voice-head-button svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.voice-head h1 {
+  margin: 0;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+/* The build tag: which branch and commit this page was served from, quiet
+   enough not to compete with the microphone but present enough to read. */
+.voice-build {
+  font-family: ui-monospace, monospace;
+  font-size: var(--t-xs);
+  color: var(--ink-muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  text-align: center;
+}
+
+/* THE HERO. Empty space is the design: the microphone sits in the middle of
+   it and nothing else competes for the first look. */
+.voice-hero {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--s4);
+  padding: var(--s5) 0;
+  text-align: center;
+}
+
+/* The one dominant element. A ring around it carries the state, so the state
+   is visible from across the room without a word being read. */
+.voice-mic {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(64vw, 240px);
+  aspect-ratio: 1;
+}
+.voice-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.voice-orbit {
+  stroke: var(--line);
+  stroke-width: 1;
+  transform-origin: center;
+  transition: stroke 300ms ease-out;
+}
+#output-wave {
+  stroke: var(--good);
+  stroke-width: 2;
+  opacity: 0.25;
+  transition: opacity 320ms ease-out;
+}
+.voice-mic #listen {
+  position: relative;
+  width: calc(100% - var(--s6));
+  height: calc(100% - var(--s6));
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 35% 25%, var(--card), color-mix(in srgb, var(--accent) 7%, var(--card)));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--ink) 13%, transparent);
+  color: var(--accent-text);
+  cursor: pointer;
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 300ms ease-out, color 300ms ease-out;
+}
+.voice-mic #listen:hover:not([aria-disabled="true"]) { transform: translateY(-2px); }
+.voice-mic #listen:active:not([aria-disabled="true"]) { transform: scale(0.97); }
+.voice-mic #listen[aria-disabled="true"] { cursor: wait; }
+.voice-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--accent-text);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0;
+  transition: opacity 280ms ease-out;
+}
+.voice-muted-slash { display: none; }
+.voice-glyph {
+  width: 44px;
+  height: 44px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 280ms ease-out, transform 280ms ease-out;
+}
+
+/* The four states, each one thing: listening breathes, thinking turns,
+   speaking pulses faster and in the good colour, muted sits in the warning
+   colour. Idle is none of them — a still ring that says nothing is happening,
+   which is true. */
+.voice-hero:is([data-activity="listening"], [data-activity="thinking"], [data-activity="speaking"]) .voice-input { opacity: 1; }
+.voice-hero:is([data-activity="listening"], [data-activity="thinking"], [data-activity="speaking"]) .voice-glyph { opacity: 0; transform: scale(0.8); }
+.voice-hero:is([data-activity="connecting"], [data-activity="thinking"]) .voice-orbit {
+  stroke: var(--accent-text);
+  stroke-width: 2;
+  stroke-dasharray: 42 605;
+  animation: voice-spin 3.2s linear infinite;
+}
+.voice-hero[data-activity="speaking"] #output-wave { opacity: 1; }
+.voice-hero[data-activity="muted"] .voice-muted-slash { display: block; }
+.voice-hero[data-muted="true"] .voice-input { opacity: 0; }
+.voice-hero[data-muted="true"] .voice-glyph { opacity: 1; transform: none; }
+.voice-hero[data-muted="true"] .voice-muted-slash { display: block; }
+.voice-hero[data-activity="muted"] #listen { color: var(--ink-muted); }
+@keyframes voice-spin {
+  to { transform: rotate(360deg); }
+}
+
+.voice-state {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.voice-state::before {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s2);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink-muted) 65%, var(--card));
+}
+.voice-hero[data-activity="listening"] .voice-state::before { background: var(--accent); }
+.voice-hero:is([data-activity="connecting"], [data-activity="thinking"]) .voice-state::before { background: var(--accent); }
+.voice-hero[data-activity="speaking"] .voice-state::before { background: var(--good); }
+.voice-hero[data-activity="muted"] .voice-state::before { background: var(--warn); }
+
+/* THE TWO ENDS OF THE SOUND, immediately under the ring (and beside it on a
+   wide window): choosing a device is part of using voice, not configuring it.
+   Side by side at EVERY width — two full-width rows read as two forms, not as
+   one pair — and deliberately small, because the ring is the page's one loud
+   thing. The HIT AREA stays 44px while the pill is drawn inset inside it, so
+   making the control small does not make it hard to press. */
+.voice-devices {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  max-width: 100%;
+}
+.voice-device {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  /* The pill gives way only when the row has a definite width to give way into
+     — beside the ring, where the row is sized by its content, a shrinkable pill
+     made Chrome size the row from its min-content and the names truncated at
+     1440px (measured: 210px of pill became 118). That branch says `0 0 auto`. */
+  flex: 0 1 auto;
+  /* The target, not the picture: the select fills this box edge to edge. */
+  min-block-size: 44px;
+  padding: 0 var(--s3) 0 var(--s2);
+  border: 0;
+  background: none;
+}
+/* The picture: a hairline pill drawn inside the 44px target. `--line` is the
+   app's edge everywhere else, but every other control sits on a card; over the
+   hero's open ground it measured almost invisible, so this mixes toward the
+   muted ink and keeps its shape in both themes. */
+.voice-device::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  block-size: 30px;
+  transform: translateY(-50%);
+  border: 1px solid color-mix(in srgb, var(--card) 72%, var(--ink-muted));
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 7%, transparent);
+  transition: border-color 160ms ease-out;
+}
+/* The focus lands on the pill, not on a box inside it: the whole control is
+   one thing to look at, and the browser's own outline would draw a rectangle
+   around the select alone. */
+.voice-device:focus-within::before { border-color: var(--accent); }
+.voice-device:focus-within select { outline: none; }
+.voice-device-glyph {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.voice-device select {
+  position: relative;
+  font: inherit;
+  font-size: var(--t-xs);
+  min-width: 0;
+  max-width: 24ch;
+  /* Full height of the target, transparent: the pill above is the picture. */
+  block-size: 44px;
+  /* Centre the content in that box. Measured without it: the select's content
+     sat 12px above the capsule's centre line (`block-size` fixed the box, and
+     the content stayed at its top), so the name floated near the top of a pill
+     whose glyph was correctly centred. */
+  align-items: center;
+  /* The name is one line and may be long, and the box CLIPS it — which it must:
+     with `appearance: base-select` the selected content is laid out at its
+     natural width, and unclipped it grew the whole page (measured: a 420px
+     viewport with a 696px document the moment a long-named device was
+     selected). */
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  /* One line, however long the name: a pill that wraps mid-phrase grows a
+     second line and stops matching the pill beside it. */
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.voice-device select:disabled { color: var(--ink-muted); cursor: default; }
+/* The device that is named but not there: still the selection, still readable,
+   and not something a person can pick again while it is absent. */
+.voice-device option:disabled { color: var(--ink-muted); }
+/* What the row cannot do or has lost, in one place: never a silent default. */
+.voice-device-note {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+  text-wrap: pretty;
+}
+
+/* The microphone and speaker selectors stay beneath the microphone button
+   across all screen widths: centered, side by side, and directly under the
+   listening circle. */
+@media (max-width: 360px) {
+  .voice-device { flex: 0 1 auto; }
+}
+
+/* The customizable select (Chrome 135+): the picker is drawn to match the card
+   instead of borrowing the platform's, and the arrow stops carrying the OS's
+   own weight. Everywhere else a person gets the native control they already
+   know — the markup, the options and the behaviour are the same either way. */
+@supports (appearance: base-select) {
+  .voice-device select,
+  .voice-device select::picker(select) { appearance: base-select; }
+  .voice-device select::picker(select) {
+    margin-top: var(--s2);
+    padding: var(--s1);
+    /* The picker is sized to its LONGEST option and lives in the top layer, so
+       one long device name ("… Digital Stereo (HDMI) [DELL U2721DE]") made the
+       whole page horizontally scrollable — measured at 420px: a 420px viewport
+       with a 696px document, while every visible element fitted. The list caps
+       its width and wraps the name instead. */
+    max-width: min(42ch, calc(100vw - var(--s4) * 2));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--ink) 13%, transparent);
+  }
+  /*
+   * **The arrow is drawn on the PILL, not by the platform.**
+   *
+   * With `appearance: base-select` the picker's icon is laid out after the
+   * selected content inside the select, so a name too long for the box pushes
+   * it outside — and the clip that keeps the page from growing then eats it
+   * (measured: the same pill carries the arrow with a short name and loses it
+   * with a long one). An arrow the text cannot reach is the fix.
+   */
+  .voice-device select::picker-icon { display: none; }
+  /* A name too long for the capsule FADES at the arrow rather than being cut
+     dead: the platform's own ellipsis would need the selected content's box,
+     which is inside the select's shadow tree and not styleable from here
+     (measured: `::part(button)`, `::part(selectedcontent)` and the child
+     selector all painted nothing). A fade says "there is more" in the same
+     breath that a cut says "this is the name".
+     The padding is the fade's runway, and it is the whole point: with the fade
+     against the content edge, a name that FITS ended inside the fade zone and
+     its last letter went grey (measured on "System default"). The text now
+     ends exactly where the fade begins, so only text that overflows is dimmed. */
+  .voice-device select {
+    padding-inline-end: 12px;
+    mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent 100%);
+  }
+  .voice-device::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 7px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid var(--ink-muted);
+    border-bottom: 1.5px solid var(--ink-muted);
+    /* Half a turn so the square's corner points down, which is the shape a
+       person already reads as "this opens". */
+    transform: translateY(-60%) rotate(45deg);
+    pointer-events: none;
+  }
+  /* The closed control truncates the name; the LIST does not. The button is
+     where that happens, and the arrow is its sibling — so a long name cannot
+     push the arrow out of the box the way an overflowing selected content did
+     (measured: the chevron vanished off the pill that was hiding text). */
+  .voice-device select > button {
+    min-width: 0;
+    align-items: center;
+    overflow: hidden;
+  }
+  .voice-device selectedcontent {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  /* The options may wrap: the select itself is one line, and if the options
+     inherit that the picker's min-content width is the longest device name —
+     which no `max-width` on the picker can then shrink, and the page grows a
+     horizontal scrollbar for a device nobody can rename. */
+  .voice-device option { white-space: normal; }
+  /* Open, said on the pill itself: the arrow darkens and the edge takes the
+     accent, so a person can see which of the two pickers is down. */
+  .voice-device select:open::picker-icon { color: var(--ink); }
+  .voice-device:has(select:open) { border-color: var(--accent); }
+  .voice-device option { padding: var(--s2); border-radius: var(--radius); }
+  .voice-device option:checked { color: var(--accent-text); }
+}
+
+/* Visually hidden, present for assistive tech: a glyph is a picture, and a
+   picture is not a name for a form control. */
+.voice-only:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+.voice-caption-slot {
+  width: min(100%, 520px);
+  block-size: calc(var(--s6) * 5);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  justify-items: center;
+  gap: var(--s2);
+}
+.voice-captions {
+  width: 100%;
+  align-self: center;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  font-size: var(--t-lg);
+  line-height: 1.45;
+  font-weight: 500;
+  text-wrap: pretty;
+  opacity: 1;
+  transition: opacity 800ms ease-out;
+}
+.voice-captions.faded { opacity: 0; }
+.voice-complaint { margin: 0; max-width: 60ch; text-align: left; }
+
+/* The last exchange, compactly: two lines that grow as the words arrive and
+   scroll away when they are old. Hidden while there is nothing to say. */
+.voice-transcript {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: var(--s3) 0;
+  list-style: none;
+  text-align: left;
+}
+.voice-transcript:empty { display: none; }
+/*
+ * **The gate, above the microphone and never off the page.**
+ *
+ * A confirmation nobody can see is worse than no confirmation, because the
+ * person believes there is a gate. Measured before this: in the hero's flow the
+ * prompt sat BELOW the ring at y=650, and at 844×390 the window is 390 tall —
+ * offscreen — while appearing grew the document by 28px (1440) to 133px (390
+ * portrait), so it displaced the very controls it is about.
+ *
+ * So it is a FIXED tray pinned above the microphone's band: it occupies space
+ * that already exists, displaces nothing, and cannot be scrolled away from. One
+ * ROW, because at 390 wide a two-row tray is ~123px tall and the ring starts at
+ * 89 — the compact shape is what keeps the microphone visible underneath it.
+ */
+.voice-confirm {
+  position: fixed;
+  inset-block-start: max(var(--s2), env(safe-area-inset-top, 0px));
+  inset-inline: 0;
+  /* Above the hero's chrome, under the settings dialog. */
+  z-index: var(--z-toast);
+  margin-inline: auto;
+  width: min(calc(100% - var(--s3) * 2), 560px);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  padding: var(--s2) var(--s3);
+  background: color-mix(in srgb, var(--warn) 8%, var(--card));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+/* A question whose session has gone: still readable, and not a thing to press. */
+.voice-confirm[data-stale="true"] { border-color: var(--line); background: var(--card); }
+.voice-confirm[data-stale="true"] .voice-confirm-what { color: var(--ink-muted); }
+/* The words live in ONE cell beside the buttons: a note that took its own grid
+   row made the tray 140px tall when the session ended, which brought it down
+   onto the ring (measured: tray bottom 146, circle top 148). */
+.voice-confirm-say { display: grid; gap: var(--s1); min-width: 0; }
+.voice-confirm-what { margin: 0; font-size: var(--t-sm); color: var(--ink); text-wrap: pretty; }
+.voice-confirm .voice-hint { font-size: var(--t-xs); }
+.voice-confirm-acts { display: flex; gap: var(--s2); justify-content: flex-end; }
+.voice-confirm-acts button {
+  font: inherit;
+  font-size: var(--t-sm);
+  /* A decision is a touch target at every size, not only under a thumb. */
+  min-block-size: 44px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+/* Readable while clearly unpressable: 0.45 measured at ~1.5:1, which is a
+   label nobody can read rather than a button nobody can press. */
+.voice-confirm-acts button:disabled { opacity: 0.6; cursor: default; }
+#confirm-allow { border-color: var(--warn); color: var(--warn); }
+.voice-turn { margin: 0; font-size: var(--t-sm); line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; }
+.voice-turn b {
+  display: block;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.voice-turn--you { color: var(--ink-muted); }
+
+/* Mute and End, and nothing else: the microphone is the page's one action. */
+.voice-shortcut { margin: 0; color: var(--ink-muted); font-size: var(--t-xs); }
+.voice-hero[data-mode="push-to-talk"] #listen { touch-action: none; user-select: none; }
+.voice-controls { display: grid; justify-items: center; gap: var(--s3); }
+.voice-session { display: flex; gap: var(--s2); }
+.voice-session button,
+.voice-dialog-head button,
+.voice-dialog-part-title button,
+.voice-setup-callout button {
+  font: inherit;
+  font-size: var(--t-sm);
+  min-block-size: 44px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+.voice-session button:disabled { opacity: 0.45; cursor: default; }
+
+.voice-summary-first { flex: 1 1 auto; min-width: 0; }
+.voice-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-facts-strip { display: grid; gap: var(--s2); padding-bottom: var(--s3); }
+.voice-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  font-size: var(--t-sm);
+}
+.voice-facts div:not(.voice-help-card) {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  padding-block: var(--s2);
+  border-bottom: 1px solid var(--line-soft);
+}
+.voice-facts div:not(.voice-help-card):last-child {
+  border-bottom: 0;
+}
+.voice-facts dt {
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  /* The label's line is where the room for a thumb-sized "?" comes from: the
+     row is 44px and the glyph inside it is 20px, so the target is honest
+     without a settings list that looks like a toolbar. */
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 110px;
+  flex: 0 0 auto;
+}
+.voice-facts dd {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  overflow-wrap: anywhere;
+}
+.voice-facts dd .voice-keyrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0;
+  margin: 0;
+}
+@media (max-width: 540px) {
+  .voice-facts div:not(.voice-help-card) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s1);
+  }
+}
+
+/* **The "?" beside a setting, and the card it opens.**
+   Small glyph, 44px target, and nothing in the row moves when a card opens:
+   the card is a popover in the top layer, which is the whole reason this is
+   not an expanding panel.
+   Note the `:not(.voice-help-card)` on the row rule above. A `display` from an
+   author sheet beats the UA's own hiding of a closed popover (author origin
+   wins regardless of specificity), so a card that inherited `display: grid`
+   was PAINTED while closed — nine explanations stacked over the settings,
+   each anchored to its glyph. Anything that sets display and could match a
+   card has to exclude it, and the evidence run checks every card's computed
+   display with nothing open. */
+.voice-help {
+  flex: 0 0 auto;
+  inline-size: 44px;
+  block-size: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+  /* Case and tracking belong to the label's words; the glyph is not one. */
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.voice-help-glyph {
+  display: grid;
+  place-items: center;
+  inline-size: 20px;
+  block-size: 20px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: var(--t-xs);
+  line-height: 1;
+}
+.voice-help:hover .voice-help-glyph,
+.voice-help:focus-visible .voice-help-glyph { border-color: var(--accent); color: var(--ink); }
+
+.voice-help-card {
+  /* The anchor pair: the name is on the row both the glyph and this card live
+     in, and the glyph carries it. */
+  position-anchor: var(--help-anchor, none);
+  max-inline-size: min(340px, calc(100vw - var(--s4) * 2));
+  inline-size: max-content;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--t-sm);
+  line-height: 1.45;
+}
+.voice-help-card p { margin: 0; }
+
+/* The glyph is the anchor and the card hangs off it. One name per setting,
+   named on the row both of them live in; a browser can have anchor
+   positioning without the invoker commands that would make the anchor
+   implicit, so the pair is spelled out rather than assumed. */
+#settings .voice-facts > div:has([commandfor="help-canvas"]) { --help-anchor: --help-canvas; }
+#settings .voice-facts > div:has([commandfor="help-daemon"]) { --help-anchor: --help-daemon; }
+#settings .voice-facts > div:has([commandfor="help-home"]) { --help-anchor: --help-home; }
+#settings .voice-facts > div:has([commandfor="help-actor"]) { --help-anchor: --help-actor; }
+#settings .voice-facts > div:has([commandfor="help-audio"]) { --help-anchor: --help-audio; }
+#settings .voice-facts > div:has([commandfor="help-version"]) { --help-anchor: --help-version; }
+#settings .voice-facts > div:has([commandfor="help-localfiles"]) { --help-anchor: --help-localfiles; }
+#settings .voice-facts > div:has([commandfor="help-microphone"]) { --help-anchor: --help-microphone; }
+#settings #key-panel { --help-anchor: --help-key; }
+#settings #theme-panel { --help-anchor: --help-theme; }
+
+#settings .voice-help { anchor-name: var(--help-anchor, none); }
+
+@supports (position-area: block-end) {
+  .voice-help-card {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    position-area: block-end span-inline-end;
+    /* Below the glyph, then above it, then the other side of it, then the
+       narrow screen's own answer, then the sheet — each one tried because the
+       previous did not fit. */
+    position-try-fallbacks: flip-block, flip-inline, --voice-help-narrow, --voice-help-sheet;
+  }
+}
+/* A glyph near the edge of a narrow screen has no room on either side of it,
+   and the card is most of the column wide. It goes back under the glyph and
+   holds to the page's own margins: still beside the setting it explains, and
+   narrower than the screen by construction, so it cannot fall off it. */
+@position-try --voice-help-narrow {
+  position-area: none;
+  inset-block-start: anchor(bottom);
+  inset-block-end: auto;
+  inset-inline-start: max(var(--s4), env(safe-area-inset-left));
+  inset-inline-end: auto;
+}
+/* And the last resort, for a glyph with no room below it either: the same
+   card, as a sheet along the bottom, inside the safe area. */
+@position-try --voice-help-sheet {
+  position-area: none;
+  inset: auto max(var(--s4), env(safe-area-inset-right)) max(var(--s4), env(safe-area-inset-bottom)) max(var(--s4), env(safe-area-inset-left));
+  inline-size: auto;
+}
+.voice-open {
+  font: inherit;
+  font-size: var(--t-xs);
+  margin-left: var(--s2);
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--accent-text);
+  cursor: pointer;
+}
+.voice-open:hover { border-color: var(--accent); }
+.voice-id { font-family: ui-monospace, monospace; color: var(--ink-muted); font-size: var(--t-xs); }
+.voice-bad { color: var(--danger); }
+.voice-hint { color: var(--ink-muted); font-size: var(--t-sm); margin: 0; overflow-wrap: anywhere; }
+.voice-ok { color: var(--good); }
+
+/* The setup half: what is missing, what the harness cannot do yet, and the
+   command that does it by hand. Visible, never a silent absence. */
+.voice-setup { display: grid; gap: var(--s2); border-top: 1px solid var(--line-soft); padding-top: var(--s3); }
+.voice-setup h3 {
+  margin: 0;
+  font-size: var(--t-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+.voice-steps { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.voice-steps li { display: grid; gap: var(--s1); font-size: var(--t-sm); }
+.voice-steps code { font-family: ui-monospace, monospace; font-size: var(--t-xs); color: var(--ink-muted); overflow-wrap: anywhere; }
+.voice-steps input {
+  font: inherit;
+  font-size: var(--t-sm);
+  min-width: 0;
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+}
+.voice-steps button {
+  justify-self: start;
+  font: inherit;
+  font-size: var(--t-xs);
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+.voice-steps button:disabled { opacity: 0.45; cursor: default; }
+
+.voice-keyrow { display: flex; flex-wrap: wrap; gap: var(--s2); padding-bottom: var(--s2); }
+.voice-keyrow:last-child { padding-bottom: var(--s3); }
+.voice-keyrow :is(input, select) {
+  flex: 1 1 200px;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--t-sm);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+}
+/* The key panel's buttons all wear the same outline: nothing there is the
+   page's main action, and Save is only pressable once there is a key to
+   save — the loudest thing in the panel must not be the one that does
+   nothing. */
+.voice-keyrow button {
+  font: inherit;
+  font-size: var(--t-sm);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+}
+.voice-keyrow button:disabled { opacity: 0.45; cursor: default; }
+
+/* One scroll surface: the dialog scrolls, the log does not scroll inside it.
+   Two nested vertical tracks on one screen was the review's second finding. */
+.voice-log { list-style: none; margin: 0; padding: 0 0 var(--s3); display: grid; gap: 0; }
+.voice-log li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2);
+  min-width: 0;
+  /* A websocket URL or a serialised event is one long token; without this it
+     pushes a horizontal scrollbar across the whole drawer. The row is a flex
+     container, so the rule has to reach its CHILDREN too — wrapping the parent
+     alone left the token sticking out. */
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+  font-size: var(--t-xs);
+  line-height: 1.35;
+  border-bottom: 1px solid var(--line-soft);
+  padding: var(--s1) 0;
+}
+.voice-log li > * { min-width: 0; overflow-wrap: anywhere; }
+.voice-at { color: var(--ink-muted); }
+.voice-op { color: var(--good); }
+.voice-answered { color: var(--accent-text); }
+.voice-event { color: var(--ink-muted); }
+
+/* Both dialogs are the same surface: native, modal, one scroll container, a
+   sticky head whose Close never leaves the screen, and no disclosure inside. */
+.voice-dialog {
+  --voice-visible-height: 100dvh;
+  --voice-visible-top: 0px;
+  position: fixed;
+  inset-block: calc(var(--voice-visible-top) + max(var(--s4), env(safe-area-inset-top))) auto;
+  inset-inline: max(var(--s4), env(safe-area-inset-left)) max(var(--s4), env(safe-area-inset-right));
+  margin-block: 0;
+  width: min(640px, calc(100% - max(var(--s4), env(safe-area-inset-left)) - max(var(--s4), env(safe-area-inset-right))));
+  max-block-size: calc(var(--voice-visible-height) - max(var(--s4), env(safe-area-inset-top)) - max(var(--s4), env(safe-area-inset-bottom)));
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* The block-end padding only: the head below carries its own, which is what
+     lets a long list scroll under a Close that never leaves the screen. */
+  padding: 0 var(--s5) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+}
+.voice-dialog::backdrop { background: color-mix(in srgb, var(--ink) 35%, transparent); }
+body:has(.voice-dialog[open]) { overflow: hidden; }
+/* Pinned to the top of the dialog's own scrollport, because the dialog is the
+   only scroll container on this surface and Close is the way out of it — it
+   was measured 70px above the viewport at the end of a short landscape
+   scroll, which is a control that has left rather than one that is reached. */
+.voice-dialog-head {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s3);
+  margin: 0 0 var(--s4);
+  padding-block: var(--s5);
+  background: var(--card);
+}
+.voice-dialog-head h2 { margin: 0; font-size: var(--t-lg); }
+.voice-dialog :is(button, select, input), .voice-setup-callout button { min-block-size: 44px; }
+.voice-dialog :is(input, select, textarea) { font-size: 16px; }
+/* The rules are a text box rather than a paragraph: they are edited, and the
+   panel must not let the page's own wrapping stand in for the text. The
+   generated blocks below them are read-only and wear a quieter surface so the
+   one thing a person can change looks like the one thing they can change. */
+.voice-prompt-field { display: grid; gap: var(--s1); padding-bottom: var(--s2); }
+.voice-prompt-label { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); }
+.voice-prompt-parts { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+.voice-prompt-text {
+  width: 100%;
+  min-block-size: 88px;
+  padding: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  font-family: ui-monospace, monospace;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  resize: vertical;
+}
+.voice-prompt-text[readonly] {
+  font-size: var(--t-sm);
+  background: color-mix(in srgb, var(--ink) 5%, var(--card));
+}
+/* Flat, not folded: a heading per part and everything under it visible, so a
+   person reads the whole state of the thing by scrolling once. One scroll
+   container only — the dialog itself — never a scrolling region inside it. */
+.voice-dialog-part { border-top: 1px solid var(--line-soft); }
+.voice-dialog-part-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin: 0;
+  padding-block: var(--s3);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+/* Copy sits where the log's own summary used to put it, and wears the same
+   chrome as every other button in a dialog. */
+/* The heading is the words; the "?" beside it is a control, and a control's
+   name is part of a heading's name when it is inside one — the key panel's
+   heading read "KEY About the provider key" in the accessibility tree until
+   the two were separated. So the row is the flex container and the heading is
+   a plain <h3> in it. */
+.voice-dialog-part-title h3,
+.voice-settings-part-title h3 { margin: 0; font: inherit; }
+.voice-setup-callout { display: grid; justify-items: center; gap: var(--s1); font-size: var(--t-sm); }
+.voice-setup-callout p { margin: 0; color: var(--ink-muted); }
+.voice-dialog .voice-complaint { margin-bottom: var(--s4); }
+
+/* The theme choices. Native radios in a native fieldset, so the arrow keys,
+   the group and the checked state are the platform's rather than a second
+   interpretation of them — and the LABEL is the 44px target, because a radio
+   stretched to 44px is a worse control than a comfortable label. Note the
+   ordering: `.voice-settings :is(button, select, input)` sets a 44px minimum
+   on inputs above, and this is the rule that takes it back off the radio. */
+.voice-theme {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.voice-theme-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-block-size: 44px;
+  cursor: pointer;
+}
+.voice-theme-choice input {
+  inline-size: 20px;
+  block-size: 20px;
+  min-block-size: 0;
+  margin: 0;
+}
+
+/* A phone lying down has less height than the hero's whole stack. The gaps are
+   what this row can give: tightening them lifts the pills above the fold
+   instead of leaving a capsule cut by the window edge. */
+@media (max-height: 480px) {
+  .voice-hero { gap: var(--s2); padding: var(--s3) 0; }
+}
+
+@media (max-width: 720px), (pointer: coarse) and (max-height: 500px) {
+  .voice {
+    --voice-safe-top: max(var(--s3), env(safe-area-inset-top));
+    --voice-safe-bottom: max(var(--s3), env(safe-area-inset-bottom));
+    display: block;
+    padding: var(--voice-safe-top) max(var(--s3), env(safe-area-inset-right)) var(--voice-safe-bottom) max(var(--s3), env(safe-area-inset-left));
+  }
+  /* Keep the thumb target at the bottom of the first screen as browser bars
+     retract. History remains below it in document flow, not another track. */
+  .voice-stage { min-block-size: calc(100svh - var(--voice-safe-top) - var(--voice-safe-bottom)); }
+  .voice-summary { order: 3; flex-basis: 100%; text-align: left; white-space: normal; }
+  .voice-session button { min-height: 44px; padding: var(--s2) var(--s5); }
+  .voice-hero { padding: var(--s3) 0 0; gap: var(--s3); align-content: end; }
+  .voice-mic { width: min(64vw, 30svh, 240px); }
+  .voice-glyph { width: 38px; height: 38px; }
+  /* Still side by side on a phone — two small pills, never two full-width
+     rows — with the drawn pill a little taller under a thumb. The 44px hit
+     area is unchanged: it belongs to the select, not to the picture. */
+  .voice-device::before { block-size: 34px; }
+  .voice-caption-slot { block-size: min(160px, 22svh); }
+  .voice-caption-choice { min-block-size: 44px; }
+  .voice :is(button, select, summary) { min-block-size: 44px; min-inline-size: 44px; }
+}
+
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  .voice-hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 1fr auto auto;
+    grid-template-areas: "captions captions" "state controls" "shortcut controls";
+    align-content: stretch;
+    column-gap: var(--s5);
+  }
+  .voice-caption-slot { grid-area: captions; block-size: auto; min-block-size: 60px; }
+  .voice-state { grid-area: state; align-self: center; }
+  .voice-shortcut { grid-area: shortcut; }
+  .voice-controls { grid-area: controls; align-self: end; }
+  /* Reserve the secondary row and its gap before sizing the circle: its
+     centre must still reach the lower third, not push End into the inset. */
+  .voice-mic { width: clamp(56px, calc(2 * (100svh / 3 - var(--voice-safe-bottom) - 44px - var(--s3)) - var(--s2)), 156px); }
+  .voice-complaint, .voice-confirm { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice *, .voice *::before, .voice *::after { animation: none !important; transition: none !important; }
+  .voice-mic #listen:is(:hover, :active) { transform: none; }
+}
