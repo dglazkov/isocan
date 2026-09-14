@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./context": "./src/context-reader.ts",
+    "./design-audit": "./src/design-audit-reader.ts",
     "./routes": "./src/routes.ts"
   },
   "scripts": {

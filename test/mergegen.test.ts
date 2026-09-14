@@ -71,6 +71,30 @@ describe("generated docs are regenerated at a conflict, not merged", () => {
     );
   });
 
+  /**
+   * **The fourth half, added after the driver let one through.**
+   *
+   * The driver is lenient by design — it never fails a merge. Its blind spot
+   * is not leniency but timing: mid-rebase it runs the generator against a
+   * working tree that does not yet hold the other paths of the commit being
+   * replayed, so a commit that ADDS a doc gets its roadmap generated without
+   * that doc, cleanly, silently, inside the commit. That is ddc62eb4 on
+   * 14 Sep 2026, and `main` went red on `test/roadmap.test.ts`.
+   *
+   * `scripts/hooks/pre-push` runs the same check before the push instead of
+   * after it. It is a shell script, so it carries its own copy of the list —
+   * which is a fourth thing that can drift from the other three.
+   */
+  it("is checked again by the pre-push hook, over the same list", () => {
+    const hook = read("scripts/hooks/pre-push");
+    for (const [file, generator] of Object.entries(GENERATED)) {
+      expect(hook, `pre-push does not check ${file}`).toContain(`${file}:${generator[0]}`);
+    }
+    // And it claims nothing the driver does not know how to make.
+    const claimed = [...hook.matchAll(/"(\S+?):(\S+?)"/g)].map((m) => m[1]!);
+    expect(claimed.filter((file) => !(file in GENERATED))).toEqual([]);
+  });
+
   it("exits 0 even when it cannot regenerate — a stopped rebase is worse than a stale file", () => {
     const out = execFileSync(
       process.execPath,

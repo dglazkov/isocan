@@ -9,7 +9,8 @@ export interface ContextSummaryOptions {
   signal?: AbortSignal;
 }
 
-async function contextHome(ctx: Ctx, canvasId: string): Promise<string> {
+/** Resolve authoritative context home, preserving a policy-scoped handle's already asserted authority. */
+export async function contextHome(ctx: Ctx, canvasId: string): Promise<string> {
   // A policy-scoped handle already asserted this authority on its successful
   // snapshot request. Discovery deliberately omits known link-only sources;
   // asking the catalogue again would refuse an otherwise authorized read.
@@ -19,18 +20,20 @@ async function contextHome(ctx: Ctx, canvasId: string): Promise<string> {
   return homes.canvases[canvasId] ?? ctx.client.base;
 }
 
+/** Reassert automatic-source policy on every transport read, including version blobs. */
+export function automaticSourceClient(ctx: Ctx, expectedHome: string, signal?: AbortSignal): DaemonClient {
+  const client = new DaemonClient(ctx.client.base, ctx.home, signal, {
+    policy: { mode: "exclude" }, expectedHome, ...(signal ? { signal } : {}),
+  });
+  ctx.reclaimOn?.(client);
+  return client;
+}
+
 function port(ctx: Ctx): ContextReadPort {
-  const sourceClient = (expectedHome: string, signal?: AbortSignal) => {
-    const client = new DaemonClient(ctx.client.base, ctx.home, signal, {
-      policy: { mode: "exclude" }, expectedHome, ...(signal ? { signal } : {}),
-    });
-    ctx.reclaimOn?.(client);
-    return client;
-  };
   return {
     classifySource: (request, signal) => ctx.client.classifySource(request, signal),
-    sourceSnapshot: (source, signal) => sourceClient(source.expectedHome, signal).snapshot(source.canvasId, signal),
-    sourceRecap: (source, signal) => sourceClient(source.expectedHome, signal).recapHead(source.canvasId, signal),
+    sourceSnapshot: (source, signal) => automaticSourceClient(ctx, source.expectedHome, signal).snapshot(source.canvasId, signal),
+    sourceRecap: (source, signal) => automaticSourceClient(ctx, source.expectedHome, signal).recapHead(source.canvasId, signal),
     readPersonal: (id, request, signal) => ctx.client.readPersonal(id, request, signal),
     designText: async (id, hash, signal) => (await ctx.client.downloadBlob(id, hash, signal)).toString("utf8"),
   };

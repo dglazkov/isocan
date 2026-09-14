@@ -998,6 +998,7 @@ function itemsTouchedBy(op, canvas) {
     case "item.setCurrentVersion":
     case "item.removeVersion":
     case "item.restoreVersion":
+    case "item.pruneVersions":
     case "item.delete":
     case "item.restore":
       return [op.itemId];

@@ -50,6 +50,11 @@ export function sourcePicture(canvasId: string, hash: string, expectedHome: stri
   return readBlob(canvasId, hash, signal, sourceHeaders(expectedHome));
 }
 
+/** Inherited design bytes retain the automatic exclusion policy at the actual blob request. */
+export async function sourceText(canvasId: string, hash: string, expectedHome: string, signal?: AbortSignal): Promise<string> {
+  return (await readBlob(canvasId, hash, signal, sourceHeaders(expectedHome))).text();
+}
+
 /** Placement and inheritance share the renderer's authoritative source classification. */
 export async function automaticSource(canvasId: string, source: string | null, destinationCanvasId: string, signal?: AbortSignal) {
   return classifyAutomaticSource(personalApi, { canvasId, source, home: await authoritativeHome(destinationCanvasId, signal) }, signal);

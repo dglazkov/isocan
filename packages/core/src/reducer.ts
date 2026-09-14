@@ -276,6 +276,14 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       return putItem({ ...item, currentVersionId: op.versionId, ...stamp });
     }
 
+    case "item.pruneVersions": {
+      const item = getItem(op.itemId);
+      if (!Number.isInteger(op.keep) || op.keep < 1) {
+        throw new OpValidationError("bad-op", `keep must be a whole number of at least 1: ${op.keep}`);
+      }
+      return putItem({ ...item, versions: pruneVersions(item, op.keep), ...stamp });
+    }
+
     case "item.removeVersion": {
       const item = getItem(op.itemId);
       requireVersion(item, op.versionId);
@@ -626,6 +634,25 @@ function requireUniqueIds(ids: string[]): void {
   if (new Set(ids).size !== ids.length) {
     throw new OpValidationError("duplicate-id", "batch op lists an item twice");
   }
+}
+
+/**
+ * **The stack `item.pruneVersions` leaves behind** — exported so a surface
+ * can say what a prune WOULD drop before anybody confirms it, from the same
+ * rule the reducer applies (lessons.md #5: a rule with one home).
+ *
+ * The newest `keep` by stack order, plus the current version wherever it
+ * sits. Order is preserved, so `v3` still means the third that was made.
+ */
+export function pruneVersions(item: Item, keep: number): ItemVersion[] {
+  const cut = Math.max(0, item.versions.length - Math.max(1, Math.floor(keep)));
+  return item.versions.filter((v, index) => index >= cut || v.id === item.currentVersionId);
+}
+
+/** What `item.pruneVersions` would remove, in stack order. */
+export function prunedVersions(item: Item, keep: number): ItemVersion[] {
+  const kept = new Set(pruneVersions(item, keep).map((v) => v.id));
+  return item.versions.filter((v) => !kept.has(v.id));
 }
 
 function requireVersion(item: Item, versionId: string): void {

@@ -1,71 +1,68 @@
 import type { DesignTokens } from "./designmd.js";
-/**
- * **Does this screen actually use the system it was built under?**
- *
- * `/design-audit` has existed since the design system did, is well written,
- * and — measured on 8 Sep 2026 across six live canvases — **has never once
- * been run.** Zero audit documents, everywhere. That is not a failure of the
- * command; it is what happens to a step somebody has to remember to type. The
- * fix this repo reaches for every time is to give the thing a NUMBER, so it
- * can be watched instead of remembered.
- *
- * ## What is checkable, and what deliberately is not
- *
- * `slop.ts` holds forty tells and is the right list, but its `spot` fields are
- * prose written for an agent to read — *"font-family lists Inter, and no
- * second face is declared anywhere"*. Prose is not a checker, and dressing it
- * up as one would be this codebase's own lesson #14: a check whose answer
- * cannot be "no". So none of that is here.
- *
- * What IS here is the one finding the design system exists to prevent, stated
- * as an integer: **values a screen uses that the system never named.** Six
- * type scales and four blues is the failure `designsystem.ts` opens with, and
- * it is arithmetic — a colour is in the palette or it is not.
- *
- * That leaves taste entirely alone, which is correct. A screen with zero
- * off-system values can still be dull; this says it is not INCOHERENT, which
- * is the floor a system can enforce and the most a machine should claim.
- *
- * ## Why literals rather than a rendered page
- *
- * The audit command already argues this and it is worth keeping: *"a ratio you
- * computed beats a colour you looked at, and half of what matters — the scale,
- * the spacing unit, the focus states — is invisible in a screenshot."* This
- * reads the source for the same reason, and gains a second: a source read is
- * deterministic, so it can be a standing number rather than a judgement that
- * moves when the renderer does.
- */
-/** One value a screen used that its design system never named, and enough to
- *  point at it: a report that cannot cite the line is a report about vibes. */
-interface OffSystemValue {
-    /** The literal as written in the screen. */
-    value: string;
-    /** How the system names this kind of thing, for the message. */
-    kind: "colour" | "type size" | "radius";
-    /** How many times it appears. */
-    count: number;
-    /** The first line it appears on, 1-based, so a finding can be pointed at. */
+/** Identifies the interpretation of a report so cached findings can be invalidated when rules change. */
+export declare const DESIGN_AUDIT_VERSION = "1.0.0";
+/** These token categories define the audit boundary; unrelated geometry is not a spacing decision. */
+export type DesignValueKind = "colour" | "type size" | "radius" | "spacing";
+/** Original-source coordinates let either editor select the same value after HTML entity decoding. */
+export interface AuditPosition {
+    offset: number;
     line: number;
+    column: number;
 }
-/** One screen's reading. Both halves matter: the departures are what to fix,
- *  and the conformance is what to keep — a report with no green is a report
- *  people stop believing. */
+/** UTF-16 offsets, one-based lines/columns, exclusive end; always in the original HTML. */
+export interface AuditRange {
+    start: AuditPosition;
+    end: AuditPosition;
+}
+/** A replacement needs a semantic choice and sometimes CSS declarations; neither is implicit approval. */
+export interface AuditRepair {
+    value: string;
+    token: string;
+    explanation: string;
+    prerequisites: string[];
+    requiresReview: true;
+}
+/** Carries one actionable finding across CLI and browser without asking either client to infer a repair. */
+export interface AuditDiagnostic {
+    code: string;
+    severity: "warning" | "info";
+    range: AuditRange;
+    actual: string;
+    explanation: string;
+    candidates: AuditRepair[];
+    property?: string;
+    kind?: DesignValueKind;
+}
+/** Records a static-analysis boundary so an unread value cannot impersonate a conforming one. */
+export interface AuditUnexamined {
+    code: string;
+    range: AuditRange;
+    explanation: string;
+}
+/** Keeps findings and coverage beside legacy counts; zero departures alone cannot establish a clean screen. */
 export interface ScreenAudit {
-    /** Values used that the design system never named. */
-    offSystem: OffSystemValue[];
-    /** What it did use from the system, so a report can say what is GOOD —
-     *  a report with no green is a report people stop believing. */
+    ruleVersion: typeof DESIGN_AUDIT_VERSION;
+    diagnostics: AuditDiagnostic[];
+    coverage: {
+        /** Completeness within the declared categories, not visual or general CSS correctness. */
+        complete: boolean;
+        declarations: number;
+        checkedValues: number;
+        omittedCategories: DesignValueKind[];
+        unexamined: AuditUnexamined[];
+    };
+    /** Compatibility: distinct normalized off-scale values, grouped with first line and occurrence count.
+     * Missing variables and unexamined regions are separate diagnostics, never off-scale literals. */
+    offSystem: {
+        value: string;
+        kind: DesignValueKind;
+        count: number;
+        line: number;
+    }[];
+    /** Compatibility: resolved conforming value occurrences, not every syntactic var() call. */
     onSystem: number;
 }
-/**
- * Every value this screen uses that the system never named.
- *
- * `source` is the screen's HTML, read whole — inline `<style>`, a `style=`
- * attribute and a linked stylesheet's contents all look the same to a regex,
- * and all three are equally a place to write a fourth blue.
- */
+/** Parse static styling without executing scripts, fetching URLs or pretending to compute the cascade. */
 export declare function auditScreen(source: string, tokens: DesignTokens): ScreenAudit;
-/** One number for a canvas: how many distinct off-system values its screens
- *  use between them. The thing a persona would watch. */
+/** Sum distinct off-scale values per screen; does not include missing references or unexamined source. */
 export declare function offSystemTotal(audits: ScreenAudit[]): number;
-export {};

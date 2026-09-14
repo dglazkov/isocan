@@ -18,6 +18,7 @@ import type {
   PersonalSourcePolicy,
 } from "@isocan/core";
 import {
+  prunedVersions,
   actorNameIn,
   actorsAnswerTo,
   resolveActor,
@@ -49,6 +50,8 @@ import { matchRef, resolveCanvas, resolveCanvasRef, resolveCtx, readHomeRecord, 
 import { DaemonClient } from "./client.ts";
 import { claimSessionIdentity, noIdentityHere, type ExplicitIdentity } from "./identity.ts";
 import { readContextSummary, type ContextSummaryOptions } from "./context-summary.ts";
+import { readDesignAudit } from "./design-audit.ts";
+import type { CanvasDesignAudit, DesignAuditOptions } from "./design-audit-reader.ts";
 import { waitForFeedback, type FeedbackOptions, type FeedbackResult } from "./feedback.ts";
 import type { ContextExtras, ContextLayer } from "@isocan/core";
 import { ApiError, type DaemonRoutes } from "./routes.ts";
@@ -413,6 +416,11 @@ export class CanvasHandle {
     return this.reach(() => readContextSummary(this.ctx, this.id, extras, options));
   }
 
+  /** Parsed HTML diagnostics with per-screen governing provenance and explicit coverage. */
+  designAudit(options: DesignAuditOptions = {}): Promise<CanvasDesignAudit> {
+    return this.reach(() => readDesignAudit(this.ctx, this.id, options));
+  }
+
   /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */
   waitForFeedback(options: FeedbackOptions = {}): Promise<FeedbackResult> {
     return this.reach(() => waitForFeedback(this.ctx.client, this.id, this.ctx.actor, options));
@@ -656,6 +664,27 @@ export class CanvasHandle {
   async remove(itemId: string): Promise<void> {
     return this.reach(async () => {
       await this.ctx.client.sendOp(this.id, this.ctx.actor, { type: "item.delete", itemId });
+    });
+  }
+
+  /**
+   * Keep only the newest `keep` versions of an item — `isocan version prune`.
+   * Not undoable, which is why a script and not a person is the usual caller:
+   * a generator that publishes a version per run is the thing that silts a
+   * stack, and the same generator is the right place to keep it bounded.
+   * Returns the item as it stands after; a stack already within the bound
+   * sends no op at all.
+   */
+  async pruneVersions(itemId: string, keep: number): Promise<Item> {
+    return this.reach(async () => {
+      const before = await this.item(itemId);
+      if (prunedVersions(before, keep).length === 0) return before;
+      await this.ctx.client.sendOp(this.id, this.ctx.actor, {
+        type: "item.pruneVersions",
+        itemId,
+        keep,
+      });
+      return this.item(itemId);
     });
   }
 

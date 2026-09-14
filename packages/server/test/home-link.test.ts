@@ -279,6 +279,67 @@ describe("a canvas born on a replica is born at the home", () => {
     );
   }, 20_000);
 
+  /**
+   * **The claim `item.pruneVersions` exists for, tested.**
+   *
+   * Trimming a version stack could have been maintenance beside `gc`, run at
+   * the home. The op's own note says why it is not: a replica folds the log,
+   * so a stack shortened at the home OUTSIDE the log would leave every replica
+   * carrying versions the home has forgotten — two copies of one item that
+   * disagree about its history, and no way for either to notice.
+   *
+   * That was an argument in a comment and nowhere else. It is the whole reason
+   * the vocabulary grew, so it is the one thing worth pinning: the prune
+   * travels as an ordinary entry with its own seq, and the two copies end up
+   * agreeing about the history — same versions, same current.
+   *
+   * Written at the replica rather than the home because that is the harder
+   * direction and the one this fixture can speak for: A holds Priya's claim,
+   * the op is ordered at H like any other, and both ends fold the same entry.
+   */
+  it("prunes through the log, so the home and the replica agree after it", async () => {
+    await birthAtA();
+    for (const id of ["ver_2", "ver_3", "ver_4"]) {
+      await op(A, priya, { type: "item.addVersion", itemId: "itm_1", version: nv(id) });
+    }
+    const before = await until(
+      () => oplog(A),
+      (entries) => entries.length === 5,
+      "the four versions at A",
+    );
+    expect(before.length).toBe(5);
+
+    await op(A, priya, { type: "item.pruneVersions", itemId: "itm_1", keep: 2 });
+
+    const folded = await until(
+      () => oplog(H),
+      (entries) => entries.some((entry) => entry.envelope.op.type === "item.pruneVersions"),
+      "the prune reaching the home",
+    );
+    // An ordinary entry: it has a seq, in order, exactly like a move. A prune
+    // that reached the replica any other way would be the bug this op exists
+    // to avoid.
+    expect(folded.map((entry) => entry.seq)).toEqual([1, 2, 3, 4, 5, 6]);
+
+    const atHome = await until(
+      () => canvas(H),
+      (snap) => (snap.canvas.items["itm_1"]?.versions.length ?? 0) === 2,
+      "the shortened stack at the home",
+    );
+    const atReplica = await until(
+      () => canvas(A),
+      (snap) => (snap.canvas.items["itm_1"]?.versions.length ?? 0) === 2,
+      "the shortened stack at A",
+    );
+    // The two copies agree about the history, which is the whole point.
+    expect(atReplica.canvas.items["itm_1"]!.versions.map((v) => v.id)).toEqual(
+      atHome.canvas.items["itm_1"]!.versions.map((v) => v.id),
+    );
+    expect(atReplica.canvas.items["itm_1"]!.currentVersionId).toBe(
+      atHome.canvas.items["itm_1"]!.currentVersionId,
+    );
+  }, 30_000);
+
   it("gives a replica that arrived late the state, and history only from its arrival", async () => {
     /**
      * Worth pinning because it is a real and slightly surprising consequence

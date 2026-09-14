@@ -1,0 +1,49 @@
+#!/bin/sh
+# **The last moment a generated doc can still be fixed cheaply.**
+#
+# `docs/ROADMAP.md` and its siblings are derived from front matter, and
+# `.gitattributes` sends them to `scripts/mergegen.mjs` so a rebase regenerates
+# them instead of hand-merging them. That driver is deliberately lenient: it
+# never fails a merge, because a stopped rebase is worse than a stale file. It
+# has one blind spot it cannot close from where it stands — mid-rebase it runs
+# the generator against a working tree that does NOT yet hold the other paths
+# of the commit being replayed, so a commit that adds a doc gets a roadmap
+# generated without it. Nothing conflicts. The wrong answer is silent, and it
+# is inside the commit.
+#
+# That happened on 14 Sep 2026 (ddc62eb4): a research note's row vanished and
+# the totals went back to 30, `main` went red on `test/roadmap.test.ts`, and it
+# cost a CI cycle and a second commit to put back.
+#
+# CI is the backstop and it worked. This is the same check eleven minutes
+# earlier, when the tree is complete and quiet and the fix is one command. It
+# only ever refuses — it regenerates nothing, because a hook that edits your
+# tree behind a push is its own surprise.
+#
+# Installed by `node scripts/install-hooks.mjs`. `git push --no-verify` skips
+# it, which is the right escape hatch for a push that is not going to main.
+set -u
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+stale=""
+for pair in "docs/ROADMAP.md:scripts/roadmap.mjs" \
+            "docs/projects/README.md:scripts/roadmap.mjs" \
+            "docs/reviews/README.md:scripts/reviews.mjs"; do
+  file=${pair%%:*}
+  gen=${pair#*:}
+  [ -f "$root/$file" ] || continue
+  if ! node "$root/$gen" --check >/dev/null 2>&1; then
+    case " $stale " in
+      *" $gen "*) ;;
+      *) stale="$stale $gen" ;;
+    esac
+  fi
+done
+
+[ -z "$stale" ] && exit 0
+
+echo "isocan: a generated doc is out of date — regenerate before pushing:" >&2
+for gen in $stale; do echo "  node $gen" >&2; done
+echo "  (then amend or commit the result; \`git push --no-verify\` to skip)" >&2
+exit 1

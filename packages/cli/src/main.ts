@@ -1,4 +1,5 @@
 import { classifyAutomaticSource } from "@isocan/api/context";
+import { auditScreen } from "@isocan/core/design-audit";
 import { registerPersonalContext } from "./personal-context.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
@@ -51,6 +52,7 @@ import {
   groupDescendants,
   groupSelectionRoots,
   isGroupItem,
+  prunedVersions,
   type FitTarget,
   BROWSER_MIME,
   DEFAULT_HOME_URL,
@@ -145,9 +147,6 @@ import {
   extractItemRefs,
   ALIGN_EDGES,
   itemKinds,
-  auditScreen,
-  offSystemTotal,
-  type ScreenAudit,
   designStanding,
   DESIGN_SYSTEM_LIMIT,
   designSkipPatch,
@@ -468,6 +467,7 @@ import {
   readIdentity,
   claimSessionIdentity,
   linkedCanvasesOf,
+  readDesignAudit,
   HOME_CLAIM_KEY,
   noIdentityHere,
   reclaimIdentity,
@@ -588,7 +588,8 @@ The system:
              point it at the localhost dev server you're building and the
              human watches it run (vite HMR keeps it fresh by itself)
   version    every \`edit\` stacks a new version on the item; \`version promote\`
-             brings any older one back to the top
+             brings any older one back to the top; \`version prune --keep N\`
+             bounds a stack that a generator keeps growing (not undoable)
   comment    threads pinned to an item (--item) or a spot (--at x,y); write
              @Name to address someone, \`comment anchor\` to re-pin a thread.
              One thread may be \`comment main\`: the canvas's Chat, as the
@@ -8832,6 +8833,74 @@ version
     }),
   );
 
+version
+  .command("prune [items...]")
+  .description(
+    "Keep only the newest N versions of an item — the rest are gone for good (requires --force; not undoable)",
+  )
+  .requiredOption("--keep <n>", "how many versions to keep on each stack")
+  .option("--all", "every item on the canvas, not just the ones named")
+  .option("--force", "confirm")
+  .action(
+    run(
+      async (
+        refs: string[],
+        opts: { keep: string; all?: boolean; force?: boolean },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const keep = Number(opts.keep);
+        if (!Number.isInteger(keep) || keep < 1) {
+          throw new Error(`--keep wants a whole number of at least 1, not "${opts.keep}"`);
+        }
+        if (refs.length === 0 && !opts.all) {
+          throw new Error("name the items to prune, or --all for every item on the canvas");
+        }
+        const items = opts.all
+          ? Object.values(snapshot.canvas.items)
+          : [...new Set(refs.map((ref) => resolveItem(snapshot, ref)))];
+        // Only stacks that would actually shrink: a logged no-op is noise in
+        // everybody's history, and the count below must be true.
+        const work = items
+          .map((item) => ({ item, dropping: prunedVersions(item, keep) }))
+          .filter(({ dropping }) => dropping.length > 0);
+        const dropping = work.reduce((n, w) => n + w.dropping.length, 0);
+        if (work.length === 0) {
+          if (ctx.json) return printJson({ pruned: [], dropped: 0, keep });
+          console.log(`nothing to prune — no stack here is deeper than ${keep}`);
+          return;
+        }
+        if (!opts.force) {
+          throw new Error(
+            `pruning ${dropping} version${dropping === 1 ? "" : "s"} across ${work.length} item${work.length === 1 ? "" : "s"} is not undoable — re-run with --force`,
+          );
+        }
+        for (const { item } of work) {
+          await sendOp(ctx, p.id, { type: "item.pruneVersions", itemId: item.id, keep });
+        }
+        if (ctx.json) {
+          return printJson({
+            pruned: work.map(({ item, dropping: d }) => ({ itemId: item.id, dropped: d.length })),
+            dropped: dropping,
+            keep,
+          });
+        }
+        printTable(
+          work.map(({ item, dropping: d }) => ({
+            item: item.id,
+            title: truncate(item.title || item.id, 32),
+            dropped: String(d.length),
+            kept: String(item.versions.length - d.length),
+          })),
+        );
+        console.log(
+          `pruned ${dropping} version${dropping === 1 ? "" : "s"} — the bytes go when \`isocan gc\` next runs`,
+        );
+      },
+    ),
+  );
+
 program
   .command("rm <items...>")
   .description("Delete item(s) to the trash — several at once is one undo step")
@@ -10271,73 +10340,39 @@ style
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const scope = designScope(snapshot, opts.in);
-      const system = designSystem(snapshot.canvas, scope);
-      if (!system) {
-        throw new Error(
-          `${p.title} has no design system, so there is nothing to audit against — ` +
-            "ask for /design-system, or `isocan design skip` if this canvas does not want one",
-        );
-      }
-      // Each screen against the system that governs WHERE IT SITS (scoped
-      // design systems, 11 Sep): a lane's screen against the lane's, the
-      // rest against the canvas's. One parse per system, not per screen.
-      const docs = new Map<string, ReturnType<typeof parseDesign>>();
-      const docOf = async (item: Item) => {
-        const hit = docs.get(item.id);
-        if (hit) return hit;
-        const v = item.versions.find((x) => x.id === item.currentVersionId) ?? item.versions[0];
-        if (!v) return null;
-        const parsed = parseDesign((await ctx.client.downloadBlob(p.id, v.blobHash)).toString("utf8"));
-        docs.set(item.id, parsed);
-        return parsed;
-      };
-      const doc = await docOf(system);
-      if (!doc) throw new Error(`${system.title} has no current version`);
-
       const within = scope.at && "id" in scope.at ? scope.at : null;
-      const screens = Object.values(snapshot.canvas.items).filter(
-        (item) => itemKind(item) === "screen" && (!within || inCanvasScope(snapshot.canvas, within, item)),
-      );
-      const rows: { id: string; title: string; audit: ScreenAudit }[] = [];
-      for (const screen of screens) {
-        const version =
-          screen.versions.find((v) => v.id === screen.currentVersionId) ?? screen.versions[0];
-        if (!version) continue;
-        const governing = designSystem(snapshot.canvas, { at: screen });
-        const tokens = governing ? (await docOf(governing))?.tokens : undefined;
-        if (!tokens) continue;
-        const html = (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8");
-        rows.push({ id: screen.id, title: screen.title, audit: auditScreen(html, tokens) });
-      }
-
-      const total = offSystemTotal(rows.map((r) => r.audit));
-      if (ctx.json) {
-        return printJson({
-          system: doc.tokens.name ?? system.title,
-          screens: rows.length,
-          offSystem: total,
-          items: rows.map((r) => ({ itemId: r.id, title: r.title, ...r.audit })),
-        });
-      }
-
-      if (rows.length === 0) return console.log(`no screens on ${p.title} yet`);
+      const report = await readDesignAudit(ctx, p.id, within ? { scopeId: within.id } : {}, snapshot);
+      if (ctx.json) return printJson(report);
+      if (report.screens === 0) return console.log(`no screens on ${p.title} yet`);
       console.log(
-        `${total} off-system value${total === 1 ? "" : "s"} across ${rows.length} screen${rows.length === 1 ? "" : "s"}, ` +
-          `against ${doc.tokens.name ?? system.title}`,
+        `${report.offSystem} off-system value${report.offSystem === 1 ? "" : "s"} across ${report.screens} screen${report.screens === 1 ? "" : "s"}, ` +
+          `${report.audited} audited${report.system ? ` against ${report.system}` : ""}`,
       );
-      for (const row of [...rows].sort((a, b) => b.audit.offSystem.length - a.audit.offSystem.length)) {
-        if (row.audit.offSystem.length === 0) {
-          console.log(`\n  ${row.title} — clean (${row.audit.onSystem} on-system values)`);
+      for (const row of [...report.items].sort((a, b) =>
+        (b.status === "audited" ? b.diagnostics.length : 0) - (a.status === "audited" ? a.diagnostics.length : 0))) {
+        if (row.status === "unavailable") {
+          console.log(`\n  ${row.title} — not audited: ${row.reason}`);
           continue;
         }
-        console.log(`\n  ${row.title} — ${row.audit.offSystem.length}`);
-        for (const off of row.audit.offSystem.slice(0, 8)) {
-          console.log(`    ${off.value}  (${off.kind}, ${off.count}x, line ${off.line})`);
+        const warnings = row.diagnostics.filter(one => one.severity === "warning");
+        console.log(`\n  ${row.title} — ${warnings.length} finding${warnings.length === 1 ? "" : "s"}, ${row.onSystem} on-system values`);
+        console.log(`    ${row.governing.name}${row.governing.inherited ? `, inherited from ${row.governing.canvasId}` : ""} (${row.governing.itemId}, ${row.governing.versionId})`);
+        for (const finding of row.diagnostics.slice(0, 8)) {
+          console.log(`    ${finding.code}  line ${finding.range.start.line}:${finding.range.start.column}: ${finding.explanation}`);
+          for (const candidate of finding.candidates.slice(0, 3)) {
+            console.log(`      consider ${candidate.value} — ${candidate.explanation}`);
+            for (const prerequisite of candidate.prerequisites) console.log(`        ${prerequisite}`);
+          }
         }
-        if (row.audit.offSystem.length > 8) {
-          console.log(`    …and ${row.audit.offSystem.length - 8} more`);
+        if (row.diagnostics.length > 8) console.log(`    …and ${row.diagnostics.length - 8} more`);
+        if (!row.coverage.complete) {
+          console.log(`    Coverage incomplete: ${row.coverage.unexamined.length} unexamined region${row.coverage.unexamined.length === 1 ? "" : "s"}`);
+          for (const region of row.coverage.unexamined.slice(0, 4)) console.log(`      ${region.code}  line ${region.range.start.line}:${region.range.start.column}: ${region.explanation}`);
+          if (row.coverage.unexamined.length > 4) console.log(`      …and ${row.coverage.unexamined.length - 4} more unexamined regions`);
         }
+        if (row.coverage.omittedCategories.length) console.log(`    Not governed: no tokens for ${row.coverage.omittedCategories.join(", ")}`);
       }
+      for (const source of report.refusedSources) console.log(`\n  Inheritance unavailable (${source.canvasId}): ${source.reason}`);
     }),
   );
 
@@ -14536,18 +14571,70 @@ program
   .description("Reclaim storage: compact the oplog and sweep unreachable blobs")
   .option("--dry-run", "report what would be freed without deleting anything")
   .option("--keep-ops <n>", "how many recent operations to keep undoable (default 500)")
+  .option(
+    "--keep-versions <n>",
+    "first prune every item's stack to its newest N versions (not undoable; needs --force)",
+  )
+  .option("--force", "confirm --keep-versions")
   // One act, one place: collecting a home is the same act as collecting a
   // canvas, over a different set, so it is a flag on this verb rather than a
   // second one. `--all` also names no canvas, which is the point — it is the
   // command to run in a directory bound to nothing.
   .option("--all", "sweep every canvas you are admitted to at this home, not just this one")
   .action(
-    run(async (opts: { dryRun?: boolean; keepOps?: string; all?: boolean }, cmd: Command) => {
+    run(
+      async (
+        opts: {
+          dryRun?: boolean;
+          keepOps?: string;
+          keepVersions?: string;
+          force?: boolean;
+          all?: boolean;
+        },
+        cmd: Command,
+      ) => {
       const ctx = await ctxOf(cmd);
       const request = {
         ...(opts.dryRun ? { dryRun: true } : {}),
         ...(opts.keepOps !== undefined ? { keepOps: Number(opts.keepOps) } : {}),
       };
+      /**
+       * `--keep-versions` is `version prune --all` run first, so one command
+       * says "bound this canvas": stacks to N, log to the horizon, bytes
+       * swept. The prune is an OP and the sweep is maintenance, which is why
+       * it is a flag here and not a field in `GcRequest` — the collector must
+       * never write history. Per canvas only: a home-wide prune is a bigger
+       * decision than a flag should carry.
+       */
+      if (opts.keepVersions !== undefined) {
+        const keep = Number(opts.keepVersions);
+        if (!Number.isInteger(keep) || keep < 1) {
+          throw new Error(`--keep-versions wants a whole number of at least 1, not "${opts.keepVersions}"`);
+        }
+        if (opts.all) throw new Error("--keep-versions prunes one canvas — drop --all, or run it per canvas");
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        const work = Object.values(snapshot.canvas.items)
+          .map((item) => ({ item, dropping: prunedVersions(item, keep).length }))
+          .filter(({ dropping }) => dropping > 0);
+        const dropping = work.reduce((n, w) => n + w.dropping, 0);
+        if (dropping > 0 && !opts.dryRun) {
+          if (!opts.force) {
+            throw new Error(
+              `pruning ${dropping} version${dropping === 1 ? "" : "s"} across ${work.length} item${work.length === 1 ? "" : "s"} is not undoable — re-run with --force`,
+            );
+          }
+          for (const { item } of work) {
+            await sendOp(ctx, p.id, { type: "item.pruneVersions", itemId: item.id, keep });
+          }
+        }
+        if (!ctx.json) {
+          console.log(
+            opts.dryRun
+              ? `would prune ${dropping} version${dropping === 1 ? "" : "s"} across ${work.length} item${work.length === 1 ? "" : "s"}`
+              : `pruned ${dropping} version${dropping === 1 ? "" : "s"} across ${work.length} item${work.length === 1 ? "" : "s"}`,
+          );
+        }
+      }
       if (opts.all) {
         const home = await ctx.client.gcHome(request);
         if (ctx.json) return printJson(home);

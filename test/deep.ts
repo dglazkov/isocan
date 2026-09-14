@@ -83,6 +83,7 @@ export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/dispatch.test.ts", secs: 77 },
   { file: "packages/cli/test/rc.test.ts", secs: 66 },
   { file: "packages/cli/test/direct.test.ts", secs: 63 },
+  { file: "packages/cli/test/prune.test.ts", secs: 63 },
   { file: "packages/cli/test/session-identity.test.ts", secs: 64 },
   { file: "packages/cli/test/shelf.test.ts", secs: 59 },
   { file: "packages/cli/test/rc-sheep-withdrawal.test.ts", secs: 57 },

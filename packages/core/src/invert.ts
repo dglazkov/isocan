@@ -147,6 +147,10 @@ export function invertOperation(
       return { type: "items.delete", itemIds: op.itemIds };
 
     case "trash.empty":
+    case "item.pruneVersions":
+      // Both forget for good. Undoing a prune would restore versions whose
+      // bytes the collector may already have swept — an undo that half works
+      // is worse than one that is refused at the door.
       return null;
 
     case "thread.create":

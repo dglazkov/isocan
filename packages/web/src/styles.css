@@ -2536,41 +2536,6 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .stage-editor-cm .cm-activeLine { background: var(--chip); }
 .stage-editor-cm .cm-activeLineGutter { background: var(--chip); }
 
-/* ---------- version fan-out ---------- */
-.fan-card {
-  position: absolute; z-index: 3; background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: var(--shadow-pop); overflow: hidden;
-  display: flex; flex-direction: column; cursor: pointer;
-  transition: transform 0.16s ease, opacity 0.16s ease;
-}
-.fan-card.current { outline: 2px solid var(--accent); }
-/* **It said it was clickable and then did nothing.**
-
-   `cursor: pointer` and a `transition` were already here — the card declared
-   itself a control and had no hover state at all, so the pointer changed and
-   the card did not. That is the one combination that reads as broken rather
-   than as plain: a thing that ignores you after telling you it wouldn't.
-
-   A border and a lift, on the transition that was already declared. The
-   current version keeps its outline on top, because "which one is live" must
-   not be something hovering can take away. */
-.fan-card:hover {
-  border-color: var(--accent);
-  transform: translateY(-3px);
-  box-shadow: 0 14px 28px -12px var(--accent-shadow);
-  z-index: 4;
-}
-.fan-card:focus-visible { border-color: var(--accent); }
-@media (prefers-reduced-motion: reduce) {
-  .fan-card:hover { transform: none; }
-}
-.fan-card .fan-label {
-  flex: none; font-size: 10px; padding: 4px 8px; color: var(--ink-muted);
-  border-bottom: 1px solid var(--line-soft); display: flex; gap: 6px; white-space: nowrap;
-}
-.fan-card .fan-label b { color: var(--ink); font-weight: 600; }
-.fan-card .fan-body { flex: 1; overflow: hidden; position: relative; pointer-events: none; }
-
 /* ---------- comments ---------- */
 .pin {
   position: absolute; height: 26px; z-index: 8;

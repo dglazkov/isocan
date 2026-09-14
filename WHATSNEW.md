@@ -21,6 +21,14 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 14 September 2026
+
+- `isocan design audit` points to the styling that needs attention: missing
+  CSS variables, off-scale spacing and type, and the existing tokens that may
+  repair them. Reports follow each screen's scoped or inherited design system
+  and say which styling could not be checked. Color strings in prose no longer
+  count as styling.
+
 ## 13 September 2026
 
 - Write your own host for the rc. `import { runRoom } from "isocan/rc"`
@@ -178,6 +186,7 @@ second week.
 - Hover a paper swatch, a size or a face on the text bar and the note you are typing shows it until the pointer leaves; click to keep it.
 - The text bar is bigger, and the sizes are now S, M, L and XL instead of the initials of the step names. Hover one for what it is called and how far out it stays readable; `isocan text --style M` works too, beside `--style heading`.
 - Anything you put somewhere stays there. A note typed next to another, files dropped at the pointer, a paste at a point, `isocan text --at`: each used to be nudged to clear space, and now lands exactly where you put it, like a real post-it. Items placed for you — the rail's file button, `--anchor` — are still kept clear of what is there.
+- A version stack can be pruned. An item a script republishes on every commit grows a stack nobody compares — ×149 by the end of a fortnight — and every one of those versions rode along on every load of the canvas. `isocan version prune <item> --keep 14 --force` keeps the newest fourteen (the one on top always survives, however old), `isocan gc --keep-versions 14 --force` does it for every item before reclaiming storage, and fanning out a stack deeper than fourteen offers the same with a confirm. It is not undoable, and every surface says so before it does it.
 
 ## 1 September 2026
 

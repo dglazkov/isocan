@@ -295,3 +295,41 @@ describe("blob GC", () => {
     expect(next.json.seq).toBe((snapshot as any).lastSeq + 1);
   });
 });
+
+describe("pruned versions", () => {
+  it("become garbage once the entries that made them fall past the horizon", async () => {
+    const { liveHash } = await seed();
+    const oldHash = await uploadBlob("# v2, soon pruned\n", "live.md");
+    await op({
+      type: "item.addVersion",
+      itemId: "itm_live",
+      version: { id: "ver_2", blobHash: oldHash, mimeType: "text/markdown", filename: "live.md", size: 18 },
+    });
+    const newHash = await uploadBlob("# v3, kept\n", "live.md");
+    await op({
+      type: "item.addVersion",
+      itemId: "itm_live",
+      version: { id: "ver_3", blobHash: newHash, mimeType: "text/markdown", filename: "live.md", size: 11 },
+    });
+    await op({ type: "item.pruneVersions", itemId: "itm_live", keep: 1 });
+
+    // The stack is one deep and the canvas shows what it showed.
+    const snapshot = await (await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })).json();
+    const item = (snapshot as any).canvas.items["itm_live"];
+    expect(item.versions.map((v: { id: string }) => v.id)).toEqual(["ver_3"]);
+    expect(item.currentVersionId).toBe("ver_3");
+
+    // Inside the horizon the addVersion entries still name the old bytes.
+    const kept = await gc({ graceMs: 0 });
+    expect(kept.sweptBlobs).toBe(0);
+    expect(await blobStatus(liveHash)).toBe(200);
+    expect(await blobStatus(oldHash)).toBe(200);
+
+    // Past it, only the surviving version's bytes are reachable.
+    const swept = await gc({ graceMs: 0, keepOps: 0 });
+    expect(swept.sweptBlobs).toBe(2);
+    expect(await blobStatus(liveHash)).toBe(404);
+    expect(await blobStatus(oldHash)).toBe(404);
+    expect(await blobStatus(newHash)).toBe(200);
+  });
+});

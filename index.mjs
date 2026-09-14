@@ -36,6 +36,11 @@ export const {
   buildComment,
   readContextSummary,
   linkedCanvasesOf,
+  contextHome,
+  automaticSourceClient,
+  readDesignAudit,
+  designAuditPort,
+  readCanvasDesignAudit,
   waitForFeedback,
   waitForResolvedFeedback,
   // canvas-groups.ts — explicit membership and resolved dry-run reports

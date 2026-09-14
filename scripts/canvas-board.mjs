@@ -60,6 +60,9 @@ const ONLY = arg("--only");
 const NOTIFY = has("--notify");
 const LAY_OUT = has("--layout");
 const AS_ME = has("--as-me");
+/** How deep a panel's stack may grow before this generator prunes it — see
+ * `publish`. `--keep-versions <n>` overrides for one run. */
+const KEEP_VERSIONS = Math.max(1, Number(arg("--keep-versions", 14)) || 14);
 
 /** The canvas these panels live on. The marker in this directory names the
  *  repo's OWN canvas, which is not necessarily the board's — so the board's is
@@ -945,6 +948,18 @@ async function publish(slug, title, html, place) {
   if (current?.blobHash === hash) return;
   await board.edit(item.id, { content: html, mime: "text/html", filename: `${slug}.html` });
   changed.push({ title, what: `v${item.versions.length + 1}` });
+  /**
+   * **A regenerated panel is not a history worth keeping whole.** Every
+   * commit re-publishes these, so a stack grows by the repo's commit rate —
+   * 149 versions of `Build` in a fortnight, 7 MB of panels nobody would open
+   * twice, and every version's metadata riding on every load of the canvas.
+   * The design note called this silting and named a new ITEM per run as the
+   * way it happens; a new version per run is the same silt, slower. So the
+   * generator that makes the versions bounds them: the newest
+   * `KEEP_VERSIONS` stay (a fortnight of daily runs, enough to see a goal
+   * drift), the rest go, and `gc` sweeps their bytes on its next hour.
+   */
+  await board.pruneVersions(item.id, KEEP_VERSIONS);
 }
 
 /* ── the run ─────────────────────────────────────────────────────────────── */

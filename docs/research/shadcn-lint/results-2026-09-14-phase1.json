@@ -1,0 +1,1200 @@
+{
+  "node": "v24.13.0",
+  "tokens": {
+    "colors": {
+      "primary": "#112233",
+      "background": "#ffffff"
+    },
+    "typography": {
+      "body": {
+        "fontSize": "16px"
+      }
+    },
+    "rounded": {
+      "md": "8px"
+    },
+    "spacing": {
+      "md": "16px"
+    }
+  },
+  "html": {
+    "knownLiteral": {
+      "source": "<p style=\"color:#112233\">Acme</p>",
+      "ruleVersion": "1.0.0",
+      "diagnostics": [],
+      "coverage": {
+        "complete": true,
+        "declarations": 1,
+        "checkedValues": 1,
+        "omittedCategories": [],
+        "unexamined": []
+      },
+      "offSystem": [],
+      "onSystem": 1
+    },
+    "offSystemLiteral": {
+      "source": "<p style=\"color:#ff0000\">Acme</p>",
+      "ruleVersion": "1.0.0",
+      "diagnostics": [
+        {
+          "code": "design/off-scale-color",
+          "severity": "warning",
+          "range": {
+            "start": {
+              "offset": 16,
+              "line": 1,
+              "column": 17
+            },
+            "end": {
+              "offset": 23,
+              "line": 1,
+              "column": 24
+            }
+          },
+          "actual": "#ff0000",
+          "kind": "colour",
+          "property": "color",
+          "explanation": "#ff0000 is outside the governing system's declared colour values.",
+          "candidates": [
+            {
+              "value": "var(--color-primary)",
+              "token": "--color-primary",
+              "explanation": "#112233 is a declared colour; confirm its intended role before replacing.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --color-primary is not declared here."
+              ],
+              "requiresReview": true
+            },
+            {
+              "value": "var(--color-background)",
+              "token": "--color-background",
+              "explanation": "#ffffff is a declared colour; confirm its intended role before replacing.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+              ],
+              "requiresReview": true
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "declarations": 1,
+        "checkedValues": 1,
+        "omittedCategories": [],
+        "unexamined": []
+      },
+      "offSystem": [
+        {
+          "value": "#ff0000",
+          "kind": "colour",
+          "count": 1,
+          "line": 1
+        }
+      ],
+      "onSystem": 0
+    },
+    "undefinedVariable": {
+      "source": "<p style=\"color:var(--missing)\">Acme</p>",
+      "ruleVersion": "1.0.0",
+      "diagnostics": [
+        {
+          "code": "design/missing-variable",
+          "severity": "warning",
+          "range": {
+            "start": {
+              "offset": 16,
+              "line": 1,
+              "column": 17
+            },
+            "end": {
+              "offset": 30,
+              "line": 1,
+              "column": 31
+            }
+          },
+          "actual": "--missing",
+          "property": "color",
+          "explanation": "--missing has no declaration in this artifact\u2019s static scope. No value can be checked.",
+          "candidates": [
+            {
+              "value": "var(--color-primary)",
+              "token": "--color-primary",
+              "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --color-primary is not declared here."
+              ],
+              "requiresReview": true
+            },
+            {
+              "value": "var(--color-background)",
+              "token": "--color-background",
+              "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+              ],
+              "requiresReview": true
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "declarations": 1,
+        "checkedValues": 0,
+        "omittedCategories": [],
+        "unexamined": []
+      },
+      "offSystem": [],
+      "onSystem": 0
+    },
+    "undefinedVariableWithFallback": {
+      "source": "<p style=\"color:var(--missing, #ff0000)\">Acme</p>",
+      "ruleVersion": "1.0.0",
+      "diagnostics": [
+        {
+          "code": "design/missing-variable",
+          "severity": "warning",
+          "range": {
+            "start": {
+              "offset": 16,
+              "line": 1,
+              "column": 17
+            },
+            "end": {
+              "offset": 39,
+              "line": 1,
+              "column": 40
+            }
+          },
+          "actual": "--missing",
+          "property": "color",
+          "explanation": "--missing has no declaration in this artifact\u2019s static scope. Its fallback is checked separately.",
+          "candidates": [
+            {
+              "value": "var(--color-primary)",
+              "token": "--color-primary",
+              "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --color-primary is not declared here."
+              ],
+              "requiresReview": true
+            },
+            {
+              "value": "var(--color-background)",
+              "token": "--color-background",
+              "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+              ],
+              "requiresReview": true
+            }
+          ]
+        },
+        {
+          "code": "design/off-scale-color",
+          "severity": "warning",
+          "range": {
+            "start": {
+              "offset": 31,
+              "line": 1,
+              "column": 32
+            },
+            "end": {
+              "offset": 38,
+              "line": 1,
+              "column": 39
+            }
+          },
+          "actual": "#ff0000",
+          "kind": "colour",
+          "property": "color",
+          "explanation": "#ff0000 is outside the governing system's declared colour values.",
+          "candidates": [
+            {
+              "value": "var(--color-primary)",
+              "token": "--color-primary",
+              "explanation": "#112233 is a declared colour; confirm its intended role before replacing.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --color-primary is not declared here."
+              ],
+              "requiresReview": true
+            },
+            {
+              "value": "var(--color-background)",
+              "token": "--color-background",
+              "explanation": "#ffffff is a declared colour; confirm its intended role before replacing.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+              ],
+              "requiresReview": true
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "declarations": 1,
+        "checkedValues": 1,
+        "omittedCategories": [],
+        "unexamined": []
+      },
+      "offSystem": [
+        {
+          "value": "#ff0000",
+          "kind": "colour",
+          "count": 1,
+          "line": 1
+        }
+      ],
+      "onSystem": 0
+    },
+    "offSystemSpacing": {
+      "source": "<p style=\"padding:13px\">Acme</p>",
+      "ruleVersion": "1.0.0",
+      "diagnostics": [
+        {
+          "code": "design/off-scale-spacing",
+          "severity": "warning",
+          "range": {
+            "start": {
+              "offset": 18,
+              "line": 1,
+              "column": 19
+            },
+            "end": {
+              "offset": 22,
+              "line": 1,
+              "column": 23
+            }
+          },
+          "actual": "13px",
+          "kind": "spacing",
+          "property": "padding",
+          "explanation": "13px is outside the governing system's declared spacing values.",
+          "candidates": [
+            {
+              "value": "var(--space-md)",
+              "token": "--space-md",
+              "explanation": "16px is a declared spacing; confirm its intended role before replacing.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --space-md is not declared here."
+              ],
+              "requiresReview": true
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "declarations": 1,
+        "checkedValues": 1,
+        "omittedCategories": [],
+        "unexamined": []
+      },
+      "offSystem": [
+        {
+          "value": "13px",
+          "kind": "spacing",
+          "count": 1,
+          "line": 1
+        }
+      ],
+      "onSystem": 0
+    },
+    "offSystemFontShorthand": {
+      "source": "<p style=\"font:13px sans-serif\">Acme</p>",
+      "ruleVersion": "1.0.0",
+      "diagnostics": [
+        {
+          "code": "design/off-scale-font-size",
+          "severity": "warning",
+          "range": {
+            "start": {
+              "offset": 15,
+              "line": 1,
+              "column": 16
+            },
+            "end": {
+              "offset": 19,
+              "line": 1,
+              "column": 20
+            }
+          },
+          "actual": "13px",
+          "kind": "type size",
+          "property": "font",
+          "explanation": "13px is outside the governing system's declared type size values.",
+          "candidates": [
+            {
+              "value": "var(--size-body)",
+              "token": "--size-body",
+              "explanation": "16px is a declared type size; confirm its intended role before replacing.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --size-body is not declared here."
+              ],
+              "requiresReview": true
+            }
+          ]
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "declarations": 1,
+        "checkedValues": 1,
+        "omittedCategories": [],
+        "unexamined": []
+      },
+      "offSystem": [
+        {
+          "value": "13px",
+          "kind": "type size",
+          "count": 1,
+          "line": 1
+        }
+      ],
+      "onSystem": 0
+    },
+    "proseOnly": {
+      "source": "<p>The reference string is #ff0000.</p>",
+      "ruleVersion": "1.0.0",
+      "diagnostics": [],
+      "coverage": {
+        "complete": true,
+        "declarations": 0,
+        "checkedValues": 0,
+        "omittedCategories": [],
+        "unexamined": []
+      },
+      "offSystem": [],
+      "onSystem": 0
+    }
+  },
+  "verifiedAt": "2026-09-14T19:53:21.416Z",
+  "independentCases": {
+    "prose-script-url": {
+      "name": "prose-script-url",
+      "source": "<p>#ff0000</p><script>const s=\"color:#ff0000\"</script><style>p{background-image:url(\"icon.svg#ff0000\");content:\"#ff0000\"}</style>",
+      "expect": "no off-system finding",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [],
+        "coverage": {
+          "complete": false,
+          "declarations": 2,
+          "checkedValues": 0,
+          "omittedCategories": [],
+          "unexamined": [
+            {
+              "code": "dynamic-style",
+              "range": {
+                "start": {
+                  "offset": 14,
+                  "line": 1,
+                  "column": 15
+                },
+                "end": {
+                  "offset": 54,
+                  "line": 1,
+                  "column": 55
+                }
+              },
+              "explanation": "Executable script may alter styles; it was not executed or inspected as CSS."
+            }
+          ]
+        },
+        "offSystem": [],
+        "onSystem": 0
+      }
+    },
+    "export-shadow": {
+      "name": "export-shadow",
+      "source": "<style>:root{--color-ink:#ff0000}p{color:var(--color-ink)}</style>",
+      "expect": "off-system or unresolved coverage, never solely credited from token name",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [
+          {
+            "code": "design/off-scale-color",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 25,
+                "line": 1,
+                "column": 26
+              },
+              "end": {
+                "offset": 32,
+                "line": 1,
+                "column": 33
+              }
+            },
+            "actual": "#ff0000",
+            "kind": "colour",
+            "property": "color",
+            "explanation": "#ff0000 is outside the governing system's declared colour values.",
+            "candidates": [
+              {
+                "value": "var(--color-background)",
+                "token": "--color-background",
+                "explanation": "#ffffff is a declared colour; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "complete": true,
+          "declarations": 2,
+          "checkedValues": 1,
+          "omittedCategories": [],
+          "unexamined": []
+        },
+        "offSystem": [
+          {
+            "value": "#ff0000",
+            "kind": "colour",
+            "count": 1,
+            "line": 1
+          }
+        ],
+        "onSystem": 0
+      }
+    },
+    "same-element-alias": {
+      "name": "same-element-alias",
+      "source": "<p style=\"--color-ink:#112233;--local:var(--color-ink);color:var(--local)\">Acme</p>",
+      "expect": "resolved on-system",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [],
+        "coverage": {
+          "complete": true,
+          "declarations": 3,
+          "checkedValues": 1,
+          "omittedCategories": [],
+          "unexamined": []
+        },
+        "offSystem": [],
+        "onSystem": 1
+      }
+    },
+    "cross-scope-alias": {
+      "name": "cross-scope-alias",
+      "source": "<style>.other{--local:#112233}p{color:var(--local)}</style><p>Acme</p>",
+      "expect": "unresolved/ambiguous, not clean reference credit",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [],
+        "coverage": {
+          "complete": false,
+          "declarations": 2,
+          "checkedValues": 0,
+          "omittedCategories": [],
+          "unexamined": [
+            {
+              "code": "ambiguous-cascade",
+              "range": {
+                "start": {
+                  "offset": 38,
+                  "line": 1,
+                  "column": 39
+                },
+                "end": {
+                  "offset": 50,
+                  "line": 1,
+                  "column": 51
+                }
+              },
+              "explanation": "--local has selector-dependent or competing declarations; its computed value is unexamined."
+            }
+          ]
+        },
+        "offSystem": [],
+        "onSystem": 0
+      }
+    },
+    "cycle-fallback": {
+      "name": "cycle-fallback",
+      "source": "<style>:root{--a:var(--a,#112233)}p{color:var(--a,#ff0000)}</style>",
+      "expect": "cycle/fallback classified, never self-rescued on-system",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [
+          {
+            "code": "design/cyclic-variable",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 42,
+                "line": 1,
+                "column": 43
+              },
+              "end": {
+                "offset": 58,
+                "line": 1,
+                "column": 59
+              }
+            },
+            "actual": "--a",
+            "property": "color",
+            "explanation": "--a belongs to a custom-property cycle. Its fallback is checked separately.",
+            "candidates": [
+              {
+                "value": "var(--color-ink)",
+                "token": "--color-ink",
+                "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-ink is not declared here."
+                ],
+                "requiresReview": true
+              },
+              {
+                "value": "var(--color-background)",
+                "token": "--color-background",
+                "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          },
+          {
+            "code": "design/off-scale-color",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 50,
+                "line": 1,
+                "column": 51
+              },
+              "end": {
+                "offset": 57,
+                "line": 1,
+                "column": 58
+              }
+            },
+            "actual": "#ff0000",
+            "kind": "colour",
+            "property": "color",
+            "explanation": "#ff0000 is outside the governing system's declared colour values.",
+            "candidates": [
+              {
+                "value": "var(--color-ink)",
+                "token": "--color-ink",
+                "explanation": "#112233 is a declared colour; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-ink is not declared here."
+                ],
+                "requiresReview": true
+              },
+              {
+                "value": "var(--color-background)",
+                "token": "--color-background",
+                "explanation": "#ffffff is a declared colour; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "complete": true,
+          "declarations": 2,
+          "checkedValues": 1,
+          "omittedCategories": [],
+          "unexamined": []
+        },
+        "offSystem": [
+          {
+            "value": "#ff0000",
+            "kind": "colour",
+            "count": 1,
+            "line": 1
+          }
+        ],
+        "onSystem": 0
+      }
+    },
+    "nested-fallback": {
+      "name": "nested-fallback",
+      "source": "<p style=\"color:var(--absent,var(--also-absent,#ff0000))\">Acme</p>",
+      "expect": "missing references and off-system fallback classified",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [
+          {
+            "code": "design/missing-variable",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 16,
+                "line": 1,
+                "column": 17
+              },
+              "end": {
+                "offset": 56,
+                "line": 1,
+                "column": 57
+              }
+            },
+            "actual": "--absent",
+            "property": "color",
+            "explanation": "--absent has no declaration in this artifact\u2019s static scope. Its fallback is checked separately.",
+            "candidates": [
+              {
+                "value": "var(--color-ink)",
+                "token": "--color-ink",
+                "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-ink is not declared here."
+                ],
+                "requiresReview": true
+              },
+              {
+                "value": "var(--color-background)",
+                "token": "--color-background",
+                "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          },
+          {
+            "code": "design/missing-variable",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 29,
+                "line": 1,
+                "column": 30
+              },
+              "end": {
+                "offset": 55,
+                "line": 1,
+                "column": 56
+              }
+            },
+            "actual": "--also-absent",
+            "property": "color",
+            "explanation": "--also-absent has no declaration in this artifact\u2019s static scope. Its fallback is checked separately.",
+            "candidates": [
+              {
+                "value": "var(--color-ink)",
+                "token": "--color-ink",
+                "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-ink is not declared here."
+                ],
+                "requiresReview": true
+              },
+              {
+                "value": "var(--color-background)",
+                "token": "--color-background",
+                "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          },
+          {
+            "code": "design/off-scale-color",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 47,
+                "line": 1,
+                "column": 48
+              },
+              "end": {
+                "offset": 54,
+                "line": 1,
+                "column": 55
+              }
+            },
+            "actual": "#ff0000",
+            "kind": "colour",
+            "property": "color",
+            "explanation": "#ff0000 is outside the governing system's declared colour values.",
+            "candidates": [
+              {
+                "value": "var(--color-ink)",
+                "token": "--color-ink",
+                "explanation": "#112233 is a declared colour; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-ink is not declared here."
+                ],
+                "requiresReview": true
+              },
+              {
+                "value": "var(--color-background)",
+                "token": "--color-background",
+                "explanation": "#ffffff is a declared colour; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "complete": true,
+          "declarations": 1,
+          "checkedValues": 1,
+          "omittedCategories": [],
+          "unexamined": []
+        },
+        "offSystem": [
+          {
+            "value": "#ff0000",
+            "kind": "colour",
+            "count": 1,
+            "line": 1
+          }
+        ],
+        "onSystem": 0
+      }
+    },
+    "font-shorthand": {
+      "name": "font-shorthand",
+      "source": "<p style=\"font:italic bold 13px/1.3 sans-serif\">Acme</p>",
+      "expect": "13px off-system type size",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [
+          {
+            "code": "design/off-scale-font-size",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              },
+              "end": {
+                "offset": 31,
+                "line": 1,
+                "column": 32
+              }
+            },
+            "actual": "13px",
+            "kind": "type size",
+            "property": "font",
+            "explanation": "13px is outside the governing system's declared type size values.",
+            "candidates": [
+              {
+                "value": "var(--size-body)",
+                "token": "--size-body",
+                "explanation": "16px is a declared type size; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --size-body is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "complete": true,
+          "declarations": 1,
+          "checkedValues": 1,
+          "omittedCategories": [],
+          "unexamined": []
+        },
+        "offSystem": [
+          {
+            "value": "13px",
+            "kind": "type size",
+            "count": 1,
+            "line": 1
+          }
+        ],
+        "onSystem": 0
+      }
+    },
+    "spacing-not-geometry": {
+      "name": "spacing-not-geometry",
+      "source": "<p style=\"padding:13px 16px;margin:0 auto;width:13px;height:13px;top:13px\">Acme</p>",
+      "expect": "13px spacing only once, 16px conforming, geometry ignored",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [
+          {
+            "code": "design/off-scale-spacing",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 18,
+                "line": 1,
+                "column": 19
+              },
+              "end": {
+                "offset": 22,
+                "line": 1,
+                "column": 23
+              }
+            },
+            "actual": "13px",
+            "kind": "spacing",
+            "property": "padding",
+            "explanation": "13px is outside the governing system's declared spacing values.",
+            "candidates": [
+              {
+                "value": "var(--space-md)",
+                "token": "--space-md",
+                "explanation": "16px is a declared spacing; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --space-md is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "complete": true,
+          "declarations": 5,
+          "checkedValues": 2,
+          "omittedCategories": [],
+          "unexamined": []
+        },
+        "offSystem": [
+          {
+            "value": "13px",
+            "kind": "spacing",
+            "count": 1,
+            "line": 1
+          }
+        ],
+        "onSystem": 1
+      }
+    },
+    "entity-offset": {
+      "name": "entity-offset",
+      "source": "<p style=\"color:&#35;ff0000\">Acme</p>",
+      "expect": "finding range maps exactly to source entity/value",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [
+          {
+            "code": "design/off-scale-color",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 16,
+                "line": 1,
+                "column": 17
+              },
+              "end": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              }
+            },
+            "actual": "#ff0000",
+            "kind": "colour",
+            "property": "color",
+            "explanation": "#ff0000 is outside the governing system's declared colour values.",
+            "candidates": [
+              {
+                "value": "var(--color-ink)",
+                "token": "--color-ink",
+                "explanation": "#112233 is a declared colour; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-ink is not declared here."
+                ],
+                "requiresReview": true
+              },
+              {
+                "value": "var(--color-background)",
+                "token": "--color-background",
+                "explanation": "#ffffff is a declared colour; confirm its intended role before replacing.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "complete": true,
+          "declarations": 1,
+          "checkedValues": 1,
+          "omittedCategories": [],
+          "unexamined": []
+        },
+        "offSystem": [
+          {
+            "value": "#ff0000",
+            "kind": "colour",
+            "count": 1,
+            "line": 1
+          }
+        ],
+        "onSystem": 0
+      }
+    },
+    "unclosed-css": {
+      "name": "unclosed-css",
+      "source": "<style>p{color:rgb(1,2,3</style>",
+      "expect": "malformed coverage",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [],
+        "coverage": {
+          "complete": false,
+          "declarations": 1,
+          "checkedValues": 0,
+          "omittedCategories": [],
+          "unexamined": [
+            {
+              "code": "malformed-css",
+              "range": {
+                "start": {
+                  "offset": 8,
+                  "line": 1,
+                  "column": 9
+                },
+                "end": {
+                  "offset": 24,
+                  "line": 1,
+                  "column": 25
+                }
+              },
+              "explanation": "An unclosed CSS function or block was recovered by the parser."
+            },
+            {
+              "code": "malformed-css",
+              "range": {
+                "start": {
+                  "offset": 15,
+                  "line": 1,
+                  "column": 16
+                },
+                "end": {
+                  "offset": 24,
+                  "line": 1,
+                  "column": 25
+                }
+              },
+              "explanation": "An unclosed CSS function or block was recovered by the parser."
+            }
+          ]
+        },
+        "offSystem": [],
+        "onSystem": 0
+      }
+    },
+    "external": {
+      "name": "external",
+      "source": "<link rel=\"stylesheet\" href=\"https://example.invalid/site.css\"><p>Acme</p>",
+      "expect": "external styling unexamined, no fetch",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [],
+        "coverage": {
+          "complete": false,
+          "declarations": 0,
+          "checkedValues": 0,
+          "omittedCategories": [],
+          "unexamined": [
+            {
+              "code": "external-style",
+              "range": {
+                "start": {
+                  "offset": 0,
+                  "line": 1,
+                  "column": 1
+                },
+                "end": {
+                  "offset": 63,
+                  "line": 1,
+                  "column": 64
+                }
+              },
+              "explanation": "Linked CSS was not fetched; its declarations and overrides are unexamined."
+            }
+          ]
+        },
+        "offSystem": [],
+        "onSystem": 0
+      }
+    },
+    "inline-handler": {
+      "name": "inline-handler",
+      "source": "<p onclick=\"this.style.color='#ff0000'\">Acme</p>",
+      "expect": "dynamic styling unexamined without script color literal violation",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [],
+        "coverage": {
+          "complete": false,
+          "declarations": 0,
+          "checkedValues": 0,
+          "omittedCategories": [],
+          "unexamined": [
+            {
+              "code": "dynamic-style",
+              "range": {
+                "start": {
+                  "offset": 3,
+                  "line": 1,
+                  "column": 4
+                },
+                "end": {
+                  "offset": 39,
+                  "line": 1,
+                  "column": 40
+                }
+              },
+              "explanation": "Event handler may alter styles; it was not executed."
+            }
+          ]
+        },
+        "offSystem": [],
+        "onSystem": 0
+      }
+    },
+    "style-import": {
+      "name": "style-import",
+      "source": "<style>@import url(\"https://example.invalid/tokens.css\");p{color:var(--remote)}</style>",
+      "expect": "external stylesheet unexamined and missing reference not credited",
+      "report": {
+        "ruleVersion": "1.0.0",
+        "diagnostics": [
+          {
+            "code": "design/missing-variable",
+            "severity": "warning",
+            "range": {
+              "start": {
+                "offset": 65,
+                "line": 1,
+                "column": 66
+              },
+              "end": {
+                "offset": 78,
+                "line": 1,
+                "column": 79
+              }
+            },
+            "actual": "--remote",
+            "property": "color",
+            "explanation": "--remote has no declaration in this artifact\u2019s static scope. No value can be checked.",
+            "candidates": [
+              {
+                "value": "var(--color-ink)",
+                "token": "--color-ink",
+                "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-ink is not declared here."
+                ],
+                "requiresReview": true
+              },
+              {
+                "value": "var(--color-background)",
+                "token": "--color-background",
+                "explanation": "This is an exported system reference; confirm its role and rerun the audit after replacement.",
+                "prerequisites": [
+                  "Include the governing CSS export (isocan design --css); --color-background is not declared here."
+                ],
+                "requiresReview": true
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "complete": false,
+          "declarations": 1,
+          "checkedValues": 0,
+          "omittedCategories": [],
+          "unexamined": [
+            {
+              "code": "external-style",
+              "range": {
+                "start": {
+                  "offset": 7,
+                  "line": 1,
+                  "column": 8
+                },
+                "end": {
+                  "offset": 57,
+                  "line": 1,
+                  "column": 58
+                }
+              },
+              "explanation": "External stylesheet or namespace was not fetched."
+            }
+          ]
+        },
+        "offSystem": [],
+        "onSystem": 0
+      }
+    }
+  },
+  "measurement": {
+    "node": "v24.13.0",
+    "esbuild": "0.28.2",
+    "entities": "8.1.0",
+    "standalone": {
+      "parse5": {
+        "version": "8.0.1",
+        "raw": 151560,
+        "gzip": 42179
+      },
+      "cssTree": {
+        "version": "3.2.1",
+        "raw": 64882,
+        "gzip": 18163
+      },
+      "analyzer": {
+        "raw": 237875,
+        "gzip": 68918
+      },
+      "postcss": {
+        "version": "8.5.28",
+        "valueParserVersion": "4.2.0",
+        "raw": 62361,
+        "gzip": 20151
+      }
+    },
+    "app": {
+      "entry": {
+        "name": "index-zpGfsxjq.js",
+        "raw": 750359,
+        "gzip": 254239
+      },
+      "raw": 5717578,
+      "gzip": 1763257
+    },
+    "baselineEntry": {
+      "raw": 750359,
+      "gzip": 254236
+    },
+    "baselineSourceCommit": "ca1c99355986835d1c90add38a33245c597ed7e4",
+    "firstCombinedOrigin": "8729b9e3a2f63808e2fd4e002912614b75457694",
+    "afterUpstreamDrawerChange": {
+      "origin": "0dfc1970d7fbefa4601d25db06f5cc2f67c8d26e",
+      "appEntry": {
+        "name": "index-lXLPxvVD.js",
+        "raw": 750470,
+        "gzip": 254290
+      },
+      "analyzer": {
+        "raw": 237875,
+        "gzip": 68918
+      }
+    }
+  }
+}

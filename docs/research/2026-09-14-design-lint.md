@@ -1,9 +1,9 @@
 ---
-status: designed
+status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals, context
-note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Undefined CSS variables currently count as on-system, spacing and font shorthand escape, and prose hex strings produce false positives. Implementation and agent lift remain unbuilt.
+note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Visible repair, contracts, repository compatibility and agent lift follow the implementation walk.
 ---
 # Design lint that explains the repair
 
@@ -210,6 +210,7 @@ start advisory, baseline measured violations, and tighten deliberate rules.
 
 ## Roadmap and proofs
 
+The implementation walk is [design-lint/phases.md](../projects/design-lint/phases.md).
 The execution queue is [#299](https://github.com/dglazkov/isocan/issues/299).
 The research is **designed**;
 the product changes and the paid agent experiment have not been performed.
@@ -271,3 +272,39 @@ and `npm run typecheck` passed; `npm run test:deep -- --maxWorkers=6` passed
 defaults. The stricter emulator/anti-skip `test:ci` run was not performed.
 The original shared workspace's fast run had an unrelated conduct-skill
 duplication failure; no skill or staged implementation file was changed.
+
+## Implementation evidence, 14 September: phase 1
+
+The earlier tables record the baseline; [phase 1](../projects/design-lint/phases.md)
+replaces the whole-source regular expressions with parse5 8.0.1 and CSS Tree
+3.2.1's parser/walker. The same seven inputs now have the intended classifications.
+Thirteen further independent cases cover scope, cycles, nested fallbacks,
+HTML entities, malformed CSS, imports and dynamic styling. The report keeps
+unexamined regions visible and never executes scripts or fetches stylesheets.
+[Actual source and output](shadcn-lint/results-2026-09-14-phase1.json).
+
+A governing token is an expected value and name, not an injected CSS definition.
+An artifact that says `var(--color-ink)` still needs that declaration in its own
+static scope. Candidates explain that prerequisite. Scoped and inherited reads
+share one browser-safe orchestration module; each finding carries both content
+and governing-document provenance. A fresh-daemon CLI walk returned exactly the
+same JSON as `CanvasHandle.designAudit()`.
+
+`node scripts/probe-design-parsers.mjs <scratch-prefix>` reproduces the parser
+comparison. Minified browser bundles were 42,179 gzip bytes for parse5, 18,163
+for CSS Tree's narrow entry, and 20,151 for PostCSS 8.5.28 plus value-parser
+4.2.0. The full standalone analyzer was 68,918 gzip bytes. CSS Tree supplies
+structured values and recovery locations with less gzip cost in this probe.
+Its tolerant recovery still needs explicit malformed-input coverage.
+
+The app's plugin loader made a static core barrel export expensive: it added
+72,119 gzip bytes to the initial chunk. A dedicated lazy audit subpath leaves
+the initial chunk at 750,359 raw / 254,239 gzip bytes, a 0 / +3 byte delta from
+the pre-change build. This phase exposes the browser reader; phase 2 will mount
+it in the interface. The measurement is not a claim that later UI costs nothing.
+
+Those isolated bundle measurements precede the upstream drawer/settings change
+`0dfc1970`. Rebuilding the combined tree afterward gives a 750,470 raw /
+254,290 gzip initial entry; the standalone analyzer remains 237,875 raw /
+68,918 gzip. The evidence identifies both source baselines rather than
+attributing the unrelated interface change to the analyzer.

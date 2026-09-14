@@ -1949,7 +1949,13 @@ that woke you, with no `session start` needed.
   stack is a CHOICE, not the newest: `version promote` puts any version
   back on top, `isocan versions <item>` marks it `▶`, and `isocan get`
   follows it. When you are asked to change "this item", change the version
-  it currently points at — not the last one that happened to land.
+  it currently points at — not the last one that happened to land. A stack
+  is worth keeping whole when people made it; one a script regenerates on
+  every run is silt, and every version's metadata rides on every load of
+  the canvas. Bound those: `isocan version prune <item> --keep 14 --force`
+  keeps the newest fourteen (the current one always survives), and `gc
+  --keep-versions N --force` does it for every item before it sweeps. Not
+  undoable — say so before you do it to somebody else's stack.
 - **Leave the canvas tidy.** What a person does by dragging — edges snapping
   together, gaps evening out — you do with `isocan align <items…> --to
 isocan fit <items...>                  # grow items to the size their content wants, and settle them apart
@@ -2023,12 +2029,20 @@ isocan fit <items...>                  # grow items to the size their content wa
   its ancestors, then the canvas and a linked canvas's. Legacy canvases retain
   their geometric area scope.
 
-  `isocan design audit` says whether the SCREENS hold up: which values each one
-  uses that the system never named, worst screen first. It is the arithmetic
-  half of `/design-audit` and nothing more — a colour is in the palette or it is
-  not — so a clean score means coherent, never good. You do not have to run it
-  after adding a screen; adding one runs it for you and prints what that screen
-  invented.
+  `isocan design audit` parses screen styling and reports departures from each
+  screen's governing system: colours, type sizes, radii and declared spacing.
+  Findings include original source locations, missing references and candidate
+  token repairs. External styles, dynamic expressions and ambiguous CSS remain
+  visibly unexamined; matching literals are allowed. `--json` includes screen
+  item/version/blob identity, governing item/version/source canvas, rule version,
+  diagnostics and coverage, alongside the existing `system`, `screens`,
+  `offSystem`, `items` and per-screen `onSystem`/`offSystem` fields. An unavailable
+  item has a reason instead of a fabricated clean score. Ordinary auditing is
+  advisory and does not change content. Adding an HTML screen also prints a
+  brief best-effort token warning; run the full audit for coverage and provenance.
+  A DESIGN.md names expected values; it does not inject CSS into a screen.
+  Token-reference repairs may require including the exported declarations in
+  the artifact. Read each candidate's prerequisites before applying it.
 
   **Past six screens with no design system, `isocan add` refuses an HTML file.**
   Two screens gets you a note, because the second screen is where a choice
@@ -2486,13 +2500,17 @@ on the thread before putting one on somebody else's canvas,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
+`version prune <items…> --keep N --force` (`--all`: every item; NOT undoable —
+ask first, and reach for it when a stack YOU keep regenerating has grown past
+what anybody compares),
 `rm`/`restore`/`trash`, `trash empty --force` (NOT undoable — ask first),
 `undo`/`redo`, `wait`, `tail -f` (`--archived`: the full history, including
 what gc compacted), `recap` (that history at decaying resolution — old spans
 summarized, recent ops verbatim), `evals corpus|pairs` (what people have asked
 agents for here and what came of it — a local report, never a score),
-`gc [--all]` (`--all`: every canvas you are
-admitted to at this home, not just this one),
+`gc [--all] [--keep-versions N --force]` (`--all`: every canvas you are
+admitted to at this home, not just this one; `--keep-versions`: prune every
+stack on this canvas to its newest N first),
 `blobs [--push]` (are this canvas's bytes at its home — and send the ones
 that are not; the answer when a teammate sees an item and no picture),
 `copy <items...> [--to <canvas>] [--at x,y] [--in <group>] [--cell r,c] [--dry-run]` (copy items beside themselves, or

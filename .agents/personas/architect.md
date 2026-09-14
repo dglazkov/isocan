@@ -109,10 +109,21 @@ goal:
   # over somebody. It inverts (`invert.ts`), it is sent from four places in the
   # anatomy module, it is in that module's agent guide, and `web-only-ops`
   # stays 0 — it is not a verb a person has and an agent does not.
+  #
+  # 35 → 36 on 2026-09-14: `item.pruneVersions`, which keeps the newest N
+  # versions of one item and forgets the rest. Not a loop of the existing
+  # `item.removeVersion` — that one is marked internal, the inverse of
+  # `item.addVersion` and nothing else, and N of them is N chances for a
+  # replica to fold half a prune and disagree with the home about an item's
+  # history. One op replays whole. It is in the log rather than beside `gc`
+  # for the same reason: maintenance done outside the log is invisible to
+  # every replica that folds it. It refuses to invert (`invert.ts`, beside
+  # `trash.empty`), it is confirmation-gated on both surfaces, and
+  # `web-only-ops` stays 0 — `isocan version prune` is the same act.
   - name: operations in the vocabulary
-    at most: 35
+    at most: 36
     measured by: node scripts/measure.mjs op-types
-    baseline: 35, 2026-09-14, 72450794
+    baseline: 36, 2026-09-14, e56e7acc
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *
