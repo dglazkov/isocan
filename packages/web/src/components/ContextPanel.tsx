@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Actor, CanvasContents, ContextLayer } from "@isocan/core";
-import { contextLayers, contextLayerKey, memoryLinks, personalMemoryLinks } from "@isocan/core";
+import { contextLayers, contextLayerKey, memoryLinks, personalMemoryLinks, formatRecapHead } from "@isocan/core";
 import { readLayeredContext } from "@isocan/api/context";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -15,8 +15,10 @@ import { PanelHead } from "./PanelHead.tsx";
 import { LiveContextInspection } from "./LazyGroupContext.tsx";
 import { PersonalContext, PersonalRead } from "./PersonalContext.tsx";
 import "./personal-context.css";
+import { sourceRecap } from "../lib/context-recap.ts";
+import "./context-recap.css";
 
-const contextIO = { ...personalApi, sourceSnapshot, designText: readBlobText };
+const contextIO = { ...personalApi, sourceRecap, sourceSnapshot, designText: readBlobText };
 
 /** Context responses belong to this actor, destination, access state and concrete set of links. */
 export function ContextPanel({ canvasId, actor, onClose }: { canvasId: string; actor: Actor; onClose?: () => void }) {
@@ -92,7 +94,7 @@ function Layer({ layer, children }: { layer: ContextLayer; children?: ReactNode 
       {layer.pieces.map((piece) => (
         <div
           key={piece.name}
-          className={`ctx-row${piece.present ? "" : " absent"}${piece.stale ? " stale" : ""}${piece.overridden ? " overridden" : ""}`}
+          className={`ctx-row${layer.kind === "inherited" && piece.name === "Recent work" ? " ctx-recent-work" : ""}${piece.present ? "" : " absent"}${piece.stale ? " stale" : ""}${piece.overridden ? " overridden" : ""}`}
         >
           <div className="ctx-line">
             <span className="ctx-name">{piece.name}</span>
@@ -106,6 +108,7 @@ function Layer({ layer, children }: { layer: ContextLayer; children?: ReactNode 
               last written" is actionable, and a warning triangle is an
               accusation. */}
           {piece.stale && <div className="ctx-why">{piece.stale}</div>}
+          {piece.recap && <p className="ctx-recap" data-source-canvas={piece.recap.canvasId}>{formatRecapHead(piece.recap.head)}</p>}
           {piece.fix && (piece.stale || !piece.present) && (
             <div className="ctx-fix">{piece.fix}</div>
           )}

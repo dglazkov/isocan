@@ -68,19 +68,15 @@ jobs:
       # comment asking two files to stay in step is not a guard.
       - uses: ./.github/actions/suite-setup
 
-      # ISOCAN_REQUIRE_EMULATOR is the anti-skip switch, and it is set here for
-      # the same reason `release.yml` sets it: locally the cloud suites skip
-      # loudly and say what they did not check, but a green CI run that quietly
-      # skipped Firestore launders an unknown into a checkmark. A PR check that
-      # can pass without testing the cloud backing is a PR check that will
-      # eventually wave through the one change that breaks it.
-      - run: npm test
-        env:
-          ISOCAN_REQUIRE_EMULATOR: "1"
-          # The bundle budget measures packages/web/dist, which `npm ci`
-          # built through `prepare`. If it is missing here, that did not
-          # happen — and a silent skip would let the entry chunk drift again.
-          ISOCAN_REQUIRE_BUNDLE: "1"
+      # `test:ci` — the same command `release.yml` runs, with every anti-skip
+      # switch on, and for the same reason. A pull-request check that can pass
+      # without testing the cloud backing, or without the deep lane's CLI
+      # walks, is a check that will eventually wave through the one change
+      # that breaks them, and it would do it while main went red. The list of
+      # switches and the argument for each is `scripts/switches.mjs`; the
+      # point of running one named command is that this file and `release.yml`
+      # cannot come to disagree about what CI tests.
+      - run: npm run test:ci
 
       - run: npm run typecheck
       - run: npm run lint

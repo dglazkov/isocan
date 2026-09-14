@@ -6,6 +6,9 @@ import { sendEchoedResult, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Modal } from "./Modal.tsx";
 
+/** How long a person waits before the dialog says something instead of spinning. */
+const PREVIEW_DEADLINE_MS = 15_000;
+
 /** Conversion is reviewed and committed at the home; this form never predicts a cutover. */
 export function GroupMigration({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const dialog = useUiStore((state) => state.groupDialog);
@@ -21,11 +24,51 @@ export function GroupMigration({ canvasId, actor }: { canvasId: string; actor: A
   const [queued, setQueued] = useState(false);
   const [converted, setConverted] = useState(false);
   const close = useCallback(() => { if (useUiStore.getState().groupDialog === dialog) useUiStore.getState().setGroupDialog(null); }, [dialog]);
+  /**
+   * **A preview that never arrives has to say so.**
+   *
+   * This read had no deadline, and neither does anything under it: `request`
+   * calls `fetch` untimed, and on a 401 it knocks on the door first — another
+   * untimed `fetch`. A home that accepts the connection and then goes quiet
+   * left this dialog saying *Loading conversion preview…* with no error, no
+   * timeout and nothing to do but close it, which is the shape
+   * `docs/reviews/lessons.md` #6 is about: a hang that never fails is worse
+   * than a slow thing that eventually does.
+   *
+   * Seen for real against a daemon sixteen hours older than the route
+   * (`/api/projects/:id/groups/migration` landed with canvas-groups phase 5),
+   * which answered the unknown path with a 401 and sent the client to a door
+   * that never came back.
+   *
+   * Two halves, because either alone is half a fix. The signal cancels the
+   * request this component owns. The deadline is what the PERSON sees, and it
+   * fires wherever the wait is — including inside a recovery this signal
+   * cannot reach. The message names the likely cause rather than the symptom:
+   * on a laptop, the overwhelmingly common reason is a daemon older than the
+   * feature.
+   */
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    let settled = false;
     setPreview(null); setError("");
-    void fetchGroupMigration(canvasId).then((answer) => { if (!cancelled) setPreview(answer); }, (err: Error) => { if (!cancelled) setError(err.message); });
-    return () => { cancelled = true; };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      controller.abort();
+      setError(
+        "The home did not answer in 15 seconds. If this is a local daemon it may be older than " +
+          "the conversion route — `isocan restart` picks up the current code. Refresh the preview to try again.",
+      );
+    }, PREVIEW_DEADLINE_MS);
+    void fetchGroupMigration(canvasId, controller.signal).then(
+      (answer) => { if (!settled) { settled = true; clearTimeout(timer); setPreview(answer); } },
+      (err: Error) => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        setError(err.name === "AbortError" ? "The conversion preview was cancelled." : err.message);
+      },
+    );
+    return () => { settled = true; clearTimeout(timer); controller.abort(); };
   }, [canvasId, refresh]);
   const stale = Boolean(preview && lastSeq > preview.revision);
   async function convert() {

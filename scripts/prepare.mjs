@@ -18,9 +18,34 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
+
+function registerMergeDriver() {
+  const git = (...args) => spawnSync("git", args, { cwd: root, stdio: "ignore" });
+  if (git("rev-parse", "--git-dir").status !== 0) return; // a tarball, not a clone
+  git("config", "merge.isocan-generated.name", "regenerate rather than merge (scripts/mergegen.mjs)");
+  git("config", "merge.isocan-generated.driver", `node ${path.join(root, "scripts/mergegen.mjs")} %P %A`);
+}
 const built = path.join(root, "packages/web/dist/index.html");
 
 if (process.env.ISOCAN_PREPARE === "1") process.exit(0); // nested install
+/**
+ * **The merge driver for generated docs, registered before anything else.**
+ *
+ * `.gitattributes` says `docs/ROADMAP.md merge=isocan-generated`; a driver by
+ * that name has to exist in `.git/config`, which is per clone and cannot be
+ * committed. Here rather than in `install-hooks.mjs` because hooks are opt-in
+ * (`npm run hooks`) and this is not worth remembering: the four generated docs
+ * were 300 of the 512 commits in a fortnight, and every one of them was a
+ * conflict somebody resolved by hand in a file that is a pure function of
+ * other files.
+ *
+ * Before the early return below, because a checkout that already has a built
+ * web app still needs the driver. Failure is silent and harmless — without it
+ * git falls back to the ordinary merge, which is exactly what these files had
+ * before.
+ */
+registerMergeDriver();
+
 if (existsSync(built)) process.exit(0); // already built — `npm run build` to refresh
 
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";

@@ -31,9 +31,10 @@ import type { AdapterSpec } from "./harnesses.ts";
  * - The adapter's shells inherit the ADAPTER's environment and nothing
  *   else — `CLAUDE_CODE_SESSION_ID` is NOT set inside them — so identity
  *   travels by injection: the rc sets `ISOCAN_HARNESS=agent` and
- *   `ISOCAN_SESSION_ID=<name>`, making the CLI inside present exactly the
- *   session key the enrolment claim minted (`agent:<name>`, `main.ts`'s
- *   enrol verb), and `ISOCAN_CANVAS=<canvasId>` so the CLI inside knows
+ *   `ISOCAN_SESSION_ID=<mac>`, making the CLI inside present exactly the
+ *   session key the enrolment claim minted (`agent:<mac>`, derived from the
+ *   agent's name by a secret only this machine holds — `agent-key.ts`), and
+ *   `ISOCAN_CANVAS=<canvasId>` so the CLI inside knows
  *   which canvas the summons is for without a directory binding. A CLI-added agent
  *   needs no rebinding at all; a web-added one needs a single idempotent
  *   `actor.claim { as }` on the machine badge, which the turn verb makes.
@@ -134,11 +135,13 @@ function passes(name: string, extra: string[]): boolean {
  * person's (above), scrubbed of every harness variable (a stale one would
  * misidentify the agent; `CLAUDECODE` trips the adapter's nested-session
  * guard), then the injection that makes the CLI inside speak as the
- * enrolled actor. `pass` is config.json's `adapterEnv` — names, or
- * `PREFIX_*` — and `source` is a parameter so a test can hand it a shell. */
+ * enrolled actor. `agentSession` is the session half of the agent's key
+ * (`agent:<session>`, `agent-key.ts`'s `agentSessionOf`). `pass` is
+ * config.json's `adapterEnv` — names, or `PREFIX_*` — and `source` is a
+ * parameter so a test can hand it a shell. */
 export function adapterEnv(
   canvasId: string,
-  agentName: string,
+  agentSession: string,
   options: { pass?: string[]; source?: NodeJS.ProcessEnv } = {},
 ): NodeJS.ProcessEnv {
   const source = options.source ?? process.env;
@@ -149,28 +152,13 @@ export function adapterEnv(
   }
   for (const name of [...harnessVars, "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[name];
   env["ISOCAN_HARNESS"] = "agent";
-  env["ISOCAN_SESSION_ID"] = agentName;
+  env["ISOCAN_SESSION_ID"] = agentSession;
   // Which canvas this summons is FOR travels beside the identity, read by the
   // CLI inside the way `--canvas` is (standing agents, phase 1): one agent may
   // stand on several canvases from one directory, so the working directory's
   // binding can no longer be the answer.
   env["ISOCAN_CANVAS"] = canvasId;
   return env;
-}
-
-/**
- * The session key the injected environment presents — and the exact key the
- * enrol verb claims, which is the whole trick.
- *
- * **Scoped to the NAME, not to a canvas** (standing agents, phase 1). It was
- * `agent:<canvasId>:<name>`, which made "Percy on a second canvas" a second
- * session key on the same badge — refused by the desk as a name already worn,
- * the same gate #89 hit. One machine answers for one Percy: the same key on
- * every canvas resumes the same actor, so enrolling the name elsewhere hands
- * the one Percy back, history intact, with no `as` and no vouch.
- */
-export function enrolmentKey(agentName: string): string {
-  return `agent:${agentName}`;
 }
 
 interface JsonRpcMessage {

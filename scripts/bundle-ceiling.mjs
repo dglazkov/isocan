@@ -319,11 +319,51 @@
  * and ambient membership, atomic copy resolution, and operation-owned form
  * completion. No new eager dependency was added. The reviewed ceiling leaves
  * 41 bytes of margin; GOAL 640,000 and JUMP 20,000 remain unchanged.
+ *
+ * **734,200 -> 743,700 on 13 Sep, for anatomy, after deferral.**
+ * The fresh production entry is 743,652 bytes, a net 9,493 over the 734,159
+ * canvas-groups build, and the number this was asked for was 748,100 before
+ * the deferral below. Measured in halves rather than asserted: taking the
+ * module out of the shell registry and rebuilding gives 741,024, so **2,628
+ * bytes are Anatomy's own** and **6,865 are the shared presentation change**
+ * in `lib/presentation.ts`, `lib/presentationStore.ts`, `CanvasViewport`,
+ * `ItemView` and `CanvasPage` — which every canvas renders through whether or
+ * not a project is on it, and which cannot be deferred because layout is
+ * synchronous.
+ *
+ * **Anatomy is for a subset of canvases and now costs like one.** It was a
+ * build-time entry in `LIST` at 7,039 bytes; it arrives through
+ * `deferredModule` instead, the path `design-competition` already uses, so the
+ * web half is fetched the first time something asks it to draw and never on a
+ * canvas with no Anatomy items. Two things had to be true for that to save
+ * anything. The underlay, which every canvas asks to draw, carries a predicate
+ * (`projectsOn`) rather than a `lazy()` — a lazy underlay downloads the module
+ * everywhere and defeats the deferral. And the light facts moved to their own
+ * module, `facts.ts`: while the mimes and the core record shared a file, the
+ * eager and lazy chunks both reached into it and rollup hoisted what they
+ * share into the entry, so the first attempt at this saved exactly 0 bytes.
+ * The 2,329-byte agent prompt is no longer in the entry at all.
+ *
+ * 9,493 is inside JUMP's 20,000.
+ *
+ * **Re-measured at landing: 743,799, and 671 of the move is not Anatomy's.**
+ * `room` phases 3 and 4 landed between the measurement above and this commit;
+ * rebuilt on that base with Anatomy's registration removed, the entry is
+ * 741,695, so the room work is inside this ceiling too and did not raise it
+ * when it landed. Said rather than absorbed: whoever owns room should see
+ * their own 671 bytes rather than find them inside a number labelled anatomy.
+ *
+ * The margin here is 101 bytes rather than the 25-48 the entries above chose.
+ * A margin thinner than one ordinary commit means the next unrelated change
+ * lands red, which is what just happened; on a main that takes a commit every
+ * twenty-five minutes, a tight ceiling is a tax on whoever pushes next rather
+ * than a discipline on whoever grew the bundle. GOAL 640,000 and JUMP 20,000
+ * remain unchanged, and they are what actually hold the line.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 734_200;
+export const CEILING = 743_900;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's

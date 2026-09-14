@@ -829,6 +829,20 @@ function reincarnate(
  * readable as one statement, and so the three refusal reasons sit together
  * where they can be compared.
  */
+/**
+ * **Which refusal of `as` a `name-taken` is**, as `reason` beside the code.
+ * The sentence says it for a person; this says it for a client that has to
+ * act on it (docs/projects/room/design.md, the claim rule, "Dual-held agents").
+ * `held-elsewhere` lasts until the other badge is ended or hands the actor
+ * over. `claimed-just-now` and `live` pass on their own: a claim under another
+ * key on this badge in the last minute, or a live face.
+ */
+export const CLAIM_REFUSAL = {
+  heldElsewhere: "held-elsewhere",
+  claimedJustNow: "claimed-just-now",
+  live: "live",
+} as const;
+
 function admit(
   ctx: ClaimContext,
   op: ActorClaimOp,
@@ -889,17 +903,20 @@ function admit(
         Date.parse(ctx.now) - Date.parse(row.boundAt) < CLAIM_STANDS_MS,
     );
   if (wornLive || heldElsewhere || otherSession) {
+    // Held elsewhere is named first when it is true: it is the refusal that
+    // does not pass on its own, so it is the one a client must hear.
     throw new OpValidationError(
       "name-taken",
       `${as} is somebody else here (${
-        wornLive
-          ? "live on a canvas"
-          : heldElsewhere
-            ? "another surface already speaks as them"
+        heldElsewhere
+          ? "another surface already speaks as them"
+          : wornLive
+            ? "live on a canvas"
             : "claimed by another session just now"
       }) — becoming them would be one actor wearing two faces. ` +
         "Be handed it by a surface that already is them (`isocan pass`, or “Bring your own " +
         "agent…”), or prove the address they signed in with.",
+      heldElsewhere ? CLAIM_REFUSAL.heldElsewhere : wornLive ? CLAIM_REFUSAL.live : CLAIM_REFUSAL.claimedJustNow,
     );
   }
   const name = op.name ?? known!.name;

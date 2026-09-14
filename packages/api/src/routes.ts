@@ -1,5 +1,6 @@
 import { SOURCE_POLICY_HEADER, sourcePolicyHeader, parseSourcePolicyHeader, sourceClassificationRoute, SOURCE_ACCESS_ROUTE, personalRoute, personalCanvasRoute, personalDelegatesRoute, type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "@isocan/core";
 import { inboxRoute, type InboxResponse } from "@isocan/core";
+import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type {
   Actor,
   ActorBindingRecord,
@@ -119,9 +120,8 @@ import {
   passRoute,
   SERVING_ROUTE,
 } from "@isocan/core";
-import type { UpgradeVerdict } from "@isocan/core";
-import type { BuildStamp, StoredBadge } from "@isocan/server";
-import { askTheDoor, bearerHeader, readBadge, writeBadge } from "@isocan/server";
+import type { BadgeStore, BuildStamp, StoredBadge, UpgradeVerdict } from "@isocan/core";
+import { ApiError, askTheDoor, bearerHeader } from "@isocan/core";
 import type { ContextPageOptions } from "./canvas-context.ts";
 
 /** The health route: who is holding the port, and which build they are. */
@@ -161,19 +161,9 @@ export interface Health extends Partial<BuildStamp> {
   upgrade?: UpgradeVerdict;
 }
 
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly code?: string,
-    /** Why, when the code alone does not say — `withdrawn` on a
-     * `not-admitted` from a badge that had been inside. */
-    readonly reason?: string,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
+/** A refusal the home answered — the class lives in `@isocan/core`, and is
+ * re-exported here so every import of it from this surface keeps working. */
+export { ApiError };
 
 /** The platform's own fetch, named so that the Node half can fall back to it
  * by name — an instance field is not on the prototype, so `super.fetcher`
@@ -194,7 +184,7 @@ export const platformFetch: typeof fetch = (input, init) => fetch(input, init);
  * fact rather than an intention.
  */
 export class DaemonRoutes {
-  /** Loaded once per process, from `identity.json`'s `auth` block. */
+  /** Loaded once per instance, from the badge store it was handed. */
   private badge: StoredBadge | null | undefined;
 
   /**
@@ -222,7 +212,14 @@ export class DaemonRoutes {
 
   constructor(
     readonly base: string,
-    readonly home: string,
+    /**
+     * Where this holder keeps its badge for `base` — read once, kept after a
+     * knock at the door. A parameter rather than a file read
+     * (docs/projects/room/design.md, `routes`): this surface runs where there
+     * is no disk, and the Node holders hand `fileBadgeStore(home, base)` from
+     * `@isocan/server`, which is `identity.json`'s `auth` block as before.
+     */
+    protected readonly badgeStore: BadgeStore,
     /** Optional lifetime of a per-call connection, including its identity setup. */
     protected readonly lifetime?: AbortSignal,
     /** A restriction captured before target resolution, shared by JSON and raw calls. */
@@ -341,7 +338,7 @@ export class DaemonRoutes {
   }
 
   private async storedBadge(): Promise<StoredBadge | null> {
-    if (this.badge === undefined) this.badge = await readBadge(this.home, this.base);
+    if (this.badge === undefined) this.badge = await this.badgeStore.read();
     return this.badge;
   }
 
@@ -365,7 +362,7 @@ export class DaemonRoutes {
     }
     const badge = answer.badge;
     this.badge = badge;
-    await writeBadge(this.home, this.base, badge);
+    await this.badgeStore.keep(badge);
     signal?.throwIfAborted();
     // Re-claim, THEN replay. Without this the recovery path is a 401
     // followed by a `not-your-actor`: the door mints a badge whose claims
@@ -994,6 +991,11 @@ export class DaemonRoutes {
     return this.request("GET", `${route}/content${query.size ? `?${query}` : ""}`);
   }
 
+  /** A bounded ordinary-source history head; the authority refuses personal sources before reads. */
+  recapHead(canvasId: string, signal?: AbortSignal): Promise<RecapHeadResponse> {
+    return this.request("GET", recapHeadRoute(canvasId), undefined, signal);
+  }
+
   async snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse> {
     const snapshot = await this.request<CanvasSnapshotResponse>("GET", `/api/projects/${canvasId}/canvas`, undefined, signal);
     this.observedGroupModes.set(canvasId, snapshot.project.groupMode ?? "legacy");
@@ -1110,8 +1112,8 @@ export class DaemonRoutes {
    * the fact dies with the socket, which is the whole point. The response
    * carries any web asks that arrived while held (agent-custody) — the rc
    * enrolls each and keeps holding. */
-  rcHold(request: RcHoldRequest): Promise<RcHoldResponse> {
-    return this.request("POST", "/api/rc/hold", request);
+  rcHold(request: RcHoldRequest, signal?: AbortSignal): Promise<RcHoldResponse> {
+    return this.request("POST", "/api/rc/hold", request, signal);
   }
 
   /** Who a live rc answers for on this canvas — and whether any is parked at

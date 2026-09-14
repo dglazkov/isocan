@@ -14,7 +14,7 @@ import { spawn } from "node:child_process";
 import { ApiError, DaemonClient, DaemonRoutes, harnessVars } from "../index.mjs";
 import { browser, throughTheDoor, until } from "./lib/browser.mjs";
 
-const { startDaemon, writeBadge, adoptIdentity } = await import("@isocan/server");
+const { startDaemon, writeBadge, adoptIdentity, fileBadgeStore } = await import("@isocan/server");
 const { BADGE_COOKIE, parseBadgeToken, itemPath, VIEW_ONLY } = await import("@isocan/core");
 const repo = fileURLToPath(new URL("..", import.meta.url));
 assert.equal(process.argv.length, 2, "Run without arguments; this journey has no partial-proof mode.");
@@ -77,7 +77,7 @@ async function cli(...args) {
 // daemon request, including the named browser viewer's deliberate write probe.
 class BrowserClient extends DaemonRoutes {
   constructor(cookie = null) {
-    super(base, clientHome);
+    super(base, fileBadgeStore(clientHome, base));
     this.fetcher = async (input, init) => {
       const headers = new Headers(init?.headers);
       headers.delete("Authorization"); headers.delete("Cookie");

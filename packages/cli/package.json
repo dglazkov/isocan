@@ -16,6 +16,7 @@
     "@isocan/api": "*",
     "@isocan/core": "*",
     "@isocan/mcp": "*",
+    "@isocan/rc": "*",
     "@isocan/server": "*",
     "commander": "^13.1.0",
     "tsx": "^4.19.2"

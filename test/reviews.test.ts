@@ -95,7 +95,9 @@ describe("a lesson number means one lesson", () => {
     expect(
       doubled.length,
       `lessons ${doubled.join(", ")} are used more than once — "see lessons.md #${doubled[0]}" ` +
-        "then names more than one lesson. Take the next FREE number, not the next one after the last row.",
+        "then names more than one lesson. `node scripts/lessons.mjs --check` says which rows collide, " +
+        "which files now cite an ambiguous number, and what the next FREE number is — which is not " +
+        "the one after the last row when branches have been allocating in parallel.",
     ).toBeLessThanOrEqual(INHERITED);
   });
 

@@ -245,13 +245,25 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       });
     }
 
+    case "item.edit":
     case "item.addVersion": {
       const item = getItem(op.itemId);
+      if (op.type === "item.edit") {
+        const expected = op.expectedMetadata;
+        if (item.currentVersionId !== op.expectedVersionId ||
+          (expected && (item.title !== expected.title ||
+            Object.keys({ ...item.properties, ...expected.properties }).some(
+              (key) => item.properties[key] !== expected.properties[key],
+            )))) {
+          throw new OpValidationError("edit-conflict", `“${item.title}” changed while editing. Reload it before saving; your draft has not been applied.`);
+        }
+      }
       if (item.versions.some((v) => v.id === op.version.id)) {
         throw new OpValidationError("duplicate-id", `version id already exists: ${op.version.id}`);
       }
       return putItem({
         ...item,
+        ...(op.type === "item.edit" ? applyMetaPatch(item, op.patch) : {}),
         versions: [...item.versions, toItemVersion(op.version, actor, ts)],
         currentVersionId: op.version.id,
         ...stamp,
@@ -277,7 +289,7 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
           `prevCurrentVersionId not among remaining versions: ${op.prevCurrentVersionId}`,
         );
       }
-      return putItem({ ...item, versions, currentVersionId: op.prevCurrentVersionId, ...stamp });
+      return putItem({ ...item, ...(op.patch ? applyMetaPatch(item, op.patch) : {}), versions, currentVersionId: op.prevCurrentVersionId, ...stamp });
     }
 
     case "item.restoreVersion": {
@@ -287,6 +299,7 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       }
       return putItem({
         ...item,
+        ...(op.patch ? applyMetaPatch(item, op.patch) : {}),
         versions: [...item.versions, op.version],
         currentVersionId: op.version.id,
         ...stamp,

@@ -1,10 +1,10 @@
 # Memory — the walk
 
-**Where we are:** phases 0–4 are closed. Memory phase 5 is next: inherited
-recap heads under [inherited-recap.md](inherited-recap.md), on CLI, web and
-MCP. Pin-from-source follows as a separate phase once its concrete copy act
-is defined. Both are engineering work with no credential, resource or person
-blocking them. Public and the four personal-memory journeys are verified.
+**Where we are:** phases 0–5 are closed. CLI, web and MCP share bounded
+inherited Recent work; Public and memory Journeys 1–5 are verified.
+Memory phase 6 is next: pin-from-source under [pin-from-source.md](pin-from-source.md).
+It copies a selected ordinary inherited piece into a local pin in one undoable
+act. No credential, resource or person blocks that work.
 
 ## Phase 0 — Context with headings
 
@@ -119,7 +119,9 @@ only the personal portion that implementation did not claim to provide.
 
 ## Phase 5 — A bounded head from inherited history
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 13 September 2026 — inherited Recent work agrees on
+CLI, desktop/phone and real MCP transport; authoritative history and route
+security pass the actual HTTP and both-backing proofs.
 
 **Proof:** actual CLI, browser and MCP reads show an ordinary inherited
 source's bounded Recent work with matching provenance. Real mutations exceed
@@ -130,13 +132,70 @@ range; missing required history reports unavailable. A failed head leaves
 readable design/pins intact and local design still governs. Excluded,
 unauthorized, copied-personal, absent-header personal, foreign and unreachable
 sources prove refusal before private source reads, including forwarding.
+Encoded API route spellings must receive the same badge, admission and source
+checks on recap and existing snapshot/history routes, over actual HTTP.
 Shared state/frozen context stay unchanged. Run the full required-emulator
 and bundle suite, typecheck, build and actual browser acceptance without
 raising the entry ceiling. Journey 5 and inherited-recap.md define the scope.
 
 
+**Verified:** the conductor ran the full suite with
+`ISOCAN_REQUIRE_DEEP=1 ISOCAN_REQUIRE_EMULATOR=1 ISOCAN_REQUIRE_BUNDLE=1`:
+5,197 passed, three existing ACP/dispatch skips, 528 files, 297.61
+seconds, exit 0. Workspace typecheck and build passed; the entry is 734,004
+bytes against the unchanged 734,200 ceiling. All ten standard browser
+journeys, Public and personal regression walks passed.
+
+Actual CLI/browser acceptance in `scripts/journey-recap.mjs` proves matching
+typed heads, source provenance, omissions, local design precedence, unchanged
+shared/frozen bytes, GC and daemon/store restart. Desktop and 390px phone
+screens were inspected, including an unavailable head whose readable design,
+pins and reason remain visible. The real SDK stdio proof in
+`packages/mcp/test/recap-summary-transport.test.ts` passed independently.
+
+FileStore and required-emulator CloudStore run the same real 130-operation,
+GC, lost-compaction-receipt, reopen, missing-range and held-read tests. The
+queue proof fails when its actual enqueue boundary is removed. Actual HTTP
+also proves encoded-route security, caller ceilings, personal exclusion before
+private I/O and cancellation through a real authoritative-home forward. The
+conductor's anonymous snapshot/history probe leaked before the correction and
+returned 401 with no source reads afterward.
+
+**Both surfaces:** this is a read, so no new Operation, CLI verb or MCP tool
+is needed. Existing Context commands and resources gain the same core head
+and formatter; the guide and README describe it. Pure logic, both backings,
+real HTTP/stdio and browser interaction each prove their own boundary.
+Personal current-piece reading and frozen-request semantics stay unchanged.
+
+## Phase 6 — Copy a source piece into a local pin
+
+**Status: NOT STARTED.**
+
+**Proof:** actual CLI and desktop/390px browser select and copy ordinary
+inherited pins and a nested group with its current source/visual faces.
+Local Context, CLI and MCP summaries show durable source provenance. One
+accepted operation makes the copy and pin; one undo/redo removes/restores it.
+Source edits, removal and unlink do not alter the independent copy. Copying a
+design piece preserves the governing local design. Actual byte/hash failures,
+excluded and personal sources, foreign/absent links, read-only/legacy targets,
+revocation, held-transfer link removal and browser identity change refuse
+without a visible partial copy; private refusals open no source data.
+Authoritative forwarding retains exclusion and cancellation. Existing group
+copy and memory behavior pass. Run full required-deep/emulator/bundle tests,
+typecheck, build and actual browser acceptance with the unchanged entry
+ceiling. Journey 6 and pin-from-source.md define the exact scope.
+
 ## Trajectory
 
+- **2026-09-13** — A core namespace loaded by runtime modules made an eager
+  Context formatter retain the new history code in the entry. Factoring the
+  report into a compatible leaf and deferring the web read reduced the entry
+  to 734,004 bytes without increasing its ceiling.
+
+- **2026-09-13** — The router accepts encoded static URL segments while raw-path
+  guards missed them. Actual HTTP exposed closed snapshot/history data without
+  a badge and recap data to an unadmitted badge. Shared security checks must use
+  the matched API route and decoded parameters before this phase closes.
 - **2026-09-13** — First personal use reserves a private source instead of
   creating canvases on every actor claim. Agents are actors too, and empty
   memory canvases must not multiply across login, retries or rename.
@@ -146,9 +205,11 @@ raising the entry ceiling. Journey 5 and inherited-recap.md define the scope.
 - **2026-09-13** — A shared card is disclosure, not authority. Desk consent
   binds its concrete destination and identity; copied properties cannot
   authorize a source read, and undo restores the same edge.
-- **2026-09-13** — Open: context pin --from remains an unfinished original
-  promise. Its explicit copy-versus-live act and both surfaces are the next
-  engineering contract after memory phase 5, with no external service selected.
+- **2026-09-13** — The unfinished pin-from-source promise is an explicit
+  current-piece copy from an ordinary inherited source at the same home.
+  It reuses native group copy in one undo, strips governing design roles and
+  records provenance. Personal publication and implicit legacy migration are
+  outside this act; phase 6 proves their refusals.
 - **2026-09-13** — FileDesk’s queue is per instance and FileStore has no
   cross-process fencing. Personal birth preserves the existing single-local-
   writer boundary; only CloudDesk claims cross-instance reservation safety.

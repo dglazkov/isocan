@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { ApiError } from "@isocan/api";
-import type { SheepPlace } from "./sheep.ts";
+import type { RcAgentRow, RoomRows, SheepPlace } from "@isocan/rc";
 
 /**
  * **The enrolment record's rc half** (agents-on-demand phase 2).
@@ -22,37 +22,9 @@ import type { SheepPlace } from "./sheep.ts";
  * caller stands, and an rc reads the rows for its own canvas and no others.
  */
 
-export interface RcAgentRow {
-  canvasId: string;
-  actorId: string;
-  /** The name at enrolment, for saying so without a registry round trip.
-   * The registry stays the authority on names. */
-  name: string;
-  /** How to start a session — the enrolling caller's harness, a flag, or
-   * null for "not yet said"; phase 3 reads it. */
-  harness: string | null;
-  /** Where the agent's sessions run. The agent verb takes no --dir: this is
-   * always where the enrolling caller already stood. */
-  cwd: string;
-  /** The ACP resume handle, once phase 3 mints one. Null until then. */
-  sessionId: string | null;
-  /** Private compare-and-restore token while enrolment is being published. */
-  preparationId?: string;
-  /** For the sheep harness, where `sessionId` lives: the kennel and the
-   * home it named at birth. Carried so a summons from any directory
-   * resumes the same sheep, and so a kennel re-pointed since is refused
-   * rather than answered with a second sheep. */
-  sheep?: SheepPlace;
-  /**
-   * For the sheep harness, the pass minted at this sheep's birth — its id and
-   * the canvas it was minted on, never its token. The desk answers its minter
-   * which badge redeemed it (`GET …/passes/:passId`), and that badge is the
-   * cell's, so withdrawal ends exactly it and `isocan badges` can name it.
-   * Belongs to the sheep in `sessionId`: dropped when the row's sheep
-   * changes without a birth.
-   */
-  cellPass?: { canvasId: string; passId: string };
-}
+/** The row type lives in the room module (docs/projects/room/design.md,
+ * `rows`); this file keeps the file-backed implementation of its verbs. */
+export type { RcAgentRow } from "@isocan/rc";
 
 export const rcAgentsFile = (home: string) => path.join(home, "rc-agents.json");
 
@@ -141,76 +113,9 @@ export async function withPreparedRcAgent<T>(home: string, row: RcAgentRow, publ
   }
 }
 
-/**
- * **The dispatch guards, as arithmetic** (phase 5). This function is the
- * whole decision — the ceiling, the cycle guard, the announce-once rule —
- * pulled out of the rc's loop so it can be tested as what it is: pure
- * bookkeeping over timestamps and a counter. The loop's job is only to
- * gather the inputs and obey the verdict. (The first version lived inline
- * and was "tested" by a four-process cascade that flaked on every loaded
- * CI box — an end-to-end pretending to be a unit test, as the first person
- * to watch it fail put it.)
- *
- * State is mutated in place the way the loop already owned it:
- * - `dispatch`: push `now` to turnTimes, set the chain (person word resets
- *   it), clear any hold.
- * - `hold-cycle`: no timer — only a person's word lifts it (the caller
- *   dispatches again when `hasPersonWord` makes the verdict change).
- * - `hold-ceiling`: `retryAfter` says when the sliding window frees.
- * - `announce` is true exactly once per hold: the refusal is said where
- *   people look, not once per lap.
- */
-export interface GuardState {
-  /** Turn-start times inside the sliding hour. */
-  turnTimes: number[];
-  /** Consecutive turns whose batch held no person's word. */
-  agentChain: number;
-  /** The limit currently holding this agent's batch, if any. */
-  held: "ceiling" | "cycle" | null;
-}
-
-export interface GuardLimits {
-  turnsPerHour: number;
-  agentChain: number;
-}
-
-export type GuardVerdict =
-  | { verdict: "dispatch" }
-  | { verdict: "hold-cycle"; announce: boolean }
-  | { verdict: "hold-ceiling"; announce: boolean; retryAfter: number; freesAt: number };
-
-export function gateTurn(
-  state: GuardState,
-  hasPersonWord: boolean,
-  limits: GuardLimits,
-  now: number,
-): GuardVerdict {
-  // The cycle guard: A waking B waking A ends here. A person's word —
-  // anywhere in the batch — resets the chain and lifts the hold.
-  if (!hasPersonWord && state.agentChain >= limits.agentChain) {
-    const announce = state.held !== "cycle";
-    state.held = "cycle";
-    return { verdict: "hold-cycle", announce };
-  }
-  // The ceiling: turns per agent per hour, a sliding window.
-  const hourAgo = now - 3_600_000;
-  state.turnTimes = state.turnTimes.filter((t) => t > hourAgo);
-  if (state.turnTimes.length >= limits.turnsPerHour) {
-    const freesAt = state.turnTimes[0]! + 3_600_000;
-    const announce = state.held !== "ceiling";
-    state.held = "ceiling";
-    return {
-      verdict: "hold-ceiling",
-      announce,
-      freesAt,
-      retryAfter: Math.min(freesAt, now + 60_000),
-    };
-  }
-  state.held = null;
-  state.turnTimes.push(now);
-  state.agentChain = hasPersonWord ? 0 : state.agentChain + 1;
-  return { verdict: "dispatch" };
-}
+/** The dispatch guards live in the room module now; re-exported so every
+ * import of them from here keeps working (`guards.test.ts` among them). */
+export { gateTurn, type GuardLimits, type GuardState, type GuardVerdict } from "@isocan/rc";
 
 /**
  * The rc's reconciliation write (phase 2.5, decided 2026-08-30): an agent
@@ -282,4 +187,16 @@ export async function removeRcAgent(
     const index = rows.findIndex((r) => r.canvasId === canvasId && r.actorId === actorId);
     if (index >= 0) rows.splice(index, 1);
   });
+}
+
+/** The rows as the room reads them (docs/projects/room/design.md, `rows`):
+ * this file's verbs over `~/.isocan/rc-agents.json`, bound to one home. */
+export function fileRcRows(home: string): RoomRows {
+  return {
+    list: () => readRcAgents(home),
+    adopt: (row) => adoptRcAgent(home, row),
+    remove: (canvasId, actorId) => removeRcAgent(home, canvasId, actorId),
+    setSessionId: (canvasId, actorId, sessionId, place, cellPass) =>
+      setRcSessionId(home, canvasId, actorId, sessionId, place, cellPass),
+  };
 }

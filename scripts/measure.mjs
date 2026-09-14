@@ -34,8 +34,44 @@ import { CEILING } from "./bundle-ceiling.mjs";
 import { operationMembers } from "./isomorphism.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
+/**
+ * **The buffer is large because a full answer is not a broken instrument.**
+ *
+ * `execFileSync` defaults to one megabyte of stdout and KILLS the child past
+ * it, handing back what fitted. `lint-violations` asks eslint for JSON, and
+ * when the walk reached `.claude/worktrees/` that report was 6,056 files —
+ * far past a megabyte. The metric got valid JSON with its end cut off, threw
+ * parsing it, and `take()` in `canvas-board.mjs` read the crash the only way
+ * it can: **"instrument would not run"**, printed on the board beside
+ * qa-tester for months. The instrument ran perfectly; the answer did not fit.
+ *
+ * The eslint walk is fixed in `eslint.config.js`, which is the real cause. The
+ * buffer is raised anyway, because "the output was too big" and "the command
+ * is broken" are different sentences and this one said the wrong sentence for
+ * a long time without anybody being able to tell.
+ */
+/**
+ * The files a feature cannot avoid. Named rather than derived: "big file" is
+ * not the property that matters — "every change has to go through here" is,
+ * and only a person knows which those are. A file leaves this list by being
+ * split, never by being excused.
+ */
+const CROWDED = [
+  "packages/cli/src/main.ts",
+  "packages/web/src/styles.css",
+  "packages/cli/src/agent-guide.md",
+];
+
+const lines = (file) => readFileSync(path.join(repo, file), "utf8").split("\n").length;
+
 const run = (cmd, args, opts = {}) =>
-  execFileSync(cmd, args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+  execFileSync(cmd, args, {
+    cwd: repo,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 64 * 1024 * 1024,
+    ...opts,
+  });
 
 /**
  * Each metric: what it counts, how, and — for the selftest — a mutation that
@@ -357,6 +393,45 @@ const METRICS = {
       apply: (t) => `${t}\nexport const SELFTEST_BARE_EXPORT = 2;\n`,
     },
   },
+  /**
+   * **The files every feature has to edit, measured because they are what
+   * stops the work scaling.**
+   *
+   * Counted on 13 September: `packages/cli/src/main.ts` is 14,700 lines and
+   * was touched 120 times in the preceding fortnight; `styles.css` 6,754 lines
+   * and 108 touches; `agent-guide.md` 2,601 and 81. They are the top of the
+   * churn list after the generated docs, and for one reason — a new verb, a
+   * new component, a new anything lands in the same file as everybody else's
+   * new thing, so parallel work conflicts by construction rather than by
+   * accident.
+   *
+   * A count of lines is a crude stand-in for "how much has to go through one
+   * door", and it is the right crudeness: it cannot be argued with, it moves
+   * the moment somebody adds to a crowded file, and it goes DOWN when the
+   * thing that actually fixes it happens — a family of commands moving to its
+   * own module, a component taking its own stylesheet.
+   *
+   * A persona goal rather than a gate, deliberately. `ratchet.mjs` says a
+   * missed bound is news and not a build break, and a hard gate on this would
+   * be turned off within a week by the first person who needed one more line
+   * at midnight.
+   */
+  "registry-lines": {
+    what: "lines in the files every feature must edit — the single doors work queues at",
+    take() {
+      return CROWDED.reduce((total, file) => total + lines(file), 0);
+    },
+    names() {
+      return CROWDED.map((file) => `${file}  ${lines(file)}`).sort(
+        (a, b) => Number(b.split(/\s+/).pop()) - Number(a.split(/\s+/).pop()),
+      );
+    },
+    breakIt: {
+      file: "packages/cli/src/agent-guide.md",
+      apply: (t) => `${t}\n<!-- selftest: one more line through the one door -->\n`,
+    },
+  },
+
   "lint-violations": {
     what: "eslint errors — rules-of-hooks and exhaustive-deps, both at error",
     take() {

@@ -1,7 +1,8 @@
 import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, formatBadgeToken } from "@isocan/core";
 import { adoptRcAgent, type RcAgentRow } from "../src/rc.ts";
+import { agentSessionOf, machineAgentKey } from "../src/agent-key.ts";
 import { describe, expect, it, vi } from "vitest";
-import { promises as fs, readFileSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -12,6 +13,7 @@ import {
   collect,
   dimitri,
   daemon,
+  holdOnThisMachine,
   home,
   isocan,
   nico,
@@ -361,7 +363,9 @@ describe("the web doors' mechanics (phase 2.5)", () => {
     await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
 
     // The dialog's exact record write: agent.enroll over HTTP. No CLI verb
-    // ran on this machine, so no rc half exists — the rc supplies it.
+    // ran on this machine, so no rc half exists — the rc supplies it. The
+    // actor is this machine's, as the ask makes it: an orphan is inert.
+    await holdOnThisMachine({ id: "usr_sian", name: "Sian" });
     await post("/api/ops", {
       canvasId: "prj_1",
       actor: dimitri,
@@ -467,7 +471,9 @@ describe("the web doors' mechanics (phase 2.5)", () => {
 
   it("an rc that starts late reconciles the enrolments it missed", async () => {
     // Enrolled from the web while NO rc ran — the record works with nothing
-    // running; the rc supplies where and how at its next start.
+    // running; the rc supplies where and how at its next start. The actor is
+    // this machine's, as the ask makes it: an orphan is inert.
+    await holdOnThisMachine({ id: "usr_percy", name: "Percy" });
     await post("/api/ops", {
       canvasId: "prj_1",
       actor: dimitri,
@@ -526,8 +532,8 @@ describe("the vocabulary divide, enforced", () => {
  * phase 1). The enrolment key used to be `agent:<canvasId>:<name>`, so Percy
  * enrolled on a second canvas from the same machine was a second session key
  * on the same badge asking for a worn name — refused by the desk, the gate
- * #89 hit. The key is the name now: the same claim on any canvas resumes the
- * one Percy.
+ * #89 hit. The key is derived from the name now, by this machine's agent
+ * secret (room phase 3.5): the same claim on any canvas resumes the one Percy.
  */
 describe("one agent, one name, one machine, many canvases", () => {
   it("enrolling a name this machine answers for, on a second canvas, is the same actor", async () => {
@@ -559,12 +565,13 @@ describe("one agent, one name, one machine, many canvases", () => {
     // A CLI run the way a summons on prj_2 runs it — the injected environment,
     // nothing else, in an unbound directory — speaks as Percy AND acts on
     // prj_2: `ISOCAN_CANVAS` is read like `--canvas`.
+    const percySession = agentSessionOf(await machineAgentKey(home, "Percy"));
     const inside = await collect(
-      spawnCli(["--json", "whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+      spawnCli(["--json", "whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: percySession, ISOCAN_CANVAS: "prj_2" }),
     );
     expect(JSON.parse(inside.stdout).id).toBe(a.id);
     const typed = await collect(
-      spawnCli(["text", "standing", "here"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+      spawnCli(["text", "standing", "here"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: percySession, ISOCAN_CANVAS: "prj_2" }),
     );
     expect(typed.code).toBe(0);
     const itemsOf = async (canvasId: string) => {
@@ -578,12 +585,12 @@ describe("one agent, one name, one machine, many canvases", () => {
     // The containment still holds for the agent's spelling: an explicit
     // pointer is refused, but the environment a summons runs in is not one.
     const pointed = await collect(
-      spawnCli(["--canvas", "prj_1", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+      spawnCli(["--canvas", "prj_1", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: percySession, ISOCAN_CANVAS: "prj_2" }),
     );
     expect(pointed.code).toBe(1);
     expect(pointed.stderr).toContain("beside itself");
     const beside = await collect(
-      spawnCli(["--json", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy", ISOCAN_CANVAS: "prj_2" }),
+      spawnCli(["--json", "agent", "add", "Sian"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: percySession, ISOCAN_CANVAS: "prj_2" }),
     );
     expect(beside.code).toBe(0);
     expect(JSON.parse(beside.stdout).canvasId).toBe("prj_2");
@@ -749,64 +756,85 @@ describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
 });
 
 /**
- * **An agent is taken up the same way however the rc noticed it.**
- *
- * This guards a mistake I made twice in one evening while chasing the flake
- * above. Taking up an agent is TWO things — `adoptRcAgent` records where and
- * how it runs, `claimAgent` holds its cursor so dispatch reaches it — and the
- * roster reconcile did only the second. An agent picked up that way had a
- * cursor and no record, so the test above went on timing out with the "fix"
- * in place, and it was right to: the narration was missing because the RECORD
- * was, not the other way round.
- *
- * Source-shape, deliberately. The path only runs when an enrolment lands
- * inside the rc's own startup, and that window cannot be forced from outside
- * without controlling internal timing — so what is asserted is that the two
- * paths agree, which is the property that was broken.
+ * **Two rcs answer one canvas** (room phase 3; journey 2). Two machines on one
+ * daemon, each with a badge of its own: this home is Nico's, `machine2` is
+ * Wren's. Each adds an agent, each runs `isocan rc`, and each roster names
+ * both. The cursor and hold routes require the actor, and the room parks
+ * before it does anything else for an agent, so each rc says the other's
+ * agent once and leaves it alone. Without the route check the second rc parks
+ * Percy and the two trade his cursor; without the room's rule it reads the
+ * refusal as a cursor it could not hold, every lap.
  */
-describe("both ways of taking up an agent do the same two things", () => {
-  const main = readFileSync(fileURLToPath(new URL("../src/main.ts", import.meta.url)), "utf8");
+describe("two rcs, one canvas (room phase 3)", () => {
+  it("each answers its own agent, says the other's once, and neither takes the other's cursor", async () => {
+    const machine2 = path.join(home, "machine2");
+    await fs.mkdir(machine2);
+    await fs.writeFile(
+      path.join(machine2, "identity.json"),
+      JSON.stringify({ id: "usr_wren", name: "Wren", createdAt: new Date().toISOString() }),
+    );
+    await fs.copyFile(path.join(home, "config.json"), path.join(machine2, "config.json"));
+    const wren = { ISOCAN_HOME: machine2 };
+    expect((await isocan("rc", "add", "Percy", ...TEAM)).code).toBe(0);
+    expect((await collect(spawnCli(["--canvas", "prj_1", "rc", "add", "Wendy", ...TEAM], wren))).code).toBe(0);
+    const ids = Object.fromEntries(Object.values(await snapshotAgents()).map((a) => [a.actor.name, a.actor.id]));
+    const percy = ids["Percy"]!;
+    const wendy = ids["Wendy"]!;
 
-  it("adopts AND claims, on the enrol entry and on the roster reconcile alike", () => {
-    const adopts = main.match(/adoptRcAgent\(ctx\.home, \{/g) ?? [];
-    const claims = main.match(/await claimAgent\(/g) ?? [];
-    // Two adoption sites: the enrol entry and the reconcile. If a third
-    // appears, it needs its own claim beside it — which is the point.
-    expect(adopts.length, "every take-up adopts").toBeGreaterThanOrEqual(2);
-    expect(claims.length, "and every one of them claims too").toBeGreaterThanOrEqual(adopts.length);
-  });
+    const started = (args: string[], env: Record<string, string> = {}) => {
+      const child = spawnCli(args, env);
+      const seen = { out: "" };
+      child.stdout!.setEncoding("utf8");
+      child.stdout!.on("data", (chunk) => (seen.out += chunk));
+      child.stderr!.setEncoding("utf8");
+      child.stderr!.on("data", (chunk) => (seen.out += chunk));
+      return { child, seen, done: new Promise<void>((resolve) => child.on("close", () => resolve())) };
+    };
+    const one = started(["rc"]);
+    await until(answeringFor, (a) => a.includes(percy), "the first rc to hold Percy");
+    const two = started(["--canvas", "prj_1", "rc"], wren);
+    // The second rc's hold names Wendy only after its start has said what it
+    // has to say, so this is the end of its start.
+    await until(answeringFor, (a) => a.includes(percy) && a.includes(wendy), "both agents answerable");
 
-  it("says the same sentence either way, so a reader cannot tell them apart", () => {
-    // The line is how a person knows an agent was taken up at all. Two
-    // wordings would make the rc's narration depend on which path noticed.
-    const said = main.match(/· where and how supplied — \$\{rcCwd\}/g) ?? [];
-    expect(said.length).toBeGreaterThanOrEqual(2);
-  });
-});
+    const summon = (threadId: string, body: string) =>
+      post("/api/ops", {
+        canvasId: "prj_1",
+        actor: dimitri,
+        op: { type: "thread.create", threadId, x: 0, y: 0, anchorItemId: null, comment: { id: `cmt_${threadId}`, body } },
+      });
+    // Both outputs, so a wait that times out shows what each machine said.
+    const both = async () => `=== first\n${one.seen.out}\n=== second\n${two.seen.out}`;
+    const second = (o: string) => o.slice(o.indexOf("=== second"));
+    await summon("th_percy", "@Percy the spacing looks wrong");
+    await until(both, (o) => o.slice(0, o.indexOf("=== second")).includes("Percy · turn ended"), "the first machine to answer Percy");
+    await summon("th_wendy", "@Wendy and the heading");
+    await until(both, (o) => second(o).includes("Wendy · turn ended"), "the second machine to answer Wendy");
+    // Long enough for a lap and a hold on each side after both turns.
+    await new Promise((r) => setTimeout(r, 3_000));
 
-/**
- * **A withdrawal inside the rc's startup window** (sheep-harness phase 2).
- * The same window as above, from the other side, and source-shape for the
- * same reason: it cannot be forced from outside.
- */
-describe("a withdrawal is reaped however the rc noticed it", () => {
-  const main = readFileSync(fileURLToPath(new URL("../src/main.ts", import.meta.url)), "utf8");
+    const threads = ((await (await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })).json()) as {
+      canvas: { threads: Record<string, { comments: { author: { name: string } }[] }> };
+    }).canvas.threads;
+    for (const [out, mine, theirs] of [
+      [one.seen.out, "Percy", "Wendy"],
+      [two.seen.out, "Wendy", "Percy"],
+    ] as const) {
+      expect(out).toContain(`${theirs} is not held by this machine — a pass from whoever holds ${theirs} hands it over`);
+      expect(out.split(`${theirs} is not held by this machine`).length - 1).toBe(1);
+      expect(out).not.toContain(`${theirs} ·`);
+      expect(out).not.toContain(`${mine} is not held by this machine`);
+      expect(out).not.toContain("another park adopted");
+      expect(out).not.toContain("could not hold");
+      expect(out).not.toContain("turn FAILED");
+    }
+    for (const threadId of ["th_percy", "th_wendy"]) {
+      expect(threads[threadId]!.comments.map((c) => c.author.name)).not.toContain("isocan");
+    }
+    expect(await answeringFor()).toEqual(expect.arrayContaining([percy, wendy]));
 
-  it("reaps and takes up once more after the start tip, where neither branch can see it", () => {
-    // Both halves of the same window (sheep-harness phase 2): an agent
-    // withdrawn between `opening` and `startTip` kept its row, and on the
-    // sheep harness its sheep — found by the full file under load; and one
-    // enrolled there waited for the first lap that read a roster, the end of
-    // a thirty-second poll on a quiet canvas — "a web add gets its rc half"
-    // failed on CI twice in three runs on it.
-    const tip = main.indexOf("const startTip = ");
-    const reaped = main.indexOf('await reap(settled, "as this rc started")');
-    const takenUp = main.indexOf("await takeUp(settled)");
-    const loop = main.indexOf("for (;;)", tip);
-    expect(tip).toBeGreaterThan(-1);
-    expect(reaped).toBeGreaterThan(tip);
-    expect(main.slice(tip, reaped)).toContain("const settled = await rosterOf()");
-    expect(takenUp).toBeGreaterThan(reaped);
-    expect(takenUp).toBeLessThan(loop);
-  });
+    one.child.kill("SIGINT");
+    two.child.kill("SIGINT");
+    await Promise.all([one.done, two.done]);
+  }, 60_000);
 });

@@ -1,0 +1,18 @@
+{
+  "name": "@isocan/rc",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.src.json"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1"
+  }
+}

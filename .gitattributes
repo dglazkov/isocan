@@ -1,0 +1,7 @@
+# Generated files are regenerated at a conflict, never hand-merged — see
+# scripts/mergegen.mjs for why and scripts/prepare.mjs for where the driver
+# is registered. A clone that has not run `npm install` falls back to the
+# ordinary merge, which is the behaviour these files had before.
+docs/ROADMAP.md merge=isocan-generated
+docs/projects/README.md merge=isocan-generated
+docs/reviews/README.md merge=isocan-generated

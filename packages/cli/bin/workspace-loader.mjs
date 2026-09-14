@@ -22,6 +22,7 @@ const sources = new Map([
   ["@isocan/api", new URL("../../api/src/index.ts", import.meta.url).href],
   ["@isocan/core", new URL("../../core/src/index.ts", import.meta.url).href],
   ["@isocan/mcp", new URL("../../mcp/src/index.ts", import.meta.url).href],
+  ["@isocan/rc", new URL("../../rc/src/index.ts", import.meta.url).href],
   ["@isocan/server", new URL("../../server/src/index.ts", import.meta.url).href],
 ]);
 

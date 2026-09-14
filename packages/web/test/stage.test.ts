@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fitInto, revealDelta, worldToScreen } from "../src/lib/viewport.ts";
 import { railSpan,
   MARKS_GUTTER,
@@ -263,5 +263,29 @@ describe("revealing on a narrow stage", () => {
     const item = { left: 100, top: 200, right: 700, bottom: 400 };
     const { dx } = revealDelta(item, tight, 76);
     expect(item.left + dx).toBe(tight.x + tight.width / 2 - 300);
+  });
+});
+
+
+describe("a module's native canvas slot", () => {
+  it("frames and bounds the same measured stage, then returns to normal chrome", () => {
+    const rect = { x: 240, y: 140, width: 650, height: 660 };
+    const element = { getBoundingClientRect: () => rect };
+    const query = vi.fn((): typeof element | null => element);
+    vi.stubGlobal("document", { querySelector: query });
+    vi.stubGlobal("window", { innerWidth: 1230, innerHeight: 800 });
+    try {
+      expect(stageRect()).toEqual(rect);
+      expect(stageInsets()).toEqual({ left: 240, top: 140, right: 340, bottom: 0 });
+      const at = onScreen({ minX: 0, minY: 0, maxX: 320, maxY: 210 }, stageRect());
+      expect(at.left).toBeGreaterThanOrEqual(240);
+      expect(at.right).toBeLessThanOrEqual(890);
+      // Collapse a sidebar, then unmount the workspace. Neither leaves a
+      // camera calculation stuck on the previous module's geometry.
+      rect.x = 0; rect.width = 890;
+      expect(stageInsets().left).toBe(0);
+      query.mockReturnValue(null);
+      expect(stageRect().y).toBe(TOPBAR_HEIGHT);
+    } finally { vi.unstubAllGlobals(); }
   });
 });

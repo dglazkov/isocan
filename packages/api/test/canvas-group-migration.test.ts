@@ -5,6 +5,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { applyOperation, invertOperation, resolveCanvasGroupMigration, type CanvasState, type LogEntry, type Operation } from "@isocan/core";
 import { CanvasGroups } from "../src/canvas-groups.ts";
+import { fileBadgeStore } from "@isocan/server";
 import { DaemonRoutes } from "../src/routes.ts";
 import { exportCanvases, importExport } from "../src/export.ts";
 import { groupFixture } from "./group-fixture.ts";
@@ -51,7 +52,7 @@ it("refuses an explicitly stale plan before sending, and propagates a writer con
 it("exposes migration as a protected GET and forwards its original mode with the revision-bound public intent", async () => {
   const f = groupFixture(false);
   const preview = await f.client.groupMigrationPreview();
-  const client = new DaemonRoutes("https://acme.invalid", await directory());
+  const client = new DaemonRoutes("https://acme.invalid", fileBadgeStore(await directory(), "https://acme.invalid"));
   const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(preview)).mockResolvedValueOnce(Response.json({ seq: 1, envelope: { id: "op_migration" } }));
   vi.stubGlobal("fetch", fetcher);
   expect(await client.groupMigrationPreview(f.state.project.id)).toEqual(preview);

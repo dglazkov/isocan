@@ -5,7 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Agent, fetch as undiciFetch } from "undici";
 import { isLoopbackBase } from "@isocan/core";
-import { paths } from "@isocan/server";
+import type { SourceRequestContext } from "@isocan/core";
+import { fileBadgeStore, paths } from "@isocan/server";
 import { DaemonRoutes, platformFetch } from "./routes.ts";
 
 /**
@@ -126,6 +127,15 @@ function boundedFetch(base: string): typeof fetch {
  * and nothing in `DaemonRoutes` may.
  */
 export class DaemonClient extends DaemonRoutes {
+  /** The client home directory: where this machine's badge, daemon log and
+   * managed builds live. The route surface takes the badge store alone. */
+  readonly home: string;
+
+  constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext) {
+    super(base, fileBadgeStore(home, base), lifetime, sourceContext);
+    this.home = home;
+  }
+
   /**
    * The Node half's one addition to how a request is MADE, rather than to
    * what is in it: on this machine, a bounded connect and a bounded retry;

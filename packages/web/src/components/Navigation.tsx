@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation, useMatch } from "react-router-dom";
-import { CANVAS_ROUTE, mergeSeen, newSince, type Actor, type SeenMarks } from "@isocan/core";
+import { CANVAS_ROUTE, MODULE_PAGE_ROUTE, mergeSeen, newSince, type Actor, type SeenMarks } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { fetchInbox } from "../lib/api.ts";
@@ -81,10 +81,22 @@ export function Navigation({ actor }: { actor: Actor }) {
     window.addEventListener("keydown", escape, true);
     return () => window.removeEventListener("keydown", escape, true);
   }, [open]);
+  /**
+   * **A module's workspace owns the screen, so the app's own floating things
+   * stay off it.** The Inbox button pins itself to the bottom-right corner of
+   * whatever is there, which on a canvas is the canvas and inside a workspace
+   * is somebody else's layout — it sat over the Anatomy inspector reading
+   * "Inbox · 696 new · unavailable", a sentence about a different room.
+   *
+   * The workspace's own chrome is the way to everything while you are in it.
+   * Chat and Agents have buttons in its header for exactly this reason; the
+   * Inbox has none, which is the argument for hiding it rather than moving it.
+   */
+  const onModulePage = Boolean(useMatch(MODULE_PAGE_ROUTE));
   const mine = state.actorId === actor.id ? state.data : null;
   const count = mine ? newSince(mine.entries, mine.marks).length : 0;
   return <>
-    {pathname !== "/" && <button className={`btn navigation-inbox${canvasId ? " on-canvas" : ""}`} onClick={() => setOpen((was) => !was)} aria-expanded={open} aria-label={`Inbox, ${count} new`}>
+    {pathname !== "/" && !onModulePage && <button className={`btn navigation-inbox${canvasId ? " on-canvas" : ""}`} onClick={() => setOpen((was) => !was)} aria-expanded={open} aria-label={`Inbox, ${count} new`}>
       Inbox{count > 0 ? ` · ${count} new` : ""}{state.error || mine?.unavailable.length ? " · unavailable" : ""}
     </button>}
     {open && <div className={`navigation-inbox-panel${canvasId ? " on-canvas" : ""}`} role="dialog" aria-label="Your inbox"><button className="btn quiet inbox-close" onClick={() => setOpen(false)}>Close inbox</button><Inbox actor={actor} /></div>}

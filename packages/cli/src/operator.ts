@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { openInBrowser } from "./browser.ts";
 import { randomBytes } from "node:crypto";
-import { spawn } from "node:child_process";
 import { AddressInfo } from "node:net";
 import { provePath, type OperatorHandoff } from "@isocan/core";
 
@@ -175,22 +175,6 @@ function timeout(ms: number, fail: (why: Error) => void): Promise<never> {
     // The wait must not be what keeps this process alive once the proof lands.
     timer.unref?.();
   });
-}
-
-/**
- * Open an address in whatever the machine calls a browser.
- *
- * Exported since operator phase 2, for `look`: the proof and the look are two
- * different pages — the first is where a person proves, the second is the
- * canvas itself — and a second spelling of "how do you open a browser here"
- * would be a second thing to get wrong on a machine with no session. The
- * address is always PRINTED as well, by both callers, for that machine.
- */
-export function openInBrowser(url: string): void {
-  spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
-    stdio: "ignore",
-    detached: true,
-  }).unref();
 }
 
 /** The tab's last page: plain text, no styling, nothing fetched. */

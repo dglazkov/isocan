@@ -7,6 +7,7 @@ import { SOURCE_POLICY_HEADER, canvasItemOf, parseSourcePolicyHeader, type Actor
 import { DaemonClient } from "../src/client.ts";
 import { Home } from "../src/connect.ts";
 import type { Ctx } from "../src/ctx.ts";
+import { linkedCanvasesOf } from "../src/context-summary.ts";
 
 /** A wire recorder tests client policy plumbing; authoritative admission is proved by MCP's real daemon suite. */
 async function fixture() {
@@ -16,7 +17,8 @@ async function fixture() {
   const contents: CanvasContents = { items: {}, threads: {}, trash: [] };
   const calls: Array<{ route: string; method: string; context: Omit<SourceRequestContext, "signal"> | null; body: unknown }> = [];
   let held = 0;
-  let stall = false;
+  let stall: string | null = null;
+  let recoverRecap = false;
   const server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
@@ -25,16 +27,24 @@ async function fixture() {
     const policy = req.headers[SOURCE_POLICY_HEADER.toLowerCase()];
     calls.push({ route, method: req.method!, context: typeof policy === "string" ? parseSourcePolicyHeader(policy) : null,
       body: req.headers["content-type"] === "application/json" && raw ? JSON.parse(raw) : raw });
-    if (stall && route === "/api/source-access") {
+    if (stall === route) {
       held++;
       res.on("close", () => held--);
       return;
+    }
+    if (recoverRecap && route.endsWith("/context/recap")) {
+      recoverRecap = false;
+      res.writeHead(401, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "badge required", code: "no-badge" })); return;
     }
     let value: unknown;
     if (route === "/api/homes") value = { birth: null, canvases: { [project.id]: null }, links: [] };
     else if (route === "/api/projects") value = [project];
     else if (route === "/api/source-access") value = { kind: "ordinary", capability: "edit" };
     else if (route.startsWith("/api/source-classification?")) value = { kind: "ordinary" };
+    else if (route === "/api/door") value = { badgeId: "bdg_acme", secret: "synthetic-secret" };
+    else if (route.endsWith("/context/recap")) value = { canvasId: route.split("/")[3], home: base, title: "Acme source", revision: 1,
+      head: { fromSeq: 1, toSeq: 1, fromTs: "2026-09-13T10:00:00Z", toTs: "2026-09-13T10:00:00Z", count: 1, comments: 0, actors: [], items: [],
+        omitted: { earlierAvailableOps: 0, actors: 0, items: 0, hiddenItems: 0, clippedLabels: 0 } } };
     else if (route.endsWith("/canvas")) value = { project, canvas: contents, lastSeq: 0 };
     else if (route.endsWith("/blobs") && req.method === "POST") value = { blobHash: "acme_hash", mimeType: "text/plain", filename: "Acme.txt", size: raw.length };
     else if (route.includes("/blobs/")) { res.writeHead(200, { "Content-Type": "text/plain" }); res.end("Acme bytes"); return; }
@@ -46,7 +56,7 @@ async function fixture() {
   const base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   const ctx = { client: new DaemonClient(base, directory), actor: owner, home: directory, binding: null, birthHome: null,
     homeOf: async () => null } as unknown as Ctx;
-  return { project, contents, calls, base, ctx, directory, home: new Home(ctx), held: () => held, stall: () => { stall = true; }, close: async () => {
+  return { project, contents, calls, base, ctx, directory, home: new Home(ctx), held: () => held, stall: (route = "/api/source-access") => { stall = route; }, recoverRecap: () => { recoverRecap = true; }, close: async () => {
     server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve()));
     await fs.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } };
@@ -115,17 +125,45 @@ it("cancels source preflight before it can issue a resolving snapshot", async ()
   } finally { await f.close(); }
 });
 
-it("binds the Node Context adapter's actual inherited snapshot to exclusion and the classified authority", async () => {
+it("binds the Node Context adapter's inherited snapshot and recovered recap to the classified authority", async () => {
   const f = await fixture();
   try {
     f.contents.items.itm_link = { id: "itm_link", title: "Acme source", x: 0, y: 0,
       properties: { ...canvasItemOf(f.base, "prj_source").properties, memory: "inherit" }, versions: [] } as unknown as Item;
     const canvas = await f.home.withSourcePolicy({ mode: "direct", actorId: f.ctx.actor.id, intent: "read" }).canvas(f.project.id);
-    await canvas.contextSummary();
+    await linkedCanvasesOf(canvas.ctx, canvas.id, { canvas: f.contents });
+    expect(f.calls.some((call) => call.route.endsWith("/context/recap"))).toBe(false);
+    let reclaimed = 0;
+    canvas.ctx.reclaimOn = (client) => { client.reclaimWith(async () => { reclaimed++; }); };
+    f.recoverRecap();
+    const layers = await canvas.contextSummary();
     const source = f.calls.find((call) => call.route === "/api/projects/prj_source/canvas");
     expect(source?.context).toEqual({ policy: { mode: "exclude" }, expectedHome: f.base });
     expect(f.calls.findIndex((call) => call.route.startsWith("/api/source-classification?"))).toBeLessThan(f.calls.indexOf(source!));
     expect(f.calls.filter((call) => call.route === "/api/projects/prj_acme/canvas").every((call) => call.context?.policy.mode === "direct")).toBe(true);
     expect(f.calls.some((call) => call.route.includes("/personal/read"))).toBe(false);
+    expect(reclaimed).toBe(1);
+    const heads = f.calls.filter((call) => call.route.endsWith("/context/recap"));
+    expect(heads).toHaveLength(2);
+    expect(heads.every((call) => call.context?.policy.mode === "exclude" && call.context.expectedHome === f.base && call.method === "GET")).toBe(true);
+    expect(layers[1]?.pieces.find((piece) => piece.name === "Recent work")?.recap).toMatchObject({ canvasId: "prj_source", home: f.base, head: { count: 1 } });
+  } finally { await f.close(); }
+});
+
+it("cancels a held inherited recap through the shared Context adapter without leaving a socket open", async () => {
+  const f = await fixture();
+  try {
+    f.contents.items.itm_link = { id: "itm_link", title: "Acme source", x: 0, y: 0,
+      properties: { ...canvasItemOf(f.base, "prj_source").properties, memory: "inherit" }, versions: [] } as unknown as Item;
+    const controller = new AbortController();
+    const canvas = await f.home.withSourcePolicy({ mode: "exclude" }, controller.signal).canvas(f.project.id);
+    f.stall("/api/projects/prj_source/context/recap");
+    const pending = canvas.contextSummary();
+    const refused = expect(pending).rejects.toThrow("Acme closed Context");
+    await expect.poll(f.held).toBe(1);
+    controller.abort(new Error("Acme closed Context"));
+    await refused;
+    await expect.poll(f.held).toBe(0);
+    expect(f.calls.filter((call) => call.route.endsWith("/context/recap"))).toHaveLength(1);
   } finally { await f.close(); }
 });

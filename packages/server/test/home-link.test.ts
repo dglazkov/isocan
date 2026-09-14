@@ -841,6 +841,9 @@ describe("the rc's liveness and the web's ask, carried across the link", () => {
     const sian = { id: "agt_sian", name: "Sian" };
     await A.badge.speakAs(sian);
     await op(A, priya, { type: "agent.enroll", agent: sian });
+    // A hold names only actors its badge holds (room phase 3, the claim
+    // rule): A holds this one, and nobody enrolled it.
+    await A.badge.speakAs({ id: "agt_nobody", name: "Nobody" });
 
     const hold = holdAtA([sian.id, "agt_nobody"], 12_000);
     const at = await until(

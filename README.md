@@ -125,11 +125,37 @@ distribute`, `isocan mv --by`, `isocan set --title` (which renames the file
 too), `isocan add --drawing`, `isocan ls --kind`, `isocan identity --color`.
 That parity is a house rule with a test behind it: see AGENTS.md.
 
+- **Anatomy project exploration**: Blueprint puts goal, structure, data and rule
+  concepts on native canvas cards, with a searchable hierarchy and resizable inspector.
+  Double-click a concept or follow a connection to explore its neighborhood:
+  the focused card expands, neighbors move into compact cards, and distant
+  concepts become markers. This temporary view preserves saved canvas positions,
+  native selection, anchored discussion and item-focused collaboration. Browser
+  Back retraces exploration; the project shortcut resumes it. Existing concept
+  edits use `anatomy draft` and a conditional save to preserve concurrent changes.
+  Broken files have item-scoped diagnostics and version recovery; healthy concepts
+  stay readable. `anatomy validate` and `recover` provide the same repair path.
+  Overview, Open Decisions and Coverage show the same graph through different
+  lenses. Import/export Anatomy JSON, discuss concepts, attach source evidence,
+  propose HTML mocks, and save or restore checkpoints. Associate a repository
+  and ask an agent to analyze it through `/anatomy` in Chat. Requests record their
+  target, Chat delivery, executor reports, reviewed revision and result; inspect
+  them with `anatomy runs` or the workspace. Retries and cancellation preserve
+  the original receipt. Attached analyses
+  expose **View Anatomy** in the project menu and right rail. Open **Anatomy** from
+  the command palette, or `isocan open --page anatomy`; the `isocan anatomy`
+  command family provides the same reads and edits. This is a removable module
+  using the proposed workspace API. [Design and phased plan](docs/projects/anatomy/phases.md).
 - **Canvas**: infinite pan/zoom surface with a minimap; items are files —
   markdown, images, video, and HTML rendered live in sandboxed iframes
   (`allow-scripts` without `allow-same-origin`). "Double-click to interact"
   hangs under the item while you point at it, rather than lying across the
   bottom of the document it is describing.
+- **Inherited Recent work**: Context shows recent activity beside a linked
+  canvas's design and pins, with its source and covered range. CLI
+  `isocan context` and MCP summaries show the same bounded reading and say
+  what was omitted. Missing history leaves readable design and pins in place.
+  Personal history does not enter this inherited reading.
 - **Personal memory**: **Your canvas** in Context creates one private canvas
   for your identity at this home. Pin a preference there, link it into a
   project, and explicitly allow the agents who may read it. The project shows
@@ -900,7 +926,12 @@ npm run dev:replica # a scratch machine on :4442 with its OWN isocan home —
                     # with `-- setup <address>#<pass>` and exercise that path
                     # from zero
 npm test            # vitest: reducer round-trips, random-walk undo property
-                    # tests, storage crash recovery, daemon HTTP/WS integration
+                    # tests, storage crash recovery, daemon HTTP/WS integration.
+                    # The fast lane — it leaves out the files that spawn the
+                    # CLI per case and says so at the end
+npm run test:deep   # those too: ~4 minutes, and what every flake has lived in
+npm run test:ci     # the gate CI applies: deep, plus the emulator and the
+                    # bundle budget, with no suite allowed to skip itself
 npm run typecheck   # strict tsc across all packages
 npm run release     # build, commit onto the `release` branch, push it
 ```

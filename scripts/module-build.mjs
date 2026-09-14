@@ -86,7 +86,8 @@ const hasCli = existsSync(path.join(src, "src/cli.ts"));
 const hasGuide = existsSync(path.join(src, "agent-guide.md"));
 
 if (hasWeb) {
-  await esbuild.build({
+  const built = await esbuild.build({
+    metafile: true,
     entryPoints: { web: path.join(src, "src/web.tsx") },
     bundle: true,
     format: "esm",
@@ -100,6 +101,15 @@ if (hasWeb) {
     logLevel: "warning",
     minify: true,
   });
+  // esbuild emits CSS beside JavaScript, but a runtime import is not an HTML
+  // entrypoint: nobody else inserts its stylesheet. Load the entry's complete
+  // CSS bundle before registration, including styles used by lazy chunks.
+  const entry = Object.entries(built.metafile.outputs).find(([, facts]) => facts.entryPoint === path.relative(process.cwd(), path.join(src, "src/web.tsx")));
+  if (entry?.[1].cssBundle) {
+    const relative = "./" + path.relative(path.dirname(entry[0]), entry[1].cssBundle).split(path.sep).join("/");
+    const loadStyle = `await new Promise((resolve,reject)=>{const link=document.createElement("link");link.rel="stylesheet";link.href=new URL(${JSON.stringify(relative)},import.meta.url).href;link.onload=resolve;link.onerror=()=>reject(new Error("Module stylesheet could not load"));document.head.appendChild(link)});\n`;
+    await fs.appendFile(path.resolve(entry[0]), "\n" + loadStyle);
+  }
 }
 if (hasCli) {
   await esbuild.build({

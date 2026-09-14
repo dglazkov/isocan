@@ -1,3 +1,4 @@
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ESLint } from "eslint";
@@ -58,5 +59,57 @@ describe("the hooks rules hold across the web app", () => {
     const severity = (rule: string) => (config.rules?.[rule] as [number] | undefined)?.[0];
     expect(severity("react-hooks/rules-of-hooks"), "the Pen white-screen").toBe(2);
     expect(severity("react-hooks/exhaustive-deps"), "the ⌘C that copied nothing").toBe(2);
+  }, 60_000);
+
+  /**
+   * **What `eslint .` walks, which is not the same question as what it has
+   * rules for.**
+   *
+   * `files:` in the config scopes the RULES. It does not scope the walk, and
+   * for months `eslint .` opened every file in the tree — including
+   * `.claude/worktrees/`, which on a working machine is up to twenty other
+   * checkouts of this same repository, each with its own `packages/web/dist`
+   * full of minified bundles.
+   *
+   * It cost fifty seconds, which was the whole of `npm run board` and two
+   * thirds of the 90-second budget the board's tests give their child. But the
+   * expensive half was not the slow half. **The report grew past
+   * `execSync`'s one-megabyte buffer**, so `measure.mjs lint-violations` got
+   * truncated JSON, threw parsing it, and reported itself as an instrument
+   * that would not run — which is what qa-tester's only goal has said on every
+   * machine with worktrees. And a hook bug in somebody else's checkout would
+   * have counted toward that goal's "at most 0", which is a gate whose answer
+   * depends on what another agent happens to have open.
+   *
+   * So the config carries a global `ignores`, and this is the guard on it.
+   * Both halves matter: nothing outside this checkout's own source, and the
+   * source still actually reached — an over-broad ignore would empty the scope
+   * and every lint would pass by looking at nothing, which is the shape
+   * `syncexec.test.ts` calls "a search over nothing always passes".
+   */
+  it("walks this checkout's source and nothing else", async () => {
+    /* Relative to the repo root, never absolute. A checkout of this repo can
+       itself live at `.claude/worktrees/<name>/`, and the first version of
+       this case matched `/.claude/` in the absolute path — so every file in
+       an agent's worktree looked like a violation and the guard failed on a
+       tree that was perfectly ignored. What is being asserted is where a file
+       sits INSIDE the checkout; the checkout's own address is not the
+       subject. */
+    const root = fileURLToPath(new URL("../../..", import.meta.url));
+    const eslint = new ESLint({ cwd: root });
+    const walked = (await eslint.lintFiles(["."])).map((r) => path.relative(root, r.filePath));
+    expect(
+      walked.filter((f) => f.split("/").includes(".claude")),
+      "another session's worktree is not this commit's lint",
+    ).toEqual([]);
+    expect(walked.filter((f) => f.split("/").includes("dist")), "nobody fixes a hook in a bundle").toEqual([]);
+    expect(
+      walked.filter((f) => f.startsWith("packages/web/src/")).length,
+      "the ignore list has eaten the source it exists to protect",
+    ).toBeGreaterThan(100);
+    expect(
+      walked.includes("packages/web/src/components/OwnCursor.tsx"),
+      "the file the linter was added for",
+    ).toBe(true);
   }, 60_000);
 });

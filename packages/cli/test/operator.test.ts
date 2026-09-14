@@ -384,11 +384,11 @@ describe("the real verbs, driven end to end", () => {
   /**
    * Run a verb, and be the browser it opens.
    *
-   * `ISOCAN_BROWSER_NOOP` is not a thing — the verb really does try to spawn
-   * `open`, and on a test machine that either fails silently or opens a page
-   * at a loopback port that answers a plain-text sentence. What matters is
-   * that this test reaches the loopback FIRST, with a token the home will
-   * verify, which is what makes the rest of the run the production path.
+   * The verb hands its address to `openInBrowser`, which `test/setup.ts` has
+   * told to print rather than spawn (`ISOCAN_BROWSER=none`) — it used to open
+   * a real window on whoever was running the suite. Everything else is the
+   * production path: this test reaches the loopback FIRST, with a token the
+   * home will verify, exactly as the browser would have.
    */
   const drive = (args: string[]) => {
     const env: NodeJS.ProcessEnv = {

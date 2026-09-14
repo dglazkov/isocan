@@ -43,7 +43,6 @@ const menu = (over = {}) =>
     historyOpen: false,
     unreadNews: 0,
     minimapOpen: true,
-    cursorGlow: true,
     theme: null,
     ownGround: false,
     pickGround: () => {},
@@ -63,6 +62,51 @@ describe("the drawer holds everything it took", () => {
     for (const control of ["Chat", "Files", "Agents", "Context", "Workbench", "Trash", "minimap", "shortcuts"]) {
       expect(found, `${control} must be reachable from the drawer`).toContain(control);
     }
+  });
+
+  describe("Groups, which left the bar on 13 Sep", () => {
+    /**
+     * The fifth control to go behind the `···`, and the one with the best
+     * reason: grouping is done by selecting items and right-clicking them, and
+     * `menuentries.tsx` already puts the same `canvasGroupEntries` in the item
+     * menu. A top-level button spent the one piece of screen that is always
+     * there on the findable path rather than the used one.
+     *
+     * Which makes this the case that matters most in the file. The rows are
+     * one click further away than they were, so "still reachable" has to be
+     * asserted rather than remembered.
+     */
+    const groups = [
+      { label: "New group", writes: true, run: () => {} },
+      { label: "Group selection", writes: true, run: () => {} },
+      { label: "Preview group conversion…", run: () => {} },
+    ];
+
+    it("is no longer a button in the bar", () => {
+      expect(toolbar, "the button was the point of the move").not.toMatch(/aria-label="Groups"/);
+      expect(toolbar, "and nothing else should re-add one").not.toMatch(/>Groups<\/button>/);
+    });
+
+    it("is reachable from the drawer, with its rows under it", () => {
+      const row = menu({ groups }).find((e): e is MenuAction => "label" in e && e.label === "Groups");
+      expect(row, "Groups must be reachable from the drawer").toBeTruthy();
+      expect(labels(row?.submenu ?? [])).toContain("New group");
+      expect(labels(row?.submenu ?? [])).toContain("Group selection");
+    });
+
+    it("says what it would act on without being opened", () => {
+      const row = (over: object) =>
+        menu({ groups, ...over }).find((e): e is MenuAction => "label" in e && e.label === "Groups");
+      expect(row({ groupsValue: "3 selected" })?.value).toBe("3 selected");
+      expect(row({ groupsValue: "Not converted" })?.value).toBe("Not converted");
+    });
+
+    it("takes no room at all on a canvas that has no rows to offer", () => {
+      // An empty submenu is a row that opens onto nothing, which is worse than
+      // an absent one: it promises and does not deliver.
+      expect(labels(menu({ groups: [] }))).not.toContain("Groups");
+      expect(labels(menu())).not.toContain("Groups");
+    });
   });
 
   it("offers switching canvases, and names the key that does it", () => {

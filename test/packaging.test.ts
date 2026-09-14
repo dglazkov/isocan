@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
  * The repo is the package: `npx github:dglazkov/isocan#release` and
@@ -100,6 +101,10 @@ describe("installable straight from git", () => {
     const strays: string[] = [];
     for (const file of await sourceFiles(path.join(repo, "packages"))) {
       if (file.endsWith(path.join("core", "src", "address.ts"))) continue; // the definition
+      // SKILL.md verbatim, generated (scripts/rc-skill.mjs) and held equal to
+      // it by packages/rc/test/skill.test.ts — and SKILL.md's specs are
+      // swept for #release in the doc loop at the end of this test.
+      if (file.endsWith(path.join("rc", "src", "skill.ts"))) continue;
       const text = await fs.readFile(file, "utf8");
       for (const [i, line] of text.split("\n").entries()) {
         if (line.includes("github:dglazkov/isocan")) {
@@ -188,6 +193,121 @@ describe("installable straight from git", () => {
       types: "./types/api/src/index.d.ts",
       default: "./index.mjs",
     });
+  });
+
+  it("the release manifest aims every export's types at declarations the release emits", async () => {
+    // Room phase 0 added `./rc` beside `.`. The script once rewrote `.` alone,
+    // so a second export would have shipped a `types` path into `.ts` sources
+    // an installed editor cannot read. Every `types` entry maps the same way,
+    // and the workspace it names is one emitTypes compiles.
+    const { releaseManifest, RELEASE_TYPE_ROOTS } = await import("../scripts/release.mjs");
+    const pkg = await readJson("package.json");
+    const shipped = releaseManifest(pkg).exports;
+    expect(Object.entries(shipped["./rc"])).toEqual([
+      ["types", "./types/rc/src/index.d.ts"],
+      ["browser", "./packages/rc/dist/index.mjs"],
+      ["default", "./rc.mjs"],
+    ]);
+    expect(RELEASE_TYPE_ROOTS).toContain("packages/rc/src");
+    for (const [key, entry] of Object.entries(pkg.exports as Record<string, { types?: string }>)) {
+      if (typeof entry !== "object" || !entry.types) continue;
+      const workspace = /^\.\/(packages\/[^/]+\/src)\//.exec(entry.types)?.[1];
+      expect(RELEASE_TYPE_ROOTS, `${key}'s types live in a workspace the release never compiles`).toContain(workspace);
+      expect(shipped[key].types).toBe(entry.types.replace(/^\.\/packages\//, "./types/").replace(/\.ts$/, ".d.ts"));
+    }
+  });
+
+  it("the emitted declarations include isocan/rc, self-contained", async () => {
+    // The emit itself, into a scratch directory: about two seconds of tsc,
+    // cheap enough that the manifest's claim is checked against real files.
+    const { emitTypes, releaseManifest } = await import("../scripts/release.mjs");
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-types-"));
+    try {
+      await emitTypes(out);
+      const shipped = releaseManifest(await readJson("package.json")).exports;
+      for (const key of [".", "./rc"]) {
+        const declared = path.join(out, shipped[key].types.replace(/^\.\/types\//, ""));
+        await expect(fs.access(declared), `${key}: ${declared}`).resolves.toBeUndefined();
+      }
+      const helpers = await fs.readFile(path.join(out, "rc/src/helpers.d.ts"), "utf8");
+      expect(helpers).not.toMatch(/"@isocan\//);
+      expect(helpers).toContain('"../../core/src/index.js"');
+    } finally {
+      await fs.rm(out, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
+  it("an installed isocan/rc bundles for the browser: the release manifest and bundle, as a host installs them", async () => {
+    // Room phase 4, journey 3 inside the suite. Measured against release at
+    // e4af490: `esbuild --platform=browser` over an installed `isocan/rc`
+    // resolved `rc.mjs`, which registers tsx, and failed on `node:module`,
+    // `node:crypto` and `@isocan/rc`. The boundary test bundled the source
+    // entry and never saw it. So this lays out what an install is, and only
+    // that: the manifest releaseManifest writes, the bundle buildBrowserBundles
+    // writes, and `rc.mjs` (so that a manifest without the `browser`
+    // condition fails the way an install did, on `node:module`, rather than on
+    // a missing file). No sources, no workspace links, no tsx to fall back on.
+    const { releaseManifest, buildBrowserBundles } = await import("../scripts/release.mjs");
+    const { build } = await import("esbuild");
+    const rootPkg = await readJson("package.json");
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-host-"));
+    try {
+      const installed = path.join(tmp, "node_modules", "isocan");
+      await fs.mkdir(installed, { recursive: true });
+      const [bundle] = await buildBrowserBundles(installed);
+      await fs.copyFile(path.join(repo, "rc.mjs"), path.join(installed, "rc.mjs"));
+      await fs.writeFile(path.join(tmp, "entry.mjs"), 'import "isocan/rc";\n');
+      // The host's one-line bundle, through whatever manifest is installed:
+      // no `external`, so a `node:` import anywhere is a resolve error.
+      const bundleThrough = async (manifest: Record<string, unknown>) => {
+        await fs.writeFile(path.join(installed, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
+        return build({
+          absWorkingDir: tmp,
+          entryPoints: ["entry.mjs"],
+          bundle: true,
+          platform: "browser",
+          format: "esm",
+          write: false,
+          metafile: true,
+          logLevel: "silent",
+        }).then(
+          (result) => ({ result, errors: "" }),
+          (err: { errors?: { text: string; location?: { file: string } | null }[] }) => ({
+            result: null,
+            errors: (err.errors ?? []).map((e) => `${e.location?.file ?? ""}: ${e.text}`).join("\n") || String(err),
+          }),
+        );
+      };
+
+      const released = releaseManifest(rootPkg, "abc1234");
+      const { result, errors } = await bundleThrough(released);
+      expect(errors, "the installed isocan/rc must bundle for the browser platform").toBe("");
+      expect(result!.outputFiles[0]!.text).not.toMatch(/node:/);
+      // What the host's bundler read: the entry and the release's bundle,
+      // nothing else, so no `node:` import could have been left external.
+      expect(Object.keys(result!.metafile.inputs).sort()).toEqual(
+        ["entry.mjs", "node_modules/isocan/packages/rc/dist/index.mjs"].sort(),
+      );
+      expect(path.join(installed, released.exports["./rc"].browser)).toBe(bundle);
+
+      // Falsified by the manifest an install had before this phase: the
+      // bundler takes `default`, reads `rc.mjs`, and stops on `node:module`.
+      const { browser: _browser, ...withoutBrowser } = released.exports["./rc"];
+      const before = await bundleThrough({ ...released, exports: { ...released.exports, "./rc": withoutBrowser } });
+      expect(before.result).toBeNull();
+      expect(before.errors).toContain('Could not resolve "node:module"');
+
+      // The bundle is a real module too: node-free ESM runs in Node, and its
+      // exports are the package's runtime surface, name for name.
+      const surface = await import(pathToFileURL(bundle!).href);
+      const source = await import("../packages/rc/src/index.ts");
+      expect(Object.keys(surface).sort()).toEqual(Object.keys(source).sort());
+      expect(typeof surface.runRoom).toBe("function");
+      expect(typeof surface.SheepAgent).toBe("function");
+      expect(surface.COLLAB_SKILL).toBe(source.COLLAB_SKILL);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 
   it("releases from CI on every commit, with the history a push needs", async () => {

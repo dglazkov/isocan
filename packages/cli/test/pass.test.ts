@@ -122,6 +122,11 @@ function cli(
     // The verb refuses to compete with this, and a developer's shell often has
     // it set — see `pointDaemonAtHome`.
     PATH: `${fakeBrowser}${path.delimiter}${process.env.PATH ?? ""}`,
+    // `test/setup.ts` tells every test NOT to open a browser; this file is the
+    // exception it names, because it is the test about the opening. Pointing
+    // the variable at the recorder is better than unsetting it: the address is
+    // watched without a window, and without depending on PATH order.
+    ISOCAN_BROWSER: path.join(fakeBrowser, "open"),
   };
   delete env.ISOCAN_HOME_URL;
   for (const v of harnessVars) delete env[v];

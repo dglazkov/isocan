@@ -25,6 +25,19 @@ import { afterAll, afterEach, beforeEach } from "vitest";
 process.env.ISOCAN_DAEMON_GUARD_PID = String(process.pid);
 
 /**
+ * **No test opens a browser window.** `isocan open`, `isocan setup` and the
+ * operator's proof all hand an address to the machine's browser, and the
+ * operator verbs that landed on 12–13 September put real windows on a real
+ * screen during a test run. The CLI children a test spawns inherit this
+ * through `{ ...process.env }`, so the guard holds for the binary as well as
+ * for anything in-process — and `openInBrowser` still prints the address,
+ * which is all a test ever wanted from it.
+ *
+ * Set rather than forced: a test that is ABOUT the opening can override it.
+ */
+process.env.ISOCAN_BROWSER ??= "none";
+
+/**
  * A daemon that knows a home is a REPLICA — it serves ops to CLIs and stops
  * serving pages to people (`resolveHomeUrl`, phase 6). That is read from the
  * environment, so a developer who has pointed their own machine at a home

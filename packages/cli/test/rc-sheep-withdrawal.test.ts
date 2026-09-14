@@ -6,6 +6,7 @@ import {
   base,
   daemon,
   dimitri,
+  holdOnThisMachine,
   home,
   post,
   rcRows,
@@ -263,7 +264,9 @@ describe("the sheep harness (sheep-harness phase 1)", () => {
       const { rc, seen, done } = parked();
       await until(async () => seen.out, (o) => o.includes("Percy's sheep live at"), "the rc to come up");
       // Past its start: only the loop narrates an adoption, so after this
-      // line the withdraw op below is one the rc reads as it lands.
+      // line the withdraw op below is one the rc reads as it lands. Sian is
+      // this machine's, as the ask makes her: an orphan is inert.
+      await holdOnThisMachine({ id: "usr_sian", name: "Sian" });
       await post("/api/ops", { canvasId: "prj_1", actor: dimitri, op: { type: "agent.enroll", agent: { id: "usr_sian", name: "Sian" } } });
       await until(async () => seen.out, (o) => o.includes("Sian · where and how supplied"), "the rc to be parked");
       // The tray's Dismiss: the withdraw op over HTTP, no verb on this machine.

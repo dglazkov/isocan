@@ -8,6 +8,7 @@ import { startDaemon, type Daemon } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
 import { AcpAgentProcess, adapterEnv } from "../src/acp.ts";
 import { adapterFor } from "../src/harnesses.ts";
+import { agentSessionOf, machineAgentKey } from "../src/agent-key.ts";
 import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -128,8 +129,11 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(run.code).toBe(0);
     expect(run.stderr).toContain("turn ended — end_turn");
     // The scripted agent echoes its environment: the harness/session pair
-    // the CLI inside would present — exactly the mint claim's key.
-    expect(run.stdout).toContain("env:agent:Sian");
+    // the CLI inside would present — exactly the mint claim's key, which
+    // this machine's agent secret derives and the name alone does not.
+    const key = await machineAgentKey(home, "Sian");
+    expect(run.stdout).toContain(`env:${key} `);
+    expect(run.stdout).not.toContain("env:agent:Sian");
     expect(run.stdout).toContain("echo:say hello");
     // The permission flow ran, and the client chose the allow option.
     expect(run.stdout).toContain("permission:yes");
@@ -137,7 +141,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // agent's session runs it — the injected environment, nothing else —
     // resolves as the enrolled Sian.
     const inside = await collect(
-      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Sian" }),
+      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: agentSessionOf(key) }),
     );
     expect(inside.stdout).toContain("Sian");
   }, 30_000);
@@ -277,7 +281,7 @@ describe("a turn in a named agent (phase 3)", () => {
         expect(run.stderr).toContain("turn ended — end_turn");
         // Reachable: the adapter ran and the injected identity arrived, so
         // the fence did not break the one connection the agent needs.
-        expect(run.stdout).toContain("env:agent:Sian");
+        expect(run.stdout).toContain(`env:${await machineAgentKey(home, "Sian")} `);
         // Fenced: the person's own file is not readable from inside, and
         // the refusal is the filesystem's, not a guess.
         expect(run.stdout).toMatch(/probe:refused:ENOENT|probe:refused:EACCES/);
@@ -360,7 +364,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // injection — the shape the 2026-09-04 spike measured. Reads pick the
     // bound key; a claim must pick the deliberate one, or the guide's first
     // step (`identity --session`) mints a stranger on pi's key.
-    const piShell = { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Sian", PI_SESSION_ID: "0199-uuid" };
+    const piShell = { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: agentSessionOf(await machineAgentKey(home, "Sian")), PI_SESSION_ID: "0199-uuid" };
     const who = await collect(spawnCli(["whoami"], piShell));
     expect(who.stdout).toContain("Sian");
     const claim = await collect(spawnCli(["identity", "--session"], piShell));
@@ -411,14 +415,15 @@ describe("a turn in a named agent (phase 3)", () => {
     );
     const run = await isocan("rc", "turn", "Percy", "hi");
     expect(run.code).toBe(0);
-    expect(run.stdout).toContain("env:agent:Percy");
+    const key = await machineAgentKey(home, "Percy");
+    expect(run.stdout).toContain(`env:${key} `);
     const rows = await rcRows();
     expect(rows[0]).toMatchObject({ actorId: "usr_percy", sessionId: rows[0]!.sessionId });
     // The machine badge now answers for Percy under the injected key: a
     // CLI run the way the agent's shells run it speaks as Percy — the one
     // rebinding a web-enrolled agent needed, made by the turn.
     const inside = await collect(
-      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy" }),
+      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: agentSessionOf(key) }),
     );
     expect(inside.stdout).toContain("Percy");
   }, 30_000);

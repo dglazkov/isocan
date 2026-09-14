@@ -3,6 +3,7 @@ import {
   normalizeHomeUrl, parseCanvasAddress, parseDesign, personalMemoryLinks, sourceOf,
   type CanvasContents, type CanvasSnapshotResponse, type ContextExtras,
   type ContextLayer, type LinkedCanvas, type PersonalReadResponse,
+  type RecapHeadResponse,
   type SourceClassificationRequest, type SourceClassificationResponse,
 } from "@isocan/core";
 
@@ -11,6 +12,8 @@ export interface ContextReadPort {
   classifySource(source: SourceClassificationRequest, signal?: AbortSignal): Promise<SourceClassificationResponse>;
   /** Actual source reads carry exclusion and this expected authority, not only an earlier preflight. */
   sourceSnapshot(source: SourceClassificationRequest, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
+  /** Optional for existing ports; missing support is reported as unavailable, never as zero activity. */
+  sourceRecap?(source: SourceClassificationRequest, signal?: AbortSignal): Promise<RecapHeadResponse>;
   readPersonal(canvasId: string, request: { actorId: string; itemId: string; mode: "summary" }, signal?: AbortSignal): Promise<PersonalReadResponse>;
   designText?(canvasId: string, hash: string, signal?: AbortSignal): Promise<string>;
 }
@@ -118,6 +121,27 @@ export async function readLayeredContext(io: ContextReadPort, options: LayeredCo
     }
   }
   const inherited = await readInheritedCanvases(io, canvas, home, signal);
+  for (const link of inherited) {
+    signal?.throwIfAborted();
+    if (!link.canvas) continue;
+    try {
+      if (!io.sourceRecap) throw new Error("Recent work is unavailable from this connection.");
+      const response = await io.sourceRecap({ canvasId: link.canvasId, expectedHome: normalizeHomeUrl(home) }, signal);
+      signal?.throwIfAborted();
+      let sourceHome: string | null = null;
+      try {
+        const parsed = new URL(response.home);
+        if (["http:", "https:"].includes(parsed.protocol)) sourceHome = normalizeHomeUrl(response.home);
+      } catch { /* An unknown home is not this source's authority. */ }
+      if (response.canvasId !== link.canvasId || sourceHome !== normalizeHomeUrl(home)) {
+        throw new Error("Recent work returned a different source — not shown.");
+      }
+      link.recap = { value: response };
+    } catch (error) {
+      signal?.throwIfAborted();
+      link.recap = { refused: failure(error) };
+    }
+  }
   const layers = contextLayers(canvas, inherited, { ...options.extras, ...(designProblems === undefined ? {} : { designProblems }) });
   if (unavailable) {
     const piece = layers[0]?.pieces.find((one) => one.name === "Design system");

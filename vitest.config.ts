@@ -1,11 +1,29 @@
 import { defineConfig } from "vitest/config";
+import { DEEP, runningDeep } from "./test/deep.ts";
 
 export default defineConfig({
   test: {
     include: ["packages/*/test/**/*.test.ts", "packages/modules/*/test/**/*.test.ts", "test/**/*.test.ts"],
+    /**
+     * **The deep lane, left out unless asked for.** The files in `test/deep.ts`
+     * drive the real binary and are about half this suite's CPU; `npm test`
+     * skips them and says so, `npm run test:deep` runs them, and CI sets
+     * `ISOCAN_REQUIRE_DEEP` so the run that decides a release never skips.
+     * The exclusion has to be empty when that switch is set — an anti-skip
+     * switch that skipped would be worse than no switch.
+     */
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      ...(runningDeep() ? [] : DEEP.map((d) => d.file)),
+    ],
     // Runs in every worker, before every test file: see test/setup.ts for what
     // a run leaves behind without it.
     setupFiles: ["test/setup.ts"],
+    /* The default reporter prints the duration; `timing-reporter.ts` is what
+       remembers it. Every run, no flag — `scripts/timings.mjs` reads them back
+       and says which kind of run is getting slower. */
+    reporters: ["default", "./test/timing-reporter.ts"],
     /**
      * NOT the 5-second default, and this is the third time it has been paid
      * for.
@@ -40,6 +58,6 @@ export default defineConfig({
     // only place a Firestore emulator can be started and have every worker
     // inherit its address. See test/emulator.ts for the three tiers and for
     // what happens on a machine that has none.
-    globalSetup: ["test/emulator.ts"],
+    globalSetup: ["test/emulator.ts", "test/deepgate.ts"],
   },
 });

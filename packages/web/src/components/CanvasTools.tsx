@@ -18,6 +18,9 @@ import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
 import { ToolGlyph, toolHint, useCanvasTools } from "../lib/tools.tsx";
 import { postToMain } from "../lib/mainthread.ts";
+import { useNavigate } from "react-router-dom";
+import { modulePagePath } from "@isocan/core";
+import { moduleProjectViews } from "../modules.ts";
 
 /**
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
@@ -153,6 +156,11 @@ const TOOLS: ToolDef[] = [
 
 export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const [more, setMore] = useState(false);
+  const navigate = useNavigate();
+  const project = useCanvasStore((s) => s.project);
+  const contents = useCanvasStore((s) => s.canvas);
+  useUiStore((s) => s.modulesGeneration);
+  const projectViews = project && contents ? moduleProjectViews(project, contents) : [];
   const colors = useActorColors();
   const activeTool = useUiStore((s) => s.activeTool);
   const adding = useUiStore((s) => s.adding);
@@ -313,6 +321,17 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           <HistoryGlyph size={17} />
         </button>
       )}
+      {projectViews.map((view) => (
+        <button
+          key={view.segment}
+          className="tool-btn"
+          data-tip={view.label}
+          aria-label={view.label}
+          onClick={() => navigate(modulePagePath(canvasId, view.segment))}
+        >
+          <span aria-hidden>{view.glyph}</span>
+        </button>
+      ))}
       {/* The canvas's OWN tools, below everything the app ships, because that
           is the boundary: above the line is isocan, below it is what this
           canvas brought. A tool wears its own label and never the app's — the
