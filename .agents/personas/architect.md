@@ -95,10 +95,24 @@ goal:
   # Canvas groups add one atomic structural act (group.change), with a closed
   # intent union and exact inverse, instead of loops of per-item operations.
   # See docs/projects/canvas-groups/design.md; the parser counts it directly.
+  # **34 -> 35 on 14 Sep, for `item.edit`, at Dion's answer.** The vocabulary is
+  # the product's central claim and grows only when an operation does something
+  # none of the others can. This one does: content AND metadata as a single
+  # conditional, undoable act, gated on `expectedVersionId` and
+  # `expectedMetadata`. The two-op alternative — `item.addVersion` then an
+  # update — cannot be conditional as one and cannot undo as one, which is the
+  # whole reason a concept's body and its title move together or not at all.
+  #
+  # It is a distinct type rather than a flag so an older daemon REFUSES it
+  # instead of ignoring a precondition it does not implement, which is the
+  # difference between a stale client that stops and one that silently writes
+  # over somebody. It inverts (`invert.ts`), it is sent from four places in the
+  # anatomy module, it is in that module's agent guide, and `web-only-ops`
+  # stays 0 — it is not a verb a person has and an agent does not.
   - name: operations in the vocabulary
-    at most: 34
+    at most: 35
     measured by: node scripts/measure.mjs op-types
-    baseline: 33, 2026-09-01, baac5a4
+    baseline: 35, 2026-09-14, 72450794
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *

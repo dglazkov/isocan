@@ -59,6 +59,56 @@ export function findMentionSpans(body: string, candidates: MentionCandidate[]): 
   return spans;
 }
 
+/** Where a slash command sits in the body — the same shape a mention has, so
+ *  one chip renderer draws both. */
+export interface CommandSpan {
+  /** Index of the "/". */
+  start: number;
+  /** Index just past the verb. */
+  end: number;
+  /** The verb as written, without the "/". */
+  name: string;
+}
+
+/**
+ * **Every slash command in `body`, so a message that RAN something says so.**
+ *
+ * A message whose whole content is `/anatomy` and a path reads as plain text —
+ * the one word that says work was asked for looks like any other word, and
+ * there is nothing to click on to find out what it does. A mention is already
+ * a chip; a command is the same kind of thing and was not.
+ *
+ * Here rather than in the web app because the rule is a fact about a body, and
+ * both surfaces read bodies. It is the third span kind `splitChips` composes,
+ * which is why this is a dozen lines rather than new machinery.
+ *
+ * **Only commands this canvas actually has.** `known` is the verbs the palette
+ * would offer, so `/anatomy` lights up where the module is loaded and stays
+ * plain text where it is not — a chip that offers to open something absent is
+ * worse than no chip. And only at the start of a line: `and/or` is not a
+ * command, `http://x/y` is not a command, and a person writing about a path
+ * mid-sentence is not asking for one.
+ */
+export function findCommandSpans(body: string, known: readonly string[]): CommandSpan[] {
+  const verbs = [...known].sort((a, b) => b.length - a.length); // longest first: `/rc end` before `/rc`
+  const spans: CommandSpan[] = [];
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] !== "/") continue;
+    const startOfLine = i === 0 || body[i - 1] === "\n";
+    if (!startOfLine) continue;
+    const hit = verbs.find((verb) => {
+      if (body.slice(i + 1, i + 1 + verb.length) !== verb) return false;
+      const after = body[i + 1 + verb.length];
+      return after === undefined || after === " " || after === "\n";
+    });
+    if (!hit) continue;
+    const end = i + 1 + hit.length;
+    spans.push({ start: i, end, name: hit });
+    i = end - 1;
+  }
+  return spans;
+}
+
 /** Actor ids mentioned in `body`, in candidate order, deduped. */
 export function extractMentions(body: string, candidates: MentionCandidate[]): string[] {
   const mentioned = new Set(findMentionSpans(body, candidates).map((span) => span.actorId));

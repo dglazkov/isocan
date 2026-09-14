@@ -7,21 +7,23 @@
  * catapult to the item.
  */
 import type { Element, ElementContent, Root } from "hast";
-import type { ItemRefCandidate, ItemRefSpan, MentionCandidate, MentionSpan } from "@isocan/core";
-import { findItemRefSpans, findMentionSpans } from "@isocan/core";
+import type { CommandSpan, ItemRefCandidate, ItemRefSpan, MentionCandidate, MentionSpan } from "@isocan/core";
+import { findCommandSpans, findItemRefSpans, findMentionSpans } from "@isocan/core";
 import { actorColor } from "./colors.ts";
 
-/** `[plain text, chip, plain text, …]` — at most one of `mention`/`item`. */
-type ChipPiece = { text: string; mention?: MentionSpan; item?: ItemRefSpan };
+/** `[plain text, chip, plain text, …]` — at most one of `mention`/`item`/`command`. */
+type ChipPiece = { text: string; mention?: MentionSpan; item?: ItemRefSpan; command?: CommandSpan };
 
 export function splitChips(
   body: string,
   candidates: MentionCandidate[],
   items: ItemRefCandidate[],
+  commands: readonly string[] = [],
 ): ChipPiece[] {
   const spans = [
     ...findMentionSpans(body, candidates).map((s) => ({ start: s.start, end: s.end, mention: s })),
     ...findItemRefSpans(body, items).map((s) => ({ start: s.start, end: s.end, item: s })),
+    ...findCommandSpans(body, commands).map((s) => ({ start: s.start, end: s.end, command: s })),
   ].sort((a, b) => a.start - b.start);
   const pieces: ChipPiece[] = [];
   let cursor = 0;
@@ -30,7 +32,11 @@ export function splitChips(
     if (span.start > cursor) pieces.push({ text: body.slice(cursor, span.start) });
     pieces.push({
       text: body.slice(span.start, span.end),
-      ...("mention" in span ? { mention: span.mention } : { item: span.item }),
+      ...("mention" in span
+        ? { mention: span.mention }
+        : "command" in span
+          ? { command: span.command }
+          : { item: span.item }),
     });
     cursor = span.end;
   }
@@ -55,9 +61,10 @@ export function rehypeChips(
   candidates: MentionCandidate[],
   selfId: string,
   items: ItemRefCandidate[],
+  commands: readonly string[] = [],
 ) {
   return function attacher() {
-    return (tree: Root) => chipify(tree, candidates, selfId, items);
+    return (tree: Root) => chipify(tree, candidates, selfId, items, commands);
   };
 }
 
@@ -66,12 +73,13 @@ function chipify(
   candidates: MentionCandidate[],
   selfId: string,
   items: ItemRefCandidate[],
+  commands: readonly string[],
 ): void {
   const children: ElementContent[] = [];
   let rewritten = false;
   for (const child of node.children as ElementContent[]) {
     if (child.type === "element") {
-      if (!OPAQUE_TAGS.has(child.tagName)) chipify(child, candidates, selfId, items);
+      if (!OPAQUE_TAGS.has(child.tagName)) chipify(child, candidates, selfId, items, commands);
       children.push(child);
       continue;
     }
@@ -79,8 +87,8 @@ function chipify(
       children.push(child);
       continue;
     }
-    const pieces = splitChips(child.value, candidates, items);
-    if (!pieces.some((piece) => piece.mention || piece.item)) {
+    const pieces = splitChips(child.value, candidates, items, commands);
+    if (!pieces.some((piece) => piece.mention || piece.item || piece.command)) {
       children.push(child);
       continue;
     }
@@ -88,6 +96,7 @@ function chipify(
     for (const piece of pieces) {
       if (piece.mention) children.push(mentionElement(piece.text, piece.mention.actorId, selfId));
       else if (piece.item) children.push(itemRefElement(piece.text, piece.item.itemId));
+      else if (piece.command) children.push(commandElement(piece.text, piece.command.name));
       else children.push({ type: "text", value: piece.text });
     }
   }
@@ -101,6 +110,30 @@ function mentionElement(text: string, actorId: string, selfId: string): Element 
     properties: {
       className: actorId === selfId ? ["mention", "mention-me"] : ["mention"],
       style: mentionChipStyle(actorId),
+    },
+    children: [{ type: "text", value: text }],
+  };
+}
+
+/**
+ * **The command a message ran, as a thing you can click.**
+ *
+ * `/anatomy` and a path rendered as plain text: the one word saying work was
+ * asked for looked like every other word. This is the same chip a mention
+ * gets, carrying `data-command` so the panel's existing click delegation can
+ * open the palette at that verb — the reader wanting to do the same thing is
+ * the common case, and a definition they cannot act on is a worse answer.
+ */
+function commandElement(text: string, name: string): Element {
+  return {
+    type: "element",
+    tagName: "span",
+    properties: {
+      className: ["command-chip"],
+      dataCommand: name,
+      role: "link",
+      tabIndex: 0,
+      title: `Open the palette at /${name}`,
     },
     children: [{ type: "text", value: text }],
   };
