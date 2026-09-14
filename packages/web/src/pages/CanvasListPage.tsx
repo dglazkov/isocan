@@ -1,4 +1,5 @@
 import { Inbox } from "../components/Inbox.tsx";
+import { useUiStore } from "../stores/uiStore.ts";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Canvas, Space } from "@isocan/core";
@@ -65,6 +66,9 @@ export function CanvasListPage({
   const colors = useActorColors();
   const marks = useActorMarks();
   const names = useActorNames();
+  /** The home's half of the Inbox experiment; `Navigation` owns the reading,
+   * and with the experiment off nothing here asks for one. */
+  const inboxOn = useUiStore((s) => s.experiments.includes("inbox"));
   const [canvases, setProjects] = useState<Canvas[] | null>(null);
   const [title, setTitle] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
@@ -899,7 +903,7 @@ export function CanvasListPage({
        * nesting the two made the smaller question inherit the larger one's
        * answer.
        */}
-      <Inbox actor={actor} />
+      {inboxOn && <Inbox actor={actor} />}
       <h2 className="working-canvases-head">Your canvases</h2>
       {(browsing || hasShelf) && (
         <div className="canvas-browse">

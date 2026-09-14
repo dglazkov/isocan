@@ -31,7 +31,17 @@ export function Navigation({ actor }: { actor: Actor }) {
   const setMode = useUiStore((s) => s.setPaletteOpen);
   const state = useInboxStore();
   const [open, setOpen] = useState(false);
+  /**
+   * **Off means off, including the polling** (13 Sep's inbox, behind an
+   * experiment on 14 Sep). An experiment that is merely hidden would still
+   * read every canvas at this home every thirty seconds for somebody who never
+   * asked for it — the one cost this mechanism exists to avoid. Subscribed
+   * rather than read once, so turning it on in Settings starts the poll
+   * without a reload.
+   */
+  const inboxOn = useUiStore((s) => s.experiments.includes("inbox"));
   useEffect(() => {
+    if (!inboxOn) return;
     let live = true;
     let visited: SeenMarks = {};
     const unwatch = onSeenVisit((actorId, canvasId, mark) => {
@@ -59,7 +69,7 @@ export function Navigation({ actor }: { actor: Actor }) {
     });
     useInboxStore.setState({ refresh: polling.refresh });
     return () => { live = false; unwatch(); polling.stop(); setMode(null); };
-  }, [actor.id, setMode]);
+  }, [actor.id, setMode, inboxOn]);
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
@@ -94,12 +104,33 @@ export function Navigation({ actor }: { actor: Actor }) {
    */
   const onModulePage = Boolean(useMatch(MODULE_PAGE_ROUTE));
   const mine = state.actorId === actor.id ? state.data : null;
-  const count = mine ? newSince(mine.entries, mine.marks).length : 0;
+  const unread = mine ? newSince(mine.entries, mine.marks) : [];
+  const count = unread.length;
+  const unavailable = Boolean(state.error || mine?.unavailable.length);
+  /**
+   * **The label is one word and a number.** On a phone this button is a fixed
+   * 96px box that ellipsises its own text, and "Inbox · 12 new · unavailable"
+   * arrived there as "Inbox · 12 n…". The breakdown somebody wants before
+   * opening it belongs in the tooltip — which is also where the per-reason
+   * count the 29 Aug research asked for finally lands, instead of one number
+   * that cannot say whether twelve means twelve people or one busy Chat.
+   */
+  const hint = unavailable
+    ? "Some of this inbox could not be read"
+    : count > 0
+      ? `${count} new · ${unread.filter((entry) => entry.reason === "mentioned").length} naming you`
+      : "Nothing new";
   return <>
-    {pathname !== "/" && !onModulePage && <button className={`btn navigation-inbox${canvasId ? " on-canvas" : ""}`} onClick={() => setOpen((was) => !was)} aria-expanded={open} aria-label={`Inbox, ${count} new`}>
-      Inbox{count > 0 ? ` · ${count} new` : ""}{state.error || mine?.unavailable.length ? " · unavailable" : ""}
+    {inboxOn && pathname !== "/" && !onModulePage && <button
+      className={`btn navigation-inbox${canvasId ? " on-canvas" : ""}${count > 0 ? " has-new" : ""}`}
+      onClick={() => setOpen((was) => !was)}
+      aria-expanded={open}
+      aria-label={count > 0 ? `Inbox, ${count} new` : "Inbox"}
+      title={hint}
+    >
+      Inbox{count > 0 ? <span className="inbox-count">{count}</span> : null}{unavailable ? <span className="inbox-warn" aria-hidden="true">!</span> : null}
     </button>}
-    {open && <div className={`navigation-inbox-panel${canvasId ? " on-canvas" : ""}`} role="dialog" aria-label="Your inbox"><button className="btn quiet inbox-close" onClick={() => setOpen(false)}>Close inbox</button><Inbox actor={actor} /></div>}
+    {inboxOn && open && <div className={`navigation-inbox-panel${canvasId ? " on-canvas" : ""}`} role="dialog" aria-label="Your inbox"><button className="btn quiet inbox-close" onClick={() => setOpen(false)}>Close inbox</button><Inbox actor={actor} /></div>}
     {mode && <Suspense fallback={null}><CommandPalette canvasId={actionCanvasId} actor={actor} mode={mode} onMode={setMode} onClose={() => setMode(null)} /></Suspense>}
   </>;
 }

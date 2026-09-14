@@ -50,6 +50,11 @@ export const EXPERIMENTS: readonly Experiment[] = [
     name: "Stickers",
     what: "A tray of emoji you drag onto the canvas — the first module built on the overlay, drop and host APIs, which are still changing.",
   },
+  {
+    id: "inbox",
+    name: "Inbox",
+    what: "Everything addressed to you, across every canvas at this home. Off while its shape settles: what a row shows, what the count counts, and what a whole-home read costs on a busy home are all still moving.",
+  },
 ];
 
 /** Is this one on? Read outside React — the module list is not a component. */
