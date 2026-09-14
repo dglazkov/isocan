@@ -64,6 +64,29 @@ describe("the lock file knows every workspace", () => {
     ).toEqual([]);
   });
 
+  /**
+   * **The image plans its tree from manifests, not from the lock alone.**
+   *
+   * The Dockerfile copies every workspace manifest by name BEFORE `npm ci`, so
+   * the install can plan before any source lands — its own comment says every
+   * one has to be there. Modules were held to that by `test/modules.test.ts`
+   * after one shipped without a line and no image built for two merges while
+   * dev and prod sat still (5 Sep 2026). The top-level packages were held by
+   * nothing: `api`, `mcp`, `rc` and `voice-agent` had no line at all, and
+   * `voice-agent` arrived on 14 Sep to the same silence.
+   *
+   * Here rather than beside the modules guard because this is where the
+   * workspaces are already enumerated, so the list cannot be the stale half.
+   */
+  it("is copied into the image before npm ci, every one of them", () => {
+    const dockerfile = readFileSync(path.join(repo, "Dockerfile"), "utf8");
+    const missing = dirs.filter((dir) => !dockerfile.includes(`COPY ${dir}/package.json`));
+    expect(
+      missing,
+      "add `COPY <dir>/package.json <dir>/package.json` to the Dockerfile, above `npm ci`",
+    ).toEqual([]);
+  });
+
   it("names each one the same way its package.json does", () => {
     const wrong = dirs
       .map((dir) => ({

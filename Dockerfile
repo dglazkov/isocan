@@ -46,6 +46,10 @@ COPY packages/cloudstore/package.json packages/cloudstore/package.json
 COPY packages/core/package.json       packages/core/package.json
 COPY packages/server/package.json     packages/server/package.json
 COPY packages/web/package.json        packages/web/package.json
+COPY packages/api/package.json        packages/api/package.json
+COPY packages/mcp/package.json        packages/mcp/package.json
+COPY packages/rc/package.json         packages/rc/package.json
+COPY packages/voice-agent/package.json packages/voice-agent/package.json
 # The modules are workspaces too (`packages/modules/*`). With these lines
 # missing `npm ci` does NOT refuse — it quietly plans the tree without them,
 # so no `node_modules/@isocan/<module>` link exists and `npm run build` below
