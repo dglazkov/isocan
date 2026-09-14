@@ -303,6 +303,9 @@ export function wireVoice(doc: Document = document): VoicePage {
   const actorStanding = required<HTMLElement>("actor-standing", doc);
   const actorNameField = required<HTMLInputElement>("actor-name-field", doc);
   const actorClaimBtn = required<HTMLButtonElement>("actor-claim-btn", doc);
+  const actorEnrolBtn = required<HTMLButtonElement>("actor-enrol-btn", doc);
+  const canvasCreateTitle = required<HTMLInputElement>("canvas-create-title", doc);
+  const canvasCreateBtn = required<HTMLButtonElement>("canvas-create-btn", doc);
   const audioLine = required<HTMLElement>("audio", doc);
   const versionLine = required<HTMLElement>("version", doc);
   const updatedLine = required<HTMLElement>("updated", doc);
@@ -3115,6 +3118,14 @@ export function wireVoice(doc: Document = document): VoicePage {
   actorClaimBtn.addEventListener("click", () => {
     const name = actorNameField.value.trim();
     if (name) void setupPost("/actor", { name });
+  });
+  actorEnrolBtn.addEventListener("click", () => {
+    const name = actorNameField.value.trim() || facts?.agent?.name || undefined;
+    void setupPost("/enrol", { name });
+  });
+  canvasCreateBtn.addEventListener("click", () => {
+    const title = canvasCreateTitle.value.trim();
+    if (title) void setupPost("/canvas/create", { title });
   });
   // The "?" beside each setting: hover, click, Escape and one card at a time.
   wireSettingsHelp(doc);
