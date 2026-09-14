@@ -188,12 +188,18 @@ interface SheepCommands {
   pastureNew(name): Promise<void>;
   pasturePut(name, path, body): Promise<void>;
   pastureSecret(name, key, value): Promise<void>;
-  mint(opts, secrets): Promise<SheepRow>;     // sheep new --detach … --secret
-  attach(id, text, onEntry, signal): Promise<Reply>;  // attach --wait --json
+  mint(opts, secrets): Promise<string>;       // sheep new --detach … --secret; the id
+  attach(id, text, onEntry): Promise<Reply>;  // attach --wait --json
   rm(id): Promise<RmAnswer>;
-  abort(id): Promise<void>;
+  abort(id): Promise<boolean>;                // whether a turn was running
 }
 ```
+
+`mint` answers the id because `sheep new` prints only that, and whether
+the sheep kept its secret is read back with `session(id)`. `attach`
+takes no signal: a turn is stopped at the home, by `rm`. `SheepAgent`
+is handed `where`, the place as a sentence, because naming a local home
+reads a kennel path, which is the host's.
 
 The laptop implements each with `spawn("sheep", …)`, in `sheep.ts`,
 which keeps `findKennel`, `kennelHome`, `sheepPlaceFor` and the

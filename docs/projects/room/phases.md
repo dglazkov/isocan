@@ -5,7 +5,7 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0–1 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` in `isocan/rc`. Next: room phase 2, the sheep over commands.** Five phases, none
+**Where we are: phases 0–2 CLOSED 13 Sep 2026; the laptop's `isocan rc` runs over `runRoom` and the module's `SheepAgent` in `isocan/rc`. Next: room phase 3, answered elsewhere.** Five phases, none
 needing a person: no ⚑ step, no cloud resource, no second machine
 except journey 2's walk, which two loopback badges on one laptop can
 stand in for (the roles project's proof recipe). The rule for every
@@ -95,7 +95,7 @@ second by the clock.
 
 ## Phase 2 — The sheep over commands
 
-**Status: NOT STARTED.**
+**Status: CLOSED 2026-09-13.** The sheep's policy is `SheepAgent` and `endSheep` over `SheepCommands` in the module; `sheep.ts` keeps the kennel, the cell's loopback and the `spawn("sheep")` implementation, and the rc sheep tests pass unchanged.
 
 **Outcome:** `SheepAgent` moves from `packages/cli/src/sheep.ts` into
 the module, rewritten over `SheepCommands` as design.md gives it, so
@@ -116,11 +116,14 @@ over an in-memory `SheepCommands` that records its calls: a birth is
 `mint` with the pass among the secrets and no prompt, then `attach`
 with the summons; a sheep found in the herd is resumed with no `mint`;
 a home that drops the secret gets `pastureSecret` and one sentence;
-withdrawal is `abort` during a turn, then `rm`, and the pasture is
-never removed. The boundary test still passes with `SheepAgent` in the
+withdrawal is `rm`, which ends a running turn itself, and at a home
+from before `rm` the listing and then `abort`; the pasture is never
+removed. The boundary test still passes with `SheepAgent` in the
 closure.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-13** — `SheepCommands` is not design.md's as written: `mint` answers an id (whether the secret held is read with `session`), `attach` takes no signal, `abort` answers whether a turn ran, and `SheepAgent` takes its place as a sentence from the host. design.md now says so.
 
 ## Phase 3 — Answered elsewhere
 

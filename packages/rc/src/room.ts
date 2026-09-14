@@ -46,6 +46,7 @@ import {
 import { gateTurn, type GuardLimits, type GuardState } from "./guards.ts";
 import { enrolmentKey, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
 import type { RcAgentRow, SheepPlace } from "./rows.ts";
+import { SHEEP_HARNESS } from "./sheep.ts";
 
 /**
  * **The rc's room, over what a host hands it** (docs/projects/room/design.md,
@@ -230,11 +231,6 @@ export function mapState(map: Map<string, unknown> = new Map()): RoomState {
     },
   };
 }
-
-/** The harness whose sessions outlive the process: its withdrawn rows leave
- * something to end. `SHEEP_HARNESS` in `packages/cli/src/sheep.ts` until the
- * sheep's policy moves into this module (the room's phase 2). */
-const SHEEP_HARNESS = "sheep";
 
 /** Where the room keeps each fact under `state`. Per agent: shared by every
  * room of one rc. Per canvas: what one room has said. */

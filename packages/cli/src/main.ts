@@ -481,11 +481,11 @@ import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
 import { fileRcRows, readRcAgents, removeRcAgent, setRcCellPass, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type RcAgentRow } from "./rc.ts";
-import { actorNamesOn, itemCenter, mapState, nameResolver, runRoom, threadLocus, type RoomAdapter, type RoomState, type RoomTurn } from "@isocan/rc";
+import { SheepAgent, actorNamesOn, endSheep, itemCenter, mapState, nameResolver, runRoom, threadLocus, type RoomAdapter, type RoomState, type RoomTurn } from "@isocan/rc";
 import { AcpAgentProcess, adapterEnv, enrolmentKey } from "./acp.ts";
 import { openInBrowser } from "./browser.ts";
 import { proveInBrowser, summonedRefusal } from "./operator.ts";
-import { SHEEP_HARNESS, SheepAgent, describePlace, endSheep, homeAddressForCell, loopbackFromCell, noSheepLine, placeLine, sheepPlaceFor } from "./sheep.ts";
+import { SHEEP_HARNESS, describePlace, homeAddressForCell, loopbackFromCell, noSheepLine, openSheep, placeLine, sheepCommands, sheepPlaceFor, type CellBirth } from "./sheep.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, onPath, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
 import {
   noSandboxLine,
@@ -13177,7 +13177,7 @@ try a policy against one agent before starting an rc with it.`,
       );
       const agent =
         spec.harness === SHEEP_HARNESS
-          ? await SheepAgent.spawn(spec, {
+          ? await openSheep(spec, {
               name: record.actor.name,
               cwd: row.cwd,
               stored: row.sheep ?? null,
@@ -13308,17 +13308,16 @@ interface RcShared {
 /**
  * What a sheep needs to be born as this agent (the sheep spike, 10 Sep
  * 2026): a pass minted for the agent's own actor — the rc's badge holds the
- * claim, so the home allows it — at the address the cell can reach, and the
- * collab skill for its pasture. The pass is minted lazily, only when a
- * sheep is actually born, because it is single-use and short-lived.
+ * claim, so the home allows it — at the address the cell can reach. The
+ * collab skill for its pasture is the room module's own text. The pass is
+ * minted lazily, only when a sheep is actually born, because it is
+ * single-use and short-lived.
  */
-async function sheepBirth(ctx: Ctx, p: Canvas, actorId: string): Promise<import("./sheep.ts").SheepBirth> {
-  const skill = await fs.readFile(path.join(skillSource(), "SKILL.md"), "utf8").catch(() => undefined);
+async function sheepBirth(ctx: Ctx, p: Canvas, actorId: string): Promise<CellBirth> {
   const origin = (await ctx.homeOf(p.id).catch(() => null)) ?? ctx.client.base;
   return {
     canvasTitle: p.title,
     canvasOrigin: origin,
-    ...(skill ? { skill } : {}),
     pass: async () => {
       const { pass, token } = await ctx.client.mintPass(p.id, actorId);
       return {
@@ -13363,7 +13362,7 @@ async function withdrawSheep(ctx: Ctx, row: RcAgentRow | undefined, narrate: (li
     }
     return;
   }
-  await endSheep({ name: row.name, sessionId: row.sessionId, place: row.sheep }, narrate);
+  await endSheep(sheepCommands(row.sheep), { name: row.name, sessionId: row.sessionId, where: describePlace(row.sheep) }, narrate);
   await endCellBadge(ctx, row, narrate);
 }
 
@@ -13759,7 +13758,7 @@ async function openAdapter(
   turn.narrate(`${spec.harness}${fenceNote(fence)}`);
   const agent =
     spec.harness === SHEEP_HARNESS
-      ? await SheepAgent.spawn(spec, {
+      ? await openSheep(spec, {
           name: row.name,
           cwd: row.cwd,
           stored: row.sheep ?? null,
@@ -13778,7 +13777,7 @@ async function openAdapter(
       return agent instanceof SheepAgent ? agent.place : undefined;
     },
     get where() {
-      return agent instanceof SheepAgent ? `at ${describePlace(agent.place)}` : undefined;
+      return agent instanceof SheepAgent ? `at ${agent.where}` : undefined;
     },
     get bornPass() {
       return agent instanceof SheepAgent ? agent.bornPass : undefined;

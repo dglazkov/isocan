@@ -12,4 +12,5 @@ export { gateTurn, type GuardLimits, type GuardState, type GuardVerdict } from "
 export type { RcAgentRow, SheepPlace } from "./rows.js";
 export { actorNamesOn, enrolmentKey, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.js";
 export { mapState, runRoom, type Room, type RoomAdapter, type RoomDeps, type RoomHarness, type RoomRoutes, type RoomRows, type RoomState, type RoomTurn, type RoomTurnEvent, } from "./room.js";
+export { SHEEP_HARNESS, SheepAgent, assistantText, endSheep, toolCalls, toolTitle, type RmAnswer, type SheepBirth, type SheepCommands, type SheepEntry, type SheepReply, type SheepRow, } from "./sheep.js";
 export { COLLAB_SKILL } from "./skill.js";

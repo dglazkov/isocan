@@ -24,4 +24,18 @@ export {
   type RoomTurn,
   type RoomTurnEvent,
 } from "./room.ts";
+export {
+  SHEEP_HARNESS,
+  SheepAgent,
+  assistantText,
+  endSheep,
+  toolCalls,
+  toolTitle,
+  type RmAnswer,
+  type SheepBirth,
+  type SheepCommands,
+  type SheepEntry,
+  type SheepReply,
+  type SheepRow,
+} from "./sheep.ts";
 export { COLLAB_SKILL } from "./skill.ts";

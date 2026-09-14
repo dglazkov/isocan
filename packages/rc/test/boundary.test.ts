@@ -40,6 +40,8 @@ describe("the room module's boundary", () => {
     // The room is reached, and nothing of `@isocan/api` is: the routes it
     // speaks to the daemon through are its own interface over core's types.
     expect(reachedPaths).toContain("packages/rc/src/room.ts");
+    // And the sheep's policy, which a host speaks to a sheep home through.
+    expect(reachedPaths).toContain("packages/rc/src/sheep.ts");
     expect(reachedPaths.filter((f) => f.startsWith("packages/api/"))).toEqual([]);
     expect(
       offenders,
