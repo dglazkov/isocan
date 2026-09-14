@@ -51,6 +51,46 @@ describe("the peek card and the identity menu do not stack", () => {
   });
 });
 
+/**
+ * **A menu that hangs off a bar on a page that cannot scroll.**
+ *
+ * `.canvas-page` is `position: fixed; inset: 0; overflow: hidden`, so whatever
+ * the identity menu puts below the bottom edge is not reachable by any
+ * gesture — there is no page scroll underneath to rescue it. Measured on the
+ * canvas LIST at 1280x720, which carries the SHORT version of this menu: it
+ * ran 160px past the edge and "Leave — enter as someone else" could not be
+ * seen. On a canvas it also carries the Controls rows and the experiments.
+ *
+ * The list page happened to scroll, which is why this survived: on that page
+ * you could reach the bottom by scrolling the whole page, so the report came
+ * from a canvas and the reproduction did not.
+ */
+describe("the identity menu fits the screen it opens on", () => {
+  const css = readFileSync(path.join(here, "../src/styles.css"), "utf8");
+  const rule = css.slice(css.indexOf(".identity-popover {"));
+  const block = rule.slice(0, rule.indexOf("}"));
+
+  it("has a height budget at all", () => {
+    expect(block, ".identity-popover needs a max-height or it runs off the screen").toMatch(
+      /max-height:\s*calc\(100dvh/,
+    );
+  });
+
+  it("scrolls what does not fit, and keeps the scroll inside itself", () => {
+    expect(block).toMatch(/overflow-y:\s*auto/);
+    // Without this a flick past the end scrolls the canvas behind the menu.
+    expect(block).toMatch(/overscroll-behavior:\s*contain/);
+  });
+
+  it("measures the budget against the dynamic viewport, for the phone case", () => {
+    // `vh` on a phone is the height WITHOUT the address bar, so the last row
+    // is exactly the one that goes missing. `dvh` is the one that shrinks.
+    expect(block, "use dvh, not vh — the address bar is the case that breaks").not.toMatch(
+      /max-height:[^;]*[^d]vh/,
+    );
+  });
+});
+
 describe("the name field is not offered to a password manager", () => {
   const menu = read("../src/components/IdentityMenu.tsx");
 

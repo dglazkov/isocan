@@ -242,3 +242,11 @@ criteria before paid runs. A dry-run harness and rendered fixture review can
 be completed locally. Actual model spend requires a separately stated budget
 and approval; human intent ratings require a person. Record both as open
 until performed rather than fabricating a favorable lift measurement.
+
+
+The phase-5 mechanism is fixed in [evaluation.md](evaluation.md): the model has
+an empty toolset and supplies HTML, while the host exercises the real captured
+repair API on a fresh synthetic daemon. Actual DOM and interaction checks grade
+stored bytes. This bounds the measured claim to correction feedback rather than
+autonomous tool use. On the available Claude Max login, reported dollar cost is
+API-equivalent; actual billed spend remains unavailable without billing evidence.
