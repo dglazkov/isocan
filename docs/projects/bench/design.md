@@ -106,9 +106,18 @@ difference is a stale client that stops versus one that quietly writes a
 record with the provenance missing — and provenance that is *sometimes* there
 is worse than none, because nothing can rely on it.
 
-**`op-types` moves 36 → 37.** The architect persona bounds the vocabulary and
-requires the argument written beside the number. The argument is the paragraph
-above, and `web-only-ops` stays 0 because `isocan bench join` is the same act.
+**`op-types` moves by exactly one.** The architect persona bounds the
+vocabulary and requires the argument written beside the number; the argument is
+the paragraph above, and `web-only-ops` stays 0 because `isocan bench join` is
+the same act.
+
+*The number, corrected 15 Sep:* this said **36 → 37**, which was the count when
+the design was written and was stale by the time phase 1 ran — `design-lint`,
+`design-partner` and the voice agent each grew the vocabulary in between, and
+the real move was **40 → 41**. Recorded rather than quietly fixed, because a
+design that names a number a later reader cannot reproduce is a design that
+teaches them to distrust the rest of it. What the phase owes is that it adds
+ONE op; the absolute number is whatever the tree says on the day.
 
 **It does not invert.** Like `agent.enroll` and `actor.claim`, standing is
 granted deliberately and withdrawn deliberately, never by a casual ⌘Z.
@@ -149,6 +158,26 @@ ask wanted to "tie into the Inbox" ties in by costing zero.
 - **The rc in a cell** — journey 4, and the next project. It needs a
   long-lived credential at the isocan door whose blast radius is undecided,
   and a Cloudflare account, which is provisioning and is asked with a price.
+
+  **It is the same credential three other things are already waiting on**
+  (found 15 Sep by reading back through the sessions that discussed it, and
+  worth writing down here so journey 4 does not derive it a fourth time):
+  `ISOCAN_BEARER` blocks [the docket](../../research/2026-09-07-the-docket.md)'s
+  nightly (#206 phase 7), [sheep as standing
+  agents](../../research/2026-09-08-sheep-as-standing-agents.md) (#210 phase 2),
+  and the screens persona. It appears in three research notes and in **no code
+  at all** — deliberately: *"minting a long-lived credential for a public
+  repository's CI is a decision about blast radius, not a plumbing task: a
+  bearer that can write to a canvas is a bearer that can write to that canvas
+  from anywhere, and it would sit in a settings page for as long as nobody
+  revoked it."*
+
+  The mechanism is settled and proved twice — `ISOCAN_DIRECT` works a canvas
+  with no daemon (`shelf.test.ts`, `ground.test.ts`) and the door already
+  exempts a bearer. Only the blast radius is open, and it is one decision, not
+  four. What the bench adds is the thing that argument was missing: a surface
+  where such a credential can be **seen and revoked** by the person it belongs
+  to. "Your profile" was hand-waving; a bench row is a real place.
   What this project owes it is only that phases 0–3 do not forbid it: three
   reachability states, `runsAt` not `machineId`, and refusal copy that does
   not say "your machine".

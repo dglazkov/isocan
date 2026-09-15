@@ -139,10 +139,39 @@ goal:
   # conditional item.edit effect with an exact admitted-task continuation edge.
   # Ordinary repairs strand selected-target context; a fake design decision or
   # silent request recapture would hide that mismatch. No extra batch/inverse op.
+  #
+  # **45 → 46 on 2026-09-15: `agent.invite`** (the bench, phase 1). It is
+  # `agent.enroll` plus provenance — enroll says *this actor answers here*,
+  # invite says *this actor answers here, and here is the bench that vouched
+  # for it* — and it exists so a person can bring an agent they ALREADY HAVE
+  # to a canvas it has never worked on. Until now that was the same act as
+  # introducing a stranger ("no rc, no button"), which is why an agent's fifth
+  # canvas was as hard as its first.
+  #
+  # A distinct type rather than a `from` field on enroll, for the argument
+  # `item.pruneVersions` made above: a daemon that does not implement the
+  # provenance half must REFUSE the operation rather than accept it and
+  # silently drop `from`. A flag on an existing op is ignored by an old
+  # daemon; a new type is rejected by it. The difference is a stale client
+  # that stops versus one that quietly writes a record with the provenance
+  # missing — and provenance that is *sometimes* there is worse than none,
+  # because nothing can rely on it.
+  #
+  # It confers standing on ONE canvas and nothing else. The reducer carries
+  # any existing `rules` across untouched and stamps `writtenBy` only on a row
+  # it creates, so joining cannot widen who may summon; it does not invert
+  # (`invert.ts`, beside `agent.enroll`); and `web-only-ops` stays 0 because
+  # `isocan bench join <name>` is the same act as the panel's **Join**.
+  #
+  # *Written first against 40 → 41, then rebased:* this phase found the bound
+  # reading 36 while `ops.ts` held 40 and raised it to the truth. design-partner
+  # wrote the four owed paragraphs above in the same hours, and took the bound
+  # to 45. Both halves of that are kept — their arguments, and this op — which
+  # is why the number here is 46 and not 41.
   - name: operations in the vocabulary
-    at most: 45
+    at most: 46
     measured by: node scripts/measure.mjs op-types
-    baseline: 40, 2026-09-15, 336e6124
+    baseline: 45, 2026-09-15
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *

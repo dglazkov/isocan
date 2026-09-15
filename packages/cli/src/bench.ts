@@ -4,6 +4,7 @@ import {
   BENCH_ITEM_SIZE,
   benchAgents,
   benchItemOf,
+  benchJoinRefusal,
   benchRows,
   benchStandingWords,
   benchWords,
@@ -13,6 +14,7 @@ import {
   type BenchCanvas,
   type BenchRow,
 } from "@isocan/core";
+import { resolveCanvas } from "@isocan/api";
 import type { Ctx } from "./ctx.ts";
 import { printJson, printTable, truncate } from "./output.ts";
 import { scanHarnesses } from "./harnesses.ts";
@@ -94,6 +96,37 @@ async function readBench(ctx: Ctx, canvasId: string): Promise<BenchRow[]> {
     new Set(rcRows.map((row) => row.actorId)),
     Date.now(),
   );
+}
+
+/**
+ * The one bench row this name means, or a refusal that says why not.
+ *
+ * Three spellings, the same three everywhere: what you call it, the actor it
+ * speaks as, or the item it is. `bench rm` and `bench join` share it because
+ * a person naming an agent to remove and a person naming one to bring along
+ * are naming the same thing, and two matchers would drift into accepting
+ * different names for the same row.
+ */
+function oneRow<T extends { name: string; actorId: string; itemId: string }>(
+  rows: readonly T[],
+  name: string,
+): T {
+  const wanted = name.toLowerCase();
+  const matches = rows.filter(
+    (row) => row.name.toLowerCase() === wanted || row.actorId === name || row.itemId === name,
+  );
+  // One refusal, spelled in core, because the terminal's is the same refusal
+  // the Chat's `@Name join` gives and the wording is the security property
+  // rather than the copy: it must not say "unknown name", and it must not
+  // read differently for a name that happens to exist on somebody else's
+  // private bench. `benchJoinRefusal` is given the name and nothing else.
+  if (matches.length === 0) throw new Error(benchJoinRefusal(name));
+  if (matches.length > 1) {
+    throw new Error(
+      `"${name}" is on your bench ${matches.length} times (${matches.map((row) => row.itemId).join(", ")}). Name one by its item id.`,
+    );
+  }
+  return matches[0]!;
 }
 
 /** What this machine already knows about an agent by this name: the rc rows
@@ -241,6 +274,67 @@ summon it. Reachability is measured every time you look:
       }),
     );
 
+  /**
+   * **`isocan bench join <name>`** — journey 2 from the terminal, and the
+   * half that makes the panel's **Join** the same act rather than a web-only
+   * gesture.
+   *
+   * It sends `agent.invite` to the canvas this command is ABOUT (`--canvas`,
+   * the directory's binding, the usual walk), carrying the bench it read the
+   * row from. Nothing is asked of any machine: the actor already exists —
+   * that is what being on your bench means — so there is no rc handshake to
+   * make, which is precisely what separates naming an agent you have from
+   * introducing a stranger. That is why this needs no parked `isocan rc` on
+   * the target canvas and `isocan agent add` does.
+   *
+   * **And it confers nothing beyond standing here.** No turn is started, no
+   * `listen` rule is written, and no other canvas is touched. What it prints
+   * is the reachability it just measured, in journey 1's words, because an
+   * enrolment that cannot answer yet is legitimate and an enrolment that
+   * pretends it can answer is the bug.
+   */
+  bench
+    .command("join <name>")
+    .description("Bring an agent from your bench to this canvas — it answers here, and nothing else changes")
+    .action(
+      act(async (ctx, args) => {
+        const name = args[0] as string;
+        const benchId = await benchCanvasId(ctx);
+        if (!benchId) {
+          throw new Error(
+            "you have no bench here — `isocan bench add <name>` puts an agent on one first",
+          );
+        }
+        const row = oneRow(benchAgents((await ctx.client.snapshot(benchId)).canvas), name);
+        const target = await resolveCanvas(ctx);
+        const standing = (await ctx.client.snapshot(target.id)).canvas.agents?.[row.actorId];
+        if (standing) {
+          if (ctx.json) {
+            return printJson({ canvasId: target.id, from: benchId, joined: false, agent: row });
+          }
+          return console.log(
+            `${standing.actor.name} already answers on ${target.title} (${target.id}).`,
+          );
+        }
+        await ctx.client.sendOp(target.id, ctx.actor, {
+          type: "agent.invite",
+          agent: { id: row.actorId, name: row.name },
+          from: benchId,
+        });
+        // Measured AFTER, and by core: the row now stands on one more canvas,
+        // so a word read before the send would be a word about a bench that
+        // no longer exists. `ready` is still the only thing a parked rc can
+        // make true, which is the point — joining did not move it.
+        const joined = oneRow(await readBench(ctx, benchId), name);
+        if (ctx.json) {
+          return printJson({ canvasId: target.id, from: benchId, joined: true, agent: joined });
+        }
+        console.log(
+          `${joined.name} answers on ${target.title} — ${benchWords(joined)}, ${benchStandingWords(joined)}. Nothing else moved: no turn was started, no summons rule was written, and no other canvas changed.`,
+        );
+      }),
+    );
+
   bench
     .command("rm <name>")
     .description("Take an agent off your bench — its enrolments and its rc rows are untouched")
@@ -250,17 +344,7 @@ summon it. Reachability is measured every time you look:
         const canvasId = await benchCanvasId(ctx);
         if (!canvasId) throw new Error("you have no bench here");
         const snapshot = await ctx.client.snapshot(canvasId);
-        const wanted = name.toLowerCase();
-        const matches = benchAgents(snapshot.canvas).filter(
-          (row) => row.name.toLowerCase() === wanted || row.actorId === name || row.itemId === name,
-        );
-        if (matches.length === 0) throw new Error(`nobody called "${name}" is on your bench`);
-        if (matches.length > 1) {
-          throw new Error(
-            `"${name}" is on your bench ${matches.length} times (${matches.map((row) => row.itemId).join(", ")}). Name one by its item id.`,
-          );
-        }
-        const row = matches[0]!;
+        const row = oneRow(benchAgents(snapshot.canvas), name);
         await ctx.client.sendOp(canvasId, ctx.actor, { type: "item.delete", itemId: row.itemId });
         if (ctx.json) return printJson({ canvasId, itemId: row.itemId, removed: row });
         console.log(`${row.name} is off your bench. Its standing and its rc rows are exactly as they were.`);

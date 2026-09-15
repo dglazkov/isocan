@@ -2,6 +2,12 @@
 # scripts/mergegen.mjs for why and scripts/prepare.mjs for where the driver
 # is registered. A clone that has not run `npm install` falls back to the
 # ordinary merge, which is the behaviour these files had before.
+#
+# ONLY a file its generator rewrites WHOLE belongs here. The driver copies the
+# regenerated file over git's merge result, so a file that is only partly
+# derived loses the incoming side silently — `docs/projects/README.md` and
+# `docs/reviews/README.md` were listed here and are hand-written, and between
+# them they ate the same index row twice on 15 Sep 2026 with nothing to show
+# for it in `git status`. `test/mergegen.test.ts` now tampers with each target
+# and regenerates, so a file that does not come back cannot be listed.
 docs/ROADMAP.md merge=isocan-generated
-docs/projects/README.md merge=isocan-generated
-docs/reviews/README.md merge=isocan-generated

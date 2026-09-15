@@ -11970,6 +11970,8 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
         : `${who} cleared the main thread`;
     case "agent.enroll":
       return `${who} enrolled ${op.agent.name} — answerable on this canvas`;
+    case "agent.invite":
+      return `${who} brought ${op.agent.name} here from a bench — answerable on this canvas`;
     case "agent.withdraw":
       return `${who} dismissed ${op.actorId} — no longer answering here`;
     default: {

@@ -21,6 +21,12 @@ export interface MentionPeer {
   name: string;
   /** Has a live session right now — they'll see the comment immediately. */
   online: boolean;
+  /**
+   * What the menu says beside the name when picking it would not mean what it
+   * looks like. Only the bench uses it today (*not here yet*), and the roster
+   * below never sets it: everybody it knows about IS on this canvas.
+   */
+  note?: string;
 }
 
 interface MentionRoster {

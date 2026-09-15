@@ -643,6 +643,25 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   agent from what this machine already knows and `isocan bench rm <name>` takes
   it off — and a row confers nothing either way: it does not enrol an agent,
   and removing it withdraws nothing.
+- **Bringing an agent along**: the agents panel lists your bench above *Add an
+  agent…*, each row with **Join**, and `isocan bench join <name>` is the same
+  act from a terminal. It enrols an agent you already have on *this* canvas —
+  with no `isocan rc` parked there, because naming an agent whose actor exists
+  is not the same act as introducing a stranger, and bringing one to its fifth
+  canvas should not be as hard as bringing it to its first. Joining grants
+  standing here and nothing else: it starts no turn, widens nobody's right to
+  summon, and touches no other canvas. Each row says whether anything could
+  answer *before* you click, in the same three words the bench uses.
+- **Asking in the Chat**: type `@Name join` on a line of its own and the agent
+  joins — the same act, said where you were already talking. Your bench is in
+  the `@` menu as well as the canvas's own people, marked *not here yet* so a
+  name never reads as somebody who can already hear you, and the line becomes
+  a chip as you write it. When it lands the thread gets one line saying so,
+  because the canvas is the only channel. A name that is not on **your** bench
+  is refused with *"Name is not on your bench"* — never "unknown name", and
+  never a different answer for a name that happens to exist on somebody
+  else's bench, because a bench is a private canvas and a refusal that varied
+  would be a way to read it one name at a time.
 - **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
   can be told what to care about — `--item <ref>` and `--op item.addVersion`
   (or a family, `item.*`) narrow which changes wake it, so a watcher does not
@@ -769,11 +788,15 @@ isocan pass [--admit-only]         # a one-use pass: the command another
 isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
                                    # what each has proved; end one
 isocan bench [add <name> [--actor <id>] [--harness <n>] [--runs-at <label>]]
-             [rm <name>]           # the agents you have, and whether anything
+             [join <name>] [rm <name>]
+                                   # the agents you have, and whether anything
                                    # could answer for one right now: ready /
                                    # elsewhere / unreachable. A row is a
                                    # record — it enrols nobody, and removing
-                                   # it withdraws nobody.
+                                   # it withdraws nobody. `join` brings one to
+                                   # THIS canvas and nothing else: no rc need
+                                   # be parked, no turn starts, no other
+                                   # canvas changes.
 isocan canvas create|list [--all]|show|edit|delete
 isocan use <canvas> [--home]      # bind this dir to a canvas (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]

@@ -67,6 +67,7 @@ export function invertOperation(
       return null; // home-scoped and never undoable; never reaches a canvas
 
     case "agent.enroll":
+    case "agent.invite":
     case "agent.withdraw":
       // Standing is granted and withdrawn deliberately, never by a casual ⌘Z
       // — an undo that silently re-armed (or silently silenced) an agent

@@ -21,3 +21,32 @@
   background: var(--chip-hover);
   outline: none;
 }
+
+/* `@Sian join` while it is being typed — a command chip, the way `/anatomy`
+   is, because it is the same kind of thing: a line that asks this canvas for
+   something it knows how to do.
+
+   It paints UNDER live text in the composer's mirrored backdrop, so the
+   background is a spread box-shadow rather than padding — the same trick
+   `.mention` and `.item-ref` use, and for the same reason: a single pixel of
+   padding here and the highlight drifts off the words. No `cursor` either;
+   there is nothing to click, the chip only says that Enter will do something
+   other than post. */
+.bench-join {
+  color: var(--ink);
+  background: var(--chip);
+  box-shadow: 0 0 0 2px var(--chip);
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* The `@` menu's word for a name that is on your bench and not on this canvas.
+   Quieter than `live`, which is the same kind of aside about the opposite
+   fact, and it sits in the same place on the row. */
+.mention-note {
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}

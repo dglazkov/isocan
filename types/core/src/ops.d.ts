@@ -485,6 +485,36 @@ export type Operation = {
      */
     rules?: unknown;
 } | {
+    /**
+     * **Bring an agent you already have to this canvas** (the bench,
+     * journey 2). `agent.enroll` plus provenance: enroll says *this actor
+     * answers here*; invite says *this actor answers here, and here is the
+     * bench that vouched for it*.
+     *
+     * **Why a distinct type rather than a field on enroll.** The same
+     * argument `item.pruneVersions` made against a loop of
+     * `item.removeVersion` (14 Sep): a daemon that does not implement the
+     * provenance half must REFUSE the operation rather than accept it and
+     * silently drop `from`. A flag on an existing op is ignored by an old
+     * daemon; a new type is rejected by it. The difference is a stale
+     * client that stops versus one that quietly writes a record with the
+     * provenance missing — and provenance that is *sometimes* there is
+     * worse than none, because nothing can rely on it.
+     *
+     * **It confers only standing here.** The reducer keeps whatever rules
+     * the record already carried and stamps `writtenBy` only on a row it
+     * creates, so joining never widens who may summon and never rewrites
+     * whose word the rc honours. It does not start a turn and it touches no
+     * other canvas: a bench row confers nothing by itself.
+     */
+    type: "agent.invite";
+    agent: Actor;
+    /** The bench canvas the row was read from — the canvas that vouched.
+     * Recorded, never resolved by a reader here: it is somebody's private
+     * canvas, and the only claim it makes is where the invitation came
+     * from. */
+    from: string;
+} | {
     /** Take the standing back. The enrolment row goes; the log keeps the
      * whole story, which is journey 8's "history untouched". */
     type: "agent.withdraw";

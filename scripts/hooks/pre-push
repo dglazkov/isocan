@@ -27,9 +27,7 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 command -v node >/dev/null 2>&1 || exit 0
 
 stale=""
-for pair in "docs/ROADMAP.md:scripts/roadmap.mjs" \
-            "docs/projects/README.md:scripts/roadmap.mjs" \
-            "docs/reviews/README.md:scripts/reviews.mjs"; do
+for pair in "docs/ROADMAP.md:scripts/roadmap.mjs"; do
   file=${pair%%:*}
   gen=${pair#*:}
   [ -f "$root/$file" ] || continue

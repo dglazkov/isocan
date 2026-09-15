@@ -28,6 +28,7 @@ export * from "./canvas-scope.js";
 export * from "./canvas-group-create.js";
 export * from "./canvasitem.js";
 export * from "./bench.js";
+export * from "./benchjoin.js";
 export * from "./googledoc.js";
 export * from "./addable.js";
 export * from "./titleroom.js";

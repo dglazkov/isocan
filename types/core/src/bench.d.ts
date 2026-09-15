@@ -43,14 +43,20 @@ export declare const BENCH_ITEM_SIZE: {
  * cannot say *unreachable*, the dead-machine case `agent-custody` waits on,
  * and it assumes the question is about THIS machine, which journey 4 makes
  * false. Never reduce this to two.
+ *
+ * Module-local: the surfaces meet this union through `BenchRow.reach`, which
+ * is exported and carries it structurally, and they check themselves against
+ * `BENCH_REACH` below rather than against the type. Nothing outside ever
+ * needed to WRITE the name, and a type nobody names is not API.
  */
 type BenchReach = "ready" | "elsewhere" | "unreachable";
 /**
  * Every reachability a bench row can read, in the order a person meets them.
  *
- * Exported so the surfaces can be checked against the vocabulary rather than
- * against each other: a build that collapsed the middle state would still type
- * check, and this is what a test holds on to.
+ * Exported — and it is the one of the pair that has to be, because it is a
+ * VALUE a test can iterate: a build that collapsed the middle state would
+ * still type check, so the guard has to hold the three answers in its hand
+ * rather than trust the union it would be checking against.
  */
 export declare const BENCH_REACH: readonly BenchReach[];
 /** One agent, as its item on the personal canvas records it. */
@@ -103,7 +109,9 @@ export interface BenchCanvas {
     answerable?: ReadonlySet<string>;
 }
 /** A canvas this agent stands on — its enrolment, named so a row can say
- * "standing on 4 canvases" and a reader can go and look. */
+ * "standing on 4 canvases" and a reader can go and look. Module-local for
+ * `BenchReach`'s reason: readers reach it through `BenchRow.standing`, and
+ * nothing outside has ever written the name. */
 interface BenchStanding {
     canvasId: string;
     canvasTitle: string;

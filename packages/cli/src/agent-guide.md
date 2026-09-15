@@ -571,6 +571,7 @@ them between machines instead of dying with the laptop it was made on.
 ```sh
 isocan bench                # every agent on your bench, with its reachability
 isocan bench add <name>     # put one on the bench, from what this machine knows
+isocan bench join <name>    # have it answer on THIS canvas too
 isocan bench rm <name>      # take it off — its standing is untouched
 ```
 
@@ -588,6 +589,38 @@ standing on a canvas, and `isocan bench rm` takes none of it away. `bench add`
 reads the agent off this machine's own records; for an agent this machine has
 never run, name its actor with `--actor <id>` and say so plainly rather than
 guessing a harness for it.
+
+**Bringing one to a canvas is `isocan bench join <name>`.** It enrols an agent
+from your bench on the canvas the command is about — `--canvas`, or whatever
+this directory is bound to — and it needs **no parked `isocan rc` there**,
+which is the difference between naming an agent you already have and
+introducing a stranger. `isocan agent add` mints an actor and so must ask the
+machine that will answer for it; an agent on your bench already has one, so
+its fifth canvas costs exactly what its first did.
+
+What joining does NOT do is the part worth reading twice: it grants standing
+on that one canvas and nothing else. No turn is started, nobody new may summon
+it (a re-join leaves an existing `--listen` grant exactly as it was), and no
+other canvas changes. If nothing can answer for the agent yet, the join still
+succeeds and the line says so in the same three words `isocan bench` uses — an
+enrolment that cannot answer yet is legitimate, and one that pretends it can
+is the bug.
+
+**A person can ask for the same thing in the Chat, by typing `@Name join` on
+a line of its own.** It is the same `agent.invite` this verb sends — joining
+from a sentence and joining from a button are one act — and when it lands the
+thread gets one line saying so, because the canvas is the only channel. You
+will see that line like any other message; it is a record, not a request, and
+nothing is being asked of you.
+
+If you are reading a thread and see `@Name join` with no such line after it,
+the ask was refused: the name was not on the asker's bench. **The refusal is
+always *"Name is not on your bench"* and never *"unknown name"*, whether the
+agent exists on somebody else's bench or does not exist at all.** That is
+deliberate and it is a security property rather than a phrasing: a bench is a
+private canvas, and a refusal that read differently for a name that exists
+somewhere would let a stranger enumerate one name at a time. Do not "improve"
+it, and do not offer to look the name up.
 
 ## The Chat
 

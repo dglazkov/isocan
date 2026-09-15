@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { Actor } from "@isocan/core";
 import { roster, rulesOf, type ListenEntry } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
@@ -10,6 +10,26 @@ import { AgentsGlyph } from "./Glyphs.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { PanelHead } from "./PanelHead.tsx";
 import { useAnswerable, useRcParked } from "../lib/answerable.ts";
+
+/**
+ * **Your bench arrives when the panel does, not when the page does.**
+ *
+ * The tray is eager — it is on the canvas page, and a person opens it often
+ * enough that its rows should already be here. The BENCH behind it is not the
+ * same thing: it is the reader in `lib/bench.ts` plus core's `bench.ts`, and
+ * loading it on first paint made every visit pay 27,400 bytes for a panel
+ * most of them never open (`test/bundle-budget.test.ts`, 15 Sep). `YourBench`
+ * was already behind a boundary — `CanvasCrumb` lazy-loads the identity menu
+ * it hangs off — so the tray was the one eager door into the same code.
+ *
+ * The boundary is a `lazy` import and not a second derivation: what arrives
+ * late is the COMPONENT, and it still reads `benchRows()` and `benchWords()`
+ * from core exactly as the terminal does. `fallback={null}` because a bench
+ * that has not arrived looks like the bench of somebody who has none, which
+ * is the honest thing for the half-second it takes: a spinner over an empty
+ * list would promise agents that may not exist.
+ */
+const BenchJoin = lazy(() => import("./BenchJoin.tsx").then((m) => ({ default: m.BenchJoin })));
 
 /**
  * **`isocan who`, given a home on the canvas.**
@@ -137,6 +157,14 @@ export function AgentTray({ canvasId, actor }: { canvasId: string; actor: Actor 
           ))
         )}
       </div>
+      {/* Journey 2: the agents you already HAVE, above the door for
+          introducing one you do not. Two different acts, so two different
+          controls — naming an agent whose custody is settled asks nothing of
+          any machine, which is why this one appears without a parked rc and
+          `AddAgent` below it does not. */}
+      <Suspense fallback={null}>
+        <BenchJoin canvasId={canvasId} actor={actor} />
+      </Suspense>
       <AddAgent canvasId={canvasId} actor={actor} />
       <PanelResizer />
     </aside>

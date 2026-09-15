@@ -124,6 +124,12 @@ export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/desk.test.ts", secs: 11 },
   { file: "packages/cli/test/documents.test.ts", secs: 11 },
   { file: "packages/cli/test/sprint.test.ts", secs: 10 },
+  // 15 Sep: it was 7.5s and in the fast lane while the phase 0 proof was the
+  // whole file. Phase 1's `bench join` case added 4.2s of its own — three
+  // canvases, an enrolment and two joins against the real binary — and 12.9s
+  // is past the line the rule states, so it moves rather than the rule
+  // bending for it.
+  { file: "packages/cli/test/bench.test.ts", secs: 12.9 },
   { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
 ];
 
@@ -177,7 +183,6 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "test/deeplist.test.ts", secs: 0.2, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },
   { file: "packages/voice-agent/test/voice-model.test.ts", secs: 9.8, why: "nineteen cases over one daemon, and the closest file to the line: only the model verbs it cannot drive from the page walk the CLI at all" },
-  { file: "packages/cli/test/bench.test.ts", secs: 7.5, why: "one case: it parks a single rc to reach `ready` and stops it on the way out, where the rc files park several and drive turns through an adapter. Measured 6.5s and 7.5s on two runs of 15 Sep — near the line, and worth the ordinary lane because it is the whole proof that reachability has three answers" },
 ];
 
 /**

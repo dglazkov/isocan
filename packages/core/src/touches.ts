@@ -70,8 +70,13 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
     case "thread.restore":
       return op.thread.anchorItemId ? [op.thread.anchorItemId] : [];
     default:
-      // Home-scoped and canvas-wide ops (actor.*, project.*, trash.empty,
-      // thread.setMain) are about no item in particular.
+      // Home-scoped and canvas-wide ops (actor.*, agent.*, project.*,
+      // trash.empty, thread.setMain) are about no item in particular. The
+      // agent family is deliberately here rather than listed with an empty
+      // return of its own: `agent.invite` enrols on the canvas, not on any
+      // item, so a `wait --item` watcher has nothing to be woken for — while
+      // `wait --op agent.invite` still matches, because `opTypeMatches` reads
+      // the type and never this table.
       return [];
   }
 }
