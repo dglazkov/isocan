@@ -9,7 +9,7 @@ import { readConfigFile, readMarker, updateConfigFile } from "@isocan/server";
 import { agentSessionOf, machineAgentKey } from "./agent-key.ts";
 import { readRcAgents, upsertRcAgent } from "./rc-rows.ts";
 import { statSync } from "node:fs";
-import { connect, matchRef, type CanvasHandle, type ListedItem } from "@isocan/api";
+import { ApiError, connect, matchRef, type CanvasHandle, type ListedItem } from "@isocan/api";
 import {
   BROWSER_MIME,
   canvasUrlWithPass,
@@ -26,6 +26,7 @@ import {
   newThreadId,
   newVersionId,
   normalizeSiteUrl,
+  parseCanvasAddress,
   siteLabel,
   type InkStroke,
 } from "@isocan/core";
@@ -3596,6 +3597,70 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
   }
 
   /**
+   * **A pasted address or pass, turned into a canvas this session can be
+   * on.**
+   *
+   * The same act `isocan setup <address>` performs, for a person at the
+   * drawer instead of a terminal: a pass is redeemed (the daemon forwards to
+   * the home that minted it, and this badge comes away admitted), or a
+   * pass-less address arrives through the home's door — and then the switch
+   * WAITS for the canvas to actually land here, because "moved" printed
+   * before the replica has arrived would be the page lying.
+   *
+   * A bare `pss_…` token is the one shape with no canvas in it: the
+   * redemption's answer IS the canvas name, which is why the caller leaves
+   * `canvasId` out and reads it back from the result.
+   *
+   * `joinFromHome` is swallowed for the reason the CLI swallows it: on a
+   * daemon that is the home itself it answers not-a-replica, and the wait
+   * below is the verdict either way — the canvas is there, or it is not.
+   */
+  async function joinCanvasArrival(request: {
+    canvasId?: string;
+    origin?: string;
+    pass?: string;
+  }): Promise<{ ok: true; canvasId: string } | { ok: false; error: string }> {
+    try {
+      let canvasId = request.canvasId;
+      let noHomeToAsk: string | null = null;
+      if (request.pass) {
+        const answer = await target.canvas.ctx.client.redeemPass(request.pass, request.origin);
+        canvasId = answer.canvasId;
+      } else if (!canvasId) {
+        return { ok: false, error: "nothing to join: name a canvas" };
+      } else {
+        const refused = await target.canvas.ctx.client.joinFromHome(canvasId, request.origin).catch((err: unknown) => {
+          // 409 not-a-replica: this daemon has nobody to ask — the canvas is
+          // either already here (admitted or link-discoverable) or it never
+          // will be. Keep the sentence; the wait decides which.
+          if (err instanceof ApiError && err.code === "not-a-replica") {
+            noHomeToAsk = err.message;
+            return null;
+          }
+          return err;
+        });
+        if (refused) throw refused;
+      }
+      const deadline = Date.now() + 15_000;
+      for (;;) {
+        const local = await target.canvas.ctx.client.listCanvases().catch(() => []);
+        if (local.some((canvas) => canvas.id === canvasId)) return { ok: true, canvasId: canvasId! };
+        if (noHomeToAsk) return { ok: false, error: noHomeToAsk };
+        if (Date.now() >= deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      return {
+        ok: false,
+        error: request.pass
+          ? `the pass was redeemed and this machine is admitted, but “${canvasId}” has not arrived here yet — try again in a moment`
+          : `this machine was let in at the door, but “${canvasId}” has not arrived here yet — try again in a moment`,
+      };
+    } catch (err) {
+      return { ok: false, error: `not joined — ${(err as Error).message}` };
+    }
+  }
+
+  /**
    * **One enrolment, two callers** — the model's `agent_enroll` tool and the
    * drawer's "Enrol from here".
    *
@@ -4190,12 +4255,29 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
        * The switch itself is `switchThisSession`: the same function the model's
        * tool call runs, so the presence room, the page, the state file and the
        * model's referents move together whichever surface asked.
+       *
+       * **`public` rides along** — the daemon's own public catalogue
+       * (`/api/public`), so the picker can mark a published canvas and offer
+       * one this machine has never visited. A POST naming one of them is the
+       * pass-less arrival: the door's link grant decides.
+       *
+       * ponytail: the catalogue is this daemon's, not a federation across
+       * homes — a replica advertises only what is listed locally. Fan out
+       * over `client.homes()` when a replica should advertise its home's
+       * catalogue too.
        */
       if (req.method === "GET" && url.pathname === "/canvases") {
-        const canvases = await target.canvas.ctx.client.listCanvases();
+        const [canvases, catalogue] = await Promise.all([
+          target.canvas.ctx.client.listCanvases(),
+          target.canvas.ctx.client.publicCanvases().catch(() => ({ canvases: [] })),
+        ]);
         const shown = sortCanvases(canvases.filter((c) => inScope(c, "live") || c.id === target.canvasId), "recent");
         respond(200, {
           canvases: shown.map((c) => ({ id: c.id, title: c.title, current: c.id === target.canvasId })),
+          // The whole catalogue, NOT deduped against the local list: on a home
+          // daemon every listed canvas is also link-discoverable, so the page
+          // marks the rows it already holds rather than printing them twice.
+          public: catalogue.canvases,
           current: target.canvasId,
         });
         return;
@@ -4204,19 +4286,59 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         const body = await readBody();
         const asked = typeof body === "string" ? {} : body;
         // A reference, not an id: the page sends what the picker holds, and a
-        // person may type a title into the same field.
-        const wanted = String(asked.id ?? asked.canvas ?? asked.ref ?? "");
-        const moved = await switchThisSession(wanted);
-        if (!moved.ok) {
+        // person may type a title into the same field — or paste a whole
+        // canvas address with its `#pss_…` pass on the end, or the bare pass
+        // token, which is how a stranger joins a canvas this machine does not
+        // know yet (`isocan setup <address>`'s act, from the drawer).
+        const wanted = String(asked.ref ?? asked.id ?? asked.canvas ?? "").trim();
+        const fail = (error: string, notFound = false): void => {
           recordToolLog({
             type: "tool_call",
             source: "typed",
             name: "project_switch",
             args: { canvas_ref: wanted, via: "settings" },
-            result: { ok: false, error: moved.error },
+            result: { ok: false, error },
           });
-          const status = !wanted ? 400 : moved.notFound ? 404 : 400;
-          respond(status, { error: moved.error });
+          respond(notFound ? 404 : 400, { error });
+        };
+        const address = parseCanvasAddress(wanted);
+        const barePass = /^pss_[^.\s]+\.[\w-]+$/.test(wanted) ? wanted : null;
+        let moved;
+        if (address || barePass) {
+          const arrival = await joinCanvasArrival(
+            address
+              ? { canvasId: address.canvasId, origin: address.origin, ...(address.pass ? { pass: address.pass } : {}) }
+              : { pass: barePass! },
+          );
+          if (!arrival.ok) {
+            fail(arrival.error);
+            return;
+          }
+          moved = await switchThisSession(arrival.canvasId);
+        } else {
+          moved = await switchThisSession(wanted);
+        }
+        // Nothing local matched: a published canvas is still joinable — the
+        // door's link grant admits, and the switch then finds it arrived.
+        if (!moved.ok && moved.notFound) {
+          const catalogue = await target.canvas.ctx.client.publicCanvases().catch(() => ({ canvases: [] }));
+          // `matchRef` is typed over the daemon's Canvas rows; the catalogue's
+          // are the same two fields, so the same two rules apply by hand.
+          const rows = catalogue.canvases;
+          const byId = rows.find((c) => c.id === wanted);
+          const byTitle = byId ? [] : rows.filter((c) => c.title.toLowerCase().startsWith(wanted.toLowerCase()));
+          const hit = byId ?? (byTitle.length === 1 ? byTitle[0] : null);
+          if (hit) {
+            const arrival = await joinCanvasArrival({ canvasId: hit.id, origin: hit.home });
+            if (!arrival.ok) {
+              fail(arrival.error);
+              return;
+            }
+            moved = await switchThisSession(hit.id);
+          }
+        }
+        if (!moved.ok) {
+          fail(moved.error, moved.notFound);
           return;
         }
         recordToolLog({

@@ -8,7 +8,7 @@ import { startDaemon, type Daemon } from "@isocan/server";
 import { agentSessionOf, machineAgentKey } from "../src/agent-key.ts";
 import { readRcAgents } from "../src/rc-rows.ts";
 import { harnessVars } from "@isocan/api";
-import { shelvePatch } from "@isocan/core";
+import { shelvePatch, grantsRoute, passesRoute, passRoute, publicListingRoute } from "@isocan/core";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 import {
   DEFAULT_VOICE_PORT,
@@ -1467,6 +1467,82 @@ describe("the person's gate", () => {
     });
     expect([400, 404]).toContain(missing.status);
     expect(((await missing.json()) as { error: string }).error).toContain("no canvas matches");
+  });
+
+  it("joins a canvas from a pasted address with its pass, a bare token, and the public catalogue", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: seeder,
+      op: { type: "project.create", canvasId: "prj_2", title: "Launch plan" },
+    });
+    await post("/api/ops", {
+      canvasId: null,
+      actor: seeder,
+      op: { type: "project.create", canvasId: "prj_3", title: "Public house" },
+    });
+    const server = await serve();
+
+    // 1. The whole pasted line — address with its `#pss_…` pass — redeems the
+    // pass and moves the session onto the canvas it names.
+    const minted = await fetch(`${base}${passesRoute("prj_2")}`, { method: "POST", headers: badge.headers });
+    expect(minted.status).toBe(200);
+    const { pass, token } = (await minted.json()) as { pass: { id: string }; token: string };
+    const joined = await fetch(`${server.state.url}canvas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: `${base}/p/prj_2#${token}` }),
+    });
+    expect(joined.status, await joined.clone().text()).toBe(200);
+    const body = (await joined.json()) as { canvas: { id: string; title: string }; previous: { id: string } };
+    expect(body.canvas).toEqual({ id: "prj_2", title: "Launch plan" });
+    expect(body.previous.id).toBe("prj_1");
+    // The pass is spent: the join was the redemption, not a local guess.
+    const spent = await fetch(`${base}${passRoute("prj_2", pass.id)}`, { headers: badge.headers });
+    expect(((await spent.json()) as { pass: { redeemedAt?: string } }).pass.redeemedAt).toBeDefined();
+
+    // 2. A bare token — the redemption's own answer names the canvas.
+    const back = await fetch(`${base}${passesRoute("prj_1")}`, { method: "POST", headers: badge.headers });
+    const { token: backToken } = (await back.json()) as { token: string };
+    const movedBack = await fetch(`${server.state.url}canvas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: backToken }),
+    });
+    expect(movedBack.status, await movedBack.clone().text()).toBe(200);
+    expect(((await movedBack.json()) as { canvas: { id: string } }).canvas.id).toBe("prj_1");
+
+    // 3. A published canvas shows in the picker, and POSTing its id joins it.
+    const granted = await fetch(`${base}${grantsRoute("prj_3")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({ subject: "link", capability: "read", actorId: seeder.id }),
+    });
+    const { grant } = (await granted.json()) as { grant: { id: string } };
+    const listed = await fetch(`${base}${publicListingRoute("prj_3", grant.id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({ listed: true, actorId: seeder.id }),
+    });
+    expect(listed.status).toBe(200);
+    const offered = await fetch(`${server.state.url}canvases`);
+    const catalogue = (await offered.json()) as { public: { id: string; title: string }[] };
+    expect(catalogue.public.map((c) => c.title)).toContain("Public house");
+    const viaPublic = await fetch(`${server.state.url}canvas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "prj_3" }),
+    });
+    expect(viaPublic.status, await viaPublic.clone().text()).toBe(200);
+    expect(((await viaPublic.json()) as { canvas: { id: string } }).canvas.id).toBe("prj_3");
+
+    // A pasted address without a pass is refused honestly, not cheerfully
+    // moved: nothing admits this badge to a canvas it has never seen.
+    const noPass = await fetch(`${server.state.url}canvas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: `${base}/p/prj_nope` }),
+    });
+    expect(noPass.status).toBe(400);
   });
 
 });
