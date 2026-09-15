@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-15
 issue: 316
 see: bench, sheep-harness, standing-agents, agent-custody, on-demand, room
-note: walked 15 Sep 2026, on a real canvas with a real Cloudflare account — an agent moved from a laptop to an always-on machine and answered from there. Three things were proved that no test covers: `isocan pass --agent` redeemed by `isocan setup` hands an agent's identity to a second machine (the piece `standing-agents` deliberately left); two machines join ONE sheep home and see the same cells; and the custody split holds visibly — identity crosses, harness and cwd do not. Three sharp edges found, one of them a likely bug: `rc listen --to` reported success and the grant is not at the home. The other two are `--default-harness` being machine-wide and `rc add` resetting a listen grant as a side effect of setting a harness.
+note: walked 15 Sep 2026, on a real canvas with a real Cloudflare account — an agent moved from a laptop to an always-on machine and answered from there. Three things were proved that no test covers: `isocan pass --agent` redeemed by `isocan setup` hands an agent's identity to a second machine (the piece `standing-agents` deliberately left); two machines join ONE sheep home and see the same cells; and the custody split holds visibly — identity crosses, harness and cwd do not. Two sharp edges found. A third was filed as a bug (#316) and RETRACTED the same day — it was correct behaviour misread three times, because the second machine is a different PERSON (Admiral One) and the prose does not name who "you" is. The two real ones are `--default-harness` being machine-wide and `rc add` resetting a listen grant as a side effect of setting a harness.
 ---
 
 # A sheep on two machines
@@ -50,39 +50,41 @@ anyway**. That is [the bench](2026-09-14-the-bench.md) phase 3's rule — the
 registry must never break the act it records — meeting a real canvas hours
 after it shipped.
 
-## Three sharp edges
+## The edges, and one retraction
 
-### 1. `rc listen --to` reported success and the grant is not there
+### 1. ~~`rc listen --to` reported success and the grant is not there~~
+**Retracted the same day. Not a bug — see below.**
 
-**The one to fix — filed as [#316](https://github.com/dglazkov/isocan/issues/316).** On the cloudtop:
+Filed as [#316](https://github.com/dglazkov/isocan/issues/316) and closed
+within the hour. The machine was **Admiral One** (`usr_NqnR80M_lu`), not Dion
+Almaer, so `rc listen Dolly --to usr_NqnR80M_lu` granted Admiral One the right
+to summon an agent **whose owner is already Admiral One**. The owner always
+listens, the grant is redundant, `policy.listen` is `[]`, and *"listens only to
+you"* is exactly correct — "you" being Admiral One.
 
+`--json` settled it in one command:
+
+```json
+{ "listen": ["usr_NqnR80M_lu"],
+  "policy": { "owner": { "id": "usr_NqnR80M_lu", "name": "Admiral One" },
+              "listen": [] } }
 ```
-isocan --canvas prj_Gi8oGKNALt rc listen Dolly --to usr_NqnR80M_lu
-Dolly listens only to you — on 1 canvas ([isocan] History). A running
-`isocan rc` reads this on its next lap; nothing needs restarting.
-```
 
-That line is the **write** path (`main.ts`: it prints only after
-`written.length > 0`), so the gesture ran and touched one canvas. Reading the
-grant back from the home afterwards — `ISOCAN_DIRECT=https://isocan.io isocan
-… rc listen Dolly` — says `listens only to you`. The grant is not there.
+**What is worth keeping is why it took three wrong readings.** The prose says
+*"listens only to you"* without naming who "you" is. On a machine whose
+identity the reader has ASSUMED rather than checked, that sentence supports
+three wrong stories — a silent no-op, a silent narrowing, replica lag — and I
+told all three, each confidently, before asking `whoami`. Naming the owner
+(*"listens only to Admiral One"*) would have ended it at the first reading and
+costs nothing. That is a copy nit, not the bug that was filed, and it is not
+being dressed up as one.
 
-**What is ruled out.** It is not an unresolved target: `resolveListen` throws
-`nobody on this canvas answers to "<who>"` and no such error appeared. It is
-not the name: an actor id behaved identically. The same gesture, with the
-name, **worked on the laptop** — where the CLI reached the home directly
-rather than through a local replica.
-
-**What is not known**, and should be found rather than guessed: whether the op
-never left the cloudtop, whether it was written and the read-back is stale, or
-whether something else. The difference between the machine where it worked and
-the one where it did not is `ISOCAN_DIRECT` versus a local daemon and replica.
-
-**Why it matters more than its size.** This is the gesture that decides whose
-word may spend somebody's tokens. It reported success. The person who runs it
-has no reason to check, and the failure is invisible until the grantee's
-summons quietly does nothing — which is the *"summons into silence"* the whole
-bench project exists to eliminate.
+**The real trap underneath it is worth more than the nit.** A second machine
+set up with a plain address arrives as **its own person**, and nothing in the
+flow says so out loud. Every later gesture on that machine — who owns an agent,
+whose tokens a summons spends, what "you" means — hangs off that, and it is
+invisible until something reads wrong. `isocan whoami` on a new machine, before
+anything else, is the habit this cost an hour for the want of.
 
 ### 2. `--default-harness` is machine-wide, and re-homed an agent nobody asked about
 
