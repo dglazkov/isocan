@@ -3,7 +3,8 @@
 The debt is an unmeasured claim: upstream lint repair results do not establish
 that isocan's HTML checker improves our artifacts. This is the preregistration
 for design-lint phase 5, written before model runs. A dry run proves only the
-instrument. No paid run or human comparison has happened.
+instrument. The approved pilot first encountered a zero-token login refusal;
+no actual model repair or human comparison has happened yet.
 
 ## Conditions and budget
 
@@ -130,7 +131,8 @@ output tokens; token estimates do not replace actual reported cost.
 [output and retry controls](https://code.claude.com/docs/en/env-vars).
 
 The proposed approval is a $10 aggregate API-equivalent budget over at most
-72 calls. It is not approved by this document. Each call's allowance is fixed
+72 calls. The user approved this proposal on 14 September by asking to do the
+last phases after reviewing the published harness. Each call's allowance is fixed
 at no more than the approved aggregate divided by 72, and can only shrink as
 the remaining budget shrinks; unused earlier allowances never enlarge later
 ones. Pass the per-call cap to the real CLI and stop if its reported cost exceeds
@@ -163,5 +165,50 @@ remains a bounded browser instrument. A byte-empty candidate is a storage refusa
 the rendered empty-page control is valid HTML with an empty body. Invalid output
 consumes an attempt while retaining the actual stored screen for review.
 
-Approval for the proposed evaluation usage and subsequent human ratings remain
-separate. This implementation record does not approve or execute either step.
+Evaluation usage is now approved. Actual model results and subsequent human
+ratings remain separate; neither is inferred from that approval.
+
+
+## Recover a pre-model login refusal without renewing the budget
+
+The first approved CLI invocation reported `Not logged in`, zero input/output
+and cache tokens, no model identity and $0 estimated API-equivalent cost. It
+produced no repair. Read-only probes then isolated the mismatch: ordinary
+`USER` is needed for this macOS login lookup. The same isolated safe-mode
+command reports the existing Claude Max login when that OS field is preserved.
+No credential is copied, printed or changed. Preflight must check authentication
+under the same isolated environment and flags in fresh scratch, not merely
+confirm that the CLI is installed or that an ordinary shell is signed in.
+
+A continuation may recover this specific pre-model failure while preserving
+its immutable evidence. Link a fresh output directory to hashes of the prior
+report and provider result. Require the same model specification, seed, frozen
+fixtures and approved $10 aggregate; validate the prior outcome as a known
+zero-token, zero-cost login refusal with no pending/unknown result or saved
+repair. Other failed or partially measured comparisons are not restartable by
+this mechanism.
+
+Carry the used invocation into aggregate accounting: one invocation and $0 are
+already recorded, leaving at most 71 additional invocations. Keep the original
+fixed per-call ceiling of $0.138888888; neither the aggregate budget nor unused
+per-call allowance grows. The 36 comparison rows restart from their frozen
+initial inputs because the refused invocation reached no model; its process
+launch remains in the full invocation/accounting lineage, separate from model
+effect rows. Insufficient remaining calls yields an incomplete comparison.
+
+After all free readiness and isolated-auth checks pass, an exclusive append-only
+continuation claim beside the prior evidence names the new run before its first
+candidate call. It prevents two continuation branches from spending the same
+remaining budget. Prior reports and output files remain unchanged. Record the
+claim, original approval and both reports with the final evidence.
+
+
+## Execution record after the frozen pilot
+
+The approved comparison completed on 14 September; its [actual results and
+remaining human review](../../research/2026-09-14-design-lint-evaluation.md#approved-model-pilot-objective-result-human-review-pending)
+are recorded separately from this preregistration. No task, scoring predicate,
+model setting or decision threshold was changed during execution. All observed
+calls stayed below their fixed requested allowance; behavior at the cap itself
+and actual billed spend remain unmeasured. Human ratings can finish the record
+without another provider call.

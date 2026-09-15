@@ -2,11 +2,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFile, writeFile, mkdir, readdir, mkdtemp, rm, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, mkdtemp, rm, rename, realpath, open } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { buildPrompt, cannedCandidate, CostLedger, invokeModel, MODEL_SPEC, modelPreflight, parseCandidate } from "./design-lint-eval-model.mjs";
+import { buildPrompt, cannedCandidate, CostLedger, invokeModel, MODEL_SPEC, modelInvocation, modelPreflight, parseCandidate } from "./design-lint-eval-model.mjs";
 
 const repo = fileURLToPath(new URL("../../", import.meta.url));
 const defaultFixtures = path.join(repo, "test/fixtures/design-lint-eval");
@@ -67,6 +67,47 @@ export async function loadEvalTasks(root = defaultFixtures) {
   }
   assert.equal(tasks.length, 6, "Frozen pilot has exactly six tasks");
   return tasks;
+}
+
+/** Read-only validation for the single documented pre-model refusal; no general run restart. */
+export async function readContinuation(priorDirectory, { budgetUsd, model, seed, fixtures }) {
+  const directory = await realpath(priorDirectory), reportBytes = await readFile(path.join(directory, "report.json"));
+  const prior = JSON.parse(reportBytes.toString("utf8"));
+  const require = (condition, reason) => { if (!condition) throw new Error(`Continuation refused: ${reason}`); };
+  require(budgetUsd === 10 && prior.accounting?.cap === 10, "the original approved aggregate is exactly $10.");
+  require(model === MODEL_SPEC.model && same(prior.model, MODEL_SPEC) && prior.modelSpecSha256 === inputHash(JSON.stringify(MODEL_SPEC)), "model specification changed.");
+  require(prior.seed === seed && same(prior.fixtures, fixtures), "seed or frozen fixture hashes changed.");
+  require(prior.mode === "model" && prior.status === "unavailable" && prior.modelCalls === 1 && !prior.continuation, "only the initial one-invocation failed model run is eligible.");
+  const account = prior.accounting;
+  require(account.calls === 1 && account.pending === false && account.reportedApiEquivalent === 0 && account.knownReportedSubtotal === 0 && account.fixedPerCall === 0.138888888 && typeof account.stopped === "string", "pending, unknown, changed or nonzero accounting cannot restart.");
+  require(prior.runs?.length === 1 && prior.runs[0].attempts?.length === 1, "a measured or partially completed comparison cannot restart.");
+  const run = prior.runs[0], attempt = run.attempts[0];
+  require(/^run-\d{2}$/.test(run.runId) && attempt.round === 1 && !attempt.receipt && !attempt.accepted && !attempt.complete, "the prior invocation must not have produced an accepted repair.");
+  require(same(prior.order, scheduleRuns(fixtures.map(task => task.id), seed)) && same(prior.order[0], { taskId: run.taskId, repetition: run.repetition, condition: run.condition, runId: run.runId, order: run.order }), "the prior comparison schedule changed.");
+  const providerRelativePath = `${run.runId}/attempt-1/provider.json`, providerBytes = await readFile(path.join(directory, providerRelativePath)), provider = JSON.parse(providerBytes.toString("utf8"));
+  require(same(provider, attempt.provider), "provider file and report disagree.");
+  require(provider.provider === "claude-cli" && provider.modelCalls === 1 && provider.exitCode === 1 && provider.signal === null && provider.apiEquivalentCost === 0 && provider.candidateText === "Not logged in · Please run /login" && Array.isArray(provider.models) && provider.models.length === 0, "the outcome is not the known pre-model login refusal.");
+  require(["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"].every(key => provider.usage?.[key] === 0), "all reported token counts must be known zero.");
+  require(attempt.allowance === account.fixedPerCall && same(provider.invocation?.args, modelInvocation(account.fixedPerCall).args), "the original per-call/tool constraints changed.");
+  return { kind: "zero-token-login-refusal", priorDirectory: directory, priorReportSha256: inputHash(reportBytes), priorProviderRelativePath: providerRelativePath, priorProviderSha256: inputHash(providerBytes), priorInvocations: 1, priorReportedApiEquivalent: 0, fixedPerCall: account.fixedPerCall,
+    approvedAggregate: 10, approvedMaxInvocations: 72, maxAdditionalInvocations: 71, seed, modelSpecSha256: prior.modelSpecSha256,
+    comparisonBoundary: "Fresh 36 comparison rows; the zero-token login refusal remains in aggregate invocation lineage, outside model-effect rows." };
+}
+
+/** Atomically reserve the only continuation branch after free checks, retaining prior evidence. */
+export async function claimContinuation(continuation, { outputDir, readinessPassed, auth }) {
+  if (!readinessPassed || !auth?.available || auth.loggedIn !== true) throw new Error("Continuation claim requires completed free readiness and isolated authentication checks.");
+  const priorReport = await readFile(path.join(continuation.priorDirectory, "report.json"));
+  const priorProvider = await readFile(path.join(continuation.priorDirectory, continuation.priorProviderRelativePath));
+  if (inputHash(priorReport) !== continuation.priorReportSha256 || inputHash(priorProvider) !== continuation.priorProviderSha256) throw new Error("Prior continuation evidence changed during readiness checks.");
+  const claimPath = path.join(continuation.priorDirectory, "continuation-claim.json");
+  const claim = { schemaVersion: 1, kind: continuation.kind, outputDirectory: await realpath(outputDir), priorReportSha256: continuation.priorReportSha256, priorProviderSha256: continuation.priorProviderSha256, approvedAggregate: 10, approvedMaxInvocations: 72, fixedPerCall: 0.138888888, priorInvocations: 1, maxAdditionalInvocations: 71, createdAt: new Date().toISOString() };
+  const contents = JSON.stringify(claim, null, 2) + "\n";
+  let handle;
+  try { handle = await open(claimPath, "wx", 0o600); await handle.writeFile(contents); await handle.sync(); }
+  catch (error) { if (error.code === "EEXIST") throw new Error("A continuation branch already claimed this remaining budget; no additional invocation is allowed."); throw error; }
+  finally { await handle?.close(); }
+  return { path: claimPath, sha256: inputHash(contents), ...claim };
 }
 
 /** Match preregistered findings, preserving false positives separately from missing seeds. */
@@ -324,15 +365,18 @@ async function sourceIdentity() {
 }
 
 /** Complete local instrumentation; no candidate may choose a policy document or bypass receipts. */
-export async function runEvaluation({ mode, outputDir, seed, budgetUsd, model }) {
+export async function runEvaluation({ mode, outputDir, seed, budgetUsd, model, continueFrom = null }) {
   if (mode !== "dry-run" && (mode !== "model" || model !== MODEL_SPEC.model)) throw new Error("Explicit supported evaluation mode required.");
-  const ledger = mode === "model" ? new CostLedger(budgetUsd) : null;
-  await mkdir(outputDir); // Refuse an existing evidence directory rather than mixing runs.
+  if (continueFrom && mode !== "model") throw new Error("Only explicit model mode may continue the prior login refusal.");
   const tasks = await loadEvalTasks(), order = scheduleRuns(tasks.map(task => task.id), seed);
+  const fixtures = tasks.map(({ id, fixtureHashes }) => ({ id, hashes: fixtureHashes }));
+  const continuation = continueFrom ? await readContinuation(continueFrom, { budgetUsd, model, seed, fixtures }) : null;
+  const ledger = mode === "model" ? new CostLedger(budgetUsd, continuation) : null;
+  await mkdir(outputDir); // Refuse an existing evidence directory rather than mixing runs.
   const browser = await import("./design-lint-eval-browser.mjs"), scoring = await import("./design-lint-eval-score.mjs");
   const preflight = modelPreflight(), provider = selectCandidateProvider(mode);
-  const report = { schemaVersion: 1, mode, seed, modelCalls: 0, provider: mode === "dry-run" ? "canned-dry-run" : "claude-cli", model: MODEL_SPEC, modelSpecSha256: inputHash(JSON.stringify(MODEL_SPEC)), preflight, source: await sourceIdentity(), fixtures: tasks.map(({ id, fixtureHashes }) => ({ id, hashes: fixtureHashes })), order, runs: [], controls: {}, status: "running", modelLift: { verdict: "unavailable", reason: mode === "dry-run" ? "Canned outputs measure instrumentation only." : "Human ratings and complete cost/coverage comparison are required." }, billedSpend: null };
-  const save = async () => { report.modelCalls = ledger?.calls ?? 0; report.accounting = ledger?.snapshot() ?? { calls: 0, reportedApiEquivalent: null, billedSpend: null, reason: "No model invoked; canned data is not a cost comparison." }; report.records = normalizedRecords(report); await json(path.join(outputDir, "report.json"), report); };
+  const report = { schemaVersion: 1, mode, seed, modelCalls: 0, modelCallsThisRun: 0, continuation, provider: mode === "dry-run" ? "canned-dry-run" : "claude-cli", model: MODEL_SPEC, modelSpecSha256: inputHash(JSON.stringify(MODEL_SPEC)), preflight, source: await sourceIdentity(), fixtures, order, runs: [], controls: {}, status: "running", modelLift: { verdict: "unavailable", reason: mode === "dry-run" ? "Canned outputs measure instrumentation only." : "Human ratings and complete cost/coverage comparison are required." }, billedSpend: null };
+  const save = async () => { report.modelCalls = ledger?.calls ?? 0; report.modelCallsThisRun = (ledger?.calls ?? 0) - (continuation?.priorInvocations ?? 0); report.accounting = ledger?.snapshot() ?? { calls: 0, reportedApiEquivalent: null, billedSpend: null, reason: "No model invoked; canned data is not a cost comparison." }; report.records = normalizedRecords(report); await json(path.join(outputDir, "report.json"), report); };
   await save();
   if (mode === "model" && !preflight.available) { report.status = "unavailable"; report.stopReason = preflight.reason; await save(); return report; }
   try {
@@ -347,6 +391,11 @@ export async function runEvaluation({ mode, outputDir, seed, budgetUsd, model })
     report.controls.invalidOutput = await invalidOutputControl(tasks.find(task => task.id === "clean-control"), { initialBrowser: report.readiness.tasks.find(row => row.taskId === "clean-control").initialBrowser, browser, scoring, outputDir: path.join(outputDir, "controls/invalid-output") });
     await save();
     if (!report.controls.invalidOutput.passed) throw new Error("Two invalid outputs did not retain reviewable failed-task evidence.");
+    if (continuation) {
+      const freshAuth = modelPreflight(); report.continuationAuth = freshAuth;
+      continuation.claim = await claimContinuation(continuation, { outputDir, readinessPassed: report.readiness.passed && report.controls.staleWrite.passed && report.controls.negative.passed && report.controls.invalidOutput.passed, auth: freshAuth.available ? freshAuth.auth : null });
+      await save();
+    }
     for (const entry of order) {
       const task = tasks.find(one => one.id === entry.taskId), runDir = path.join(outputDir, entry.runId);
       await mkdir(runDir); const host = await createEvalHost(task);

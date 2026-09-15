@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals
-note: phases 1–4 deliver parsed diagnostics, conditional repair and scoped contracts on both surfaces, plus an advisory repository runner and measured optional-tool fixtures. Phase 5 now has a complete, independently verified dry-run harness; model-run approval and actual human ratings remain open.
+note: phases 1–4 deliver parsed diagnostics, conditional repair and scoped contracts on both surfaces, plus an advisory repository runner and measured optional-tool fixtures. Phase 5 completed its approved 36-run model comparison and verified the stored evidence; the objective benefit threshold is unmet. Human intent/preference ratings for 18 blind pairs are the only remaining gate.
 ---
 # A design check that gives the next edit
 

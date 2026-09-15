@@ -7,27 +7,28 @@ import { MODEL_SPEC } from "./lib/design-lint-eval-model.mjs";
 
 /** Validate all mode/budget arguments before loading browser or daemon code. */
 export function parseEvalArgs(args) {
-  const options = { mode: null, outputDir: null, seed: "design-lint-pilot-v1", model: null, budgetUsd: null, summarize: null, ratings: null };
+  const options = { mode: null, outputDir: null, seed: "design-lint-pilot-v1", model: null, budgetUsd: null, summarize: null, ratings: null, continueFrom: null };
   const seen = new Set();
   for (let i = 0; i < args.length; i++) {
     const key = args[i]; if (seen.has(key)) throw new Error(`Duplicate option ${key}`); seen.add(key);
     if (key === "--dry-run") { options.mode = "dry-run"; continue; }
-    if (!["--out", "--seed", "--model", "--budget-usd", "--summarize", "--ratings"].includes(key) || !args[i + 1] || args[i + 1].startsWith("--")) throw new Error(`Unknown or incomplete option ${key}`);
+    if (!["--out", "--seed", "--model", "--budget-usd", "--summarize", "--ratings", "--continue-from"].includes(key) || !args[i + 1] || args[i + 1].startsWith("--")) throw new Error(`Unknown or incomplete option ${key}`);
     const value = args[++i];
     if (key === "--out") options.outputDir = path.resolve(value);
     else if (key === "--seed") options.seed = value;
     else if (key === "--model") options.model = value;
     else if (key === "--budget-usd") options.budgetUsd = Number(value);
     else if (key === "--summarize") options.summarize = path.resolve(value);
+    else if (key === "--continue-from") options.continueFrom = path.resolve(value);
     else options.ratings = path.resolve(value);
   }
   if (options.summarize) {
-    if (options.mode || options.model || options.budgetUsd !== null || options.outputDir || seen.has("--seed")) throw new Error("--summarize accepts only an optional --ratings file.");
+    if (options.mode || options.model || options.budgetUsd !== null || options.outputDir || options.continueFrom || seen.has("--seed")) throw new Error("--summarize accepts only an optional --ratings file.");
     return options;
   }
   if (options.ratings) throw new Error("--ratings requires --summarize.");
   if (options.mode === "dry-run") {
-    if (options.model || options.budgetUsd !== null) throw new Error("Dry run cannot select a model or monetary allowance.");
+    if (options.model || options.budgetUsd !== null || options.continueFrom) throw new Error("Dry run cannot select a model, monetary allowance or continuation.");
   } else {
     if (options.model !== MODEL_SPEC.model || !Number.isFinite(options.budgetUsd) || options.budgetUsd <= 0) throw new Error("Choose --dry-run, or explicit --model claude-sonnet-5 with an approved --budget-usd cap.");
     options.mode = "model";
@@ -55,7 +56,7 @@ async function main() {
     const { runEvaluation } = await import("./lib/design-lint-eval-runner.mjs");
     const result = await runEvaluation(options);
     await summarizeRun(options.outputDir, null);
-    console.log(JSON.stringify({ outputDir: options.outputDir, status: result.status, runs: result.runs.length, modelCalls: result.modelCalls, modelLift: result.modelLift, stopReason: result.stopReason ?? null }, null, 2));
+    console.log(JSON.stringify({ outputDir: options.outputDir, status: result.status, runs: result.runs.length, modelCalls: result.modelCalls, modelCallsThisRun: result.modelCallsThisRun, modelLift: result.modelLift, stopReason: result.stopReason ?? null }, null, 2));
     if (result.status !== "completed") process.exitCode = 2;
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

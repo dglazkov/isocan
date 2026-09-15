@@ -2124,6 +2124,11 @@ isocan fit <items...>                  # grow items to the size their content wa
   model lift or human ratings. Model mode needs a separately user-approved
   budget. Read the [evaluation plan](../../../docs/projects/design-lint/evaluation.md)
   and [measured results](../../../docs/research/2026-09-14-design-lint-evaluation.md).
+  For the documented pilot's verified zero-token login refusal, model mode
+  accepts `--continue-from <prior-output-directory>` and a fresh `--out`,
+  retaining the original budget and invocation count with one claimed successor.
+  The evaluation plan specifies this narrow continuation's eligibility.
+
 
   **Past six screens with no design system, `isocan add` refuses an HTML file.**
   Two screens gets you a note, because the second screen is where a choice

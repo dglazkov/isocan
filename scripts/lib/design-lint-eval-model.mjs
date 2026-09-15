@@ -1,6 +1,7 @@
 /** Model boundary for the preregistered pilot. Importing this module never invokes a provider. */
 import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -24,11 +25,13 @@ export function parseCandidate(text) {
 
 /** Record every invocation before it starts; unavailable cost permanently closes this ledger. */
 export class CostLedger {
-  constructor(cap) {
+  constructor(cap, carry = null) {
     if (!Number.isFinite(cap) || cap <= 0) throw new Error("Model mode needs an explicit positive aggregate API-equivalent budget.");
     this.cap = cap; this.perCall = Math.floor(cap / MODEL_SPEC.maxCalls * 1e9) / 1e9;
     if (!this.perCall) throw new Error("Budget is too small for a positive per-call allowance.");
-    this.calls = 0; this.reported = 0; this.unavailable = false; this.pending = false; this.stopped = null;
+    if (carry && (cap !== 10 || carry.kind !== "zero-token-login-refusal" || carry.priorInvocations !== 1 || carry.priorReportedApiEquivalent !== 0 || carry.fixedPerCall !== this.perCall)) throw new Error("Only the validated one-invocation, zero-cost login refusal may carry forward.");
+    this.carriedInvocations = carry ? 1 : 0;
+    this.calls = this.carriedInvocations; this.reported = 0; this.unavailable = false; this.pending = false; this.stopped = null;
   }
   begin() {
     if (this.stopped || this.pending || this.calls >= MODEL_SPEC.maxCalls) throw new Error(this.stopped ?? "No additional model call is allowed.");
@@ -47,7 +50,7 @@ export class CostLedger {
     }
     return this.snapshot();
   }
-  snapshot() { return { cap: this.cap, fixedPerCall: this.perCall, calls: this.calls, reportedApiEquivalent: this.unavailable || this.pending ? null : this.reported, knownReportedSubtotal: this.reported, billedSpend: null, stopped: this.stopped, pending: this.pending, costProvenance: "CLI-reported estimated/API-equivalent token cost; managed modelPricing may affect rates. Not billing evidence.", enforcement: "CLI cap requested; provider enforcement unmeasured until an approved run" }; }
+  snapshot() { return { cap: this.cap, fixedPerCall: this.perCall, calls: this.calls, carriedInvocations: this.carriedInvocations, newInvocations: this.calls - this.carriedInvocations, reportedApiEquivalent: this.unavailable || this.pending ? null : this.reported, knownReportedSubtotal: this.reported, billedSpend: null, stopped: this.stopped, pending: this.pending, costProvenance: "CLI-reported estimated/API-equivalent token cost; managed modelPricing may affect rates. Not billing evidence.", enforcement: "CLI cap requested; provider enforcement unmeasured until an approved run" }; }
 }
 
 /** Keep accounting evidence and candidate text; discard account/session identifiers from CLI JSON. */
@@ -83,20 +86,42 @@ export function modelInvocation(allowance, inherited = process.env) {
   if (!Number.isFinite(allowance) || allowance <= 0) throw new Error("Invalid per-call allowance.");
   const env = {};
   // Preserve ordinary OS/auth discovery without copying provider-routing or customization variables.
-  for (const key of ["PATH", "HOME", "USERPROFILE", "TMPDIR", "TMP", "TEMP", "SystemRoot", "LANG", "LC_ALL"]) if (inherited[key] !== undefined) env[key] = inherited[key];
+  // Claude's macOS keychain lookup needs USER as well as HOME; neither is a credential.
+  for (const key of ["PATH", "HOME", "USER", "USERPROFILE", "TMPDIR", "TMP", "TEMP", "SystemRoot", "LANG", "LC_ALL"]) if (inherited[key] !== undefined) env[key] = inherited[key];
   Object.assign(env, { CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(MODEL_SPEC.outputTokens), CLAUDE_CODE_MAX_RETRIES: "0", CLAUDE_CODE_EFFORT_LEVEL: MODEL_SPEC.effort, CLAUDE_CODE_MAX_TURNS: "1", CLAUDE_CODE_SAFE_MODE: "1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", CLAUDE_CODE_AUTO_CONNECT_IDE: "false", CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1", CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS: "1", CLAUDE_CODE_SKIP_PROMPT_HISTORY: "1" });
   return { command: "claude", args: ["--print", "--output-format", "json", "--model", MODEL_SPEC.model, "--effort", MODEL_SPEC.effort, "--max-turns", "1", "--max-budget-usd", allowance.toFixed(9), "--tools", "", "--safe-mode", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--setting-sources", "", "--disable-slash-commands", "--no-chrome", "--no-session-persistence", "--permission-mode", "dontAsk"], env };
 }
 
-/** Read-only version/help preflight; this function has no provider invocation. */
-export function modelPreflight() {
+/** Retain only status enums, never account identifiers or authentication material. */
+export function sanitizeAuthStatus(stdout, exitCode) {
+  let value;
+  try { value = JSON.parse(stdout); } catch { return { available: false, loggedIn: null, reason: "Authentication status was not available as JSON." }; }
+  const member = (key, choices) => choices.includes(value?.[key]) ? value[key] : null;
+  return { available: typeof value?.loggedIn === "boolean" && (exitCode === 0 || exitCode === 1), loggedIn: typeof value?.loggedIn === "boolean" ? value.loggedIn : null,
+    authMethod: member("authMethod", ["claude.ai", "api_key", "none"]), apiProvider: member("apiProvider", ["firstParty", "bedrock", "vertex", "foundry"]), subscriptionType: member("subscriptionType", ["max", "pro", "team", "enterprise", "free"]), exitCode };
+}
+
+/** Read-only help/version/auth checks use the same isolated environment and a fresh scratch cwd. */
+export function modelPreflight({ run = execFileSync, inherited = process.env } = {}) {
+  let cwd;
   try {
-    const version = execFileSync("claude", ["--version"], { encoding: "utf8", timeout: 10_000 }).trim();
-    const help = execFileSync("claude", ["--help"], { encoding: "utf8", timeout: 10_000 });
+    cwd = mkdtempSync(path.join(tmpdir(), "isocan-eval-auth-check-"));
+    const invocation = modelInvocation(1 / MODEL_SPEC.maxCalls, inherited);
+    const options = { cwd, env: invocation.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 10_000 };
+    const version = run(invocation.command, ["--version"], options).trim();
+    const help = run(invocation.command, ["--help"], options);
     const required = ["--safe-mode", "--tools", "--strict-mcp-config", "--max-budget-usd", "--effort", "--setting-sources"];
     if (required.some(flag => !help.includes(flag))) return { available: false, version, reason: "CLI lacks a required isolation/budget flag." };
-    return { available: true, version, helpSha256: sha(help), model: MODEL_SPEC, contextBoundary: "Safe mode disables local customizations; admin-managed provider policy may still apply. OS login credentials are not copied into evidence.", budgetBoundary: "CLI-reported estimated/API-equivalent token cost; admin-managed modelPricing can affect rates. Not billing evidence. Actual provider cap enforcement remains unmeasured." };
+    const isolationArgs = invocation.args.slice(invocation.args.indexOf("--tools"));
+    let authOutput, authExit = 0;
+    try { authOutput = run(invocation.command, [...isolationArgs, "auth", "status", "--json"], options); }
+    catch (error) { authOutput = error.stdout ?? ""; authExit = error.status ?? null; }
+    const auth = sanitizeAuthStatus(authOutput, authExit);
+    return { available: auth.available && auth.loggedIn === true, ...(auth.available && auth.loggedIn === true ? {} : { reason: "Authentication is unavailable in the actual isolated invocation environment." }), version, helpSha256: sha(help), model: MODEL_SPEC, auth,
+      isolation: { flags: isolationArgs, environmentKeys: Object.keys(invocation.env).sort(), workingDirectory: "fresh empty scratch" },
+      contextBoundary: "Safe mode disables local customizations; admin-managed provider policy may still apply. Ordinary OS USER/HOME discovery is preserved; credentials are not copied or retained in evidence.", budgetBoundary: "CLI-reported estimated/API-equivalent token cost; admin-managed modelPricing can affect rates. Not billing evidence. Actual provider cap enforcement remains unmeasured." };
   } catch { return { available: false, reason: "Claude CLI preflight unavailable.", model: MODEL_SPEC }; }
+  finally { if (cwd) rmSync(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 }
 
 /** Labelled canned candidates are the only provider reachable from dry-run mode. */

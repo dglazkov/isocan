@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile, mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { parseEvalArgs } from "../scripts/design-lint-eval.mjs";
-import { buildPrompt, cannedCandidate, CostLedger, inspectProviderOutput, invokeModel, MODEL_SPEC, modelInvocation, outputCapture, parseCandidate } from "../scripts/lib/design-lint-eval-model.mjs";
-import { applyCandidate, candidateScope, checkInitial, createEvalHost, loadEvalTasks, normalizedRecords, requestCandidate, scheduleRuns, selectCandidateProvider, staleWriteControl } from "../scripts/lib/design-lint-eval-runner.mjs";
+import { buildPrompt, cannedCandidate, CostLedger, inspectProviderOutput, invokeModel, MODEL_SPEC, modelInvocation, modelPreflight, outputCapture, parseCandidate, sanitizeAuthStatus } from "../scripts/lib/design-lint-eval-model.mjs";
+import { applyCandidate, candidateScope, checkInitial, claimContinuation, createEvalHost, inputHash, loadEvalTasks, normalizedRecords, readContinuation, requestCandidate, scheduleRuns, selectCandidateProvider, staleWriteControl } from "../scripts/lib/design-lint-eval-runner.mjs";
 
 const scratch: string[] = [];
 afterEach(async () => { for (const dir of scratch.splice(0)) await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
@@ -69,10 +69,33 @@ describe("frozen model and correction budgets", () => {
     await expect(invokeModel({ approvedModelMode: false })).rejects.toThrow(/explicit/);
   });
   it("freezes tools, output, effort, turn and retry controls while excluding ambient routing/settings", () => {
-    const invocation = modelInvocation(0.1, { PATH: "/usr/bin", HOME: "/tmp/acme", ANTHROPIC_BASE_URL: "https://secret.invalid", ANTHROPIC_API_KEY: "secret", CLAUDE_CODE_EFFORT_LEVEL: "low", CLAUDE_CODE_RETRY_WATCHDOG: "1" });
+    const invocation = modelInvocation(0.1, { PATH: "/usr/bin", HOME: "/tmp/acme", USER: "acme-os-user", ANTHROPIC_BASE_URL: "https://secret.invalid", ANTHROPIC_API_KEY: "secret", CLAUDE_CODE_EFFORT_LEVEL: "low", CLAUDE_CODE_RETRY_WATCHDOG: "1" });
     expect(invocation.args).toContain("--safe-mode"); expect(invocation.args[invocation.args.indexOf("--tools") + 1]).toBe(""); expect(invocation.args[invocation.args.indexOf("--max-turns") + 1]).toBe("1");
     expect(invocation.env.CLAUDE_CODE_MAX_RETRIES).toBe("0"); expect(invocation.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe("8192"); expect(invocation.env.CLAUDE_CODE_EFFORT_LEVEL).toBe("high");
     expect(invocation.env.ANTHROPIC_API_KEY).toBeUndefined(); expect(invocation.env.ANTHROPIC_BASE_URL).toBeUndefined(); expect(invocation.env.CLAUDE_CODE_RETRY_WATCHDOG).toBeUndefined();
+    expect(invocation.env.USER).toBe("acme-os-user");
+  });
+  it("checks authentication under actual isolation flags and OS discovery before declaring model readiness", () => {
+    const calls = [];
+    const run = vi.fn((_command, args, options) => {
+      calls.push({ args, options });
+      if (args[0] === "--version") return "Acme CLI fixture version";
+      if (args[0] === "--help") return "--safe-mode --tools --strict-mcp-config --max-budget-usd --effort --setting-sources";
+      expect(args.slice(-3)).toEqual(["auth", "status", "--json"]);
+      expect(args).not.toContain("--print"); expect(args).toContain("--safe-mode"); expect(args).toContain("--strict-mcp-config");
+      expect(options.env.USER).toBe("acme-os-user"); expect(options.env.ANTHROPIC_API_KEY).toBeUndefined();
+      return JSON.stringify({ loggedIn: true, authMethod: "claude.ai", apiProvider: "firstParty", subscriptionType: "max", email: "private-acme@example.invalid", accountUuid: "private-account" });
+    });
+    const result = modelPreflight({ run, inherited: { USER: "acme-os-user", ANTHROPIC_API_KEY: "secret" } });
+    expect(result.available).toBe(true); expect(calls).toHaveLength(3); expect(new Set(calls.map(call => call.options.cwd)).size).toBe(1);
+    expect(result.auth).toMatchObject({ loggedIn: true, authMethod: "claude.ai", subscriptionType: "max" });
+    expect(JSON.stringify(result)).not.toContain("private-"); expect(JSON.stringify(result)).not.toContain("acme-os-user"); expect(JSON.stringify(result)).not.toContain("secret");
+  });
+  it("keeps failed or malformed authentication preflight unavailable", () => {
+    expect(sanitizeAuthStatus('{"loggedIn":false,"authMethod":"none"}', 1)).toMatchObject({ available: true, loggedIn: false });
+    expect(sanitizeAuthStatus("not JSON", 1)).toMatchObject({ available: false, loggedIn: null });
+    const run = (_command, args) => args[0] === "--version" ? "Acme" : args[0] === "--help" ? "--safe-mode --tools --strict-mcp-config --max-budget-usd --effort --setting-sources" : '{"loggedIn":false,"authMethod":"none"}';
+    expect(modelPreflight({ run }).available).toBe(false);
   });
 });
 
@@ -122,3 +145,74 @@ it("real captured repair and unchanged clean candidate preserve policy and versi
   const output = await mkdtemp(path.join(tmpdir(), "isocan-eval-stale-test-")); scratch.push(output);
   expect((await staleWriteControl(tasks.find(task => task.id === "card-spacing"), output)).passed).toBe(true);
 }, 30_000);
+
+
+describe("one bounded continuation after a zero-token login refusal", () => {
+  async function priorFixture(change = (_report, _provider) => {}) {
+    const directory = await mkdtemp(path.join(tmpdir(), "isocan-eval-continuation-test-")); scratch.push(directory);
+    const seed = "Acme continuation", fixtures = ["a", "b", "c", "d", "e", "f"].map(id => ({ id, hashes: { "initial.html": inputHash(id) } }));
+    const order = scheduleRuns(fixtures.map(task => task.id), seed), ledger = new CostLedger(10), allowance = ledger.begin();
+    ledger.finish(0, allowance, "Provider outcome was refused, interrupted or unconfirmed.");
+    const provider = { provider: "claude-cli", modelCalls: 1, exitCode: 1, signal: null, apiEquivalentCost: 0, candidateText: "Not logged in · Please run /login", models: [], usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, invocation: { args: modelInvocation(allowance).args } };
+    const report = { mode: "model", status: "unavailable", modelCalls: 1, model: MODEL_SPEC, modelSpecSha256: inputHash(JSON.stringify(MODEL_SPEC)), seed, fixtures, order, accounting: ledger.snapshot(), runs: [{ ...order[0], attempts: [{ round: 1, allowance, provider }] }] };
+    change(report, provider);
+    const providerPath = path.join(directory, order[0].runId, "attempt-1", "provider.json");
+    await mkdir(path.dirname(providerPath), { recursive: true });
+    await writeFile(providerPath, JSON.stringify(provider)); await writeFile(path.join(directory, "report.json"), JSON.stringify(report));
+    return { directory, providerPath, options: { budgetUsd: 10, model: MODEL_SPEC.model, seed, fixtures }, report };
+  }
+  it("retains the prior exact evidence and counts its invocation within the original 72", async () => {
+    const fixture = await priorFixture(), carry = await readContinuation(fixture.directory, fixture.options);
+    expect(carry).toMatchObject({ priorInvocations: 1, priorReportedApiEquivalent: 0, maxAdditionalInvocations: 71, approvedAggregate: 10, fixedPerCall: 0.138888888 });
+    expect(carry.priorReportSha256).toBe(inputHash(await readFile(path.join(fixture.directory, "report.json"))));
+    expect(carry.priorProviderSha256).toBe(inputHash(await readFile(fixture.providerPath)));
+    const ledger = new CostLedger(10, carry);
+    expect(ledger.snapshot()).toMatchObject({ calls: 1, carriedInvocations: 1, newInvocations: 0 });
+    for (let call = 0; call < 71; call++) { const allowance = ledger.begin(); expect(allowance).toBe(0.138888888); ledger.finish(0, allowance); }
+    expect(ledger.snapshot()).toMatchObject({ calls: 72, newInvocations: 71, reportedApiEquivalent: 0 }); expect(() => ledger.begin()).toThrow();
+    expect(() => new CostLedger(11, carry)).toThrow();
+  });
+  it.each([
+    ["pending", report => { report.accounting.pending = true; }],
+    ["missing cost", report => { report.accounting.reportedApiEquivalent = null; }],
+    ["nonzero cost", (report, provider) => { report.accounting.reportedApiEquivalent = 0.01; provider.apiEquivalentCost = 0.01; }],
+    ["actual model", (_report, provider) => { provider.models = [MODEL_SPEC.model]; }],
+    ["nonzero tokens", (_report, provider) => { provider.usage.input_tokens = 1; }],
+    ["actual candidate", (_report, provider) => { provider.candidateText = '{"html":"Acme"}'; }],
+    ["accepted repair", report => { report.runs[0].attempts[0].receipt = { status: "saved" }; }],
+    ["altered invocation", (_report, provider) => { provider.invocation.args = ["--print"]; }],
+  ])("refuses %s prior evidence rather than restarting its allowance", async (_name, change) => {
+    const fixture = await priorFixture(change); await expect(readContinuation(fixture.directory, fixture.options)).rejects.toThrow(/Continuation refused/);
+  });
+  it("requires the identical model, seed, fixture bytes and approved aggregate", async () => {
+    const fixture = await priorFixture();
+    for (const change of [{ budgetUsd: 11 }, { seed: "Other" }, { model: "other" }, { fixtures: [] }]) await expect(readContinuation(fixture.directory, { ...fixture.options, ...change })).rejects.toThrow();
+  });
+  it("claims only once after free checks, without rewriting either immutable input", async () => {
+    const fixture = await priorFixture(), carry = await readContinuation(fixture.directory, fixture.options);
+    const outputA = path.join(fixture.directory, "new-a"), outputB = path.join(fixture.directory, "new-b");
+    await mkdir(outputA); await mkdir(outputB);
+    const args = { outputDir: outputA, readinessPassed: true, auth: { available: true, loggedIn: true } };
+    await expect(claimContinuation(carry, { ...args, readinessPassed: false })).rejects.toThrow(/free readiness/);
+    await expect(claimContinuation(carry, { ...args, auth: { available: true, loggedIn: false } })).rejects.toThrow(/authentication/);
+    await expect(readFile(path.join(fixture.directory, "continuation-claim.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    const results = await Promise.allSettled([claimContinuation(carry, args), claimContinuation(carry, { ...args, outputDir: outputB })]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    const claim = JSON.parse(await readFile(path.join(fixture.directory, "continuation-claim.json"), "utf8"));
+    expect([await realpath(outputA), await realpath(outputB)]).toContain(claim.outputDirectory);
+    expect(claim).toMatchObject({ priorInvocations: 1, maxAdditionalInvocations: 71, fixedPerCall: 0.138888888 });
+    expect(inputHash(await readFile(path.join(fixture.directory, "report.json")))).toBe(carry.priorReportSha256);
+    expect(inputHash(await readFile(fixture.providerPath))).toBe(carry.priorProviderSha256);
+  });
+  it("refuses changed evidence between validation and exclusive claim", async () => {
+    const fixture = await priorFixture(), carry = await readContinuation(fixture.directory, fixture.options);
+    await writeFile(fixture.providerPath, "changed Acme evidence");
+    await expect(claimContinuation(carry, { outputDir: fixture.directory, readinessPassed: true, auth: { available: true, loggedIn: true } })).rejects.toThrow(/changed/);
+  });
+  it("requires explicit model mode for continuation and never accepts it for dry or summary", () => {
+    expect(() => parseEvalArgs(["--dry-run", "--out", "/tmp/acme", "--continue-from", "/tmp/old"])).toThrow();
+    expect(() => parseEvalArgs(["--summarize", "/tmp/acme", "--continue-from", "/tmp/old"])).toThrow();
+    expect(parseEvalArgs(["--model", MODEL_SPEC.model, "--budget-usd", "10", "--out", "/tmp/acme", "--continue-from", "/tmp/old"])).toMatchObject({ mode: "model", continueFrom: "/tmp/old" });
+  });
+});

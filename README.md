@@ -807,6 +807,11 @@ and conditional repair, with zero evaluation model calls. It proves the harness;
 it does not infer model lift or human ratings. Model mode requires a separately
 user-approved budget. See the [evaluation plan](docs/projects/design-lint/evaluation.md)
 and [measured results](docs/research/2026-09-14-design-lint-evaluation.md).
+For the documented pilot's verified zero-token login refusal, model mode also
+accepts `--continue-from <prior-output-directory>` with a fresh `--out`. It
+retains the original budget and used invocation count and claims one successor;
+its narrow eligibility rules are part of the evaluation plan.
+
 
 ## Architecture
 

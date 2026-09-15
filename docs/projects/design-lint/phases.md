@@ -2,9 +2,10 @@
 
 **Where we are — 14 September 2026:** Research and issues #299–303 are published.
 Design-lint phases 1–4 are CLOSED; phase 5 is PART-DONE. Its complete dry-run
-harness and independent local proofs pass. The next step is design-lint phase 5
-model-usage approval, followed by human ratings on actual model outputs. No
-implementation dependency remains before that approval.
+harness and independent local proofs pass. The approved model pilot now also
+completed all 36 comparison runs within its original budget. Design-lint phase 5
+waits only on a person's blind intent/preference ratings for its 18 pairs;
+no additional model usage is needed to finish this pilot.
 
 The [journeys](journey.md) are acceptance and [design](design.md) names the
 mechanisms. Each phase closes only on its named proof, with a full suite,
@@ -247,7 +248,7 @@ with other technology checks explicitly recommendations.
 
 ## Phase 5 — Controlled repair evaluation (#302)
 
-**Status: PART-DONE.** 2026-09-14 — The complete local evaluation instrument passes; model-usage approval and actual human intent ratings remain open.
+**Status: PART-DONE.** 2026-09-14 — The approved 36-run model pilot and independent evidence checks pass; its measured objective threshold is unmet and blind human intent ratings remain open.
 
 **Work:** Prepare equal-budget rules-only versus diagnostics tasks and a dry-run
 harness, declare go/no-go thresholds, and render fixtures at intended sizes.
@@ -271,12 +272,16 @@ the harness is reviewable. Human intent ratings wait on a person's review.
 - **2026-09-14** — A zero-byte candidate is refused by storage before it can
   become a render. The empty-page control uses valid HTML with an empty body;
   invalid output consumes an attempt and retains the actual stored screen for review.
-- **2026-09-14** — Open: approve the proposed $10 CLI-reported estimated
-  API-equivalent evaluation budget, at most 72 `claude-sonnet-5` invocations
-  through the current Claude Max session. Waits on the user; billing and actual
-  provider cap enforcement are not established by the dry run.
+- **2026-09-14** — The user approved the proposed $10 / 72-invocation pilot.
+  Its first invocation reported no login, no model tokens and $0 cost. An
+  isolated environment had omitted the OS `USER` field; continuation must keep
+  that invocation and the original budget rather than reset either.
+- **2026-09-14** — The fixed pilot completed 14/18 tasks in each condition.
+  Diagnostics improved neither median rounds nor cost. Eight replies included
+  prose outside the required JSON; five clean outputs lost a trailing newline.
+  These remain failures under the preregistration, not reasons to rescore this pilot.
 - **2026-09-14** — Open: collect blind intent and preference ratings for the
-  18 actual model-output pairs after the approved pilot. Waits on a person;
+  18 completed model-output pairs. Waits on a person;
   automated checks and canned outputs supply no human study ratings.
 
 **Proof record:** The conductor ran the complete source-checkout command on
@@ -317,3 +322,50 @@ typecheck and build. The entry bytes/hash are unchanged from the proof base;
 all nineteen named lint/harness source hashes remain identical. The strict
 suite and dry run above predate this upstream UI-only refresh. Fifteen record
 guards passed. No model run or human rating was performed.
+
+
+**Approved pilot continuation:** The user's “Do last phases!” approved the
+proposed $10 / 72-invocation pilot. Isolated auth now preserves ordinary OS
+`USER` discovery and tests the actual invocation environment before dispatch.
+A preregistered one-child continuation retained the first zero-token login
+refusal and the original $0.138888888 per-call ceiling; it created no new budget.
+Independent accounting/claim probes passed without further model calls.
+
+The actual pilot exited 0: 36 fresh canvases, 46 model calls plus the prior
+refusal, 47 total invocations, and $1.0796458 estimated API-equivalent cost.
+Every confirmed model was `claude-sonnet-5`; no call exceeded its allowance.
+Actual billed spend and cap-boundary enforcement remain unknown. Stored bytes,
+audits, receipts, protected policy histories, all 19 named source hashes and
+108 image hashes agree. There were 32 saved repairs, six unchanged submissions
+and eight invalid replies, whose actual stored screens remain reviewable.
+
+Both conditions completed 14/18 tasks with one median attempt. Diagnostics
+increased median estimated cost by 23.9%, so the preregistered objective benefit
+threshold is unmet. The full verdict remains inconclusive until human ratings
+arrive. Five clean runs lost exactly a trailing newline; three Button runs
+exhausted both attempts with prose outside the required JSON. The frozen scorer
+keeps these failures. The browser review loaded 18 blind pairs and 54 pending
+choices; the conductor made no selection and supplies no human judgment.
+
+[Actual pilot research](../../research/2026-09-14-design-lint-evaluation.md#approved-model-pilot-objective-result-human-review-pending),
+[compact evidence](../../research/shadcn-lint/results-2026-09-14-phase5-model.json)
+and [complete archive](../../research/shadcn-lint/phase5-model-pilot-2026-09-14.tar.gz)
+retain the original refusal and successor. Fresh extraction verified all 1,226
+files. The measured source base is `4832d8a2` plus the recorded implementation
+hashes; publication includes the same harness bytes. No scorer, task, model
+setting or threshold changed during execution.
+
+No new Operation, product CLI verb or shared-core computation was needed.
+The source-checkout evaluation command, README and agent guide document the
+bounded continuation. Tests exercise auth isolation, accounting, immutable
+claims and actual daemon/browser evidence; no application dependency or runtime
+changed. Human review is the only remaining phase-5 dependency.
+
+
+Final verification against current upstream `55e0cfa1` passed: 5,409 fast tests
+(108 skipped) across 530 files in 180.42 seconds; typecheck and build exited 0.
+The strict local `npm run test:ci -- --maxWorkers=6` passed all 582 files and
+5,966 tests in 472.58 seconds, with three opt-in model/sandbox skips. The
+Firestore emulator and bundle checks ran. Fifteen record guards passed. The
+production entry remains byte-identical: 762,574 raw / 258,875 gzip bytes.
+No existing limit or timeout was raised, and no application package changed.
