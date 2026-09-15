@@ -3,7 +3,7 @@ status: designed
 since: 2026-09-08
 issue: 210
 see: standing-agents, on-demand, personas, agent-custody
-note: a standing agent's one structural weakness is that `isocan rc` is a process on a MACHINE, and a sheep is a session in a cell that is not. But the obvious join — the summons calling the cell's address — is a shape on-demand's design already withdrew on custody grounds, and the reconciliation is that custody is about who started it and whose credentials it uses, not which computer it is on. Start with personas as the cheap tier: no parking, no summons, no custody question, and a gap that is real today.
+note: phase 2 (the badge) turned out DONE on 15 Sep 2026 — built by sheep-harness for turns and satisfying all four obligations of that day's bearer decision: a birth pass scoped to the agent, held once on the rc row, labelled `cell (<agent>'s sheep)` in `isocan badges`, ended with the agent on withdrawal. Phase 3 (a parked rc in a cell, with the bill measured) is the first unbuilt one, and its gap is a number rather than a credential. Originally: a standing agent's one structural weakness is that `isocan rc` is a process on a MACHINE, and a sheep is a session in a cell that is not. But the obvious join — the summons calling the cell's address — is a shape on-demand's design already withdrew on custody grounds, and the reconciliation is that custody is about who started it and whose credentials it uses, not which computer it is on. Start with personas as the cheap tier: no parking, no summons, no custody question, and a gap that is real today.
 ---
 
 # Sheep as standing agents
@@ -197,10 +197,31 @@ it called", which is D7's question and was always the real one.
    tools, writing a page into `docs/reviews/` the way `persona-run.mjs` does.
    Proves the pasture, the credential and the write path in one go, with
    nothing standing anywhere.
-2. **The badge.** D5 — minted once, held by the pasture, and the same decision
-   written down for #206 phase 7.
+2. ~~**The badge.**~~ **DONE — built by sheep-harness in September, found on
+   15 Sep 2026 while looking for what to build next.** Not "mostly there":
+   walked, and satisfying all four obligations the 15 Sep decision attached to
+   its yes. `bornPassOf` (`packages/cli/src/main.ts`) mints a pass at the
+   SHEEP'S BIRTH, scoped to that agent, and the cell redeems it — so the badge
+   claims the agent's actor and never the person's. It is held on the rc row as
+   `cellPass: {canvasId, passId}` (`packages/rc/src/rows.ts`), minted once
+   rather than per wake, which is what the door's meter requires. `isocan
+   badges` labels it **`cell (<agent>'s sheep)`** through `cellBadges()`, so a
+   person can tell it from their laptop before ending one. And withdrawal ends
+   it: *"the sheep is ended at its home (`endSheep`), then the badge its cell
+   redeemed is ended at the isocan home"* — reached by `rc remove`, `agent
+   remove`, a parked rc seeing the withdraw op, and a summons racing a
+   withdrawal.
+
+   The half of D5 that is NOT done is the one this phase bundled in: "the same
+   decision written down for #206 phase 7". The 15 Sep decision deliberately
+   split them, and a public repository's CI is still unanswered.
 3. **A parked rc in a sheep**, on one canvas, with the cost measured rather
-   than estimated: what a night of long-polling actually bills.
+   than estimated: what a night of long-polling actually bills. **This is now
+   the first unbuilt phase, and the gap is not a credential.** A cell already
+   answers a TURN with a badge it holds legitimately (phase 2 above); nobody
+   has parked an rc inside one. What that leaves is a number, measured — and
+   note that `isocan harness` reports sheep `RUNNABLE: no` on Dion's laptop as
+   of 15 Sep, so the machine that would run the measurement cannot today.
 4. **The roster.** If (3) is worth it, `rc --all` across the enrolments, which
    is the shape that makes it a standing agent rather than one agent standing.
 5. **Reopen the address hook**, or decide not to, with the three review

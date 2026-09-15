@@ -170,6 +170,32 @@ it on its own evidence.
 4. **Killing it ends the agent, not the person.** That is the test of whether
    §1 was really done, and it is worth asserting rather than assuming.
 
+### Found the same day, after the decision: for a sheep, it is already built
+
+Looking for what to build first under the new yes turned up that **the four
+obligations above are already met for a sheep cell**, by `sheep-harness` in
+September. Not approximately — walked:
+
+| Obligation | Where it already is |
+| --- | --- |
+| A dedicated agent's actor, never the person's | `bornPassOf` (`packages/cli/src/main.ts`) mints a pass at the SHEEP'S BIRTH, scoped to that agent; the cell redeems it |
+| Labelled at the mint | `isocan badges` prints **`cell (<agent>'s sheep)`** via `cellBadges()` |
+| Minted once and kept | held on the rc row as `cellPass: {canvasId, passId}` (`packages/rc/src/rows.ts`), not re-minted per wake |
+| Killing ends the agent, not the person | *"the sheep is ended at its home (`endSheep`), then the badge its cell redeemed is ended at the isocan home"* — reached by `rc remove`, `agent remove`, a parked rc seeing the withdraw op, and a summons racing a withdrawal |
+
+So the decision above did not unblock a build; it **ratified one that had
+already happened**, which is a better outcome and an uncomfortable one. It is
+the third thing this note's own investigation found already built, after the
+bearer itself and the kill.
+
+**What that leaves for journey 4 is not a credential.** A cell answers a TURN
+today; nobody has parked an rc inside one. That is
+[sheep-as-standing-agents](2026-09-08-sheep-as-standing-agents.md) phase 3, and
+what it needs is a number — what a night of long-polling actually bills —
+rather than a decision. One practical obstacle: `isocan harness` reports sheep
+`RUNNABLE: no` on Dion's laptop as of 15 Sep, so the machine that would run
+that measurement cannot today.
+
 ### What is still open after this
 
 The scope question in §"What is genuinely missing" is **answered by
