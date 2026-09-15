@@ -172,11 +172,16 @@ ask wanted to "tie into the Inbox" ties in by costing zero.
   from anywhere, and it would sit in a settings page for as long as nobody
   revoked it."*
 
-  **Measured 15 Sep 2026, after this project closed:** most of it is already
-  built — [the bearer is mostly built](../../research/2026-09-15-the-bearer-is-mostly-built.md).
+  **Measured and decided 15 Sep 2026, after this project closed** — [the bearer
+  is mostly built](../../research/2026-09-15-the-bearer-is-mostly-built.md).
   The credential is an ordinary badge in a header, the CLI already mints one,
-  and `isocan badges --kill` already ends it at the home. What is left is a
-  label and a scope.
+  and `isocan badges --kill` already ends it at the home. Dion's answer: a cell
+  may hold one in its owner's own secrets store, claiming a DEDICATED AGENT's
+  actor and never the person's own, admitted only where that agent is enrolled
+  — so the worst case is the blast radius `agent-custody` already fenced. **So
+  journey 4 is no longer blocked on a credential decision.** What it still owes
+  is a label on the badge, so `isocan badges` tells a cell from a laptop, and a
+  Cloudflare account, which is provisioning and is asked with a price.
 
   The mechanism is settled and proved twice — `ISOCAN_DIRECT` works a canvas
   with no daemon (`shelf.test.ts`, `ground.test.ts`) and the door already

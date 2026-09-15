@@ -116,11 +116,15 @@ cost.
 
 ## The one decision that unlocks all three
 
-**Measured 15 Sep 2026: most of this is already built** — see [the bearer is
-mostly built](2026-09-15-the-bearer-is-mostly-built.md). `askTheDoor()` mints
-with `carrier: "bearer"` on the CLI's ordinary path, and `isocan badges --kill`
-already ends one at the home. The decision below is real but much smaller than
-this paragraph makes it sound.
+**Measured and DECIDED 15 Sep 2026 — this case is unblocked** — see [the bearer
+is mostly built](2026-09-15-the-bearer-is-mostly-built.md). `askTheDoor()`
+mints with `carrier: "bearer"` on the CLI's ordinary path, and `isocan badges
+--kill` already ends one at the home, so the question below was smaller than
+this paragraph makes it sound. Dion's answer: a cell may hold a long-lived
+bearer badge in its owner's own secrets store, claiming a DEDICATED AGENT's
+actor and never the person's own, admitted only where that agent is enrolled.
+The worst case is then the blast radius `agent-custody` already built its fence
+around. Shape 2 and shape 3 below both proceed on that basis.
 
 **A sheep needs a badge at the isocan door**, and it is the same question as
 #206 phase 7's `ISOCAN_BEARER`: a long-lived credential that can write to a

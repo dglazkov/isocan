@@ -356,11 +356,14 @@ secret.
         ISOCAN_BEARER: ${{ secrets.ISOCAN_BEARER }}
       run: node scripts/docket.mjs --no-commit
 
-**Measured 15 Sep 2026** — the paragraph below says minting this is a blast-radius
-decision rather than plumbing, and that framing outlived its facts: see [the
-bearer is mostly built](2026-09-15-the-bearer-is-mostly-built.md). The
-credential, the listing and the kill all exist; what is missing is a label and
-a scope.
+**Measured 15 Sep 2026, and this case is still BLOCKED** — see [the bearer is
+mostly built](2026-09-15-the-bearer-is-mostly-built.md). The credential, the
+listing and the kill all exist, and the framing below outlived its facts; but
+the decision taken that day covers a CELL in its owner's own secrets store,
+NOT a public repository's CI, which is a different risk that had been bundled
+with it. Repository secrets are reachable by anyone with write access and by
+misconfigured workflow triggers, and that has nothing to do with isocan. This
+nightly stays unbuilt until somebody argues it on its own evidence.
 
 **Gated on the secret so it is inert until the secret exists**, which is the
 same shape sheep's station project uses for its ⚑ steps. Left unbuilt rather

@@ -3,7 +3,7 @@ status: designed
 since: 2026-09-15
 issue: 309
 see: bench, sheep-harness, standing-agents, on-demand, agent-custody, room, embed
-note: measured 15 Sep 2026 — `ISOCAN_BEARER` has been described in three research notes as an unbuilt credential whose blast radius nobody has decided, and it is blocking four things. It is mostly built. `askTheDoor()` already mints with `carrier: "bearer"` and that is the CLI's ORDINARY path, so every `isocan` on every machine already holds the thing: a long-lived bearer badge with no expiry. Revocation exists too — `isocan badges` lists surfaces and `--kill` ends one at the home, and `surfaceKind()` already says "browser" or "machine". What is missing is narrow: a badge minted deliberately for a headless holder and labelled as one, and a decision about scope. The door's per-address mint meter is the real constraint and it argues FOR the long-lived shape.
+note: measured AND DECIDED 15 Sep 2026 — the decision: yes for a cell holding a badge that claims a DEDICATED AGENT's actor in the owner's own secrets store, never the person's own badge; not yet for a public repository's CI, which is a different risk that had been bundled with it. Measured — `ISOCAN_BEARER` has been described in three research notes as an unbuilt credential whose blast radius nobody has decided, and it is blocking four things. It is mostly built. `askTheDoor()` already mints with `carrier: "bearer"` and that is the CLI's ORDINARY path, so every `isocan` on every machine already holds the thing: a long-lived bearer badge with no expiry. Revocation exists too — `isocan badges` lists surfaces and `--kill` ends one at the home, and `surfaceKind()` already says "browser" or "machine". What is missing is narrow: a badge minted deliberately for a headless holder and labelled as one, and a decision about scope. The door's per-address mint meter is the real constraint and it argues FOR the long-lived shape.
 ---
 
 # The bearer is mostly built
@@ -122,6 +122,65 @@ construction.
    machine benefits.
 3. **Then the rc in a cell**, as its own project, with the price asked before
    anything is provisioned.
+
+## The decision, 15 September 2026
+
+**Decided by Dion, the day this note was written.**
+
+**Yes for a cell, with a dedicated agent actor. Not yet for a public
+repository's CI.**
+
+A cell may hold a long-lived bearer badge in its owner's own secrets store,
+and that badge must claim **only a dedicated agent's actor**, admitted only
+where that agent is enrolled. **Never the person's own badge.** Then the worst
+case is "that agent misbehaves on the canvases it already stands on", which is
+the blast radius [agent-custody](../projects/agent-custody/design.md) was built
+around, and `isocan badges --kill` ends exactly that and nothing of the
+person's.
+
+### Why the two cases split
+
+They had been one decision, and that is most of why this stalled. They are not
+the same risk:
+
+- **A cell** — a secret in the owner's own Cloudflare Workers store — is much
+  closer to *a second machine you own* than to a published credential. isocan's
+  model already accommodates a second machine; what it lacked was a way to say
+  which machine, and §"What is genuinely missing" is that gap.
+- **A public repository's CI** — the docket's nightly (#206 phase 7) and the
+  screens persona — is the genuinely dangerous one. Repository secrets are
+  reachable by anyone with write access and by misconfigured workflow triggers,
+  which is a well-known exfiltration path and has nothing to do with isocan.
+
+One question blocked both. Only one of them is answered here, and the other is
+not weakened by being left: whoever wants the nightly badly enough should argue
+it on its own evidence.
+
+### What follows from the yes, and is not optional
+
+1. **A dedicated actor, never the person's.** If the cell's badge claims the
+   person, every mitigation in this note is decoration: killing it logs the
+   person out of their own life, so nobody will, so it never gets killed.
+2. **Labelled at the mint.** `isocan badges` must tell a cell from a laptop
+   before somebody ends one. Today `surfaceKind()` says only `machine`, and
+   "which machine" is the whole question a person has at that moment.
+3. **Minted once and kept.** The door's per-address meter refuses a caller that
+   mints on every wake, and the symptom is a silent 401. This is a constraint,
+   not a preference.
+4. **Killing it ends the agent, not the person.** That is the test of whether
+   §1 was really done, and it is worth asserting rather than assuming.
+
+### What is still open after this
+
+The scope question in §"What is genuinely missing" is **answered by
+construction rather than by new code**: a badge already carries `admittedTo`
+and `claims` (`packages/server/src/desk.ts`), so a badge that claims one
+agent's actor and is admitted where that agent stands already has exactly the
+narrow reach wanted. No capability model is needed for this.
+
+What remains is the label (§2 above), and then the cell itself — its own
+project, with a Cloudflare account, asked with a price before anything is
+provisioned.
 
 ## What this note does not claim
 
