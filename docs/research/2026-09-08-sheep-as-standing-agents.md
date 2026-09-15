@@ -116,6 +116,12 @@ cost.
 
 ## The one decision that unlocks all three
 
+**Measured 15 Sep 2026: most of this is already built** — see [the bearer is
+mostly built](2026-09-15-the-bearer-is-mostly-built.md). `askTheDoor()` mints
+with `carrier: "bearer"` on the CLI's ordinary path, and `isocan badges --kill`
+already ends one at the home. The decision below is real but much smaller than
+this paragraph makes it sound.
+
 **A sheep needs a badge at the isocan door**, and it is the same question as
 #206 phase 7's `ISOCAN_BEARER`: a long-lived credential that can write to a
 canvas from anywhere, living somewhere until somebody revokes it. The door

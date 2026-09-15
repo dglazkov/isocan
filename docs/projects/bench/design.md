@@ -172,6 +172,12 @@ ask wanted to "tie into the Inbox" ties in by costing zero.
   from anywhere, and it would sit in a settings page for as long as nobody
   revoked it."*
 
+  **Measured 15 Sep 2026, after this project closed:** most of it is already
+  built — [the bearer is mostly built](../../research/2026-09-15-the-bearer-is-mostly-built.md).
+  The credential is an ordinary badge in a header, the CLI already mints one,
+  and `isocan badges --kill` already ends it at the home. What is left is a
+  label and a scope.
+
   The mechanism is settled and proved twice — `ISOCAN_DIRECT` works a canvas
   with no daemon (`shelf.test.ts`, `ground.test.ts`) and the door already
   exempts a bearer. Only the blast radius is open, and it is one decision, not
