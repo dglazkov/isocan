@@ -23,6 +23,11 @@ second week.
 
 ## 14 September 2026
 
+- `isocan who` and the canvas tray now agree about an agent whose rc is
+  parked directly at the home rather than on your machine. A laptop asks the
+  canvas's home who is answering, and **Add agent** from a laptop reaches an
+  rc parked at the home.
+
 - A DESIGN.md can now declare recipe-owned styling, caller controls, approved
   treatments and exceptions with reasons. Design check and the CLI show the
   effective policy for each screen. Edit the governing document and Undo as

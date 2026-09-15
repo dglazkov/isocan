@@ -23,6 +23,9 @@ import type {
   PostOpRequest,
   PostOpResponse,
   PresenceSession,
+  RcAnsweringResponse,
+  RcAskRequest,
+  RcAskResponse,
   Canvas,
   RedeemPassResponse,
   ServerMessage,
@@ -66,6 +69,8 @@ import {
   FREE_NAME_ROUTE,
   grantRevokeRoute,
   grantsRoute,
+  rcAnsweringRoute,
+  rcAskRoute,
   publicListingRoute,
   healthPath,
   normalizeHomeUrl,
@@ -270,6 +275,20 @@ export interface HomeConnection {
    */
   grants(canvasId: string): Promise<GrantsResponse>;
   setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse>;
+  /**
+   * **Who answers for this canvas, as the HOME has it** (issue #306). The
+   * home's registry is the only one that sees every hold: its own, the
+   * mirrors its members relay up, and an rc parked directly at it on some
+   * other badge. This daemon's registry sees only the first two, so for a
+   * canvas homed elsewhere the roster and the tray read this, not
+   * `answering()`. A read about connections, never about actors: no claim
+   * goes up first.
+   */
+  rcAnswering(canvasId: string): Promise<RcAnsweringResponse>;
+  /** The web's add-agent ask, forwarded when nothing is parked HERE: the rc
+   * it is for may be holding at the home on a badge this daemon never sees.
+   * The home's refusal (`no-rc`, `not-your-rc`) comes back verbatim. */
+  rcAsk(canvasId: string, body: RcAskRequest): Promise<RcAskResponse>;
   createGrant(
     canvasId: string,
     subject: GrantSubject,
@@ -1857,6 +1876,18 @@ export class HomeLink implements HomeConnection {
    * a grant is about badges, never about actors. */
   grants(canvasId: string): Promise<GrantsResponse> {
     return this.api<GrantsResponse>("GET", grantsRoute(canvasId));
+  }
+
+  rcAnswering(canvasId: string): Promise<RcAnsweringResponse> {
+    return this.api<RcAnsweringResponse>("GET", rcAnsweringRoute(canvasId));
+  }
+
+  async rcAsk(canvasId: string, body: RcAskRequest): Promise<RcAskResponse> {
+    // The ask is said in the asker's name ("<from> asked to add …"), and the
+    // home checks that against THIS daemon's badge — so the claim goes up
+    // first, as before a forwarded op.
+    await this.ensureClaim(body.from);
+    return this.api<RcAskResponse>("POST", rcAskRoute(canvasId), body);
   }
 
   async setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse> {

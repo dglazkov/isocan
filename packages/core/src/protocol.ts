@@ -584,6 +584,16 @@ export interface RcAnsweringResponse {
   policies?: Record<string, RcPolicy>;
 }
 
+/** The answering route above, spelled once: a replica forwards it to the
+ * canvas's home (issue #306), and a route spelled in three packages is a
+ * route that drifts. */
+export const rcAnsweringRoute = (canvasId: string): string =>
+  `/api/projects/${encodeURIComponent(canvasId)}/rc`;
+/** The ask route below, spelled once for the same reason: the web, the API
+ * client and the home-link all ring the same doorbell. */
+export const rcAskRoute = (canvasId: string): string =>
+  `/api/projects/${encodeURIComponent(canvasId)}/agents/ask`;
+
 /** The doorbell: somebody wants an agent by name, on this canvas. */
 export interface RcAskRequest {
   name: string;

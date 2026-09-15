@@ -470,7 +470,8 @@ export declare class DaemonRoutes {
      * enrolls each and keeps holding. */
     rcHold(request: RcHoldRequest, signal?: AbortSignal): Promise<RcHoldResponse>;
     /** Who a live rc answers for on this canvas — and whether any is parked at
-     * all, here or relayed from a member's machine. */
+     * all — as the canvas's home has it: a daemon that is not the home asks the
+     * home and folds in its own holds (issue #306). */
     rcAnswering(canvasId: string): Promise<RcAnsweringResponse>;
     undo(canvasId: string, actor: Actor): Promise<LogEntry>;
     redo(canvasId: string, actor: Actor): Promise<LogEntry>;

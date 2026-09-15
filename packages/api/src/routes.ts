@@ -1,5 +1,6 @@
 import { SOURCE_POLICY_HEADER, sourcePolicyHeader, parseSourcePolicyHeader, sourceClassificationRoute, SOURCE_ACCESS_ROUTE, personalRoute, personalCanvasRoute, personalDelegatesRoute, type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "@isocan/core";
 import { inboxRoute, type InboxResponse } from "@isocan/core";
+import { rcAnsweringRoute } from "@isocan/core";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type {
   Actor,
@@ -1128,9 +1129,10 @@ export class DaemonRoutes {
   }
 
   /** Who a live rc answers for on this canvas — and whether any is parked at
-   * all, here or relayed from a member's machine. */
+   * all — as the canvas's home has it: a daemon that is not the home asks the
+   * home and folds in its own holds (issue #306). */
   rcAnswering(canvasId: string): Promise<RcAnsweringResponse> {
-    return this.request("GET", `/api/projects/${canvasId}/rc`);
+    return this.request("GET", rcAnsweringRoute(canvasId));
   }
 
   undo(canvasId: string, actor: Actor): Promise<LogEntry> {

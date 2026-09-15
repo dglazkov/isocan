@@ -11775,7 +11775,8 @@ program
        * **The roster tells the truth about absent agents** (phase 6,
        * journey 7). Standing agents get rows beside the live sessions —
        * `answerable` exactly when a live rc holds a connection claiming
-       * them (the daemon's connection-bound fact, never a TTL), `enrolled`
+       * them (the connection-bound fact as the canvas's HOME has it, never
+       * a TTL — a replica's daemon asks the home, issue #306), `enrolled`
        * when the record stands but nobody is listening. Three readings,
        * distinguishable without knowing how any of it works.
        */

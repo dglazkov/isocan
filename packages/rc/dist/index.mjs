@@ -1160,6 +1160,7 @@ var CLAIM_REFUSAL = {
 var CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
 var CLIENT_FEATURES_HEADER = "x-isocan-features";
 var PARK_ADOPTED_CODE = "park-adopted";
+var rcAnsweringRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/rc`;
 var FILENAME_HEADER = "X-Isocan-Filename";
 var MAX_DIRECT_UPLOAD_BYTES = 24 * 1024 * 1024;
 var encodeFilename = (filename) => encodeURIComponent(filename);
@@ -3051,9 +3052,10 @@ var DaemonRoutes = class {
     return this.request("POST", "/api/rc/hold", request, signal);
   }
   /** Who a live rc answers for on this canvas — and whether any is parked at
-   * all, here or relayed from a member's machine. */
+   * all — as the canvas's home has it: a daemon that is not the home asks the
+   * home and folds in its own holds (issue #306). */
   rcAnswering(canvasId) {
-    return this.request("GET", `/api/projects/${canvasId}/rc`);
+    return this.request("GET", rcAnsweringRoute(canvasId));
   }
   undo(canvasId, actor) {
     return this.request("POST", `/api/projects/${canvasId}/undo`, { actor });

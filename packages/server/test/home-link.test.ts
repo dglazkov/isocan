@@ -939,6 +939,111 @@ describe("the rc's liveness and the web's ask, carried across the link", () => {
     expect(held.asks).toMatchObject([{ askId, name: "Sian", from: { id: "usr_home" } }]);
   }, 20_000);
 
+  /** An rc holding directly AT the home, on the home's own badge — sheep's
+   * collie in a Durable Object, or any rc that is not behind a member daemon. */
+  function holdAtH(actorIds: string[], waitMs = 12_000, says: Record<string, unknown> = {}) {
+    const aborter = new AbortController();
+    const done = fetch(`${H.base}/api/rc/hold`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...H.badge.headers },
+      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs, ...says }),
+      signal: aborter.signal,
+    });
+    return { done, aborter };
+  }
+
+  /**
+   * **Issue #306.** A hold placed at the home on another badge never reaches
+   * a replica's registry — nothing relays DOWN — so `isocan who` on a laptop
+   * read a hosted rc's agents as `enrolled` while the home's tray read them
+   * `answerable`. A replica now answers `/rc` with the home's fact.
+   */
+  it("a hold at H reads answerable at A, and stops when it ends (#306)", async () => {
+    await birthAtA();
+    const percy = { id: "agt_percy", name: "Percy" };
+    await H.badge.speakAs(percy);
+    await op(A, priya, { type: "agent.enroll", agent: percy });
+    const home = { id: "usr_home", name: "Home" };
+    await until(() => canvas(H), (c) => c.canvas.agents?.[percy.id] !== undefined, "the enrolment to reach H");
+    expect((await rcOf(A)).parked).toBe(false);
+
+    const hold = holdAtH([percy.id], 12_000, { owner: home, policies: { [percy.id]: { owner: home, listen: [] } } });
+    type Answering = { parked: boolean; actorIds: string[]; owners?: unknown[]; policies?: Record<string, unknown> };
+    const at = await until(() => get<Answering>(A, `/api/projects/${CANVAS}/rc`), (r) => r.parked, "H's hold to read at A");
+    expect(at.actorIds).toEqual([percy.id]);
+    expect(at.owners).toEqual([home]);
+    expect(at.policies).toEqual({ [percy.id]: { owner: home, listen: [] } });
+
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+    await until(() => rcOf(A), (r) => !r.parked, "the hold's end to read at A");
+  }, 20_000);
+
+  it("a hold at A and a hold at H read as one answering set at A (#306)", async () => {
+    await birthAtA();
+    const sian = { id: "agt_sian", name: "Sian" };
+    const percy = { id: "agt_percy", name: "Percy" };
+    await A.badge.speakAs(sian);
+    await H.badge.speakAs(percy);
+    await op(A, priya, { type: "agent.enroll", agent: sian });
+    await op(A, priya, { type: "agent.enroll", agent: percy });
+    await until(() => canvas(H), (c) => c.canvas.agents?.[percy.id] !== undefined, "the enrolments to reach H");
+    const home = { id: "usr_home", name: "Home" };
+
+    const atA = holdAtA([sian.id], 12_000, { owner: priya, policies: { [sian.id]: { owner: priya, listen: [] } } });
+    const atH = holdAtH([percy.id], 12_000, { owner: home, policies: { [percy.id]: { owner: home, listen: [priya.id] } } });
+    type Answering = { parked: boolean; actorIds: string[]; owners?: { id: string }[]; policies?: Record<string, unknown> };
+    const at = await until(
+      () => get<Answering>(A, `/api/projects/${CANVAS}/rc`),
+      (r) => r.actorIds.includes(sian.id) && r.actorIds.includes(percy.id),
+      "both holds to read at A",
+    );
+    expect(at.parked).toBe(true);
+    expect(at.owners?.map((o) => o.id).sort()).toEqual([home.id, priya.id].sort());
+    expect(at.policies).toEqual({
+      [sian.id]: { owner: priya, listen: [] },
+      [percy.id]: { owner: home, listen: [priya.id] },
+    });
+    atA.aborter.abort();
+    atH.aborter.abort();
+    await Promise.allSettled([atA.done, atH.done]);
+  }, 20_000);
+
+  it("with the home down, A still reads its own hold (#306)", async () => {
+    await birthAtA();
+    const hold = holdAtA([], 12_000);
+    await until(() => rcOf(A), (r) => r.parked, "the hold to register at A");
+    await H.daemon.close();
+    const at = await rcOf(A);
+    expect(at.parked).toBe(true);
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
+
+  it("an ask posted at A with nobody parked at A comes out of H's open hold (#306)", async () => {
+    await birthAtA();
+    const hold = holdAtH([], 12_000);
+    await until(() => rcOf(A), (r) => r.parked, "H's hold to read at A");
+
+    const asked = await post(A, `/api/projects/${CANVAS}/agents/ask`, { name: "Sian", from: priya });
+    expect(asked.status).toBe(200);
+    const { askId } = (await asked.json()) as { askId: string };
+    const held = (await (await hold.done).json()) as { asks: { askId: string; name: string; from: { id: string } }[] };
+    expect(held.asks).toMatchObject([{ askId, name: "Sian", from: { id: priya.id } }]);
+  }, 20_000);
+
+  it("an ask posted at A meets H's owner-only refusal, verbatim (#306)", async () => {
+    await birthAtA();
+    const home = { id: "usr_home", name: "Home" };
+    const hold = holdAtH([], 12_000, { owner: home });
+    await until(() => rcOf(A), (r) => r.parked, "H's hold to read at A");
+    const asked = await post(A, `/api/projects/${CANVAS}/agents/ask`, { name: "Sian", from: priya });
+    expect(asked.status).toBe(403);
+    expect(await asked.json()).toMatchObject({ code: "not-your-rc" });
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
+
   it("an ask with nobody parked anywhere is refused, with the code the dialog reads", async () => {
     await birthAtA();
     const asked = await post(H, `/api/projects/${CANVAS}/agents/ask`, {

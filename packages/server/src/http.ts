@@ -5569,11 +5569,34 @@ export function registerRoutes(
     return { ok: true, asks };
   });
 
-  /** Who answers here if summoned — the union of every open hold's agents,
-   * local and relayed — and `parked`, the Web UI's add-agent gate. */
+  /**
+   * Who answers here if summoned — the union of every open hold's agents,
+   * local and relayed — and `parked`, the Web UI's add-agent gate.
+   *
+   * **For a canvas homed elsewhere, the home's answer, folded with this
+   * daemon's own holds** (issue #306). The registry here sees this machine's
+   * holds and what its members relay up, and nothing an rc parked at the
+   * home on another badge asserts — so a laptop's `isocan who` read a hosted
+   * rc's agents as `enrolled` while the home's tray read them `answerable`.
+   * This is the one route where the home's view is folded into a local
+   * registry rather than replacing it: a hold at this daemon is a fact this
+   * daemon has NOW, and the relay up takes a flap window to say it. The
+   * home's word on an agent wins where both speak. A home that does not
+   * answer leaves the local reading, which is what an offline laptop had
+   * before and all it can know.
+   */
   app.get("/api/projects/:id/rc", async (req) => {
     const { id } = req.params as { id: string };
-    return rc.answering(id);
+    const home = options.homes?.for(id) ?? null;
+    if (!home) return rc.answering(id);
+    const local = rc.answeringLocal(id);
+    const at = await home.rcAnswering(id).catch(() => null);
+    if (!at) return rc.answering(id);
+    const owners = new Map((at.owners ?? []).map((o) => [o.id, o]));
+    for (const owner of local.owners) if (!owners.has(owner.id)) owners.set(owner.id, owner);
+    const actorIds = [...new Set([...at.actorIds, ...local.actorIds])];
+    const policies = { ...local.policies, ...(at.policies ?? {}) };
+    return { parked: at.parked || local.parked, actorIds, owners: [...owners.values()], policies };
   });
 
   /**
@@ -5615,6 +5638,12 @@ export function registerRoutes(
     const isOwner = (owner: import("@isocan/core").Actor, askerId: string) =>
       sameActor(joined, owner.id, askerId);
     if (!rc.ask(id, ask, isOwner)) {
+      // Nothing parked here or behind a member — but for a canvas homed
+      // elsewhere, the rc may be holding AT the home on a badge this daemon
+      // never sees (issue #306). The home answers the ask as if it had been
+      // posted there, refusals included, verbatim.
+      const home = options.homes?.for(id) ?? null;
+      if (home) return home.rcAsk(id, { name, from: body.from, ...template });
       const owners = rc.answering(id).owners;
       if (owners.length > 0) {
         const names = owners.map((o) => o.name);

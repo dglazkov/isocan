@@ -1,4 +1,5 @@
 import { inboxRoute, type InboxResponse } from "@isocan/core";
+import { rcAnsweringRoute, rcAskRoute } from "@isocan/core";
 import type {
   CanvasGroupMigrationPreview,
   Actor,
@@ -631,14 +632,16 @@ export function fetchNews(): Promise<NewsResponse> {
  * **Which enrolled agents a live rc is actually answering for — and whether
  * one is parked at all.**
  *
- * Connection-bound, never a TTL: the daemon reports the holds it is holding
- * right now, unioned with what member machines' daemons relay up their
- * home-link sockets (agent-custody mechanism 1). `roster()` takes the ids as
- * its fourth argument and downgrades every standing row to `enrolled`
- * without them; `parked` is the add-agent gate. See `useAnswerable`.
+ * Connection-bound, never a TTL: the holds open right now, as the canvas's
+ * HOME has them — its own, what member machines' daemons relay up their
+ * home-link sockets (agent-custody mechanism 1), and an rc parked at it on
+ * another badge. A daemon that is not the home asks the home and folds in
+ * its own holds (issue #306). `roster()` takes the ids as its fourth
+ * argument and downgrades every standing row to `enrolled` without them;
+ * `parked` is the add-agent gate. See `useAnswerable`.
  */
 export function fetchRcAnswering(canvasId: string): Promise<RcAnsweringResponse> {
-  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/rc`);
+  return request("GET", rcAnsweringRoute(canvasId));
 }
 
 /**
@@ -648,7 +651,7 @@ export function fetchRcAnswering(canvasId: string): Promise<RcAnsweringResponse>
  * `agent.enroll` op lands, or the dialog's countdown says nothing answered.
  */
 export function askEnrolAgent(canvasId: string, body: RcAskRequest): Promise<RcAskResponse> {
-  return request("POST", `/api/projects/${encodeURIComponent(canvasId)}/agents/ask`, body);
+  return request("POST", rcAskRoute(canvasId), body);
 }
 
 export function getSnapshot(canvasId: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<CanvasSnapshotResponse> {

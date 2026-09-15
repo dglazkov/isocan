@@ -583,6 +583,13 @@ export interface RcAnsweringResponse {
      * answers everyone its canvas-state gate admits. */
     policies?: Record<string, RcPolicy>;
 }
+/** The answering route above, spelled once: a replica forwards it to the
+ * canvas's home (issue #306), and a route spelled in three packages is a
+ * route that drifts. */
+export declare const rcAnsweringRoute: (canvasId: string) => string;
+/** The ask route below, spelled once for the same reason: the web, the API
+ * client and the home-link all ring the same doorbell. */
+export declare const rcAskRoute: (canvasId: string) => string;
 /** The doorbell: somebody wants an agent by name, on this canvas. */
 export interface RcAskRequest {
     name: string;
