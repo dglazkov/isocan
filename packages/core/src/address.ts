@@ -276,9 +276,25 @@ export function parseCanvasAddress(raw: string): CanvasAddress | null {
   // question nobody asked with a canvas nobody named.
   const parts = url.pathname.replace(/\/+$/, "").split("/");
   if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
-  const canvasId = decodeURIComponent(parts[2] ?? "");
+  const canvasId = decodeSegment(parts[2]);
   if (!canvasId) return null;
   return { origin: url.origin, canvasId, ...(pass !== undefined ? { pass } : {}) };
+}
+
+/** A path segment decoded, or null when the escape is malformed.
+ *
+ * `decodeURIComponent` throws on a bad percent escape (`/p/%E0%A4%A`), and
+ * both address parsers document a null answer for anything that is not an
+ * address — a throw would force every caller to catch, which is the exact
+ * thing the null contract exists to avoid. Pasted text is arbitrary, so a
+ * malformed escape is an ordinary input, not an exception. */
+function decodeSegment(segment: string | undefined): string | null {
+  if (!segment) return null;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
 }
 
 /** An item address taken apart — `parseCanvasAddress`'s shape with the item
@@ -323,8 +339,8 @@ export function parseItemAddress(raw: string): ItemAddress | null {
   ) {
     return null;
   }
-  const canvasId = decodeURIComponent(parts[2] ?? "");
-  const itemId = decodeURIComponent(parts[4] ?? "");
+  const canvasId = decodeSegment(parts[2]);
+  const itemId = decodeSegment(parts[4]);
   if (!canvasId || !itemId) return null;
   return { origin: url.origin, canvasId, itemId };
 }

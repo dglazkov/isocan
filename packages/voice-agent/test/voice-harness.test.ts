@@ -1467,6 +1467,26 @@ describe("the person's gate", () => {
     });
     expect([400, 404]).toContain(missing.status);
     expect(((await missing.json()) as { error: string }).error).toContain("no canvas matches");
+
+    // An AMBIGUOUS local prefix is a different refusal, and it must not fall
+    // through to the public catalogue: nothing there may silently win.
+    await post("/api/ops", {
+      canvasId: null,
+      actor: seeder,
+      op: { type: "project.create", canvasId: "prj_amb_a", title: "Winter work" },
+    });
+    await post("/api/ops", {
+      canvasId: null,
+      actor: seeder,
+      op: { type: "project.create", canvasId: "prj_amb_b", title: "Winter rest" },
+    });
+    const ambiguous = await fetch(`${server.state.url}canvas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "Winter" }),
+    });
+    expect(ambiguous.status).toBe(400);
+    expect(((await ambiguous.json()) as { error: string }).error).toContain("ambiguous");
   });
 
   it("joins a canvas from a pasted address with its pass, a bare token, and the public catalogue", async () => {

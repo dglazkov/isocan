@@ -71,6 +71,13 @@ import {
 export const VOICE_HARNESS = "voice";
 export const DEFAULT_VOICE_PORT = 7654;
 
+/** The one sentence for a harness process that predates a pull: its routes
+ * and daemon client are frozen at start while it serves the fresh dist page.
+ * Spelled once, because three refusals answer with it (join, create, switch). */
+export const STALE_HARNESS =
+  "this harness build is older than the daemon it speaks to — pull the latest isocan, " +
+  "rebuild, and restart the voice harness";
+
 /** Everything this feature owns, under `~/.isocan`. */
 export function voiceDir(home: string): string {
   return path.join(home, "voice");
@@ -3543,7 +3550,7 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
    */
   async function switchThisSession(ref: string): Promise<
     | { ok: true; canvas: { id: string; title: string }; previous: { id: string; title: string }; items: { id: string; title?: string }[]; answer: string; unchanged?: boolean }
-    | { ok: false; error: string; notFound?: boolean }
+    | { ok: false; error: string; notFound?: boolean; code?: string }
   > {
     const wanted = ref.trim();
     if (!wanted) return { ok: false, error: "a switch needs the canvas to move to" };
@@ -3551,7 +3558,18 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
     try {
       next = matchRef(await target.canvas.ctx.client.listCanvases(), wanted);
     } catch (err) {
-      return { ok: false, error: (err as Error).message, notFound: true };
+      // `notFound` names the NO-MATCH case only: an ambiguous local prefix
+      // is a different refusal and must not fall through to the public
+      // catalogue, where a unique public title could silently win. The
+      // daemon's refusal code rides along so the drawer can say the same
+      // stale-build sentence the join path says.
+      const message = (err as Error).message;
+      return {
+        ok: false,
+        error: message,
+        notFound: message.startsWith("no canvas matches"),
+        ...((err as { code?: string }).code !== undefined ? { code: (err as { code?: string }).code } : {}),
+      };
     }
     if (next.id === target.canvasId) {
       return {
@@ -3661,12 +3679,7 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
       // the harness process was started before the pull and is frozen there.
       // Say the fix, not the daemon's "update isocan" sentence.
       if (err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED) {
-        return {
-          ok: false,
-          error:
-            "this harness build is older than the daemon it speaks to — pull the latest isocan, " +
-            "rebuild, and restart the voice harness",
-        };
+        return { ok: false, error: STALE_HARNESS };
       }
       return { ok: false, error: `not joined — ${(err as Error).message}` };
     }
@@ -4320,7 +4333,7 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         // address (and its #pss_… pass) out of whatever surrounds it; a bare
         // pass token may likewise ride in prose. The regex only NOMINATES a
         // candidate; parseCanvasAddress does the real validation.
-        const embedded = /(?:https?:\/\/)?[A-Za-z0-9][A-Za-z0-9.-]*(?::\d+)?\/p\/[A-Za-z0-9_-]+(?:#[^\s"']+)?/.exec(wanted)?.[0];
+        const embedded = /(?:https?:\/\/)?(?:\[[0-9A-Fa-f:.]*\]|[A-Za-z0-9][A-Za-z0-9.-]*)(?::\d+)?\/p\/[A-Za-z0-9_-]+(?:#[^\s"']+)?/.exec(wanted)?.[0];
         const address = parseCanvasAddress(wanted) ?? (embedded ? parseCanvasAddress(embedded) : null);
         const barePass = /pss_[^.\s]+\.[\w-]+/.exec(wanted)?.[0] ?? null;
         let moved;
@@ -4359,7 +4372,7 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
           }
         }
         if (!moved.ok) {
-          fail(moved.error, moved.notFound);
+          fail(moved.code === CANVAS_GROUPS_REQUIRED ? STALE_HARNESS : moved.error, moved.notFound);
           return;
         }
         recordToolLog({
@@ -4401,11 +4414,7 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
           });
         } catch (err) {
           const stale = (err as { code?: string }).code === CANVAS_GROUPS_REQUIRED;
-          respond(502, {
-            error: stale
-              ? "this harness build is older than the daemon it speaks to — pull the latest isocan, rebuild, and restart the voice harness"
-              : (err as Error).message,
-          });
+          respond(502, { error: stale ? STALE_HARNESS : (err as Error).message });
         }
         return;
       }
