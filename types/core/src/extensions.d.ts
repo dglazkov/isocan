@@ -1,5 +1,5 @@
 import type { CanvasContents, Item } from "./model.js";
-import { type SlashCommand } from "./commands.js";
+import { type CommandMetadata } from "./commands.js";
 export declare const TOOL_ROLE = "tool";
 /** The properties that make an item this canvas's tool. */
 export declare function toolProperties(): Record<string, string>;
@@ -50,7 +50,7 @@ type ToolRead = {
  * failure a person actually makes, and the refusal should say so at the moment
  * the file is read rather than when the button is pressed.
  */
-export declare function readToolExtension(text: string, commands: SlashCommand[]): ToolRead;
+export declare function readToolExtension(text: string, commands: readonly CommandMetadata[]): ToolRead;
 /**
  * **What this tool can do, in words, before you keep it** — stage 2.
  *
@@ -66,7 +66,7 @@ export declare function readToolExtension(text: string, commands: SlashCommand[]
  * Derived, never declared. A manifest that stated its own capabilities would
  * be a manifest that could understate them.
  */
-export declare function toolCapabilities(tool: ToolExtension, commands: SlashCommand[]): string[];
+export declare function toolCapabilities(tool: ToolExtension, commands: readonly CommandMetadata[]): string[];
 /**
  * Every tool on this canvas, oldest first, so the rail does not reshuffle
  * itself when somebody edits one. The bytes are not read here — an item's

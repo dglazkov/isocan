@@ -361,6 +361,26 @@ export type Operation = {
     threadId: string;
     comment: NewComment;
 } | {
+    /** Publishes typed questions as one comment; the writer resolves retained metadata. */
+    type: "questionnaire.ask";
+    threadId: string;
+    commentId: string;
+    questions: import("./design-partner.js").DesignQuestionSet;
+    legacySource?: import("./questionnaire.js").LegacyQuestionSource;
+    contextRequest?: import("./canvas-group-context.js").ContextRequest;
+    /** Canonical writer output only; public callers cannot supply retained metadata. */
+    context?: import("./canvas-group-context.js").ContextManifest;
+    retainedReferences?: import("./questionnaire.js").QuestionnaireRetainedReference[];
+} | {
+    /** Records the named respondent's typed outcomes as one comment and one undo step. */
+    type: "questionnaire.answer";
+    threadId: string;
+    commentId: string;
+    response: import("./design-partner.js").DesignResponse;
+    /** Canonical writer output only; public callers cannot supply retained metadata. */
+    context?: import("./canvas-group-context.js").ContextManifest;
+    retainedReferences?: import("./questionnaire.js").QuestionnaireRetainedReference[];
+} | {
     type: "thread.setAnchor";
     /** Omission clears a previous text selector, preserving old item-pin clients. */
     textAnchor?: TextAnchor | null;

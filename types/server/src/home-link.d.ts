@@ -40,9 +40,9 @@ export declare class HomeRefusedError extends Error {
  * engine learns "there is somewhere else to send this", never how a socket
  * works. */
 export interface HomeConnection {
-    /** Authoritative private routes retain per-call policy and cancellation without local fallback. */
-    personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext): Promise<T>;
-    /** Raw forwarding keeps source policy off this long-lived connection's mutable state. */
+    /** Authoritative private routes retain policy and cancellation; transparent reads also retain the original decoder features. */
+    personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext, clientFeatures?: string): Promise<T>;
+    /** Raw forwarding keeps source policy and original feature headers on the call, never the connection. */
     sourceRequest(method: string, path: string, body: unknown, headers: Record<string, string>, actor: Actor | undefined, context: SourceRequestContext): Promise<Response>;
     readonly homeUrl: string;
     /** `POST /api/ops` at the home, with this daemon's badge. */
@@ -681,7 +681,7 @@ export declare class HomeLink implements HomeConnection {
      */
     freeName(): Promise<string>;
     private ensureClaim;
-    personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext): Promise<T>;
+    personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext, clientFeatures?: string): Promise<T>;
     sourceRequest(method: string, path: string, body: unknown, headers: Record<string, string>, actor: Actor | undefined, context: SourceRequestContext): Promise<Response>;
     submitOp(body: PostOpRequest): Promise<PostOpResponse>;
     groupMigrationPreview(canvasId: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;

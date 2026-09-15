@@ -14,13 +14,14 @@ import type {
   ServerMessage,
   ActorJoins,
   ActorNames,
-  SlashCommand,
+  CommandMetadata,
   TakedownNotice,
   BadgeEnd,
   RefusalNotice,
 } from "@isocan/core";
 import {
   CANVAS_GROUPS_FEATURE,
+  QUESTIONNAIRES_FEATURE,
   CANVAS_GROUPS_REQUIRED,
   CLIENT_FEATURES_PARAM,
   applyOperation,
@@ -241,7 +242,7 @@ interface CanvasStore {
   backing: { bound: boolean; onDisk: Record<string, string> };
   /** The slash-command menu, from the daemon. Null = not asked yet; the
    * built-ins stand in until it lands (lib/commands.ts). */
-  commands: SlashCommand[] | null;
+  commands: CommandMetadata[] | null;
   /**
    * The rung this tab's admission holds here (#88, widened by the roles
    * ladder), read off the socket's hello. `edit` until the home says
@@ -954,7 +955,7 @@ function wsUrl(canvasId: string, since: number): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   // `since=0` is "no cursor" on the wire and the daemon reads it as such, so
   // a fresh connect says the same thing whether it says it or stays silent.
-  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`;
+  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`;
 }
 
 /**

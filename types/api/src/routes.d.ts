@@ -232,6 +232,18 @@ export declare class DaemonRoutes {
     group?: string, originGroupMode?: "legacy" | "groups", 
     /** A canvas's birth space at its home; only valid with project.create. */
     spaceId?: string): Promise<PostOpResponse>;
+    /** Refusing questionnaire acts retain their canonical type and caller-owned retry ID. */
+    questionnaire(canvasId: string, actor: Actor, op: Extract<Operation, {
+        type: "questionnaire.ask" | "questionnaire.answer";
+    }>, opId: string, originGroupMode?: "legacy" | "groups"): Promise<PostOpResponse>;
+    /** Writer-resolved eligibility; a missing agent display badge does not imply a human. */
+    questionnaireActors(canvasId: string): Promise<{
+        actors: Array<{
+            id: string;
+            name: string;
+            kind: "human" | "agent" | "unknown";
+        }>;
+    }>;
     /** Semantic group request; canonical resolved patches belong to the
      * authoritative writer. Pass a stable opId when retrying one intent. */
     changeGroup(canvasId: string, actor: Actor, action: Exclude<GroupAction, {

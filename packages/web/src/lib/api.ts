@@ -67,6 +67,7 @@ import {
   PUBLIC_CANVASES_ROUTE,
   publicListingRoute,
   CANVAS_GROUPS_FEATURE,
+  QUESTIONNAIRES_FEATURE,
   CLIENT_FEATURES_HEADER,
   CANVAS_GROUPS_REQUIRED,
   ATTEST_ROUTE,
@@ -288,7 +289,7 @@ export async function request<T>(
     fetch(url, {
       method,
       ...(signal ? { signal } : {}),
-      headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extraHeaders, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
+      headers: { [CLIENT_FEATURES_HEADER]: `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`, ...extraHeaders, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
       ...(body !== undefined
         ? { body: JSON.stringify(body) }
         : {}),

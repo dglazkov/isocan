@@ -59,6 +59,8 @@ const OP_WORDS: Partial<Record<OperationType, string>> = {
   "item.react": "left a mark",
   "thread.create": "started a conversation",
   "thread.reply": "replied",
+  "questionnaire.ask": "asked design questions",
+  "questionnaire.answer": "answered design questions",
   "thread.delete": "removed a conversation",
   "thread.restore": "restored a conversation",
   "thread.setAnchor": "moved a conversation",

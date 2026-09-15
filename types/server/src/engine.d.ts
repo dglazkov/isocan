@@ -46,6 +46,8 @@ export declare class NothingToUndoError extends Error {
     constructor(kind: "undo" | "redo", actorName?: string);
 }
 interface SubmitRequest {
+    /** Transport-resolved origin at the authoritative writer; never accepted from the request body or forwarded. */
+    authoritativeHome?: string;
     sourceContext?: SourceRequestContext;
     clientFeatures?: string;
     originGroupMode?: "legacy" | "groups";
@@ -962,6 +964,10 @@ export declare class Engine {
      */
     private heldNames;
     private actors;
+    /** Eligibility is a protected canvas read; joins affect comparison, never historical authorship. */
+    designRespondents(canvasId: string): Promise<{
+        actors: import("../../core/src/index.js").QuestionnaireActor[];
+    }>;
     /** Core pipeline. Runs inside the queue. */
     private applyAndPersist;
     /**

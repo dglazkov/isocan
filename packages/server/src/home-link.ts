@@ -43,7 +43,7 @@ import type {
   UndoRedoRequest,
 } from "@isocan/core";
 import {
-  CANVAS_GROUPS_FEATURE,
+  CURRENT_CLIENT_FEATURES,
   CLIENT_FEATURES_HEADER,
   CLIENT_FEATURES_PARAM,
   ATTEST_ROUTE,
@@ -237,9 +237,9 @@ export class HomeRefusedError extends Error {
  * engine learns "there is somewhere else to send this", never how a socket
  * works. */
 export interface HomeConnection {
-  /** Authoritative private routes retain per-call policy and cancellation without local fallback. */
-  personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext): Promise<T>;
-  /** Raw forwarding keeps source policy off this long-lived connection's mutable state. */
+  /** Authoritative private routes retain policy and cancellation; transparent reads also retain the original decoder features. */
+  personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext, clientFeatures?: string): Promise<T>;
+  /** Raw forwarding keeps source policy and original feature headers on the call, never the connection. */
   sourceRequest(method: string, path: string, body: unknown, headers: Record<string, string>, actor: Actor | undefined, context: SourceRequestContext): Promise<Response>;
   readonly homeUrl: string;
   /** `POST /api/ops` at the home, with this daemon's badge. */
@@ -1112,7 +1112,7 @@ export class HomeLink implements HomeConnection {
     const since = await this.localSeq(link.canvasId);
     if (link.dialSeq !== attempt) return;
     const wsBase = this.homeUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-    const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`;
+    const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}&${CLIENT_FEATURES_PARAM}=${CURRENT_CLIENT_FEATURES}`;
     let socket: WebSocket;
     try {
       socket = new WebSocket(url, { headers: bearerHeader(badge) });
@@ -1835,9 +1835,9 @@ export class HomeLink implements HomeConnection {
     return work;
   }
 
-  async personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext): Promise<T> {
+  async personalRequest<T>(method: string, path: string, body?: unknown, actor?: Actor, context?: SourceRequestContext, clientFeatures?: string): Promise<T> {
     if (actor) await abortable(this.ensureClaim(actor), context?.signal);
-    return this.api<T>(method, path, body, context?.signal, context);
+    return this.api<T>(method, path, body, context?.signal, context, clientFeatures);
   }
 
   async sourceRequest(method: string, path: string, body: unknown, headers: Record<string, string>, actor: Actor | undefined, context: SourceRequestContext): Promise<Response> {
@@ -1847,7 +1847,7 @@ export class HomeLink implements HomeConnection {
     if (!badge) throw new HomeUnreachableError(this.homeUrl, "the door did not answer");
     const send = (held: StoredBadge) => this.fetchHome(path, {
       method, ...(context.signal ? { signal: context.signal } : {}),
-      headers: { ...headers, [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...bearerHeader(held), [SOURCE_POLICY_HEADER]: sourcePolicyHeader(context) },
+      headers: { [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...headers, ...bearerHeader(held), [SOURCE_POLICY_HEADER]: sourcePolicyHeader(context) },
       ...(body === undefined ? {} : { body: Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body) }),
     });
     let response = await send(badge);
@@ -2255,7 +2255,7 @@ export class HomeLink implements HomeConnection {
     const send = async (held: StoredBadge) =>
       this.fetchHome(`/api/projects/${canvasId}/adopt`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...bearerHeader(held) },
+        headers: { "Content-Type": "application/json", [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...bearerHeader(held) },
         body: JSON.stringify({ entries }),
       });
     let res = await send(badge);
@@ -2327,7 +2327,7 @@ export class HomeLink implements HomeConnection {
    * answers to "which credential is in that file" on one machine is the
    * divergence house rule 4 forbids.
    */
-  private async api<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, context?: SourceRequestContext): Promise<T> {
+  private async api<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, context?: SourceRequestContext, clientFeatures = CURRENT_CLIENT_FEATURES): Promise<T> {
     signal = context?.signal ? AbortSignal.any([context.signal, ...(signal ? [signal] : [])]) : signal;
     signal?.throwIfAborted();
     const badge = await this.ensureBadge();
@@ -2337,7 +2337,7 @@ export class HomeLink implements HomeConnection {
         method,
         ...(signal ? { signal } : {}),
         headers: {
-          [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE,
+          [CLIENT_FEATURES_HEADER]: clientFeatures,
           ...(context ? { [SOURCE_POLICY_HEADER]: sourcePolicyHeader(context) } : {}),
           ...bearerHeader(held),
           ...(body !== undefined ? { "Content-Type": "application/json" } : {}),

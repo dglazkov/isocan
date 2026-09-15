@@ -80,6 +80,7 @@ export interface DeepFile {
 }
 
 export const DEEP: readonly DeepFile[] = [
+  { file: "test/questionnaire-cli.test.ts", secs: 11.1 },
   { file: "test/canvas-board.test.ts", secs: 73 },
   { file: "packages/cli/test/dispatch.test.ts", secs: 77 },
   { file: "packages/cli/test/rc.test.ts", secs: 66 },

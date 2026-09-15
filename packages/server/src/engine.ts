@@ -1,3 +1,4 @@
+import { validateQuestionnaireComment } from "@isocan/core/questionnaire";
 import { PersonalError } from "./personal.ts";
 import type { PersonalSourceRecord } from "./personal-desk.ts";
 import type { SourceRequestContext } from "@isocan/core";
@@ -81,6 +82,8 @@ import {
 } from "@isocan/core";
 import { groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { contextBlobAvailable, hydrateContextManifest } from "./canvas-group-context.ts";
+import { isQuestionnaireOperation, rejectPublicQuestionnaire, resolveQuestionnaireOperation, questionnaireRetry, questionnaireActors } from "./questionnaire.ts";
+import { requireQuestionnaireClient } from "./questionnaire-capability.ts";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
 import { admittingGrant, ensureHomeLinkGrant, ensureLinkGrant } from "./grants.ts";
@@ -205,6 +208,8 @@ export class NothingToUndoError extends Error {
 }
 
 interface SubmitRequest {
+  /** Transport-resolved origin at the authoritative writer; never accepted from the request body or forwarded. */
+  authoritativeHome?: string;
   sourceContext?: SourceRequestContext;
   clientFeatures?: string;
   originGroupMode?: "legacy" | "groups";
@@ -1116,6 +1121,7 @@ export class Engine {
       }
       if (request.originGroupMode !== undefined && request.originGroupMode !== "legacy" && request.originGroupMode !== "groups") throw new OpValidationError("bad-op", "originGroupMode must be legacy or groups");
       rejectPublicContext(request.op);
+      rejectPublicQuestionnaire(request.op);
       if (request.op.type === "project.create" && request.op.groupMode !== undefined &&
           request.op.groupMode !== "groups" && request.op.groupMode !== "legacy") {
         throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
@@ -1164,9 +1170,21 @@ export class Engine {
        * the question is answered; asking here as well would be a replica
        * holding an opinion about an order it does not own.
        */
-      if (!home && request.opId !== undefined) {
+      if (!home && request.canvasId && isQuestionnaireOperation(request.op)) {
+        const runtime = await this.runtime(request.canvasId);
+        const registry = (await this.actors()).registry;
+        const prior = questionnaireRetry([...runtime.entries, ...await this.store.readArchivedLog(request.canvasId)], request.op, request.opId, request.actor.id, registry);
+        if (prior) return prior;
+      } else if (!home && request.opId !== undefined) {
         const already = await this.alreadyWritten(request);
-        if (already) return already;
+        if (already) {
+          if (request.clientFeatures !== undefined) {
+            requireGroupClient(request.clientFeatures, undefined, [already]);
+            requireQuestionnaireClient(request.clientFeatures, undefined, [already]);
+          }
+          if (isQuestionnaireOperation(already.envelope.op)) throw new OpValidationError("bad-op", "questionnaire retry identity conflicts with its original operation type");
+          return already;
+        }
       }
       if (home) return this.forwardSubmit(home, request);
       return this.applyAndPersist(request, undefined);
@@ -1636,7 +1654,10 @@ export class Engine {
         );
       }
       const runtime = await this.runtime(canvasId);
-      if (clientFeatures !== undefined) requireGroupClient(clientFeatures, runtime.state.project);
+      if (clientFeatures !== undefined) {
+        requireGroupClient(clientFeatures, runtime.state.project);
+        requireQuestionnaireClient(clientFeatures, runtime.state.canvas, runtime.entries);
+      }
       /**
        * **One ⌘Z reverses one GESTURE**, which is usually one op and is
        * sometimes eight — see `LogEntry.group`.
@@ -1708,7 +1729,10 @@ export class Engine {
         );
       }
       const runtime = await this.runtime(canvasId);
-      if (clientFeatures !== undefined) requireGroupClient(clientFeatures, runtime.state.project);
+      if (clientFeatures !== undefined) {
+        requireGroupClient(clientFeatures, runtime.state.project);
+        requireQuestionnaireClient(clientFeatures, runtime.state.canvas, runtime.entries);
+      }
       // The mirror of `undo` above, member for member: a gesture redone is a
       // gesture, and in the order it was originally written.
       const person = actorAliases((await this.actors()).registry.joined, actor.id);
@@ -1875,6 +1899,7 @@ export class Engine {
       // Snapshot adoption bypasses the reducer. Validate retained provenance
       // here too, without requiring its original items or versions to survive.
       for (const thread of Object.values(state.canvas.threads)) {
+        for (const comment of thread.comments) validateQuestionnaireComment(comment, canvasId);
         for (const comment of thread.comments) if (comment.context !== undefined) {
           if (state.project.groupMode !== "groups") throw new OpValidationError("bad-op", "frozen context requires a group-mode canvas");
           validateContextManifest(comment.context, canvasId);
@@ -2567,6 +2592,12 @@ export class Engine {
     return this.actorsRuntime;
   }
 
+  /** Eligibility is a protected canvas read; joins affect comparison, never historical authorship. */
+  async designRespondents(canvasId: string): Promise<{ actors: import("@isocan/core").QuestionnaireActor[] }> {
+    const state = (await this.runtime(canvasId)).state;
+    return { actors: questionnaireActors(state, (await this.actors()).registry) };
+  }
+
   /** Core pipeline. Runs inside the queue. */
   private async applyAndPersist(
     request: SubmitRequest,
@@ -2594,7 +2625,10 @@ export class Engine {
     }
     const runtime = await this.runtime(canvasId);
 
-    if (request.clientFeatures !== undefined) requireGroupClient(request.clientFeatures, runtime.state.project);
+    if (request.clientFeatures !== undefined) {
+      requireGroupClient(request.clientFeatures, runtime.state.project);
+      requireQuestionnaireClient(request.clientFeatures, runtime.state.canvas);
+    }
     if (cause === undefined && request.originGroupMode !== undefined && request.originGroupMode !== (runtime.state.project.groupMode ?? "legacy")) throw new MigrationBoundaryError(`This write was prepared in ${request.originGroupMode} mode, but the canvas now uses ${runtime.state.project.groupMode ?? "legacy"}. Review the queued work before sending a new request.`);
 
     // Normalize placement so the logged op never references ephemeral client
@@ -2649,6 +2683,7 @@ export class Engine {
       }
     }
     if (cause === undefined) {
+      if (isQuestionnaireOperation(normalizedOp)) normalizedOp = await resolveQuestionnaireOperation(this.store, runtime.state, runtime.lastSeq, normalizedOp, request.actor, (await this.actors()).registry, request.authoritativeHome);
       normalizedOp = resolveContextOperation(runtime.state, runtime.lastSeq, normalizedOp);
       if (normalizedOp.type === "thread.create" || normalizedOp.type === "thread.reply") {
         if (normalizedOp.comment.context) normalizedOp = { ...normalizedOp, comment: { ...normalizedOp.comment, context: await hydrateContextManifest(this.store, runtime.state, normalizedOp.comment.context) } };
@@ -2913,6 +2948,8 @@ function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
     case "item.edit": // conditional content + metadata edit restores both
     case "thread.create": // thread.restore keeps replies added before the undo
     case "thread.reply": // comment.restore keeps author + timestamp
+    case "questionnaire.ask":
+    case "questionnaire.answer":
     case "group.change": // exact structural preconditions and restore-based creation redo
       return undoEntry.inverse!;
     default:

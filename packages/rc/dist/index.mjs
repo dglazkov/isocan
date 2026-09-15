@@ -51,6 +51,29 @@ var TEXT_COLUMN_MAX = {
   display: TEXT_COLUMN.display * 2
 };
 
+// packages/core/src/identity.ts
+function resolveActor(joined, actorId) {
+  if (!joined) return actorId;
+  let current = actorId;
+  const seen = /* @__PURE__ */ new Set([current]);
+  for (; ; ) {
+    const next = joined[current];
+    if (next === void 0 || seen.has(next)) return current;
+    seen.add(next);
+    current = next;
+  }
+}
+function sameActor(joined, a, b) {
+  return a === b || resolveActor(joined, a) === resolveActor(joined, b);
+}
+function actorNameIn(names, actor) {
+  const current = names?.[actor.id];
+  return current && current.trim() ? current : actor.name;
+}
+
+// packages/core/src/questionnaire.ts
+var questionnaireActorsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/questionnaire/actors`;
+
 // packages/core/src/address.ts
 var CANVAS_PATH_PREFIX = "/p";
 var CANVAS_ROUTE = `${CANVAS_PATH_PREFIX}/:canvasId`;
@@ -71,14 +94,14 @@ function canvasUrl(origin, canvasId) {
 function canvasUrlWithPass(origin, canvasId, token) {
   return urlWithPass(canvasUrl(origin, canvasId), token);
 }
-function urlWithPass(url, token) {
-  return `${url}#${token}`;
+function urlWithPass(url2, token) {
+  return `${url2}#${token}`;
 }
 function splitPassFragment(address) {
-  const hash = address.indexOf("#");
-  if (hash < 0) return { address };
-  const pass = address.slice(hash + 1);
-  const rest = address.slice(0, hash);
+  const hash2 = address.indexOf("#");
+  if (hash2 < 0) return { address };
+  const pass = address.slice(hash2 + 1);
+  const rest = address.slice(0, hash2);
   return pass ? { address: rest, pass } : { address: rest };
 }
 function parseCanvasAddress(raw) {
@@ -86,26 +109,26 @@ function parseCanvasAddress(raw) {
   if (!trimmed) return null;
   const { address, pass } = splitPassFragment(trimmed);
   const schemed = /^[a-z][a-z0-9+.-]*:\/\//i.test(address) ? address : `${/^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(address) ? "http" : "https"}://${address}`;
-  let url;
+  let url2;
   try {
-    url = new URL(schemed);
+    url2 = new URL(schemed);
   } catch {
     return null;
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-  if (!url.hostname) return null;
-  const parts = url.pathname.replace(/\/+$/, "").split("/");
+  if (url2.protocol !== "http:" && url2.protocol !== "https:") return null;
+  if (!url2.hostname) return null;
+  const parts = url2.pathname.replace(/\/+$/, "").split("/");
   if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
   const canvasId = decodeURIComponent(parts[2] ?? "");
   if (!canvasId) return null;
-  return { origin: url.origin, canvasId, ...pass !== void 0 ? { pass } : {} };
+  return { origin: url2.origin, canvasId, ...pass !== void 0 ? { pass } : {} };
 }
 function normalizeHomeUrl(raw) {
   const trimmed = raw.trim();
   try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return trimmed.replace(/\/+$/, "");
-    return url.origin;
+    const url2 = new URL(trimmed);
+    if (url2.protocol !== "http:" && url2.protocol !== "https:") return trimmed.replace(/\/+$/, "");
+    return url2.origin;
   } catch {
     return trimmed.replace(/\/+$/, "");
   }
@@ -179,9 +202,9 @@ function formatBadgeToken(badgeId, secret) {
   return formatDotToken(badgeId, secret);
 }
 var DOOR_ROUTE = "/api/door";
-async function askTheDoor(base, timeoutMs = 1e4, signal) {
+async function askTheDoor(base2, timeoutMs = 1e4, signal) {
   try {
-    const res = await fetch(`${base}${DOOR_ROUTE}`, {
+    const res = await fetch(`${base2}${DOOR_ROUTE}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ carrier: "bearer" }),
@@ -202,7 +225,7 @@ async function askTheDoor(base, timeoutMs = 1e4, signal) {
     }
     return { badge: { badgeId: body.badgeId, secret: body.secret, at: (/* @__PURE__ */ new Date()).toISOString() } };
   } catch (err) {
-    return { refused: { status: 0, error: `could not reach the door at ${base}: ${err.message}` } };
+    return { refused: { status: 0, error: `could not reach the door at ${base2}: ${err.message}` } };
   }
 }
 function bearerHeader(badge) {
@@ -210,26 +233,6 @@ function bearerHeader(badge) {
 }
 var BADGES_ROUTE = "/api/badges";
 var badgeRoute = (badgeId) => `${BADGES_ROUTE}/${encodeURIComponent(badgeId)}`;
-
-// packages/core/src/identity.ts
-function resolveActor(joined, actorId) {
-  if (!joined) return actorId;
-  let current = actorId;
-  const seen = /* @__PURE__ */ new Set([current]);
-  for (; ; ) {
-    const next = joined[current];
-    if (next === void 0 || seen.has(next)) return current;
-    seen.add(next);
-    current = next;
-  }
-}
-function sameActor(joined, a, b) {
-  return a === b || resolveActor(joined, a) === resolveActor(joined, b);
-}
-function actorNameIn(names, actor) {
-  const current = names?.[actor.id];
-  return current && current.trim() ? current : actor.name;
-}
 
 // packages/core/src/grants.ts
 function narrowed(capability) {
@@ -1011,6 +1014,8 @@ function itemsTouchedBy(op, canvas) {
     case "thread.setAnchor":
       return op.anchorItemId ? [op.anchorItemId] : [];
     case "thread.reply":
+    case "questionnaire.ask":
+    case "questionnaire.answer":
     case "thread.delete":
     case "comment.remove":
     case "comment.restore":
@@ -1039,7 +1044,7 @@ function opTouchesAreas(op, areaIds, canvas) {
     const item = canvas.items[id];
     if (item && areas.some((area) => isGroupItem(area) && area.id === item.id || inCanvasScope(canvas, area, item))) return true;
   }
-  if (op.type === "thread.create" || op.type === "thread.reply") {
+  if (op.type === "thread.create" || op.type === "thread.reply" || op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas.threads[op.threadId];
     if (thread && thread.anchorItemId === null && inside(thread.x, thread.y)) return true;
   }
@@ -1075,11 +1080,11 @@ function findMentionSpans(body, candidates) {
 }
 function extractMentions(body, candidates) {
   const mentioned = new Set(findMentionSpans(body, candidates).map((span) => span.actorId));
-  const ids = [];
+  const ids2 = [];
   for (const candidate of candidates) {
-    if (mentioned.has(candidate.id) && !ids.includes(candidate.id)) ids.push(candidate.id);
+    if (mentioned.has(candidate.id) && !ids2.includes(candidate.id)) ids2.push(candidate.id);
   }
-  return ids;
+  return ids2;
 }
 function resolvableNames(candidates) {
   const names = [];
@@ -1158,6 +1163,8 @@ var CLAIM_REFUSAL = {
 
 // packages/core/src/protocol.ts
 var CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
+var QUESTIONNAIRES_FEATURE = "questionnaires-v1";
+var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`;
 var CLIENT_FEATURES_HEADER = "x-isocan-features";
 var PARK_ADOPTED_CODE = "park-adopted";
 var rcAnsweringRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/rc`;
@@ -1165,22 +1172,22 @@ var FILENAME_HEADER = "X-Isocan-Filename";
 var MAX_DIRECT_UPLOAD_BYTES = 24 * 1024 * 1024;
 var encodeFilename = (filename) => encodeURIComponent(filename);
 var LOOPBACK = /^(\[::1\]|::1|localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
-function isLoopbackBase(base) {
-  return LOOPBACK.test(hostOf(base) ?? "");
+function isLoopbackBase(base2) {
+  return LOOPBACK.test(hostOf(base2) ?? "");
 }
-function hostOf(base) {
+function hostOf(base2) {
   try {
-    return new URL(base).hostname;
+    return new URL(base2).hostname;
   } catch {
     try {
-      return new URL(`http://${base}`).hostname;
+      return new URL(`http://${base2}`).hostname;
     } catch {
       return null;
     }
   }
 }
-function healthPath(base) {
-  return isLoopbackBase(base) ? "/healthz" : "/api/healthz";
+function healthPath(base2) {
+  return isLoopbackBase(base2) ? "/healthz" : "/api/healthz";
 }
 var HOME_JOIN_ROUTE = "/api/home/join";
 var HOMES_ROUTE = "/api/homes";
@@ -1189,895 +1196,6 @@ var NEWS_ROUTE = "/api/news";
 var ACTOR_KINDS_ROUTE = "/api/kinds";
 var SERVING_ROUTE = "/api/serving";
 var HOME_GC_ROUTE = "/api/gc";
-
-// packages/core/src/slop.ts
-var SLOP_RULES = [
-  {
-    name: "The default typeface",
-    kind: "visual",
-    spot: "font-family lists Inter, Space Grotesk, or the bare system stack, and no second face is declared anywhere",
-    instead: "Two faces with different jobs, or one with real weight contrast. A page set entirely in one sans at one weight reads as unstyled."
-  },
-  {
-    name: "Italic serif display",
-    kind: "visual",
-    spot: "font-style: italic on an h1/h2 in a serif face",
-    instead: "It signals 'editorial' and nothing else, and every generated landing page has it. Earn the seriousness with scale and spacing."
-  },
-  {
-    name: "Purple-to-blue gradient hero",
-    kind: "visual",
-    spot: "linear-gradient in a hero or header with hues between 240 and 280",
-    instead: "A gradient the subject asks for, or a flat ground with one accent. This one is the single most identifiable AI tell."
-  },
-  {
-    name: "Glassmorphism everywhere",
-    kind: "visual",
-    spot: "backdrop-filter: blur on cards or panels that do not overlap anything",
-    instead: "Blur is for something showing through. Over a flat background it is decoration that costs contrast."
-  },
-  {
-    name: "One radius for everything",
-    kind: "visual",
-    spot: "the same border-radius on cards, buttons, inputs, avatars, and images",
-    instead: "Radius is hierarchy: a button and a page section are not the same object. Pick two or three and mean them."
-  },
-  {
-    name: "Everything centered",
-    kind: "visual",
-    spot: "text-align: center on more than the hero, or every section a centered column",
-    instead: "Centred text is hard to read past two lines and flattens hierarchy. Left-align body copy; centre what is genuinely a statement."
-  },
-  {
-    name: "Emoji as section markers",
-    kind: "visual",
-    spot: "emoji at the start of headings, list items, or feature cards",
-    instead: "They read as filler, they break in Windows and in print, and they are not iconography. Use type weight, a rule, or a real icon."
-  },
-  {
-    name: "Generic call to action",
-    kind: "copy",
-    spot: "button text of 'Get Started', 'Learn More', 'Click Here', or 'Discover'",
-    instead: "Say what happens: 'Send the invite', 'See this month's bill'. A CTA that fits any product is a CTA for none."
-  },
-  {
-    name: "Three feature cards, always three",
-    kind: "visual",
-    spot: "a grid of exactly three equal cards, each an icon, a two-word heading, and a sentence",
-    instead: "The layout came before the content. Say what there actually is, and let the count follow."
-  },
-  {
-    name: "Marketing adjectives instead of facts",
-    kind: "copy",
-    spot: "seamless, revolutionise, unlock, elevate, effortless, cutting-edge, 'take it to the next level'",
-    instead: "A number, a noun, or a verb the reader recognises. Specific beats aspirational."
-  },
-  {
-    name: "Lorem or invented content",
-    kind: "copy",
-    spot: "lorem ipsum, 'John Doe', 'Company Name', placeholder avatars, fabricated testimonials or logos",
-    instead: "Real content, or clearly-labelled empty states. Fake reviews and fake logos are worse than blank space."
-  },
-  {
-    name: "Contrast sacrificed to taste",
-    kind: "visual",
-    spot: "grey body text under 4.5:1 on its background, or a light-grey placeholder standing in for a label",
-    instead: "Compute the ratio. #999 on white is a design decision that excludes people."
-  },
-  {
-    name: "Type with no scale",
-    kind: "visual",
-    spot: "font-size values that do not follow a ratio, or more than six distinct sizes on one page",
-    instead: "A scale, stated in the design system, and every size taken from it."
-  },
-  {
-    name: "Spacing by eyeball",
-    kind: "visual",
-    spot: "margins and paddings in unrelated values (13px, 22px, 7px) rather than steps of a unit",
-    instead: "One spacing unit and multiples of it. Inconsistent gaps read as sloppiness even when nobody can name why."
-  },
-  {
-    name: "Shadow as a substitute for structure",
-    kind: "visual",
-    spot: "box-shadow on every card, at the same blur, doing the work a border or a background would do better",
-    instead: "Depth should mean something is above something. Flat groups with a hairline read cleaner."
-  },
-  {
-    name: "Hover states only",
-    kind: "visual",
-    spot: ":hover styled, :focus-visible absent",
-    instead: "Half your users are on a keyboard or a touchscreen. A focus ring is not optional."
-  },
-  {
-    name: "The dark mode that was not designed",
-    kind: "visual",
-    spot: "colours defined only inside a prefers-color-scheme block, or a light palette inverted wholesale",
-    instead: "Tokens at the root, re-valued for dark. Check that the accent still works on the dark ground."
-  },
-  {
-    name: "Not just X \u2014 it's Y",
-    kind: "copy",
-    spot: "the escalation template: 'not just a todo app, it's a system for thinking', 'more than a X \u2014 a Y'",
-    instead: "Say the second thing and drop the first. The construction works by denying a claim nobody made."
-  },
-  {
-    name: "The opener that says nothing",
-    kind: "copy",
-    spot: "a hero or intro beginning 'In today's fast-paced world', 'In an era of', 'Whether you're a X or a Y'",
-    instead: "Open on the specific thing this product does. The reader arrived already knowing the world is fast-paced."
-  },
-  {
-    name: "Apology as an error message",
-    kind: "copy",
-    spot: "'Oops!', 'Something went wrong', 'We're sorry' \u2014 with no cause and no next step",
-    instead: "What failed, and what to do: 'That file is over 24 MB. Try a smaller one.' An apology is not information."
-  },
-  {
-    name: "Copy that narrates the interface",
-    kind: "copy",
-    spot: "'Click the button below to get started', 'Use this section to manage your team', 'Here you can'",
-    instead: "The interface is on screen; describing it is a sentence the reader has to skip. Say what the thing does."
-  },
-  {
-    name: "Title Case On Everything",
-    kind: "copy",
-    spot: "headings, buttons, labels and menu items all in Title Case, with no sentence case anywhere",
-    instead: "Pick one and mean it. Sentence case for anything longer than a couple of words reads faster and dates less."
-  },
-  {
-    name: "The tricolon on repeat",
-    kind: "copy",
-    spot: "three-item lists throughout \u2014 'fast, simple, and reliable' \u2014 where the third item adds nothing the first two did not",
-    instead: "Two if there are two, four if there are four. A rhythm applied to every claim is a rhythm doing the claiming."
-  }
-];
-function slopRulesAsText(kind) {
-  const rules = kind ? SLOP_RULES.filter((rule) => rule.kind === kind) : SLOP_RULES;
-  return rules.map((rule, i) => `${i + 1}. **${rule.name}** \u2014 spot it: ${rule.spot}. ${rule.instead}`).join("\n");
-}
-
-// packages/core/src/commands.ts
-var DEFAULT_COMMANDS = [
-  {
-    name: "help",
-    description: "Keyboard shortcuts, and what else you can ask for",
-    usage: "",
-    source: "built-in",
-    // Answered where it is typed: the app knows its own keyboard.
-    local: true,
-    body: `Say what can be done here.
-
-Answer with three things, short enough to read in the thread:
-
-1. THE COMMANDS. \`isocan command list\` \u2014 every one available on this canvas,
-   including any this home added. Give the name, what it does, and one example
-   of the arguments, e.g. "/variation 3 try a vertical nav".
-2. THE KEYS, if they asked about the web app. \`isocan --help shortcuts\` is not
-   a thing; the list lives in the app's help panel, which opens with ? \u2014 say
-   that, and name the two or three that matter for what they are doing.
-3. WHAT YOU CAN DO for them right now, in one line. Not a menu of capabilities
-   \u2014 the one or two things that would obviously help on THIS canvas, given
-   what is on it.
-
-If they asked about something specific, answer that instead of reciting the
-list. A person typing /help mid-task has a question, not a curiosity.`
-  },
-  {
-    name: "accessibility-audit",
-    description: "Audit selected screens against WCAG \u2014 from the real HTML, not a picture",
-    usage: "[what to focus on]",
-    source: "built-in",
-    body: `Audit the screens for accessibility, and write the report onto the canvas.
-
-READ THE SOURCE, NOT THE SCREENSHOT. \`isocan get <item> screen.html\` gives you
-the actual HTML and CSS. This is the whole reason the audit is worth running
-here rather than by eye: half of accessibility is invisible in a picture \u2014 a
-div pretending to be a button looks identical to a button.
-
-WHICH SCREENS: the items attached to the message, the ones #-referenced in it,
-or the selection. If none of those answers, ask.
-
-WHAT TO CHECK, in the order that matters:
-- **Semantic HTML.** Headings in order and not skipping levels; landmarks
-  (header/nav/main/footer); lists that are lists; \`<button>\` for things that
-  do something and \`<a href>\` for things that go somewhere. A clickable div is
-  the single most common finding and the most consequential.
-- **Names.** Every control has an accessible name \u2014 visible text, aria-label,
-  or a label element that actually points at it. Icon-only buttons are where
-  this fails.
-- **ARIA.** Roles that match what the element does, aria-describedby that
-  resolves to a real id, no aria-hidden on something focusable. No ARIA is
-  better than wrong ARIA; say so when you find decoration.
-- **Contrast.** Compute the ratio from the CSS rather than judging by eye:
-  4.5:1 for body text, 3:1 for large text and for the boundary of a control.
-  Give the numbers.
-- **Keyboard.** Tab order follows the DOM; nothing is reachable only by hover
-  or pointer; focus is VISIBLE (an \`outline: none\` with no replacement is a
-  finding); no keyboard trap.
-- **Images.** alt text that says what the image is FOR, empty alt on
-  decoration, and no alt that just repeats the filename.
-- **Motion and media**, if any: a \`prefers-reduced-motion\` path, captions.
-
-WRITE IT AS A DOCUMENT, not a chat message. \`isocan add audit.md --title
-"<screen> \u2014 accessibility audit" --prop parent=<the screen's item id>\`, so it
-hangs under the screen it is about.
-
-Structure it so somebody can act on it before lunch:
-- A one-paragraph verdict, and a count by severity.
-- Findings ordered by severity, each with: what is wrong, WHERE (the selector,
-  the element, the line if you can), which WCAG criterion it fails (with the
-  number, e.g. 1.4.3 Contrast (Minimum)), and the fix as a diff or a snippet.
-- What you checked and found FINE. A report with no green is a report nobody
-  believes.
-- What you could not check from source \u2014 anything that needs a screen reader
-  or a real keyboard \u2014 said plainly rather than left implied.
-
-Then reply on the thread with the count, the worst one in a sentence, and
-#the-report. If the person named a focus in the argument, lead with that.`
-  },
-  {
-    name: "app-store-assets",
-    description: "Icon, three marketing screenshots, and the ASO metadata",
-    usage: "[what to emphasise]",
-    source: "built-in",
-    body: `Produce a full App Store set from the selected screens.
-
-Read "Making an image" in \`isocan --agent-help\` first \u2014 it has the three ways
-to make a picture here and a working headless-Chrome recipe. The short version:
-compose in HTML/SVG and render at an exact size. Do not generate UI.
-
-FIVE DELIVERABLES. Produce all five, even for a partial-sounding request; a
-half set is not usable in App Store Connect.
-
-**1. App icon \u2014 1024x1024 PNG.**
-- The whole image IS the icon. No rounded rectangle, no squircle, no container
-  shape, no border, no margin: the store applies the mask itself, and an icon
-  that draws its own corners gets them clipped twice.
-- Full-bleed background, edge to edge \u2014 a 2-3 stop gradient from the app's own
-  palette, never a flat fill.
-- One motif, centred, orthographic, generous negative space. Distil what the
-  app IS into a single mark; do not draw a phone, and do not put text in it.
-- Weight and light: a soft top-down specular and a hint of material make it
-  read as an object rather than a sticker.
-
-**2-4. Three marketing screenshots \u2014 1290x2796 PNG** (the 6.7" size; the store
-scales the rest down from it).
-- Put the REAL screen inside the device frame: \`isocan get\` it and drop it in
-  an \`<iframe>\`. Never redraw a UI. This is the rule the whole command hangs
-  on \u2014 a screenshot with invented UI is a lie about the product, and it is the
-  one thing reviewers notice.
-- Frame: straight on, no tilt, titanium rim, layered shadow for depth. No
-  hands, no desks, no caf\xE9s.
-- Layout: headline in the top fifth, device below it, ~150px of quiet at every
-  edge. Identical headline typography across all three \u2014 same face, weight,
-  size, alignment. That consistency is what makes a set read as a set.
-- Each one carries ONE idea: (2) the hook \u2014 what this is; (3) the feature that
-  makes it worth having; (4) polish \u2014 dark mode or the most visually
-  confident view, on a deep background with a midnight device.
-- The palette evolves gently across the three; it does not change.
-
-**5. ASO metadata \u2014 a document on the canvas.** Respect the limits exactly and
-count the characters rather than estimating:
-- App name, 30. Subtitle, 30. Short description, 80. Long description, 4000.
-- Keywords, 100 total, comma-separated, no spaces after commas, and NEVER a
-  word already in the name or subtitle \u2014 that is a wasted slot.
-- Category, primary and secondary, with a sentence on why.
-- What's New, 500.
-Lead with benefits, not features. Say what the person gets, not what the app
-contains.
-
-Everything lands on the canvas \u2014 \`isocan add icon.png --title "App icon"
---prop parent=<the screen it came from>\` \u2014 so \`isocan tidy\` hangs the set
-under its source. Finish with one comment:
-the five deliverables, which way each image was made, and two or three
-follow-ups worth doing.`
-  },
-  {
-    name: "web-assets",
-    description: "Favicon, Apple touch icon, and a manifest.json",
-    usage: "[what to emphasise]",
-    source: "built-in",
-    body: `Produce the web asset set from the selected screens.
-
-Read "Making an image" in \`isocan --agent-help\`. For icons, prefer AUTHORING
-the SVG over rendering or generating: a favicon is geometry, an SVG one is
-sharp at every size, and \`icon.svg\` is a first-class favicon in every current
-browser. Render the PNGs from that same SVG so they cannot drift.
-
-**1. Favicon.** One recognisable mark from the app's branding, on a full-bleed
-background \u2014 no squircle, no container shape, no margin. Deliver \`icon.svg\`
-plus \`favicon-32.png\` and \`favicon-192.png\` rendered from it. It has to be
-legible at 16px: if the mark has more than three parts, it is a logo, not a
-favicon.
-
-**2. Apple touch icon \u2014 180x180 PNG.** Same mark, no transparency (iOS
-composites on white and a transparent icon looks broken), no rounded corners \u2014
-iOS applies the mask.
-
-**3. manifest.json.** \`name\`, \`short_name\` (12 chars or it truncates on the
-home screen), \`icons\` covering 192 and 512 with \`purpose: "any maskable"\`,
-\`start_url\`, \`display: "standalone"\`, and \`theme_color\`/\`background_color\`
-taken from the app's actual palette rather than invented \u2014 the background
-colour is what people see during the splash, so it must match the app's first
-paint or the launch flashes.
-
-**4. The two lines nobody remembers.** Include the \`<link>\` tags to paste into
-\`<head>\`, since assets with no wiring are assets nobody installs.
-
-Land everything with \`isocan add icon.svg --title "Favicon" --prop
-parent=<the screen it came from>\`. Finish with one comment listing what you
-made, how each was made, and the head snippet.`
-  },
-  {
-    name: "marketing-kit",
-    description: "Social card, banner, email header, and the copy to go with them",
-    usage: "[the angle to take]",
-    source: "built-in",
-    body: `Produce a marketing set from the selected screens.
-
-Read "Making an image" in \`isocan --agent-help\`. These are compositions \u2014
-type, gradient, geometry, and where it helps a framed shot of the real screen \u2014
-so compose and render rather than generate.
-
-**1. Social card \u2014 1200x630 PNG** (the size Open Graph and Twitter actually
-use; 1:1 is for a feed post, and if they asked for one, do both).
-- It will be seen at 300px wide in a timeline. One idea, six words at most,
-  type large enough to read at a third of this size.
-- The product visible, not described.
-
-**2. Banner \u2014 1600x900 PNG.** 16:9, room for the headline to breathe, safe
-margins so nothing important dies in a crop.
-
-**3. Email header \u2014 1600x900 PNG,** and remember it renders at ~600px wide in
-most clients: no small type, no thin strokes, and legible on a white ground
-since half of clients strip backgrounds.
-
-**4. The copy, as HTML on the canvas.** A headline, a subhead, three short
-benefit lines, and one call to action. Reference the email header with a
-relative \`<img>\` so the document is self-contained on the canvas. Write like a
-person: no "revolutionise", no "seamless", no "unlock the power of". Say what
-it does and who it is for.
-
-ONE VOICE ACROSS ALL FOUR. Same palette, same type, same claim. A kit whose
-pieces argue with each other is worse than one piece.
-
-Land everything with \`isocan add card.png --title "Social card" --prop
-parent=<the screen it came from>\`. Finish with one comment: the four
-deliverables, how each image was made, and the single sentence you would lead
-with if you only got one.`
-  },
-  {
-    name: "design-audit",
-    description: "Review a screen's craft and copy against the design system, then offer to fix it",
-    usage: "[what to look at]",
-    source: "built-in",
-    body: `Audit the design of the selected screens, from the source.
-
-READ TWO THINGS FIRST.
-
-1. THE DESIGN SYSTEM: \`isocan style\` for the whole thing, \`isocan style
-   --tokens\` for just the values, \`isocan style --css\` for the custom
-   properties. If this canvas has one it is the standard, and the tokens are
-   the normative half: a finding is "16px is not in the scale (12, 14, 18, 27)"
-   and not "I would have chosen otherwise". Run \`isocan style check\` first \u2014
-   if the system itself is broken, say so before grading anything against it.
-   If there is no design system, say so once at the top and audit against the
-   list below alone; do not invent one and then grade against it.
-2. THE SCREEN: \`isocan get <item> screen.html\`. Audit the HTML and CSS, not a
-   picture of them. A ratio you computed beats a colour you looked at, and
-   half of what matters here \u2014 the scale, the spacing unit, the focus states \u2014
-   is invisible in a screenshot.
-
-WHAT TO LOOK FOR, in this order:
-
-**Conformance.** Where the screen departs from the design system. Cite the
-declared value and the one it should have been.
-
-**The usual tells.** These are the moves a generated interface reaches for \u2014
-in the pixels AND in the words, because copy is most of what is on a screen and
-an audit that grades the type scale and skips the sentences has graded half of
-it. Each one says how to spot it, so report it only when you can point at the
-line:
-
-${slopRulesAsText()}
-
-**Craft, in the parts a list cannot hold.** Hierarchy (does the eye land on
-the right thing first?), rhythm (do the gaps mean something?), and whether the
-copy says anything. Be specific or say nothing: "the hero and the first card
-compete because both are 32px semibold" is worth reading; "improve visual
-hierarchy" is not.
-
-WRITE IT AS A DOCUMENT: \`isocan add design-audit.md --title "<screen> \u2014
-design audit" --prop parent=<the screen's item id>\`, so it hangs under what it
-is about.
-
-Structure it to be acted on:
-- One paragraph of verdict, and the single change that would help most.
-- Findings worst first, each with the selector or element, what is wrong, and
-  the fix as a snippet or a diff \u2014 a value, not an adjective.
-- What is GOOD, named specifically. A report with no green is a report the
-  person stops believing, and it tells them what to keep.
-- What you could not judge from source.
-
-This list is a FLOOR, not taste. Removing every item on it makes a screen
-unembarrassing, not good; say plainly which findings are hygiene and which are
-the one or two that would actually make it better.
-
-THEN ASK BEFORE YOU CHANGE ANYTHING. An audit nobody acts on is a document,
-and most of these fixes are ten seconds of work for whoever wrote the screen.
-So reply on the thread with the verdict, the top fix, #the-report, and the
-offer \u2014 findings numbered, and how to answer:
-
-> Want me to apply these? Reply with the numbers, or \`all\`, or \`hygiene\` for
-> the mechanical ones (1, 4, 7) and none of the judgement calls.
-
-Do NOT apply anything until that reply comes back. The person who asked for an
-audit asked for an audit; a screen that changed under them while they were
-reading about it is a worse outcome than a finding they never got to.
-
-WHEN THEY SAY YES, the fix lands as a NEW VERSION of the screen \u2014 write the
-corrected file and \`isocan edit <the screen's item> <file>\`. Never a new item
-beside it: a variant is a different thing to choose between, and this is the
-same screen with a fault removed. The version stack is what makes saying yes
-cheap \u2014 every fix is one keystroke from being undone, and the before is still
-there to compare against.
-
-Apply only what they named. Then reply saying which findings are now fixed,
-which you left and why, and that the previous version is still in the stack.`
-  },
-  {
-    name: "design-system",
-    description: "Write down what this canvas has decided things look like \u2014 a DESIGN.md",
-    usage: "[what to change]",
-    source: "built-in",
-    body: `Write or update this canvas's design system.
-
-The format is DESIGN.md (github.com/google-labs-code/design.md): YAML front
-matter carrying typed design tokens, then markdown sections carrying the
-reasoning. Use it \u2014 it converts to and from \`tokens.json\`, Figma variables
-and Tailwind themes, so what you write here does not stop at the edge of this
-canvas. \`isocan style\` prints the current one, \`--tokens\` and \`--css\`
-give you its machine-readable halves, and \`isocan style check\` grades it.
-
-It is an item on the canvas, not a file in a repo \u2014 so it sits beside the
-designs it governs, versions like everything else, and the person can read it
-without knowing it exists.
-
-IF THERE IS NONE, DERIVE IT FROM WHAT IS ALREADY THERE. Do not invent a system
-and impose it: \`isocan ls --kind site --kind document\`, \`isocan get\` the two
-or three screens that look most like what they want, and write down what they
-ALREADY do. Where the screens disagree, pick the one that appears most, and
-say in the document that you did.
-
-FRONT MATTER \u2014 the normative half. Numbers, not adjectives:
-
-    ---
-    version: alpha
-    name: <what this system is called>
-    colors:            # at least \`primary\`; \`neutral\` is the ground
-      primary: "#1c1c1c"
-    typography:        # 4\u201312 levels, each with a real fontSize
-      body:
-        fontFamily: ...
-        fontSize: 14px
-        lineHeight: 1.5
-    spacing:           # one unit and its steps
-      md: 16px
-    rounded:
-      md: 10px
-    components:        # references, not repeats: "{colors.tertiary}"
-      button-primary:
-        background: "{colors.tertiary}"
-    ---
-
-Quote hex values and references \u2014 unquoted, a \`#\` is a YAML comment and
-\`{\u2026}\` is a mapping. A section you deliberately have no tokens for goes in
-\`omitted\` so the linter stays quiet about it.
-
-SECTIONS \u2014 the reasoning, in this order: Overview, Colors, Typography, Layout,
-Elevation & Depth, Shapes, Components, Do's and Don'ts. Skip what does not
-apply. The prose says WHY and WHEN; the tokens say what. Do not restate the
-hex values in sentences \u2014 say what each colour is for.
-
-Finish with rules the project actually cares about: three to six, imperative,
-each one falsifiable. "Body text is left-aligned." "One accent per screen."
-"No shadow without overlap." An unfalsifiable rule ("keep it clean") grades
-nothing and will be ignored.
-
-Keep it under two pages. A style guide nobody finishes is a style guide nobody
-follows.
-
-THEN: \`isocan design set DESIGN.md\` \u2014 a new version when one exists, so the
-style you are moving away from is still there to compare against. Run
-\`isocan style check\` and fix what it finds before you reply; it catches
-references to tokens nobody kept, values that are not colours, and contrast
-that fails. Then say what you wrote down and, honestly, where the existing
-screens disagree with each other \u2014 that disagreement is the decision the
-person now gets to make.`
-  },
-  {
-    name: "skill",
-    description: "Find a published skill, or add one to this canvas",
-    usage: "find <what you want> | add <owner/repo/path>",
-    source: "built-in",
-    body: `Get this canvas a new skill.
-
-A slash command's body IS a skill \u2014 same markdown, same frontmatter \u2014 which is
-why anything published for Claude Code, Codex or Cursor drops straight in. The
-first argument says which job:
-
-**\`/skill find <what you want>\`** \u2014 look, propose, install NOTHING.
-
-START AT AN INDEX, NOT A SEARCH BOX. A web search for a skill returns ten
-reprints of the same repo and the original is rarely the first hit. These are
-the directories worth reading first \u2014 they are indexes, not skills, so nothing
-here is a candidate to install:
-
-- \`VoltAgent/awesome-agent-skills\` \u2014 the broadest, 1000+ entries
-- \`ComposioHQ/awesome-claude-skills\` \u2014 smaller, better curated
-- \`github/awesome-copilot\` \u2014 the same format from the other direction
-
-And these are the collections most things worth having actually live in, so
-check them before concluding something does not exist: \`obra/superpowers\`
-(methodology), \`mattpocock/skills\` and \`addyosmani/agent-skills\`
-(engineering practice), \`anthropics/skills\` (documents, design, testing),
-\`pbakaus/impeccable\` (design language), \`kepano/obsidian-skills\`.
-
-ONE WARNING TO PASS ON: \`anthropics/skills\` ships no LICENSE file and no
-licence note. It is worth reading and worth learning from; recommend it only
-while saying that, and never suggest vendoring it.
-
-Then, for the two or three worth their time, reply with:
-- what it does, in your words, and whether it actually fits this canvas
-- the CANONICAL source \u2014 the repo it lives in, not the tenth aggregator site
-  that reprinted it. Most search results for skills are SEO copies; find the
-  original and name it.
-- its licence, and roughly how used it is (stars, installs) \u2014 one line
-- the exact command to add it, ready to paste
-
-Then stop. Choosing is theirs.
-
-**\`/skill add <owner/repo/path/SKILL.md or https URL>\`** \u2014 fetch and show it.
-
-    isocan command add --from <ref>          # prints it, installs nothing
-    isocan command add --from <ref> --yes    # installs it
-
-Run the first form. Post what it printed \u2014 or, if it is long, the frontmatter,
-what it instructs an agent to DO, and anything that reaches outside this canvas
-(network calls, shell, credentials, files outside the project). Then ask
-whether to install it, and wait.
-
-WHY THE TWO STEPS. A command's body is read as instructions by every future
-agent here, with this CLI, on this canvas. Adding one is not downloading a
-document, it is giving a stranger a seat at the table \u2014 and a bad one does not
-misbehave now, it waits until somebody runs it. So nothing lands unread. If
-they tell you to skip the reading, install it and say plainly what you did not
-check.
-
-A file already on their disk is different: they wrote it or they already have
-it, so \`isocan command add <name> <file>\` needs no ceremony.
-
-AFTERWARDS: say the name, that \`/name\` now works in any composer, and that
-\`isocan command rm <name>\` takes it back. If it shadows a built-in, say which
-one and that removing yours gives ours back.
-
-ONE SKILL PER JOB. Before proposing anything, check what this canvas already
-has (\`isocan command list\`). A second skill that does a job we already do is
-not more capability, it is a menu where two entries mean the same thing and
-nobody knows which to pick \u2014 say so and name the one that already covers it.
-
-WHAT NOT TO DO: do not add several at once "to be helpful", and do not add
-anything they did not ask for. A canvas whose menu is forty commands nobody
-chose is worse than one with eight.`
-  },
-  {
-    name: "cancel",
-    description: "Call off what was asked here \u2014 stop, say where you got to",
-    usage: "[why, or what to do instead]",
-    source: "built-in",
-    body: `Stop what you are doing on this thread.
-
-They have called it off. That is a complete instruction and it does not need
-justifying \u2014 do not argue with it, do not finish the last bit because you were
-nearly done, and do not ask whether they are sure.
-
-WHAT TO DO, in order:
-
-1. **Stop.** No more building, no more ops beyond the ones below.
-2. **Say where you got to**, precisely, in one comment: what you finished, what
-   is half done, and what you were about to do. "Stopped" is not enough; they
-   are cancelling because something changed, and what to do with the pieces is
-   their decision.
-3. **Leave the canvas consistent.** Anything you added that is only half a
-   thing \u2014 an item with placeholder content, a screen that references a file
-   you never wrote \u2014 either finish that ONE step so it stands on its own, or
-   remove it (\`isocan rm\`, which is the trash, so it is recoverable) and say
-   which you did. Never leave something on the canvas that looks finished and
-   is not.
-4. **Put the thread down**: posting your reply does this by itself.
-
-If they said what to do instead, that is a new request, not a continuation.
-Treat it as one: read it fresh, and if it is unclear, ask rather than assume it
-resembles what you were doing.
-
-If you had not started, say so in one line. That is the best possible outcome
-of a cancellation and it costs them nothing to hear.`
-  },
-  {
-    name: "tidy",
-    aka: ["format"],
-    description: "Tidy the canvas \u2014 grid (default), smart, or your own instructions",
-    usage: "[grid|smart|note]",
-    source: "built-in",
-    body: `Arrange the canvas.
-
-The layout is a core function both surfaces share, so it lands every item on
-the same coordinate whoever asks, and it is ONE \`items.move\`, which means one
-undo. Do not place items by hand with \`mv\` unless the note below asks for
-something the arrangement cannot do.
-
-**Read the argument first, because it decides which of three things this is.**
-
-**WITH ITEMS SELECTED OR ATTACHED, tidy those and nothing else** \u2014 run
-\`isocan format grid <item ids>\`. They land in the box they already occupy,
-so the rest of the canvas does not move and nothing is shoved through
-somebody else's work. Somebody who picked six screens and asked for a tidy
-has said which six; rearranging the whole canvas is doing more than was
-asked, to work that was not chosen.
-
-**\`/format\` or \`/format grid\`** \u2014 run \`isocan format grid\`. It straightens
-the lines and decides nothing: every item on one lattice, uniform gutters,
-columns the width of the widest thing so left edges agree down the canvas. It
-reads no lineage and no kinds. This is the default because "make it neat" is
-the request nine times out of ten, and a tidy that only straightens is one
-somebody can run without wondering what it will decide.
-
-**\`/format smart\`** \u2014 run \`isocan format smart\`. This one READS the canvas:
-- Screens go in a row, left to right, keeping the reading order they already had.
-- Anything made FROM a screen hangs in a column beneath it (the \`parent\`
-  property \u2014 see /variation).
-- Images and video gather into a grid below the screens: reference material,
-  not slots in the row.
-- Ink that annotates an item is left alone. It travels with what it marks.
-
-Then look at what is left and group at a larger scale where the canvas
-obviously asks for it \u2014 a cluster that is plainly one feature, a run of
-rejected attempts, a set of references about one screen. Use \`isocan mv\`,
-\`align\` and \`distribute\`, and say what you grouped and why. If nothing
-obviously groups, say that instead of inventing a structure: a canvas with no
-clusters in it is a fine answer.
-
-**\`/format <anything else>\`** \u2014 the words are instructions for this one time.
-Start from \`grid\` unless they describe something closer to \`smart\`, then
-adjust to what they asked for, and say which part of what you did came from
-their words. They are looking at the canvas and you are not.
-
-Reply on the thread with what moved and what you left alone. If nothing moved,
-say that too: a canvas that is already formatted is a good answer, not a
-failure.`
-  },
-  {
-    name: "variation",
-    description: "Make N variations of a screen, each explored differently",
-    usage: "[n=3] <how they should differ>",
-    source: "built-in",
-    body: `Make variations of a screen.
-
-WHICH SCREEN: the items attached to the message, or the ones #-referenced in
-it, or \u2014 failing both \u2014 the single item they had selected. If none of those
-answers, ask which one rather than guessing; a variation of the wrong screen
-wastes their time and yours.
-
-HOW MANY: the first argument if it is a number, otherwise three.
-
-HOW THEY SHOULD DIFFER: the rest of the argument. If it is empty, vary the
-thing that actually carries the design \u2014 layout and hierarchy \u2014 and not the
-palette, and say that is what you chose.
-
-For each variation:
-- Build a REAL alternative, not a recolour. Two variations that differ by a
-  font are one variation.
-- \`isocan add <file> --title "<original title> \u2014 <what makes it different>"\`
-  with \`--prop parent=<source item id>\`. That property is what makes it a
-  child: /format will hang it under its source, and anyone can see where it
-  came from.
-- Give it a name that says the IDEA, not a number. "\u2014 single column" is worth
-  reading; "\u2014 variation 2" is not.
-
-Then run \`isocan format\` so they land under the original in the order you
-made them, and post ONE comment on the thread: what you varied, what each one
-is trying, and which you would keep and why. You looked at all three; say what
-you saw.`
-  },
-  {
-    name: "grill-me",
-    description: "A relentless interview that ends in a spec, not a vibe",
-    usage: "[what you want to build]",
-    source: "built-in",
-    body: `Interview them until nothing is left silently assumed, then write the spec.
-
-The procedure is Matt Pocock's \`grilling\` skill (github.com/mattpocock/skills,
-MIT), adapted to a canvas thread. If you already have that skill, use it and
-apply the thread notes at the bottom.
-
-THE TREE AND THE FRONTIER. Map the work as a design tree: every decision
-branches into the decisions that hang off it. The FRONTIER is every decision
-whose prerequisites are already settled \u2014 the questions you can ask NOW without
-guessing at answers you have not heard. A question whose answer depends on
-another question still open belongs to a LATER round, not this one.
-
-WORK IN ROUNDS. Ask the WHOLE frontier in one comment, numbered, each with your
-recommended answer:
-
-    \u2753 **Q1** \u2014 **<title>**: <the question, with options where there are any>
-
-    \u27A1\uFE0F <what you would do, and why in one line>
-
-    ---
-
-    \u2753 **Q2** \u2014 **<title>**: \u2026
-
-Then \`isocan wait --timeout 900\` and stop. Their answers reshape the tree:
-settled decisions push the frontier outward and unblock what depended on them.
-Recompute and ask the next round.
-
-FINDING FACTS IS YOUR JOB, NEVER THEIRS. If a question needs something the
-canvas can answer \u2014 what is already built, what a screen does, what the house
-style says \u2014 go and look: \`isocan ls\`, \`isocan get\`, \`isocan style\`,
-\`isocan activity\`. Asking somebody what is on their own canvas wastes the one
-thing this costs, which is their attention. The DECISIONS are theirs; put each
-one to them and wait.
-
-ON A CANVAS, TWO CHANGES TO THE ABOVE:
-- One comment per ROUND, not per question. Every round costs them a trip back
-  to the thread, and every wait costs you a turn.
-- Say where you are: "Round 2 of about 4" costs nothing and tells them how long
-  this is.
-
-DONE IS AN EMPTY FRONTIER. Then write the spec as an item \u2014
-\`isocan add spec.md --title "<what it is> \u2014 spec" --prop parent=<the screen
-it is about, if there is one>\` \u2014 covering what is being built and for whom,
-every decision they made and WHY in their own words, what is explicitly out of
-scope, and what is still open. Reply with #the-spec and the one thing to do
-first.
-
-Do not start building until they confirm you have understood the same thing.
-The value is in the decisions, not the prose: a spec that says "clean, modern"
-recorded nothing.`
-  },
-  {
-    name: "sprint",
-    description: "Run a design sprint here \u2014 you facilitate, people and agents sketch, one person decides",
-    usage: "[what we are designing] | <phase> [8m] [note]",
-    source: "built-in",
-    body: `Facilitate a design sprint on this canvas. You hold the clock; you never vote,
-never sketch, and never decide.
-
-The method is Knapp's Sprint (character.vc/guide/design-sprint) in AJ&Smart's
-four-day cut, and the whole thing is a script over verbs you already have.
-\`isocan sprint\` reads the state; \`isocan sprint phase\` sets it; the bell is
-\`isocan wait\`. Read docs/research/2026-09-01-design-sprint.md if you have the
-repo \u2014 it says why each rule below is there.
-
-TWO WAYS THIS COMMAND IS TYPED. \`/sprint <phase> [8m] [note]\` \u2014 where <phase>
-is one of map experts hmw target demos notes ideas crazy8s sketch museum
-heatmap critique poll supervote storyboard prototype test wrap, or end \u2014 IS the
-phase change: the clock chip and \`isocan sprint\` derive the current phase from
-the newest such line in the Chat. Anything else after /sprint is a BRIEF for
-you: what the team wants to design. Only you post phase lines.
-
-SETUP, ONE ROUND \u2014 AND THE BOARD FIRST. Two things at once, in this order:
-    isocan sprint board
-lays the board: eleven sheets to the right of the work, one per stretch of
-the week \u2014 Brief \xB7 Map \xB7 Experts & HMW \xB7 Target \xB7 Demos \xB7 Sketches \xB7 Vote \xB7
-Storyboard \xB7 Prototype \xB7 Test \xB7 Wrap \u2014 each carrying a card that says what
-happens there. The board IS the walkthrough: nobody in the room has to know
-the method, because every sheet says what to do on it. Then, in one Chat
-comment, ask and wait:
-1. Who is the DECIDER \u2014 one person, named. Never you, never an agent.
-2. Who is sketching \u2014 the people, and which agents by name. Agents sketch as
-   peers under the same rules.
-3. The long-term goal in one sentence, and the two or three sprint questions.
-4. Which cut \u2014 four days, one day, or the one-hour version (hmw \u2192 ideas \u2192
-   heatmap \u2192 poll \u2192 supervote). Default to one day if nobody says.
-Write the answers onto the Brief sheet as they come:
-    isocan sprint brief --goal "\u2026" --question "\u2026" --question "\u2026" --decider Maya --sketcher Theo --sketcher Nia --cut "one day"
-Every call is a new VERSION of the one brief, never a second card. Then ask
-for \u2705 on the brief, or "go", and do not call a phase before you have it.
-\`isocan sprint --json\` shows the marks each vote uses (\u{1F534} heat map, \u2B50 straw
-poll, \u{1F3C6} supervote); say them once so nobody invents a fourth.
-
-THE CLOCK, AND THE WALK. Every phase begins with exactly one command:
-    isocan sprint phase <phase> [duration] [note]
-That posts the /sprint line to the Chat, which is the only thing that starts a
-clock \u2014 and, with the board laid, it walks the room: everyone's camera glides
-to the phase's sheet, and the clock chip offers the phase's one action (New
-note on the phase's paper, in the sheet; Hand in, which lands the selection
-on the sheet). You never need to say where to go or what to click; call the
-phase and the board does that. \`isocan sprint\` names the sheet. Then read the seconds left and park on them:
-    isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
-Exit 2 is the bell \u2014 call the next phase. A wake mid-box is somebody's question:
-answer it and park again for what is left (\`isocan sprint --json\` again). A
-phase with no clock (museum, supervote, prototype) runs until you call the next.
-
-SILENCE IS THE METHOD. During hmw, notes, ideas, crazy8s and sketch:
-- Do not post in the Chat \u2014 every parked sketcher wakes on it. Narrate with
-  \`isocan session say "\u2026"\` instead; the chip shows the clock.
-- Sketchers work ALONE, each on a DESK you give them before the first silent
-  box: \`isocan sprint desk <name>\` makes a private canvas for that one
-  person \u2014 link off, one pass in \u2014 and prints an address to hand to them and
-  nobody else (a DM, never the Chat). An agent sketches in its own directory
-  or on a desk of its own. Nothing lands on this canvas until the bell. At
-  the bell each hands in \u2014 the desk's clock chip has a Hand in button that
-  lands the selection on this sprint's sheet, or from a terminal
-  \`isocan copy <items> --to <this canvas> --in <sheet> --handin\` \u2014 and you
-  \`isocan format --in <sheet>\` once so the wall arrives together. Six
-  arrivals at once beat six arrivals in a row.
-- QUOTAS hold the wall to one voice each: eight frames in crazy8s, ONE solution
-  sketch per sketcher. An agent that could make forty makes one. Check with
-  \`isocan sprint\` (it counts hand-ins) and say so if somebody is over.
-- An agent's sketch follows the paper rules: three panels, a title that says the
-  idea, self-explanatory without its author. It may be a real HTML screen; it is
-  still judged as a sketch, and polish is not a vote.
-
-THE PHASES, AND THE VERB FOR EACH.
-- map: \`isocan map new "<goal>"\`, actors left, ending right, 5\u201315 steps.
-- experts: one thread per expert; personas (\`isocan persona ls\`) count as
-  experts \u2014 interview them, don't debate. Everyone writes HMWs while listening:
-  \`isocan text "HMW \u2026" --paper yellow\`, one idea per note. Cluster with
-  \`isocan mv\`; two \u2B50 each; the Decider picks the target on the map.
-- demos: three minutes each, \`isocan browse <url>\` for the thing worth
-  stealing, one post-it saying what.
-- notes, ideas, crazy8s, sketch: silent, above. Agents may run /variation-shaped
-  work in THEIR directory; it lands here only as hand-ins.
-- museum: \`isocan format\` the sketches in a row. Walk the room:
-  \`isocan present <sketch>\` per sketch; people who want the tour follow YOU
-  from the agent tray. Nobody presents their own.
-- museum: before you call it, put the wall on the Vote sheet \u2014 \`isocan mv
-  <sketches...> --in Vote\` then \`isocan format --in Vote\` \u2014 because the
-  Vote sheet IS the wall: the curtain hides counts and names there and
-  nowhere else.
-- heatmap: \`isocan sprint phase heatmap 5m\`. Everyone places \u{1F534} on the PARTS
-  they like, as many as they want, silently \u2014 the chip's "Place a \u{1F534}" then a
-  click on the part, or \`isocan react \u{1F534} <sketch> --at 0.4,0.6\` (fractions
-  of the sketch's box). The dots draw where they were put; under the curtain
-  each person sees only their own, and all of them at the bell. You may read
-  \`isocan sprint tally\` because you are the referee, not a voter.
-- critique: three minutes per sketch, the room narrates, the author speaks last
-  and only to say what was missed. A scribe (an agent is good at this) writes
-  each big idea as \`isocan text --paper pink\` beside the sketch.
-- poll: \`isocan sprint phase poll 2m\`. ONE \u2B50 each, chosen silently, placed at
-  once. \`isocan sprint tally\` shows human and agent dots apart \u2014 agent dots
-  are a second opinion, never the vote. Remind anybody wearing two.
-- supervote: the Decider's \u{1F3C6}, up to three. Nobody else's counts. If the
-  winner is a /variation child, \`isocan choose <winner>\` folds it home in one
-  undoable gesture; otherwise mark it with \`isocan context pin\`.
-- storyboard: \`isocan area grid Storyboard 1x15\` draws fifteen frames on the
-  sheet; move the winning sketches in (\`isocan mv <sketch> --in Storyboard
-  --cell 1,3\`) rather than redrawing, and a missing frame is a note in its
-  cell (\`isocan text "\u2026" --in Storyboard --cell 1,7 --paper yellow\`). Then
-  \`isocan slides add --in Storyboard\`: the deck is the row, in order.
-- prototype: fan out \u2014 one agent per screen, one name each, said in the Chat
-  first; a Stitcher runs \`isocan design check\` and \`isocan format\`; the
-  trial run is the deck full screen.
-- test: FIVE PEOPLE, interviewed by a person. Before the first interview,
-  \`isocan area grid Test 5x15 --rows "<the five names>"\` \u2014 rows are people,
-  columns are frames. Agents transcribe, never invent: one note per cell
-  from what was said, \`isocan text "\u2026" --in Test --cell <person>,<frame>
-  --paper yellow\`. Patterns need three of five; mark one with a reaction on
-  the notes that show it.
-- wrap: quote Monday's questions by #Title and answer each; \`isocan recap\` and
-  \`isocan timeline --majors\` are the week's record. Then \`isocan sprint end\`.
-
-WHAT YOU NEVER DO. Vote. Decide. Sketch. Post in the Chat during a silent box.
-Extend a box because somebody asked \u2014 the bell is not negotiated; call another
-box if the room truly needs one. Play a user. Hide the record: the log names
-everyone, and "not shown while voting" is the honest promise.
-
-Every phase you call, say in the same comment what happens in it and how long,
-in one line. A room that knows the rules is a room that plays.`
-  }
-];
 
 // packages/core/src/evals.ts
 var KEPT_AFTER_MS = 12 * 60 * 60 * 1e3;
@@ -2273,6 +1391,12 @@ function dispatchReason(op, authorId, agent, canvas) {
     const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined);
     if (reason) return reason;
   }
+  if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
+    const thread = canvas?.threads[op.threadId];
+    const comment = thread?.comments.find((c) => c.id === op.commentId);
+    const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined);
+    if (reason) return reason;
+  }
   const rules = agent.rules;
   if (!rules) return null;
   const items = rules.items ?? [];
@@ -2341,8 +1465,8 @@ function inboxRoute(actorId, options = {}) {
 // packages/api/src/routes.ts
 var platformFetch = (input, init) => fetch(input, init);
 var DaemonRoutes = class {
-  constructor(base, badgeStore, lifetime, sourceContext) {
-    this.base = base;
+  constructor(base2, badgeStore, lifetime, sourceContext) {
+    this.base = base2;
     this.badgeStore = badgeStore;
     this.lifetime = lifetime;
     if (sourceContext) this.sourceContext = Object.freeze({
@@ -2409,14 +1533,14 @@ var DaemonRoutes = class {
    * Exactly one recovery per request, and never a loop: a 401 goes to the
    * door (which re-claims on the way back), and a `not-your-actor` claims.
    */
-  async request(method, url, body, signal, extra) {
+  async request(method, url2, body, signal, extra) {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers = { ...await this.authHeader(), [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extra, ...this.policyHeaders() };
+      const headers = { ...await this.authHeader(), [CLIENT_FEATURES_HEADER]: `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`, ...extra, ...this.policyHeaders() };
       signal?.throwIfAborted();
       if (body !== void 0) headers["Content-Type"] = "application/json";
-      return this.fetcher(`${this.base}${url}`, {
+      return this.fetcher(`${this.base}${url2}`, {
         method,
         ...signal !== void 0 ? { signal } : {},
         ...Object.keys(headers).length > 0 ? { headers } : {},
@@ -2595,6 +1719,15 @@ var DaemonRoutes = class {
       ...group !== void 0 ? { group } : {},
       ...origin !== void 0 ? { originGroupMode: origin } : {}
     });
+  }
+  /** Refusing questionnaire acts retain their canonical type and caller-owned retry ID. */
+  questionnaire(canvasId, actor, op, opId, originGroupMode) {
+    const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } });
+  }
+  /** Writer-resolved eligibility; a missing agent display badge does not imply a human. */
+  questionnaireActors(canvasId) {
+    return this.request("GET", questionnaireActorsRoute(canvasId));
   }
   // ---- presence sessions ----
   /** Semantic group request; canonical resolved patches belong to the
@@ -2990,8 +2123,8 @@ var DaemonRoutes = class {
     return this.request("GET", `/api/commands`);
   }
   /** Write one for this home. `text` is the file, frontmatter and all. */
-  saveCommand(name, text) {
-    return this.request("PUT", `/api/commands/${encodeURIComponent(name)}`, { text });
+  saveCommand(name, text2) {
+    return this.request("PUT", `/api/commands/${encodeURIComponent(name)}`, { text: text2 });
   }
   /** Remove one of this home's; the built-in of that name comes back. */
   deleteCommand(name) {
@@ -3526,10 +2659,10 @@ var SheepAgent = class {
    * is written again at the end by a `sheep` from before the stream, and by
    * no other.
    */
-  async prompt(sessionId, text, onEvent) {
+  async prompt(sessionId, text2, onEvent) {
     const seen = /* @__PURE__ */ new Set();
     const said = [];
-    const reply = await this.commands.attach(sessionId, text, (entry) => {
+    const reply = await this.commands.attach(sessionId, text2, (entry) => {
       if (typeof entry?.id !== "string" || seen.has(entry.id)) return;
       seen.add(entry.id);
       for (const title of toolCalls([entry])) onEvent?.({ kind: "tool", detail: title });

@@ -1,6 +1,7 @@
 import { SOURCE_POLICY_HEADER, sourcePolicyHeader, parseSourcePolicyHeader, sourceClassificationRoute, SOURCE_ACCESS_ROUTE, personalRoute, personalCanvasRoute, personalDelegatesRoute, type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "@isocan/core";
 import { inboxRoute, type InboxResponse } from "@isocan/core";
 import { rcAnsweringRoute } from "@isocan/core";
+import { questionnaireActorsRoute } from "@isocan/core/questionnaire";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type {
   Actor,
@@ -81,6 +82,7 @@ import {
   PUBLIC_CANVASES_ROUTE,
   publicListingRoute,
   CANVAS_GROUPS_FEATURE,
+  QUESTIONNAIRES_FEATURE,
   CLIENT_FEATURES_HEADER,
   canvasContextRoute,
   commentContextRoute,
@@ -296,7 +298,7 @@ export class DaemonRoutes {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extra, ...this.policyHeaders() };
+      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`, ...extra, ...this.policyHeaders() };
       signal?.throwIfAborted();
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url}`, {
@@ -534,6 +536,23 @@ export class DaemonRoutes {
       ...(group !== undefined ? { group } : {}),
       ...(origin !== undefined ? { originGroupMode: origin } : {}),
     });
+  }
+
+  /** Refusing questionnaire acts retain their canonical type and caller-owned retry ID. */
+  questionnaire(
+    canvasId: string,
+    actor: Actor,
+    op: Extract<Operation, { type: "questionnaire.ask" | "questionnaire.answer" }>,
+    opId: string,
+    originGroupMode?: "legacy" | "groups",
+  ): Promise<PostOpResponse> {
+    const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) });
+  }
+
+  /** Writer-resolved eligibility; a missing agent display badge does not imply a human. */
+  questionnaireActors(canvasId: string): Promise<{ actors: Array<{ id: string; name: string; kind: "human" | "agent" | "unknown" }> }> {
+    return this.request("GET", questionnaireActorsRoute(canvasId));
   }
 
   // ---- presence sessions ----

@@ -53,6 +53,8 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
     case "thread.setAnchor":
       return op.anchorItemId ? [op.anchorItemId] : [];
     case "thread.reply":
+    case "questionnaire.ask":
+    case "questionnaire.answer":
     case "thread.delete":
     case "comment.remove":
     case "comment.restore":
@@ -102,7 +104,7 @@ export function opTouchesAreas(op: Operation, areaIds: readonly string[], canvas
     const item = canvas.items[id];
     if (item && areas.some((area) => (isGroupItem(area) && area.id === item.id) || inCanvasScope(canvas, area, item))) return true;
   }
-  if (op.type === "thread.create" || op.type === "thread.reply") {
+  if (op.type === "thread.create" || op.type === "thread.reply" || op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas.threads[op.threadId];
     if (thread && thread.anchorItemId === null && inside(thread.x, thread.y)) return true;
   }

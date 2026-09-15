@@ -12,6 +12,9 @@ import type {
 import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
+import { questionnaireQuestionMarkdown, validateQuestionnaireComment, questionnaireStates, rejectQuestionnaireMetadata } from "./questionnaire.ts";
+import { DesignPartnerContractError, parseDesignQuestionSet, parseDesignResponse } from "./design-partner.ts";
+import { designResponseMarkdown } from "./design-partner-plan.ts";
 import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
 import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
 
@@ -29,10 +32,21 @@ export function applyOperation(
   state: CanvasState | null,
   envelope: OpEnvelope,
 ): CanvasState | null {
+  try { return applyValidatedOperation(state, envelope); }
+  catch (error) {
+    if (error instanceof DesignPartnerContractError) throw new OpValidationError("bad-op", error.message);
+    throw error;
+  }
+}
+function applyValidatedOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
   const op = envelope.op;
-  const contexts = op.type === "thread.create" || op.type === "thread.reply" || op.type === "comment.restore" ? [op.comment.context]
+  rejectQuestionnaireMetadata(op);
+  const contexts = op.type === "questionnaire.ask" || op.type === "questionnaire.answer" ? [op.context]
+    : op.type === "thread.create" || op.type === "thread.reply" || op.type === "comment.restore" ? [op.comment.context]
     : op.type === "comment.update" ? [op.context]
     : op.type === "thread.restore" ? op.thread.comments.map((comment) => comment.context) : [];
+  if (op.type === "comment.restore") validateQuestionnaireComment(op.comment, envelope.canvasId!);
+  if (op.type === "thread.restore") for (const comment of op.thread.comments) validateQuestionnaireComment(comment, envelope.canvasId!);
   for (const context of contexts) if (context) {
     if (!state || state.project.groupMode !== "groups") throw new OpValidationError("bad-op", "frozen context requires a group-mode canvas");
     validateContextManifest(context, state.project.id);
@@ -418,6 +432,22 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [thread.id]: thread } });
     }
 
+    case "questionnaire.ask":
+    case "questionnaire.answer": {
+      const thread = getThread(op.threadId);
+      if (thread.comments.some((c) => c.id === op.commentId)) throw new OpValidationError("duplicate-id", `comment id already exists: ${op.commentId}`);
+      const design = op.type === "questionnaire.ask" ? parseDesignQuestionSet(op.questions) : parseDesignResponse(op.response);
+      let body: string;
+      if (design.kind === "questions") body = questionnaireQuestionMarkdown(design, op.type === "questionnaire.ask" && !!op.legacySource);
+      else {
+        const source = questionnaireStates(state!.canvas).find((q) => q.source.threadId === design.question.threadId && q.source.commentId === design.question.commentId && q.source.payloadId === design.question.payloadId && q.source.revision === design.question.revision);
+        if (!source || source.questions.requestId !== design.requestId || source.questions.epoch !== design.epoch) throw new OpValidationError("bad-op", "questionnaire response source association disagrees");
+        body = designResponseMarkdown(design, source.questions);
+      }
+      const comment: Comment = { id: op.commentId, author: actor, body, createdAt: ts, design, designReferences: structuredClone(op.retainedReferences ?? []), ...(op.context ? { context: structuredClone(op.context) } : {}), ...(op.type === "questionnaire.ask" && op.legacySource ? { designLegacySource: structuredClone(op.legacySource) } : {}) };
+      validateQuestionnaireComment(comment, state!.project.id);
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [thread.id]: { ...thread, comments: [...thread.comments, comment] } } });
+    }
     case "thread.reply": {
       const thread = getThread(op.threadId);
       requireBody(op.comment.body);

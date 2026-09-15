@@ -40,6 +40,8 @@ export function canEditNow(): boolean {
  * canvas.
  */
 export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string }[] = [
+  { what: "answering design questions", file: "components/QuestionnairePanel.tsx", gate: "active && canEdit" },
+  { what: "publishing design questions", file: "components/QuestionnairePanel.tsx", gate: "publishing && thread && canEdit" },
   { what: "group migration confirmation", file: "components/GroupMigration.tsx", gate: "{canEdit && <button" },
   {
     what: "the tool rail — the create actions: pen, text, comment, upload, site",

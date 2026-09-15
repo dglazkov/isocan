@@ -336,6 +336,28 @@ export type Operation =
     }
   | { type: "thread.reply"; threadId: string; comment: NewComment }
   | {
+      /** Publishes typed questions as one comment; the writer resolves retained metadata. */
+      type: "questionnaire.ask";
+      threadId: string;
+      commentId: string;
+      questions: import("./design-partner.ts").DesignQuestionSet;
+      legacySource?: import("./questionnaire.ts").LegacyQuestionSource;
+      contextRequest?: import("./canvas-group-context.ts").ContextRequest;
+      /** Canonical writer output only; public callers cannot supply retained metadata. */
+      context?: import("./canvas-group-context.ts").ContextManifest;
+      retainedReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];
+    }
+  | {
+      /** Records the named respondent's typed outcomes as one comment and one undo step. */
+      type: "questionnaire.answer";
+      threadId: string;
+      commentId: string;
+      response: import("./design-partner.ts").DesignResponse;
+      /** Canonical writer output only; public callers cannot supply retained metadata. */
+      context?: import("./canvas-group-context.ts").ContextManifest;
+      retainedReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];
+    }
+  | {
       // Re-pin a thread: to an item (x,y become an offset from its top-left)
       // or freestanding (x,y become world coordinates). Lets a thread that
       // started before its item existed be anchored to it after the fact.

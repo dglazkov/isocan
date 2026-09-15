@@ -3,6 +3,7 @@ import { type ActivityEntry } from "../../core/src/index.js";
 import { type Ctx } from "./ctx.js";
 import { type ExplicitIdentity } from "./identity.js";
 import { type ContextSummaryOptions } from "./context-summary.js";
+import { type DesignQuestionsOptions, type DesignQuestionsResult, type DesignAskRequest, type DesignAnswerRequest, type QuestionnaireSubmission, type DesignReferenceRequest, type DesignReferenceContent } from "./questionnaire-reader.js";
 import type { CanvasDesignAudit, DesignAuditOptions, DesignRepairRequest, DesignRepairResult } from "./design-audit-reader.js";
 import { type FeedbackOptions, type FeedbackResult } from "./feedback.js";
 import type { ContextExtras, ContextLayer } from "../../core/src/index.js";
@@ -203,6 +204,16 @@ export declare class CanvasHandle {
     designAudit(options?: DesignAuditOptions): Promise<CanvasDesignAudit>;
     /** Submit an explicitly authored, version-checked repair and retain its before/after audit evidence. */
     designRepair(itemId: string, request: Omit<DesignRepairRequest, "canvasId" | "itemId">): Promise<DesignRepairResult>;
+    /** Structured discovery shares the dock's resolver and the writer's refusing acts. */
+    designQuestions(options?: DesignQuestionsOptions): Promise<DesignQuestionsResult>;
+    /** The saved intent owns its IDs so lost delivery can be retried without another question. */
+    designAsk(request: Omit<DesignAskRequest, "canvasId">): Promise<QuestionnaireSubmission>;
+    /** Submit as this connection's actor; the writer resolves respondent custody and current source. */
+    designAnswer(request: Omit<DesignAnswerRequest, "canvasId">): Promise<QuestionnaireSubmission>;
+    /** Reads retained answer bytes by reference ID rather than silently opening a newer item version. */
+    designReference(request: DesignReferenceRequest): Promise<DesignReferenceContent>;
+    /** Eligibility comes from registry-backed writer classification, not the display-only agent map. */
+    designRespondents(): ReturnType<DaemonRoutes["questionnaireActors"]>;
     /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */
     waitForFeedback(options?: FeedbackOptions): Promise<FeedbackResult>;
     contextPage(options: ContextPageOptions): Promise<ContextContentPage>;

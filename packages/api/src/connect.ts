@@ -51,6 +51,8 @@ import { DaemonClient } from "./client.ts";
 import { claimSessionIdentity, noIdentityHere, type ExplicitIdentity } from "./identity.ts";
 import { readContextSummary, type ContextSummaryOptions } from "./context-summary.ts";
 import { readDesignAudit, repairDesignItem } from "./design-audit.ts";
+import { questionnairePort } from "./questionnaire.ts";
+import { readDesignQuestions, askDesignQuestions, answerDesignQuestions, readDesignReference, type DesignQuestionsOptions, type DesignQuestionsResult, type DesignAskRequest, type DesignAnswerRequest, type QuestionnaireSubmission, type DesignReferenceRequest, type DesignReferenceContent } from "./questionnaire-reader.ts";
 import type { CanvasDesignAudit, DesignAuditOptions, DesignRepairRequest, DesignRepairResult } from "./design-audit-reader.ts";
 import { waitForFeedback, type FeedbackOptions, type FeedbackResult } from "./feedback.ts";
 import type { ContextExtras, ContextLayer } from "@isocan/core";
@@ -424,6 +426,31 @@ export class CanvasHandle {
   /** Submit an explicitly authored, version-checked repair and retain its before/after audit evidence. */
   designRepair(itemId: string, request: Omit<DesignRepairRequest, "canvasId" | "itemId">): Promise<DesignRepairResult> {
     return this.reach(() => repairDesignItem(this.ctx, { ...request, canvasId: this.id, itemId }));
+  }
+
+  /** Structured discovery shares the dock's resolver and the writer's refusing acts. */
+  designQuestions(options: DesignQuestionsOptions = {}): Promise<DesignQuestionsResult> {
+    return this.reach(() => readDesignQuestions(questionnairePort(this.ctx), this.id, options));
+  }
+
+  /** The saved intent owns its IDs so lost delivery can be retried without another question. */
+  designAsk(request: Omit<DesignAskRequest, "canvasId">): Promise<QuestionnaireSubmission> {
+    return this.reach(() => askDesignQuestions(questionnairePort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Submit as this connection's actor; the writer resolves respondent custody and current source. */
+  designAnswer(request: Omit<DesignAnswerRequest, "canvasId">): Promise<QuestionnaireSubmission> {
+    return this.reach(() => answerDesignQuestions(questionnairePort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Reads retained answer bytes by reference ID rather than silently opening a newer item version. */
+  designReference(request: DesignReferenceRequest): Promise<DesignReferenceContent> {
+    return this.reach(() => readDesignReference(questionnairePort(this.ctx), this.id, request));
+  }
+
+  /** Eligibility comes from registry-backed writer classification, not the display-only agent map. */
+  designRespondents(): ReturnType<DaemonRoutes["questionnaireActors"]> {
+    return this.reach(() => this.ctx.client.questionnaireActors(this.id));
   }
 
   /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */

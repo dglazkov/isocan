@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { SHORTCUT_GROUPS, shortcutsIn, type SlashCommand } from "@isocan/core";
+import { SHORTCUT_GROUPS, shortcutsIn, type CommandMetadata } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Modal } from "./Modal.tsx";
 import { useCommands } from "../lib/commands.ts";
@@ -73,7 +73,7 @@ export function HelpPanel() {
               ordinary comment and an agent carries it out — so the same request works
               from a terminal with <code>isocan comment add</code>.
             </p>
-            {commands.map((command: SlashCommand) => (
+            {commands.map((command: CommandMetadata) => (
               <div className="help-row" key={command.name}>
                 <span className="help-keys">
                   <kbd>/{command.name}</kbd>

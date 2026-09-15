@@ -6,7 +6,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./markdown": "./src/markdown-text.ts",
-    "./design-audit": "./src/designaudit.ts"
+    "./design-audit": "./src/designaudit.ts",
+    "./design-partner": "./src/design-partner.ts",
+    "./design-partner-plan": "./src/design-partner-plan.ts",
+    "./questionnaire": "./src/questionnaire.ts",
+    "./questionnaire-adoption": "./src/questionnaire-adoption.ts",
+    "./design-brief": "./src/design-brief.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

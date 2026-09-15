@@ -48,6 +48,14 @@ export const {
   designAuditFails,
   repairDesignScreen,
   repairDesignItem,
+  // questionnaire.ts / questionnaire-reader.ts — shared typed questions, receipts and exact references
+  askDesignQuestions,
+  answerDesignQuestions,
+  readDesignQuestions,
+  readDesignReference,
+  questionnairePort,
+  questionnaireFailureStatus,
+  questionnaireSubmissionIds,
   waitForFeedback,
   waitForResolvedFeedback,
   // canvas-groups.ts — explicit membership and resolved dry-run reports

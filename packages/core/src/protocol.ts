@@ -15,6 +15,16 @@ export const DEFAULT_PORT = 4441;
 /** Reducer capability, independent of the caller's access-control rung. A
  * client advertises this before receiving explicit canvas-group state. */
 export const CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
+/** Reducer capability for immutable question/answer records; old peers must refuse these acts. */
+export const QUESTIONNAIRES_FEATURE = "questionnaires-v1";
+/** Upgrade refusal is distinct from denied access and cannot be fixed by retrying a stale client. */
+export const QUESTIONNAIRES_REQUIRED = "questionnaires-required";
+/** Features this build can replay; replicas advertise their own decoder independently of a forwarded caller. */
+export const CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`;
+/** Missing and unknown declarations never imply support for typed questionnaire state. */
+export function supportsQuestionnaires(value: unknown): boolean {
+  return typeof value === "string" && value.split(",").some((part) => part.trim() === QUESTIONNAIRES_FEATURE);
+}
 /** Shared spelling for HTTP clients and ingress checks; an upgraded replica
  * still preserves its original caller's declaration when forwarding writes. */
 export const CLIENT_FEATURES_HEADER = "x-isocan-features";

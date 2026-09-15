@@ -1,10 +1,11 @@
 # A design partner — the walk
 
-**Where we are:** phase 0 CLOSED on 14 September 2026; **phase 1 is next**.
-The shared contracts and twelve-case evaluation preparation are verified.
-Phases 1–7 are NOT STARTED. This closes preparation, not the live questionnaire
-workflow, browser acceptance or measured design quality. This plan covers
-canvas chat and external coding agents as equal entrances to one workflow. Read [journey.md](journey.md),
+**Where we are:** phases 0–1 CLOSED on 14 September 2026; **phase 2 is next**.
+Shared contracts, twelve-case evaluation preparation and the live question/reference
+workflow are verified. Scene 2 works from the dock and CLI. Phases 2–7 are
+NOT STARTED: ordinary request enrollment, the compact brief, the complete design
+workflow and measured quality remain ahead. Canvas chat and external coding
+agents remain equal entrances to one workflow. Read [journey.md](journey.md),
 [design.md](design.md), then this walk.
 
 The first useful release fixes discovery integrity. The next delivers one
@@ -132,7 +133,7 @@ recorded honestly. This closes preparation, not a quality baseline.
 
 ## Phase 1 — Questions and references that can be trusted
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 14 September 2026 — shared questions, exact references, browser/CLI recovery and one-answer Undo passed the independent walks, full fast/typecheck/build and strict emulator gates. See [verification/phase-1.md](verification/phase-1.md).
 
 **Depends on:** phase 0. Useful as an independent correctness release.
 
@@ -163,7 +164,13 @@ freeform drafts, keyboard focus and narrow-screen use. One undo restores the
 answer state. Legacy questions remain readable. Record these in
 `verification/phase-1.md` with the full required checks.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-14** — Exact referenced versions must outlive the source stack, including a later superseding answer. Canonical retained metadata, actual GC and restart preserved both versions; live-item lookup alone was insufficient.
+- **2026-09-14** — A snapshot can confirm an accepted answer without revealing its operation ID. Delivery results keep the submitted retry ID separate from canonical receipt identity; uncertain writes retain the original intent.
+- **2026-09-14** — A relay's transport identity is not the human's provenance. Preserve original feature declarations and known actor kind; an old client cannot decode a typed receipt merely because its relay can.
+- **2026-09-14** — Shared validation must fit the initial-load budget. Command metadata stays synchronous while full instruction bodies load on demand; all thirteen commands, aliases and 41,070 instruction bytes remain unchanged.
+- **2026-09-14** — Capability measurement must follow actual shared API calls. The audit now resolves referenced implementations with negative controls; unused imports and documentation do not establish a reachable client act.
 
 ## Phase 2 — A request becomes a complete design task
 

@@ -53,6 +53,8 @@ export * from "./evals.ts";
 export * from "./undone.ts";
 export * from "./lineage.ts";
 export * from "./commands.ts";
+export * from "./command-catalogue.ts";
+export * from "./command-bodies.ts";
 export * from "./shortcuts.ts";
 export * from "./bytes.ts";
 export * from "./format.ts";
@@ -116,3 +118,5 @@ export { markdownResource, SOURCE_PATH_PROP } from "./markdown-resources.ts";
 export * from "./inbox-api.ts";
 
 export type { DesignRecipeContract, DesignContractException, EffectiveDesignContract, DesignPolicyProblem, DesignContractPolicy } from "./design-contract.ts";
+export type * from "./design-partner.ts";
+export type * from "./questionnaire.ts";

@@ -1,5 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
-import { COMMAND_NAME, findCommand, parseSlashCommand, type SlashCommand } from "./commands.ts";
+import { COMMAND_NAME, findCommand, parseSlashCommand, type CommandMetadata } from "./commands.ts";
 
 /**
  * **Extending the canvas from inside it** — stage 1 of
@@ -134,7 +134,7 @@ type ToolRead = { tool: ToolExtension; problem?: undefined } | { tool?: undefine
  * failure a person actually makes, and the refusal should say so at the moment
  * the file is read rather than when the button is pressed.
  */
-export function readToolExtension(text: string, commands: SlashCommand[]): ToolRead {
+export function readToolExtension(text: string, commands: readonly CommandMetadata[]): ToolRead {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -203,7 +203,7 @@ export function readToolExtension(text: string, commands: SlashCommand[]): ToolR
  * Derived, never declared. A manifest that stated its own capabilities would
  * be a manifest that could understate them.
  */
-export function toolCapabilities(tool: ToolExtension, commands: SlashCommand[]): string[] {
+export function toolCapabilities(tool: ToolExtension, commands: readonly CommandMetadata[]): string[] {
   const ask = parseSlashCommand(tool.does);
   const command = ask ? findCommand(commands, ask.name) : null;
   const can: string[] = [];

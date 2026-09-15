@@ -7135,3 +7135,6 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: 12px;
   font-weight: 600;
 }
+
+/* The rare question author loads after this explicit action or an actual question arrives. */
+.main-design-ask { margin: 4px 12px; padding: 5px 0; border: 0; background: transparent; color: var(--ink-muted); font: inherit; font-size: 11px; text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

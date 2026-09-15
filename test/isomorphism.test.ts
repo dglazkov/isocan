@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 // @ts-expect-error — a .mjs script with no types, imported for its reading on
 // purpose: a second copy of "which operations a surface can send" is the thing
 // this guard exists to prevent one level up.
-import { audit, mentionedIn, operations, producedByUndo } from "../scripts/isomorphism.mjs";
+import { audit, mentionedIn, operations, producedByUndo, sharedApiOperations } from "../scripts/isomorphism.mjs";
 
 /**
  * **Can an agent do everything a person can?**
@@ -37,9 +40,13 @@ import { audit, mentionedIn, operations, producedByUndo } from "../scripts/isomo
  * operation is actually reached invents a gap**, and an invented gap costs a
  * day chasing something that was never broken.
  */
+// The repository is one immutable subject for these assertions. Resolve its
+// shared API symbols once, as the command-line audit does, rather than building
+// the same TypeScript program for each column of the resulting report.
+const rows = audit();
 describe("every shared fact is an operation either surface can send", () => {
   it("has nothing a person can do that an agent cannot", () => {
-    const webOnly = audit()
+    const webOnly = rows
       .filter((r: { webOnly: boolean }) => r.webOnly)
       .map((r: { op: string }) => r.op);
     expect(
@@ -54,15 +61,22 @@ describe("every shared fact is an operation either surface can send", () => {
     /* Dead vocabulary against a ratcheted bound: `op-types` is held at 33 and
        every rise is meant to cost somebody a sentence, so an operation nothing
        can send is a seat in that count nobody is sitting in. */
-    const orphans = audit()
+    const orphans = rows
       .filter((r: { unreachable: boolean }) => r.unreachable)
       .map((r: { op: string }) => r.op);
     expect(orphans, "in the vocabulary, sent by nothing").toEqual([]);
   });
 
   it("follows both module entry points into their shared operation helpers", () => {
-    expect(audit().find((row: { op: string }) => row.op === "item.edit"))
+    expect(rows.find((row: { op: string }) => row.op === "item.edit"))
       .toMatchObject({ web: true, cli: true, unreachable: false });
+  });
+
+  it("reaches questionnaire producers through both surfaces' actual shared API calls", () => {
+    for (const op of ["questionnaire.ask", "questionnaire.answer"]) {
+      expect(rows.find((row: { op: string }) => row.op === op))
+        .toMatchObject({ web: true, cli: true, unreachable: false });
+    }
   });
 
   it("counts inversion as a way an operation is reached", () => {
@@ -74,7 +88,7 @@ describe("every shared fact is an operation either surface can send", () => {
     const undo = producedByUndo();
     for (const op of ["comment.restore", "thread.restore", "item.restoreVersion"]) {
       expect(undo.has(op), `${op} is what undo returns`).toBe(true);
-      const row = audit().find((r: { op: string }) => r.op === op);
+      const row = rows.find((r: { op: string }) => r.op === op);
       expect(row?.unreachable, `${op} is reachable, through undo`).toBe(false);
     }
   });
@@ -101,5 +115,73 @@ describe("every shared fact is an operation either surface can send", () => {
     expect(ops).toContain("item.add");
     expect(ops).toContain("project.update");
     expect(mentionedIn("packages/cli/src").size).toBeGreaterThan(15);
+  });
+});
+
+describe("the shared API reachability instrument", () => {
+  it("loses one entrance when its consumer is removed, without granting unused API or core vocabulary", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "isocan-api-reachability-"));
+    const write = (relative: string, source: string) => {
+      const file = path.join(root, relative);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, source);
+      return file;
+    };
+    try {
+      write("node_modules/@isocan/api/package.json", JSON.stringify({ name: "@isocan/api", type: "module", exports: { ".": "./src/index.ts", "./questionnaire": "./src/shared.ts" } }));
+      write("node_modules/@isocan/core/package.json", JSON.stringify({ name: "@isocan/core", type: "module", exports: "./index.ts" }));
+      write("node_modules/@isocan/core/index.ts", `
+        export type Operation = { type: "fixture.typeOnly" } | { type: "fixture.coreOnly" };
+        export function coreOnly() { return { type: "fixture.coreOnly" }; }
+      `);
+      write("node_modules/@isocan/api/src/index.ts", 'export * from "./shared.ts"; export * from "./unused.ts";');
+      write("node_modules/@isocan/api/src/unused.ts", 'export function absentConsumer() { return { type: "fixture.absent" }; }');
+      write("node_modules/@isocan/api/src/shared.ts", `
+        import type { Operation } from "@isocan/core";
+        import { coreOnly } from "@isocan/core";
+        // A shared receipt reader knows about both tags but constructs neither.
+        function receipt(value: unknown) {
+          const hint: Extract<Operation, { type: "fixture.typeOnly" }> | null = null;
+          return value === "fixture.answer" || hint;
+        }
+        export function ask() { coreOnly(); receipt(null); return { type: "fixture.ask" }; }
+        export function answer() { return { type: "fixture.answer" }; }
+        export function unused() { return { type: "fixture.unused" }; }
+        export class CanvasHandle {
+          designAsk() { return ask(); }
+          designAnswer() { return answer(); }
+          unusedMethod() { return unused(); }
+        }
+      `);
+      const web = write("web.ts", `
+        import { ask, unused, absentConsumer } from "@isocan/api";
+        import { answer } from "@isocan/api/questionnaire";
+        ask(); answer();
+      `);
+      const cli = write("cli.ts", `
+        import { CanvasHandle } from "@isocan/api";
+        const handle = new CanvasHandle(); handle.designAsk(); handle.designAnswer();
+      `);
+      const vocabulary = ["fixture.ask", "fixture.answer", "fixture.unused", "fixture.absent", "fixture.typeOnly", "fixture.coreOnly"];
+      const read = () => sharedApiOperations({ web: [web], cli: [cli] }, vocabulary, path.join(root, "node_modules/@isocan/api/src"));
+      const both = read();
+      expect([...both.web].sort()).toEqual(["fixture.answer", "fixture.ask"]);
+      expect([...both.cli].sort()).toEqual(["fixture.answer", "fixture.ask"]);
+
+      // The API continues exporting answer, the CLI still calls it, and the
+      // web even imports it. Removing the actual web use must remove its reach.
+      writeFileSync(web, 'import { ask, answer } from "@isocan/api"; ask();');
+      const oneConsumer = read();
+      expect([...oneConsumer.web]).toEqual(["fixture.ask"]);
+      expect([...oneConsumer.cli].sort()).toEqual(["fixture.answer", "fixture.ask"]);
+
+      // Merely describing a method or importing a runtime binding is not a use.
+      writeFileSync(web, 'import { ask } from "@isocan/api"; import type { CanvasHandle } from "@isocan/api"; type Answer = CanvasHandle["designAnswer"];');
+      const noConsumer = read();
+      expect([...noConsumer.web]).toEqual([]);
+      expect([...noConsumer.cli].sort()).toEqual(["fixture.answer", "fixture.ask"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 });

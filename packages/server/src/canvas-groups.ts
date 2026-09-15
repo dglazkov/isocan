@@ -19,6 +19,8 @@ export class CanvasGroupsClientError extends Error {
 /** Log reads and socket broadcasts also inspect the record itself: a group
  * creation can be the first event an already-connected legacy client sees. */
 export function groupOperation(op: Operation): boolean {
+  if (op.type === "questionnaire.ask") return op.context !== undefined || op.contextRequest !== undefined;
+  if (op.type === "questionnaire.answer") return op.context !== undefined;
   if (op.type === "thread.create" || op.type === "thread.reply") return op.comment.context !== undefined || op.comment.contextRequest !== undefined;
   if (op.type === "comment.update") return op.context !== undefined || op.contextRequest !== undefined;
   if (op.type === "comment.restore") return op.comment.context !== undefined;

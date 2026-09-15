@@ -207,6 +207,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   typed, and everything that follows is attributed and undoable like any other
   work. isocan draws the button, from an icon set it ships; a tool runs no code
   and cannot add an operation.
+- **Design questions with durable answers**: the dock and `design ask`,
+  `design answer` and `design questions` share validated question and response
+  records. A named person's choice, text, skip, dismissal or delegation resolves
+  a question; another agent's progress update does not. Attachments retain their
+  exact uploaded versions, and `design reference` opens those bytes after later
+  edits. The dock keeps drafts and retry identities across refresh. Publishing
+  currently selects an existing design brief and thread; automatic discovery is
+  not enabled by this feature. Legacy questionnaires remain readable and need
+  explicit adoption before typed answers can resolve them.
 - **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
   canvases you were on lately, most recent first, then the rest by activity,
   with a field that finds one from a few letters (`lkh` reaches "Lake House";
@@ -733,6 +742,13 @@ isocan activity [who] [-n N]           # what has been happening here, newest fi
 isocan design [--css|--tokens] · design set <file> · design check
 #   the canvas's own design system: a DESIGN.md whose front matter is
 #   typed design tokens (W3C-compatible) and whose sections are the reasoning
+isocan design questions [payload] [--respondents] --json
+isocan design ask questions.json --thread <thread> --json
+isocan design answer <payload> --id <stable-answer-id> --question <id> --text "…"
+isocan design answer --file saved-response.json --json
+isocan design reference <thread> <comment> <reference> --out sketch.svg --json
+#   structured questions use a current brief and named human respondent;
+#   preserve the saved payload ID on retry; exact reference bytes survive edits
 isocan design audit [--item <item>|--in <group>] [--json] [--fail]
 #   parsed HTML styling, source locations, token repair candidates and explicit
 #   coverage; each screen names its governing system and captured versions,

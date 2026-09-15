@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
-import type { SlashCommand } from "@isocan/core";
-import { DEFAULT_COMMANDS, mergeCommands, withModuleCommands } from "@isocan/core";
+import type { CommandMetadata } from "@isocan/core";
+import { DEFAULT_COMMAND_CATALOGUE, mergeCommands, withModuleCommands } from "@isocan/core";
 import { fetchCommands } from "./api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -15,7 +15,7 @@ import { useUiStore } from "../stores/uiStore.ts";
  * they are compiled into both clients, so the common case works with no round
  * trip and an offline canvas still has a menu.
  */
-export function useCommands(): SlashCommand[] {
+export function useCommands(): CommandMetadata[] {
   const loaded = useCanvasStore((s) => s.commands);
   // A runtime module that arrived after first paint may add commands.
   const modulesGeneration = useUiStore((s) => s.modulesGeneration);
@@ -28,7 +28,7 @@ export function useCommands(): SlashCommand[] {
       })
       .catch(() => {
         // No daemon, or an old one: the built-ins are a real menu, not a stub.
-        if (alive) useCanvasStore.setState({ commands: mergeCommands(DEFAULT_COMMANDS, []) });
+        if (alive) useCanvasStore.setState({ commands: mergeCommands(DEFAULT_COMMAND_CATALOGUE, []) });
       });
     return () => {
       alive = false;
@@ -62,6 +62,6 @@ export function useCommands(): SlashCommand[] {
     // generation is the only thing that can tell this memo the answer has
     // changed — and `exhaustive-deps` cannot see a link it is not shown.
     void modulesGeneration;
-    return withModuleCommands(loaded ?? mergeCommands(DEFAULT_COMMANDS, []));
+    return withModuleCommands(loaded ?? mergeCommands(DEFAULT_COMMAND_CATALOGUE, []));
   }, [loaded, modulesGeneration]);
 }

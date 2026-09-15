@@ -23,6 +23,11 @@ second week.
 
 ## 14 September 2026
 
+- Design questions keep your draft answers and uploaded references through
+  refresh and failed submissions. A teammate's message leaves your question
+  open. Agents can read the same saved answers and exact attached versions
+  through `design questions` and `design reference`.
+
 - `isocan who` and the canvas tray now agree about an agent whose rc is
   parked directly at the home rather than on your machine. A laptop asks the
   canvas's home who is answering, and **Add agent** from a laptop reaches an

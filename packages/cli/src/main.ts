@@ -4,6 +4,7 @@ import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from 
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
 import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
 import { registerContextReads, reportContext, contextReceipt } from "./context-reads.ts";
+import { registerQuestionnaires } from "./questionnaire.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
@@ -10344,6 +10345,8 @@ None yet? \`/design-system\` in a composer asks an agent to derive one from the
 screens already on the canvas — what they ALREADY do, rather than a system
 somebody invented and imposed.`,
   );
+
+registerQuestionnaires(style, ctxOf);
 
 /**
  * **Saying no, and where that decision lives.**

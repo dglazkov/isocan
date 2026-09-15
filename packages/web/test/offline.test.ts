@@ -7,7 +7,7 @@ import type {
   CanvasState,
   ServerMessage,
 } from "@isocan/core";
-import { applyOperation, CANVAS_GROUPS_FEATURE, CANVAS_GROUPS_REQUIRED, captureGroupExpectations, CLIENT_FEATURES_PARAM, ENDED, REFUSED, TAKEN_DOWN, WS_NOT_ADMITTED, WS_STALE_CLIENT, resolveCanvasGroupRequest } from "@isocan/core";
+import { applyOperation, CURRENT_CLIENT_FEATURES, CANVAS_GROUPS_REQUIRED, captureGroupExpectations, CLIENT_FEATURES_PARAM, ENDED, REFUSED, TAKEN_DOWN, WS_NOT_ADMITTED, WS_STALE_CLIENT, resolveCanvasGroupRequest } from "@isocan/core";
 import type { ReplicaStore, StoredReplica } from "../src/lib/replica.ts";
 
 /**
@@ -368,9 +368,9 @@ describe("the crux", () => {
     // swapped — right up until somebody else's op is in the tail, which is the
     // next assertion.
     expect(events).toEqual([
-      `dial:canvasId=prj_1&since=0&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`,
+      `dial:canvasId=prj_1&since=0&${CLIENT_FEATURES_PARAM}=${CURRENT_CLIENT_FEATURES}`,
       "post:" + posted[0].opId,
-      `dial:canvasId=prj_1&since=2&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE}`,
+      `dial:canvasId=prj_1&since=2&${CLIENT_FEATURES_PARAM}=${CURRENT_CLIENT_FEATURES}`,
     ]);
 
     FakeSocket.last.deliver({ type: "resumed", from: 2, lastSeq: 4, colors: {}, names: {} });

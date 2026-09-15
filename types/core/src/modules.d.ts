@@ -1,7 +1,7 @@
 import type { ContextPiece } from "./context.js";
 import type { Canvas, CanvasContents, Item } from "./model.js";
 import type { Operation } from "./ops.js";
-import type { SlashCommand } from "./commands.js";
+import type { CommandMetadata, SlashCommand } from "./commands.js";
 /**
  * **The module registry** (`docs/projects/modules/design.md`).
  *
@@ -158,7 +158,7 @@ export declare function moduleCommands(): SlashCommand[];
  * hold — the daemon's, or the compiled built-ins — because the daemon
  * registers no module and the list it serves cannot know them.
  */
-export declare function withModuleCommands(commands: readonly SlashCommand[]): SlashCommand[];
+export declare function withModuleCommands<T extends CommandMetadata>(commands: readonly T[]): (T | SlashCommand)[];
 /** Idempotent by name, so a surface that registers twice (HMR, a test) holds one. */
 export declare function registerModule(record: CoreModule): void;
 export declare function unregisterModule(name: string): void;

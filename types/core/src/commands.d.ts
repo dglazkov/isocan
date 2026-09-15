@@ -12,19 +12,18 @@
  *
  * A command IS a skill: its body is the instructions the agent follows, in
  * markdown, written for a reader who has the isocan CLI and this canvas. The
- * built-ins here ship with the app; a home can add its own (or shadow one of
+ * catalogue and instruction bodies beside this file ship with the app; a home can add its own (or shadow one of
  * these) by dropping a file in `~/.isocan/commands/`, which is why the
  * registry is a list rather than this constant.
  */
-export interface SlashCommand {
+/** The shared menu, alias and dispatch data; an instruction body is not required to offer a command. */
+export interface CommandMetadata {
     /** The word after the slash: lowercase, digits and dashes. */
     name: string;
     /** One line, shown beside the name in the menu. */
     description: string;
     /** How the arguments read, e.g. `[note]` or `<n> <how>`. */
     usage: string;
-    /** What the agent should do. Markdown — this is the skill. */
-    body: string;
     /**
      * **Names this command used to have**, so a rename does not break the
      * habit of everybody who learned the old one.
@@ -36,7 +35,7 @@ export interface SlashCommand {
      * tried to use it — and `/format` is written in canvases, in habits, and in
      * the agent guide.
      */
-    aka?: string[];
+    aka?: readonly string[];
     /** Shipped with isocan, written by this home, or carried by a loaded module (core/modules.ts). */
     source: "built-in" | "home" | "module";
     /**
@@ -63,6 +62,11 @@ export interface SlashCommand {
      */
     opens?: string;
 }
+/** A complete command carries the actual instructions read by CLI and agent clients. */
+export interface SlashCommand extends CommandMetadata {
+    /** What the agent should do. Markdown — this is the skill. */
+    body: string;
+}
 /** What a command may be called. Kept narrow so a name is always typeable,
  * always a legal filename, and never ambiguous with the text after it. */
 export declare const COMMAND_NAME: RegExp;
@@ -85,16 +89,16 @@ export declare function parseSlashCommand(body: string): ParsedCommand | null;
 /** The commands worth offering for what has been typed so far. Prefix first
  * (what you are typing is usually the start of what you mean), then anything
  * else that contains it, and never the same command twice. */
-export declare function matchCommands(commands: SlashCommand[], query: string, limit?: number): SlashCommand[];
+export declare function matchCommands<T extends CommandMetadata>(commands: readonly T[], query: string, limit?: number): T[];
 /** Look one up by name — the registry is small, and the answer has to be the
  * same for the menu, the CLI, and the agent reading the comment. */
-export declare function findCommand(commands: SlashCommand[], name: string): SlashCommand | null;
+export declare function findCommand<T extends CommandMetadata>(commands: readonly T[], name: string): T | null;
 /**
  * The home's commands laid over the built-ins: same name, the home wins.
  * Shadowing rather than replacing means an upgrade improves the built-ins you
  * have not overridden, and a `rm` of your own file gives you ours back.
  */
-export declare function mergeCommands(builtIns: SlashCommand[], home: SlashCommand[]): SlashCommand[];
+export declare function mergeCommands<T extends CommandMetadata>(builtIns: readonly T[], home: readonly T[]): T[];
 /**
  * A command as a FILE: frontmatter for what the menu shows, and the rest is
  * the instructions. The same shape a skill has, because it is one — and a
@@ -112,6 +116,4 @@ export declare function mergeCommands(builtIns: SlashCommand[], home: SlashComma
 export declare function parseCommandFile(name: string, text: string): SlashCommand | null;
 /** The file a command is written back as — what `parseCommandFile` reads. */
 export declare function commandFileText(command: Pick<SlashCommand, "description" | "usage" | "body">): string;
-/** The commands isocan ships with. A home can shadow any of them by name. */
-export declare const DEFAULT_COMMANDS: SlashCommand[];
 export {};

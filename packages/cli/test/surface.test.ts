@@ -108,6 +108,7 @@ function registeredCommands(): string[] {
     path.join(repo, "packages/cli/src/main.ts"),
     path.join(repo, "packages/cli/src/canvas-groups.ts"),
     path.join(repo, "packages/cli/src/context-reads.ts"),
+    path.join(repo, "packages/cli/src/questionnaire.ts"),
     path.join(repo, "packages/cli/src/personal-context.ts"),
     ...moduleDirs().map((dir) => path.join(dir, "src/cli.ts")).filter((f) => existsSync(f)),
   ];

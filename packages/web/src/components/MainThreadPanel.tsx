@@ -1,6 +1,6 @@
 import { useChatDraft } from "../lib/chatdraft.ts";
 import "./command-chip.css";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
 import { commentReferencedItemIds, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
@@ -27,7 +27,7 @@ import { GateGrant } from "./LazyGate.tsx";
 import { runLocalCommand } from "../lib/localcommands.ts";
 import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
-import { QuestionnaireDock, activeQuestion, parseQuestionPayload } from "./QuestionnaireDock.tsx";
+const QuestionnairePanel = lazy(() => import("./QuestionnairePanel.tsx").then((module) => ({ default: module.QuestionnairePanel })));
 import { messageContextRoots, useMessageContext, useMessageSend } from "../lib/messagecontext.ts";
 import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
 import { useCanEdit } from "../lib/capability.ts";
@@ -133,14 +133,6 @@ function Attached({ canvasId }: { canvasId: string }) {
  * it said once — the body below is what they typed on top of the request.
  */
 export function CommandChip({ body }: { body: string }) {
-  const qPayload = parseQuestionPayload(body);
-  if (qPayload) {
-    return (
-      <span className="command-chip" title="Structured questionnaire">
-        📋 Questionnaire ({qPayload.questions.length} questions)
-      </span>
-    );
-  }
   const parsed = parseSlashCommand(body);
   if (!parsed) return null;
   return (
@@ -152,10 +144,7 @@ export function CommandChip({ body }: { body: string }) {
 
 /** The message without its command word — what they typed on top of it. */
 export function withoutCommand(body: string): string {
-  const qPayload = parseQuestionPayload(body);
-  if (qPayload) {
-    return qPayload.headline || "Please answer the questions docked below to align on the design direction.";
-  }
+  if (/^\/ask(?:\s|$)/.test(body)) return body; // Invalid legacy data remains readable text.
   const parsed = parseSlashCommand(body);
   return parsed ? body.slice(parsed.end).trimStart() : body;
 }
@@ -391,8 +380,10 @@ function Panel({
   const context = useMessageContext(canvasId, messageContextRoots(canvas, draft, selected));
   const sending = useMessageSend(canvasId, context, draft);
   const canEdit = useCanEdit();
-  const [dismissedCommentId, setDismissedCommentId] = useState<string | null>(null);
-  const activeQ = useMemo(() => activeQuestion(thread), [thread]);
+  const questionnaireViewer = JSON.stringify([canvasId, actor.id]);
+  const [publisherFor, setPublisherFor] = useState<string | null>(null);
+  const showDesignQuestions = publisherFor === questionnaireViewer;
+  const hasDesignQuestions = canvas && Object.values(canvas.threads).some((one) => one.comments.some((comment) => comment.design?.kind === "questions" || /^\/ask(?:\s|$)/.test(comment.body)));
 
 
   /**
@@ -587,17 +578,7 @@ function Panel({
           )}
         </div>
       </div>
-      {activeQ && activeQ.comment.id !== dismissedCommentId && (
-        <QuestionnaireDock
-          payload={activeQ.payload}
-          onAnswer={async (reply) => {
-            await postToMain(canvasId, actor, reply, []);
-          }}
-          onDismiss={() => {
-            setDismissedCommentId(activeQ.comment.id);
-          }}
-        />
-      )}
+      {hasDesignQuestions || showDesignQuestions ? <Suspense fallback={null}><QuestionnairePanel key={questionnaireViewer} canvasId={canvasId} canvas={canvas} actor={actor} thread={thread} canEdit={canEdit} startPublishing={showDesignQuestions} /></Suspense> : canEdit && thread && <button className="main-design-ask" type="button" onClick={() => setPublisherFor(questionnaireViewer)}>Ask design questions</button>}
       {canEdit && <form
         onKeyDown={(e) => {
           submitOnEnter(e);

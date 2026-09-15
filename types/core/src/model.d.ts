@@ -175,6 +175,10 @@ export interface Comment {
     id: string;
     author: Actor;
     body: string;
+    /** Immutable canonical questionnaire facts; ordinary comment writes cannot supply these. */
+    design?: import("./design-partner.js").DesignQuestionSet | import("./design-partner.js").DesignResponse;
+    designReferences?: import("./questionnaire.js").QuestionnaireRetainedReference[];
+    designLegacySource?: import("./questionnaire.js").LegacyQuestionSource;
     /** Actor ids @-mentioned in the body, resolved at authoring time against
      * the actors the author could see. Absent on older comments. */
     mentions?: string[];

@@ -1,4 +1,5 @@
-import { type ContextManifest } from "./canvas-group-context.js";
+export { parseDesignBrief } from "./design-brief.js";
+import type { ContextManifest } from "./canvas-group-context.js";
 /** Decision metadata travels with the adopted target's conditional content edit and inverse. */
 export declare const DESIGN_PARTNER_DECISION_PROPERTY = "designPartner.decision";
 /** Unsupported values remain visible and cannot accidentally enable automatic enrollment. */
@@ -21,7 +22,7 @@ interface DesignRecordBase {
     epoch: number;
 }
 /** Supplied locations and inspected bytes are distinct states; unavailable sources retain a reason. */
-interface DesignReference {
+export interface DesignReference {
     id: string;
     state: "supplied" | "fetched" | "inaccessible" | "superseded";
     url?: string;
@@ -69,7 +70,7 @@ interface DesignQuestionOption {
     preview?: DesignArtifactRef;
 }
 /** Renderer-specific input semantics; permission to skip or delegate is explicit for each question. */
-interface DesignQuestion {
+export interface DesignQuestion {
     id: string;
     title: string;
     consequence: string;
@@ -104,7 +105,7 @@ export interface DesignQuestionSource {
     revision: number;
 }
 /** One explicit outcome; skipped, dismissed and delegated states never imply a supplied answer. */
-type DesignResolution = {
+export type DesignResolution = {
     questionId: string;
     state: "answered";
     value: {
@@ -204,18 +205,15 @@ export interface DesignReceipt extends DesignRecordBase {
 }
 /** Closed persisted record family; unsupported kinds require a deliberate schema change. */
 type DesignPartnerRecord = DesignBrief | DesignQuestionSet | DesignResponse | DesignDecision | DesignReceipt;
-export declare class DesignPartnerContractError extends Error {
-    readonly code: "invalid" | "association" | "actor" | "stale" | "conflict";
-    constructor(code: "invalid" | "association" | "actor" | "stale" | "conflict", message: string);
-}
+export { DesignPartnerContractError } from "./design-partner-values.js";
+/** Checks source/version/hash shape without claiming the caller can access or has inspected its bytes. */
+export declare function parseDesignArtifactRef(value: unknown): DesignArtifactRef;
 /** Refuses filename-only uploads and fetched URLs without version identities; availability stays explicit. */
 export declare function parseDesignReference(value: unknown): DesignReference;
 /** Validates immutable questions, unique choices and real visual-preview identities before publication. */
 export declare function parseDesignQuestionSet(value: unknown): DesignQuestionSet;
 /** Validates outcome shape; source freshness, respondent custody and allowed choices need association checks. */
 export declare function parseDesignResponse(value: unknown): DesignResponse;
-/** Reuses the retained-context validator and preserves known facts separately from stated assumptions. */
-export declare function parseDesignBrief(value: unknown): DesignBrief;
 /** Checks comparable alternatives and attribution consistency, without authorizing adoption into a target. */
 export declare function parseDesignDecision(value: unknown): DesignDecision;
 /** Checks readiness and evidence shape; actual inspection requires separate proof beyond record validation. */
@@ -224,4 +222,3 @@ export declare function parseDesignReceipt(value: unknown): DesignReceipt;
 export declare function parseDesignPartnerRecord(value: unknown): DesignPartnerRecord;
 /** Unknown policy never silently enables automatic enrollment. */
 export declare function designPartnerPolicy(properties: Readonly<Record<string, string>>): DesignPartnerPolicy;
-export {};

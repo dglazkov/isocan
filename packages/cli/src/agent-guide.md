@@ -185,9 +185,13 @@ think is the last.
 with `/ask` — `isocan comment reply <thread> "/ask blue header or green?"` —
 and park. An unanswered `/ask` is a derived state, not a flag: the workbench
 pins your row to the top marked "asked", and `isocan who` shows `blocked`,
-until somebody OTHER than you replies in that thread. It clears on the
-answer, never on being seen — so ask real questions, in the thread the work
-is in, and amend your own ask freely (your own replies keep it open).
+until somebody OTHER than you replies in that thread. That rule is for plain
+prose asks. Structured design questions use `design ask`: only the named human's
+typed answer, skip, dismissal or delegation resolves them. Another agent's update
+and unrelated human prose leave them open. A legacy JSON `/ask` needs explicit
+adoption with a current brief and named respondent before it can receive typed
+answers. Use `design questions` to read the actual source and outstanding IDs.
+Being seen never counts as an answer.
 
 **Going home** is not a step, it is an interruption: run `isocan session end`
 when the human has told you the collaboration is over, and only then. Nothing
@@ -1074,9 +1078,12 @@ across every thread, with the command to reply to each. Read it when you come
 back to a canvas: an unanswered question from an earlier lap is the first
 thing worth knowing, and it is often yours.
 
-**Somebody else answering closes it.** Adding to your own question does not —
-amending what you asked is still asking. That is why "I'll just add a bit more
-detail" never accidentally marks you unblocked.
+**For a plain-prose ask, somebody else answering closes it.** Adding to your
+own question does not. Structured design questions instead stay open until the
+named human submits a typed outcome through the dock or `design answer`.
+Valid legacy JSON questionnaires remain unresolved until explicit adoption;
+another participant's progress reply cannot supply their missing respondent.
+Read `design questions` for the structured source and outstanding IDs.
 
 ## Running a sprint
 
@@ -2004,6 +2011,83 @@ isocan fit <items...>                  # grow items to the size their content wa
 
   Posting your reply clears it, which is the right shape: the status is the
   gap between being asked and answering, and done is done.
+- **Ask design questions with an identified source and respondent.**
+  `isocan design questions --json` returns structured question sets, their exact
+  thread/comment/payload revision, effective resolutions, response IDs and
+  outstanding question IDs. `isocan design questions --respondents --json`
+  lists writer-resolved human, agent and unknown identities. Only a named,
+  known human can answer; being absent from an agent list is not eligibility.
+
+  This explicit publishing path currently needs an existing thread and a valid
+  versioned design brief. Read the brief with `get` and its version identity
+  with `show --json`; use its current request ID, epoch and exact authoritative
+  home/canvas/item/version/blob reference. Do not invent those values or turn
+  ordinary JSON into a brief. The browser's **Ask design questions** form
+  selects the same existing brief and respondent. Request-start automation is
+  separate; publishing questions does not turn it on.
+
+  Save a `DesignQuestionSet` as JSON, with a stable `id`, `revision`, `brief`,
+  `respondentActorId`, `headline`, `inferredAnswers`, `supersedes`, and `questions`,
+  plus `schemaVersion: 1`, `kind: "questions"`, `requestId` and `epoch`.
+  Every question needs `id`, `title`, `consequence`, `renderer`, `options`,
+  `multiple`, `skippable` and `delegatable`. Choice options have `id`, `title`
+  and `consequence`; visual cards additionally name actual versioned `preview`
+  artifacts. Freeform, upload and URL questions have an empty options array.
+  The supported renderers are `choice-list`, `visual-cards`, `freeform`, `upload`
+  and `url-collection`. A normal first pass asks zero to three useful questions;
+  an explicitly requested interview may contain up to 32.
+
+  With `questions.json` prepared from that existing brief and thread:
+
+  ```sh
+  isocan design ask questions.json --thread thr_acme --json
+  isocan design questions qset_acme --json
+  # Run an answer as the named person, using their own claimed identity:
+  isocan design answer qset_acme --id answer_acme --question workflow --option batch --json
+  # Other forms: --text "...", --skip, --dismiss, --delegate usr_agent,
+  # or --references references.json. Use exactly one answer form per command.
+  isocan design answer --file saved-response.json --json
+  isocan design reference thr_acme cmt_answer ref_sketch --out sketch.svg --json
+  ```
+
+  `--file` accepts the full saved `DesignResponse`: its exact `question` source,
+  respondent, request/epoch and explicit `resolutions`. Use it for multiple
+  questions in one answer. A `--supersedes` replacement must explicitly retain
+  every question the earlier answer resolved. Skipping, dismissal and delegation
+  are outcomes, not supplied facts. An agent must never answer by borrowing the
+  person's identity.
+
+  Upload the real file with `add` before referencing it. A references file is
+  an array such as `{ "id": "ref_sketch", "state": "fetched", "artifact":
+  { "home": "https://example.test", "canvasId": "prj_acme", "itemId":
+  "itm_sketch", "versionId": "ver_sketch", "blobHash": "<actual SHA-256>" } }`.
+  Replace the example identities with the uploaded version's real values.
+  Every reference ID in an answer should be distinct. Two versions of the same
+  item may be attached and read separately. A URL alone is `supplied`; an
+  `inaccessible` URL needs a reason. Neither claims inspected content. This
+  publishing path accepts local-canvas artifacts; copy remote references through
+  the existing authorized canvas path first. `design reference` opens the exact
+  retained bytes, even after a later edit; `--out` refuses to overwrite a file.
+  Without `--out`, the command returns a bounded UTF-8 or base64 page with an
+  optional `nextOffset`, so an image cannot flood the transcript.
+
+  Preserve the payload ID and saved content when retrying. CLI derives stable
+  operation/comment IDs and reports them with `accepted`, `pending` or `refused`.
+  A lost receipt can be confirmed by the exact saved comment; otherwise keep
+  the same intent until reconciled. `submittedOpId` retains the retry identity;
+  `opId` is the actual accepted operation, or null when only the saved comment
+  confirms delivery. `confirmedBy` distinguishes receipt from snapshot evidence.
+  Joined identities are compared through the home's current join map while
+  original answer authorship remains unchanged. Changing content under an old ID is a
+  conflict. One `undo` removes the answer and reopens its questions; `redo`
+  restores the original author and references.
+
+  A legacy JSON `/ask` remains readable, but another participant's next comment
+  is not its typed answer. Explicit adoption uses a file containing
+  `{threadId, questions, legacySource: {threadId, commentId, body}}`: name the
+  current brief and respondent, preserve the original body and equivalent
+  normalized questions. The original comment stays in history. Malformed legacy
+  content remains prose and cannot be adopted into an invented questionnaire.
 - **Read the design system before you build a screen.** `isocan design` prints
   it: a DESIGN.md (github.com/google-labs-code/design.md) whose front matter
   carries typed tokens and whose sections carry the reasoning. It is an ITEM on
@@ -2591,6 +2675,8 @@ on the thread before putting one on somebody else's canvas,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
 `design [--css|--tokens] [set|check]`, `design audit [--item|--in|--file|--fail]`,
 `design repair <item> <file> --from-audit <report.json>`,
+`design questions [payload] [--respondents]`, `design ask <file> [--thread <id>]`,
+`design answer [payload] [--file <file>]`, `design reference <thread> <comment> <reference> [--out <file>]`,
 `add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle

@@ -1,434 +1,180 @@
-import { useState, useRef, useMemo, type ReactNode } from "react";
-import type { CommentThread, Comment } from "@isocan/core";
-import { isSystemActor } from "@isocan/core";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Actor, DesignArtifactRef, DesignQuestionSet, DesignQuestionSource, DesignResponse, ItemVersion, QuestionnaireState } from "@isocan/core";
+import { newItemId, newOpId, newVersionId } from "@isocan/core";
+import { parseDesignReference } from "@isocan/core/design-partner";
+import { answerDesignQuestions, questionnaireSubmissionIds } from "@isocan/api/questionnaire";
+import { blobUrl } from "../lib/api.ts";
+import { questionnaireIO, uploadQuestionReference } from "../lib/questionnaire.ts";
+import { creationDestination } from "../lib/groupplacement.ts";
+import { mimeTypeOf } from "../lib/mime.ts";
+import { useContentOrigin } from "../lib/contentBase.ts";
+import { itemFrame } from "../lib/frame.ts";
+import { forgetQuestionFile, keepQuestionFile, questionDraftResolution, questionnaireDraftKey, readQuestionFile, readQuestionnaireDraft, reconcileQuestionnaireDraft, transferQuestionnaireDraft, unavailableChoiceMessage, type QuestionnaireDraft, type QuestionDraft, type QuestionUploadDraft } from "../lib/questionnairedraft.ts";
 
-export interface QuestionOptionSpec {
-  id: string;
-  title: string;
-  body?: string;
-  eyebrow?: string;
-  colors?: string[];
-  description?: string;
-}
-
-export type QuestionRendererType =
-  | "choice-list"
-  | "visual-cards"
-  | "upload"
-  | "url-collection"
-  | "freeform";
-
-export interface QuestionSpec {
-  id: string;
-  title: string;
-  description?: string;
-  renderer: QuestionRendererType;
-  label?: string;
-  multiSelect?: boolean;
-  skippable?: boolean;
-  placeholder?: string;
-  options?: QuestionOptionSpec[];
-}
-
-export interface InferredAnswer {
-  questionId: string;
-  displayValue: string;
-}
-
-export interface QuestionContextPayload {
-  headline?: string;
-  inferredAnswers?: InferredAnswer[];
-  questions: QuestionSpec[];
-}
-
-export function parseQuestionPayload(body: string): QuestionContextPayload | null {
-  if (!body.startsWith("/ask")) return null;
-  const raw = body.slice(4).trim();
-  if (!raw.startsWith("{") || !raw.endsWith("}")) return null;
-  try {
-    const data = JSON.parse(raw);
-    if (
-      data &&
-      typeof data === "object" &&
-      Array.isArray(data.questions) &&
-      data.questions.length > 0
-    ) {
-      return data as QuestionContextPayload;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-/**
- * Finds the active, unanswered structured question payload in the thread.
- */
-export function activeQuestion(thread: CommentThread | null): {
-  payload: QuestionContextPayload;
-  comment: Comment;
-} | null {
-  if (!thread || thread.comments.length === 0) return null;
-  for (let i = thread.comments.length - 1; i >= 0; i--) {
-    const comment = thread.comments[i]!;
-    const payload = parseQuestionPayload(comment.body);
-    if (payload) {
-      // It is open iff no human user (or answer submission) has replied after it.
-      // An agent followup or notification should NOT mark the questionnaire as answered.
-      const answered = thread.comments
-        .slice(i + 1)
-        .some((later) => {
-          // A system actor report does not answer the questionnaire
-          if (isSystemActor(later.author.id)) {
-            return false;
-          }
-          const questionAuthorId = comment.author.id;
-          // Followup comments from the question author (the agent) do not close the questionnaire
-          if (later.author.id === questionAuthorId) {
-            return false;
-          }
-          // Any reply from another participant (the user) answers or dismisses the questionnaire
-          return true;
-        });
-      return answered ? null : { payload, comment };
-    }
-  }
-  return null;
+/** Render and open the referenced immutable version, never the item’s current preview. */
+export function QuestionReferencePreview({ artifact, version, name }: { artifact: DesignArtifactRef; version?: Pick<ItemVersion, "mimeType" | "filename"> | undefined; name: string }) {
+  const origin = useContentOrigin(artifact.canvasId, [artifact.blobHash]);
+  const frame = itemFrame(origin, artifact.canvasId, artifact.blobHash);
+  const src = blobUrl(artifact.canvasId, artifact.blobHash);
+  return <div className="q-reference-preview">
+    {version?.mimeType.startsWith("image/") && <img src={src} alt={name} loading="lazy" />}
+    {version?.mimeType === "text/html" && frame && <iframe title={`${name} preview`} src={frame.src} sandbox={frame.sandbox} tabIndex={-1} />}
+    <a href={src} target="_blank" rel="noopener noreferrer" download={version?.filename}>{name} · exact version</a>
+  </div>;
 }
 
 interface QuestionnaireDockProps {
-  payload: QuestionContextPayload;
-  onAnswer: (responseBody: string) => Promise<void>;
-  onDismiss: () => void;
+  canvasId: string;
+  actor: Actor;
+  state: QuestionnaireState;
+  agents: Array<{ id: string; name: string }>;
+  onCollapse: () => void;
 }
-
-export function QuestionnaireDock({ payload, onAnswer, onDismiss }: QuestionnaireDockProps) {
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({});
-  const [uploadFiles, setUploadFiles] = useState<string[]>([]);
-  const [urlInput, setUrlInput] = useState("");
-  const [urlList, setUrlList] = useState<string[]>([]);
-  const [freeformText, setFreeformText] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const questions = payload.questions;
-  /**
-   * **The narrowing has to survive into the handlers below.**
-   *
-   * `questions[currentIdx]` is `Question | undefined` under
-   * `noUncheckedIndexedAccess`, and the early return narrows it here — but not
-   * inside `handleSelectOption`, `handleAddUrl`, `handleFiles` or
-   * `handleNext`, which are hoisted `function` declarations: TypeScript cannot
-   * know one of them will not be called before the guard has run, so it
-   * refuses the narrowing at every `q.id` in all four. Eight errors, and they
-   * turned `main` red on the commit that added this file.
-   *
-   * Binding the checked value to its own const is the whole fix: `q` is a
-   * `Question` by construction, so every use — JSX and closure alike — is
-   * reading a value that cannot be undefined, rather than one the compiler has
-   * been persuaded about.
-   */
-  const current = questions[currentIdx];
-  if (!current) return null;
-  const q = current;
-
-  const currentSelection: string[] = answers[q.id] || [];
-
-  function handleSelectOption(optId: string) {
-    if (q.multiSelect) {
-      const exists = currentSelection.includes(optId);
-      const next = exists
-        ? currentSelection.filter((id) => id !== optId)
-        : [...currentSelection, optId];
-      setAnswers({ ...answers, [q.id]: next });
-    } else {
-      setAnswers({ ...answers, [q.id]: [optId] });
+function initialDraft(key: string, questions: DesignQuestionSet, source: DesignQuestionSource): QuestionnaireDraft {
+  let saved: QuestionnaireDraft | null = null;
+  try { saved = readQuestionnaireDraft(localStorage, key); } catch { /* Storage warning is shown on the first save. */ }
+  return reconcileQuestionnaireDraft(saved, questions, source);
+}
+/** The dock renders shared records. Neither prose nor another participant can settle a question. */
+export function QuestionnaireDock({ canvasId, actor, state, agents, onCollapse }: QuestionnaireDockProps) {
+  const { questions, source } = state;
+  const key = questionnaireDraftKey(canvasId, actor.id, questions, source);
+  const [draft, setDraft] = useState(() => initialDraft(key, questions, source));
+  const currentDraft = useRef(draft);
+  const [error, setError] = useState("");
+  const [storageError, setStorageError] = useState(() => {
+    try { return localStorage.getItem(key) && !readQuestionnaireDraft(localStorage, key) ? "A saved draft could not be read. It remains in browser storage; this questionnaire starts with empty answers." : ""; }
+    catch { return "Browser storage is unavailable. Keep this page open to preserve this draft."; }
+  });
+  const [transfer, setTransfer] = useState(() => {
+    if (!questions.supersedes) return null;
+    try { return readQuestionnaireDraft(localStorage, questionnaireDraftKey(canvasId, actor.id, questions, questions.supersedes)); } catch { return null; }
+  });
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [refused, setRefused] = useState(false);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const outstanding = questions.questions.filter((q) => state.outstandingQuestionIds.includes(q.id));
+  const q = outstanding.find((one) => one.id === draft.currentQuestionId) ?? outstanding[0];
+  const idx = q ? outstanding.indexOf(q) : 0;
+  useEffect(() => { titleRef.current?.focus(); }, [q?.id]);
+  const persist = useCallback((next: QuestionnaireDraft) => {
+    currentDraft.current = next;
+    setDraft(next);
+    try { localStorage.setItem(key, JSON.stringify(next)); setStorageError(""); }
+    catch { setStorageError("This browser could not save the draft for refresh. Keep this page open, or free browser storage before continuing."); }
+  }, [key]);
+  useEffect(() => {
+    const submission = currentDraft.current.submission;
+    if (submission && state.responses.some((record) => record.response.id === submission.response.id && record.author.id === actor.id)) persist({ ...currentDraft.current, submission: null });
+  }, [state.responses, actor.id, persist]);
+  function updateQuestion(id: string, patch: Partial<QuestionDraft>) {
+    const now = currentDraft.current;
+    const old = now.questions[id];
+    if (old) persist({ ...now, questions: { ...now.questions, [id]: { ...old, ...patch } } });
+  }
+  function updateUpload(questionId: string, id: string, patch: Partial<QuestionUploadDraft>) {
+    const now = currentDraft.current.questions[questionId];
+    if (now) updateQuestion(questionId, { uploads: now.uploads.map((one) => one.id === id ? { ...one, ...patch } : one) });
+  }
+  async function upload(questionId: string, value: QuestionUploadDraft) {
+    updateUpload(questionId, value.id, { state: "uploading", error: "" });
+    try {
+      const file = await readQuestionFile(value.fileKey);
+      const reference = await uploadQuestionReference(canvasId, actor, value, file, (patch) => updateUpload(questionId, value.id, patch));
+      updateUpload(questionId, value.id, { state: "ready", reference, error: "" });
+      try { await forgetQuestionFile(value.fileKey); } catch { /* A retained retry copy never turns a saved reference into a failure. */ }
+    } catch (cause) { updateUpload(questionId, value.id, { state: "failed", error: cause instanceof Error ? cause.message : "Upload failed. Your draft is available to retry." }); }
+  }
+  async function addFiles(questionId: string, files: File[]) {
+    updateQuestion(questionId, { resolution: "answer" });
+    if ((currentDraft.current.questions[questionId]?.uploads.length ?? 0) + files.length > 20) { setError("Attach up to 20 files to one question."); return; }
+    for (const file of files) {
+      const id = `ref_${crypto.randomUUID()}`;
+      const destination = creationDestination();
+      const value: QuestionUploadDraft = { id, fileKey: `${key}:${id}`, name: file.name, mimeType: mimeTypeOf(file), size: file.size, itemId: newItemId(), versionId: newVersionId(), opId: newOpId(), destination, state: "waiting" };
+      try { await keepQuestionFile(`${key}:${id}`, file); }
+      catch (cause) { setError(`Could not keep ${file.name} for retry. ${cause instanceof Error ? cause.message : "Browser storage is unavailable or full."}`); continue; }
+      const current = currentDraft.current.questions[questionId]!;
+      updateQuestion(questionId, { uploads: [...current.uploads, value] });
+      await upload(questionId, value);
     }
   }
-
-  function handleAddUrl() {
-    const trimmed = urlInput.trim();
-    if (!trimmed) return;
-    const next = [...urlList, trimmed];
-    setUrlList(next);
-    setUrlInput("");
-    setAnswers({ ...answers, [q.id]: next });
-  }
-
-  function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const names = Array.from(files).map((f) => f.name);
-    const next = [...uploadFiles, ...names];
-    setUploadFiles(next);
-    setAnswers({ ...answers, [q.id]: next });
-  }
-
-  async function finish(finalAnswers: Record<string, any>) {
-    // Build human-readable formatted markdown reply for the asking agent
-    const lines: string[] = [];
-    lines.push("Here are my answers to shape the project:\n");
-
-    for (const question of questions) {
-      const ans = finalAnswers[question.id];
-      if (!ans || (Array.isArray(ans) && ans.length === 0)) {
-        lines.push(`- **${question.label || question.title}**: *(Skipped)*`);
-        continue;
+  async function submit() {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true); setError(""); setRefused(false);
+    try {
+      let submission = currentDraft.current.submission;
+      if (!submission) {
+        const resolutions = outstanding.map((question) => questionDraftResolution(question, currentDraft.current.questions[question.id]!));
+        if (resolutions.some((resolution) => !resolution)) throw new Error("Answer, skip, delegate or dismiss each remaining question before submitting.");
+        const response: DesignResponse = { schemaVersion: 1, kind: "response", id: `answer_${crypto.randomUUID()}`, requestId: questions.requestId, epoch: questions.epoch, question: source, respondentActorId: actor.id, resolutions: resolutions.filter((resolution) => resolution !== null), supersedesResponseId: null };
+        const ids = await questionnaireSubmissionIds("answer", response.id);
+        submission = { ...ids, response };
+        persist({ ...currentDraft.current, submission });
       }
-
-      if (question.renderer === "choice-list" || question.renderer === "visual-cards") {
-        const titles = (question.options || [])
-          .filter((opt) => ans.includes(opt.id))
-          .map((opt) => opt.title);
-        lines.push(`- **${question.label || question.title}**: ${titles.join(", ")}`);
-      } else if (question.renderer === "url-collection") {
-        lines.push(`- **${question.label || question.title}**: ${ans.join(", ")}`);
-      } else if (question.renderer === "upload") {
-        lines.push(`- **${question.label || question.title}**: ${ans.join(", ")}`);
-      } else if (question.renderer === "freeform") {
-        lines.push(`- **${question.label || question.title}**: ${ans}`);
+      const result = await answerDesignQuestions(questionnaireIO(actor), { canvasId, threadId: source.threadId, ...submission });
+      if (result.status !== "accepted") {
+        setRefused(result.status === "refused");
+        throw new Error(result.reason ?? "The home has not confirmed your answer. Retry sends the same saved answer.");
       }
-    }
-
-    lines.push("\nPlease proceed with the designs based on these selections!");
-    await onAnswer(lines.join("\n"));
+      persist({ ...currentDraft.current, submission: null });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Your answer was not confirmed. Retry uses the saved answer IDs."); }
+    finally { busyRef.current = false; setBusy(false); }
   }
-
-  function handleNext(isSkip = false) {
-    let updatedAnswers = { ...answers };
-    if (isSkip) {
-      delete updatedAnswers[q.id];
-    } else {
-      if (q.renderer === "freeform" && freeformText.trim()) {
-        updatedAnswers[q.id] = freeformText.trim();
-      }
-    }
-    setAnswers(updatedAnswers);
-
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx(currentIdx + 1);
-      setFreeformText("");
-    } else {
-      finish(updatedAnswers);
-    }
+  if (!q) return null;
+  const answer = draft.questions[q.id]!;
+  const locked = busy || draft.submission !== null;
+  const isChoice = q.renderer === "choice-list" || q.renderer === "visual-cards";
+  const resolved = questionDraftResolution(q, answer);
+  const complete = outstanding.every((one) => questionDraftResolution(one, draft.questions[one.id]!));
+  function advance() {
+    if (idx < outstanding.length - 1) persist({ ...currentDraft.current, currentQuestionId: outstanding[idx + 1]!.id });
   }
-
-  const isLast = currentIdx === questions.length - 1;
-  const hasSelection =
-    (currentSelection && currentSelection.length > 0) ||
-    (q.renderer === "freeform" && freeformText.trim().length > 0) ||
-    (q.renderer === "url-collection" && urlList.length > 0) ||
-    (q.renderer === "upload" && uploadFiles.length > 0);
-
-  return (
-    <div className="q-dock-container floats">
-      {/* Top Header */}
-      <div className="q-dock-head">
-        <div className="q-dock-title-group">
-          <h3 className="q-dock-title">{q.title}</h3>
-          {q.description && <p className="q-dock-desc">{q.description}</p>}
+  function addUrl() {
+    try {
+      if (answer.references.length >= 20) throw new Error("Attach up to 20 URLs to one question.");
+      const reference = parseDesignReference({ id: `ref_${crypto.randomUUID()}`, state: "supplied", url: answer.urlInput.trim() });
+      if (answer.references.some((r) => r.url === reference.url)) throw new Error("That URL is already attached to this question.");
+      updateQuestion(q!.id, { references: [...answer.references, reference], urlInput: "", resolution: "answer" }); setError("");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Enter an absolute HTTP or HTTPS URL."); }
+  }
+  return <section className="q-dock-container floats" aria-label="Design questions" data-question-payload={questions.id}>
+    <header className="q-dock-head">
+      <div className="q-dock-title-group"><span className="q-dock-eyebrow">{questions.headline}</span><h3 ref={titleRef} tabIndex={-1} className="q-dock-title">{q.title}</h3><p className="q-dock-desc">{q.consequence}</p></div>
+      <button type="button" className="q-dock-close" onClick={onCollapse} aria-label="Minimize questions; keep draft">−</button>
+    </header>
+    {transfer && <div className="q-help"><p>This replaces earlier questions. You can copy your earlier draft; changed questions will need review.</p><button type="button" className="btn secondary" onClick={() => { persist(transferQuestionnaireDraft(transfer, questions, source)); setTransfer(null); }}>Copy earlier draft</button></div>}
+    {questions.inferredAnswers.length > 0 && <details className="q-using"><summary>Using what we already know</summary>{questions.inferredAnswers.map((one) => <p key={one.questionId}>{one.value}</p>)}</details>}
+    {outstanding.length > 1 && <nav className="q-dock-steps" aria-label="Questions">{outstanding.map((one, i) => <button type="button" key={one.id} className={`q-dock-step-pill ${one.id === q.id ? "active" : ""}`} aria-current={one.id === q.id ? "step" : undefined} onClick={() => persist({ ...currentDraft.current, currentQuestionId: one.id })}>{i + 1}<span className="q-step-name">. {one.title}</span>{questionDraftResolution(one, draft.questions[one.id]!) ? " ✓" : ""}</button>)}</nav>}
+    <div className="q-dock-body">
+      {answer.needsReview && <div role="alert"><p>This question changed. Your earlier draft is retained; review it before answering.</p>{unavailableChoiceMessage(q, answer) && <p>{unavailableChoiceMessage(q, answer)}</p>}<button type="button" className="btn secondary" onClick={() => updateQuestion(q.id, { needsReview: false, previousFingerprint: null, optionIds: answer.optionIds.filter((id) => q.options.some((option) => option.id === id)) })}>I reviewed this question</button></div>}
+      <fieldset disabled={locked} className="q-fields"><legend className="sr-only">{q.title}</legend>
+        {isChoice && <><div className={q.renderer === "visual-cards" ? "q-visual-cards-grid" : "q-choice-list"}>{q.options.map((option) => <div className={`q-card-base q-option ${!answer.useText && answer.optionIds.includes(option.id) ? "selected" : ""}`} key={option.id}>
+          {option.preview && <QuestionReferencePreview artifact={option.preview} version={state.references.find((ref) => ref.artifact.versionId === option.preview!.versionId && ref.artifact.itemId === option.preview!.itemId)?.version} name={option.title} />}
+          <label><input type={q.multiple ? "checkbox" : "radio"} name={`${questions.id}-${q.id}`} value={option.id} checked={!answer.useText && answer.optionIds.includes(option.id)} onChange={() => updateQuestion(q.id, { optionIds: q.multiple ? answer.optionIds.includes(option.id) ? answer.optionIds.filter((id) => id !== option.id) : [...answer.optionIds, option.id] : [option.id], useText: false, resolution: "answer" })} /><span><strong>{option.title}</strong>{q.recommendedOptionId === option.id && <small className="q-recommended">Recommended</small>}<span className="q-option-consequence">{option.consequence}</span></span></label>
+        </div>)}</div><label className="q-other"><input type="checkbox" checked={answer.useText} onChange={(e) => updateQuestion(q.id, { useText: e.target.checked, resolution: "answer" })} />Write my own answer</label></>}
+        {(q.renderer === "freeform" || (isChoice && answer.useText)) && <label className="q-field-label">Your answer<textarea className="q-textarea" rows={3} value={answer.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value, resolution: "answer" })} /></label>}
+        {/* The picker and this drop attach files to an answer, not a chosen canvas point;
+            uploadQuestionReference requests automatic placement for the saved files. */}
+        {q.renderer === "upload" && <div className="q-upload-area" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (!locked) void addFiles(q.id, Array.from(e.dataTransfer.files)); }}>
+          <label className="q-field-label">Attach sketches, images or documents<input type="file" multiple aria-label={`Upload for ${q.title}`} onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void addFiles(q.id, files); }} /></label>
+          <p className="q-help">Your files stay attached to this answer after upload. You can also drop them here.</p>
+          {answer.uploads.map((one) => <div className="q-upload-row" key={one.id}>{one.reference?.artifact ? <QuestionReferencePreview artifact={one.reference.artifact} version={{ mimeType: one.mimeType, filename: one.name }} name={one.name} /> : <strong>{one.name}</strong>}<span role="status">{one.state === "ready" ? "Uploaded" : one.state === "uploading" ? "Uploading…" : "Not uploaded"}</span>{one.error && <p role="alert">{one.error}</p>}{one.state === "failed" && <button type="button" className="btn secondary" onClick={() => void upload(q.id, one)}>Retry {one.name}</button>}<button type="button" disabled={one.state === "uploading"} onClick={() => { updateQuestion(q.id, { uploads: answer.uploads.filter((other) => other.id !== one.id) }); void forgetQuestionFile(one.fileKey).catch(() => setStorageError("The attachment was removed from this draft, but its local retry copy could not be cleared.")); }}>Remove {one.name}</button></div>)}
+        </div>}
+        {q.renderer === "url-collection" && <div className="q-url-area"><label className="q-field-label">Reference URL<input type="url" className="q-text-input" value={answer.urlInput} placeholder="https://…" onChange={(e) => updateQuestion(q.id, { urlInput: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }} /></label><button type="button" className="btn secondary" disabled={!answer.urlInput.trim()} onClick={addUrl}>Add URL</button><p className="q-help">Supplied URLs have not been inspected. The designer must report whether each reference is accessible.</p>{answer.references.map((ref) => <div className="q-url-reference" key={ref.id}><a href={ref.url} target="_blank" rel="noopener noreferrer">{ref.url}</a><span>Supplied · not inspected</span><button type="button" onClick={() => updateQuestion(q.id, { references: answer.references.filter((other) => other.id !== ref.id) })}>Remove URL</button></div>)}</div>}
+        <div className="q-resolution-actions">
+          {q.skippable && <button type="button" className="q-btn-ghost" aria-pressed={answer.resolution === "skipped"} onClick={() => updateQuestion(q.id, { resolution: "skipped" })}>Skip this question</button>}
+          <button type="button" className="q-btn-ghost" aria-pressed={answer.resolution === "dismissed"} onClick={() => updateQuestion(q.id, { resolution: "dismissed" })}>Dismiss this question</button>
+          {q.delegatable && agents.length > 0 && <label className="q-field-label">Let a designer decide<select value={answer.resolution === "delegated" ? answer.agentActorId : ""} onChange={(e) => updateQuestion(q.id, { resolution: e.target.value ? "delegated" : "answer", agentActorId: e.target.value })}><option value="">Choose an agent…</option>{agents.map((one) => <option key={one.id} value={one.id}>{one.name}</option>)}</select></label>}
         </div>
-        <button
-          type="button"
-          className="q-dock-close"
-          onClick={onDismiss}
-          title="Dismiss questionnaire"
-          aria-label="Close questionnaire"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Progress Dots / Steps */}
-      {questions.length > 1 && (
-        <div className="q-dock-steps">
-          {questions.map((stepQ, idx) => (
-            <button
-              key={stepQ.id}
-              type="button"
-              className={`q-dock-step-pill ${idx === currentIdx ? "active" : ""} ${
-                answers[stepQ.id] ? "answered" : ""
-              }`}
-              onClick={() => setCurrentIdx(idx)}
-              title={stepQ.label || stepQ.title}
-            >
-              {idx + 1}. {stepQ.label || `Q${idx + 1}`}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Question Body per Renderer */}
-      <div className="q-dock-body">
-        {/* 1. Choice List */}
-        {q.renderer === "choice-list" && (
-          <div className="q-choice-list">
-            {(q.options || []).map((opt, i) => {
-              const selected = currentSelection.includes(opt.id);
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={`q-card-base q-choice-card ${selected ? "selected" : ""}`}
-                  onClick={() => handleSelectOption(opt.id)}
-                >
-                  <span className="q-opt-num">{i + 1}</span>
-                  <div className="q-opt-text">
-                    {opt.eyebrow && <span className="q-opt-eyebrow">{opt.eyebrow}</span>}
-                    <span className="q-opt-title">{opt.title}</span>
-                    {opt.body && <p className="q-opt-body">{opt.body}</p>}
-                  </div>
-                  {q.multiSelect && (
-                    <span className={`q-opt-checkbox ${selected ? "checked" : ""}`}>
-                      {selected ? "✓" : ""}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 2. Visual Cards (3-color palette swatches) */}
-        {q.renderer === "visual-cards" && (
-          <div className="q-visual-cards-grid">
-            {(q.options || []).map((opt) => {
-              const selected = currentSelection.includes(opt.id);
-              const colors = opt.colors || ["#333", "#666", "#999"];
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  className={`q-card-base q-visual-card ${selected ? "selected" : ""}`}
-                  onClick={() => handleSelectOption(opt.id)}
-                >
-                  <div className="q-swatch-box">
-                    <div
-                      className="q-swatch-primary"
-                      style={{ backgroundColor: colors[0] }}
-                    />
-                    <div className="q-swatch-sub-column">
-                      <div
-                        className="q-swatch-sub"
-                        style={{ backgroundColor: colors[1] || colors[0] }}
-                      />
-                      <div
-                        className="q-swatch-sub"
-                        style={{ backgroundColor: colors[2] || colors[1] || colors[0] }}
-                      />
-                    </div>
-                  </div>
-                  <span className="q-visual-card-title">{opt.title}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 3. Drag-and-drop File Upload */}
-        {q.renderer === "upload" && (
-          <div className="q-upload-area">
-            <input
-              type="file"
-              ref={fileInputRef}
-              style={{ display: "none" }}
-              multiple
-              onChange={(e) => handleFiles(e.target.files)}
-            />
-            <div
-              className="q-dropzone"
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                handleFiles(e.dataTransfer.files);
-              }}
-            >
-              <div className="q-dropzone-icon">🖼️</div>
-              <p className="q-dropzone-primary">Drop images, wireframes, or sketches</p>
-              <p className="q-dropzone-secondary">or click to browse your files</p>
-            </div>
-            {uploadFiles.length > 0 && (
-              <div className="q-chip-list">
-                {uploadFiles.map((fn, idx) => (
-                  <span key={idx} className="q-file-chip">
-                    📎 {fn}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 4. URL Collection */}
-        {q.renderer === "url-collection" && (
-          <div className="q-url-area">
-            <div className="q-url-input-row">
-              <input
-                type="url"
-                className="q-text-input"
-                placeholder={q.placeholder || "https://..."}
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddUrl();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={handleAddUrl}
-                disabled={!urlInput.trim()}
-              >
-                Add URL
-              </button>
-            </div>
-            {urlList.length > 0 && (
-              <div className="q-chip-list">
-                {urlList.map((u, idx) => (
-                  <span key={idx} className="q-url-chip">
-                    🔗 {u}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 5. Freeform text input */}
-        {q.renderer === "freeform" && (
-          <div className="q-freeform-area">
-            <textarea
-              className="q-textarea"
-              rows={3}
-              placeholder={q.placeholder || "Type your thoughts..."}
-              value={freeformText}
-              onChange={(e) => setFreeformText(e.target.value)}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Footer Controls */}
-      <div className="q-dock-foot">
-        <button
-          type="button"
-          className="q-btn-ghost"
-          onClick={() => handleNext(true)}
-        >
-          Skip for now
-        </button>
-
-        <button
-          type="button"
-          className="btn primary q-btn-continue"
-          onClick={() => handleNext(false)}
-        >
-          {isLast ? (hasSelection ? "Submit Answers" : "Finish") : "Continue →"}
-        </button>
-      </div>
+        {answer.resolution !== "answer" && <p className="q-resolution-note" role="status">{answer.resolution === "skipped" ? "Will be recorded as skipped; no fact is supplied." : answer.resolution === "dismissed" ? "Will be recorded as dismissed." : "Will record your delegation to the selected agent."} <button type="button" onClick={() => updateQuestion(q.id, { resolution: "answer" })}>Answer instead</button></p>}
+      </fieldset>
     </div>
-  );
+    {storageError && <p className="q-error" role="alert">{storageError}</p>}{error && <p className="q-error" role="alert">{error}</p>}
+    <footer className="q-dock-foot"><button type="button" className="q-btn-ghost" disabled={idx === 0} onClick={() => persist({ ...currentDraft.current, currentQuestionId: outstanding[idx - 1]!.id })}>Back</button>
+      {refused && draft.submission && <button type="button" className="q-btn-ghost" onClick={() => { persist({ ...currentDraft.current, submission: null }); setRefused(false); setError(""); }}>Edit answers</button>}
+      {draft.submission || idx === outstanding.length - 1 ? <button type="button" className="btn primary" disabled={busy || (!draft.submission && !complete)} onClick={() => void submit()}>{busy ? "Submitting…" : draft.submission ? "Retry submission" : "Submit answers"}</button> : <button type="button" className="btn primary" disabled={!resolved || locked} onClick={advance}>Continue</button>}
+    </footer>
+  </section>;
 }

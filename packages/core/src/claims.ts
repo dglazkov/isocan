@@ -517,7 +517,9 @@ export function bindName(
   // Recorded whenever the claim says which harness it came from, and left
   // alone otherwise (a legacy migration row, a name set by the door).
   const harness = harnessOf(sessionKey);
-  const withHarness: ActorRegistry = harness
+  // A replica claims transport custody. It does not identify the person or
+  // harness behind that transport and must not overwrite an actual claim.
+  const withHarness: ActorRegistry = harness && harness.toLowerCase() !== "replica"
     ? { ...registry, harnesses: { ...(registry.harnesses ?? {}), [actor.id]: harness } }
     : registry;
   const current = registry.names[actor.id];

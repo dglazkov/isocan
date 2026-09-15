@@ -21,7 +21,7 @@ export interface DesignQuestionContext {
 }
 function refuse(code: DesignPartnerContractError["code"], reason: string): never { throw new DesignPartnerContractError(code, reason); }
 /** Full authority and version equality; identical blob bytes on another canvas are a different source. */
-function sameDesignArtifact(a: DesignArtifactRef, b: DesignArtifactRef): boolean {
+export function sameDesignArtifact(a: DesignArtifactRef, b: DesignArtifactRef): boolean {
   return a.home === b.home && a.canvasId === b.canvasId && a.itemId === b.itemId && a.versionId === b.versionId && a.blobHash === b.blobHash;
 }
 function sameQuestion(a: DesignQuestionSource, b: DesignQuestionSource): boolean {
@@ -80,13 +80,14 @@ interface DesignAnswerMaterializationPlan {
 /** An accepted identical retry is an observation and must not create another comment or undo step. */
 type DesignAnswerPlan = DesignAnswerMaterializationPlan | { kind: "already-recorded"; responseId: string };
 /** This projection is for people. Readers use typed data, never parse these sentences. */
-function designResponseMarkdown(response: DesignResponse, questions: DesignQuestionSet): string {
+export function designResponseMarkdown(response: DesignResponse, questions: DesignQuestionSet): string {
   return ["Design answers", ...response.resolutions.map((answer) => {
-    const q = questions.questions.find((one) => one.id === answer.questionId)!;
+    const q = questions.questions.find((one) => one.id === answer.questionId);
+    if (!q) refuse("association", "The answer names an unknown question.");
     let value: string;
     if (answer.state === "answered") {
       const result = answer.value;
-      value = result.kind === "text" ? result.text : result.kind === "options" ? result.optionIds.map((id) => q.options.find((o) => o.id === id)!.title).join(", ") : result.references.map((r) => `${r.url ?? r.artifact!.itemId} (${r.state})`).join(", ");
+      value = result.kind === "text" ? result.text : result.kind === "options" ? result.optionIds.map((id) => { const option = q.options.find((o) => o.id === id); if (!option) refuse("association", "The answer names an unknown option."); return option.title; }).join(", ") : result.references.map((r) => `${r.url ?? r.artifact!.itemId} (${r.state})`).join(", ");
     } else value = answer.state === "delegated" ? `Delegated to ${answer.agentActorId}` : answer.state === "skipped" ? "Skipped" : "Dismissed";
     return `- ${q.title}: ${value}`;
   })].join("\n");

@@ -1,4 +1,4 @@
-import { findCommand, parseSlashCommand, type SlashCommand } from "@isocan/core";
+import { findCommand, parseSlashCommand, type CommandMetadata } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { moduleDialog } from "../modules.ts";
 
@@ -16,7 +16,7 @@ import { moduleDialog } from "../modules.ts";
  * before posting. It returns true when it handled the message, which is the
  * caller's cue to clear the field and post nothing.
  */
-export function runLocalCommand(body: string, commands: SlashCommand[]): boolean {
+export function runLocalCommand(body: string, commands: CommandMetadata[]): boolean {
   const parsed = parseSlashCommand(body);
   if (!parsed) return false;
   const command = findCommand(commands, parsed.name);

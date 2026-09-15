@@ -47,7 +47,7 @@ export function summarizeRecapWindow(entries: LogEntry[], canvas: CanvasContents
     const op = entry.envelope.op;
     const who = entry.envelope.actor.name;
     actors.set(who, (actors.get(who) ?? 0) + 1);
-    if (op.type === "thread.create" || op.type === "thread.reply") comments++;
+    if (op.type === "thread.create" || op.type === "thread.reply" || op.type === "questionnaire.ask" || op.type === "questionnaire.answer") comments++;
     for (const id of touchedItems(entry)) {
       const row = items.get(id) ?? { title: null, ops: 0 };
       row.ops++;

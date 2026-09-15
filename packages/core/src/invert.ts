@@ -158,6 +158,9 @@ export function invertOperation(
 
     case "thread.reply":
       return { type: "comment.remove", threadId: op.threadId, commentId: op.comment.id };
+    case "questionnaire.ask":
+    case "questionnaire.answer":
+      return { type: "comment.remove", threadId: op.threadId, commentId: op.commentId };
 
     case "thread.setMain": {
       if (op.threadId !== null && !canvas.threads[op.threadId]) {

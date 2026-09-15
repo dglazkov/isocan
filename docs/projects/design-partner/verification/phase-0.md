@@ -167,3 +167,10 @@ committed originals. The build produced during clean installation remains
 applicable; these modules are not in the phase 0 browser import graph. The
 execution checkout receives these exact files, and its staged tree is compared
 with the clean verification tree before commit, excluding phase 1's work.
+
+The correction landed as `9fd836f1181c641de77aaa99e4cf34e23b64e150`.
+[Release run 34917952577](https://github.com/dglazkov/isocan/actions/runs/34917952577)
+then passed all four suite shards, checks and publication;
+[review run 34917952606](https://github.com/dglazkov/isocan/actions/runs/34917952606)
+also passed. This confirms the committed correction, without asserting a
+hosted product walk.

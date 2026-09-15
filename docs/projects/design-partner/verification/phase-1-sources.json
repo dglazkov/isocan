@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "c088404aef65e284e2c559387622d4b294e5fcb6",
+  "files": [
+    {
+      "path": "index.mjs",
+      "sha256": "82bd30fcc0241fae5ab7e3458667a2e0f78611bd079f7bbc9a995e0dcbf58599"
+    },
+    {
+      "path": "packages/api/package.json",
+      "sha256": "c754098c4cd65a95b6a2fd4dcaaf933eea4ff2ab685c9f91f4c04412b20f60cf"
+    },
+    {
+      "path": "packages/api/src/connect.ts",
+      "sha256": "5edad719cd8e1480ee907233ae43cb84a2c8e63fdd9225a6ccab05af74ec5271"
+    },
+    {
+      "path": "packages/api/src/index.ts",
+      "sha256": "c139ca06dd0e012c021d7849ef81ea0c52c0f1669a36b90ff477ccb2ed8462db"
+    },
+    {
+      "path": "packages/api/src/questionnaire-reader.ts",
+      "sha256": "a5d5b7a6fbad8c5c3953b64b4d848a9690b965d2417047cfadbfad14555d10a1"
+    },
+    {
+      "path": "packages/api/src/questionnaire.ts",
+      "sha256": "721557ca865a4a778a381eca4ec7312c0198142c2bf654ea429463425e3c7cfd"
+    },
+    {
+      "path": "packages/api/src/routes.ts",
+      "sha256": "d8d3b3690437fa7e298dce6652d890a358eabb11f9e66520b5cda27c29a073d9"
+    },
+    {
+      "path": "packages/api/test/questionnaire-fixture.ts",
+      "sha256": "296942233daacabe5f93473d7fb6a666fe480cb46968826ff167f4de44a8114b"
+    },
+    {
+      "path": "packages/api/test/questionnaire-reader.test.ts",
+      "sha256": "6727b9ff42859627b0febbeae8bc3a740b3454b7a7f886541441a292537c6438"
+    },
+    {
+      "path": "packages/api/test/questionnaire.test.ts",
+      "sha256": "133aa7ba690448b8cedef43de8baca0cb02f98f8b4c58fec5b8d12ab7bf3e5ad"
+    },
+    {
+      "path": "packages/cli/bin/workspace-loader.mjs",
+      "sha256": "56a70888697432dcc594d60dd6f22b3df3207a83bcf5867b0d164ff6c27a8d4f"
+    },
+    {
+      "path": "packages/cli/src/agent-guide.md",
+      "sha256": "1e443e6ba881f86c125456487172876aca596ef4fb5bbc9b2f8047f561979bc1"
+    },
+    {
+      "path": "packages/cli/src/main.ts",
+      "sha256": "42f32b729e106f562763667962c109d43cf2afcb4f4f6f524691155b42ce5ef4"
+    },
+    {
+      "path": "packages/cli/src/questionnaire.ts",
+      "sha256": "1712794c70eea9a238a37f0ee427bd5a718798f0bbee450d73e3d25c96bfc20b"
+    },
+    {
+      "path": "packages/cli/test/fake-sheep.mjs",
+      "sha256": "add986afbff42bbb8c30986090151851bb7909e31fc86b828234dd19fd8ae7ee"
+    },
+    {
+      "path": "packages/cli/test/rc-sheep-withdrawal.test.ts",
+      "sha256": "61c9f2c9e02c4843af32f5e4116276b23d1cc8a3bce7eed46e06d0c48d4a61f2"
+    },
+    {
+      "path": "packages/cli/test/surface.test.ts",
+      "sha256": "3b5478b519a691fa4091f25dd6e37a27aee5ca90150cee2719fbbc627ae06244"
+    },
+    {
+      "path": "packages/core/package.json",
+      "sha256": "cd950677c8220947d4cfb8d54925b254b10398f37c4d134c0d8c9c87ee10b322"
+    },
+    {
+      "path": "packages/core/src/claims.ts",
+      "sha256": "f81000760e5d645fd14cde06c93aabfbc8c78f94abe5f92f5820872b4169a3e2"
+    },
+    {
+      "path": "packages/core/src/command-bodies.ts",
+      "sha256": "bee7a168aea2821aadc0b18d447e24e0a80f47d49c02fab2061eef6746c56a4b"
+    },
+    {
+      "path": "packages/core/src/command-catalogue.ts",
+      "sha256": "eab2f84efe9435de0772526cb29c1ecb579b94a6f57e48834d20c7182e185a08"
+    },
+    {
+      "path": "packages/core/src/commands.ts",
+      "sha256": "1b73cf40172ff7e3f52bae5e252b5f7da20959b96f69feeac91661f1aca513b6"
+    },
+    {
+      "path": "packages/core/src/design-brief.ts",
+      "sha256": "f047307265ebffb89e18d75e31a5625b57df50224e712198317ab68ff3a276f2"
+    },
+    {
+      "path": "packages/core/src/design-partner-plan.ts",
+      "sha256": "0598685b38ea7399b5b4040a1db8b609bb4ec49aa8b97dea7f8fd150d4bbfdc9"
+    },
+    {
+      "path": "packages/core/src/design-partner-values.ts",
+      "sha256": "9258270f10b16e5ac89f2d66e985a68aafdf8c40879f9649d5e49fbdcdcc9b92"
+    },
+    {
+      "path": "packages/core/src/design-partner.ts",
+      "sha256": "fbbb5519ee58cafc6b575db9918e6e1959644aa99929abef8c1e0379d1472918"
+    },
+    {
+      "path": "packages/core/src/extensions.ts",
+      "sha256": "e96d17d3874fbcf63ae44a8fff1073397380e7011a2cb9b0a4ebbca0ae196e53"
+    },
+    {
+      "path": "packages/core/src/inbox.ts",
+      "sha256": "17aa560d89a9a921542353977ab193ad3caee8b65e56ca622cbcd1c2b44d75d0"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "sha256": "7312e0e22b574be4d21e455ec058c192f0d07220065f38dc722fcfa59afe1ade"
+    },
+    {
+      "path": "packages/core/src/invert.ts",
+      "sha256": "c1757dbc109087d4dcbeff58c60f1fd5bc5fdf4514b3e3e54312dd1932d66fba"
+    },
+    {
+      "path": "packages/core/src/lens.ts",
+      "sha256": "a07fec08b0f24503e596f98c0597d4882d5d84177efc51e481f0c6a3844f1dc3"
+    },
+    {
+      "path": "packages/core/src/model.ts",
+      "sha256": "dd9d19a94637978f58cd8a3a01b83a2541d19fec1a25ff5d35b42d75ba04ac8d"
+    },
+    {
+      "path": "packages/core/src/modules.ts",
+      "sha256": "c4a1de692dfa615084286572e3c8ac200dd133cacc7dcfb96ae40bc28f9bc8b7"
+    },
+    {
+      "path": "packages/core/src/ops.ts",
+      "sha256": "8af9b3224df240485203219d440c02252c5aa82d781d0f74e36a8ca633b575d8"
+    },
+    {
+      "path": "packages/core/src/opwords.ts",
+      "sha256": "5279e7c536317877d131f41ee73a0017e5b5d6b109c0867a381b0131e3f7ed2c"
+    },
+    {
+      "path": "packages/core/src/protocol.ts",
+      "sha256": "8d996eb05d48fd4cd5fc2035104016059c566fdc0577dc0b5542bfa30da1fbc8"
+    },
+    {
+      "path": "packages/core/src/questionnaire-adoption.ts",
+      "sha256": "9e37e2d5921aaefe7ca5f41dbc3521309484b9ba6a9c2aa5603023424ef65692"
+    },
+    {
+      "path": "packages/core/src/questionnaire.ts",
+      "sha256": "30328d99038d29cd83c5cb96d9ed906c39275b95620da2fb25a9a92d15d0d2c3"
+    },
+    {
+      "path": "packages/core/src/recap-window.ts",
+      "sha256": "b89a02cfaf74a4fe269df5f75ca2115d8e026c3cc224a15bc9b59241f494b4e8"
+    },
+    {
+      "path": "packages/core/src/reducer.ts",
+      "sha256": "854efbc077b9f84ffea524893bfe96cdedc480a92de008086e585ce54bd87c81"
+    },
+    {
+      "path": "packages/core/src/roster.ts",
+      "sha256": "53942377a88e4ea54f337c1729579084251eabdc9e9235b0fe4204207c78968c"
+    },
+    {
+      "path": "packages/core/src/timeline.ts",
+      "sha256": "23c4990da9fd05dea5ca826c875f1a5cba15b86ca5a7908b80a54ec796f00818"
+    },
+    {
+      "path": "packages/core/src/touches.ts",
+      "sha256": "76e307f6a7ba8ebfec501f62fb4f2dc4d85d3878f616b617f448d6389cffbaff"
+    },
+    {
+      "path": "packages/core/test/commands.test.ts",
+      "sha256": "81cbb76d1e38683ebd8179e0bf6b13fdb8715de795b6b30f50d2ae310f766b1f"
+    },
+    {
+      "path": "packages/core/test/questionnaire.test.ts",
+      "sha256": "23d51736ca91d6888bc1fe57bcc2d1faa0a7ab9a3f2aa03f4d180ae318a5b207"
+    },
+    {
+      "path": "packages/server/src/canvas-groups.ts",
+      "sha256": "cff161ead898b19e5dbbf1d5261f9a9a88f093c35aae313145cf13432cf1bea2"
+    },
+    {
+      "path": "packages/server/src/engine.ts",
+      "sha256": "4b562fd646c398f76e03854c065d9be6f1911da2a2ec94ba2787503a62d11258"
+    },
+    {
+      "path": "packages/server/src/file-store.ts",
+      "sha256": "fca6b0ff7ab248846fa261d09ae9421539c64271a6839162b7396a2d60e623f1"
+    },
+    {
+      "path": "packages/server/src/home-link.ts",
+      "sha256": "70902486aeac44f7d770bbb24dcc69e7a5db675c2657f59016c0fc2b2fdd6135"
+    },
+    {
+      "path": "packages/server/src/http.ts",
+      "sha256": "6a2fd1bd63cbd4ed436601ca0c78c5d51d29c1b5664cb232e24a801077246bca"
+    },
+    {
+      "path": "packages/server/src/questionnaire-capability.ts",
+      "sha256": "f3d312d4d79ec790c14d302bb8dc0f93b3f518f3d410fd80e474b617e7dcb73f"
+    },
+    {
+      "path": "packages/server/src/questionnaire.ts",
+      "sha256": "d3347d556a0da23e7622ef1d6f8cd2adede72bca838b78ab7bb3d192cbe6aeee"
+    },
+    {
+      "path": "packages/server/src/ws.ts",
+      "sha256": "43903bffb15884b0a47fe07117efbb946fed1a96893900201e5a101577331b6f"
+    },
+    {
+      "path": "packages/server/test/kinds-backfill.test.ts",
+      "sha256": "03da8d3b1032360074cc805d380d822401a1cd58e0b970c42bc7d7fe54ada5ea"
+    },
+    {
+      "path": "packages/server/test/questionnaire.test.ts",
+      "sha256": "6c3d606a1abad3cdd5791648d73f4841eaf4bed1311b9a1a38a58652d4eef323"
+    },
+    {
+      "path": "packages/web/src/components/CommandPalette.tsx",
+      "sha256": "eea22d575e957f6c0ee9aed3891febd556e775129029a4527003b22ded3399e8"
+    },
+    {
+      "path": "packages/web/src/components/HelpPanel.tsx",
+      "sha256": "f6d1530d4b67e951a4d2a1d55a558768bd35186e4520bab53b5914647db2808f"
+    },
+    {
+      "path": "packages/web/src/components/MainThreadPanel.tsx",
+      "sha256": "2165d9bc46d02d4986ee2a3ea7acc9eff434bc4485e6c4698c300d034bfaa271"
+    },
+    {
+      "path": "packages/web/src/components/MentionField.tsx",
+      "sha256": "edc7f81a0e2fa1a473a66d331720bd517c2d8331bb837427f56c2776dddf541a"
+    },
+    {
+      "path": "packages/web/src/components/QuestionnaireDock.tsx",
+      "sha256": "221a98993788bf58748f7df77bb38d5551581f7b810409984db86639c0d4d126"
+    },
+    {
+      "path": "packages/web/src/components/QuestionnairePanel.tsx",
+      "sha256": "c55c6526208ec8f25b661229a0edd3ec7e4ff020256e30715287a0c97880f2a6"
+    },
+    {
+      "path": "packages/web/src/components/QuestionnairePublish.tsx",
+      "sha256": "64b6949372d280b0b3fb7859e5cbc8c0b51aca8bee9f990f8251ba5b2972f676"
+    },
+    {
+      "path": "packages/web/src/components/questionnaire.css",
+      "sha256": "43856b2fd9607f25cd911f9cace7282a395b5fa377b84c956de9865a4f250a58"
+    },
+    {
+      "path": "packages/web/src/lib/api.ts",
+      "sha256": "3f3dd162bfbb7c77acfddc79a3c3dfa11294bd71b4a3c65b0df537c641eecb33"
+    },
+    {
+      "path": "packages/web/src/lib/capability.ts",
+      "sha256": "84bf0b83637e9b8693ebf491ba07a2a02dce14b8f3c1992d1c3ad04ee41b3470"
+    },
+    {
+      "path": "packages/web/src/lib/commands.ts",
+      "sha256": "9f7bae50b7b81f4e90ce3649feb366b7a95adf2d93686ed7fecd7f32894ce921"
+    },
+    {
+      "path": "packages/web/src/lib/localcommands.ts",
+      "sha256": "ab215a098b5a7c6d6b57eb564ea3b44d7250af25d5fd271e50a62f378822cc96"
+    },
+    {
+      "path": "packages/web/src/lib/questionnaire.ts",
+      "sha256": "b9abf740b7ec63b3356734ef31bb1f2f221136f012f7229b1622133c24ae152f"
+    },
+    {
+      "path": "packages/web/src/lib/questionnairedraft.ts",
+      "sha256": "6494b73fc8d6d8b44e88a75570c6cb9836105984970efe19d511443c6209d0b4"
+    },
+    {
+      "path": "packages/web/src/stores/canvasStore.ts",
+      "sha256": "afc7640f5e0c56ade26980a5a5f5b68ca49c9587c36ae38232332b4523254de4"
+    },
+    {
+      "path": "packages/web/src/styles.css",
+      "sha256": "44e2c48e4533e773704d6527bef657175a1e2d91424a1caacc390a2d664d9e3a"
+    },
+    {
+      "path": "packages/web/test/desk.test.ts",
+      "sha256": "4d4f6398827f50f947ae2f50eecf43dd11df5baf54768d02850cf08e72c74d89"
+    },
+    {
+      "path": "packages/web/test/groups.test.ts",
+      "sha256": "371ac939898ca070bbebab7efe9731d40e801f3ae5915566dcb2a7639d51ae6b"
+    },
+    {
+      "path": "packages/web/test/localcommands.test.ts",
+      "sha256": "a544af0f82589b97d4510bd890e68b97219745e3c3bee1f7b323e98428034da8"
+    },
+    {
+      "path": "packages/web/test/offline.test.ts",
+      "sha256": "890171364ed000ea469dfe4d6393a52619ee132291d466db4ddb0567e8d94905"
+    },
+    {
+      "path": "packages/web/test/questionnairedraft.test.ts",
+      "sha256": "6511aa82b8ea6b17e285fa5c51934326341597666024a063813abc90eebeaed7"
+    },
+    {
+      "path": "packages/web/test/questionnaireupload.test.ts",
+      "sha256": "762e79b75a87d22073e0a40d208245b7288851a3f802ae63a95dde5dce4f0869"
+    },
+    {
+      "path": "packages/web/test/share.test.ts",
+      "sha256": "0d739c05b313a4a34b5dda1d429b4d413bb82660446e372eadaae8e525d696f7"
+    },
+    {
+      "path": "packages/web/test/walk.test.ts",
+      "sha256": "424dfbf35ee72709a5d5e879011d97c94e269bc95bc710a474b874262223c803"
+    },
+    {
+      "path": "scripts/isomorphism.mjs",
+      "sha256": "5959a44a2788178e88402931440adaabcc14e74aee5c60f1a4c9187bea1dec45"
+    },
+    {
+      "path": "scripts/journey-questionnaire.mjs",
+      "sha256": "e59d2c4624da7f5d4da16bce6c89b7447d0cf742880dce79ff83b876ee64748d"
+    },
+    {
+      "path": "test/deep.ts",
+      "sha256": "adb55793e52fe70e758627ff296bd9361854faf3dad8ce6a2c39450553ac29a3"
+    },
+    {
+      "path": "test/isomorphism.test.ts",
+      "sha256": "d42d38a4190e72c4082d9d5a11847e1ff259241503cec187968d74472745d31f"
+    },
+    {
+      "path": "test/questionnaire-cli.test.ts",
+      "sha256": "e5113d49ab0cd0fad3fa58bdd59cea6ba8d4c98080420abcc6712fe3baf0264c"
+    }
+  ],
+  "webEntry": {
+    "path": "packages/web/dist/assets/index-DX4bMuPI.js",
+    "bytes": 729777,
+    "sha256": "30d1d8067329a6d8ba064a91058168ac9ba06e084542d1334cd95f33c65b68c7"
+  }
+}

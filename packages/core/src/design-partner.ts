@@ -1,4 +1,7 @@
-import { validateContextManifest, type ContextManifest } from "./canvas-group-context.ts";
+import { bad, object, recordFields, text, bool, integer, choice, list, nonempty, unique, ids, nullableText, url, fidelity, hash, base } from "./design-partner-values.ts";
+import { parseDesignBrief } from "./design-brief.ts";
+export { parseDesignBrief } from "./design-brief.ts";
+import type { ContextManifest } from "./canvas-group-context.ts";
 
 /** Phase-0 data contract. Parsing proves shape, never custody, grants or inspection. */
 const DESIGN_PARTNER_SCHEMA_VERSION = 1;
@@ -27,7 +30,7 @@ export interface DesignArtifactRef {
 }
 interface DesignRecordBase { schemaVersion: 1; requestId: string; epoch: number }
 /** Supplied locations and inspected bytes are distinct states; unavailable sources retain a reason. */
-interface DesignReference {
+export interface DesignReference {
   id: string;
   state: "supplied" | "fetched" | "inaccessible" | "superseded";
   url?: string;
@@ -58,7 +61,7 @@ export interface DesignBrief extends DesignRecordBase {
 /** An identified answer choice explains its consequence and may point to an actual preview version. */
 interface DesignQuestionOption { id: string; title: string; consequence: string; preview?: DesignArtifactRef }
 /** Renderer-specific input semantics; permission to skip or delegate is explicit for each question. */
-interface DesignQuestion {
+export interface DesignQuestion {
   id: string;
   title: string;
   consequence: string;
@@ -84,7 +87,7 @@ export interface DesignQuestionSet extends DesignRecordBase {
 /** Exact immutable published source; a title or latest thread message cannot substitute for identity. */
 export interface DesignQuestionSource { threadId: string; commentId: string; payloadId: string; revision: number }
 /** One explicit outcome; skipped, dismissed and delegated states never imply a supplied answer. */
-type DesignResolution =
+export type DesignResolution =
   | { questionId: string; state: "answered"; value: { kind: "options"; optionIds: string[] } | { kind: "text"; text: string } | { kind: "references"; references: DesignReference[] } }
   | { questionId: string; state: "skipped" | "dismissed" }
   | { questionId: string; state: "delegated"; agentActorId: string };
@@ -145,41 +148,9 @@ export interface DesignReceipt extends DesignRecordBase {
 /** Closed persisted record family; unsupported kinds require a deliberate schema change. */
 type DesignPartnerRecord = DesignBrief | DesignQuestionSet | DesignResponse | DesignDecision | DesignReceipt;
 
-export class DesignPartnerContractError extends Error {
-  constructor(readonly code: "invalid" | "association" | "actor" | "stale" | "conflict", message: string) {
-    super(message); this.name = "DesignPartnerContractError";
-  }
-}
-const bad = (message: string): never => { throw new DesignPartnerContractError("invalid", message); };
-const object = (v: unknown, fields?: readonly string[]): Record<string, unknown> => {
-  if (v === null || typeof v !== "object" || Array.isArray(v)) return bad("Expected an object.");
-  if (fields && Object.keys(v).some((key) => !fields.includes(key))) bad("Unknown field in design-partner record.");
-  return v as Record<string, unknown>;
-};
-const recordFields = ["schemaVersion", "requestId", "epoch", "kind"];
-const text = (v: unknown): string => typeof v === "string" && v.trim().length > 0 && v.length <= 32000 ? v : bad("Expected nonempty bounded text.");
-const bool = (v: unknown): boolean => typeof v === "boolean" ? v : bad("Expected a boolean.");
-const integer = (v: unknown, min = 0): number => Number.isSafeInteger(v) && (v as number) >= min ? v as number : bad("Expected an integer in range.");
-const choice = <T extends string>(v: unknown, values: readonly T[]): T => values.includes(v as T) ? v as T : bad(`Expected one of ${values.join(", ")}.`);
-const list = <T>(v: unknown, parse: (entry: unknown) => T, max = 1000): T[] => Array.isArray(v) && v.length <= max ? v.map(parse) : bad("Expected a bounded array.");
-const nonempty = <T>(items: T[]): T[] => items.length ? items : bad("Expected at least one entry.");
-const unique = <T>(items: T[], key: (item: T) => string): T[] => new Set(items.map(key)).size === items.length ? items : bad("Repeated identity.");
-const ids = (v: unknown): string[] => unique(list(v, text), (x) => x);
-const nullableText = (v: unknown): string | null => v === null ? null : text(v);
-const url = (v: unknown): string => {
-  const value = text(v);
-  let parsed: URL; try { parsed = new URL(value); } catch { return bad("Expected an absolute HTTP(S) URL."); }
-  if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password) bad("Expected an HTTP(S) URL without credentials.");
-  return value;
-};
-const fidelity = (v: unknown): DesignFidelity => choice(v, ["wireframe", "designed", "implementation"]);
-const hash = (v: unknown): string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v) ? v : bad("Expected a lowercase SHA-256 blob identity.");
-function base(v: Record<string, unknown>): DesignRecordBase {
-  if (v.schemaVersion !== 1) bad("Unsupported design-partner schema version.");
-  return { schemaVersion: 1, requestId: text(v.requestId), epoch: integer(v.epoch, 1) };
-}
+export { DesignPartnerContractError } from "./design-partner-values.ts";
 /** Checks source/version/hash shape without claiming the caller can access or has inspected its bytes. */
-function parseDesignArtifactRef(value: unknown): DesignArtifactRef {
+export function parseDesignArtifactRef(value: unknown): DesignArtifactRef {
   const v = object(value, ["home", "canvasId", "itemId", "versionId", "blobHash"]);
   return { home: url(v.home), canvasId: text(v.canvasId), itemId: text(v.itemId), versionId: text(v.versionId), blobHash: hash(v.blobHash) };
 }
@@ -242,21 +213,6 @@ function resolution(value: unknown): DesignResolution {
 export function parseDesignResponse(value: unknown): DesignResponse {
   const v = object(value, [...recordFields, "id", "question", "respondentActorId", "resolutions", "supersedesResponseId"]); if (v.kind !== "response") bad("Expected a response.");
   return { ...base(v), kind: "response", id: text(v.id), question: questionSource(v.question), respondentActorId: text(v.respondentActorId), resolutions: unique(nonempty(list(v.resolutions, resolution, DESIGN_PARTNER_MAX_QUESTIONS)), (r) => r.questionId), supersedesResponseId: nullableText(v.supersedesResponseId) };
-}
-/** Reuses the retained-context validator and preserves known facts separately from stated assumptions. */
-export function parseDesignBrief(value: unknown): DesignBrief {
-  const v = object(value, [...recordFields, "requestingActorId", "source", "progress", "intent", "fidelity", "delivery", "targetItemId", "groupId", "audience", "primaryTask", "constraints", "facts", "context", "references", "outstandingDecisionIds", "outputIds"]); if (v.kind !== "brief") bad("Expected a brief.");
-  const rawSource = object(v.source);
-  const entrance = choice(rawSource.entrance, ["canvas-chat", "external-agent"]);
-  object(rawSource, entrance === "canvas-chat" ? ["entrance", "threadId", "commentId"] : ["entrance", "externalRequestId"]);
-  const source: DesignBrief["source"] = entrance === "canvas-chat" ? { entrance, threadId: text(rawSource.threadId), commentId: text(rawSource.commentId) } : { entrance, externalRequestId: text(rawSource.externalRequestId) };
-  const rawContext = object(v.context);
-  validateContextManifest(rawContext as unknown as ContextManifest, text(rawContext.canvasId));
-  return { ...base(v), kind: "brief", requestingActorId: text(v.requestingActorId), source,
-    progress: choice(v.progress, ["active", "cancelled", "completed"]), intent: choice(v.intent, ["create", "extend", "refine"]), fidelity: fidelity(v.fidelity), delivery: choice(v.delivery, ["html-node", "connected-app", "wireframe", "exploration"]), targetItemId: nullableText(v.targetItemId), groupId: nullableText(v.groupId), audience: nullableText(v.audience), primaryTask: nullableText(v.primaryTask), constraints: list(v.constraints, text),
-    facts: unique(list(v.facts, (entry) => { const f = object(entry, ["id", "name", "value", "origin", "sources"]); return { id: text(f.id), name: text(f.name), value: text(f.value), origin: choice(f.origin, ["supplied", "context", "assumed"]), sources: list(f.sources, parseDesignArtifactRef) }; }), (f) => f.id),
-    context: structuredClone(rawContext) as unknown as ContextManifest, references: unique(list(v.references, parseDesignReference), (r) => r.id), outstandingDecisionIds: ids(v.outstandingDecisionIds), outputIds: ids(v.outputIds),
-  };
 }
 /** Checks comparable alternatives and attribution consistency, without authorizing adoption into a target. */
 export function parseDesignDecision(value: unknown): DesignDecision {

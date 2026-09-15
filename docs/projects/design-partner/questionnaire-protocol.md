@@ -52,6 +52,18 @@ authorized copy/pin path; later governing-context work must preserve permitted
 inherited provenance without treating this temporary restriction as a new
 inheritance policy. A supplied URL is not a fetched artifact.
 
+A superseding answer may keep an exact version already canonically retained
+by that question's source or response history after the live source was pruned.
+The writer still verifies the authoritative home, canvas and available bytes;
+the caller cannot supply replacement version metadata. Changing a text answer
+must not require reuploading an unchanged reference that remains readable.
+
+Feature negotiation follows the original client through a home relay. The
+relay's decoder capability does not establish the caller's capability, and an
+operation-ID retry is checked against the actual receipt being returned. A
+relay identity claim likewise supplies custody transport, not a human/agent
+classification; existing recorded harness provenance must survive it.
+
 `design ask`, `design answer` and `design questions` expose the same acts and
 states. `design reference` reads exact retained bytes, including after a newer
 version becomes current. These commands are advertised in the shipped help
@@ -66,3 +78,12 @@ acknowledged, so an interrupted upload can actually retry after refresh.
 Quota or storage failures remain visible. Stable upload, operation and response
 IDs survive uncertain receipts. Queued or refused writes never look complete.
 The implementation reuses existing group-placement and operation-receipt rules.
+
+A submission result distinguishes the caller's stable `submittedOpId` from
+the accepted `opId`. A direct canonical receipt supplies the latter, including
+the original ID when the writer recognizes the same saved payload under a
+new delivery ID. After a lost acknowledgement, an authoritative snapshot can
+confirm the exact saved comment, payload and author; it cannot identify the
+operation that wrote them. That recovery says `confirmedBy: snapshot` and
+`opId: null`, while retaining the submitted retry ID. Accepted author matching
+uses the home’s current canonical joins without rewriting historical authors.
