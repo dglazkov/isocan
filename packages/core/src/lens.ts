@@ -376,7 +376,7 @@ export function lensStanding(
   for (const act of acts) {
     const row = rowFor(act.canvasId, act.canvasTitle);
     row.acts += 1;
-    if (act.op === "thread.create" || act.op === "thread.reply") row.replies += 1;
+    if (act.op === "thread.create" || act.op === "thread.reply" || act.op === "questionnaire.ask" || act.op === "questionnaire.answer") row.replies += 1;
     if (row.lastAct === null || act.ts > row.lastAct) row.lastAct = act.ts;
   }
   const titleOf = (canvasId: string) => sources.find((s) => s.canvasId === canvasId)?.canvasTitle ?? canvasId;

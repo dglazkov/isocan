@@ -12,8 +12,13 @@ import type {
 import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
+import { questionnaireQuestionMarkdown, validateQuestionnaireComment, questionnaireStates, rejectQuestionnaireMetadata } from "./questionnaire.ts";
+import { DesignPartnerContractError, parseDesignQuestionSet, parseDesignResponse } from "./design-partner.ts";
+import { designResponseMarkdown } from "./design-partner-plan.ts";
 import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
 import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
+import { validateDesignRecordState, validateDesignRecordEffect } from "./design-record.ts";
+import { DesignRestoreConflict, designDecisionMarkdown, designTargetMatches, rejectDesignDecisionMetadata, sameDesignValue, validateDesignDecisionComment } from "./design-decision-state.ts";
 
 /**
  * The shared pure reducer. The daemon runs it authoritatively; the web client
@@ -29,10 +34,23 @@ export function applyOperation(
   state: CanvasState | null,
   envelope: OpEnvelope,
 ): CanvasState | null {
+  try { return applyValidatedOperation(state, envelope); }
+  catch (error) {
+    if (error instanceof DesignPartnerContractError) throw new OpValidationError("bad-op", error.message);
+    throw error;
+  }
+}
+function applyValidatedOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
   const op = envelope.op;
-  const contexts = op.type === "thread.create" || op.type === "thread.reply" || op.type === "comment.restore" ? [op.comment.context]
+  rejectQuestionnaireMetadata(op);
+  rejectDesignDecisionMetadata(op);
+  if ((op.type === "item.add" || op.type === "item.edit" || op.type === "item.addVersion") && op.version.designRecord !== undefined) throw new OpValidationError("bad-op", "design admission requires its canonical design operation");
+  const contexts = op.type === "questionnaire.ask" || op.type === "questionnaire.answer" ? [op.context]
+    : op.type === "thread.create" || op.type === "thread.reply" || op.type === "comment.restore" ? [op.comment.context]
     : op.type === "comment.update" ? [op.context]
     : op.type === "thread.restore" ? op.thread.comments.map((comment) => comment.context) : [];
+  if (op.type === "comment.restore") validateQuestionnaireComment(op.comment, envelope.canvasId!);
+  if (op.type === "thread.restore") for (const comment of op.thread.comments) validateQuestionnaireComment(comment, envelope.canvasId!);
   for (const context of contexts) if (context) {
     if (!state || state.project.groupMode !== "groups") throw new OpValidationError("bad-op", "frozen context requires a group-mode canvas");
     validateContextManifest(context, state.project.id);
@@ -41,6 +59,8 @@ export function applyOperation(
   // Historical area canvases keep their original reduction. Explicit group
   // state is validated after EVERY operation, including ordinary inverses.
   if (next?.project.groupMode === "groups") validateGroupForest(next);
+  if (next) validateDesignRecordState(next);
+  if (next) for (const thread of Object.values(next.canvas.threads)) for (const comment of thread.comments) validateDesignDecisionComment(comment, next.project.id);
   return next;
 }
 
@@ -113,6 +133,50 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
   };
 
   switch (op.type) {
+    case "design.compare":
+    case "design.respond": {
+      const comment = op.canonicalComment, expected = op.type === "design.compare" ? op.comparison : op.response;
+      if (!comment || comment.id !== op.commentId || comment.author.id !== actor.id || comment.designDecision?.opId !== envelope.id || !sameDesignValue(comment.designDecision.record, expected)) throw new OpValidationError("bad-op", "canonical comparison effect disagrees with intent");
+      validateDesignDecisionComment(comment, project.id);
+      return reduceOperation(state, { ...envelope, op: { type: "comment.restore", threadId: op.threadId, comment } });
+    }
+    case "design.decide": {
+      const effect = op.effect, record = effect?.comment.designDecision?.record;
+      if (!effect || Object.keys(effect).some((key) => !["edit", "threadId", "comment"].includes(key)) || effect.edit.type !== "item.edit" || Object.keys(effect.edit).some((key) => !["type", "itemId", "version", "expectedVersionId", "expectedMetadata", "patch"].includes(key)) || effect.threadId !== op.threadId || effect.comment.id !== op.commentId || effect.comment.author.id !== actor.id || effect.comment.designDecision?.opId !== envelope.id || record?.kind !== "adoption-decision" || !sameDesignValue(record.input, op.decision) || effect.edit.itemId !== op.decision.basis.target.artifact.itemId || effect.edit.version.id !== op.decision.versionId || effect.edit.version.blobHash !== record.adopted.blobHash || Object.keys(effect.edit.patch).length || !sameDesignValue(effect.edit.expectedMetadata, { title: op.decision.basis.target.title, properties: op.decision.basis.target.properties }) || !designTargetMatches(canvas, op.decision.basis.target)) throw new OpValidationError("edit-conflict", "canonical adoption pair disagrees or its approved target changed");
+      validateDesignDecisionComment(effect.comment, project.id);
+      if (record.input.source.kind === "comparison") {
+        const source = record.input.source.source, sourceComment = canvas.threads[source.threadId]?.comments.find((c) => c.id === source.commentId);
+        if (source.threadId !== op.threadId || !sourceComment || !sameDesignValue(sourceComment.designDecision?.record, record.comparison) || sourceComment.body !== designDecisionMarkdown(record.comparison) || !sameDesignValue(sourceComment.author, record.recommendationAuthor)) throw new OpValidationError("bad-op", "canonical adoption source or recommendation author disagrees");
+      } else if (!sameDesignValue(record.recommendationAuthor, { id: actor.id, name: actor.name })) throw new OpValidationError("bad-op", "direct recommendation author disagrees");
+      const retained = effect.comment.designReferences!.find((r) => sameDesignValue(r.artifact, record.adopted))!;
+      const { createdAt: _createdAt, createdBy: _createdBy, ...version } = retained.version;
+      if (!sameDesignValue(effect.edit.version, version) || effect.edit.expectedVersionId !== record.input.basis.target.artifact.versionId || effect.comment.createdAt !== ts || !sameDesignValue(effect.comment.author, { id: actor.id, name: actor.name })) throw new OpValidationError("bad-op", "canonical edit differs from its retained adopted version");
+      const edited = reduceOperation(state, { ...envelope, actor: { id: actor.id, name: actor.name }, op: effect.edit })!;
+      const next = reduceOperation(edited, { ...envelope, op: { type: "comment.restore", threadId: effect.threadId, comment: effect.comment } })!;
+      return { ...next, project: { ...next.project, lastOp: op.type } };
+    }
+    case "design.restore": {
+      const e = op.effect, current = canvas.threads[e.threadId]?.comments.find((c) => c.id === e.commentId) ?? null;
+      if (!designTargetMatches(canvas, e.target) || !canvas.threads[e.threadId] || !sameDesignValue(current, e.expectedComment) || e.item.itemId !== e.target.artifact.itemId || e.comment && e.comment.id !== e.commentId || e.comment === null && e.expectedComment === null) throw new DesignRestoreConflict("The adopted target or decision comment changed; neither half was restored.");
+      if (Object.keys(e).some((key) => !["target", "item", "threadId", "commentId", "expectedComment", "comment"].includes(key)) || e.item.type !== "item.removeVersion" && e.item.type !== "item.restoreVersion") throw new DesignRestoreConflict("Invalid paired restoration.");
+      const original = e.expectedComment ?? e.comment, record = original?.designDecision?.record;
+      if (!original || record?.kind !== "adoption-decision") throw new DesignRestoreConflict("Paired restoration requires its original decision.");
+      validateDesignDecisionComment(original, project.id);
+      const adopted = original.designReferences!.find((r) => sameDesignValue(r.artifact, record.adopted))!.version;
+      const removing = e.item.type === "item.removeVersion";
+      if (Object.keys(e.item).some((key) => !(removing ? ["type", "itemId", "versionId", "prevCurrentVersionId", "patch"] : ["type", "itemId", "version", "patch"]).includes(key))) throw new DesignRestoreConflict("Unknown paired restoration semantics.");
+      if (!sameDesignValue(e.target, { ...record.input.basis.target, artifact: removing ? record.adopted : record.input.basis.target.artifact }) || e.item.patch && Object.keys(e.item.patch).length || e.item.type === "item.removeVersion" && (e.comment !== null || e.item.versionId !== record.adopted.versionId || e.item.prevCurrentVersionId !== record.input.basis.target.artifact.versionId) || e.item.type === "item.restoreVersion" && (e.expectedComment !== null || !sameDesignValue(e.item.version, adopted))) throw new DesignRestoreConflict("Restoration disagrees with its exact original target/comment pair.");
+      const edited = reduceOperation(state, { ...envelope, op: e.item })!;
+      const next = reduceOperation(edited, { ...envelope, op: e.comment ? { type: "comment.restore", threadId: e.threadId, comment: e.comment } : { type: "comment.remove", threadId: e.threadId, commentId: e.commentId } })!;
+      return { ...next, project: { ...next.project, lastOp: op.type } };
+    }
+    case "design.request":
+    case "design.receipt": {
+      if (!op.effect) throw new OpValidationError("bad-op", "design act requires its canonical writer effect");
+      validateDesignRecordEffect(state, envelope);
+      const next = reduceOperation(state, { ...envelope, op: op.effect });
+      return next && { ...next, project: { ...next.project, lastOp: op.type } };
+    }
     case "group.change": {
       const resolved = op.action.kind === "apply" ? op : resolveGroupOperation(state, op, { actor, ts, opId: envelope.id });
       if (resolved.action.kind !== "apply") throw new OpValidationError("bad-op", "unresolved group operation");
@@ -418,6 +482,22 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [thread.id]: thread } });
     }
 
+    case "questionnaire.ask":
+    case "questionnaire.answer": {
+      const thread = getThread(op.threadId);
+      if (thread.comments.some((c) => c.id === op.commentId)) throw new OpValidationError("duplicate-id", `comment id already exists: ${op.commentId}`);
+      const design = op.type === "questionnaire.ask" ? parseDesignQuestionSet(op.questions) : parseDesignResponse(op.response);
+      let body: string;
+      if (design.kind === "questions") body = questionnaireQuestionMarkdown(design, op.type === "questionnaire.ask" && !!op.legacySource);
+      else {
+        const source = questionnaireStates(state!.canvas).find((q) => q.source.threadId === design.question.threadId && q.source.commentId === design.question.commentId && q.source.payloadId === design.question.payloadId && q.source.revision === design.question.revision);
+        if (!source || source.questions.requestId !== design.requestId || source.questions.epoch !== design.epoch) throw new OpValidationError("bad-op", "questionnaire response source association disagrees");
+        body = designResponseMarkdown(design, source.questions);
+      }
+      const comment: Comment = { id: op.commentId, author: actor, body, createdAt: ts, design, designReferences: structuredClone(op.retainedReferences ?? []), ...(op.context ? { context: structuredClone(op.context) } : {}), ...(op.type === "questionnaire.ask" && op.legacySource ? { designLegacySource: structuredClone(op.legacySource) } : {}) };
+      validateQuestionnaireComment(comment, state!.project.id);
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [thread.id]: { ...thread, comments: [...thread.comments, comment] } } });
+    }
     case "thread.reply": {
       const thread = getThread(op.threadId);
       requireBody(op.comment.body);

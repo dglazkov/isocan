@@ -40,6 +40,12 @@ export function canEditNow(): boolean {
  * canvas.
  */
 export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string }[] = [
+  { what: "starting a design task", file: "components/DesignTaskPanel.tsx", gate: "startSource && canEdit" },
+  { what: "correcting a design task", file: "components/DesignTaskCard.tsx", gate: "edit && canEdit" },
+  { what: "design task lifecycle actions", file: "components/DesignTaskCard.tsx", gate: "canEdit && !checking && !edit && !mutation.pending" },
+  { what: "publishing design evidence", file: "components/DesignTaskCard.tsx", gate: "publishing && canEdit && actor" },
+  { what: "answering design questions", file: "components/QuestionnairePanel.tsx", gate: "active && canEdit" },
+  { what: "publishing design questions", file: "components/QuestionnairePanel.tsx", gate: "publishing && thread && canEdit" },
   { what: "group migration confirmation", file: "components/GroupMigration.tsx", gate: "{canEdit && <button" },
   {
     what: "the tool rail — the create actions: pen, text, comment, upload, site",
@@ -74,7 +80,7 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
   {
     what: "the stage composer — the editor pane, and editing a text node",
     file: "components/ArtifactStage.tsx",
-    gate: "const editable = editableText(current.mimeType) && canEdit;",
+    gate: "const editable = editableText(current.mimeType) && canEdit && !current.designRecord;",
   },
   {
     what: "the comment composer — a new thread",

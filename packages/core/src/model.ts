@@ -89,6 +89,8 @@ export interface VisualFace {
 }
 
 export interface ItemVersion {
+  /** Canonical design admission and flat retention; ordinary version input cannot supply this marker. */
+  designRecord?: import("./design-record.ts").DesignRecordMarker;
   id: string;
   /** sha256 of content; stored at blobs/<hash>.<ext>. The source face of the artifact. */
   blobHash: string;
@@ -209,6 +211,12 @@ export interface Comment {
   id: string;
   author: Actor;
   body: string;
+  /** Writer-owned comparisons and adoption facts; ordinary comment input cannot mint their authority. */
+  designDecision?: import("./design-decision.ts").DesignDecisionComment;
+  /** Immutable canonical questionnaire facts; ordinary comment writes cannot supply these. */
+  design?: import("./design-partner.ts").DesignQuestionSet | import("./design-partner.ts").DesignResponse;
+  designReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];
+  designLegacySource?: import("./questionnaire.ts").LegacyQuestionSource;
   /** Actor ids @-mentioned in the body, resolved at authoring time against
    * the actors the author could see. Absent on older comments. */
   mentions?: string[];

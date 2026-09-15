@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { Markdown } from "../lib/markdown.tsx";
-import type { DesignDoc, DesignTypography } from "@isocan/core";
+import type { Actor, DesignDoc, DesignTypography } from "@isocan/core";
 import { bySeverity, checkDesign, parseDesign, parseHex, resolveToken } from "@isocan/core";
+import { readDesignDirection } from "@isocan/core/design-direction";
 import {
   componentCss,
   componentShape,
@@ -32,7 +33,7 @@ import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
  * repo's own `contrastRatio`, so a palette that cannot carry text says so here
  * rather than in an audit three weeks later.
  */
-function DesignSystemViewInner({ canvasId, blobHash }: { canvasId: string; blobHash: string }) {
+function DesignSystemViewInner({ canvasId, blobHash, author }: { canvasId: string; blobHash: string; author?: Actor | undefined }) {
   const [load, setLoad] = useState<TextLoad>(() => {
     const cached = peekBlobText(canvasId, blobHash);
     return cached === undefined ? null : { text: cached };
@@ -70,9 +71,12 @@ function DesignSystemViewInner({ canvasId, blobHash }: { canvasId: string; blobH
   if (!parsed) return <div className="file-view">…</div>;
 
   const doc = parsed;
+  const direction = readDesignDirection(doc);
   return (
     <div className="ds-view">
       <Masthead doc={doc} />
+      {direction.status === "valid" && <section className="ds-section"><h3>{direction.direction.stage === "accepted" ? "Accepted treatments · authored record" : "Provisional direction"}</h3><p>{direction.direction.rationale}</p>{author && <small>Written by {author.name}</small>}<ol>{direction.direction.taskHierarchy.map((step, index) => <li key={index}>{step}</li>)}</ol><details><summary>Reusable decisions</summary><p>{direction.direction.layout}</p><p>{direction.direction.density}</p><p>{direction.direction.typography}</p><p>{direction.direction.palettePurpose}</p>{direction.direction.treatments.map((treatment) => <p key={treatment.name}><strong>{treatment.name}</strong> · {treatment.guidance}<br /><small>{treatment.states.join(" · ")}</small></p>)}</details></section>}
+      {direction.status === "malformed" && <section className="ds-problems"><h3>Direction could not be read</h3><p>{direction.problems.join(" ")}</p></section>}
       <Findings doc={doc} />
       {doc.problems.length > 0 && (
         <section className="ds-problems">

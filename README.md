@@ -207,6 +207,38 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   typed, and everything that follows is attributed and undoable like any other
   work. isocan draws the button, from an icon set it ships; a tool runs no code
   and cannot add an operation.
+- **Design questions with durable answers**: the dock and `design ask`,
+  `design answer` and `design questions` share validated question and response
+  records. A named person's choice, text, skip, dismissal or delegation resolves
+  a question; another agent's progress update does not. Attachments retain their
+  exact uploaded versions, and `design reference` opens those bytes after later
+  edits. The dock keeps drafts and retry identities across refresh. Legacy
+  questionnaires remain readable and need explicit adoption before typed
+  answers can resolve them.
+- **A shared design task**: start from a chat message or `design start`, correct
+  the compact brief and continue through either entrance without repeating
+  settled questions. The shared procedure asks only about missing consequential
+  facts, with zero to three initial canvas questions. Saved outputs carry separate
+  receipts naming what was checked; missing browser inspection stays an unverified
+  draft, and changed inputs make affected evidence stale. Automatic enrollment
+  is opt-in through the canvas's `design.workflow=adaptive-v1` property. Turning
+  it off preserves existing briefs, answers and receipts; manual starts and
+  continuation remain available. Independent design-quality improvements still
+  require controlled evaluation.
+- **Design systems that carry forward**: inspect the actual scoped source,
+  record a provisional direction or reusable treatments, and carry those choices
+  into later screens through the browser or CLI. Working-file projections keep
+  their original version and preserve edits when the source changes. Inspect
+  three runnable receiving, editorial and campaign references with their design
+  rationale. Library creation uses groups for explicit scope; legacy canvases
+  retain previews, downloads and source editing until migrated.
+- **Useful alternatives and durable choices**: agents publish exact working
+  wireframes or visual directions with a recommendation and tradeoffs. Try each,
+  choose, delegate or ask for more or a specific combination. Adopting a choice
+  keeps the brief and rejected options, with one Undo for the target and decision.
+  Corrections preserve history, and later agents can read the accepted rationale.
+  Drafts keep the version you reviewed; pending choices remain recoverable after
+  refresh or source removal. The CLI uses the same compare/respond/decide acts.
 - **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
   canvases you were on lately, most recent first, then the rest by activity,
   with a field that finds one from a few letters (`lkh` reaches "Lake House";
@@ -585,6 +617,18 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   stranger with none of your personas, and whether a stranger gets in is what
   the link grant decides. The two gestures compose, and neither pretends to be
   the other.
+- **Your bench**: a standing agent belongs to a canvas; the agents *you have*
+  belong to you. Click your own face and pick **"Your bench…"**, or run
+  `isocan bench`, for a row per agent — its name, its harness, where it stands,
+  and **whether anything could answer for it right now**. That last column is
+  measured every time you look and has three answers, never two: *ready*,
+  *elsewhere* (it stands somewhere, but nothing is parked — a summons lands in
+  silence), and *unreachable* (nothing present can run it at all). The bench
+  itself is your own private canvas, so it follows you between machines instead
+  of dying with the laptop it was made on. `isocan bench add <name>` takes the
+  agent from what this machine already knows and `isocan bench rm <name>` takes
+  it off — and a row confers nothing either way: it does not enrol an agent,
+  and removing it withdraws nothing.
 - **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
   can be told what to care about — `--item <ref>` and `--op item.addVersion`
   (or a family, `item.*`) narrow which changes wake it, so a watcher does not
@@ -710,6 +754,12 @@ isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
 isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
                                    # what each has proved; end one
+isocan bench [add <name> [--actor <id>] [--harness <n>] [--runs-at <label>]]
+             [rm <name>]           # the agents you have, and whether anything
+                                   # could answer for one right now: ready /
+                                   # elsewhere / unreachable. A row is a
+                                   # record — it enrols nobody, and removing
+                                   # it withdraws nobody.
 isocan canvas create|list [--all]|show|edit|delete
 isocan use <canvas> [--home]      # bind this dir to a canvas (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
@@ -733,6 +783,30 @@ isocan activity [who] [-n N]           # what has been happening here, newest fi
 isocan design [--css|--tokens] · design set <file> · design check
 #   the canvas's own design system: a DESIGN.md whose front matter is
 #   typed design tokens (W3C-compatible) and whose sections are the reasoning
+isocan design direction [intent.json] [--in <group>|--item <item>] --json
+isocan design recipes --json
+isocan design recipe receiving --out ./receiving-reference
+isocan design project ./design-work [--in <group>|--item <item>]
+isocan design reconcile ./design-work --json
+#   working DESIGN.md and source manifest retain the original conditional base;
+#   uncertain saves retain their exact intent; accepted content and current context differ
+isocan design workflow [request] --json  # shared procedure, policy and resumable tasks
+isocan design start request.json --json
+isocan design brief <request> --json
+isocan design brief --update correction.json --json
+isocan design brief --resume continuation.json --json
+isocan design brief --cancel cancellation.json --json
+isocan design brief --complete completion.json --json
+isocan design receipt <request> --json
+isocan design receipt --publish evidence.json --json
+#   retain the same intent IDs on retry; completion and verification are separate
+isocan design questions [payload] [--respondents] --json
+isocan design ask questions.json --thread <thread> --json
+isocan design answer <payload> --id <stable-answer-id> --question <id> --text "…"
+isocan design answer --file saved-response.json --json
+isocan design reference <thread> <comment> <reference> --out sketch.svg --json
+#   structured questions use a current brief and named human respondent;
+#   preserve the saved payload ID on retry; exact reference bytes survive edits
 isocan design audit [--item <item>|--in <group>] [--json] [--fail]
 #   parsed HTML styling, source locations, token repair candidates and explicit
 #   coverage; each screen names its governing system and captured versions,
@@ -794,6 +868,24 @@ without installing packages or applying fixes. Reports are advisory and expose
 incomplete coverage; zero findings does not establish design-policy compliance.
 The [optional-tool research](docs/research/2026-09-14-optional-project-linters.md)
 records compatibility proofs, limits and recommendations for other technologies.
+
+The source checkout also includes a repair-evaluation dry run. Choose a fresh
+output directory:
+
+```sh
+node scripts/design-lint-eval.mjs --dry-run --out /tmp/acme-design-eval
+```
+
+It exercises six fixtures in 36 canned runs through a real local daemon, Chrome
+and conditional repair, with zero evaluation model calls. It proves the harness;
+it does not infer model lift or human ratings. Model mode requires a separately
+user-approved budget. See the [evaluation plan](docs/projects/design-lint/evaluation.md)
+and [measured results](docs/research/2026-09-14-design-lint-evaluation.md).
+For the documented pilot's verified zero-token login refusal, model mode also
+accepts `--continue-from <prior-output-directory>` with a fresh `--out`. It
+retains the original budget and used invocation count and claims one successor;
+its narrow eligibility rules are part of the evaluation plan.
+
 
 ## Architecture
 

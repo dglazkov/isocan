@@ -7,6 +7,9 @@
 // JSON line each, appended, because the rc reads the transcript while a turn
 // runs and two processes must not rewrite one file. Only the verbs that
 // change state write it, and by rename, so a reader never sees half of it.
+// Each mutation also holds a process-shared lock and reads the latest state:
+// atomic rename alone lets concurrent removals both accept a stale snapshot.
+// The lock never spans stdin, a birth's delay, or a running turn.
 // A turn appends a tool call and a reply to the sheep's transcript, the way
 // pi's entries look in `sheep log --json`, so the rc's tool beats have
 // something to read.
@@ -32,7 +35,7 @@
 // `new --secret` the way a `sheep` or a home from before sheep#5 does: the
 // sheep is minted, exit 0, stdin is never read, and its row has no
 // `secrets` field.
-import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from "node:fs";
 
 const file = process.env.FAKE_SHEEP_STATE;
 const load = () => {
@@ -46,6 +49,29 @@ let state = load();
 const save = () => {
   writeFileSync(`${file}.${process.pid}`, JSON.stringify(state, null, 2));
   renameSync(`${file}.${process.pid}`, file);
+};
+/** Serialize only synchronous state mutations, reloading after acquisition. */
+const change = async (mutate) => {
+  const lock = `${file}.lock`;
+  const deadline = Date.now() + 5000;
+  while (true) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      if (Date.now() > deadline) throw new Error("fake sheep: state mutation lock timed out");
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+  try {
+    state = load();
+    const result = mutate();
+    save();
+    return result;
+  } finally {
+    rmdirSync(lock);
+  }
 };
 const argv = process.argv.slice(2);
 const stdin = async () => {
@@ -96,16 +122,13 @@ if (verb === "ls") {
 } else if (verb === "pasture" && sub === "ls") {
   for (const name of Object.keys(state.pastures)) process.stdout.write(`${name}\t2026-09-10T00:00:00.000Z\n`);
 } else if (verb === "pasture" && sub === "new") {
-  state.pastures[argv[2]] = { tree: {}, secrets: {} };
-  save();
+  await change(() => { state.pastures[argv[2]] = { tree: {}, secrets: {} }; });
 } else if (verb === "pasture" && sub === "put") {
   call.stdin = await stdin();
-  state.pastures[argv[2]].tree[argv[3]] = call.stdin;
-  save();
+  await change(() => { state.pastures[argv[2]].tree[argv[3]] = call.stdin; });
 } else if (verb === "pasture" && sub === "secret" && argv[2] === "set") {
   call.stdin = await stdin();
-  state.pastures[argv[3]].secrets[argv[4]] = call.stdin.trim();
-  save();
+  await change(() => { state.pastures[argv[3]].secrets[argv[4]] = call.stdin.trim(); });
 } else if (verb === "new") {
   const names = state.noSheepSecrets ? [] : flags("--secret");
   let values = [];
@@ -121,74 +144,92 @@ if (verb === "ls") {
     }
   }
   if (state.newMs) {
-    state.minting = true;
-    save();
-    await new Promise((resolve) => setTimeout(resolve, state.newMs));
-    state = load();
+    const delay = await change(() => {
+      state.minting = true;
+      return state.newMs;
+    });
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  const id = await change(() => {
     delete state.minting;
-  }
-  const id = `s_${state.next++}`;
-  const row = { id, name: flag("--name") ?? null, pasture: flag("--pasture") ?? null, createdAt: Date.now(), state: "idle", task: null, setup: null };
-  if (!state.noSheepSecrets) row.secrets = [...names].sort();
-  state.sessions.unshift(row);
-  if (names.length > 0) {
-    state.sheepSecrets ??= {};
-    state.sheepSecrets[id] = Object.fromEntries(names.map((name, i) => [name, values[i]]));
-  }
-  // With a prompt, the turn it starts; `--detach` with none only mints.
-  if (after() !== undefined) {
-    entry(id, "user", after());
-    entry(id, "assistant", [{ type: "text", text: "ready" }]);
-  }
-  save();
+    const id = `s_${state.next++}`;
+    const row = { id, name: flag("--name") ?? null, pasture: flag("--pasture") ?? null, createdAt: Date.now(), state: "idle", task: null, setup: null };
+    if (!state.noSheepSecrets) row.secrets = [...names].sort();
+    state.sessions.unshift(row);
+    if (names.length > 0) {
+      state.sheepSecrets ??= {};
+      state.sheepSecrets[id] = Object.fromEntries(names.map((name, i) => [name, values[i]]));
+    }
+    // With a prompt, the turn it starts; `--detach` with none only mints.
+    if (after() !== undefined) {
+      entry(id, "user", after());
+      entry(id, "assistant", [{ type: "text", text: "ready" }]);
+    }
+    return id;
+  });
   process.stdout.write(`${id}\n`);
 } else if (verb === "attach") {
   const id = argv[argv.indexOf("--") - 1];
-  if (!find(id)) await finish(2, `sheep: no session ${id}`);
-  if (state.attachMs) {
+  const started = await change(() => {
+    if (!find(id)) return null;
+    if (state.attachMs) find(id).state = "busy";
+    return { delay: state.attachMs ?? 0 };
+  });
+  if (!started) await finish(2, `sheep: no session ${id}`);
+  if (started.delay) {
     // A turn that takes a while: busy while it runs, and stopped with no
     // reply when `rm` (exit 1) or `abort` (exit 0) lands under it.
-    find(id).state = "busy";
-    save();
-    const until = Date.now() + state.attachMs;
+    const until = Date.now() + started.delay;
     while (Date.now() < until) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       state = load();
       if (!find(id)) await finish(1, "sheep: the session ended");
       if (find(id).state !== "busy") await finish(0, "");
     }
-    state = load();
-    find(id).state = "idle";
   }
   const json = argv.includes("--json");
-  const land = (e) => {
-    if (json) process.stdout.write(`${JSON.stringify(e)}\n`);
-  };
-  // The first turn in a fresh sheep is where its pasture's setup runs.
-  if (find(id).setup === null) find(id).setup = { state: "ok", at: Date.now(), ms: 1 };
-  land(entry(id, "user", after() ?? ""));
-  land(entry(id, "assistant", [{ type: "toolCall", id: "t1", name: "bash", arguments: { command: 'isocan comment reply th_1 "on it"' } }]));
-  land(entry(id, "assistant", [{ type: "text", text: "on it" }]));
-  save();
+  const landed = await change(() => {
+    const sheep = find(id);
+    if (!sheep) return null;
+    if (started.delay && sheep.state !== "busy") return [];
+    sheep.state = "idle";
+    // The first turn in a fresh sheep is where its pasture's setup runs.
+    if (sheep.setup === null) sheep.setup = { state: "ok", at: Date.now(), ms: 1 };
+    return [
+      entry(id, "user", after() ?? ""),
+      entry(id, "assistant", [{ type: "toolCall", id: "t1", name: "bash", arguments: { command: 'isocan comment reply th_1 "on it"' } }]),
+      entry(id, "assistant", [{ type: "text", text: "on it" }]),
+    ];
+  });
+  if (landed === null) await finish(1, "sheep: the session ended");
+  if (landed.length === 0) await finish(0, "");
+  if (json) for (const e of landed) process.stdout.write(`${JSON.stringify(e)}\n`);
   if (!json) process.stdout.write("on it\n");
 } else if (verb === "rm") {
   const id = target();
-  const sheep = find(id);
-  if (state.oldHome) await finish(2, sheep ? "sheep: not found" : "sheep: unknown session");
-  if (!sheep) await finish(2, `sheep: no session ${id} at this home; \`sheep ls\` lists the ones there are`);
-  const aborted = sheep.state === "busy";
-  state.sessions = state.sessions.filter((s) => s.id !== id);
-  delete state.entries[id];
-  if (state.sheepSecrets) delete state.sheepSecrets[id];
-  save();
-  process.stdout.write(argv.includes("--json") ? `${JSON.stringify({ id, ended: true, aborted })}\n` : `${id}\tended\n`);
+  const result = await change(() => {
+    const sheep = find(id);
+    if (state.oldHome) return { error: sheep ? "sheep: not found" : "sheep: unknown session" };
+    if (!sheep) return { error: `sheep: no session ${id} at this home; \`sheep ls\` lists the ones there are` };
+    const aborted = sheep.state === "busy";
+    state.sessions = state.sessions.filter((s) => s.id !== id);
+    delete state.entries[id];
+    if (state.sheepSecrets) delete state.sheepSecrets[id];
+    return { id, ended: true, aborted };
+  });
+  if (result.error) await finish(2, result.error);
+  process.stdout.write(argv.includes("--json") ? `${JSON.stringify(result)}\n` : `${id}\tended\n`);
 } else if (verb === "abort") {
   const id = target();
-  const sheep = find(id);
-  if (!sheep) await finish(2, "sheep: unknown session");
-  if (sheep.state === "busy") {
+  const result = await change(() => {
+    const sheep = find(id);
+    if (!sheep) return "missing";
+    if (sheep.state !== "busy") return "idle";
     sheep.state = "idle";
-    save();
+    return "aborted";
+  });
+  if (result === "missing") await finish(2, "sheep: unknown session");
+  if (result === "aborted") {
     process.stdout.write(`${id}\taborted op_1\n`);
   } else {
     process.stdout.write(`${id}\tidle\n`);

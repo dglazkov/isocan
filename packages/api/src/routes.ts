@@ -1,5 +1,9 @@
 import { SOURCE_POLICY_HEADER, sourcePolicyHeader, parseSourcePolicyHeader, sourceClassificationRoute, SOURCE_ACCESS_ROUTE, personalRoute, personalCanvasRoute, personalDelegatesRoute, type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "@isocan/core";
 import { inboxRoute, type InboxResponse } from "@isocan/core";
+import { rcAnsweringRoute } from "@isocan/core";
+import { questionnaireActorsRoute } from "@isocan/core/questionnaire";
+import { designRequestsRoute, type DesignRecordOperation, type DesignRequestsResponse } from "@isocan/core/design-request";
+import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core/design-decision";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type {
   Actor,
@@ -79,7 +83,7 @@ import {
   BADGE_ENDED,
   PUBLIC_CANVASES_ROUTE,
   publicListingRoute,
-  CANVAS_GROUPS_FEATURE,
+  CURRENT_CLIENT_FEATURES,
   CLIENT_FEATURES_HEADER,
   canvasContextRoute,
   commentContextRoute,
@@ -295,7 +299,7 @@ export class DaemonRoutes {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, ...extra, ...this.policyHeaders() };
+      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...extra, ...this.policyHeaders() };
       signal?.throwIfAborted();
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url}`, {
@@ -521,6 +525,8 @@ export class DaemonRoutes {
     originGroupMode?: "legacy" | "groups",
     /** A canvas's birth space at its home; only valid with project.create. */
     spaceId?: string,
+    /** Retain one caller-owned identity across uncertain conditional-edit delivery. */
+    opId?: string,
   ): Promise<PostOpResponse> {
     const origin = originGroupMode ?? (canvasId ? this.observedGroupModes.get(canvasId) : undefined);
     return this.request("POST", "/api/ops", {
@@ -530,9 +536,49 @@ export class DaemonRoutes {
       ...(clientId !== undefined ? { clientId } : {}),
       ...(home !== undefined ? { home } : {}),
       ...(spaceId !== undefined ? { spaceId } : {}),
+      ...(opId !== undefined ? { opId } : {}),
       ...(group !== undefined ? { group } : {}),
       ...(origin !== undefined ? { originGroupMode: origin } : {}),
     });
+  }
+
+  /** Refusing questionnaire acts retain their canonical type and caller-owned retry ID. */
+  questionnaire(
+    canvasId: string,
+    actor: Actor,
+    op: Extract<Operation, { type: "questionnaire.ask" | "questionnaire.answer" }>,
+    opId: string,
+    originGroupMode?: "legacy" | "groups",
+  ): Promise<PostOpResponse> {
+    const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) });
+  }
+
+  /** Writer-resolved eligibility; a missing agent display badge does not imply a human. */
+  questionnaireActors(canvasId: string): Promise<{ actors: Array<{ id: string; name: string; kind: "human" | "agent" | "unknown" }> }> {
+    return this.request("GET", questionnaireActorsRoute(canvasId));
+  }
+
+  /** Only canonical admitted records contribute continuation, budget and lifecycle eligibility. */
+  designRequests(canvasId: string, signal?: AbortSignal): Promise<DesignRequestsResponse> {
+    return this.request("GET", designRequestsRoute(canvasId), undefined, signal);
+  }
+
+  /** Canonical comparisons and decision history keep actual authorship separate from currentness. */
+  designDecisions(canvasId: string, signal?: AbortSignal): Promise<DesignDecisionsResponse> {
+    return this.request("GET", designDecisionsRoute(canvasId), undefined, signal);
+  }
+
+  /** Stable comparison, non-adopting response and paired adoption intents use the existing writer. */
+  designDecision(canvasId: string, actor: Actor, op: Extract<Operation, { type: "design.compare" | "design.respond" | "design.decide" }>, opId: string, signal?: AbortSignal): Promise<PostOpResponse> {
+    const origin = this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) }, signal);
+  }
+
+  /** Stable public request/receipt intent reaches the ordinary serialized operation writer. */
+  designRecord(canvasId: string, actor: Actor, op: DesignRecordOperation, opId: string, originGroupMode?: "legacy" | "groups"): Promise<PostOpResponse> {
+    const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) });
   }
 
   // ---- presence sessions ----
@@ -1128,9 +1174,10 @@ export class DaemonRoutes {
   }
 
   /** Who a live rc answers for on this canvas — and whether any is parked at
-   * all, here or relayed from a member's machine. */
+   * all — as the canvas's home has it: a daemon that is not the home asks the
+   * home and folds in its own holds (issue #306). */
   rcAnswering(canvasId: string): Promise<RcAnsweringResponse> {
-    return this.request("GET", `/api/projects/${canvasId}/rc`);
+    return this.request("GET", rcAnsweringRoute(canvasId));
   }
 
   undo(canvasId: string, actor: Actor): Promise<LogEntry> {

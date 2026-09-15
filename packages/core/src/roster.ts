@@ -1,4 +1,5 @@
 import type { CanvasContents, CommentThread } from "./model.ts";
+import { questionnaireStates, parseLegacyQuestionnaire } from "./questionnaire.ts";
 import type { PresenceSession } from "./protocol.ts";
 import { collectCanvasActors } from "./mentions.ts";
 import { recentActivity, type ActivityEntry } from "./activity.ts";
@@ -80,11 +81,13 @@ interface OpenAsk {
 export function openAsk(thread: CommentThread): OpenAsk | null {
   for (let i = thread.comments.length - 1; i >= 0; i--) {
     const comment = thread.comments[i]!;
+    if (comment.design) continue;
+    if (thread.comments.some((later) => later.designLegacySource?.threadId === thread.id && later.designLegacySource.commentId === comment.id)) continue;
     const match = comment.body.match(/^\/ask\b\s*([\s\S]*)$/);
     if (match) {
       // Open iff nothing after it is somebody else speaking — the asker
       // amending their own question keeps it open.
-      const answered = thread.comments
+      const answered = !parseLegacyQuestionnaire(comment.body) && thread.comments
         .slice(i + 1)
         .some((later) => later.author.id !== comment.author.id);
       return answered
@@ -103,10 +106,12 @@ export function openAsk(thread: CommentThread): OpenAsk | null {
 /** Every open question on the canvas, newest first. */
 export function openAsks(canvas: CanvasContents): OpenAsk[] {
   const open: OpenAsk[] = [];
+  const typed = questionnaireStates(canvas);
   for (const thread of Object.values(canvas.threads)) {
     const ask = openAsk(thread);
-    if (ask) open.push(ask);
+    if (ask && !typed.some((row) => row.legacySource?.threadId === ask.threadId && row.legacySource.commentId === ask.commentId)) open.push(ask);
   }
+  open.push(...typed.filter((row) => row.status === "open").map((row) => ({ threadId: row.source.threadId, commentId: row.source.commentId, askerId: row.author.id, body: row.questions.headline })));
   return open.reverse();
 }
 

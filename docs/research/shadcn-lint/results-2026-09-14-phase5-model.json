@@ -1,0 +1,454 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-14",
+  "phase": "design-lint phase 5",
+  "status": "PART-DONE",
+  "remaining": "18 pairs of blind human intent and preference ratings; no further model calls needed",
+  "source": {
+    "node": "v24.13.0",
+    "gitRevision": "4832d8a2029798983c8ac5922cb137be0b64997f",
+    "hashes": {
+      "scripts/design-lint-eval.mjs": "a418c7ffa178507b8c31a5dc55b23438593489d9d00ca6e9ba7cccc300feee73",
+      "scripts/lib/design-lint-eval-runner.mjs": "f1ec675f34300371724d7f2190c99fec276b7885551b0cee261e8fea14605d47",
+      "scripts/lib/design-lint-eval-model.mjs": "e05c95af4a09796d63a4349fb6600e3a4a1dd9094a63eb92d20e81a910aebdcd",
+      "scripts/lib/design-lint-eval-browser.mjs": "5f778e2ddbf58b3cad8af5ec6b4bd11554d733796b8db71707bc61abdc6d0718",
+      "scripts/lib/design-lint-eval-score.mjs": "2abc54f1af668819f4da3cdf7b73d6ed5b119ecaa32ec904518993bb55b3b6a8",
+      "scripts/lib/browser.mjs": "f93e28691de92d921f77bff05b4c7119bf6b3f90b80908c4031aa81d8a4733d9",
+      "packages/core/src/designaudit.ts": "8d2d3ab5091133c59cd1baf6ea1df97e7ffcdfeef0e2dc4ad9e64738d7fd8b56",
+      "packages/core/src/design-contract.ts": "26cc06cc9a514cc87cf454a1e4d6324bf91ec01295726fa001b79b948ce775df",
+      "packages/core/src/design-contract-rules.ts": "a3b0100e03bea83d13d74a54c846010936461034994dcb156b4ab10befbb9858",
+      "packages/core/src/designmd.ts": "fa81c2459ab9d128e7576d3ad539d6d1a9414c0e105cd7dad0e14dcf2dad1cff",
+      "packages/core/src/tokens.ts": "e4af2ceaaab9f144833f098986e2cdc3362fbf646faae6ef4b683deb675fe1ac",
+      "packages/core/src/memory.ts": "66973da3b310abdd5750df16b13dd2e8e07128ae3f30f0d376cd7e0fc70508ac",
+      "packages/core/src/designsystem.ts": "2d8767c67190de251941870b56b1ddbb2c061ea2b8583c19ea2e8dfa808773e6",
+      "packages/core/src/canvas-scope.ts": "6cdcd1b0b2160efb3ed35c6502fb98b9afe013eb8024061c0e6667ff0e85c520",
+      "packages/api/src/context-reader.ts": "b7b9ec1a4c67b365c38be23b14601db226667f0c988ad7c602e14d7762e22715",
+      "packages/api/src/design-audit-reader.ts": "f6853916146a300d26c789edab5a2883ef5a32e26aab609b7c77976709dfc316",
+      "packages/api/src/design-audit.ts": "e7a3c81ef849b0129ca5d5538adb04dca01de73dc5344059e4f36bb109a8a30f",
+      "packages/api/src/connect.ts": "d27a9aa14e5d6258a94543caa3993f42cbb6483957c1a6beb1801fb0bc46f80f",
+      "package-lock.json": "2a3f6add6d3fff24d765e50c9bcbd37b3dc642b2958f76b039c762a0e4318151"
+    },
+    "boundary": "Required named harness, scorer, parser, governing resolver and API sources plus dependency lock; not a transitive fingerprint of every daemon/platform input."
+  },
+  "frozenFixtureAggregateSha256": "00ba41f97cdfebcd200113b7605d59cb211bb3345b10c9089fc290ee528d17b9",
+  "model": {
+    "model": "claude-sonnet-5",
+    "outputTokens": 8192,
+    "effort": "high",
+    "maxTurns": 1,
+    "retries": 0,
+    "tools": [],
+    "maxCalls": 72
+  },
+  "preflight": {
+    "available": true,
+    "version": "2.1.269 (Claude Code)",
+    "helpSha256": "ae85d661e9c086f05637ebcd868f5702b477ff6e55e2e65b8ada7807cd51a4b6",
+    "model": {
+      "model": "claude-sonnet-5",
+      "outputTokens": 8192,
+      "effort": "high",
+      "maxTurns": 1,
+      "retries": 0,
+      "tools": [],
+      "maxCalls": 72
+    },
+    "auth": {
+      "available": true,
+      "loggedIn": true,
+      "authMethod": "claude.ai",
+      "apiProvider": "firstParty",
+      "subscriptionType": "max",
+      "exitCode": 0
+    },
+    "isolation": {
+      "flags": [
+        "--tools",
+        "",
+        "--safe-mode",
+        "--strict-mcp-config",
+        "--mcp-config",
+        "{\"mcpServers\":{}}",
+        "--setting-sources",
+        "",
+        "--disable-slash-commands",
+        "--no-chrome",
+        "--no-session-persistence",
+        "--permission-mode",
+        "dontAsk"
+      ],
+      "environmentKeys": [
+        "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS",
+        "CLAUDE_CODE_AUTO_CONNECT_IDE",
+        "CLAUDE_CODE_DISABLE_ADVISOR_TOOL",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        "CLAUDE_CODE_EFFORT_LEVEL",
+        "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+        "CLAUDE_CODE_MAX_RETRIES",
+        "CLAUDE_CODE_MAX_TURNS",
+        "CLAUDE_CODE_SAFE_MODE",
+        "CLAUDE_CODE_SKIP_PROMPT_HISTORY",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "PATH",
+        "TMPDIR",
+        "USER"
+      ],
+      "workingDirectory": "fresh empty scratch"
+    },
+    "contextBoundary": "Safe mode disables local customizations; admin-managed provider policy may still apply. Ordinary OS USER/HOME discovery is preserved; credentials are not copied or retained in evidence.",
+    "budgetBoundary": "CLI-reported estimated/API-equivalent token cost; admin-managed modelPricing can affect rates. Not billing evidence. Actual provider cap enforcement remains unmeasured."
+  },
+  "continuation": {
+    "kind": "zero-token-login-refusal",
+    "priorDirectory": "/private/tmp/isocan-phase5-model-pilot-20260914",
+    "priorReportSha256": "0bc758628683e4d29c1e9dcd80c39abb078d5d19090662c8c89f3a9e72e74dee",
+    "priorProviderRelativePath": "run-01/attempt-1/provider.json",
+    "priorProviderSha256": "3777c1a0ac1a9a414f36e575d62854bd0c5271c42184da8dd3ed80e1d3fcd0d0",
+    "priorInvocations": 1,
+    "priorReportedApiEquivalent": 0,
+    "fixedPerCall": 0.138888888,
+    "approvedAggregate": 10,
+    "approvedMaxInvocations": 72,
+    "maxAdditionalInvocations": 71,
+    "seed": "design-lint-pilot-v1",
+    "modelSpecSha256": "f98383b17d16ce7213d529b186b19d4bd190b34bfc7f981c0d3cdf266121fc39",
+    "comparisonBoundary": "Fresh 36 comparison rows; the zero-token login refusal remains in aggregate invocation lineage, outside model-effect rows.",
+    "claim": {
+      "path": "/private/tmp/isocan-phase5-model-pilot-20260914/continuation-claim.json",
+      "sha256": "280541557f159589bb4afd318aaed3745420063a12d36c80c238eac90c700af6",
+      "schemaVersion": 1,
+      "kind": "zero-token-login-refusal",
+      "outputDirectory": "/private/tmp/isocan-phase5-model-pilot-20260914-continued",
+      "priorReportSha256": "0bc758628683e4d29c1e9dcd80c39abb078d5d19090662c8c89f3a9e72e74dee",
+      "priorProviderSha256": "3777c1a0ac1a9a414f36e575d62854bd0c5271c42184da8dd3ed80e1d3fcd0d0",
+      "approvedAggregate": 10,
+      "approvedMaxInvocations": 72,
+      "fixedPerCall": 0.138888888,
+      "priorInvocations": 1,
+      "maxAdditionalInvocations": 71,
+      "createdAt": "2026-09-14T23:59:07.266Z"
+    }
+  },
+  "accounting": {
+    "cap": 10,
+    "fixedPerCall": 0.138888888,
+    "calls": 47,
+    "carriedInvocations": 1,
+    "newInvocations": 46,
+    "reportedApiEquivalent": 1.0796457999999998,
+    "knownReportedSubtotal": 1.0796457999999998,
+    "billedSpend": null,
+    "stopped": null,
+    "pending": false,
+    "costProvenance": "CLI-reported estimated/API-equivalent token cost; managed modelPricing may affect rates. Not billing evidence.",
+    "enforcement": "CLI cap requested; provider enforcement unmeasured until an approved run"
+  },
+  "accountingInterpretation": "All observed costs below allowance. Cap-boundary/provider invoice enforcement unmeasured; actual billed spend unknown. One prior zero-token login refusal plus 46 model calls.",
+  "summary": {
+    "schemaVersion": 1,
+    "mode": "model",
+    "verdict": "inconclusive",
+    "modelLift": null,
+    "reason": null,
+    "reasons": [
+      "Human intent and preference ratings are pending."
+    ],
+    "metrics": {
+      "rules-only": {
+        "runs": 18,
+        "completed": 14,
+        "medianRounds": 1,
+        "medianApiEquivalentCost": 0.020093800000000002,
+        "interactionFailures": 0,
+        "newUnexamined": 0
+      },
+      "diagnostics": {
+        "runs": 18,
+        "completed": 14,
+        "medianRounds": 1,
+        "medianApiEquivalentCost": 0.024904799999999998,
+        "interactionFailures": 0,
+        "newUnexamined": 0
+      }
+    },
+    "human": {
+      "available": false,
+      "intentLost": {
+        "rules-only": null,
+        "diagnostics": null
+      },
+      "preference": {
+        "rules-only": null,
+        "diagnostics": null,
+        "tie": null
+      }
+    },
+    "comparison": {
+      "completionDelta": 0,
+      "roundsReduction": 0,
+      "apiEquivalentCostReduction": -0.2394270869621473,
+      "objectiveThreshold": false,
+      "safeguards": false,
+      "ceilingEffect": false
+    },
+    "billedSpend": null
+  },
+  "byCondition": {
+    "rules-only": {
+      "calls": 23,
+      "totalEstimatedApiEquivalentCost": 0.4698914,
+      "medianTaskElapsedMs": 9350.540312000005,
+      "byTask": {
+        "button-treatment": {
+          "runs": 3,
+          "completed": 2
+        },
+        "card-spacing": {
+          "runs": 3,
+          "completed": 3
+        },
+        "clean-control": {
+          "runs": 3,
+          "completed": 0
+        },
+        "ink-reference": {
+          "runs": 3,
+          "completed": 3
+        },
+        "scoped-lane": {
+          "runs": 3,
+          "completed": 3
+        },
+        "type-shorthand": {
+          "runs": 3,
+          "completed": 3
+        }
+      }
+    },
+    "diagnostics": {
+      "calls": 23,
+      "totalEstimatedApiEquivalentCost": 0.6097544,
+      "medianTaskElapsedMs": 9758.211291499989,
+      "byTask": {
+        "button-treatment": {
+          "runs": 3,
+          "completed": 1
+        },
+        "card-spacing": {
+          "runs": 3,
+          "completed": 3
+        },
+        "clean-control": {
+          "runs": 3,
+          "completed": 1
+        },
+        "ink-reference": {
+          "runs": 3,
+          "completed": 3
+        },
+        "scoped-lane": {
+          "runs": 3,
+          "completed": 3
+        },
+        "type-shorthand": {
+          "runs": 3,
+          "completed": 3
+        }
+      }
+    }
+  },
+  "independentOutputVerification": {
+    "passed": true,
+    "purpose": "Independent comparison of actual saved evidence files, initial frozen inputs, policy histories, receipts and screenshot hashes. Actual pilot outputs, invocation lineage and cost are independently verified; human judgments remain pending.",
+    "runs": 36,
+    "freshCanvasIds": 36,
+    "candidateAttempts": 46,
+    "receiptCounts": {
+      "saved": 32,
+      "unchanged": 6,
+      "not-submitted": 8
+    },
+    "protectedDocumentSnapshots": 42,
+    "sourceHashesVerified": 19,
+    "reviewImageHashesVerified": 108,
+    "reviewPairs": 18,
+    "allActualHumanRatingsPending": true,
+    "modelCalls": 46,
+    "totalCliInvocationsIncludingPriorRefusal": 47,
+    "estimatedApiEquivalentCost": 1.0796458,
+    "verdict": "inconclusive",
+    "reportSha256": "0a0a4cb8ce5aa4842d81e08f4cc0c6690d73d2b2b12ad9eb76b9b98ad78b1e04"
+  },
+  "independentContinuationVerification": {
+    "passed": true,
+    "modelCalls": 0,
+    "syntheticAccounting": true,
+    "priorImmutableReportSha256": "0bc758628683e4d29c1e9dcd80c39abb078d5d19090662c8c89f3a9e72e74dee",
+    "priorImmutableProviderSha256": "3777c1a0ac1a9a414f36e575d62854bd0c5271c42184da8dd3ed80e1d3fcd0d0",
+    "remainingCalls": 71,
+    "perCall": 0.138888888,
+    "originalAggregate": 10,
+    "oneConcurrentClaimWinner": true,
+    "originalEvidenceUnmodified": true,
+    "invalidBudgetSeedModelUnknownCostAndChangedEvidenceRefused": true,
+    "isolatedAuth": {
+      "available": true,
+      "loggedIn": true,
+      "authMethod": "claude.ai",
+      "apiProvider": "firstParty",
+      "subscriptionType": "max",
+      "exitCode": 0
+    }
+  },
+  "archiveVerification": {
+    "passed": true,
+    "archive": "docs/research/shadcn-lint/phase5-model-pilot-2026-09-14.tar.gz",
+    "sha256": "9a3367e5ff3247ef7d2a4d126a60754d824d87e197343411a564311b029f6e22",
+    "bytes": 3744645,
+    "filesVerified": 1226,
+    "internalHardlinks": 821,
+    "freshExtraction": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase5-pilot-extracted-fjzq6245"
+  },
+  "reviewUi": {
+    "verifiedBy": "Conductor via live in-app browser DOM and screenshot",
+    "url": "http://127.0.0.1:8769/",
+    "sections": 18,
+    "selects": 54,
+    "pending": 54,
+    "images": 108,
+    "loaded": 108,
+    "conditionNamesInPage": false,
+    "agentSelections": 0,
+    "humanRatings": "pending",
+    "servedFiles": "Only original review.html and review-assets; report and arm key are excluded."
+  },
+  "failures": [
+    {
+      "runId": "run-01",
+      "taskId": "clean-control",
+      "condition": "rules-only",
+      "repetition": 3,
+      "violations": [
+        "unnecessary-clean-edit"
+      ]
+    },
+    {
+      "runId": "run-02",
+      "taskId": "clean-control",
+      "condition": "diagnostics",
+      "repetition": 3,
+      "violations": [
+        "unnecessary-clean-edit"
+      ]
+    },
+    {
+      "runId": "run-03",
+      "taskId": "button-treatment",
+      "condition": "rules-only",
+      "repetition": 3,
+      "violations": [
+        "compliance",
+        "unaccepted-receipt",
+        "render-or-interaction"
+      ]
+    },
+    {
+      "runId": "run-04",
+      "taskId": "button-treatment",
+      "condition": "diagnostics",
+      "repetition": 3,
+      "violations": [
+        "compliance",
+        "unaccepted-receipt",
+        "render-or-interaction"
+      ]
+    },
+    {
+      "runId": "run-23",
+      "taskId": "clean-control",
+      "condition": "rules-only",
+      "repetition": 2,
+      "violations": [
+        "unnecessary-clean-edit"
+      ]
+    },
+    {
+      "runId": "run-25",
+      "taskId": "clean-control",
+      "condition": "rules-only",
+      "repetition": 1,
+      "violations": [
+        "unnecessary-clean-edit"
+      ]
+    },
+    {
+      "runId": "run-26",
+      "taskId": "clean-control",
+      "condition": "diagnostics",
+      "repetition": 1,
+      "violations": [
+        "unnecessary-clean-edit"
+      ]
+    },
+    {
+      "runId": "run-34",
+      "taskId": "button-treatment",
+      "condition": "diagnostics",
+      "repetition": 2,
+      "violations": [
+        "compliance",
+        "unaccepted-receipt",
+        "render-or-interaction"
+      ]
+    }
+  ],
+  "verification": {
+    "modelCommandExit": 0,
+    "focusedTests": {
+      "passed": 63,
+      "files": 3,
+      "exitCode": 0
+    },
+    "fastSuite": {
+      "passed": 5409,
+      "skipped": 108,
+      "filesPassed": 530,
+      "durationSeconds": 180.42,
+      "exitCode": 0
+    },
+    "typecheckExit": 0,
+    "buildExit": 0,
+    "strictSuite": {
+      "command": "npm run test:ci -- --maxWorkers=6",
+      "localJreFirestoreAndBundleRequired": true,
+      "passed": 5966,
+      "skipped": 3,
+      "skipBoundary": "opt-in real-model/sandbox tests",
+      "filesPassed": 582,
+      "durationSeconds": 472.58,
+      "exitCode": 0
+    },
+    "recordGuards": {
+      "passed": 15,
+      "exitCode": 0
+    },
+    "bundle": {
+      "path": "packages/web/dist/assets/index-k3a2TSzf.js",
+      "rawBytes": 762574,
+      "gzipBytes": 258875,
+      "sha256": "75945c5fe067994f380c4dd265204ce1023bf728f0373c637fb89c9bf7b6c6cb"
+    },
+    "originMainChecked": "55e0cfa1193b454fcc9f59d641b65671663a1d4d",
+    "noSourceChangeSinceModelRun": true,
+    "extractedSummaryReplay": {
+      "passed": true,
+      "exitCode": 0,
+      "modelCalls": 0,
+      "matchesOriginal": true
+    },
+    "taskFixtureHashesVerified": 25,
+    "fixtureReadmeAdditionalFile": 1
+  }
+}

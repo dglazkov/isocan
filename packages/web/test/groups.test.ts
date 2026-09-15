@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, groupMemberRoute, groupRoute, GROUPS_ROUTE } from "@isocan/core";
+import { CURRENT_CLIENT_FEATURES, CLIENT_FEATURES_HEADER, groupMemberRoute, groupRoute, GROUPS_ROUTE } from "@isocan/core";
 import {
   addGroupMember,
   createGroup,
@@ -69,7 +69,7 @@ describe("the group calls, on the wire", () => {
     expect(seen[3]!.body).toBeUndefined();
     const headers = new Headers(seen[3]!.headers);
     expect(headers.get("content-type")).toBeNull();
-    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CANVAS_GROUPS_FEATURE);
+    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CURRENT_CLIENT_FEATURES);
   });
 
   it("adds a member with PUT on the encoded member route, and removes with a bodiless DELETE", async () => {

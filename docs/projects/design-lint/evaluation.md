@@ -3,7 +3,8 @@
 The debt is an unmeasured claim: upstream lint repair results do not establish
 that isocan's HTML checker improves our artifacts. This is the preregistration
 for design-lint phase 5, written before model runs. A dry run proves only the
-instrument. No paid run or human comparison has happened.
+instrument. The approved pilot first encountered a zero-token login refusal;
+no actual model repair or human comparison has happened yet.
 
 ## Conditions and budget
 
@@ -120,8 +121,8 @@ Mismatched model identity, missing cost, invalid usage or an unconfirmed outcome
 stops the comparison rather than being assigned zero cost or clean success.
 
 Read-only preflight on 14 September found Claude Code 2.1.269 signed in through
-Claude Max. A run therefore consumes that subscription's quota; the CLI's
-reported dollar cost is **API-equivalent cost**, not evidence of a new invoice.
+Claude Max. The proposed run uses that authenticated session; the CLI's
+reported dollar cost is **estimated API-equivalent cost**, not billing evidence.
 Actual billed spend remains unavailable without billing evidence. The published
 Sonnet 5 base API prices are $2 per million input tokens and $10 per million
 output tokens; token estimates do not replace actual reported cost.
@@ -130,7 +131,8 @@ output tokens; token estimates do not replace actual reported cost.
 [output and retry controls](https://code.claude.com/docs/en/env-vars).
 
 The proposed approval is a $10 aggregate API-equivalent budget over at most
-72 calls. It is not approved by this document. Each call's allowance is fixed
+72 calls. The user approved this proposal on 14 September by asking to do the
+last phases after reviewing the published harness. Each call's allowance is fixed
 at no more than the approved aggregate divided by 72, and can only shrink as
 the remaining budget shrinks; unused earlier allowances never enlarge later
 ones. Pass the per-call cap to the real CLI and stop if its reported cost exceeds
@@ -146,3 +148,67 @@ reviewable per-attempt inputs, candidates, receipts, audits and screenshots,
 plus a blind paired review sheet with ratings left empty and a separate arm key.
 The human gate remains pending until a person supplies preserved/uncertain/lost
 and preference/tie ratings. Do not infer those values from the browser checks.
+
+## Instrument built; comparison remains pending
+
+The source-checkout command is
+`node scripts/design-lint-eval.mjs --dry-run --out <fresh-directory>`.
+The [independent instrument report](../../research/2026-09-14-design-lint-evaluation.md)
+records 36 actual daemon/browser runs and 42 canned attempts, with no evaluation
+model calls or human ratings. Its archive includes the complete blind review.
+Use `--summarize <directory> --ratings <file>` only after a person rates the
+actual model outputs; the dry-run summary always remains instrumentation-only.
+
+The final browser predicate also checks painted response text and conservative
+DOM occlusion. Transparent overlays can produce conservative failures, so this
+remains a bounded browser instrument. A byte-empty candidate is a storage refusal;
+the rendered empty-page control is valid HTML with an empty body. Invalid output
+consumes an attempt while retaining the actual stored screen for review.
+
+Evaluation usage is now approved. Actual model results and subsequent human
+ratings remain separate; neither is inferred from that approval.
+
+
+## Recover a pre-model login refusal without renewing the budget
+
+The first approved CLI invocation reported `Not logged in`, zero input/output
+and cache tokens, no model identity and $0 estimated API-equivalent cost. It
+produced no repair. Read-only probes then isolated the mismatch: ordinary
+`USER` is needed for this macOS login lookup. The same isolated safe-mode
+command reports the existing Claude Max login when that OS field is preserved.
+No credential is copied, printed or changed. Preflight must check authentication
+under the same isolated environment and flags in fresh scratch, not merely
+confirm that the CLI is installed or that an ordinary shell is signed in.
+
+A continuation may recover this specific pre-model failure while preserving
+its immutable evidence. Link a fresh output directory to hashes of the prior
+report and provider result. Require the same model specification, seed, frozen
+fixtures and approved $10 aggregate; validate the prior outcome as a known
+zero-token, zero-cost login refusal with no pending/unknown result or saved
+repair. Other failed or partially measured comparisons are not restartable by
+this mechanism.
+
+Carry the used invocation into aggregate accounting: one invocation and $0 are
+already recorded, leaving at most 71 additional invocations. Keep the original
+fixed per-call ceiling of $0.138888888; neither the aggregate budget nor unused
+per-call allowance grows. The 36 comparison rows restart from their frozen
+initial inputs because the refused invocation reached no model; its process
+launch remains in the full invocation/accounting lineage, separate from model
+effect rows. Insufficient remaining calls yields an incomplete comparison.
+
+After all free readiness and isolated-auth checks pass, an exclusive append-only
+continuation claim beside the prior evidence names the new run before its first
+candidate call. It prevents two continuation branches from spending the same
+remaining budget. Prior reports and output files remain unchanged. Record the
+claim, original approval and both reports with the final evidence.
+
+
+## Execution record after the frozen pilot
+
+The approved comparison completed on 14 September; its [actual results and
+remaining human review](../../research/2026-09-14-design-lint-evaluation.md#approved-model-pilot-objective-result-human-review-pending)
+are recorded separately from this preregistration. No task, scoring predicate,
+model setting or decision threshold was changed during execution. All observed
+calls stayed below their fixed requested allowance; behavior at the cap itself
+and actual billed spend remain unmeasured. Human ratings can finish the record
+without another provider call.

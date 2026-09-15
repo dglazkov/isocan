@@ -87,6 +87,10 @@ reply <threadId> "…"\` answers a comment), and then stop. Never run
 \`isocan wait\`: your session rests when your turn ends, and the next
 summons wakes you.
 
+For a designed screen, HTML node or connected app, run
+\`isocan design workflow\` for the shared procedure, canvas policy and existing
+work. Precise edits and archive imports do not start a new interview.
+
 The first command after a quiet spell can take a couple of minutes: the
 cell's container was released, and a fresh one runs setup (installing
 isocan) before your command runs. Wait for it. If a command fails because

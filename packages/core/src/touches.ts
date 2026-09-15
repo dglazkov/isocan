@@ -29,6 +29,13 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
   };
 
   switch (op.type) {
+    case "design.decide": return [op.decision.basis.target.artifact.itemId, ...anchorOf(op.threadId)];
+    case "design.restore": return [op.effect.item.itemId, ...anchorOf(op.effect.threadId)];
+    case "design.compare":
+    case "design.respond": return anchorOf(op.threadId);
+    case "design.request":
+    case "design.receipt":
+      return op.effect ? itemsTouchedBy(op.effect, canvas) : [op.type === "design.receipt" ? op.itemId : op.action.kind === "start" ? op.action.itemId : op.action.brief.itemId];
     case "group.change":
       return groupChangeItemIds(op);
     case "item.add":
@@ -53,6 +60,8 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
     case "thread.setAnchor":
       return op.anchorItemId ? [op.anchorItemId] : [];
     case "thread.reply":
+    case "questionnaire.ask":
+    case "questionnaire.answer":
     case "thread.delete":
     case "comment.remove":
     case "comment.restore":
@@ -102,7 +111,7 @@ export function opTouchesAreas(op: Operation, areaIds: readonly string[], canvas
     const item = canvas.items[id];
     if (item && areas.some((area) => (isGroupItem(area) && area.id === item.id) || inCanvasScope(canvas, area, item))) return true;
   }
-  if (op.type === "thread.create" || op.type === "thread.reply") {
+  if (op.type === "thread.create" || op.type === "thread.reply" || op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas.threads[op.threadId];
     if (thread && thread.anchorItemId === null && inside(thread.x, thread.y)) return true;
   }

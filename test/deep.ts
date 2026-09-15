@@ -80,6 +80,9 @@ export interface DeepFile {
 }
 
 export const DEEP: readonly DeepFile[] = [
+  { file: "packages/cli/test/design-system.test.ts", secs: 17.5 },
+  { file: "packages/cli/test/design-decision.test.ts", secs: 10.4 },
+  { file: "test/questionnaire-cli.test.ts", secs: 11.1 },
   { file: "test/canvas-board.test.ts", secs: 73 },
   { file: "packages/cli/test/dispatch.test.ts", secs: 77 },
   { file: "packages/cli/test/rc.test.ts", secs: 66 },
@@ -149,10 +152,12 @@ export interface FastSpawner {
 }
 
 export const FAST_SPAWNERS: readonly FastSpawner[] = [
+  { file: "packages/cli/test/design-request.test.ts", secs: 9.8, why: "one real-home lifecycle and exact-reference walk; measured 14 September, near the ten-second line" },
   { file: "packages/cli/test/migration.test.ts", secs: 9.8, why: "left the deep lane on the measurement that built this list — recorded at 11s, measured at 9.4" },
   { file: "packages/cli/test/correspondence.test.ts", secs: 9.9, why: "two cases, two walks — and the closest file to the line, so the one to watch" },
   { file: "packages/cli/test/grid.test.ts", secs: 9.4, why: "a single case that walks once" },
   { file: "packages/cli/test/tools.test.ts", secs: 7.7, why: "three cases sharing one daemon" },
+  { file: "test/ratchetroot.test.ts", secs: 1.5, why: "spawns the binary four times over temp directories — no daemon, no canvas, just files on disk" },
   { file: "packages/cli/test/board.test.ts", secs: 7.9, why: "one case; the file the first version of this list mistook for `test/canvas-board.test.ts`" },
   { file: "packages/cli/test/setup.test.ts", secs: 7.8, why: "five cases, and the first thing a new person runs — worth keeping in the ordinary run" },
   { file: "packages/cli/test/rehome.test.ts", secs: 7.3, why: "eight cases, one command each" },
@@ -169,6 +174,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "test/deeplist.test.ts", secs: 0.2, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },
   { file: "packages/voice-agent/test/voice-model.test.ts", secs: 9.8, why: "nineteen cases over one daemon, and the closest file to the line: only the model verbs it cannot drive from the page walk the CLI at all" },
+  { file: "packages/cli/test/bench.test.ts", secs: 7.5, why: "one case: it parks a single rc to reach `ready` and stops it on the way out, where the rc files park several and drive turns through an adapter. Measured 6.5s and 7.5s on two runs of 15 Sep — near the line, and worth the ordinary lane because it is the whole proof that reachability has three answers" },
 ];
 
 /**

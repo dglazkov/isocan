@@ -1,9 +1,14 @@
 import { classifyAutomaticSource } from "@isocan/api/context";
 import { registerPersonalContext } from "./personal-context.ts";
+import { registerBench } from "./bench.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
 import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
 import { registerContextReads, reportContext, contextReceipt } from "./context-reads.ts";
+import { registerQuestionnaires } from "./questionnaire.ts";
+import { registerDesignSystems } from "./design-system.ts";
+import { registerDesignRequests } from "./design-request.ts";
+import { registerDesignDecisions } from "./design-decision.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
@@ -35,6 +40,7 @@ import type {
   Placement,
   PresenceSession,
   Canvas,
+  MintPassResponse,
   Capability,
   Grant,
   GrantResponse,
@@ -146,7 +152,8 @@ import {
   extractItemRefs,
   ALIGN_EDGES,
   itemKinds,
-  designStanding,
+  designScopeStanding,
+  resolvePlacement,
   DESIGN_SYSTEM_LIMIT,
   designSkipPatch,
   designUnskipPatch,
@@ -223,7 +230,6 @@ import {
   copyProperties,
   duplicatePlacements,
   newGroupId,
-  needsDesignSystem,
   TEXT_FACES,
   TEXT_FACE_PROP,
   TEXT_FILENAME,
@@ -337,7 +343,6 @@ import {
   contextMark,
   markPatch,
   layersReport,
-  governingDesign,
   memoryOf,
   memoryPatch,
   contextSheet,
@@ -466,6 +471,8 @@ import {
   readIdentity,
   claimSessionIdentity,
   linkedCanvasesOf,
+  readDesignSystem,
+  designSystemPort,
   readDesignAudit,
   readDesignAuditAdvisory,
   readDesignSourceAudit,
@@ -3676,8 +3683,17 @@ program
     "--admit-only",
     "admit the machine but hand over no identity — it names itself when it arrives",
   )
+  .option(
+    "--agent <name>",
+    "mint for an agent this machine answers for, not for you — whoever redeems it answers for that agent (e.g. `collie new --pass`)",
+  )
   .action(
-    run(async (opts: { admitOnly?: boolean }, cmd: Command) => {
+    run(async (opts: { admitOnly?: boolean; agent?: string }, cmd: Command) => {
+      if (opts.admitOnly && opts.agent !== undefined) {
+        throw new Error(
+          "`--admit-only` hands over no identity and `--agent` hands over an agent's — say one of them",
+        );
+      }
       const ctx = await ctxOf(cmd);
       const canvas = await resolveCanvas(ctx);
       // The one origin again, and per canvas: a pass is minted at the home
@@ -3685,6 +3701,7 @@ program
       // is that home's — not this machine's next one, which is all a birth
       // default ever knows.
       const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
+      if (opts.agent !== undefined) return passForAgent(ctx, canvas, origin, opts.agent);
       /**
        * **Two real shapes, and the default endows.**
        *
@@ -3738,6 +3755,86 @@ program
       );
     }),
   );
+
+/**
+ * **`isocan pass --agent <name>` — handing an agent's answering to another
+ * host** (sheep's collie, phase 3: an agent moves in).
+ *
+ * An agent this machine enrolled is claimed on this machine's badge, under
+ * the key `mintAndEnrol` derives — which is the whole of what "this machine
+ * answers for it" means at the desk. A pass minted for that actor carries the
+ * claim to whoever redeems it: a hosted rc (the collie's badge, pasted into
+ * `collie new --pass`) arrives BEING the agent, and once it takes up the
+ * agent's cursor this machine's `isocan rc` says *"another park adopted …'s
+ * cursor — standing down for it"* and keeps answering for everyone else.
+ *
+ * **Nothing new at the desk.** `mintPass(canvasId, actorId)` is already
+ * allowed for exactly an actor the minting badge holds, and refused with
+ * `not-your-actor` otherwise — mechanism 5's sentence, spoken by the home, so
+ * this verb does not pre-check the claim and cannot say it differently. What
+ * it adds is the name → actor step on the canvas's roster, and the words.
+ *
+ * **It prints the address, not the `setup` command.** The line is for a host
+ * that takes a pass at a prompt; `isocan setup` with it would make a
+ * machine's person the agent, which is not what handing an agent over means.
+ */
+async function passForAgent(ctx: Ctx, canvas: Canvas, origin: string, name: string): Promise<void> {
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const agents = Object.values(snapshot.canvas.agents ?? {});
+  const record = agents.find(
+    (a) => a.actor.id === name || a.actor.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!record) {
+    const standing = agents.map((a) => a.actor.name);
+    throw new Error(
+      `no standing agent "${name}" on "${canvas.title}"` +
+        (standing.length > 0 ? ` — standing here: ${standing.join(", ")}` : " — nobody is enrolled here"),
+    );
+  }
+  const agent = record.actor;
+  let minted: MintPassResponse;
+  try {
+    minted = await ctx.client.mintPass(canvas.id, agent.id);
+  } catch (err) {
+    // The desk's own sentence goes out as it came; the line after it is the
+    // one thing the home cannot know — which machine to run this on.
+    if (err instanceof ApiError && err.code === "not-your-actor") {
+      console.error(`error: ${err.message}`);
+      console.error(
+        `${agent.name} is not answered by this machine — \`--agent\` mints only for an agent ` +
+          "this machine's badge holds; run it on the machine whose `isocan rc` enrolled them.",
+      );
+      process.exitCode = 1;
+      return;
+    }
+    throw err;
+  }
+  const { pass, token } = minted;
+  const address = canvasUrlWithPass(origin, canvas.id, token);
+  const minutes = Math.round(PASS_TTL_MS / 60_000);
+  if (ctx.json) {
+    return printJson({
+      address,
+      canvas: canvasUrl(origin, canvas.id),
+      expiresAt: pass.expiresAt,
+      actor: agent,
+      agent: true,
+    });
+  }
+  printKeyValues({
+    canvas: `${canvas.title} (${canvasUrl(origin, canvas.id)})`,
+    identity: `${agent.name} (${agent.id}) — an agent: whoever redeems this arrives as ${agent.name}, not as you`,
+    expires: `in ${minutes} minutes (${pass.expiresAt})`,
+  });
+  console.log(`\nPaste this where ${agent.name}'s new host asks for a pass (\`collie new --pass\` takes it at a hidden prompt):\n`);
+  console.log(`  ${address}\n`);
+  console.log(
+    `Whoever redeems it answers for ${agent.name} from then on; once it takes up ${agent.name}'s cursor,\n` +
+      `this machine's \`isocan rc\` stands down for ${agent.name} and keeps answering for everyone else.\n` +
+      `That address is a credential — it works once, and only for the next ${minutes} minutes.\n` +
+      "Do not post it on a thread and do not commit it.",
+  );
+}
 
 /**
  * **`isocan embed` — the address to paste into somebody else's window**
@@ -6332,20 +6429,24 @@ function printArrivalAudit(audit: DesignAuditEvidence | undefined): void {
  * this canvas does not want one. There is no flag: a flag leaves no trace, has
  * to be passed every time, and tells the next person nothing.
  */
-function refuseUnsystematisedScreen(
-  canvas: CanvasContents,
+async function refuseUnsystematisedScreen(
+  ctx: Ctx, snapshot: CanvasSnapshotResponse,
   project: { id: string; title: string; properties?: Record<string, string> },
-  mimeType: string,
-): void {
-  if (mimeType !== "text/html") return;
-  const screens = Object.values(canvas.items).filter((item) => itemKind(item) === "screen").length;
-  if (designStanding(canvas, screens, project) !== "overdue") return;
+  placement: Placement, size: { width: number; height: number },
+): Promise<void> {
+  const canvas = snapshot.canvas;
+  const point = resolvePlacement(canvas, placement, size.width, size.height, "chosen" in placement && !!placement.chosen);
+  const containerId = (placement as Placement & { containerId?: string }).containerId;
+  const scope = snapshot.project.groupMode === "groups" ? { groupId: containerId ?? null } : { at: { x: point.x + size.width / 2, y: point.y + size.height / 2 } };
+  const linked = await linkedCanvasesOf(ctx, project.id, snapshot);
+  const standing = designScopeStanding(canvas, Object.values(canvas.items).filter(item => itemKind(item) === "screen"), project, { ...scope, linked });
+  if (standing.standing !== "overdue") return;
   throw new Error(
-    `${project.title} has ${screens} screens and no design system, which is past ` +
-      `${DESIGN_SYSTEM_LIMIT} — every one of them decided something nobody wrote down.\n` +
-      "  ask for `/design-system`      derive one from the screens already here\n" +
-      "  isocan design set <file>      write one you have\n" +
-      "  isocan design skip            this canvas does not want one, on the record",
+    `${project.title}: this target scope has ${standing.screenCount} screens without a governing design system, which is past ` +
+      `${DESIGN_SYSTEM_LIMIT}. ${standing.selection.reason}\n` +
+      "  ask for `/design-system`      derive one from the screens in this scope\n" +
+      "  isocan design set <file>      write one you have (use --in for this scope)\n" +
+      "  isocan design skip            record an exemption for this canvas",
   );
 }
 
@@ -6370,12 +6471,11 @@ async function noteMissingDesignSystem(ctx: Ctx, canvasId: string): Promise<void
   if (ctx.json) return;
   try {
     const snapshot = await ctx.client.snapshot(canvasId);
-    const screens = Object.values(snapshot.canvas.items).filter(
-      (item) => itemKind(item) === "screen",
-    ).length;
-    if (!needsDesignSystem(snapshot.canvas, screens)) return;
+    const screens = Object.values(snapshot.canvas.items).filter(item => itemKind(item) === "screen");
+    const standing = designScopeStanding(snapshot.canvas, screens, snapshot.project, { linked: await linkedCanvasesOf(ctx, canvasId, snapshot) });
+    if (standing.standing === "fine") return;
     console.error(
-      `note: ${screens} screens here and no design system. ` +
+      `note: ${standing.uncoveredIds.length} screens here have no governing design system. ` +
         "`/design-system` derives one from what these screens already do; " +
         "`isocan design set <file>` writes one you have.",
     );
@@ -6477,7 +6577,9 @@ program
         if (opts.drawing && mimeType !== DRAWING_MIME) {
           throw new Error(`--drawing needs an SVG; ${filename} is ${mimeType}`);
         }
-        refuseUnsystematisedScreen(snapshot.canvas, p, mimeType);
+        const plannedSize = sizeFor(opts.size, defaultSize(mimeType));
+        const plannedPlacement = mimeType === "text/html" ? placementFor(snapshot, opts, plannedSize) : undefined;
+        if (plannedPlacement) await refuseUnsystematisedScreen(ctx, snapshot, p, plannedPlacement, plannedSize);
         await narrate(ctx, p.id, { status: `adding ${truncate(filename, 24)}…` });
 
         // Check if there is a distinct visual face (explicit --visual, or HTML with inlined assets)
@@ -6551,7 +6653,7 @@ program
         // goes through `placementFor`, where `--at` is the chosen case.
         const placement = inkBox
           ? (groupPlacementFor(snapshot, { ...opts, at: `${Math.floor(inkBox.minX)},${Math.floor(inkBox.minY)}` }) ?? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) })
-          : placementFor(snapshot, opts, { width, height });
+          : plannedPlacement ?? placementFor(snapshot, opts, { width, height });
         const itemId = newItemId();
         const versionId = newVersionId();
         const result = await sendOp(ctx, p.id, {
@@ -9040,13 +9142,35 @@ async function personaFiles(root: string): Promise<Array<{ file: string; persona
 /** Where personas live for THIS invocation: the bound directory when there is
  *  one, otherwise the cwd — so `isocan persona ls` works in a checkout that
  *  has never been bound to a canvas. */
-async function personaRoot(ctx: Ctx): Promise<string> {
+/**
+ * **Whose personas.** A persona belongs to a project directory, so the binding
+ * answers first: standing in a subdirectory of a bound tree, `persona ls` means
+ * that tree's roles, not none.
+ *
+ * `--root` is for the one caller that means something else. `scripts/ratchet.mjs`
+ * measures THIS checkout against THIS checkout's bounds, and a git worktree is a
+ * second copy of the source bound to the first — so from a worktree the binding
+ * handed back the main checkout's `.agents/personas`, and the ratchet reported a
+ * bound the tree in front of it had already moved. It read as a real miss and was
+ * an artefact of where it ran (14 Sep 2026: op-types "36, past at most 35", from a
+ * worktree whose own file said 36).
+ *
+ * A flag rather than a rule about cwd: the default is untouched, so nothing that
+ * works today changes its mind.
+ */
+async function personaRoot(ctx: Ctx, cmd: Command): Promise<string> {
+  const chosen = (cmd.optsWithGlobals() as { root?: string }).root;
+  if (chosen) return path.resolve(chosen);
   return ctx.binding?.root ?? process.cwd();
 }
 
 const persona = program
   .command("persona")
-  .description("The roles an agent can take on here — `.agents/personas/`");
+  .description("The roles an agent can take on here — `.agents/personas/`")
+  .option(
+    "--root <dir>",
+    "read personas from this directory instead of the one this directory is bound to",
+  );
 
 persona
   .command("ls", { isDefault: true })
@@ -9054,7 +9178,7 @@ persona
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const root = await personaRoot(ctx);
+      const root = await personaRoot(ctx, cmd);
       const found = await personaFiles(root);
       if (found.length === 0) {
         console.log(
@@ -9085,7 +9209,7 @@ persona
   .action(
     run(async (name: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const root = await personaRoot(ctx);
+      const root = await personaRoot(ctx, cmd);
       const found = await personaFiles(root);
       const match =
         found.find((f) => f.persona.name === name) ??
@@ -9128,7 +9252,7 @@ persona
   .action(
     run(async (name: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const root = await personaRoot(ctx);
+      const root = await personaRoot(ctx, cmd);
       const found = await personaFiles(root);
       const match =
         found.find((f) => f.persona.name === name) ??
@@ -9404,6 +9528,10 @@ const context = program
 
 registerContextReads(context, ctxOf);
 registerPersonalContext(context, ctxOf);
+// Your bench (docs/projects/bench/design.md): the personal canvas read as a
+// registry of agents. Its body is `bench.ts`, because this file is the list of
+// verbs and every verb that keeps its body here makes the list harder to read.
+registerBench(program, ctxOf);
 
 /**
  * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,
@@ -10254,6 +10382,11 @@ screens already on the canvas — what they ALREADY do, rather than a system
 somebody invented and imposed.`,
   );
 
+registerQuestionnaires(style, ctxOf);
+registerDesignRequests(style, ctxOf);
+registerDesignDecisions(style, ctxOf);
+registerDesignSystems(style, ctxOf);
+
 /**
  * **Saying no, and where that decision lives.**
  *
@@ -10380,17 +10513,10 @@ style
     run(async (opts: { css?: boolean; tokens?: boolean; in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const item = designSystem(snapshot.canvas, designScope(snapshot, opts.in));
-      if (!item) {
-        throw new Error(
-          `${p.title} has no design system yet — write one with \`isocan design set DESIGN.md\`, ` +
-            `or ask for /design-system and an agent will derive it from the screens already here`,
-        );
-      }
-      const version = item.versions.find((v) => v.id === item.currentVersionId);
-      if (!version) throw new Error(`${item.title} has no current version`);
-      const text = (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8");
-      const doc = parseDesign(text);
+      const scope = designScope(snapshot, opts.in);
+      const { governing } = await readDesignSystem(designSystemPort(ctx), { canvasId: p.id, ...(scope.at ? { target: { kind: "item", itemId: scope.at.id } } : {}) });
+      if (governing.status !== "available") throw new Error(governing.reason);
+      const text = governing.text, doc = governing.document;
 
       // The machine-readable halves. A design system nobody can export stops
       // at the edge of this canvas.
@@ -10398,18 +10524,9 @@ style
       if (opts.css) return console.log(toCss(doc.tokens));
       if (opts.tokens) return printJson(toDtcg(doc.tokens));
       if (ctx.json) {
-        return printJson({
-          itemId: item.id,
-          title: item.title,
-          versions: item.versions.length,
-          tokens: doc.tokens,
-          sections: doc.sections.map((section) => section.title),
-          body: text,
-        });
+        return printJson({ itemId: governing.artifact.itemId, title: governing.title, versions: governing.versions, tokens: doc.tokens, sections: doc.sections.map(section => section.title), body: text, governing });
       }
-      // The body alone on stdout so it can be piped into something that
-      // follows it; everything else goes to stderr.
-      console.error(`${item.title} (${item.id}, v${item.versions.length})`);
+      console.error(`${governing.title} (${governing.artifact.itemId}, v${governing.versions}) · ${governing.selection.reason}${governing.exempt ? " · requirement exempt; incumbent retained" : ""}`);
       console.log(text);
     }),
   );
@@ -10418,31 +10535,18 @@ style
   .command("check")
   .description("Is the design system usable — references, colours, contrast, sections")
   .option("--in <area>", "check the one that governs this area")
+  .option("--provenance", "with --json, include the exact governing identity and selection beside findings")
   .action(
-    run(async (opts: { in?: string }, cmd: Command) => {
+    run(async (opts: { in?: string; provenance?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      // The one that governs: the area's own (with --in), else this canvas's,
-      // else the first a linked canvas contributes (memory phase 1) — and the
-      // check says whose.
-      const governing = governingDesign(
-        snapshot.canvas,
-        await linkedCanvasesOf(ctx, p.id, snapshot),
-        designScope(snapshot, opts.in),
-      );
-      if (!governing) {
-        throw new Error(
-          `${p.title} has no design system — isocan design set DESIGN.md, or ask for /design-system`,
-        );
-      }
-      const item = governing.item;
-      if (governing.from) console.error(`checking against ${governing.from.title}'s design system, inherited here`);
-      const version = item.versions.find((v) => v.id === item.currentVersionId);
-      if (!version) throw new Error(`${item.title} has no current version`);
-      const text = (await ctx.client.downloadBlob(governing.from?.canvasId ?? p.id, version.blobHash)).toString("utf8");
-      const findings = bySeverity(checkDesign(parseDesign(text)));
-      if (ctx.json) return printJson(findings);
-      if (findings.length === 0) return console.error(`${item.title}: nothing to fix`);
+      const scope = designScope(snapshot, opts.in);
+      const { governing } = await readDesignSystem(designSystemPort(ctx), { canvasId: p.id, ...(scope.at ? { target: { kind: "item", itemId: scope.at.id } } : {}) });
+      if (governing.status !== "available") throw new Error(governing.reason);
+      const findings = bySeverity(checkDesign(governing.document));
+      if (ctx.json) return printJson(opts.provenance ? { findings, governing } : findings);
+      console.error(`${governing.title} · ${governing.selection.reason}${governing.exempt ? " · requirement exempt; incumbent retained" : ""}`);
+      if (findings.length === 0) return console.error(`${governing.title}: nothing to fix`);
       printTable(
         findings.map((f) => ({
           "": f.severity === "error" ? "✗" : f.severity === "warning" ? "!" : "·",
@@ -11684,7 +11788,8 @@ program
        * **The roster tells the truth about absent agents** (phase 6,
        * journey 7). Standing agents get rows beside the live sessions —
        * `answerable` exactly when a live rc holds a connection claiming
-       * them (the daemon's connection-bound fact, never a TTL), `enrolled`
+       * them (the connection-bound fact as the canvas's HOME has it, never
+       * a TTL — a replica's daemon asks the home, issue #306), `enrolled`
        * when the record stands but nobody is listening. Three readings,
        * distinguishable without knowing how any of it works.
        */

@@ -45,6 +45,8 @@ const WEIGHT: Record<string, number> = {
   // conversation continuing, which is not the same event.
   "thread.create": 4,
   "thread.reply": 1,
+  "questionnaire.ask": 1,
+  "questionnaire.answer": 1,
   // The designated channel moving is rare and always means something.
   "thread.setMain": 5,
   "project.create": 8,
@@ -126,6 +128,8 @@ function aboutOf(op: Operation): string | null {
     case "item.addVersion":
     case "item.edit":
       return firstLine(o.version?.filename);
+    case "questionnaire.ask": return firstLine(op.questions?.headline);
+    case "questionnaire.answer": return "Answered design questions";
     case "thread.create":
     case "thread.reply":
       return firstLine(o.comment?.body);

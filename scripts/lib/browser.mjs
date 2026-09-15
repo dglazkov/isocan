@@ -17,6 +17,7 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -260,7 +261,10 @@ export async function browser() {
       await stop("SIGTERM");
       if (alive()) await stop("SIGKILL");
       if (alive()) throw new Error("the owned Chrome process did not exit");
-      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      // Several journeys close browsers together. Blocking profile removal can
+      // hold the event loop past another browser’s exit timer, before its queued
+      // exit event is delivered. Await removal without blocking that delivery.
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     })(),
   };
 }

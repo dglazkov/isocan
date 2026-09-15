@@ -18,8 +18,20 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const sources = new Map([
+  ["@isocan/api/design-decision", new URL("../../api/src/design-decision-reader.ts", import.meta.url).href],
+  ["@isocan/core/design-decision", new URL("../../core/src/design-decision.ts", import.meta.url).href],
+  ["@isocan/api/design-system", new URL("../../api/src/design-system-reader.ts", import.meta.url).href],
+  ["@isocan/api/design-recipes", new URL("../../api/src/design-recipes.ts", import.meta.url).href],
+  ["@isocan/core/design-direction", new URL("../../core/src/design-direction.ts", import.meta.url).href],
+  ["@isocan/core/design-partner-plan", new URL("../../core/src/design-partner-plan.ts", import.meta.url).href],
   ["@isocan/api/context", new URL("../../api/src/context-reader.ts", import.meta.url).href],
   ["@isocan/api/design-audit", new URL("../../api/src/design-audit-reader.ts", import.meta.url).href],
+  ["@isocan/api/questionnaire", new URL("../../api/src/questionnaire-reader.ts", import.meta.url).href],
+  ["@isocan/api/design-request", new URL("../../api/src/design-request-reader.ts", import.meta.url).href],
+  ["@isocan/core/design-request", new URL("../../core/src/design-request.ts", import.meta.url).href],
+  ["@isocan/core/design-record", new URL("../../core/src/design-record.ts", import.meta.url).href],
+  ["@isocan/core/questionnaire", new URL("../../core/src/questionnaire.ts", import.meta.url).href],
+  ["@isocan/core/design-partner", new URL("../../core/src/design-partner.ts", import.meta.url).href],
   ["@isocan/core/design-audit", new URL("../../core/src/designaudit.ts", import.meta.url).href],
   ["@isocan/api/routes", new URL("../../api/src/routes.ts", import.meta.url).href],
   ["@isocan/api", new URL("../../api/src/index.ts", import.meta.url).href],

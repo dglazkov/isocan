@@ -13,6 +13,8 @@ import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./m
  */
 
 export interface NewVersion {
+  /** Canonical writer output only; new public item/version writes cannot forge design admission. */
+  designRecord?: import("./design-record.ts").DesignRecordMarker;
   id: string;
   blobHash: string;
   mimeType: string;
@@ -210,6 +212,12 @@ export type Operation =
   | { type: "project.update"; patch: MetaPatch }
   | { type: "project.delete" } // soft: dir moved aside; NOT undoable
   // ---- items ----
+  | { type: "design.compare"; threadId: string; commentId: string; comparison: import("./design-decision.ts").DesignComparison; canonicalComment?: Comment }
+  | { type: "design.respond"; threadId: string; commentId: string; response: import("./design-decision.ts").DesignComparisonResponse; canonicalComment?: Comment }
+  | { type: "design.decide"; threadId: string; commentId: string; decision: import("./design-decision.ts").DesignDecisionInput; effect?: import("./design-decision.ts").DesignDecisionEffect }
+  | { type: "design.restore"; effect: import("./design-decision.ts").DesignRestoreEffect }
+  | { type: "design.request"; action: import("./design-request.ts").DesignRequestAction; effect?: import("./design-record.ts").DesignRecordEffect }
+  | { type: "design.receipt"; itemId: string; versionId: string; receipt: import("./design-partner.ts").DesignReceipt; placement?: Placement; width?: number; height?: number; title?: string; effect?: import("./design-record.ts").DesignRecordEffect }
   | { type: "group.change"; action: GroupAction }
   | {
       type: "item.add";
@@ -336,6 +344,28 @@ export type Operation =
     }
   | { type: "thread.reply"; threadId: string; comment: NewComment }
   | {
+      /** Publishes typed questions as one comment; the writer resolves retained metadata. */
+      type: "questionnaire.ask";
+      threadId: string;
+      commentId: string;
+      questions: import("./design-partner.ts").DesignQuestionSet;
+      legacySource?: import("./questionnaire.ts").LegacyQuestionSource;
+      contextRequest?: import("./canvas-group-context.ts").ContextRequest;
+      /** Canonical writer output only; public callers cannot supply retained metadata. */
+      context?: import("./canvas-group-context.ts").ContextManifest;
+      retainedReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];
+    }
+  | {
+      /** Records the named respondent's typed outcomes as one comment and one undo step. */
+      type: "questionnaire.answer";
+      threadId: string;
+      commentId: string;
+      response: import("./design-partner.ts").DesignResponse;
+      /** Canonical writer output only; public callers cannot supply retained metadata. */
+      context?: import("./canvas-group-context.ts").ContextManifest;
+      retainedReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];
+    }
+  | {
       // Re-pin a thread: to an item (x,y become an offset from its top-left)
       // or freestanding (x,y become world coordinates). Lets a thread that
       // started before its item existed be anchored to it after the fact.
@@ -433,6 +463,7 @@ export type OperationType = Operation["type"];
 
 /** Ops the engine accepts directly from clients (everything non-internal). */
 export const INTERNAL_OP_TYPES: ReadonlySet<OperationType> = new Set([
+  "design.restore",
   "item.removeVersion",
   "item.restoreVersion",
   "comment.remove",

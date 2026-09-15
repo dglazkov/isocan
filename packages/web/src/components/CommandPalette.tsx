@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Actor, Canvas, SlashCommand, Space } from "@isocan/core";
+import type { Actor, Canvas, CommandMetadata, Space } from "@isocan/core";
 import { ago, groupSwitchRows, isShelved, keyFor, litRuns, rankCanvases, type ShelfScope, type SwitchRow } from "@isocan/core";
 import { useUiStore, type PaletteMode } from "../stores/uiStore.ts";
 import { useCommands } from "../lib/commands.ts";
@@ -389,7 +389,7 @@ const INLINE_JUMPS = 5;
 
 type Row =
   | { kind: "action"; action: Action }
-  | { kind: "ask"; command: SlashCommand }
+  | { kind: "ask"; command: CommandMetadata }
   | { kind: "canvas"; row: SwitchRow; group?: string | null; groupId?: string | null };
 
 function keyOf(row: Row): string {
@@ -495,7 +495,7 @@ function openChat(canvasId: string): void {
   void import("../lib/panels.ts").then((m) => m.openPanel(canvasId, "main"));
 }
 
-export type { SlashCommand };
+export type { SlashCommand } from "@isocan/core";
 
 /** Spaces are only needed by the unranked switcher; a failed read retains the
  * useful flat fallback without pretending the browser owns a space ledger. */

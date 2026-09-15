@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, grantRevokeRoute, grantRoute, grantsRoute, LINK } from "@isocan/core";
+import { CURRENT_CLIENT_FEATURES, CLIENT_FEATURES_HEADER, grantRevokeRoute, grantRoute, grantsRoute, LINK } from "@isocan/core";
 import { ApiError, createBar, createGrant, listGrants, revokeGrant } from "../src/lib/api.ts";
 
 /**
@@ -63,7 +63,7 @@ describe("the Share dialog's endpoint", () => {
     const { grants } = await listGrants("prj_acme");
 
     expect(seen).toEqual([
-      { method: "GET", url: grantsRoute("prj_acme"), headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE }, body: undefined },
+      { method: "GET", url: grantsRoute("prj_acme"), headers: { [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES }, body: undefined },
     ]);
     expect(grants[0]!.subject).toBe(LINK);
   });
@@ -100,7 +100,7 @@ describe("the Share dialog's endpoint", () => {
     expect(seen[0]!.body).toBeUndefined();
     const headers = new Headers(seen[0]!.headers);
     expect(headers.get("content-type")).toBeNull();
-    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CANVAS_GROUPS_FEATURE);
+    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CURRENT_CLIENT_FEATURES);
   });
 
   it("keeps somebody out with `bars: true` and no rung (roles phase 3)", async () => {
@@ -124,7 +124,7 @@ describe("the Share dialog's endpoint", () => {
     expect(seen[0]!.body).toBeUndefined();
     const headers = new Headers(seen[0]!.headers);
     expect(headers.get("content-type")).toBeNull();
-    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CANVAS_GROUPS_FEATURE);
+    expect(headers.get(CLIENT_FEATURES_HEADER)).toBe(CURRENT_CLIENT_FEATURES);
     // And without the flag the parameter is not sent at all.
     await revokeGrant("prj_acme", "gnt_1", "usr_priya", false);
     expect(seen[1]!.url).not.toContain("bar");

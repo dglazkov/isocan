@@ -50,6 +50,14 @@ Conventions: `<item>`/`<thread>` args accept id, id prefix, or title prefix.
 Coordinates are world units (+x right, +y down). Add `--json` to any command
 when you need to parse output.
 
+**Design work has one shared entry.** For a designed screen, HTML node or
+connected application, run `isocan design workflow` before starting or resuming.
+It reads this canvas's rollout policy, existing requests and next steps, and
+provides the full procedure on demand. A precise edit or archive import follows
+ordinary editing/import without a new interview. Canvas summons and external
+agents use the same durable brief; do not copy the procedure into a private
+memory or restart discovery when changing agents.
+
 ## Your name
 
 You are a collaborator on this canvas, so you need a name of your own — not
@@ -185,9 +193,13 @@ think is the last.
 with `/ask` — `isocan comment reply <thread> "/ask blue header or green?"` —
 and park. An unanswered `/ask` is a derived state, not a flag: the workbench
 pins your row to the top marked "asked", and `isocan who` shows `blocked`,
-until somebody OTHER than you replies in that thread. It clears on the
-answer, never on being seen — so ask real questions, in the thread the work
-is in, and amend your own ask freely (your own replies keep it open).
+until somebody OTHER than you replies in that thread. That rule is for plain
+prose asks. Structured design questions use `design ask`: only the named human's
+typed answer, skip, dismissal or delegation resolves them. Another agent's update
+and unrelated human prose leave them open. A legacy JSON `/ask` needs explicit
+adoption with a current brief and named respondent before it can receive typed
+answers. Use `design questions` to read the actual source and outstanding IDs.
+Being seen never counts as an answer.
 
 **Going home** is not a step, it is an interruption: run `isocan session end`
 when the human has told you the collaboration is over, and only then. Nothing
@@ -549,6 +561,33 @@ mattered; the person decides whether to widen it (`sandboxRead`,
 `sandboxWrite` and `sandboxDomains` in `~/.isocan/config.json`) or to leave
 it closed. What never changes is the canvas work: the `isocan` CLI reaches
 the daemon from inside a fence exactly as it does outside.
+
+## Your bench: the agents a person has
+
+A standing agent belongs to a canvas. A **bench** belongs to a person: it is
+the list of agents they have, kept on their own private canvas, so it follows
+them between machines instead of dying with the laptop it was made on.
+
+```sh
+isocan bench                # every agent on your bench, with its reachability
+isocan bench add <name>     # put one on the bench, from what this machine knows
+isocan bench rm <name>      # take it off — its standing is untouched
+```
+
+Read the third column before you summon anybody. It is **measured every time
+you look**, and it has three answers, never two:
+
+- `ready` — something parked would answer for it now.
+- `elsewhere` — it stands somewhere, but nothing is parked; a summons lands in
+  silence.
+- `unreachable` — nothing present can run it at all.
+
+**A bench row confers nothing.** Adding one does not enrol an agent, give it
+reach, or let anybody summon it — `isocan agent add` is still what grants
+standing on a canvas, and `isocan bench rm` takes none of it away. `bench add`
+reads the agent off this machine's own records; for an agent this machine has
+never run, name its actor with `--actor <id>` and say so plainly rather than
+guessing a harness for it.
 
 ## The Chat
 
@@ -1074,9 +1113,12 @@ across every thread, with the command to reply to each. Read it when you come
 back to a canvas: an unanswered question from an earlier lap is the first
 thing worth knowing, and it is often yours.
 
-**Somebody else answering closes it.** Adding to your own question does not —
-amending what you asked is still asking. That is why "I'll just add a bit more
-detail" never accidentally marks you unblocked.
+**For a plain-prose ask, somebody else answering closes it.** Adding to your
+own question does not. Structured design questions instead stay open until the
+named human submits a typed outcome through the dock or `design answer`.
+Valid legacy JSON questionnaires remain unresolved until explicit adoption;
+another participant's progress reply cannot supply their missing respondent.
+Read `design questions` for the structured source and outstanding IDs.
 
 ## Running a sprint
 
@@ -1792,6 +1834,13 @@ this canvas. It is not the address, and the difference is the whole point:
   it is admitted **whether or not the link grant is on**, and by default
   arrives speaking as the actor this CLI speaks as.
 
+- `isocan pass --agent <name>` prints an **address carrying a credential for an
+  agent** this machine's `isocan rc` answers for — its badge holds the claim.
+  Whoever redeems it (a hosted rc: `collie new --pass`) arrives as that agent,
+  not as the person, and this machine's rc stands down for it. An agent this
+  badge does not hold is refused with `not-your-actor`. Handing an agent over
+  is the person's decision, like every pass.
+
 - `isocan embed` prints an **address carrying the same credential**. You hand
   that to a *window* — an agent manager's pane, an IDE panel, a tab beside the
   conversation you are having. Not a terminal: a `npx` line pasted into an
@@ -1800,6 +1849,7 @@ this canvas. It is not the address, and the difference is the whole point:
 ```sh
 isocan pass               # the whole command to paste on the other machine
 isocan pass --admit-only  # admit it, but hand over no identity
+isocan pass --agent Percy # an address that arrives as Percy, for his new host
 isocan embed              # the address to paste into a pane or an IDE panel
 isocan embed --admit-only # let the window in, but hand it no identity
 ```
@@ -1996,6 +2046,172 @@ isocan fit <items...>                  # grow items to the size their content wa
 
   Posting your reply clears it, which is the right shape: the status is the
   gap between being asked and answering, and done is done.
+- **One design request, through either entrance.** Read `isocan design
+  workflow` for the procedure and canvas-owned automatic enrollment policy.
+  `isocan design brief [request] --json` returns canonical briefs, exact
+  references, source provenance, question history, remaining allowance,
+  lifecycle capabilities, and receipts with current/stale/unavailable reasons.
+  `--thread <id> --comment <id>` finds a canvas request; `--output <item>` finds
+  the request beside its result. Ordinary uploaded JSON is not admission.
+
+  For an external request, save this synthetic starting intent as `request.json`:
+
+  ```json
+  {
+    "requestId": "req_acme_receiving",
+    "itemId": "itm_acme_receiving_brief",
+    "versionId": "ver_acme_receiving_start",
+    "source": { "entrance": "external-agent", "externalRequestId": "acme-receiving-1" },
+    "fields": {
+      "intent": "create", "fidelity": "designed", "delivery": "html-node",
+      "targetItemId": null, "groupId": null,
+      "audience": "Warehouse staff", "primaryTask": "Receive stock on a phone",
+      "constraints": ["Use the existing brand"], "facts": [], "references": [],
+      "outstandingDecisionIds": [], "outputIds": []
+    }
+  }
+  ```
+
+  For canvas chat, replace `source` with `{ "entrance": "canvas-chat",
+  "threadId": "<actual thread>", "commentId": "<actual request comment>" }`.
+  The home resolves the original author and captured context. External supplied
+  facts are attributed to the reporting agent; do not imitate a human answer.
+
+  ```sh
+  isocan design start request.json --json
+  isocan design workflow req_acme_receiving
+  isocan design brief req_acme_receiving --json > brief-read.json
+  ```
+
+  An explicit start works while automatic enrollment is off. `design start
+  request.json --automatic` requires `design.workflow=adaptive-v1`; unknown
+  policy stays unsupported. Keep the file and all IDs for retry. The default
+  operation ID hashes the complete `versionId` into a bounded stable ID;
+  `--op-id` can supply an explicit one.
+
+  To correct facts, save a lifecycle file with `brief` copied from the read's
+  exact `ref`, the current `epoch`, a new stable `versionId`, and `patch`:
+
+  ```sh
+  node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync("brief-read.json","utf8")).requests[0]; fs.writeFileSync("update.json",JSON.stringify({brief:r.ref,epoch:r.brief.epoch,versionId:"ver_acme_receiving_update",patch:{constraints:["Use the existing brand","Large controls"]}},null,2));'
+  isocan design brief req_acme_receiving --update update.json --json
+  ```
+
+  `design brief --resume resume.json` uses the same captured basis plus a
+  required `reason`; it advances epoch and preserves original source/facts.
+  `--cancel cancel.json` needs the basis and new version ID, with optional reason.
+  `--complete complete.json` accepts an output-bearing patch. Options are
+  mutually exclusive. A stale refusal leaves your file intact: re-read and
+  reconcile before preparing another version. Complete the brief before
+  publishing a receipt bound to its exact completed reference.
+
+  For settled design answers, the read's `reconciliation` contains the exact
+  effective question/response bindings. Copy these as `acceptedResponses` in
+  one update with your deliberate field patch. Review skipped, dismissed and
+  delegated outcomes as such; they are not supplied preferences. Ordinary
+  brief corrections preserve settled answers for this continuation.
+
+  `design receipt [request] --publish receipt.json` takes
+  `{itemId,versionId,receipt}`. The receipt names request/epoch, completed
+  `brief`, actual canvas output or repository revision/build/runtime,
+  `governing` selection, relevant `context`, fidelity, draft/ready status,
+  checks and unresolved limits. Browser checks include actual tool/version,
+  viewport, state, coverage and exact evidence references. The shared procedure
+  explains what to exercise; without a browser, publish a draft. Reading
+  `design receipt [request]` preserves reported results separately from their
+  currentness and names runtime observations that this read cannot recheck.
+  Use the selected canvas output's `outputGovernings` binding and the brief's
+  live `contextReferences`; historical citations stay exact evidence, not
+  implicit latest-version requirements. `design receipt --help` lists the
+  publication fields and no-browser draft shape.
+
+  Save an exact input/evidence `DesignArtifactRef` from the read as `ref.json`,
+  then use `design brief <request> --reference ref.json --out reference.svg`.
+  `--face visual` opens the retained visual face; `--out` refuses overwrite.
+  Without `--out`, output is a bounded base64 page with offset/nextOffset.
+  Foreign references retain permission checks at their original source.
+- **Ask design questions with an identified source and respondent.**
+  `isocan design questions --json` returns structured question sets, their exact
+  thread/comment/payload revision, effective resolutions, response IDs and
+  outstanding question IDs. `isocan design questions --respondents --json`
+  lists writer-resolved human, agent and unknown identities. Only a named,
+  known human can answer; being absent from an agent list is not eligibility.
+
+  This publishing path needs an existing thread and a valid versioned brief.
+  `isocan design start request.json` admits the ordinary request; `isocan design
+  brief --json` returns its exact current reference, request ID and epoch.
+  Existing unadmitted phase-1 briefs remain usable for manual questionnaires,
+  but an uploaded JSON file does not acquire canonical request standing. The
+  browser uses the same brief and respondent. Automatic enrollment remains a
+  separate canvas policy; publishing questions does not turn it on.
+
+  Save a `DesignQuestionSet` as JSON, with a stable `id`, `revision`, `brief`,
+  `respondentActorId`, `headline`, `inferredAnswers`, `supersedes`, and `questions`,
+  plus `schemaVersion: 1`, `kind: "questions"`, `requestId` and `epoch`.
+  Every question needs `id`, `title`, `consequence`, `renderer`, `options`,
+  `multiple`, `skippable` and `delegatable`. Choice options have `id`, `title`
+  and `consequence`; visual cards additionally name actual versioned `preview`
+  artifacts. Freeform, upload and URL questions have an empty options array.
+  The supported renderers are `choice-list`, `visual-cards`, `freeform`, `upload`
+  and `url-collection`. A normal first pass asks zero to three useful questions;
+  an explicitly requested interview may contain up to 32.
+
+  An admitted request also supplies `discovery`: `purpose` is `initial`,
+  `consequential` or `interview`, with `factBindings` entries naming `questionId`
+  and stable `factId`. Follow-up requires a new `reason`; interview also names
+  its requesting `source`. Use `design workflow` for the remaining allowance.
+
+  With `questions.json` prepared from that existing brief and thread:
+
+  ```sh
+  isocan design ask questions.json --thread thr_acme --json
+  isocan design questions qset_acme --json
+  # Run an answer as the named person, using their own claimed identity:
+  isocan design answer qset_acme --id answer_acme --question workflow --option batch --json
+  # Other forms: --text "...", --skip, --dismiss, --delegate usr_agent,
+  # or --references references.json. Use exactly one answer form per command.
+  isocan design answer --file saved-response.json --json
+  isocan design reference thr_acme cmt_answer ref_sketch --out sketch.svg --json
+  ```
+
+  `--file` accepts the full saved `DesignResponse`: its exact `question` source,
+  respondent, request/epoch and explicit `resolutions`. Use it for multiple
+  questions in one answer. A `--supersedes` replacement must explicitly retain
+  every question the earlier answer resolved. Skipping, dismissal and delegation
+  are outcomes, not supplied facts. An agent must never answer by borrowing the
+  person's identity.
+
+  Upload the real file with `add` before referencing it. A references file is
+  an array such as `{ "id": "ref_sketch", "state": "fetched", "artifact":
+  { "home": "https://example.test", "canvasId": "prj_acme", "itemId":
+  "itm_sketch", "versionId": "ver_sketch", "blobHash": "<actual SHA-256>" } }`.
+  Replace the example identities with the uploaded version's real values.
+  Every reference ID in an answer should be distinct. Two versions of the same
+  item may be attached and read separately. A URL alone is `supplied`; an
+  `inaccessible` URL needs a reason. Neither claims inspected content. This
+  publishing path accepts local-canvas artifacts; copy remote references through
+  the existing authorized canvas path first. `design reference` opens the exact
+  retained bytes, even after a later edit; `--out` refuses to overwrite a file.
+  Without `--out`, the command returns a bounded UTF-8 or base64 page with an
+  optional `nextOffset`, so an image cannot flood the transcript.
+
+  Preserve the payload ID and saved content when retrying. CLI derives stable
+  operation/comment IDs and reports them with `accepted`, `pending` or `refused`.
+  A lost receipt can be confirmed by the exact saved comment; otherwise keep
+  the same intent until reconciled. `submittedOpId` retains the retry identity;
+  `opId` is the actual accepted operation, or null when only the saved comment
+  confirms delivery. `confirmedBy` distinguishes receipt from snapshot evidence.
+  Joined identities are compared through the home's current join map while
+  original answer authorship remains unchanged. Changing content under an old ID is a
+  conflict. One `undo` removes the answer and reopens its questions; `redo`
+  restores the original author and references.
+
+  A legacy JSON `/ask` remains readable, but another participant's next comment
+  is not its typed answer. Explicit adoption uses a file containing
+  `{threadId, questions, legacySource: {threadId, commentId, body}}`: name the
+  current brief and respondent, preserve the original body and equivalent
+  normalized questions. The original comment stays in history. Malformed legacy
+  content remains prose and cannot be adopted into an invented questionnaire.
 - **Read the design system before you build a screen.** `isocan design` prints
   it: a DESIGN.md (github.com/google-labs-code/design.md) whose front matter
   carries typed tokens and whose sections carry the reasoning. It is an ITEM on
@@ -2111,6 +2327,24 @@ isocan fit <items...>                  # grow items to the size their content wa
   with a DESIGN.md policy. See the
   [optional-tool research](../../../docs/research/2026-09-14-optional-project-linters.md)
   for measured compatibility, limits and conditional recommendations.
+
+  The source checkout's standalone repair-evaluation harness uses a fresh
+  output directory:
+
+  ```sh
+  node scripts/design-lint-eval.mjs --dry-run --out /tmp/acme-design-eval
+  ```
+
+  Its six fixtures and 36 canned runs exercise a real local daemon, Chrome and
+  conditional repair with zero evaluation model calls. Dry runs establish no
+  model lift or human ratings. Model mode needs a separately user-approved
+  budget. Read the [evaluation plan](../../../docs/projects/design-lint/evaluation.md)
+  and [measured results](../../../docs/research/2026-09-14-design-lint-evaluation.md).
+  For the documented pilot's verified zero-token login refusal, model mode
+  accepts `--continue-from <prior-output-directory>` and a fresh `--out`,
+  retaining the original budget and invocation count with one claimed successor.
+  The evaluation plan specifies this narrow continuation's eligibility.
+
 
   **Past six screens with no design system, `isocan add` refuses an HTML file.**
   Two screens gets you a note, because the second screen is where a choice
@@ -2440,6 +2674,121 @@ Put every asset on the canvas — `isocan add icon.png --title "App icon"
 --prop parent=<the screen it came from>` — so it hangs under its source when
 anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 
+### Comparing and adopting a design
+
+Use `design compare` when a real structural or visual decision remains.
+Publish two working wireframes for workflow uncertainty, or two polished
+previews for visual uncertainty, with the same realistic scenario and fidelity.
+Name each hypothesis/tradeoff and give your attributed recommendation. A batch
+holds one to three options; one is an explicit direct/delegated speed path.
+Link further batches for requested wider exploration. A precise incumbent edit
+needs neither comparison nor another interview.
+
+```sh
+isocan design compare req_acme_receiving --json > comparison-read.json
+isocan design compare --publish comparison.json --thread thr_acme --json
+isocan design compare req_acme_receiving --thread thr_acme --comment cmt_acme_comparison --option continuous --out /tmp/acme-continuous.html
+isocan design respond response.json --json
+isocan design decide decision.json --json
+isocan design decide decision.json --retry --json
+isocan design compare --target item_acme_receiving --json
+```
+
+A publication file is `{threadId,comparison,opId?,commentId?,retry?}`, or a
+bare comparison with `--thread`. The comparison has schemaVersion 1,
+kind `comparison`, stable id/revision, requestId/epoch, exact admitted `brief`,
+decisionKey, audience, mode, uncertainty, scenario, fidelity, alternatives,
+recommendedAlternativeId, recommendation, target, governing, supersedes,
+correctsDecisionId and followsResponseId. Initial predecessor fields are null.
+Each alternative has id/title/hypothesis/tradeoff and an exact artifact ref.
+Audience is `{kind:'human',respondentActorId}` or
+`{kind:'external-agent',externalRequestId,reporterActorId}`. A reissue is a new
+identity with `supersedes` naming the old exact thread/comment/payload/revision;
+it does not change the older source. Option downloads retain exact bytes.
+
+The JSON read supplies `approvalBases` per option. Capture the basis when the
+choice is reviewed: exact brief/epoch, all options, target content, title,
+description, properties, scope and governing version. A decision file wraps
+`{threadId,decision,opId?,commentId?,retry?}`; decision contains id, requestId,
+decisionKey, source `{kind:'comparison',source}`, that captured basis,
+chosenAlternativeId, fresh versionId, supersedesDecisionId and authority.
+Use the exact source and basis already seen; never recapture latest metadata
+at the final submit. Reading or trying an option never selects it.
+
+Authority is one of these explicit forms:
+
+- `human-choice`: nullable human `reason`; the writer verifies the named person.
+- `canvas-delegation`: effective responseId and the named agent's own rationale.
+- `external-report`: externalRequestId, reportedOutcome (`choice` or
+  `delegation`), statement, nullable reportedReason and your rationale.
+- `agent-judgment`: your rationale for a direct proposal; no delegation claim,
+  and no resolution of an outstanding comparison addressed to a person.
+
+A native external report is authored by the original reporting agent, or its
+current worker after explicit reasoned resume. Do not manufacture a human
+questionnaire response or repeat the conversation to obtain one. A human's
+missing reason remains null, never a copy of the recommendation.
+
+`design respond` takes `{threadId,response,opId?,commentId?,retry?}`. Its typed
+`comparison-response` names requestId/epoch, exact comparison source, authority
+`human` or `external-report`, an outcome and supersedesResponseId. Outcomes are
+delegate (agentActorId), more (nullable count/instruction), combine (at least
+two optionId/part entries plus a specific instruction), skip or dismiss.
+More/combine request real new work; they do not adopt an imaginary merge.
+These responses remain distinct from ordinary `design answer`.
+
+One `design decide` conditionally adopts compatible content and records the
+choice together. One Undo restores both. The brief and rejected alternatives
+remain available; an existing screen keeps its filename. A connected-app
+prototype choice records a direction, not an implemented repository runtime.
+Invalid local files remain editable. After pending delivery, preserve the exact
+file and IDs and use `--retry`; changed inputs require explicit review and a new
+intent. Accepted with stale/unavailable consistency is still accepted. Read
+history and the effective rationale through `design compare`, `design brief`
+or `design workflow` before extending another screen through either entrance.
+
+### Carrying an authored design into the next screen
+
+Run `design workflow` for the shared procedure. `design show --in <scope>`
+(and `--css` or `--tokens`) opens the same permitted governing document as
+`design check --in <scope> --provenance --json`. The default check JSON stays
+the findings array; `--provenance` returns `{findings,governing}`, including an
+exact identity even when no findings exist. `design=none` exempts the canvas
+from requiring a system; any incumbent remains visible and applicable.
+
+Use a new folder for a projection; its manifest identifies the source rather
+than creating another canvas design system. After inspecting the current
+system, this walk preserves every vendor/lint field and the prose while
+changing one authored rationale:
+
+```sh
+isocan design recipes
+isocan design recipe receiving --out /tmp/acme-receiving-reference
+isocan design project /tmp/acme-working-system
+isocan design direction --json
+# Edit /tmp/acme-working-system/DESIGN.md using its actual tokens and rationale.
+isocan design reconcile /tmp/acme-working-system --json
+```
+
+`design direction <file>` accepts `{projection,direction,opId,versionId,retry?}`:
+use the projection manifest and a complete version-1 direction with `stage`,
+`rationale`, `taskHierarchy`, `layout`, `density`, `typography`, `palettePurpose`
+and `treatments:[{name,guidance,states}]`. Stage is `provisional` or `accepted`;
+it is authored content, with the actual version author shown separately, and
+does not manufacture a human preference. Use `design set DESIGN.md --in <scope>`
+for the first system; subsequent direction edits identify their exact source.
+After uncertain direction delivery, preserve `projection`, `direction`, `opId`
+and `versionId` unchanged and set `retry:true` in that file. This asks for the
+original receipt even if a later edit pruned its version or removed the item.
+
+Invalid working document syntax is refused before preparing a pending intent;
+correct `DESIGN.md` and run reconciliation again. An uncertain save retains `DESIGN.intent.json` and the original IDs. Retry the
+same content; changing it does not authorize overwriting the pending intent.
+A refused stale save leaves the working file intact. Review the new source,
+then explicitly use `design project <directory> --refresh` to capture it while
+preserving your working file. An accepted save can separately report stale or
+unavailable consistency after another edit; do not call that a current system.
+
 ## Quick reference of the whole surface
 
 **Canvas membership (new canvases use groups):** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
@@ -2563,8 +2912,18 @@ on the thread before putting one on somebody else's canvas,
 `inbox [--mentions] [--new]`, `seen [--mark] [--canvas <name>]`,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
-`design [--css|--tokens] [set|check]`, `design audit [--item|--in|--file|--fail]`,
+`design [--css|--tokens] [set|check]`, `design check [--in <scope>] [--provenance]`,
+`design direction [file] [--in <scope>|--item <id>]`, `design project <directory> [--in <scope>|--item <id>] [--refresh]`,
+`design reconcile <directory>`, `design recipes`, `design recipe <id> [--design|--out <directory>]`, `design audit [--item|--in|--file|--fail]`,
 `design repair <item> <file> --from-audit <report.json>`,
+`design questions [payload] [--respondents]`, `design ask <file> [--thread <id>]`,
+`design answer [payload] [--file <file>]`, `design reference <thread> <comment> <reference> [--out <file>]`,
+`design workflow [request] [--thread|--comment|--output]`, `design start <file> [--automatic]`,
+`design brief [request] [--update|--resume|--cancel|--complete <file>]`,
+`design brief <request> --reference <file> [--face source|visual] [--out <file>]`,
+`design receipt [request] [--publish <file>]`,
+`design compare [request] [--publish <file>|--target <item>] [--option <id> --out <file>]`,
+`design respond <file> [--thread <id>] [--retry]`, `design decide <file> [--thread <id>] [--retry]`,
 `add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle

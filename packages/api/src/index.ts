@@ -20,6 +20,12 @@ export * from "./connect.ts";
 export * from "./context-summary.ts";
 export * from "./design-audit.ts";
 export * from "./design-audit-reader.ts";
+export * from "./questionnaire-reader.ts";
+export * from "./questionnaire.ts";
+export * from "./design-request-reader.ts";
+export * from "./design-request.ts";
+export * from "./design-decision-reader.ts";
+export * from "./design-decision.ts";
 export * from "./feedback.ts";
 export * from "./canvas-groups.ts";
 export type { ContextReadOptions, CommentContextOptions, ContextPageOptions, ContextBytesOptions, ContextItemContent } from "./canvas-context.ts";
@@ -36,3 +42,6 @@ export * from "./export.ts";
  * compose a pass address, read one a person pasted, ask whether a home is
  * this machine. The same three `isocan/rc` hands a host with no Node. */
 export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "@isocan/core";
+export * from "./design-system-reader.ts";
+export * from "./design-system.ts";
+export * from "./design-recipes.ts";

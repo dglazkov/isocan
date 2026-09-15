@@ -11,6 +11,7 @@ import {
   applyOperation,
   activityOpType,
   bindName,
+  harnessOf,
   COMMAND_NAME,
   emptyCanvas,
   extensionFor,
@@ -407,8 +408,17 @@ export class FileStore implements Store {
      * back so this runs once per home.
      */
     const backfill = snapshot !== null && snapshot !== undefined && saved.harnesses === undefined;
+    // Older relay claims overwrote actual human/agent provenance with the
+    // transport name. Recover only those rows from this already loaded log;
+    // names, joins, custody and the snapshot sequence are not migration inputs.
+    const relayRows = new Set(Object.entries(saved.harnesses ?? {}).filter(([, harness]) => harness.toLowerCase() === "replica").map(([id]) => id));
+    const actualHarnesses = new Map<string, string>();
     for (const entry of entries) {
       const op = entry.envelope.op;
+      if (op.type === "actor.claim" && relayRows.has(entry.envelope.actor.id)) {
+        const harness = harnessOf(op.sessionKey);
+        if (harness && harness.toLowerCase() !== "replica") actualHarnesses.set(entry.envelope.actor.id, harness);
+      }
       if (entry.seq <= lastSeq) {
         if (backfill && op.type === "actor.claim") {
           registry = bindName(registry, { actor: entry.envelope.actor, ts: entry.envelope.ts, sessionKey: op.sessionKey });
@@ -432,6 +442,15 @@ export class FileStore implements Store {
         continue;
       }
       lastSeq = entry.seq;
+      recovered = true;
+    }
+    if (relayRows.size) {
+      const harnesses = { ...registry.harnesses };
+      for (const id of relayRows) {
+        const actual = actualHarnesses.get(id);
+        if (actual) harnesses[id] = actual; else delete harnesses[id];
+      }
+      registry = { ...registry, harnesses };
       recovered = true;
     }
     if (recovered) await this.saveActors(registry, lastSeq);

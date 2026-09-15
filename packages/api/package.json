@@ -7,7 +7,12 @@
     ".": "./src/index.ts",
     "./context": "./src/context-reader.ts",
     "./design-audit": "./src/design-audit-reader.ts",
-    "./routes": "./src/routes.ts"
+    "./questionnaire": "./src/questionnaire-reader.ts",
+    "./design-request": "./src/design-request-reader.ts",
+    "./routes": "./src/routes.ts",
+    "./design-system": "./src/design-system-reader.ts",
+    "./design-recipes": "./src/design-recipes.ts",
+    "./design-decision": "./src/design-decision-reader.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

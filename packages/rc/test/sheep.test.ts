@@ -152,6 +152,8 @@ describe("SheepAgent over SheepCommands", () => {
     const tree = home.pastureTrees.get("isocan-percy")!;
     expect(Object.keys(tree.tree).sort()).toEqual(["BRIEF.md", "setup.sh", "skills/isocan/SKILL.md"]);
     expect(tree.tree["BRIEF.md"]).toContain('You are Percy, an agent enrolled on the isocan canvas "Acme Board"');
+    expect(tree.tree["BRIEF.md"]).toContain("isocan design workflow");
+    expect(tree.tree["BRIEF.md"]).toContain("Precise edits and archive imports");
     expect(tree.tree["setup.sh"]).toContain('isocan setup --direct --no-open --no-install "$ISOCAN_PASS"');
     expect(tree.tree["skills/isocan/SKILL.md"]).toBe(COLLAB_SKILL);
     expect(tree.secrets).toEqual({});

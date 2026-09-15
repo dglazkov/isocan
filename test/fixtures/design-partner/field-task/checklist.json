@@ -1,0 +1,22 @@
+{
+  "equipment": [
+    {
+      "id": "P-07",
+      "name": "Transfer pump"
+    },
+    {
+      "id": "P-12",
+      "name": "Circulation pump"
+    }
+  ],
+  "checks": [
+    "Housing",
+    "Seal",
+    "Power lead"
+  ],
+  "statuses": [
+    "Pass",
+    "Needs attention"
+  ],
+  "noteRequiredWhen": "Needs attention"
+}

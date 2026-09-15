@@ -241,6 +241,19 @@ describe("installable straight from git", () => {
       const routes = await fs.readFile(path.join(out, "api/src/routes.d.ts"), "utf8");
       expect(routes).toContain("export declare class DaemonRoutes");
       expect(routes).not.toMatch(/"@isocan\//);
+      expect(routes).toContain('"../../core/src/design-request.js"');
+      // All emitted declarations must be standalone, including lazy subpaths
+      // whose export name differs from their source filename (design-audit).
+      const declarations = await fs.readdir(out, { recursive: true });
+      for (const file of declarations.filter(name => name.endsWith(".d.ts"))) {
+        const full = path.join(out, file), text = await fs.readFile(full, "utf8");
+        expect(text, file).not.toMatch(/"@isocan\//);
+        for (const match of text.matchAll(/(?:from\s+|import\s*\(\s*)"(\.[^"]+)"/g)) {
+          const target = path.resolve(path.dirname(full), match[1]!.replace(/\.js$/, ".d.ts"));
+          expect(path.relative(out, target).startsWith(".."), `${file}: ${match[1]} escapes the declarations`).toBe(false);
+          await expect(fs.access(target), `${file}: ${match[1]} has no declaration`).resolves.toBeUndefined();
+        }
+      }
       // And both entries hand over core's address helpers (sheep's collie,
       // phase 2), re-exported from core's own declarations inside the tree.
       const apiIndex = await fs.readFile(path.join(out, "api/src/index.d.ts"), "utf8");

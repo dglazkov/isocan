@@ -1,0 +1,21 @@
+{
+  "ref": "cb272b208608d0a78bbd0c0435a78f3dccb72e3d",
+  "node": "v24.21.0",
+  "scope": "Source and exported helper behavior; not a browser journey or design-quality evaluation",
+  "questionnaire": {
+    "validPayloadAccepted": true,
+    "malformedQuestionObjectAccepted": true,
+    "openBeforeReply": true,
+    "openAfterOtherAgentReply": false,
+    "sameAuthorFollowupKeepsOpen": true,
+    "uploadHandler": "function handleFiles(files: FileList | null) {\n    if (!files || files.length === 0) return;\n    const names = Array.from(files).map((f) => f.name);\n    const next = [...uploadFiles, ...names];\n    setUploadFiles(next);\n    setAnswers({ ...answers, [q.id]: next });\n  }",
+    "visualCardsUsePaletteSwatches": true
+  },
+  "sourceObservations": {
+    "guideLines": 2601,
+    "guideMentionsQuestionnaire": false,
+    "arrivalAuditSkipsJson": true,
+    "addJsonReturnsBeforeCourtesyChecks": true,
+    "anySystemClearsCanvasStanding": true
+  }
+}

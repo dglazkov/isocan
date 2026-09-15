@@ -22,6 +22,7 @@ import { EmojiPicker } from "./EmojiPicker.tsx";
 import { TerminalDialog } from "./TerminalDialog.tsx";
 import { CloudAgentDialog } from "./CloudAgentDialog.tsx";
 import { SurfacesDialog } from "./SurfacesDialog.tsx";
+import { YourBench } from "./YourBench.tsx";
 import { VerifyDialog } from "./VerifyDialog.tsx";
 import { canVerifyEmail, useAttestOffer } from "../lib/signin.ts";
 import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
@@ -121,6 +122,7 @@ export function IdentityMenu({
   const [terminal, setTerminal] = useState(false);
   const [cloud, setCloud] = useState(false);
   const [surfaces, setSurfaces] = useState(false);
+  const [bench, setBench] = useState(false);
   const [verify, setVerify] = useState(false);
   // The same gate every control of this project stands behind: the refusal's
   // "Prove your address" is drawn only where the home can verify an email.
@@ -203,6 +205,7 @@ export function IdentityMenu({
     return <CloudAgentDialog actor={actor} canvasId={canvasId} onClose={onClose} />;
   }
   if (surfaces) return <SurfacesDialog onClose={onClose} />;
+  if (bench) return <YourBench actor={actor} onClose={onClose} />;
   if (verify) {
     return <VerifyDialog actor={actor} onIdentity={onIdentity} onClose={onClose} />;
   }
@@ -524,6 +527,18 @@ export function IdentityMenu({
         onClick={() => setSurfaces(true)}
       >
         Your surfaces…
+      </button>
+      {/* Your bench, beside Your surfaces, and for the same reason: this menu
+          is *how I'm connected here*, and the agents that answer for you are
+          another way you are connected. A standing agent belongs to a canvas
+          and is drawn in the workbench; a bench belongs to a PERSON, so it
+          hangs off the face and needs no canvas to open. */}
+      <button
+        className="btn identity-terminal"
+        title="The agents you have, and whether anything could answer for one right now"
+        onClick={() => setBench(true)}
+      >
+        Your bench…
       </button>
       <button
         className="btn identity-leave"

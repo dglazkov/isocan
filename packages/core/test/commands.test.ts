@@ -1,13 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   COMMAND_NAME,
   DEFAULT_COMMANDS,
+  DEFAULT_COMMAND_CATALOGUE,
   findCommand,
   matchCommands,
   commandFileText,
   mergeCommands,
   parseCommandFile,
   parseSlashCommand,
+  registerModule,
+  unregisterModule,
+  withModuleCommands,
+  type CommandMetadata,
   type SlashCommand,
 } from "../src/index.ts";
 
@@ -104,6 +109,13 @@ describe("a home's commands over the built-ins", () => {
 });
 
 describe("the built-ins", () => {
+  it("offers the exact same metadata without pretending the menu contains instructions", () => {
+    expect(DEFAULT_COMMAND_CATALOGUE).toEqual(DEFAULT_COMMANDS.map(({ body: _body, ...metadata }) => metadata));
+    for (const entry of DEFAULT_COMMAND_CATALOGUE) expect(entry).not.toHaveProperty("body");
+    expect(findCommand(DEFAULT_COMMAND_CATALOGUE, "format")?.name).toBe("tidy");
+    expect(matchCommands(DEFAULT_COMMAND_CATALOGUE, "help")[0]).toMatchObject({ local: true });
+  });
+
   it("are all legally named, and named once", () => {
     for (const c of DEFAULT_COMMANDS) expect(c.name, c.name).toMatch(COMMAND_NAME);
     expect(new Set(DEFAULT_COMMANDS.map((c) => c.name)).size).toBe(DEFAULT_COMMANDS.length);
@@ -135,6 +147,23 @@ describe("the built-ins", () => {
       DEFAULT_COMMANDS.map((c) => c.name),
       "the old name is not a row of its own",
     ).not.toContain("format");
+  });
+});
+
+describe("metadata and full commands share one overlay and alias resolver", () => {
+  afterEach(() => unregisterModule("@isocan/acme-command-test"));
+
+  it("keeps home shadowing, module dispatch and aliases when the base contains no bodies", () => {
+    registerModule({ name: "@isocan/acme-command-test", commands: [
+      command("acme-panel", { source: "module", opens: "acme-dialog", aka: ["acme-old"] }),
+      command("help", { source: "module", opens: "unwanted-dialog" }),
+    ] });
+    const home: CommandMetadata = { name: "help", description: "Acme home help", usage: "[topic]", source: "home" };
+    const merged = withModuleCommands(mergeCommands<CommandMetadata>(DEFAULT_COMMAND_CATALOGUE, [home]));
+    expect(findCommand(merged, "help")).toEqual(home);
+    expect(findCommand(merged, "acme-old")).toMatchObject({ name: "acme-panel", source: "module", opens: "acme-dialog", body: "do it" });
+    expect(findCommand(merged, "format")?.name).toBe("tidy");
+    expect(merged.map((c) => c.name)).toEqual([...new Set(merged.map((c) => c.name))].sort((a, b) => a.localeCompare(b)));
   });
 });
 

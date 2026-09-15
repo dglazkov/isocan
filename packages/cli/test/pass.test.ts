@@ -4,12 +4,13 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { canvasUrl, INSTALL_SPEC } from "@isocan/core";
+import { canvasUrl, INSTALL_SPEC, PASS_REDEEM_ROUTE } from "@isocan/core";
 import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
 import { markerFile } from "@isocan/server";
 import { harnessVars } from "@isocan/api";
 import { readBadge, writeBadge, type StoredBadge } from "../../server/src/badge-store.ts";
 import { reservePort } from "../../../test/ports.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **Scene 5, from the terminal end.**
@@ -211,6 +212,134 @@ describe("isocan pass — minting the escalation credential from a terminal", ()
     expect(minted.stdout).toMatch(/not post it on a thread/i);
     // And it points at the thing you hand a PERSON instead.
     expect(minted.stdout).toContain("isocan share");
+  }, 60_000);
+});
+
+/**
+ * **`isocan pass --agent` — handing an agent over, not the person** (sheep's
+ * collie, phase 3: an agent moves in).
+ *
+ * Priya's laptop enrolled Percy with `isocan rc add`, so the laptop's badge
+ * holds Percy's claim; a pass minted for Percy's actor is how a hosted rc —
+ * the collie's badge, a surface that is not Priya — comes to answer for him.
+ * The desk already allows exactly that and refuses anything else with
+ * `not-your-actor`; what the verb adds is the name on the roster and the
+ * words, so these cases read what a person reads and then redeem from a badge
+ * that is nobody, to see the claim really moved.
+ *
+ * Synthetic throughout: Percy, Shaun, Jordan, the Acme canvas.
+ */
+describe("isocan pass --agent — a pass that arrives as the agent", () => {
+  const post = (badge: TestBadge, url: string, body: unknown) =>
+    fetch(`http://127.0.0.1:${homePort}${url}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify(body),
+    });
+  const addItem = (itemId: string) => ({
+    type: "item.add" as const,
+    itemId,
+    version: { id: `ver_${itemId}`, blobHash: `h_${itemId}`, mimeType: "text/markdown", filename: `${itemId}.md`, size: 4 },
+    width: 100,
+    height: 80,
+    placement: { x: 5, y: 6 },
+  });
+
+  async function enrolPercy(): Promise<{ id: string; name: string }> {
+    const enrolled = await atHome("rc", "add", "Percy", "--harness", "sheep", "--json");
+    expect(enrolled.code, enrolled.stderr).toBe(0);
+    return (JSON.parse(enrolled.stdout) as { enrolled: { id: string; name: string } }).enrolled;
+  }
+
+  it("says the pass arrives as the agent, and prints the address to paste", async () => {
+    const canvasId = await acmeCanvas();
+    const percy = await enrolPercy();
+    const minted = await atHome("pass", "--agent", "Percy");
+    expect(minted.code, minted.stderr).toBe(0);
+    const home = `http://127.0.0.1:${homePort}`;
+    const identity = minted.stdout.split("\n").find((line) => line.startsWith("identity"));
+    expect(identity?.replace(/^identity\s+/, "")).toBe(
+      `${percy.name} (${percy.id}) — an agent: whoever redeems this arrives as Percy, not as you`,
+    );
+    expect(minted.stdout).toContain("Paste this where Percy's new host asks for a pass (`collie new --pass`");
+    const pasted = minted.stdout.split("\n").filter((line) => line.startsWith("  ")).map((line) => line.trim());
+    expect(pasted).toHaveLength(1);
+    expect(pasted[0]!.startsWith(`${canvasUrl(home, canvasId)}#pss_`)).toBe(true);
+    expect(minted.stdout).toContain(
+      "Whoever redeems it answers for Percy from then on; once it takes up Percy's cursor,\n" +
+        "this machine's `isocan rc` stands down for Percy and keeps answering for everyone else.",
+    );
+    expect(minted.stdout).toContain("credential");
+    // Not the setup line: `setup` would make a machine's person the agent.
+    expect(minted.stdout).not.toContain("npx ");
+  }, 60_000);
+
+  it("the pass endows the agent's claim on the badge that redeems it — and never Priya's", async () => {
+    const canvasId = await acmeCanvas();
+    const percy = await enrolPercy();
+    const minted = await atHome("pass", "--agent", "percy", "--json");
+    expect(minted.code, minted.stderr).toBe(0);
+    const out = JSON.parse(minted.stdout) as { address: string; actor: { id: string; name: string }; agent: boolean };
+    expect(out.actor).toEqual(percy);
+    expect(out.agent).toBe(true);
+    const token = out.address.split("#")[1]!;
+
+    // The collie's badge, say: a surface that has never been anyone.
+    const host = await mintTestBadge(`http://127.0.0.1:${homePort}`);
+    const before = await post(host, "/api/ops", { canvasId, actor: percy, op: addItem("itm_before") });
+    expect(before.status).toBe(400);
+    expect(((await before.json()) as { code: string }).code).toBe("not-your-actor");
+
+    const redeemed = await post(host, PASS_REDEEM_ROUTE, { token });
+    expect(redeemed.status, await redeemed.clone().text()).toBe(200);
+    expect(await redeemed.json()).toEqual({ canvasId, actor: percy });
+
+    // The claim moved: the host holds Percy, and only Percy.
+    const held = await homeDaemon.desk.claimsOf(host.badgeId);
+    expect(held.map((row) => row.actorId)).toEqual([percy.id]);
+    const wrote = await post(host, "/api/ops", { canvasId, actor: percy, op: addItem("itm_after") });
+    expect(wrote.status, await wrote.clone().text()).toBe(200);
+    const asPriya = await post(host, "/api/ops", { canvasId, actor: priya, op: addItem("itm_priya") });
+    expect(asPriya.status).toBe(400);
+  }, 60_000);
+
+  it("refuses a name that is not an agent on the canvas, in isocan's own words", async () => {
+    await acmeCanvas();
+    await enrolPercy();
+    const refused = await atHome("pass", "--agent", "Shaun");
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain('error: no standing agent "Shaun" on "Acme Sprint Board" — standing here: Percy');
+    expect(refused.stdout).not.toContain("#pss_");
+  }, 60_000);
+
+  it("refuses an agent this machine's badge does not hold with the desk's not-your-actor sentence", async () => {
+    const canvasId = await acmeCanvas();
+    // Shaun stands on the canvas, enrolled by Jordan's machine — whose badge,
+    // not Priya's, holds his claim.
+    const jordans = await mintTestBadge(`http://127.0.0.1:${homePort}`);
+    const jordan = { id: "usr_jordan", name: "Jordan" };
+    const shaun = { id: "usr_shaun", name: "Shaun" };
+    await jordans.speakAs(jordan);
+    await jordans.speakAs(shaun, "agent:shaun-at-jordans");
+    const enrolled = await post(jordans, "/api/ops", { canvasId, actor: jordan, op: { type: "agent.enroll", agent: shaun } });
+    expect(enrolled.status, await enrolled.clone().text()).toBe(200);
+
+    const refused = await atHome("pass", "--agent", "Shaun");
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain(
+      "error: this badge does not speak for usr_shaun — claim that actor first",
+    );
+    expect(refused.stderr).toContain(
+      "Shaun is not answered by this machine — `--agent` mints only for an agent this machine's badge holds",
+    );
+    expect(refused.stdout).not.toContain("#pss_");
+  }, 60_000);
+
+  it("refuses --admit-only beside --agent", async () => {
+    await acmeCanvas();
+    const refused = await atHome("pass", "--admit-only", "--agent", "Percy");
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain("`--admit-only` hands over no identity and `--agent` hands over an agent's — say one of them");
   }, 60_000);
 });
 

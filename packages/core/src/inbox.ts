@@ -826,6 +826,12 @@ export function dispatchReason(
     const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined);
     if (reason) return reason;
   }
+  if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
+    const thread = canvas?.threads[op.threadId];
+    const comment = thread?.comments.find((c) => c.id === op.commentId);
+    const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined);
+    if (reason) return reason;
+  }
   const rules = agent.rules;
   if (!rules) return null;
   const items = rules.items ?? [];

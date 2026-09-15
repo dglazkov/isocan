@@ -1,3 +1,5 @@
+import { DesignDecisionClientError, designDecisionOperation } from "./design-decision-capability.ts";
+import { supportsDesignDecisions } from "@isocan/core";
 import { Readable } from "node:stream";
 import { PersonalService, PersonalError } from "./personal.ts";
 import { SOURCE_POLICY_HEADER, parseSourcePolicyHeader, SOURCE_ACCESS_ROUTE, personalRoute, type SourceRequestContext, type SourceAccessRequest, type PersonalLinkRequest, type PersonalUnlinkRequest, type PersonalReadRequest } from "@isocan/core";
@@ -7,6 +9,10 @@ import { collectInbox, sequenceInbox } from "./inbox.ts";
 import { textAttention } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
+import { QuestionnaireClientError, questionnaireOperation, requireQuestionnaireClient } from "./questionnaire-capability.ts";
+import { supportsQuestionnaires } from "@isocan/core";
+import { supportsDesignRequests } from "@isocan/core";
+import { DesignRequestClientError, designRequestOperation } from "./design-request-capability.ts";
 import { registerCanvasGroupContext } from "./canvas-group-context.ts";
 import { createReadStream, existsSync, statSync, promises as fs } from "node:fs";
 import os from "node:os";
@@ -830,7 +836,7 @@ export function registerRoutes(
   };
 
   app.setErrorHandler((err, _req, reply) => {
-    if (err instanceof CanvasGroupsClientError) {
+    if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError) {
       return reply.status(426).send({ error: err.message, code: err.code });
     }
     if (err instanceof GroupConflictError || err instanceof MigrationBoundaryError) {
@@ -1251,6 +1257,10 @@ export function registerRoutes(
           const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
           if (snapshot) requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.project);
         }
+        if (!sourceContext && !recap && !pathname.includes("/blobs") && (!supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignDecisions(req.headers[CLIENT_FEATURES_HEADER]))) {
+          const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
+          if (snapshot) requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.canvas);
+        }
         /**
          * The capability check, method-keyed and in the SAME hook (#88): an
          * admission below `edit` (`view`, `read`) reads everything and
@@ -1345,8 +1355,17 @@ export function registerRoutes(
         }
         if (cap) sourceCaps.set(req, cap);
         const home = options.homes?.for(canvasId);
+        // Source actor restrictions must finish before a capability check reads private state.
+        // A remote source is checked by the authority receiving the original feature header.
+        // Recap carries bounded metadata, not typed reducer state; its queued read must
+        // remain the first content read so cancellation cannot touch a retained snapshot.
+        if (!home && !RECAP_HEAD_ROUTE.test(pathname) && !pathname.includes("/blobs") && (!supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignDecisions(req.headers[CLIENT_FEATURES_HEADER]))) {
+          const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
+          if (snapshot) requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.canvas);
+        }
         if (home) {
-          const headers: Record<string, string> = {};
+          // Transparent forwarding carries the original decoder capability, including absence.
+          const headers: Record<string, string> = { [CLIENT_FEATURES_HEADER]: typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "" };
           for (const name of ["content-type", "range", "x-isocan-filename"]) if (typeof req.headers[name] === "string") headers[name] = req.headers[name] as string;
           const actor = context.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
           const response = await home.sourceRequest(req.method, req.url, req.body, headers, actor, context);
@@ -1677,6 +1696,26 @@ export function registerRoutes(
   });
 
   registerCanvasGroupContext(app, engine, store);
+  app.get("/api/projects/:id/design/decisions", async (req) => {
+    const { id } = req.params as { id: string };
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req), typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
+    if (!supportsDesignDecisions(req.headers[CLIENT_FEATURES_HEADER])) throw new DesignDecisionClientError();
+    return engine.designDecisions(id, localOrigin(req));
+  });
+  app.get("/api/projects/:id/design/requests", async (req) => {
+    const { id } = req.params as { id: string };
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req), typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
+    if (!supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER])) throw new DesignRequestClientError();
+    return engine.designRequests(id, localOrigin(req));
+  });
+  app.get("/api/projects/:id/questionnaire/actors", async (req) => {
+    const { id } = req.params as { id: string };
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req));
+    return engine.designRespondents(id);
+  });
 
   app.get("/api/projects/:id/groups/migration", async (req) => {
     if (!supportsCanvasGroups(String(req.headers[CLIENT_FEATURES_HEADER] ?? ""))) throw new CanvasGroupsClientError();
@@ -1689,6 +1728,9 @@ export function registerRoutes(
     if (body.originGroupMode !== undefined && body.originGroupMode !== "legacy" && body.originGroupMode !== "groups") throw new OpValidationError("bad-op", "originGroupMode must be legacy or groups");
     if (body.op?.type === "project.create" && body.op.groupMode !== "legacy" && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
     if (body.op && groupOperation(body.op) && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
+    if (body.op && questionnaireOperation(body.op) && !supportsQuestionnaires(clientFeatures)) throw new QuestionnaireClientError();
+    if (body.op && designRequestOperation(body.op) && !supportsDesignRequests(clientFeatures)) throw new DesignRequestClientError();
+    if (body.op && designDecisionOperation(body.op) && !supportsDesignDecisions(clientFeatures)) throw new DesignDecisionClientError();
     if (body.canvasId && !supportsCanvasGroups(clientFeatures)) {
       const snapshot = await engine.getSnapshot(body.canvasId).catch(() => null);
       if (snapshot) requireGroupClient(clientFeatures, snapshot.project);
@@ -1857,6 +1899,7 @@ export function registerRoutes(
     }
     const entry = await engine.submit({
       ...(body as PostOpRequest & { actor: Actor }),
+      authoritativeHome: localOrigin(req),
       clientFeatures,
       badgeId: req.badge!.badgeId,
       ...(sourceContexts.has(req) ? { sourceContext: sourceContexts.get(req)! } : {}),
@@ -5198,6 +5241,7 @@ export function registerRoutes(
     // for this route and every other one shaped like it.
     const snapshot = await engine.getSnapshot(id);
     requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.project);
+    requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.canvas);
     // The one fact about the READER that rides on the read (#88): a client
     // whose admission is not edit learns its rung here, with the canvas,
     // instead of discovering it as a refusal per gesture. Absent means edit,
@@ -5241,6 +5285,7 @@ export function registerRoutes(
       entries = await engine.getLog(id, sinceSeq);
     }
     requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
+    requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
     return entries;
   });
 
@@ -5263,6 +5308,7 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     const entries = await engine.getArchivedLog(id);
     requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
+    requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], undefined, entries);
     return entries;
   });
 
@@ -5355,14 +5401,21 @@ export function registerRoutes(
         const remote = options.homes?.for(canvas.id);
         if (context && remote) {
           const actor = context.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
-          const result = await remote.personalRequest<import("@isocan/core").WatchLogResponse>("POST", "/api/oplog/watch", { ...body, only: [canvas.id], waitMs: 0 }, actor, context);
+          const result = await remote.personalRequest<import("@isocan/core").WatchLogResponse>("POST", "/api/oplog/watch", { ...body, only: [canvas.id], waitMs: 0 }, actor, context, typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
           entries.push(...result.entries); Object.assign(next, result.cursors);
           continue;
+        }
+        if ((!supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignDecisions(req.headers[CLIENT_FEATURES_HEADER]))) {
+          try { requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], (await engine.getSnapshot(canvas.id)).canvas); } catch (error) {
+            if (!(error instanceof QuestionnaireClientError || error instanceof DesignRequestClientError || error instanceof DesignDecisionClientError) || only?.has(canvas.id)) throw error;
+            continue;
+          }
         }
         const since = cursors?.[canvas.id] ?? 0;
         // Seeding (no cursors at all) means "from now on" — tips, no entries.
         const log = cursors ? await engine.getLog(canvas.id, since) : [];
         requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], canvas, log);
+        requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], undefined, log);
         const lastSeq = cursors
           ? (log[log.length - 1]?.seq ?? since)
           : (await engine.getSnapshot(canvas.id)).lastSeq;
@@ -5569,11 +5622,34 @@ export function registerRoutes(
     return { ok: true, asks };
   });
 
-  /** Who answers here if summoned — the union of every open hold's agents,
-   * local and relayed — and `parked`, the Web UI's add-agent gate. */
+  /**
+   * Who answers here if summoned — the union of every open hold's agents,
+   * local and relayed — and `parked`, the Web UI's add-agent gate.
+   *
+   * **For a canvas homed elsewhere, the home's answer, folded with this
+   * daemon's own holds** (issue #306). The registry here sees this machine's
+   * holds and what its members relay up, and nothing an rc parked at the
+   * home on another badge asserts — so a laptop's `isocan who` read a hosted
+   * rc's agents as `enrolled` while the home's tray read them `answerable`.
+   * This is the one route where the home's view is folded into a local
+   * registry rather than replacing it: a hold at this daemon is a fact this
+   * daemon has NOW, and the relay up takes a flap window to say it. The
+   * home's word on an agent wins where both speak. A home that does not
+   * answer leaves the local reading, which is what an offline laptop had
+   * before and all it can know.
+   */
   app.get("/api/projects/:id/rc", async (req) => {
     const { id } = req.params as { id: string };
-    return rc.answering(id);
+    const home = options.homes?.for(id) ?? null;
+    if (!home) return rc.answering(id);
+    const local = rc.answeringLocal(id);
+    const at = await home.rcAnswering(id).catch(() => null);
+    if (!at) return rc.answering(id);
+    const owners = new Map((at.owners ?? []).map((o) => [o.id, o]));
+    for (const owner of local.owners) if (!owners.has(owner.id)) owners.set(owner.id, owner);
+    const actorIds = [...new Set([...at.actorIds, ...local.actorIds])];
+    const policies = { ...local.policies, ...(at.policies ?? {}) };
+    return { parked: at.parked || local.parked, actorIds, owners: [...owners.values()], policies };
   });
 
   /**
@@ -5615,6 +5691,12 @@ export function registerRoutes(
     const isOwner = (owner: import("@isocan/core").Actor, askerId: string) =>
       sameActor(joined, owner.id, askerId);
     if (!rc.ask(id, ask, isOwner)) {
+      // Nothing parked here or behind a member — but for a canvas homed
+      // elsewhere, the rc may be holding AT the home on a badge this daemon
+      // never sees (issue #306). The home answers the ask as if it had been
+      // posted there, refusals included, verbatim.
+      const home = options.homes?.for(id) ?? null;
+      if (home) return home.rcAsk(id, { name, from: body.from, ...template });
       const owners = rc.answering(id).owners;
       if (owners.length > 0) {
         const names = owners.map((o) => o.name);
@@ -5790,6 +5872,7 @@ export function registerRoutes(
       return { error: "adopt takes the canvas's entries", code: "bad-op" };
     }
     requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], undefined, body.entries);
+    requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], undefined, body.entries);
     const made = await engine.adopt(id, body.entries, sourceContexts.get(req), req.badge!.badgeId);
     // Both arrivals need this: a teleport's bytes follow the log, and a
     // restored backup is otherwise a canvas nobody could enter. See above.

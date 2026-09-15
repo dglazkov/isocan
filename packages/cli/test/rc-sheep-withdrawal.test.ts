@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 import {
   badge,
   base,
+  collect,
   daemon,
   dimitri,
   holdOnThisMachine,
@@ -11,6 +14,7 @@ import {
   post,
   rcRows,
   spawnCli,
+  started,
   TEAM,
   until,
   useRcHome,
@@ -27,6 +31,99 @@ import { env, run, sheepCalls, sheepPass, sheepState, stateFile, useSheepHome } 
 
 useRcHome();
 useSheepHome();
+
+describe("the simulated sheep home's concurrent mutations", () => {
+  /**
+   * Hold each caller's initial state read until every caller has the same
+   * snapshot. Later reads pause after capturing their bytes, exposing a
+   * missing mutation lock without putting a rendezvous inside that lock.
+   * This scheduler belongs to the test launcher, not the sheep fixture.
+   */
+  const together = async (calls: Array<{ args: string[]; input?: string }>) => {
+    const barrier = `${home}/sheep-read-barrier`;
+    const preload = `${home}/sheep-read-preload.mjs`;
+    await fs.mkdir(barrier);
+    await fs.writeFile(preload, `
+      import fs from "node:fs";
+      import { syncBuiltinESMExports } from "node:module";
+      const read = fs.readFileSync;
+      let first = true;
+      const pause = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1);
+      fs.readFileSync = function(file, ...args) {
+        const bytes = read.call(this, file, ...args);
+        if (String(file) !== process.env.FAKE_SHEEP_STATE) return bytes;
+        if (first) {
+          first = false;
+          fs.writeFileSync(process.env.FAKE_SHEEP_READ_BARRIER + "/" + process.pid, "");
+          const deadline = Date.now() + 5000;
+          while (fs.readdirSync(process.env.FAKE_SHEEP_READ_BARRIER).length < Number(process.env.FAKE_SHEEP_READ_PARTIES)) {
+            if (Date.now() > deadline) throw new Error("initial sheep read rendezvous timed out");
+            pause();
+          }
+        } else {
+          const deadline = Date.now() + 100;
+          while (Date.now() < deadline) pause();
+        }
+        return bytes;
+      };
+      syncBuiltinESMExports();
+    `);
+    const fakeSheep = fileURLToPath(new URL("./fake-sheep.mjs", import.meta.url));
+    return Promise.all(calls.map(({ args, input }) => {
+      const child = spawn(process.execPath, ["--import", preload, fakeSheep, ...args], {
+        cwd: home,
+        env: {
+          ...process.env, ...env,
+          FAKE_SHEEP_READ_BARRIER: barrier,
+          FAKE_SHEEP_READ_PARTIES: String(calls.length),
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: 8000,
+        killSignal: "SIGKILL",
+      });
+      started.push(child);
+      const done = collect(child);
+      child.stdin!.end(input ?? "");
+      return done.then((result) => ({ ...result, signal: child.signalCode }));
+    }));
+  };
+  const busyHome = () => fs.writeFile(stateFile, JSON.stringify({
+    sessions: [{ id: "s_1", state: "busy", pasture: "acme" }],
+    pastures: { acme: { tree: {}, secrets: {} } },
+    entries: { s_1: [{ id: "e1" }] },
+    sheepSecrets: { s_1: { TEST_SECRET: "synthetic" } },
+    next: 2,
+  }));
+
+  it("ends one sheep exactly once when eight callers captured its original state", async () => {
+    await busyHome();
+    const results = await together(Array.from({ length: 8 }, () => ({ args: ["rm", "--json", "s_1"] })));
+    expect(results.every((r) => r.signal === null), JSON.stringify(results)).toBe(true);
+    expect(results.filter((r) => r.code === 0), JSON.stringify(results)).toHaveLength(1);
+    expect(results.filter((r) => r.code === 2)).toHaveLength(7);
+    expect(JSON.parse(results.find((r) => r.code === 0)!.stdout)).toEqual({ id: "s_1", ended: true, aborted: true });
+    const state = await sheepState();
+    expect(state.sessions).toEqual([]);
+    expect(state.entries).toEqual({});
+    expect(state.sheepSecrets).toEqual({});
+    expect(Object.keys(state.pastures)).toEqual(["acme"]);
+    expect(await sheepCalls()).toHaveLength(8);
+  });
+
+  it("keeps an unrelated pasture write when removal started from the same state", async () => {
+    await busyHome();
+    const results = await together([
+      { args: ["rm", "--json", "s_1"] },
+      { args: ["pasture", "put", "acme", "NOTE.md"], input: "Acme note" },
+    ]);
+    expect(results.map((r) => [r.code, r.signal]), JSON.stringify(results)).toEqual([[0, null], [0, null]]);
+    const state = await sheepState();
+    expect(state.sessions).toEqual([]);
+    expect(state.entries).toEqual({});
+    expect(state.sheepSecrets).toEqual({});
+    expect(state.pastures.acme.tree).toEqual({ "NOTE.md": "Acme note" });
+  });
+});
 
 describe("the sheep harness (sheep-harness phase 1)", () => {
   /**

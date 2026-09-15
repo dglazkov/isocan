@@ -132,7 +132,7 @@ describe("a design competition, from the terminal", () => {
     const tokens = (await ok(["design", "--css", "--in", "Road Signs", "--canvas", C])).stdout;
     expect(tokens).toMatch(/--/);
     // Three lanes, three systems — and the canvas's own is still nobody's.
-    await refused(["design", "--css", "--canvas", C], /no design system/);
+    await refused(["design", "--css", "--canvas", C], /no design system/i);
 
     // Scene 2 — the fighters walk in, each from its pack's template.
     const cast = await json(["competition", "start", "--canvas", C]);

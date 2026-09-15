@@ -10,7 +10,7 @@ import {
   type RefObject,
   type UIEvent,
 } from "react";
-import type { ItemRefCandidate, MentionCandidate, SlashCommand } from "@isocan/core";
+import type { ItemRefCandidate, MentionCandidate, CommandMetadata } from "@isocan/core";
 import { matchCommands } from "@isocan/core";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { mentionChipStyle, splitChips } from "../lib/chips.ts";
@@ -487,7 +487,7 @@ function matchPeers(peers: MentionPeer[], query: string): MenuOption[] {
 
 /** The commands worth offering — core decides, so the menu and
  * `isocan command list` can never disagree about what exists. */
-function matchSlashCommands(commands: SlashCommand[], query: string): MenuOption[] {
+function matchSlashCommands(commands: CommandMetadata[], query: string): MenuOption[] {
   return matchCommands(commands, query, MAX_COMMANDS).map((command) => ({
     id: command.name,
     label: command.name,

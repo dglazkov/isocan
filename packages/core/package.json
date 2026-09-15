@@ -6,7 +6,16 @@
   "exports": {
     ".": "./src/index.ts",
     "./markdown": "./src/markdown-text.ts",
-    "./design-audit": "./src/designaudit.ts"
+    "./design-audit": "./src/designaudit.ts",
+    "./design-partner": "./src/design-partner.ts",
+    "./design-partner-plan": "./src/design-partner-plan.ts",
+    "./questionnaire": "./src/questionnaire.ts",
+    "./questionnaire-adoption": "./src/questionnaire-adoption.ts",
+    "./design-brief": "./src/design-brief.ts",
+    "./design-request": "./src/design-request.ts",
+    "./design-record": "./src/design-record.ts",
+    "./design-direction": "./src/design-direction.ts",
+    "./design-decision": "./src/design-decision.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

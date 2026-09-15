@@ -1,0 +1,4 @@
+id,queue,age_days,reason
+AC-201,Fulfillment,9,Replacement part missing
+AC-202,Fulfillment,8,Carrier investigation
+AC-203,Fulfillment,7,Address correction

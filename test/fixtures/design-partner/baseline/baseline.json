@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "procedureRevision": "design-partner-baseline-v1",
+  "sourceRevision": "304346276dbabd3b7c10dff3f55070dbcff10ab2",
+  "capturedOn": "2026-09-14",
+  "capture": "Local main source, before design-partner implementation. No deployed build is asserted.",
+  "runtime": {
+    "kind": "pinned-source-checkout",
+    "sourceRevision": "304346276dbabd3b7c10dff3f55070dbcff10ab2",
+    "cliEntry": "packages/cli/bin/isocan.js",
+    "requires": [
+      "A separately prepared checkout at this revision",
+      "Matching model, tool access, reference facts and resource ceilings across paired conditions",
+      "A harness exposing the frozen guide and manual-command resources on demand",
+      "Actual source/runtime identity in each attempted result"
+    ]
+  },
+  "files": [
+    {
+      "path": "helpers.ts.txt",
+      "sha256": "dc7cfb1f21d77495022443e613630178b373d2bd506ff30091f3d6a8a1d02aeb",
+      "source": "packages/rc/src/helpers.ts",
+      "purpose": "Exact source of the canvas summons adapter"
+    },
+    {
+      "path": "sheep.ts.txt",
+      "sha256": "cee012e72e8465a2a670e1ec34a9c4ed9736b28017637fad8e07bc7148cd23bb",
+      "source": "packages/rc/src/sheep.ts",
+      "purpose": "Exact hosted canvas orientation, including BRIEF"
+    },
+    {
+      "path": "agent-guide.md",
+      "sha256": "1b13df54fca67269929fa35d41ee47291bff9e3062a89e5b63afda4b0c49ccdd",
+      "source": "packages/cli/src/agent-guide.md",
+      "purpose": "Full CLI collaboration guide, available on demand"
+    },
+    {
+      "path": "collaboration-skill.md",
+      "sha256": "1ab7598f32052b7e2fc9b96c85123eff3b5426d059aede97f25370f841b1a674",
+      "source": ".agents/skills/isocan-collab/SKILL.md",
+      "purpose": "External harness doorway, available at orientation"
+    },
+    {
+      "path": "commands.ts.txt",
+      "sha256": "389362e23fedd418fcae9b9f26d132f1283962b0e7a3852dd718350667aa846d",
+      "source": "packages/core/src/commands.ts",
+      "purpose": "Exact manual command source"
+    },
+    {
+      "path": "slop.ts.txt",
+      "sha256": "461897c68d64ebdbaede64ebdc664c7611b9e300c1b14b51f58c433bb73fed3e",
+      "source": "packages/core/src/slop.ts",
+      "purpose": "Dependency of the manual command bodies"
+    },
+    {
+      "path": "summons.mjs",
+      "sha256": "13f9c3d1f3641e8351ba928b0f315fd61272319f2f0d2fcacc27392dfcded8bd",
+      "source": "packages/rc/src/helpers.ts#summonsPrompt",
+      "purpose": "Type-erased original function, no imports or provider calls"
+    },
+    {
+      "path": "manual-commands.json",
+      "sha256": "cd6599960d3529ff35425edc470f3b137ba25ab14575405297deb214c66eb694",
+      "source": "packages/core/src/commands.ts#DEFAULT_COMMANDS",
+      "purpose": "All rendered built-ins, including current slop guidance; on demand, not auto-injected"
+    }
+  ]
+}

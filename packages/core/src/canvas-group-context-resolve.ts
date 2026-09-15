@@ -3,6 +3,7 @@ import { sourceFaceOf, visualFaceOf } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { GroupConflictError, OpValidationError } from "./errors.ts";
 import { annotationTarget } from "./annotation.ts";
+import { retainedDesignVersion } from "./design-record.ts";
 import { contextClosure, excludedInAmbient, type ContextContentPage, type ContextManifest, type ContextRequest } from "./canvas-group-context.ts";
 
 // Fresh request resolution is separate from the browser's replay/ambient leaf,
@@ -28,7 +29,7 @@ function manifest(state: CanvasState, revision: number, request: ContextRequest,
     const item = state.canvas.items[itemId];
     if (!item) return { itemId, parentId: null, depth, title: itemId, kind: "missing", excluded: false, unavailable: "item is not live at this revision", version: null, threadIds: [] };
     const current = item.versions.find((version) => version.id === item.currentVersionId);
-    const version = current ? structuredClone(current) : null;
+    const version = current ? retainedDesignVersion(current) : null;
     if (version?.visual) version.visual = { ...version.visual, filename: version.visual.filename ?? version.filename, size: version.visual.size ?? version.size };
     return {
       itemId, parentId: item.containerId ?? null, depth, title: item.title,

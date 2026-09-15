@@ -1,3 +1,5 @@
+import { DesignDecisionClientError, designDecisionOperation } from "./design-decision-capability.ts";
+import { supportsDesignDecisions } from "@isocan/core";
 import { textAttention } from "@isocan/core";
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -22,6 +24,10 @@ import {
 } from "@isocan/core";
 import { Engine, CanvasNotFoundError } from "./engine.ts";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
+import { QuestionnaireClientError, questionnaireOperation, requireQuestionnaireClient } from "./questionnaire-capability.ts";
+import { supportsQuestionnaires } from "@isocan/core";
+import { supportsDesignRequests } from "@isocan/core";
+import { DesignRequestClientError, designRequestOperation } from "./design-request-capability.ts";
 import type { Desk } from "./desk.ts";
 import { admissionIn, admittingGrant, heldCapability } from "./grants.ts";
 import {
@@ -167,6 +173,9 @@ export class SocketCensus {
  */
 interface Member {
   groupCapable: boolean;
+  questionnaireCapable: boolean;
+  designRequestCapable: boolean;
+  designDecisionCapable: boolean;
   badgeId: string;
   /** Tell this connection its rung changed. */
   standing: (capability: Capability) => void;
@@ -308,6 +317,17 @@ export function attachWebSockets(
       // existed. Never send the first unknown operation before closing.
       if (!member.groupCapable && message.type === "op-applied" && groupOperation(message.entry.envelope.op)) {
         socket.close(WS_STALE_CLIENT, "Canvas groups require an updated isocan client");
+        continue;
+      }
+      if (!member.questionnaireCapable && message.type === "op-applied" && (questionnaireOperation(message.entry.envelope.op) || message.entry.inverse && questionnaireOperation(message.entry.inverse))) {
+        socket.close(WS_STALE_CLIENT, "Typed questionnaires require an updated isocan client");
+        continue;
+      }
+      if (!member.designDecisionCapable && message.type === "op-applied" && (designDecisionOperation(message.entry.envelope.op) || message.entry.inverse && designDecisionOperation(message.entry.inverse))) {
+        socket.close(WS_STALE_CLIENT, "This canvas now uses design decisions; update isocan."); continue;
+      }
+      if (!member.designRequestCapable && message.type === "op-applied" && (designRequestOperation(message.entry.envelope.op) || message.entry.inverse && designRequestOperation(message.entry.inverse))) {
+        socket.close(WS_STALE_CLIENT, "Design requests require an updated isocan client");
         continue;
       }
       socket.send(payload);
@@ -639,6 +659,7 @@ export function attachWebSockets(
     try {
       const snapshot = await engine.getSnapshot(canvasId);
       requireGroupClient(features, snapshot.project);
+      requireQuestionnaireClient(features, snapshot.canvas);
       /**
        * "I have through N" — the lid-close beat, and the reason this is worth
        * a branch at all: a tab (and, from phase 6, a local daemon's home
@@ -655,6 +676,7 @@ export function attachWebSockets(
        */
       const tail = since > 0 ? await engine.getLog(canvasId, since) : [];
       requireGroupClient(features, snapshot.project, tail);
+      requireQuestionnaireClient(features, snapshot.canvas, tail);
       /**
        * Four ways this is not servable, all of them ordinary rather than
        * exceptional:
@@ -725,7 +747,7 @@ export function attachWebSockets(
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
-      if (err instanceof CanvasGroupsClientError) ws.close(WS_STALE_CLIENT, "Canvas groups require an updated isocan client");
+      if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError) ws.close(WS_STALE_CLIENT, err.message);
       else ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
       return;
     }
@@ -741,6 +763,9 @@ export function attachWebSockets(
     }
     room.set(ws, {
       groupCapable: supportsCanvasGroups(features),
+      questionnaireCapable: supportsQuestionnaires(features),
+      designRequestCapable: supportsDesignRequests(features),
+      designDecisionCapable: supportsDesignDecisions(features),
       badgeId,
       standing: (next) => {
         if (next === capability) return;

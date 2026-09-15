@@ -1,9 +1,10 @@
 import {
-  designSystem, governingDesign, inCanvasScope, itemKind, newVersionId, normalizeHomeUrl, parseDesign, sourceFaceOf,
+  designSystem, inCanvasScope, itemKind, newVersionId, parseDesign, sourceFaceOf,
   type CanvasContents, type CanvasSnapshotResponse, type LinkedCanvas, type Operation, type SourceClassificationRequest,
 } from "@isocan/core";
 import type { ScreenAudit } from "@isocan/core/design-audit";
 import { readInheritedCanvases, type ContextReadPort } from "./context-reader.ts";
+import { readGoverningDesign } from "./design-governing.ts";
 
 /** Both transports enforce automatic-source policy on the actual inherited blob read. */
 export interface DesignAuditReadPort extends Pick<ContextReadPort, "classifySource" | "sourceSnapshot"> {
@@ -95,7 +96,7 @@ export async function readCanvasDesignAudit(
   signal?.throwIfAborted();
   // An explicit lazy entry keeps HTML/CSS parsers out of the browser's initial graph.
   const { auditScreen, DESIGN_AUDIT_VERSION, offSystemTotal } = await import("@isocan/core/design-audit");
-  const documents = new Map<string, Promise<ReturnType<typeof parseDesign>>>();
+  const documents = new Map<string, Promise<{ text: string; document: ReturnType<typeof parseDesign> }>>();
   const items: ItemDesignAudit[] = [];
   const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
   for (const item of screens) {
@@ -107,29 +108,17 @@ export async function readCanvasDesignAudit(
     try {
       if (!version) throw new Error("The screen's current version is unavailable.");
       if (sourceFaceOf(version).mimeType !== "text/html") throw new Error("Only an HTML source face can be audited.");
-      const governing = governingDesign(canvas, linked, { at: item });
-      if (!governing) throw new Error("No readable design system governs this screen.");
-      const system = governing.item;
-      const systemVersion = system.versions.find(one => one.id === system.currentVersionId);
-      if (!systemVersion) throw new Error(`The current version of ${system.title} is unavailable.`);
-      const sourceCanvasId = governing.from?.canvasId ?? canvasId;
-      provenance = { canvasId: sourceCanvasId, itemId: system.id, versionId: systemVersion.id, blobHash: systemVersion.blobHash, title: system.title, name: system.title, inherited: governing.from !== null };
-      const key = JSON.stringify([sourceCanvasId, system.id, systemVersion.id, systemVersion.blobHash]);
-      let pending = documents.get(key);
-      if (!pending) {
-        pending = (governing.from
-          ? io.sourceBlobText({ canvasId: sourceCanvasId, expectedHome: normalizeHomeUrl(options.home) }, systemVersion.blobHash, signal)
-          : io.blobText(canvasId, systemVersion.blobHash, signal)).then(parseDesign);
-        documents.set(key, pending);
-      }
-      const doc = await pending;
+      const governing = await readGoverningDesign(io, { canvasId, canvas, home: options.home, atId: item.id, linked, documents, ...(signal ? { signal } : {}) });
+      if (governing.artifact) provenance = { canvasId: governing.artifact.canvasId, itemId: governing.artifact.itemId, versionId: governing.artifact.versionId, blobHash: governing.artifact.blobHash, title: governing.title ?? "Unavailable design system", name: governing.title ?? "Unavailable design system", inherited: governing.artifact.canvasId !== canvasId };
+      if (governing.status !== "available") throw new Error(!governing.artifact && !governing.title ? "No readable design system governs this screen." : governing.reason);
+      const doc = governing.document;
       signal?.throwIfAborted();
       if (doc.problems.length) throw new Error(`The governing design document could not be parsed: ${doc.problems.join("; ")}`);
-      provenance.name = doc.tokens.name ?? system.title;
+      provenance!.name = doc.tokens.name ?? governing.title;
       const source = draft?.text ?? await io.blobText(canvasId, version.blobHash, signal);
       signal?.throwIfAborted();
       identity.input ??= await designAuditInput(source, { kind: "stored", label: version.filename });
-      items.push({ ...identity, status: "audited", governing: provenance, ...auditScreen(source, doc.tokens) });
+      items.push({ ...identity, status: "audited", governing: provenance!, ...auditScreen(source, doc.tokens) });
     } catch (error) {
       signal?.throwIfAborted();
       items.push({ ...identity, status: "unavailable", governing: provenance, reason: errorText(error) });
@@ -187,20 +176,12 @@ export async function readDesignSourceAudit(io: DesignAuditReadPort, options: { 
   let provenance: DesignAuditProvenance | null = null;
   try {
     options.signal?.throwIfAborted();
-    const at = options.atId === undefined ? undefined : options.canvas.items[options.atId];
-    if (options.atId !== undefined && !at) throw new Error(`No item or scope ${options.atId} on this canvas.`);
-    const scope = at ? { at } : undefined;
-    const linked = designSystem(options.canvas, scope) ? [] : await readInheritedCanvases(io, options.canvas, options.home, options.signal);
-    const governing = governingDesign(options.canvas, linked, scope);
-    if (!governing) throw new Error("No readable design system governs this source location.");
-    const version = governing.item.versions.find(one => one.id === governing.item.currentVersionId);
-    if (!version) throw new Error("The governing design's current version is unavailable.");
-    const id = governing.from?.canvasId ?? options.canvasId;
-    provenance = { canvasId: id, itemId: governing.item.id, versionId: version.id, blobHash: version.blobHash, title: governing.item.title, name: governing.item.title, inherited: governing.from !== null };
-    const text = governing.from ? await io.sourceBlobText({ canvasId: id, expectedHome: normalizeHomeUrl(options.home) }, version.blobHash, options.signal) : await io.blobText(id, version.blobHash, options.signal);
+    const governing = await readGoverningDesign(io, options);
+    if (governing.status !== "available") throw new Error(governing.reason);
+    const ref = governing.artifact;
+    provenance = { canvasId: ref.canvasId, itemId: ref.itemId, versionId: ref.versionId, blobHash: ref.blobHash, title: governing.title, name: governing.document.tokens.name ?? governing.title, inherited: governing.inherited };
     options.signal?.throwIfAborted();
-    const report = await auditDesignSource(options.text, text, { label: options.label, designLabel: governing.item.title });
-    provenance.name = parseDesign(text).tokens.name ?? governing.item.title;
+    const report = await auditDesignSource(options.text, governing.text, { label: options.label, designLabel: governing.title });
     return { ...report, governing: provenance };
   } catch (error) {
     options.signal?.throwIfAborted();

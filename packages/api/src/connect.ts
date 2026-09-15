@@ -51,6 +51,12 @@ import { DaemonClient } from "./client.ts";
 import { claimSessionIdentity, noIdentityHere, type ExplicitIdentity } from "./identity.ts";
 import { readContextSummary, type ContextSummaryOptions } from "./context-summary.ts";
 import { readDesignAudit, repairDesignItem } from "./design-audit.ts";
+import { questionnairePort } from "./questionnaire.ts";
+import { designRequestPort } from "./design-request.ts";
+import { designDecisionPort } from "./design-decision.ts";
+import { readDesignComparisons, publishDesignComparison, respondDesignComparison, submitDesignDecision, readDesignComparisonReference, type DesignComparisonFilter, type DesignCompareRequest, type DesignRespondRequest, type DesignDecideRequest } from "./design-decision-reader.ts";
+import { readDesignRequests, readDesignWorkflow, startDesignRequest, changeDesignRequest, publishDesignReceipt, readDesignRequestReference, type DesignRequestFilter, type DesignStartRequest, type DesignChangeRequest, type DesignPublishRequest } from "./design-request-reader.ts";
+import { readDesignQuestions, askDesignQuestions, answerDesignQuestions, readDesignReference, type DesignQuestionsOptions, type DesignQuestionsResult, type DesignAskRequest, type DesignAnswerRequest, type QuestionnaireSubmission, type DesignReferenceRequest, type DesignReferenceContent } from "./questionnaire-reader.ts";
 import type { CanvasDesignAudit, DesignAuditOptions, DesignRepairRequest, DesignRepairResult } from "./design-audit-reader.ts";
 import { waitForFeedback, type FeedbackOptions, type FeedbackResult } from "./feedback.ts";
 import type { ContextExtras, ContextLayer } from "@isocan/core";
@@ -424,6 +430,92 @@ export class CanvasHandle {
   /** Submit an explicitly authored, version-checked repair and retain its before/after audit evidence. */
   designRepair(itemId: string, request: Omit<DesignRepairRequest, "canvasId" | "itemId">): Promise<DesignRepairResult> {
     return this.reach(() => repairDesignItem(this.ctx, { ...request, canvasId: this.id, itemId }));
+  }
+
+  /** Structured discovery shares the dock's resolver and the writer's refusing acts. */
+  designQuestions(options: DesignQuestionsOptions = {}): Promise<DesignQuestionsResult> {
+    return this.reach(() => readDesignQuestions(questionnairePort(this.ctx), this.id, options));
+  }
+
+  /** The saved intent owns its IDs so lost delivery can be retried without another question. */
+  designAsk(request: Omit<DesignAskRequest, "canvasId">): Promise<QuestionnaireSubmission> {
+    return this.reach(() => askDesignQuestions(questionnairePort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Submit as this connection's actor; the writer resolves respondent custody and current source. */
+  designAnswer(request: Omit<DesignAnswerRequest, "canvasId">): Promise<QuestionnaireSubmission> {
+    return this.reach(() => answerDesignQuestions(questionnairePort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Reads retained answer bytes by reference ID rather than silently opening a newer item version. */
+  designReference(request: DesignReferenceRequest): Promise<DesignReferenceContent> {
+    return this.reach(() => readDesignReference(questionnairePort(this.ctx), this.id, request));
+  }
+
+  /** Eligibility comes from registry-backed writer classification, not the display-only agent map. */
+  designRespondents(): ReturnType<DaemonRoutes["questionnaireActors"]> {
+    return this.reach(() => this.ctx.client.questionnaireActors(this.id));
+  }
+
+  /** Read exact comparisons and authored decision history without changing the selected option. */
+  designComparisons(filter: DesignComparisonFilter = {}) {
+    return this.reach(() => readDesignComparisons(designDecisionPort(this.ctx), { canvasId: this.id, filter }));
+  }
+
+  /** Publish one immutable comparison or an explicit linked reissue with stable source identities. */
+  designCompare(request: Omit<DesignCompareRequest, "canvasId">) {
+    return this.reach(() => publishDesignComparison(designDecisionPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Request revision, delegate, skip or dismiss without adopting output or inventing a human answer. */
+  designRespond(request: Omit<DesignRespondRequest, "canvasId">) {
+    return this.reach(() => respondDesignComparison(designDecisionPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Adopt the exact captured target and record its actual decision author in one undoable act. */
+  designDecide(request: Omit<DesignDecideRequest, "canvasId">) {
+    return this.reach(() => submitDesignDecision(designDecisionPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Open retained option bytes by exact comparison source, never by the latest item version. */
+  designComparisonReference(request: Omit<Parameters<typeof readDesignComparisonReference>[1], "canvasId">) {
+    return this.reach(() => readDesignComparisonReference(designDecisionPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** One on-demand procedure and current next-step plan, using this canvas's shared rollout policy. */
+  designWorkflow(filter: DesignRequestFilter = {}) {
+    return this.reach(() => readDesignWorkflow(designRequestPort(this.ctx), { canvasId: this.id, filter }));
+  }
+
+  /** Read admitted briefs and evidence by request, source conversation or output identity. */
+  designBrief(filter: DesignRequestFilter = {}) {
+    return this.reach(() => readDesignRequests(designRequestPort(this.ctx), { canvasId: this.id, filter }));
+  }
+
+  /** Start carries stable caller-owned IDs; authenticated admission materializes the brief. */
+  designStart(request: Omit<DesignStartRequest, "canvasId">) {
+    return this.reach(() => startDesignRequest(designRequestPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Conditional lifecycle changes preserve the captured brief identity and explicit resume reason. */
+  designChange(request: Omit<DesignChangeRequest, "canvasId">) {
+    return this.reach(() => changeDesignRequest(designRequestPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Saved receipts retain their authored check results alongside current input freshness. */
+  async designReceipt(filter: DesignRequestFilter = {}) {
+    const read = await this.designBrief(filter);
+    return { receipts: read.requests.flatMap(request => request.receipts), unavailable: read.unavailable };
+  }
+
+  /** Publish attributed evidence as its own versioned artifact after the brief completes. */
+  designPublishReceipt(request: Omit<DesignPublishRequest, "canvasId">) {
+    return this.reach(() => publishDesignReceipt(designRequestPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Open an exact request input or evidence version while preserving foreign-source permissions. */
+  designRequestReference(request: Omit<Parameters<typeof readDesignRequestReference>[1], "canvasId">) {
+    return this.reach(() => readDesignRequestReference(designRequestPort(this.ctx), { ...request, canvasId: this.id }));
   }
 
   /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */

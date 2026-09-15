@@ -2,6 +2,7 @@ import type { CanvasState } from "./model.ts";
 import type { MetaPatch, NewVersion, Operation } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
 import { invertGroupChange } from "./canvas-groups.ts";
+import { currentDesignScope } from "./design-decision-state.ts";
 
 /**
  * Compute the inverse of an operation against the state it is ABOUT to be
@@ -32,6 +33,27 @@ export function invertOperation(
   };
 
   switch (op.type) {
+    case "design.compare":
+    case "design.respond": return { type: "comment.remove", threadId: op.threadId, commentId: op.commentId };
+    case "design.decide": {
+      if (!op.effect) throw new OpValidationError("bad-op", "resolve adoption before inversion");
+      const inverse = invertOperation(stateBefore, op.effect.edit);
+      if (inverse?.type !== "item.removeVersion") throw new OpValidationError("bad-op", "invalid adoption inverse");
+      const record = op.effect.comment.designDecision?.record;
+      if (record?.kind !== "adoption-decision") throw new OpValidationError("bad-op", "missing canonical adoption");
+      return { type: "design.restore", effect: { target: { ...op.decision.basis.target, artifact: record.adopted }, item: inverse, threadId: op.threadId, commentId: op.commentId, expectedComment: op.effect.comment, comment: null } };
+    }
+    case "design.restore": {
+      const e = op.effect, item = getItem(e.item.itemId), inverse = invertOperation(stateBefore, e.item);
+      if (inverse?.type !== "item.removeVersion" && inverse?.type !== "item.restoreVersion") throw new OpValidationError("bad-op", "invalid paired inverse");
+      const change = e.item;
+      const version = change.type === "item.removeVersion" ? item.versions.find((v) => v.id === change.prevCurrentVersionId)! : change.version;
+      return { type: "design.restore", effect: { target: { artifact: { ...e.target.artifact, versionId: version.id, blobHash: version.blobHash }, title: item.title, description: item.description, properties: structuredClone(item.properties), scope: currentDesignScope(canvas, item) }, item: inverse, threadId: e.threadId, commentId: e.commentId, expectedComment: e.comment, comment: e.expectedComment } };
+    }
+    case "design.request":
+    case "design.receipt":
+      if (!op.effect) throw new OpValidationError("bad-op", "resolve design intent before inversion");
+      return invertOperation(stateBefore, op.effect);
     case "group.change":
       if (op.action.kind !== "apply") throw new OpValidationError("bad-op", "resolve group intent before inversion");
       return { type: "group.change", action: { kind: "apply", change: invertGroupChange(stateBefore, op.action.change) } };
@@ -158,6 +180,9 @@ export function invertOperation(
 
     case "thread.reply":
       return { type: "comment.remove", threadId: op.threadId, commentId: op.comment.id };
+    case "questionnaire.ask":
+    case "questionnaire.answer":
+      return { type: "comment.remove", threadId: op.threadId, commentId: op.commentId };
 
     case "thread.setMain": {
       if (op.threadId !== null && !canvas.threads[op.threadId]) {

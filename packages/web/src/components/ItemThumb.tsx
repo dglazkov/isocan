@@ -87,6 +87,7 @@ export function ItemThumb({
       >
         <VersionContent
           canvasId={canvasId}
+          designVersion={current}
           blobHash={visual.blobHash}
           mimeType={visual.mimeType}
           filename={visual.filename ?? current.filename}

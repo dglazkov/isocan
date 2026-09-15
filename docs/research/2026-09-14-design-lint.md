@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-14
 issue: 299
 see: design-competition, evals, context
-note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Phase 2 adds browser findings, local-file audits and conditional repair with honest write receipts. Phase 3 adds scoped recipe contracts, effective policy views and native/DTCG preservation. Phase 4 adds a measured advisory Tailwind repository runner and isolated CSS/HTML/accessibility probes. Controlled agent evaluation remains next.
+note: measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Phase 2 adds browser findings, local-file audits and conditional repair with honest write receipts. Phase 3 adds scoped recipe contracts, effective policy views and native/DTCG preservation. Phase 4 adds a measured advisory Tailwind repository runner and isolated CSS/HTML/accessibility probes. Phase 5 now completed its approved 36-run model pilot: both conditions complete 14/18 tasks, with no objective benefit threshold met. Human ratings for 18 blind pairs remain pending.
 ---
 # Design lint that explains the repair
 
@@ -399,8 +399,10 @@ and build passed. Before the final upstream identity-menu change, the browser en
 unchanged from phase 3; the combined entry is 762,574 raw / 258,864 gzip bytes.
 [Combined evidence](shadcn-lint/results-2026-09-14-phase4.json) records successful
 proofs, earlier corrected failures and the unrelated server-test intermittency.
-No model call or cloud resource was used. Phase 5's controlled harness remains
-next; lint compliance alone has not established agent lift or visual intent.
+No model call or cloud resource was used. Phase 5's [controlled harness](2026-09-14-design-lint-evaluation.md)
+now passes its dry-run proof and has completed the approved 36-run model pilot.
+Both conditions complete 14/18 tasks, with no objective benefit threshold met.
+Only blind human intent/preference ratings remain open.
 
 Publication incorporated upstream identity-menu change `d25c478b`; all 5,346
 fast tests, typecheck and build passed on the combined tree. The strict

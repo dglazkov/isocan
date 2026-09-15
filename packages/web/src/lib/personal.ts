@@ -55,6 +55,11 @@ export async function sourceText(canvasId: string, hash: string, expectedHome: s
   return (await readBlob(canvasId, hash, signal, sourceHeaders(expectedHome))).text();
 }
 
+/** Exact inherited references use the automatic-source policy on the actual byte request too. */
+export async function sourceBytes(canvasId: string, hash: string, expectedHome: string, signal?: AbortSignal): Promise<Uint8Array> {
+  return new Uint8Array(await (await readBlob(canvasId, hash, signal, sourceHeaders(expectedHome))).arrayBuffer());
+}
+
 /** Placement and inheritance share the renderer's authoritative source classification. */
 export async function automaticSource(canvasId: string, source: string | null, destinationCanvasId: string, signal?: AbortSignal) {
   return classifyAutomaticSource(personalApi, { canvasId, source, home: await authoritativeHome(destinationCanvasId, signal) }, signal);

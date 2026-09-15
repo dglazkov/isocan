@@ -1,7 +1,7 @@
 import type { ContextPiece } from "./context.ts";
 import type { Canvas, CanvasContents, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
-import type { SlashCommand } from "./commands.ts";
+import type { CommandMetadata, SlashCommand } from "./commands.ts";
 import { inCanvasScope } from "./canvas-scope.ts";
 
 /**
@@ -244,8 +244,8 @@ export function moduleCommands(): SlashCommand[] {
  * hold — the daemon's, or the compiled built-ins — because the daemon
  * registers no module and the list it serves cannot know them.
  */
-export function withModuleCommands(commands: readonly SlashCommand[]): SlashCommand[] {
-  const byName = new Map<string, SlashCommand>();
+export function withModuleCommands<T extends CommandMetadata>(commands: readonly T[]): (T | SlashCommand)[] {
+  const byName = new Map<string, T | SlashCommand>();
   for (const command of moduleCommands()) byName.set(command.name, command);
   for (const command of commands) byName.set(command.name, command);
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));

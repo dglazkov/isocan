@@ -3164,7 +3164,7 @@ export function wireVoice(doc: Document = document): VoicePage {
   });
   canvasCustomBtn.addEventListener("click", () => {
     const ref = canvasCustomId.value.trim();
-    if (ref) void setupPost("/canvas", { ref });
+    if (ref) void setupPost("/canvas", { id: ref });
   });
   canvasCreateBtn.addEventListener("click", () => {
     const title = canvasCreateTitle.value.trim();
