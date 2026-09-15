@@ -1,5 +1,5 @@
 import { type CanvasContents, type CanvasSnapshotResponse, type Operation, type SourceClassificationRequest } from "../../core/src/index.js";
-import type { ScreenAudit } from "@isocan/core/design-audit";
+import type { ScreenAudit } from "../../core/src/designaudit.js";
 import { type ContextReadPort } from "./context-reader.js";
 /** Both transports enforce automatic-source policy on the actual inherited blob read. */
 export interface DesignAuditReadPort extends Pick<ContextReadPort, "classifySource" | "sourceSnapshot"> {

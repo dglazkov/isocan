@@ -239,7 +239,7 @@ function OrdinaryArtifactStage({
 
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const hasVisual = current.visual !== undefined;
-  const editable = editableText(current.mimeType) && canEdit;
+  const editable = editableText(current.mimeType) && canEdit && !current.designRecord;
   // Not a hook — a derivation, so it may live where it is used.
   const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
 
@@ -279,6 +279,8 @@ function OrdinaryArtifactStage({
       entered={true}
       itemId={item.id}
       versionId={current.id}
+      designVersion={current}
+      actor={actor}
       designSystem={isDesignSystem(item)}
       textNode={isTextItem(item)}
       reloadToken={0}

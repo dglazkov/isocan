@@ -94,6 +94,16 @@ old question; silently inferring a missing respondent is not a migration.
 publishing, legacy-adoption and reference-read boundaries. Request creation in
 phase 2 removes its temporary need to select an existing valid brief.
 
+## Request lifecycle and evidence
+
+[request-protocol.md](request-protocol.md) resolves phase 2: writer-generated
+brief/receipt JSON, canonical version markers, conditional lifecycle acts,
+source and answer provenance, permission-bearing context reads and derived
+evidence freshness. Its bounded compatible schema extensions preserve old
+unadmitted v1 records. Explicit Undo restores prior eligibility only when the
+current source/cancellation/context guards hold; it is not permanent worker
+revocation.
+
 ## One selection, one conditional edit
 
 For an existing screen, the planner emits one `item.edit` containing the
@@ -116,7 +126,7 @@ be expressed safely by the existing write path.
 
 Keep existing `design` commands and flags compatible. The planned native
 verbs are `design ask`, `design answer`, `design questions`, `design start`,
-`design brief`, `design decide` and `design receipt`; each appears in help and
+`design brief`, `design workflow`, `design decide` and `design receipt`; each appears in help and
 the guide only when its implementation ships. The API exposes the same intents.
 Later phases can add bounded options, but cannot create a browser-only act.
 

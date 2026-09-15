@@ -23,7 +23,9 @@ operation groups correlate work; they do not supply an atomic transaction.
 
 Phase 0 fixes the precise schemas and operation mapping before implementation.
 The [phase-0 contract](contracts.md) now specifies the representation,
-refusing write boundary, planned verbs and shared rollout policy.
+refusing write boundary, planned verbs and shared rollout policy. Phase 2's
+[request protocol](request-protocol.md) settles admission, continuation,
+provenance and evidence currentness before implementation.
 The chosen representation must preserve the following fields and invariants;
 changing the representation cannot quietly remove them.
 
@@ -95,7 +97,9 @@ Published answers are shared and versioned. Unsubmitted drafts need restoration
 in the same browser after refresh; they are not broadcast as if submitted.
 Question changes reconcile drafts by stable IDs and mark changed/removed options.
 Submission retries are idempotent. Cancellation and supersession cannot wake
-an old run into adopting a now-unwanted result.
+an old run into adopting a now-unwanted result while that state is current.
+Explicit Undo may intentionally restore earlier work, subject to the remaining
+source and cancellation guards in the request protocol.
 
 Uploads use the real attachment path and yield retrievable item/version
 references before submission succeeds. Preserve a failed upload as a retryable

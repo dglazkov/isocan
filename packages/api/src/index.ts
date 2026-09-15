@@ -22,6 +22,8 @@ export * from "./design-audit.ts";
 export * from "./design-audit-reader.ts";
 export * from "./questionnaire-reader.ts";
 export * from "./questionnaire.ts";
+export * from "./design-request-reader.ts";
+export * from "./design-request.ts";
 export * from "./feedback.ts";
 export * from "./canvas-groups.ts";
 export type { ContextReadOptions, CommentContextOptions, ContextPageOptions, ContextBytesOptions, ContextItemContent } from "./canvas-context.ts";

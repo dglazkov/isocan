@@ -41,12 +41,12 @@ export async function screenshot(b, file) {
   const {data} = await b.send('Page.captureScreenshot',{format:'png'});
   await fs.writeFile(file,Buffer.from(data,'base64'));
 }
-export async function makeFixture() {
+export async function makeFixture({ contentPort = "off" } = {}) {
   const output = await fs.mkdtemp(path.join(os.tmpdir(),'isocan-personal-journey-'));
   const state = path.join(output,'state');
   await fs.mkdir(state);
   process.env.ISOCAN_STORE='file';
-  const daemonOptions={host:'127.0.0.1',home:path.join(state,'daemon'),birthHome:null,auth:null,operators:[],contentPort:'off',servesWorld:true};
+  const daemonOptions={host:'127.0.0.1',home:path.join(state,'daemon'),birthHome:null,auth:null,operators:[],contentPort,servesWorld:true};
   let daemon=await startDaemon({...daemonOptions,port:0});
   const base=`http://127.0.0.1:${daemon.app.server.address().port}`;
   const owner=await browser();

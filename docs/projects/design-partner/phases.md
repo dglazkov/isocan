@@ -1,11 +1,11 @@
 # A design partner — the walk
 
-**Where we are:** phases 0–1 CLOSED on 14 September 2026; **phase 2 is next**.
-Shared contracts, twelve-case evaluation preparation and the live question/reference
-workflow are verified. Scene 2 works from the dock and CLI. Phases 2–7 are
-NOT STARTED: ordinary request enrollment, the compact brief, the complete design
-workflow and measured quality remain ahead. Canvas chat and external coding
-agents remain equal entrances to one workflow. Read [journey.md](journey.md),
+**Where we are:** phases 0–2 CLOSED on 14 September 2026; **phase 3 is next**.
+Shared contracts, reliable questions and one complete opt-in design task work
+through canvas chat and the external CLI. Both entrances resume the same brief
+and retain exact references, corrections and attributed evidence. Phases 3–7
+are NOT STARTED: contextual craft defaults, alternatives, shared repair and
+measured design quality remain ahead. Read [journey.md](journey.md),
 [design.md](design.md), then this walk.
 
 The first useful release fixes discovery integrity. The next delivers one
@@ -174,9 +174,10 @@ answer state. Legacy questions remain readable. Record these in
 
 ## Phase 2 — A request becomes a complete design task
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 14 September 2026 — both entrances completed the same synthetic primary task, preserved settled answers and exposed honest versioned receipts; full fast/typecheck/build and strict emulator gates passed. See [verification/phase-2.md](verification/phase-2.md).
 
-**Depends on:** phase 1.
+**Depends on:** phase 1. The concrete [request protocol](request-protocol.md)
+settles the write/read boundary before implementation.
 
 **Outcome:** Scenes 1 and 6 have a small end-to-end implementation behind
 the shared rollout policy. Both entrances can create and resume the same
@@ -208,7 +209,12 @@ Use a real browser for the task; with browser capability removed, prove the
 same path yields an unverified draft. Scripted agents prove routing and
 contract behavior; model-generated quality remains phase 7's proof.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-14** — Current task inputs and historical citations have different freshness rules. A new version does not invalidate an intentionally cited older sketch; a new governing winner can invalidate policy evidence without changing the former winner's bytes. Readers now expose structured per-check freshness.
+- **2026-09-14** — A receipt draft must capture versions before inspection is reported. Resolving latest versions at publication could attach old checks to new content. Captured input drift requires explicit refresh and rechecking; uncertain writes preserve exact semantic intent and actor identity.
+- **2026-09-14** — Reconcile a settled question batch with every effective response identity in one conditional brief edit. Partial answers remain available; brief drift does not erase valid outcomes, and skipped answers do not become human facts. Native conversation remains attributed agent reporting.
+- **2026-09-14** — Canonical request admission needs its own writer boundary. An ordinary JSON edit cannot manufacture lifecycle authority; snapshot retries bind full intent and authenticated actor, while Undo intentionally restores prior identity subject to remaining live guards.
 
 ## Phase 3 — Defaults that fit, systems that carry forward
 

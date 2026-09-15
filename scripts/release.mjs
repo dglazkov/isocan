@@ -207,7 +207,7 @@ export const RELEASE_TYPE_ROOTS = ["packages/core/src", "packages/server/src", "
  * So: one `tsc` declaration-only emit of RELEASE_TYPE_ROOTS, then a rewrite
  * of every emitted specifier into a form an installed tree can resolve —
  * `./x.ts` becomes `./x.js` (TypeScript maps that back to `x.d.ts`), and the
- * bare `@isocan/*` names (and `@isocan/api/routes`) become relative
+ * bare `@isocan/*` names and declared workspace subpaths become relative
  * paths within `types/` itself. The result is self-contained: no workspace,
  * no loader, no node_modules but the consumer's own.
  *
@@ -248,7 +248,7 @@ export async function emitTypes(out = path.join(root, "types")) {
   } finally {
     await fs.rm(tsconfig, { force: true });
   }
-  await rewriteSpecifiers(out, out);
+  await rewriteSpecifiers(out, await declarationTargets(out));
   const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
   const shipped = releaseManifest(pkg).exports ?? {};
   for (const entry of Object.values(shipped)) {
@@ -261,29 +261,46 @@ export async function emitTypes(out = path.join(root, "types")) {
   return out;
 }
 
-/** The specifier rewrite emitTypes describes, over every `.d.ts` under `dir`. */
-async function rewriteSpecifiers(dir, out) {
+/** Manifest exports are the one map from workspace specifiers to emitted declarations. */
+async function declarationTargets(out) {
+  const targets = new Map();
+  for (const sourceRoot of RELEASE_TYPE_ROOTS) {
+    const workspace = path.dirname(sourceRoot);
+    const manifest = JSON.parse(await fs.readFile(path.join(root, workspace, "package.json"), "utf8"));
+    for (const [key, value] of Object.entries(manifest.exports ?? {})) {
+      const source = typeof value === "string" ? value : value?.types;
+      if (!/^\.\/src\/(?:[\w-]+\/)*[\w-]+\.tsx?$/.test(source ?? "") || key !== "." && !/^\.\/(?:[\w-]+\/)*[\w-]+$/.test(key)) throw new Error(`unsupported declaration export ${manifest.name}${key === "." ? "" : key.slice(1)} — expected a concrete ./src/*.ts target`);
+      const specifier = `${manifest.name}${key === "." ? "" : key.slice(1)}`;
+      const target = path.join(out, path.relative("packages", workspace), source.replace(/\.tsx?$/, ".d.ts"));
+      await fs.access(target).catch(() => { throw new Error(`no emitted declaration for ${specifier}: ${target}`); });
+      targets.set(specifier, target);
+    }
+  }
+  return targets;
+}
+
+/** Rewrite every emitted declaration; an unmapped workspace import cannot ship unresolved. */
+async function rewriteSpecifiers(dir, targets) {
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      await rewriteSpecifiers(full, out);
+      await rewriteSpecifiers(full, targets);
       continue;
     }
     if (!entry.name.endsWith(".d.ts")) continue;
-    const relative = (pkg, file = "index.js") => {
-      const target = path.relative(path.dirname(full), path.join(out, pkg, "src", file));
+    const relative = (declared) => {
+      const target = path.relative(path.dirname(full), declared.replace(/\.d\.ts$/, ".js"));
       const posix = target.split(path.sep).join("/");
       return posix.startsWith(".") ? posix : `./${posix}`;
     };
     const text = await fs.readFile(full, "utf8");
     const rewritten = text
-      .replace(/"(\.[^"]*)\.ts"/g, '"$1.js"')
-      .replace(/"@isocan\/core"/g, `"${relative("core")}"`)
-      .replace(/"@isocan\/server"/g, `"${relative("server")}"`)
-      .replace(/"@isocan\/rc"/g, `"${relative("rc")}"`)
-      // `isocan/rc` re-exports the route surface a host constructs (sheep's
-      // collie, phase 1) by `@isocan/api`'s subpath, not its Node-only root.
-      .replace(/"@isocan\/api\/routes"/g, `"${relative("api", "routes.js")}"`);
+      .replace(/"(\.[^"]*)\.tsx?"/g, '"$1.js"')
+      .replace(/"(@isocan\/[^"]+)"/g, (_quoted, specifier) => {
+        const target = targets.get(specifier);
+        if (!target) throw new Error(`unresolved workspace declaration ${specifier} in ${full}`);
+        return `"${relative(target)}"`;
+      });
     if (rewritten !== text) await fs.writeFile(full, rewritten);
   }
 }

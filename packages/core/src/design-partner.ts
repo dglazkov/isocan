@@ -2,6 +2,7 @@ import { bad, object, recordFields, text, bool, integer, choice, list, nonempty,
 import { parseDesignBrief } from "./design-brief.ts";
 export { parseDesignBrief } from "./design-brief.ts";
 import type { ContextManifest } from "./canvas-group-context.ts";
+import { parseDesignDiscovery, parseDesignGoverning } from "./design-request-parse.ts";
 
 /** Phase-0 data contract. Parsing proves shape, never custody, grants or inspection. */
 const DESIGN_PARTNER_SCHEMA_VERSION = 1;
@@ -39,6 +40,8 @@ export interface DesignReference {
 }
 /** Versioned request facts owned by the canvas; projections must preserve provenance and assumptions. */
 export interface DesignBrief extends DesignRecordBase {
+  /** Optional on historical JSON; admitted requests require writer-stamped continuation provenance. */
+  continuation?: import("./design-request.ts").DesignContinuation;
   kind: "brief";
   requestingActorId: string;
   source: { entrance: "canvas-chat"; threadId: string; commentId: string }
@@ -74,6 +77,8 @@ export interface DesignQuestion {
 }
 /** Reissue changes with a new payload id; never edit published typed questions. */
 export interface DesignQuestionSet extends DesignRecordBase {
+  /** Required for canonical request discovery; historical manual questionnaires remain readable. */
+  discovery?: import("./design-request.ts").DesignDiscovery;
   kind: "questions";
   id: string;
   revision: number;
@@ -125,6 +130,8 @@ type DesignOutputIdentity = { kind: "canvas"; artifact: DesignArtifactRef }
   | { kind: "repository"; repository: string; revision: string; buildId: string; runtimeUrl: string };
 /** Scoped completion evidence, independent of craft preference; references make later staleness detectable. */
 export interface DesignReceipt extends DesignRecordBase {
+  /** Admitted receipts bind the actual governing selection, including deliberate absence. */
+  governing?: import("./design-request.ts").DesignGoverningBinding;
   kind: "receipt";
   id: string;
   brief: DesignArtifactRef;
@@ -188,8 +195,8 @@ function question(value: unknown): DesignQuestion {
 }
 /** Validates immutable questions, unique choices and real visual-preview identities before publication. */
 export function parseDesignQuestionSet(value: unknown): DesignQuestionSet {
-  const v = object(value, [...recordFields, "id", "revision", "brief", "respondentActorId", "headline", "inferredAnswers", "questions", "supersedes"]); if (v.kind !== "questions") bad("Expected questions.");
-  return { ...base(v), kind: "questions", id: text(v.id), revision: integer(v.revision, 1), brief: parseDesignArtifactRef(v.brief), respondentActorId: text(v.respondentActorId), headline: text(v.headline), inferredAnswers: unique(list(v.inferredAnswers, (entry) => { const a = object(entry, ["questionId", "value", "sources"]); return { questionId: text(a.questionId), value: text(a.value), sources: list(a.sources, parseDesignArtifactRef) }; }), (a) => a.questionId), questions: unique(nonempty(list(v.questions, question, DESIGN_PARTNER_MAX_QUESTIONS)), (q) => q.id), supersedes: v.supersedes === null ? null : questionSource(v.supersedes) };
+  const v = object(value, [...recordFields, "id", "revision", "brief", "respondentActorId", "headline", "inferredAnswers", "questions", "supersedes", "discovery"]); if (v.kind !== "questions") bad("Expected questions.");
+  return { ...base(v), kind: "questions", id: text(v.id), revision: integer(v.revision, 1), brief: parseDesignArtifactRef(v.brief), respondentActorId: text(v.respondentActorId), headline: text(v.headline), inferredAnswers: unique(list(v.inferredAnswers, (entry) => { const a = object(entry, ["questionId", "value", "sources"]); return { questionId: text(a.questionId), value: text(a.value), sources: list(a.sources, parseDesignArtifactRef) }; }), (a) => a.questionId), questions: unique(nonempty(list(v.questions, question, DESIGN_PARTNER_MAX_QUESTIONS)), (q) => q.id), supersedes: v.supersedes === null ? null : questionSource(v.supersedes), ...(v.discovery === undefined ? {} : { discovery: parseDesignDiscovery(v.discovery) }) };
 }
 function resolution(value: unknown): DesignResolution {
   const v = object(value, ["questionId", "state", "value", "agentActorId"]);
@@ -229,11 +236,11 @@ export function parseDesignDecision(value: unknown): DesignDecision {
 }
 /** Checks readiness and evidence shape; actual inspection requires separate proof beyond record validation. */
 export function parseDesignReceipt(value: unknown): DesignReceipt {
-  const v = object(value, [...recordFields, "id", "brief", "output", "context", "fidelity", "status", "checks", "unresolved"]); if (v.kind !== "receipt") bad("Expected a receipt.");
+  const v = object(value, [...recordFields, "id", "brief", "output", "context", "fidelity", "status", "checks", "unresolved", "governing"]); if (v.kind !== "receipt") bad("Expected a receipt.");
   const rawOutput = object(v.output), outputKind = choice(rawOutput.kind, ["canvas", "repository"]);
   object(rawOutput, outputKind === "canvas" ? ["kind", "artifact"] : ["kind", "repository", "revision", "buildId", "runtimeUrl"]);
   const output: DesignOutputIdentity = outputKind === "canvas" ? { kind: outputKind, artifact: parseDesignArtifactRef(rawOutput.artifact) } : { kind: outputKind, repository: text(rawOutput.repository), revision: text(rawOutput.revision), buildId: text(rawOutput.buildId), runtimeUrl: url(rawOutput.runtimeUrl) };
-  const result: DesignReceipt = { ...base(v), kind: "receipt", id: text(v.id), brief: parseDesignArtifactRef(v.brief), output, context: list(v.context, parseDesignArtifactRef), fidelity: fidelity(v.fidelity), status: choice(v.status, ["draft", "ready"]),
+  const result: DesignReceipt = { ...base(v), kind: "receipt", id: text(v.id), brief: parseDesignArtifactRef(v.brief), output, context: list(v.context, parseDesignArtifactRef), fidelity: fidelity(v.fidelity), status: choice(v.status, ["draft", "ready"]), ...(v.governing === undefined ? {} : { governing: parseDesignGoverning(v.governing) }),
     checks: unique(list(v.checks, (entry) => {
       const c = object(entry, ["id", "kind", "tool", "toolVersion", "result", "coverage", "state", "viewport", "evidence"]), viewport = c.viewport === null ? null : object(c.viewport, ["width", "height"]);
       return { id: text(c.id), kind: choice(c.kind, ["source", "browser-task", "craft"]), tool: text(c.tool), toolVersion: text(c.toolVersion), result: choice(c.result, ["passed", "failed", "unavailable"]), coverage: text(c.coverage), state: text(c.state), viewport: viewport === null ? null : { width: integer(viewport.width, 1), height: integer(viewport.height, 1) }, evidence: list(c.evidence, parseDesignArtifactRef) };

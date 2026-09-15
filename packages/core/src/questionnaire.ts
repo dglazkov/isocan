@@ -33,6 +33,13 @@ export interface QuestionnaireActor { id: string; name: string; kind: "human" | 
 export const questionnaireActorsRoute = (canvasId: string): string => `/api/projects/${encodeURIComponent(canvasId)}/questionnaire/actors`;
 const sameSource = (a: DesignQuestionSource, b: DesignQuestionSource) => a.threadId === b.threadId && a.commentId === b.commentId && a.payloadId === b.payloadId && a.revision === b.revision;
 
+/** Exact authored question text remains a valid response source even when its brief version later changes. */
+export function questionnaireSourceCurrent(canvas: CanvasContents, question: Pick<QuestionnaireState, "source" | "questions" | "legacySource">): boolean {
+  const { source, questions, legacySource } = question;
+  const comment = canvas.threads[source.threadId]?.comments.find((c) => c.id === source.commentId);
+  if (!comment || comment.design?.kind !== "questions" || comment.design.id !== source.payloadId || comment.design.revision !== source.revision || comment.body !== questionnaireQuestionMarkdown(questions, !!legacySource)) return false;
+  return !legacySource || canvas.threads[legacySource.threadId]?.comments.find((c) => c.id === legacySource.commentId)?.body === legacySource.body;
+}
 /** Only typed, writer-stamped responses resolve questions. Retained history survives stale inputs. */
 export function questionnaireStates(canvas: CanvasContents, filter: { threadId?: string; requestId?: string; respondentActorId?: string; joined?: ActorJoins } = {}): QuestionnaireState[] {
   const all = Object.values(canvas.threads).flatMap((thread) => thread.comments.map((comment) => ({ thread, comment })));
@@ -51,8 +58,7 @@ export function questionnaireStates(canvas: CanvasContents, filter: { threadId?:
     const brief = canvas.items[questions.brief.itemId];
     const superseded = asks.some(({ comment: other }) => other.design?.kind === "questions" && other.design.supersedes && sameSource(other.design.supersedes, source));
     const legacy = comment.designLegacySource;
-    const legacyComment = legacy && canvas.threads[legacy.threadId]?.comments.find((c) => c.id === legacy.commentId);
-    const stale = comment.body !== questionnaireQuestionMarkdown(questions, !!legacy) || !brief || brief.currentVersionId !== questions.brief.versionId || brief.versions.find((v) => v.id === questions.brief.versionId)?.blobHash !== questions.brief.blobHash || !!legacy && legacyComment?.body !== legacy.body;
+    const stale = !questionnaireSourceCurrent(canvas, { source, questions, ...(legacy ? { legacySource: legacy } : {}) }) || !brief || brief.currentVersionId !== questions.brief.versionId || brief.versions.find((v) => v.id === questions.brief.versionId)?.blobHash !== questions.brief.blobHash;
     const references = [comment, ...responses.map((r) => all.find(({ thread: t, comment: c }) => t.id === source.threadId && c.id === r.commentId)!.comment)].flatMap((c) => c.designReferences ?? []);
     return [{ source, questions, author: comment.author, responses, resolutions, outstandingQuestionIds, references, status: superseded ? "superseded" : stale ? "stale" : outstandingQuestionIds.length ? "open" : "answered", ...(legacy ? { legacySource: legacy } : {}) } satisfies QuestionnaireState];
   });

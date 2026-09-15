@@ -212,10 +212,19 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   records. A named person's choice, text, skip, dismissal or delegation resolves
   a question; another agent's progress update does not. Attachments retain their
   exact uploaded versions, and `design reference` opens those bytes after later
-  edits. The dock keeps drafts and retry identities across refresh. Publishing
-  currently selects an existing design brief and thread; automatic discovery is
-  not enabled by this feature. Legacy questionnaires remain readable and need
-  explicit adoption before typed answers can resolve them.
+  edits. The dock keeps drafts and retry identities across refresh. Legacy
+  questionnaires remain readable and need explicit adoption before typed
+  answers can resolve them.
+- **A shared design task**: start from a chat message or `design start`, correct
+  the compact brief and continue through either entrance without repeating
+  settled questions. The shared procedure asks only about missing consequential
+  facts, with zero to three initial canvas questions. Saved outputs carry separate
+  receipts naming what was checked; missing browser inspection stays an unverified
+  draft, and changed inputs make affected evidence stale. Automatic enrollment
+  is opt-in through the canvas's `design.workflow=adaptive-v1` property. Turning
+  it off preserves existing briefs, answers and receipts; manual starts and
+  continuation remain available. Contextual defaults and measured design-quality
+  improvements are still being developed.
 - **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
   canvases you were on lately, most recent first, then the rest by activity,
   with a field that finds one from a few letters (`lkh` reaches "Lake House";
@@ -742,6 +751,16 @@ isocan activity [who] [-n N]           # what has been happening here, newest fi
 isocan design [--css|--tokens] · design set <file> · design check
 #   the canvas's own design system: a DESIGN.md whose front matter is
 #   typed design tokens (W3C-compatible) and whose sections are the reasoning
+isocan design workflow [request] --json  # shared procedure, policy and resumable tasks
+isocan design start request.json --json
+isocan design brief <request> --json
+isocan design brief --update correction.json --json
+isocan design brief --resume continuation.json --json
+isocan design brief --cancel cancellation.json --json
+isocan design brief --complete completion.json --json
+isocan design receipt <request> --json
+isocan design receipt --publish evidence.json --json
+#   retain the same intent IDs on retry; completion and verification are separate
 isocan design questions [payload] [--respondents] --json
 isocan design ask questions.json --thread <thread> --json
 isocan design answer <payload> --id <stable-answer-id> --question <id> --text "…"

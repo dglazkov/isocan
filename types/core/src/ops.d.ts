@@ -11,6 +11,8 @@ import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./m
  * first-class inverse.
  */
 export interface NewVersion {
+    /** Canonical writer output only; new public item/version writes cannot forge design admission. */
+    designRecord?: import("./design-record.js").DesignRecordMarker;
     id: string;
     blobHash: string;
     mimeType: string;
@@ -198,6 +200,20 @@ export type Operation = {
     patch: MetaPatch;
 } | {
     type: "project.delete";
+} | {
+    type: "design.request";
+    action: import("./design-request.js").DesignRequestAction;
+    effect?: import("./design-record.js").DesignRecordEffect;
+} | {
+    type: "design.receipt";
+    itemId: string;
+    versionId: string;
+    receipt: import("./design-partner.js").DesignReceipt;
+    placement?: Placement;
+    width?: number;
+    height?: number;
+    title?: string;
+    effect?: import("./design-record.js").DesignRecordEffect;
 } | {
     type: "group.change";
     action: GroupAction;

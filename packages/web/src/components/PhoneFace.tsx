@@ -18,6 +18,7 @@ import { ZoomControls } from "./ZoomControls.tsx";
 import { Minimap } from "./Minimap.tsx";
 import "./phone.css";
 import "./mobile-navigation.css";
+const DesignTaskPanel = lazy(() => import("./DesignTaskPanel.tsx").then((module) => ({ default: module.DesignTaskPanel })));
 const CanvasTools = lazy(() => import("./CanvasTools.tsx").then((m) => ({ default: m.CanvasTools })));
 /** Retain this visit’s chosen tab and node across width changes, without saving a desktop preference. */
 export type PhoneVisit = { tab: "Chat" | "Canvas" | "Agents"; itemId: string | null; plan: boolean };
@@ -93,7 +94,8 @@ export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit
       </div> : <div className="phone-node" data-node-id={item?.id} {...gestures}>
         {item ? <>
           <div className="phone-node-bar"><strong>{item.title}</strong><button onClick={() => update({ plan: true })}>Plan</button><button onClick={() => navigate(itemPath(canvasId, item.id))}>Present</button></div>
-          <div className="phone-artifact">{current && visual ? <VersionContent canvasOf={item.properties.canvas ?? null} canvasSource={sourceOf(item)} canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} /> : <p>This node has no preview.</p>}</div>
+          <Suspense fallback={null}><DesignTaskPanel key={`${canvasId}:${actor.id}:${item.id}`} canvasId={canvasId} actor={actor} filter={{ outputItemId: item.id }} presentation="disclosure" /></Suspense>
+          <div className="phone-artifact">{current && visual ? <VersionContent canvasOf={item.properties.canvas ?? null} canvasSource={sourceOf(item)} canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} designVersion={current} actor={actor} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} /> : <p>This node has no preview.</p>}</div>
           {directions.map(([direction, name, glyph]) => { const next = findNextItem(item, items, direction); return <button key={direction} className={`phone-edge edge-${name}`} aria-label={next ? `${name}: ${canvas?.items[next.id]?.title}` : `No item ${name}`} disabled={!next} onClick={() => step(direction)}>{glyph}</button>; })}
           <button className="phone-thread-toggle" onClick={() => { setDigestThread(null); setThreadOpen(true); }}>Conversation{thread ? ` · ${thread.comments.length}` : ""}</button>
         </> : <p className="phone-empty">Nothing on the canvas yet. Ask for something in Chat.</p>}

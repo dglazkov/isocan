@@ -8,6 +8,7 @@
     "./context": "./src/context-reader.ts",
     "./design-audit": "./src/design-audit-reader.ts",
     "./questionnaire": "./src/questionnaire-reader.ts",
+    "./design-request": "./src/design-request-reader.ts",
     "./routes": "./src/routes.ts"
   },
   "scripts": {

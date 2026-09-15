@@ -29,6 +29,9 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
   };
 
   switch (op.type) {
+    case "design.request":
+    case "design.receipt":
+      return op.effect ? itemsTouchedBy(op.effect, canvas) : [op.type === "design.receipt" ? op.itemId : op.action.kind === "start" ? op.action.itemId : op.action.brief.itemId];
     case "group.change":
       return groupChangeItemIds(op);
     case "item.add":

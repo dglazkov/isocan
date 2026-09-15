@@ -4,6 +4,8 @@ import { planDesignAnswer } from "@isocan/core/design-partner-plan";
 import { questionnaireStates, questionnaireArtifacts, legacyQuestionSet, parseLegacyQuestionnaire, rejectQuestionnaireMetadata } from "@isocan/core/questionnaire";
 import type { Store } from "./store.ts";
 import { contextBlobAvailable, hydrateContextManifest } from "./canvas-group-context.ts";
+import { retainedDesignVersion } from "@isocan/core/design-record";
+import { validateAdmittedDesignQuestions } from "./design-request.ts";
 
 /** Joins preserve identity while known harness records establish eligibility; absence remains unknown. */
 export function questionnaireActorKind(registry: ActorRegistry, id: string): DesignActorKind {
@@ -81,7 +83,7 @@ async function retain(store: Store, state: CanvasState, home: string, artifact: 
   const previous = retained.find((ref) => ref.artifact.home === artifact.home && ref.artifact.canvasId === artifact.canvasId && ref.artifact.itemId === artifact.itemId && ref.artifact.versionId === artifact.versionId && ref.artifact.blobHash === artifact.blobHash);
   const existing = item?.versions.find((v) => v.id === artifact.versionId && v.blobHash === artifact.blobHash) ?? previous?.version;
   if (!existing || existing.blobHash !== artifact.blobHash) bad("questionnaire reference does not identify an available item version");
-  const version = structuredClone(existing);
+  const version = retainedDesignVersion(existing);
   if (!(await contextBlobAvailable(store, state.project.id, version.blobHash))) bad("questionnaire reference bytes are unavailable");
   if (version.visual) {
     if (!(await contextBlobAvailable(store, state.project.id, version.visual.blobHash))) bad("questionnaire visual reference bytes are unavailable");
@@ -92,10 +94,10 @@ async function retain(store: Store, state: CanvasState, home: string, artifact: 
   return { artifact: structuredClone(artifact), version };
 }
 /** This function runs within Engine's single writer chain, after custody and ordinary canvas grants. */
-export async function resolveQuestionnaireOperation(store: Store, state: CanvasState, revision: number, op: QuestionnaireOperation, actor: Actor, registry: ActorRegistry, home: string | undefined): Promise<QuestionnaireOperation> {
-  try { return await materialize(store, state, revision, op, actor, registry, home); } catch (error) { return refuseContract(error); }
+export async function resolveQuestionnaireOperation(store: Store, state: CanvasState, revision: number, op: QuestionnaireOperation, actor: Actor, registry: ActorRegistry, home: string | undefined, history: readonly LogEntry[] = []): Promise<QuestionnaireOperation> {
+  try { return await materialize(store, state, revision, op, actor, registry, home, history); } catch (error) { return refuseContract(error); }
 }
-async function materialize(store: Store, state: CanvasState, revision: number, op: QuestionnaireOperation, actor: Actor, registry: ActorRegistry, home: string | undefined): Promise<QuestionnaireOperation> {
+async function materialize(store: Store, state: CanvasState, revision: number, op: QuestionnaireOperation, actor: Actor, registry: ActorRegistry, home: string | undefined, history: readonly LogEntry[]): Promise<QuestionnaireOperation> {
   if (!home) bad("questionnaire writer has no authoritative home address");
   if (!state.canvas.threads[op.threadId]) bad("questionnaire requires an existing thread");
   const source = op.type === "questionnaire.answer" ? questionnaireStates(state.canvas).find((q) => q.source.threadId === op.response.question.threadId && q.source.commentId === op.response.question.commentId && q.source.payloadId === op.response.question.payloadId && q.source.revision === op.response.question.revision) : undefined;
@@ -104,6 +106,7 @@ async function materialize(store: Store, state: CanvasState, revision: number, o
   if (op.type === "questionnaire.answer" && op.threadId !== op.response.question.threadId) bad("answer must be posted to its source thread");
   const retainedBrief = await retain(store, state, home, questions.brief);
   const brief = parseDesignBrief(JSON.parse(await readText(store, state.project.id, retainedBrief.version.blobHash)));
+  if (state.canvas.items[questions.brief.itemId]?.versions.find((v) => v.id === questions.brief.versionId)?.designRecord?.kind === "brief") validateAdmittedDesignQuestions(state, brief, questions, history, registry, op.type === "questionnaire.ask");
   if (state.canvas.items[questions.brief.itemId]!.currentVersionId !== questions.brief.versionId || brief.requestId !== questions.requestId || brief.epoch !== questions.epoch || brief.progress !== "active" || brief.context.canvasId !== state.project.id) bad("questionnaire request is stale, canceled or belongs to another canvas");
   const requestSource = brief.source;
   if (requestSource.entrance === "canvas-chat") {
@@ -139,6 +142,12 @@ async function materialize(store: Store, state: CanvasState, revision: number, o
   }
   const design = normalized.type === "questionnaire.ask" ? normalized.questions : normalized.response;
   const references = await Promise.all(questionnaireArtifacts(design).map((artifact) => retain(store, state, home, artifact, normalized.type === "questionnaire.answer" ? source?.references : undefined)));
+  // A retained brief/reference may itself root exact evidence. Copy only those
+  // canonical flat roots; stripping its marker must not make its citations collectible.
+  for (const artifact of questionnaireArtifacts(design)) {
+    const marker = state.canvas.items[artifact.itemId]?.versions.find((v) => v.id === artifact.versionId && v.blobHash === artifact.blobHash)?.designRecord;
+    for (const retained of marker?.retainedReferences ?? []) if (!references.some((r) => stable(r.artifact) === stable(retained.artifact))) references.push(await retain(store, state, home, retained.artifact, marker!.retainedReferences));
+  }
   const withReferences = { ...normalized, retainedReferences: references };
   if (normalized.type === "questionnaire.ask" && normalized.contextRequest !== undefined) {
     if (state.project.groupMode !== "groups") bad("frozen selected context requires a group-mode canvas");

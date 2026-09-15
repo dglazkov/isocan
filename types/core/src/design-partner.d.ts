@@ -31,6 +31,8 @@ export interface DesignReference {
 }
 /** Versioned request facts owned by the canvas; projections must preserve provenance and assumptions. */
 export interface DesignBrief extends DesignRecordBase {
+    /** Optional on historical JSON; admitted requests require writer-stamped continuation provenance. */
+    continuation?: import("./design-request.js").DesignContinuation;
     kind: "brief";
     requestingActorId: string;
     source: {
@@ -83,6 +85,8 @@ export interface DesignQuestion {
 }
 /** Reissue changes with a new payload id; never edit published typed questions. */
 export interface DesignQuestionSet extends DesignRecordBase {
+    /** Required for canonical request discovery; historical manual questionnaires remain readable. */
+    discovery?: import("./design-request.js").DesignDiscovery;
     kind: "questions";
     id: string;
     revision: number;
@@ -177,6 +181,8 @@ type DesignOutputIdentity = {
 };
 /** Scoped completion evidence, independent of craft preference; references make later staleness detectable. */
 export interface DesignReceipt extends DesignRecordBase {
+    /** Admitted receipts bind the actual governing selection, including deliberate absence. */
+    governing?: import("./design-request.js").DesignGoverningBinding;
     kind: "receipt";
     id: string;
     brief: DesignArtifactRef;

@@ -9,6 +9,8 @@ import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, Migra
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { QuestionnaireClientError, questionnaireOperation, requireQuestionnaireClient } from "./questionnaire-capability.ts";
 import { supportsQuestionnaires } from "@isocan/core";
+import { supportsDesignRequests } from "@isocan/core";
+import { DesignRequestClientError, designRequestOperation } from "./design-request-capability.ts";
 import { registerCanvasGroupContext } from "./canvas-group-context.ts";
 import { createReadStream, existsSync, statSync, promises as fs } from "node:fs";
 import os from "node:os";
@@ -832,7 +834,7 @@ export function registerRoutes(
   };
 
   app.setErrorHandler((err, _req, reply) => {
-    if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError) {
+    if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError) {
       return reply.status(426).send({ error: err.message, code: err.code });
     }
     if (err instanceof GroupConflictError || err instanceof MigrationBoundaryError) {
@@ -1253,7 +1255,7 @@ export function registerRoutes(
           const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
           if (snapshot) requireGroupClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.project);
         }
-        if (!sourceContext && !recap && !pathname.includes("/blobs") && !supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER])) {
+        if (!sourceContext && !recap && !pathname.includes("/blobs") && (!supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER]))) {
           const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
           if (snapshot) requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.canvas);
         }
@@ -1355,7 +1357,7 @@ export function registerRoutes(
         // A remote source is checked by the authority receiving the original feature header.
         // Recap carries bounded metadata, not typed reducer state; its queued read must
         // remain the first content read so cancellation cannot touch a retained snapshot.
-        if (!home && !RECAP_HEAD_ROUTE.test(pathname) && !pathname.includes("/blobs") && !supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER])) {
+        if (!home && !RECAP_HEAD_ROUTE.test(pathname) && !pathname.includes("/blobs") && (!supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER]))) {
           const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
           if (snapshot) requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.canvas);
         }
@@ -1692,6 +1694,13 @@ export function registerRoutes(
   });
 
   registerCanvasGroupContext(app, engine, store);
+  app.get("/api/projects/:id/design/requests", async (req) => {
+    const { id } = req.params as { id: string };
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req), typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
+    if (!supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER])) throw new DesignRequestClientError();
+    return engine.designRequests(id, localOrigin(req));
+  });
   app.get("/api/projects/:id/questionnaire/actors", async (req) => {
     const { id } = req.params as { id: string };
     const home = options.homes?.for(id);
@@ -1711,6 +1720,7 @@ export function registerRoutes(
     if (body.op?.type === "project.create" && body.op.groupMode !== "legacy" && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
     if (body.op && groupOperation(body.op) && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
     if (body.op && questionnaireOperation(body.op) && !supportsQuestionnaires(clientFeatures)) throw new QuestionnaireClientError();
+    if (body.op && designRequestOperation(body.op) && !supportsDesignRequests(clientFeatures)) throw new DesignRequestClientError();
     if (body.canvasId && !supportsCanvasGroups(clientFeatures)) {
       const snapshot = await engine.getSnapshot(body.canvasId).catch(() => null);
       if (snapshot) requireGroupClient(clientFeatures, snapshot.project);
@@ -5385,9 +5395,9 @@ export function registerRoutes(
           entries.push(...result.entries); Object.assign(next, result.cursors);
           continue;
         }
-        if (!supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER])) {
+        if ((!supportsQuestionnaires(req.headers[CLIENT_FEATURES_HEADER]) || !supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER]))) {
           try { requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], (await engine.getSnapshot(canvas.id)).canvas); } catch (error) {
-            if (!(error instanceof QuestionnaireClientError) || only?.has(canvas.id)) throw error;
+            if (!(error instanceof QuestionnaireClientError || error instanceof DesignRequestClientError) || only?.has(canvas.id)) throw error;
             continue;
           }
         }

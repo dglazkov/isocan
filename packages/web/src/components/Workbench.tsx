@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
@@ -29,6 +29,7 @@ import { iconKindFor } from "../lib/kinds.ts";
 import { moduleInspectorsFor } from "../modules.ts";
 import { useWebHost } from "../lib/modulehost.ts";
 import { readBlobText } from "../lib/api.ts";
+const DesignTaskPanel = lazy(() => import("./DesignTaskPanel.tsx").then((module) => ({ default: module.DesignTaskPanel })));
 import { useAnswerable } from "../lib/answerable.ts";
 
 /**
@@ -220,6 +221,7 @@ export function Workbench({
             </div>
           )}
         </div>
+        {itemId && <Suspense fallback={null}><DesignTaskPanel key={`${canvasId}:${actor.id}:${itemId}`} canvasId={canvasId} actor={actor} filter={{ outputItemId: itemId }} presentation="inspector" /></Suspense>}
         {/* **The inspector slot** (modules phase 4): beside the stage, for
             the open item's kind, filled by whichever loaded module reads
             that kind — the document's outline is the first. Handed the item

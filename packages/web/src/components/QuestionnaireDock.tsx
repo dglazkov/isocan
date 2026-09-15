@@ -1,27 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Actor, DesignArtifactRef, DesignQuestionSet, DesignQuestionSource, DesignResponse, ItemVersion, QuestionnaireState } from "@isocan/core";
+import type { Actor, DesignQuestionSet, DesignQuestionSource, DesignResponse, QuestionnaireState } from "@isocan/core";
 import { newItemId, newOpId, newVersionId } from "@isocan/core";
 import { parseDesignReference } from "@isocan/core/design-partner";
 import { answerDesignQuestions, questionnaireSubmissionIds } from "@isocan/api/questionnaire";
-import { blobUrl } from "../lib/api.ts";
 import { questionnaireIO, uploadQuestionReference } from "../lib/questionnaire.ts";
 import { creationDestination } from "../lib/groupplacement.ts";
 import { mimeTypeOf } from "../lib/mime.ts";
-import { useContentOrigin } from "../lib/contentBase.ts";
-import { itemFrame } from "../lib/frame.ts";
 import { forgetQuestionFile, keepQuestionFile, questionDraftResolution, questionnaireDraftKey, readQuestionFile, readQuestionnaireDraft, reconcileQuestionnaireDraft, transferQuestionnaireDraft, unavailableChoiceMessage, type QuestionnaireDraft, type QuestionDraft, type QuestionUploadDraft } from "../lib/questionnairedraft.ts";
 
-/** Render and open the referenced immutable version, never the item’s current preview. */
-export function QuestionReferencePreview({ artifact, version, name }: { artifact: DesignArtifactRef; version?: Pick<ItemVersion, "mimeType" | "filename"> | undefined; name: string }) {
-  const origin = useContentOrigin(artifact.canvasId, [artifact.blobHash]);
-  const frame = itemFrame(origin, artifact.canvasId, artifact.blobHash);
-  const src = blobUrl(artifact.canvasId, artifact.blobHash);
-  return <div className="q-reference-preview">
-    {version?.mimeType.startsWith("image/") && <img src={src} alt={name} loading="lazy" />}
-    {version?.mimeType === "text/html" && frame && <iframe title={`${name} preview`} src={frame.src} sandbox={frame.sandbox} tabIndex={-1} />}
-    <a href={src} target="_blank" rel="noopener noreferrer" download={version?.filename}>{name} · exact version</a>
-  </div>;
-}
+import { LocalExactReferenceCard } from "./ExactReferenceCard.tsx";
 
 interface QuestionnaireDockProps {
   canvasId: string;
@@ -151,7 +138,7 @@ export function QuestionnaireDock({ canvasId, actor, state, agents, onCollapse }
       {answer.needsReview && <div role="alert"><p>This question changed. Your earlier draft is retained; review it before answering.</p>{unavailableChoiceMessage(q, answer) && <p>{unavailableChoiceMessage(q, answer)}</p>}<button type="button" className="btn secondary" onClick={() => updateQuestion(q.id, { needsReview: false, previousFingerprint: null, optionIds: answer.optionIds.filter((id) => q.options.some((option) => option.id === id)) })}>I reviewed this question</button></div>}
       <fieldset disabled={locked} className="q-fields"><legend className="sr-only">{q.title}</legend>
         {isChoice && <><div className={q.renderer === "visual-cards" ? "q-visual-cards-grid" : "q-choice-list"}>{q.options.map((option) => <div className={`q-card-base q-option ${!answer.useText && answer.optionIds.includes(option.id) ? "selected" : ""}`} key={option.id}>
-          {option.preview && <QuestionReferencePreview artifact={option.preview} version={state.references.find((ref) => ref.artifact.versionId === option.preview!.versionId && ref.artifact.itemId === option.preview!.itemId)?.version} name={option.title} />}
+          {option.preview && <LocalExactReferenceCard localCanvasId={canvasId} artifact={option.preview} version={state.references.find((ref) => ref.artifact.versionId === option.preview!.versionId && ref.artifact.itemId === option.preview!.itemId)?.version} name={option.title} />}
           <label><input type={q.multiple ? "checkbox" : "radio"} name={`${questions.id}-${q.id}`} value={option.id} checked={!answer.useText && answer.optionIds.includes(option.id)} onChange={() => updateQuestion(q.id, { optionIds: q.multiple ? answer.optionIds.includes(option.id) ? answer.optionIds.filter((id) => id !== option.id) : [...answer.optionIds, option.id] : [option.id], useText: false, resolution: "answer" })} /><span><strong>{option.title}</strong>{q.recommendedOptionId === option.id && <small className="q-recommended">Recommended</small>}<span className="q-option-consequence">{option.consequence}</span></span></label>
         </div>)}</div><label className="q-other"><input type="checkbox" checked={answer.useText} onChange={(e) => updateQuestion(q.id, { useText: e.target.checked, resolution: "answer" })} />Write my own answer</label></>}
         {(q.renderer === "freeform" || (isChoice && answer.useText)) && <label className="q-field-label">Your answer<textarea className="q-textarea" rows={3} value={answer.text} onChange={(e) => updateQuestion(q.id, { text: e.target.value, resolution: "answer" })} /></label>}
@@ -160,7 +147,7 @@ export function QuestionnaireDock({ canvasId, actor, state, agents, onCollapse }
         {q.renderer === "upload" && <div className="q-upload-area" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (!locked) void addFiles(q.id, Array.from(e.dataTransfer.files)); }}>
           <label className="q-field-label">Attach sketches, images or documents<input type="file" multiple aria-label={`Upload for ${q.title}`} onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void addFiles(q.id, files); }} /></label>
           <p className="q-help">Your files stay attached to this answer after upload. You can also drop them here.</p>
-          {answer.uploads.map((one) => <div className="q-upload-row" key={one.id}>{one.reference?.artifact ? <QuestionReferencePreview artifact={one.reference.artifact} version={{ mimeType: one.mimeType, filename: one.name }} name={one.name} /> : <strong>{one.name}</strong>}<span role="status">{one.state === "ready" ? "Uploaded" : one.state === "uploading" ? "Uploading…" : "Not uploaded"}</span>{one.error && <p role="alert">{one.error}</p>}{one.state === "failed" && <button type="button" className="btn secondary" onClick={() => void upload(q.id, one)}>Retry {one.name}</button>}<button type="button" disabled={one.state === "uploading"} onClick={() => { updateQuestion(q.id, { uploads: answer.uploads.filter((other) => other.id !== one.id) }); void forgetQuestionFile(one.fileKey).catch(() => setStorageError("The attachment was removed from this draft, but its local retry copy could not be cleared.")); }}>Remove {one.name}</button></div>)}
+          {answer.uploads.map((one) => <div className="q-upload-row" key={one.id}>{one.reference?.artifact ? <LocalExactReferenceCard localCanvasId={canvasId} artifact={one.reference.artifact} version={{ mimeType: one.mimeType, filename: one.name }} name={one.name} /> : <strong>{one.name}</strong>}<span role="status">{one.state === "ready" ? "Uploaded" : one.state === "uploading" ? "Uploading…" : "Not uploaded"}</span>{one.error && <p role="alert">{one.error}</p>}{one.state === "failed" && <button type="button" className="btn secondary" onClick={() => void upload(q.id, one)}>Retry {one.name}</button>}<button type="button" disabled={one.state === "uploading"} onClick={() => { updateQuestion(q.id, { uploads: answer.uploads.filter((other) => other.id !== one.id) }); void forgetQuestionFile(one.fileKey).catch(() => setStorageError("The attachment was removed from this draft, but its local retry copy could not be cleared.")); }}>Remove {one.name}</button></div>)}
         </div>}
         {q.renderer === "url-collection" && <div className="q-url-area"><label className="q-field-label">Reference URL<input type="url" className="q-text-input" value={answer.urlInput} placeholder="https://…" onChange={(e) => updateQuestion(q.id, { urlInput: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }} /></label><button type="button" className="btn secondary" disabled={!answer.urlInput.trim()} onClick={addUrl}>Add URL</button><p className="q-help">Supplied URLs have not been inspected. The designer must report whether each reference is accessible.</p>{answer.references.map((ref) => <div className="q-url-reference" key={ref.id}><a href={ref.url} target="_blank" rel="noopener noreferrer">{ref.url}</a><span>Supplied · not inspected</span><button type="button" onClick={() => updateQuestion(q.id, { references: answer.references.filter((other) => other.id !== ref.id) })}>Remove URL</button></div>)}</div>}
         <div className="q-resolution-actions">

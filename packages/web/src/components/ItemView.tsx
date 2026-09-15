@@ -3,7 +3,7 @@ import { groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.
 import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { Markdown } from "../lib/markdown.tsx";
-import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
+import type { Actor, Item, ItemVersion, Neighbour, Operation } from "@isocan/core";
 import {
   backingOf,
   isDesignSystem,
@@ -49,7 +49,7 @@ import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
-import { DesignSystemView } from "./DesignSystemView.tsx";
+const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
 import { useUiStore } from "../stores/uiStore.ts";
 import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
@@ -107,6 +107,8 @@ const TITLE_GAP_PX = 8;
 
 import { usePresentation, currentPresentation } from "../lib/canvasPresentation.ts";
 import { presentedItem, presentedCanvas, presentedOffset } from "../lib/presentation.ts";
+
+const DesignRecordFace = lazy(() => import("./DesignRecordFace.tsx").then((module) => ({ default: module.DesignRecordFace })));
 
 function ItemViewInner({
   item,
@@ -1193,6 +1195,8 @@ function ItemViewInner({
               entered={entered}
               itemId={item.id}
               versionId={current.id}
+              designVersion={current}
+              actor={entered ? actor : undefined}
               designSystem={isDesignSystem(item)}
               textNode={isText}
               canvasOf={item.properties.canvas ?? null}
@@ -1479,8 +1483,12 @@ function VersionFace({
   size,
   warm,
   liveDoc,
+  designVersion,
+  actor,
 }: {
   canvasId: string;
+  designVersion?: ItemVersion | undefined;
+  actor?: Actor | undefined;
   blobHash: string;
   mimeType: string;
   filename: string;
@@ -1517,6 +1525,7 @@ function VersionFace({
   const moduleItem = useCanvasStore((s) => itemId ? (s.past?.canvas ?? s.canvas)?.items[itemId] : undefined);
   // A runtime module that arrived after first paint may own this mime now.
   useUiStore((s) => s.modulesGeneration);
+  if (designVersion?.designRecord) return <Suspense fallback={<div className="file-view">Reading design record…</div>}><DesignRecordFace key={JSON.stringify([canvasId, designVersion.id, actor?.id])} canvasId={canvasId} version={designVersion} actor={actor} /></Suspense>;
   if (liveDoc) {
     // The doc as Google draws it, in the same item. A private doc shows
     // Google's own sign-in here, which is honest: the frame is Google's,
@@ -1544,7 +1553,7 @@ function VersionFace({
     );
   }
   if (designSystem && (mimeType === "text/markdown" || mimeType === "text/plain")) {
-    return <DesignSystemView canvasId={canvasId} blobHash={blobHash} />;
+    return <Suspense fallback={<p>Reading design system…</p>}><DesignSystemView canvasId={canvasId} blobHash={blobHash} /></Suspense>;
   }
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
     return (

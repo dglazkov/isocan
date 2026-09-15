@@ -81,6 +81,8 @@ export interface VisualFace {
     size?: number;
 }
 export interface ItemVersion {
+    /** Canonical design admission and flat retention; ordinary version input cannot supply this marker. */
+    designRecord?: import("./design-record.js").DesignRecordMarker;
     id: string;
     /** sha256 of content; stored at blobs/<hash>.<ext>. The source face of the artifact. */
     blobHash: string;

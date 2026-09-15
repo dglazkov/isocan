@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-14
 see: design-competition, evals, context, memory
-note: phases 0–1 closed with shared contracts, twelve-case evaluation preparation and the real question/reference workflow verified on browser and CLI. Phase 2 is next; ordinary request enrollment, the complete design workflow and generated-design outcome evaluation remain ahead.
+note: phases 0–2 closed with shared contracts, real question/reference recovery and a complete opt-in design task verified on browser and CLI. Phase 3 is next; contextual craft defaults, alternatives, shared repair and generated-design outcome evaluation remain ahead.
 ---
 # A design partner — the experience
 

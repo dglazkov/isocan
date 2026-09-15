@@ -17,6 +17,7 @@ import { DesignPartnerContractError, parseDesignQuestionSet, parseDesignResponse
 import { designResponseMarkdown } from "./design-partner-plan.ts";
 import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
 import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
+import { validateDesignRecordState, validateDesignRecordEffect } from "./design-record.ts";
 
 /**
  * The shared pure reducer. The daemon runs it authoritatively; the web client
@@ -41,6 +42,7 @@ export function applyOperation(
 function applyValidatedOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
   const op = envelope.op;
   rejectQuestionnaireMetadata(op);
+  if ((op.type === "item.add" || op.type === "item.edit" || op.type === "item.addVersion") && op.version.designRecord !== undefined) throw new OpValidationError("bad-op", "design admission requires its canonical design operation");
   const contexts = op.type === "questionnaire.ask" || op.type === "questionnaire.answer" ? [op.context]
     : op.type === "thread.create" || op.type === "thread.reply" || op.type === "comment.restore" ? [op.comment.context]
     : op.type === "comment.update" ? [op.context]
@@ -55,6 +57,7 @@ function applyValidatedOperation(state: CanvasState | null, envelope: OpEnvelope
   // Historical area canvases keep their original reduction. Explicit group
   // state is validated after EVERY operation, including ordinary inverses.
   if (next?.project.groupMode === "groups") validateGroupForest(next);
+  if (next) validateDesignRecordState(next);
   return next;
 }
 
@@ -127,6 +130,13 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
   };
 
   switch (op.type) {
+    case "design.request":
+    case "design.receipt": {
+      if (!op.effect) throw new OpValidationError("bad-op", "design act requires its canonical writer effect");
+      validateDesignRecordEffect(state, envelope);
+      const next = reduceOperation(state, { ...envelope, op: op.effect });
+      return next && { ...next, project: { ...next.project, lastOp: op.type } };
+    }
     case "group.change": {
       const resolved = op.action.kind === "apply" ? op : resolveGroupOperation(state, op, { actor, ts, opId: envelope.id });
       if (resolved.action.kind !== "apply") throw new OpValidationError("bad-op", "unresolved group operation");

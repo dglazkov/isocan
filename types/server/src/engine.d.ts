@@ -968,6 +968,8 @@ export declare class Engine {
     designRespondents(canvasId: string): Promise<{
         actors: import("../../core/src/index.js").QuestionnaireActor[];
     }>;
+    /** The serialized read binds admitted JSON and canonical discovery history at one local state. */
+    designRequests(canvasId: string, home: string): Promise<import("../../core/src/index.js").DesignRequestsResponse>;
     /** Core pipeline. Runs inside the queue. */
     private applyAndPersist;
     /**

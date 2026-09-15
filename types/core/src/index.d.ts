@@ -116,3 +116,5 @@ export * from "./inbox-api.js";
 export type { DesignRecipeContract, DesignContractException, EffectiveDesignContract, DesignPolicyProblem, DesignContractPolicy } from "./design-contract.js";
 export type * from "./design-partner.js";
 export type * from "./questionnaire.js";
+export type * from "./design-request.js";
+export type * from "./design-record.js";

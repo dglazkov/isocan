@@ -65,7 +65,7 @@ export function registerQuestionnaires(design: Command, contextOf: (cmd: Command
   design.command("ask <file>")
     .description("Publish a validated question set from JSON with a named human respondent and current brief")
     .option("--thread <id>", "existing thread; required when the file is a bare question-set record")
-    .addHelpText("after", "\nThe file is a DesignQuestionSet record, or {threadId, questions, legacySource?}.\nKeep its payload id when retrying. Stable comment/operation IDs are derived from it.\nLegacy adoption explicitly names the original threadId, commentId and unchanged body.\nThe current phase requires an existing valid design brief and thread.\n")
+    .addHelpText("after", "\nThe file is a DesignQuestionSet record, or {threadId, questions, legacySource?}.\nKeep its payload id when retrying. Stable comment/operation IDs are derived from it.\nLegacy adoption explicitly names the original threadId, commentId and unchanged body.\nUse design start to admit a brief, then design brief --json for its exact reference.\nAn admitted request also needs discovery purpose and stable question/fact bindings.\n")
     .action(act(async (handle, ctx, [file, options]) => {
       const input = await jsonFile(file);
       let raw: unknown = input, threadId: unknown = options.thread, legacySource: { threadId: string; commentId: string; body: string } | undefined;

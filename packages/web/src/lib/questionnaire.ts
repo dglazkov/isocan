@@ -32,7 +32,7 @@ export function questionnaireIO(actor: Actor): QuestionnairePort {
   };
 }
 /** An available, current brief paired with its exact canvas version for publishing. */
-export interface BrowserDesignBrief { title: string; brief: DesignBrief; artifact: DesignArtifactRef }
+export interface BrowserDesignBrief { title: string; brief: DesignBrief; artifact: DesignArtifactRef; request?: import("@isocan/api/design-request").DesignRequestView | undefined }
 /** Existing brief items are the phase-1 publishing bootstrap; ordinary request creation comes next. */
 export async function browserDesignBriefs(canvasId: string, signal?: AbortSignal): Promise<BrowserDesignBrief[]> {
   const [{ canvas }, home] = await Promise.all([getSnapshot(canvasId, signal), authoritativeHome(canvasId, signal)]);
@@ -51,6 +51,11 @@ export async function browserDesignBriefs(canvasId: string, signal?: AbortSignal
       if (brief.progress !== "active") continue;
       choices.push({ title: item.title, brief, artifact: { home, canvasId, itemId: item.id, versionId: version.id, blobHash: version.blobHash } });
     } catch { /* Successfully read ordinary JSON remains an ordinary item. */ }
+  }
+  if (Object.values(canvas.items).some((item) => item.versions.find((version) => version.id === item.currentVersionId)?.designRecord?.kind === "brief")) {
+    const [{ readDesignRequests }, { designRequestReadIO }] = await Promise.all([import("@isocan/api/design-request"), import("./design-request.ts")]);
+    const admitted = await readDesignRequests(designRequestReadIO, { canvasId, ...(signal ? { signal } : {}) });
+    for (const choice of choices) choice.request = admitted.requests.find((one) => one.ref.itemId === choice.artifact.itemId);
   }
   return choices;
 }

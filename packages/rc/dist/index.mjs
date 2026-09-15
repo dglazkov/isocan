@@ -990,6 +990,9 @@ function itemsTouchedBy(op, canvas) {
     return anchor ? [anchor] : [];
   };
   switch (op.type) {
+    case "design.request":
+    case "design.receipt":
+      return op.effect ? itemsTouchedBy(op.effect, canvas) : [op.type === "design.receipt" ? op.itemId : op.action.kind === "start" ? op.action.itemId : op.action.brief.itemId];
     case "group.change":
       return groupChangeItemIds(op);
     case "item.add":
@@ -1164,7 +1167,8 @@ var CLAIM_REFUSAL = {
 // packages/core/src/protocol.ts
 var CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
 var QUESTIONNAIRES_FEATURE = "questionnaires-v1";
-var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`;
+var DESIGN_REQUESTS_FEATURE = "design-requests-v1";
+var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},${DESIGN_REQUESTS_FEATURE}`;
 var CLIENT_FEATURES_HEADER = "x-isocan-features";
 var PARK_ADOPTED_CODE = "park-adopted";
 var rcAnsweringRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/rc`;
@@ -1462,6 +1466,9 @@ function inboxRoute(actorId, options = {}) {
   return `${INBOX_ROUTE}?${query}`;
 }
 
+// packages/core/src/design-request.ts
+var designRequestsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/requests`;
+
 // packages/api/src/routes.ts
 var platformFetch = (input, init) => fetch(input, init);
 var DaemonRoutes = class {
@@ -1537,7 +1544,7 @@ var DaemonRoutes = class {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers = { ...await this.authHeader(), [CLIENT_FEATURES_HEADER]: `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`, ...extra, ...this.policyHeaders() };
+      const headers = { ...await this.authHeader(), [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...extra, ...this.policyHeaders() };
       signal?.throwIfAborted();
       if (body !== void 0) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url2}`, {
@@ -1728,6 +1735,15 @@ var DaemonRoutes = class {
   /** Writer-resolved eligibility; a missing agent display badge does not imply a human. */
   questionnaireActors(canvasId) {
     return this.request("GET", questionnaireActorsRoute(canvasId));
+  }
+  /** Only canonical admitted records contribute continuation, budget and lifecycle eligibility. */
+  designRequests(canvasId, signal) {
+    return this.request("GET", designRequestsRoute(canvasId), void 0, signal);
+  }
+  /** Stable public request/receipt intent reaches the ordinary serialized operation writer. */
+  designRecord(canvasId, actor, op, opId, originGroupMode) {
+    const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } });
   }
   // ---- presence sessions ----
   /** Semantic group request; canonical resolved patches belong to the
@@ -2448,7 +2464,7 @@ function nameResolver(snapshot) {
   const names = actorNamesOn(snapshot);
   return (actorId) => names.get(actorId);
 }
-var summonsPrompt = (canvasTitle, agentName, payload) => `You are ${agentName}, an agent enrolled on the isocan canvas "${canvasTitle}". This is a summons: activity addressed to you arrived while nothing was running for you. Work from this directory through the \`isocan\` CLI \u2014 \`isocan --agent-help\` is the full protocol if you need orientation, and \`isocan comment reply <threadId> "\u2026"\` answers a comment. Address what the payload below carries, reply on its thread, and then simply finish your turn: do NOT run \`isocan wait\` \u2014 your session rests when you stop, and new activity summons you again.
+var summonsPrompt = (canvasTitle, agentName, payload) => `You are ${agentName}, an agent enrolled on the isocan canvas "${canvasTitle}". This is a summons: activity addressed to you arrived while nothing was running for you. Work from this directory through the \`isocan\` CLI \u2014 \`isocan --agent-help\` is the full protocol if you need orientation, and \`isocan comment reply <threadId> "\u2026"\` answers a comment. For a designed screen, HTML node or connected app, run \`isocan design workflow\` for the shared procedure, canvas policy and existing work; precise edits and archive imports do not start a new interview. Address what the payload below carries, reply on its thread, and then simply finish your turn: do NOT run \`isocan wait\` \u2014 your session rests when you stop, and new activity summons you again.
 
 The payload (the same shape \`isocan wait --json\` returns):
 ` + JSON.stringify(payload, null, 2);
@@ -2498,6 +2514,10 @@ through the CLI (\`isocan --agent-help\` is the protocol; \`isocan comment
 reply <threadId> "\u2026"\` answers a comment), and then stop. Never run
 \`isocan wait\`: your session rests when your turn ends, and the next
 summons wakes you.
+
+For a designed screen, HTML node or connected app, run
+\`isocan design workflow\` for the shared procedure, canvas policy and existing
+work. Precise edits and archive imports do not start a new interview.
 
 The first command after a quiet spell can take a couple of minutes: the
 cell's container was released, and a fresh one runs setup (installing

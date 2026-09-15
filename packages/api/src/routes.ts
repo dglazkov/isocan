@@ -2,6 +2,7 @@ import { SOURCE_POLICY_HEADER, sourcePolicyHeader, parseSourcePolicyHeader, sour
 import { inboxRoute, type InboxResponse } from "@isocan/core";
 import { rcAnsweringRoute } from "@isocan/core";
 import { questionnaireActorsRoute } from "@isocan/core/questionnaire";
+import { designRequestsRoute, type DesignRecordOperation, type DesignRequestsResponse } from "@isocan/core/design-request";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type {
   Actor,
@@ -81,8 +82,7 @@ import {
   BADGE_ENDED,
   PUBLIC_CANVASES_ROUTE,
   publicListingRoute,
-  CANVAS_GROUPS_FEATURE,
-  QUESTIONNAIRES_FEATURE,
+  CURRENT_CLIENT_FEATURES,
   CLIENT_FEATURES_HEADER,
   canvasContextRoute,
   commentContextRoute,
@@ -298,7 +298,7 @@ export class DaemonRoutes {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`, ...extra, ...this.policyHeaders() };
+      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...extra, ...this.policyHeaders() };
       signal?.throwIfAborted();
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url}`, {
@@ -553,6 +553,17 @@ export class DaemonRoutes {
   /** Writer-resolved eligibility; a missing agent display badge does not imply a human. */
   questionnaireActors(canvasId: string): Promise<{ actors: Array<{ id: string; name: string; kind: "human" | "agent" | "unknown" }> }> {
     return this.request("GET", questionnaireActorsRoute(canvasId));
+  }
+
+  /** Only canonical admitted records contribute continuation, budget and lifecycle eligibility. */
+  designRequests(canvasId: string, signal?: AbortSignal): Promise<DesignRequestsResponse> {
+    return this.request("GET", designRequestsRoute(canvasId), undefined, signal);
+  }
+
+  /** Stable public request/receipt intent reaches the ordinary serialized operation writer. */
+  designRecord(canvasId: string, actor: Actor, op: DesignRecordOperation, opId: string, originGroupMode?: "legacy" | "groups"): Promise<PostOpResponse> {
+    const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) });
   }
 
   // ---- presence sessions ----

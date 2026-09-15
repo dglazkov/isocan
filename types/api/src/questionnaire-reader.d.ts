@@ -1,6 +1,6 @@
 import { type CanvasSnapshotResponse, type Operation, type PostOpResponse, type ItemVersion } from "../../core/src/index.js";
-import { type DesignQuestionSet, type DesignResponse, type DesignArtifactRef } from "@isocan/core/design-partner";
-import { questionnaireStates } from "@isocan/core/questionnaire";
+import { type DesignQuestionSet, type DesignResponse, type DesignArtifactRef } from "../../core/src/design-partner.js";
+import { questionnaireStates } from "../../core/src/questionnaire.js";
 type QuestionnaireOperation = Extract<Operation, {
     type: "questionnaire.ask" | "questionnaire.answer";
 }>;

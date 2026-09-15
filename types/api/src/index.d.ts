@@ -22,6 +22,8 @@ export * from "./design-audit.js";
 export * from "./design-audit-reader.js";
 export * from "./questionnaire-reader.js";
 export * from "./questionnaire.js";
+export * from "./design-request-reader.js";
+export * from "./design-request.js";
 export * from "./feedback.js";
 export * from "./canvas-groups.js";
 export type { ContextReadOptions, CommentContextOptions, ContextPageOptions, ContextBytesOptions, ContextItemContent } from "./canvas-context.js";

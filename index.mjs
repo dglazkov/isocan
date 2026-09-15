@@ -56,6 +56,14 @@ export const {
   questionnairePort,
   questionnaireFailureStatus,
   questionnaireSubmissionIds,
+  // design-request.ts / design-request-reader.ts — one workflow through either entrance
+  designRequestPort,
+  readDesignRequests,
+  readDesignWorkflow,
+  startDesignRequest,
+  changeDesignRequest,
+  publishDesignReceipt,
+  readDesignRequestReference,
   waitForFeedback,
   waitForResolvedFeedback,
   // canvas-groups.ts — explicit membership and resolved dry-run reports

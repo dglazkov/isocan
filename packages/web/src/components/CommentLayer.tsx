@@ -1,7 +1,8 @@
 import { createPortal } from "react-dom";
 import { useTextAnchorStore } from "../stores/textAnchorStore.ts";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Markdown } from "../lib/markdown.tsx";
+const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
 import type { Actor, CanvasContents, CommentThread, NewComment } from "@isocan/core";
 import {
   collectItemRefCandidates,
@@ -404,10 +405,7 @@ export function ThreadPopover({
             )}
             <CommentFold comment={comment}>
               <div className="body">
-                <CommandChip body={comment.body} />
-                <Markdown rehypePlugins={chips}>
-                  {withoutCommand(comment.body)}
-                </Markdown>
+                {comment.design ? <Suspense fallback={<p>Reading design record…</p>}><DesignComment comment={comment} /></Suspense> : <><CommandChip body={comment.body} /><Markdown rehypePlugins={chips}>{withoutCommand(comment.body)}</Markdown></>}
               </div>
               {comment.context && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
             </CommentFold>

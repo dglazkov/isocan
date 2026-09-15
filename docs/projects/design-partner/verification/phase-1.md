@@ -290,3 +290,14 @@ readable brief/reference projections and the complete shared task path.
 Closure documentation checks passed after recording the phase: conductor status
 lint clean, regenerated roadmap current, and 16/16 roadmap/changelog/lesson
 tests passed (exit 0, 2.25 seconds). Log: `phase1-closure-docs.log`.
+
+## Landed commit and CI acknowledgement
+
+The complete phase landed on `main` as
+`aca35fc9904cf7c85fc9d009be3e56045c542e16`. GitHub
+[release run 34925120720](https://github.com/dglazkov/isocan/actions/runs/34925120720)
+passed all four strict suite shards, typecheck/measurement checks and publication;
+its publish job completed at 03:36:45 UTC on 15 September 2026.
+[Review run 34925120664](https://github.com/dglazkov/isocan/actions/runs/34925120664)
+also passed. This acknowledgement travels with the phase 2 mechanism commit;
+it adds no unverified product change.

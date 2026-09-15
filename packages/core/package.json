@@ -11,7 +11,9 @@
     "./design-partner-plan": "./src/design-partner-plan.ts",
     "./questionnaire": "./src/questionnaire.ts",
     "./questionnaire-adoption": "./src/questionnaire-adoption.ts",
-    "./design-brief": "./src/design-brief.ts"
+    "./design-brief": "./src/design-brief.ts",
+    "./design-request": "./src/design-request.ts",
+    "./design-record": "./src/design-record.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

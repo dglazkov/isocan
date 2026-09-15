@@ -32,6 +32,10 @@ export function invertOperation(
   };
 
   switch (op.type) {
+    case "design.request":
+    case "design.receipt":
+      if (!op.effect) throw new OpValidationError("bad-op", "resolve design intent before inversion");
+      return invertOperation(stateBefore, op.effect);
     case "group.change":
       if (op.action.kind !== "apply") throw new OpValidationError("bad-op", "resolve group intent before inversion");
       return { type: "group.change", action: { kind: "apply", change: invertGroupChange(stateBefore, op.action.change) } };

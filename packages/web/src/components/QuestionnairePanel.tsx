@@ -45,6 +45,6 @@ export function QuestionnairePanel({ canvasId, canvas, actor, thread, canEdit, s
     {!publishing && canEdit && thread && <div className="q-tools"><button type="button" onClick={() => { setLegacySource(undefined); setPublishing(true); }}>Ask design questions</button>{legacy && <button type="button" onClick={() => { setLegacySource({ threadId: thread.id, commentId: legacy.id, body: legacy.body }); setPublishing(true); }}>Adopt legacy questions…</button>}</div>}
     {draftError && <p className="q-error" role="alert">{draftError}</p>}
     {actorError && publishing && <p className="q-error" role="alert">{actorError}</p>}
-    {!active && own.some((one) => one.status === "stale") && <p className="q-help">Earlier questions refer to a changed brief. Their answers and drafts remain available; ask a current question to continue.</p>}
+    {!active && own.some((one) => one.status === "stale") && <p className="q-help">Earlier questions refer to a changed brief. Their answers and drafts remain available. Review the current design task before asking again.</p>}
   </div>;
 }

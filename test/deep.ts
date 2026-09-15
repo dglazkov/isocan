@@ -150,6 +150,7 @@ export interface FastSpawner {
 }
 
 export const FAST_SPAWNERS: readonly FastSpawner[] = [
+  { file: "packages/cli/test/design-request.test.ts", secs: 9.8, why: "one real-home lifecycle and exact-reference walk; measured 14 September, near the ten-second line" },
   { file: "packages/cli/test/migration.test.ts", secs: 9.8, why: "left the deep lane on the measurement that built this list — recorded at 11s, measured at 9.4" },
   { file: "packages/cli/test/correspondence.test.ts", secs: 9.9, why: "two cases, two walks — and the closest file to the line, so the one to watch" },
   { file: "packages/cli/test/grid.test.ts", secs: 9.4, why: "a single case that walks once" },

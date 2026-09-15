@@ -13,6 +13,8 @@ import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./m
  */
 
 export interface NewVersion {
+  /** Canonical writer output only; new public item/version writes cannot forge design admission. */
+  designRecord?: import("./design-record.ts").DesignRecordMarker;
   id: string;
   blobHash: string;
   mimeType: string;
@@ -210,6 +212,8 @@ export type Operation =
   | { type: "project.update"; patch: MetaPatch }
   | { type: "project.delete" } // soft: dir moved aside; NOT undoable
   // ---- items ----
+  | { type: "design.request"; action: import("./design-request.ts").DesignRequestAction; effect?: import("./design-record.ts").DesignRecordEffect }
+  | { type: "design.receipt"; itemId: string; versionId: string; receipt: import("./design-partner.ts").DesignReceipt; placement?: Placement; width?: number; height?: number; title?: string; effect?: import("./design-record.ts").DesignRecordEffect }
   | { type: "group.change"; action: GroupAction }
   | {
       type: "item.add";

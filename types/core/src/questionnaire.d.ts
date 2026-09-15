@@ -43,6 +43,8 @@ export interface QuestionnaireActor {
 }
 /** Both clients reach the writer's eligibility read through the ordinary canvas permission boundary. */
 export declare const questionnaireActorsRoute: (canvasId: string) => string;
+/** Exact authored question text remains a valid response source even when its brief version later changes. */
+export declare function questionnaireSourceCurrent(canvas: CanvasContents, question: Pick<QuestionnaireState, "source" | "questions" | "legacySource">): boolean;
 /** Only typed, writer-stamped responses resolve questions. Retained history survives stale inputs. */
 export declare function questionnaireStates(canvas: CanvasContents, filter?: {
     threadId?: string;

@@ -50,6 +50,14 @@ Conventions: `<item>`/`<thread>` args accept id, id prefix, or title prefix.
 Coordinates are world units (+x right, +y down). Add `--json` to any command
 when you need to parse output.
 
+**Design work has one shared entry.** For a designed screen, HTML node or
+connected application, run `isocan design workflow` before starting or resuming.
+It reads this canvas's rollout policy, existing requests and next steps, and
+provides the full procedure on demand. A precise edit or archive import follows
+ordinary editing/import without a new interview. Canvas summons and external
+agents use the same durable brief; do not copy the procedure into a private
+memory or restart discovery when changing agents.
+
 ## Your name
 
 You are a collaborator on this canvas, so you need a name of your own — not
@@ -2011,6 +2019,90 @@ isocan fit <items...>                  # grow items to the size their content wa
 
   Posting your reply clears it, which is the right shape: the status is the
   gap between being asked and answering, and done is done.
+- **One design request, through either entrance.** Read `isocan design
+  workflow` for the procedure and canvas-owned automatic enrollment policy.
+  `isocan design brief [request] --json` returns canonical briefs, exact
+  references, source provenance, question history, remaining allowance,
+  lifecycle capabilities, and receipts with current/stale/unavailable reasons.
+  `--thread <id> --comment <id>` finds a canvas request; `--output <item>` finds
+  the request beside its result. Ordinary uploaded JSON is not admission.
+
+  For an external request, save this synthetic starting intent as `request.json`:
+
+  ```json
+  {
+    "requestId": "req_acme_receiving",
+    "itemId": "itm_acme_receiving_brief",
+    "versionId": "ver_acme_receiving_start",
+    "source": { "entrance": "external-agent", "externalRequestId": "acme-receiving-1" },
+    "fields": {
+      "intent": "create", "fidelity": "designed", "delivery": "html-node",
+      "targetItemId": null, "groupId": null,
+      "audience": "Warehouse staff", "primaryTask": "Receive stock on a phone",
+      "constraints": ["Use the existing brand"], "facts": [], "references": [],
+      "outstandingDecisionIds": [], "outputIds": []
+    }
+  }
+  ```
+
+  For canvas chat, replace `source` with `{ "entrance": "canvas-chat",
+  "threadId": "<actual thread>", "commentId": "<actual request comment>" }`.
+  The home resolves the original author and captured context. External supplied
+  facts are attributed to the reporting agent; do not imitate a human answer.
+
+  ```sh
+  isocan design start request.json --json
+  isocan design workflow req_acme_receiving
+  isocan design brief req_acme_receiving --json > brief-read.json
+  ```
+
+  An explicit start works while automatic enrollment is off. `design start
+  request.json --automatic` requires `design.workflow=adaptive-v1`; unknown
+  policy stays unsupported. Keep the file and all IDs for retry. The default
+  operation ID hashes the complete `versionId` into a bounded stable ID;
+  `--op-id` can supply an explicit one.
+
+  To correct facts, save a lifecycle file with `brief` copied from the read's
+  exact `ref`, the current `epoch`, a new stable `versionId`, and `patch`:
+
+  ```sh
+  node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync("brief-read.json","utf8")).requests[0]; fs.writeFileSync("update.json",JSON.stringify({brief:r.ref,epoch:r.brief.epoch,versionId:"ver_acme_receiving_update",patch:{constraints:["Use the existing brand","Large controls"]}},null,2));'
+  isocan design brief req_acme_receiving --update update.json --json
+  ```
+
+  `design brief --resume resume.json` uses the same captured basis plus a
+  required `reason`; it advances epoch and preserves original source/facts.
+  `--cancel cancel.json` needs the basis and new version ID, with optional reason.
+  `--complete complete.json` accepts an output-bearing patch. Options are
+  mutually exclusive. A stale refusal leaves your file intact: re-read and
+  reconcile before preparing another version. Complete the brief before
+  publishing a receipt bound to its exact completed reference.
+
+  For settled design answers, the read's `reconciliation` contains the exact
+  effective question/response bindings. Copy these as `acceptedResponses` in
+  one update with your deliberate field patch. Review skipped, dismissed and
+  delegated outcomes as such; they are not supplied preferences. Ordinary
+  brief corrections preserve settled answers for this continuation.
+
+  `design receipt [request] --publish receipt.json` takes
+  `{itemId,versionId,receipt}`. The receipt names request/epoch, completed
+  `brief`, actual canvas output or repository revision/build/runtime,
+  `governing` selection, relevant `context`, fidelity, draft/ready status,
+  checks and unresolved limits. Browser checks include actual tool/version,
+  viewport, state, coverage and exact evidence references. The shared procedure
+  explains what to exercise; without a browser, publish a draft. Reading
+  `design receipt [request]` preserves reported results separately from their
+  currentness and names runtime observations that this read cannot recheck.
+  Use the selected canvas output's `outputGovernings` binding and the brief's
+  live `contextReferences`; historical citations stay exact evidence, not
+  implicit latest-version requirements. `design receipt --help` lists the
+  publication fields and no-browser draft shape.
+
+  Save an exact input/evidence `DesignArtifactRef` from the read as `ref.json`,
+  then use `design brief <request> --reference ref.json --out reference.svg`.
+  `--face visual` opens the retained visual face; `--out` refuses overwrite.
+  Without `--out`, output is a bounded base64 page with offset/nextOffset.
+  Foreign references retain permission checks at their original source.
 - **Ask design questions with an identified source and respondent.**
   `isocan design questions --json` returns structured question sets, their exact
   thread/comment/payload revision, effective resolutions, response IDs and
@@ -2018,13 +2110,13 @@ isocan fit <items...>                  # grow items to the size their content wa
   lists writer-resolved human, agent and unknown identities. Only a named,
   known human can answer; being absent from an agent list is not eligibility.
 
-  This explicit publishing path currently needs an existing thread and a valid
-  versioned design brief. Read the brief with `get` and its version identity
-  with `show --json`; use its current request ID, epoch and exact authoritative
-  home/canvas/item/version/blob reference. Do not invent those values or turn
-  ordinary JSON into a brief. The browser's **Ask design questions** form
-  selects the same existing brief and respondent. Request-start automation is
-  separate; publishing questions does not turn it on.
+  This publishing path needs an existing thread and a valid versioned brief.
+  `isocan design start request.json` admits the ordinary request; `isocan design
+  brief --json` returns its exact current reference, request ID and epoch.
+  Existing unadmitted phase-1 briefs remain usable for manual questionnaires,
+  but an uploaded JSON file does not acquire canonical request standing. The
+  browser uses the same brief and respondent. Automatic enrollment remains a
+  separate canvas policy; publishing questions does not turn it on.
 
   Save a `DesignQuestionSet` as JSON, with a stable `id`, `revision`, `brief`,
   `respondentActorId`, `headline`, `inferredAnswers`, `supersedes`, and `questions`,
@@ -2036,6 +2128,11 @@ isocan fit <items...>                  # grow items to the size their content wa
   The supported renderers are `choice-list`, `visual-cards`, `freeform`, `upload`
   and `url-collection`. A normal first pass asks zero to three useful questions;
   an explicitly requested interview may contain up to 32.
+
+  An admitted request also supplies `discovery`: `purpose` is `initial`,
+  `consequential` or `interview`, with `factBindings` entries naming `questionId`
+  and stable `factId`. Follow-up requires a new `reason`; interview also names
+  its requesting `source`. Use `design workflow` for the remaining allowance.
 
   With `questions.json` prepared from that existing brief and thread:
 
@@ -2677,6 +2774,10 @@ on the thread before putting one on somebody else's canvas,
 `design repair <item> <file> --from-audit <report.json>`,
 `design questions [payload] [--respondents]`, `design ask <file> [--thread <id>]`,
 `design answer [payload] [--file <file>]`, `design reference <thread> <comment> <reference> [--out <file>]`,
+`design workflow [request] [--thread|--comment|--output]`, `design start <file> [--automatic]`,
+`design brief [request] [--update|--resume|--cancel|--complete <file>]`,
+`design brief <request> --reference <file> [--face source|visual] [--out <file>]`,
+`design receipt [request] [--publish <file>]`,
 `add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle

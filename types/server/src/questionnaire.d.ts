@@ -11,4 +11,4 @@ export declare function rejectPublicQuestionnaire(op: Operation): void;
 /** Called before the general op-id fast path; canonical fields alone are ignored. */
 export declare function questionnaireRetry(entries: readonly LogEntry[], op: QuestionnaireOperation, opId: string | undefined, actorId: string, registry: ActorRegistry): LogEntry | null;
 /** This function runs within Engine's single writer chain, after custody and ordinary canvas grants. */
-export declare function resolveQuestionnaireOperation(store: Store, state: CanvasState, revision: number, op: QuestionnaireOperation, actor: Actor, registry: ActorRegistry, home: string | undefined): Promise<QuestionnaireOperation>;
+export declare function resolveQuestionnaireOperation(store: Store, state: CanvasState, revision: number, op: QuestionnaireOperation, actor: Actor, registry: ActorRegistry, home: string | undefined, history?: readonly LogEntry[]): Promise<QuestionnaireOperation>;

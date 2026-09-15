@@ -1,9 +1,9 @@
 ---
 status: superseded
 since: 2026-09-14
-supersededBy: docs/projects/design-partner/phases.md — execution outline only; findings remain the evidence baseline
+supersededBy: docs/projects/design-partner/phases.md — execution and verification; findings remain the research baseline
 see: design-partner, design-competition, evals, context, memory
-note: execution outline promoted to the design-partner project and its eight-phase plan. Findings and source probes remain the evidence baseline; implementation and outcome evaluation have not started.
+note: the design-partner project owns execution. Phases 0–2 now verify shared contracts, question/reference recovery and a complete opt-in task through both entrances. These findings describe the inspected baseline; craft defaults and outcome evaluation remain ahead.
 ---
 # isocan as a design partner
 

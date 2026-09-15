@@ -62,6 +62,8 @@ export const summonsPrompt = (
   `This is a summons: activity addressed to you arrived while nothing was running for you. ` +
   `Work from this directory through the \`isocan\` CLI — \`isocan --agent-help\` is the full ` +
   `protocol if you need orientation, and \`isocan comment reply <threadId> "…"\` answers a comment. ` +
+  `For a designed screen, HTML node or connected app, run \`isocan design workflow\` for the shared ` +
+  `procedure, canvas policy and existing work; precise edits and archive imports do not start a new interview. ` +
   `Address what the payload below carries, reply on its thread, and then simply finish your ` +
   `turn: do NOT run \`isocan wait\` — your session rests when you stop, and new activity ` +
   `summons you again.\n\n` +

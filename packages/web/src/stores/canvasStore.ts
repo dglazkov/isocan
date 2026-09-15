@@ -20,8 +20,7 @@ import type {
   RefusalNotice,
 } from "@isocan/core";
 import {
-  CANVAS_GROUPS_FEATURE,
-  QUESTIONNAIRES_FEATURE,
+  CURRENT_CLIENT_FEATURES,
   CANVAS_GROUPS_REQUIRED,
   CLIENT_FEATURES_PARAM,
   applyOperation,
@@ -955,7 +954,7 @@ function wsUrl(canvasId: string, since: number): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   // `since=0` is "no cursor" on the wire and the daemon reads it as such, so
   // a fresh connect says the same thing whether it says it or stays silent.
-  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}&${CLIENT_FEATURES_PARAM}=${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`;
+  return `${protocol}//${host}/ws?canvasId=${canvasId}&since=${since}&${CLIENT_FEATURES_PARAM}=${CURRENT_CLIENT_FEATURES}`;
 }
 
 /**

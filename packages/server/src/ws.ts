@@ -24,6 +24,8 @@ import { Engine, CanvasNotFoundError } from "./engine.ts";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { QuestionnaireClientError, questionnaireOperation, requireQuestionnaireClient } from "./questionnaire-capability.ts";
 import { supportsQuestionnaires } from "@isocan/core";
+import { supportsDesignRequests } from "@isocan/core";
+import { DesignRequestClientError, designRequestOperation } from "./design-request-capability.ts";
 import type { Desk } from "./desk.ts";
 import { admissionIn, admittingGrant, heldCapability } from "./grants.ts";
 import {
@@ -170,6 +172,7 @@ export class SocketCensus {
 interface Member {
   groupCapable: boolean;
   questionnaireCapable: boolean;
+  designRequestCapable: boolean;
   badgeId: string;
   /** Tell this connection its rung changed. */
   standing: (capability: Capability) => void;
@@ -315,6 +318,10 @@ export function attachWebSockets(
       }
       if (!member.questionnaireCapable && message.type === "op-applied" && (questionnaireOperation(message.entry.envelope.op) || message.entry.inverse && questionnaireOperation(message.entry.inverse))) {
         socket.close(WS_STALE_CLIENT, "Typed questionnaires require an updated isocan client");
+        continue;
+      }
+      if (!member.designRequestCapable && message.type === "op-applied" && (designRequestOperation(message.entry.envelope.op) || message.entry.inverse && designRequestOperation(message.entry.inverse))) {
+        socket.close(WS_STALE_CLIENT, "Design requests require an updated isocan client");
         continue;
       }
       socket.send(payload);
@@ -734,7 +741,7 @@ export function attachWebSockets(
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
-      if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError) ws.close(WS_STALE_CLIENT, err.message);
+      if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError) ws.close(WS_STALE_CLIENT, err.message);
       else ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
       return;
     }
@@ -751,6 +758,7 @@ export function attachWebSockets(
     room.set(ws, {
       groupCapable: supportsCanvasGroups(features),
       questionnaireCapable: supportsQuestionnaires(features),
+      designRequestCapable: supportsDesignRequests(features),
       badgeId,
       standing: (next) => {
         if (next === capability) return;

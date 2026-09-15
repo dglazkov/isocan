@@ -23,6 +23,12 @@ second week.
 
 ## 14 September 2026
 
+- Start a design task from a chat message and keep its brief beside the work.
+  Correct the audience or task, then continue with another agent using the same
+  answers and references. Receipts show what was tried and flag evidence that
+  needs refreshing. Agents can use the same flow through `design start` and
+  `design brief`; automatic starts remain opt-in.
+
 - Design questions keep your draft answers and uploaded references through
   refresh and failed submissions. A teammate's message leaves your question
   open. Agents can read the same saved answers and exact attached versions

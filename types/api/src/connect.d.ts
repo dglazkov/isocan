@@ -3,6 +3,7 @@ import { type ActivityEntry } from "../../core/src/index.js";
 import { type Ctx } from "./ctx.js";
 import { type ExplicitIdentity } from "./identity.js";
 import { type ContextSummaryOptions } from "./context-summary.js";
+import { readDesignRequestReference, type DesignRequestFilter, type DesignStartRequest, type DesignChangeRequest, type DesignPublishRequest } from "./design-request-reader.js";
 import { type DesignQuestionsOptions, type DesignQuestionsResult, type DesignAskRequest, type DesignAnswerRequest, type QuestionnaireSubmission, type DesignReferenceRequest, type DesignReferenceContent } from "./questionnaire-reader.js";
 import type { CanvasDesignAudit, DesignAuditOptions, DesignRepairRequest, DesignRepairResult } from "./design-audit-reader.js";
 import { type FeedbackOptions, type FeedbackResult } from "./feedback.js";
@@ -214,6 +215,26 @@ export declare class CanvasHandle {
     designReference(request: DesignReferenceRequest): Promise<DesignReferenceContent>;
     /** Eligibility comes from registry-backed writer classification, not the display-only agent map. */
     designRespondents(): ReturnType<DaemonRoutes["questionnaireActors"]>;
+    /** One on-demand procedure and current next-step plan, using this canvas's shared rollout policy. */
+    designWorkflow(filter?: DesignRequestFilter): Promise<import("./design-request-reader.js").DesignWorkflowView>;
+    /** Read admitted briefs and evidence by request, source conversation or output identity. */
+    designBrief(filter?: DesignRequestFilter): Promise<import("./design-request-reader.js").DesignRequestReadResult>;
+    /** Start carries stable caller-owned IDs; authenticated admission materializes the brief. */
+    designStart(request: Omit<DesignStartRequest, "canvasId">): Promise<import("./design-request-reader.js").DesignRequestSubmission>;
+    /** Conditional lifecycle changes preserve the captured brief identity and explicit resume reason. */
+    designChange(request: Omit<DesignChangeRequest, "canvasId">): Promise<import("./design-request-reader.js").DesignRequestSubmission>;
+    /** Saved receipts retain their authored check results alongside current input freshness. */
+    designReceipt(filter?: DesignRequestFilter): Promise<{
+        receipts: import("./design-request-reader.js").DesignReceiptView[];
+        unavailable: {
+            itemId: string;
+            reason: string;
+        }[];
+    }>;
+    /** Publish attributed evidence as its own versioned artifact after the brief completes. */
+    designPublishReceipt(request: Omit<DesignPublishRequest, "canvasId">): Promise<import("./design-request-reader.js").DesignRequestSubmission>;
+    /** Open an exact request input or evidence version while preserving foreign-source permissions. */
+    designRequestReference(request: Omit<Parameters<typeof readDesignRequestReference>[1], "canvasId">): Promise<import("./design-request-reader.js").DesignRequestReferenceContent>;
     /** Bounded addressed feedback with a caller-owned cursor; never marks work seen. */
     waitForFeedback(options?: FeedbackOptions): Promise<FeedbackResult>;
     contextPage(options: ContextPageOptions): Promise<ContextContentPage>;
