@@ -434,7 +434,12 @@ export function wireVoice(doc: Document = document): VoicePage {
    * keys mean the build does not answer that verb yet — which is said out
    * loud rather than rendered as a dead button.
    */
-  const offered: { daemons?: unknown[]; canvases?: unknown[]; actors?: unknown[] } = {};
+  const offered: {
+    daemons?: unknown[];
+    canvases?: unknown[];
+    public?: { id: string; title: string; home: string }[];
+    actors?: unknown[];
+  } = {};
 
   /**
    * The session's word and the page's word, side by side. `data-state` is the
@@ -665,9 +670,9 @@ export function wireVoice(doc: Document = document): VoicePage {
     if (doc.activeElement !== actorNameField && facts?.agent?.name && !actorNameField.value) {
       actorNameField.placeholder = facts.agent.name;
     }
-    if (offered.canvases && Array.isArray(offered.canvases) && offered.canvases.length > 0) {
+    const choices = canvasChoices();
+    if (choices.length > 0) {
       canvasRow.hidden = false;
-      const canvases = offered.canvases as { id?: string; title?: string }[];
       /**
        * **Elements, never markup.** A canvas title is somebody's text — it is
        * whatever that person typed — and a title containing `</option>` (or a
@@ -678,14 +683,14 @@ export function wireVoice(doc: Document = document): VoicePage {
        * under a person's cursor: the DOM is touched only when the set of
        * canvases actually changed.
        */
-      const signature = canvases.map((c) => `${c.id ?? ""}\u0000${c.title ?? ""}`).join("\u0001");
+      const signature = choices.map((c) => `${c.id}\u0000${c.title}\u0000${c.public}`).join("\u0001");
       if (canvasSelect.dataset.signature !== signature) {
         canvasSelect.dataset.signature = signature;
         canvasSelect.replaceChildren(
-          ...canvases.map((c) => {
+          ...choices.map((c) => {
             const option = doc.createElement("option");
-            option.value = c.id ?? "";
-            option.textContent = c.title ?? c.id ?? "";
+            option.value = c.id;
+            option.textContent = c.public ? `${c.title} · public` : c.title;
             return option;
           }),
         );
@@ -1957,8 +1962,39 @@ export function wireVoice(doc: Document = document): VoicePage {
     const [daemons, canvases] = await Promise.all([callSetup("/daemons"), callSetup("/canvases")]);
     if (daemons.ok && Array.isArray(daemons.body?.found)) offered.daemons = daemons.body.found as unknown[];
     if (canvases.ok && Array.isArray(canvases.body?.canvases)) offered.canvases = canvases.body.canvases as unknown[];
+    if (canvases.ok && Array.isArray(canvases.body?.public))
+      offered.public = canvases.body.public as { id: string; title: string; home: string }[];
     renderFacts();
     renderSetup();
+  }
+
+  /**
+   * **The picker's rows: this daemon's canvases, then the home's public
+   * catalogue** for anything not already local — a published canvas this
+   * machine has never visited is offered too, and one it already holds is
+   * marked as such. The harness owns the join (a POST naming one of them
+   * arrives through the door), so the page sends the id and nothing else.
+   */
+  function canvasChoices(): { id: string; title: string; public: boolean }[] {
+    const rows: { id: string; title: string; public: boolean }[] = [];
+    const seen = new Set<string>();
+    const publicIds = new Set(
+      (Array.isArray(offered.public) ? offered.public : [])
+        .map((one) => one?.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    for (const one of Array.isArray(offered.canvases) ? offered.canvases : []) {
+      const row = one as { id?: string; title?: string } | null;
+      if (!row?.id) continue;
+      seen.add(row.id);
+      rows.push({ id: row.id, title: row.title ?? row.id, public: publicIds.has(row.id) });
+    }
+    for (const one of Array.isArray(offered.public) ? offered.public : []) {
+      if (!one?.id || seen.has(one.id)) continue;
+      seen.add(one.id);
+      rows.push({ id: one.id, title: one.title ?? one.id, public: true });
+    }
+    return rows;
   }
 
   /** One step of the setup: a sentence, and either a control or the command. */
@@ -2016,14 +2052,15 @@ export function wireVoice(doc: Document = document): VoicePage {
       : "These are the harness's to set, not this page's. What this build cannot do is named here, with the command that does it by hand.";
 
 
-    if (offered.canvases) {
+    if (offered.canvases || offered.public) {
+      const choices = canvasChoices();
       const li = setupStep(`Canvas: ${facts?.canvas?.title ?? "none"}. Choose another one:`);
       const select = doc.createElement("select");
       select.setAttribute("aria-label", "Canvas");
-      for (const one of offered.canvases as { id?: string; title?: string }[]) {
+      for (const one of choices) {
         const option = doc.createElement("option");
-        option.value = String(one.id ?? "");
-        option.textContent = String(one.title ?? one.id ?? "");
+        option.value = one.id;
+        option.textContent = one.public ? `${one.title} · public` : one.title;
         select.appendChild(option);
       }
       li.appendChild(select);
@@ -3127,7 +3164,7 @@ export function wireVoice(doc: Document = document): VoicePage {
   });
   canvasCustomBtn.addEventListener("click", () => {
     const ref = canvasCustomId.value.trim();
-    if (ref) void setupPost("/canvas", { id: ref });
+    if (ref) void setupPost("/canvas", { ref });
   });
   canvasCreateBtn.addEventListener("click", () => {
     const title = canvasCreateTitle.value.trim();

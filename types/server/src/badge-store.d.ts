@@ -37,6 +37,9 @@ export type { BadgeStore, DoorAnswer, StoredBadge } from "../../core/src/index.j
  * pair, holding the human's claim and each of its agents'.
  */
 export declare function readBadge(home: string, base: string): Promise<StoredBadge | null>;
+/** Rename the home person, or explicitly choose a fresh ID, inside the same
+ * transaction as credentials and pass adoption. Unknown fields remain intact. */
+export declare function writeIdentityName(home: string, name: string, fresh?: boolean): Promise<Actor>;
 /** Merge a credential without dropping the person, other badges or private fields. */
 export declare function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void>;
 /** Persist only an actor returned by successful pass redemption. A different

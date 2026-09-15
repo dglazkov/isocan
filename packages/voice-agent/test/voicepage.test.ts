@@ -1213,6 +1213,18 @@ describe("the setup panel says what this harness cannot do", () => {
     const call = vi.mocked(fetch).mock.calls.find(([input]) => String(input).endsWith("/canvas"));
     expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({ id: "prj_2" });
   });
+
+  it("posts the pasted join reference verbatim — address, pass and all", async () => {
+    await wire();
+    const field = element<HTMLInputElement>("canvas-custom-id");
+    field.value = "https://isocan.io/p/prj_elsewhere#pss_abc123.sec-ret";
+    element<HTMLButtonElement>("canvas-custom-btn").click();
+    await flush();
+    const call = vi.mocked(fetch).mock.calls.find(([input]) => String(input).endsWith("/canvas"));
+    expect(call).toBeTruthy();
+    const sent = JSON.parse(String((call?.[1] as RequestInit).body)) as { ref: string };
+    expect(sent).toEqual({ ref: "https://isocan.io/p/prj_elsewhere#pss_abc123.sec-ret" });
+  });
 });
 
 describe("configuration behind the settings cog", () => {

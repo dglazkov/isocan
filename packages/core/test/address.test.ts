@@ -10,6 +10,7 @@ import {
   canvasUrl,
   canvasUrlWithPass,
   parseCanvasAddress,
+  parseItemAddress,
   setupCommand,
   cloudAgentInstructions,
   localAgentInstructions,
@@ -95,6 +96,10 @@ describe("a canvas's address", () => {
     });
     // A trailing slash is what a browser adds; it is not a different canvas.
     expect(parseCanvasAddress("https://isocan.io/p/prj_acme/")?.canvasId).toBe("prj_acme");
+    // A malformed percent escape is not an address and is not a throw: the
+    // null contract is the whole reason callers do not catch around this.
+    expect(parseCanvasAddress("https://isocan.io/p/%E0%A4%A")).toBeNull();
+    expect(parseItemAddress("https://isocan.io/p/prj_acme/i/%E0%A4%A")).toBeNull();
     // Round trip, both directions, against the one writer.
     const built = canvasUrlWithPass("https://isocan.io", "prj_acme", "pss_1.s3cret");
     expect(parseCanvasAddress(built)).toEqual({

@@ -3,7 +3,7 @@ status: superseded
 since: 2026-09-14
 supersededBy: docs/projects/design-partner/phases.md — execution and verification; findings remain the research baseline
 see: design-partner, design-competition, evals, context, memory
-note: the design-partner project owns execution. Phases 0–3 verify shared requests, reliable questions and references, scoped craft defaults and cross-entrance reuse. These findings describe the inspected baseline; alternatives, shared repair and independent outcome evaluation remain ahead.
+note: the design-partner project owns execution. Phases 0–6 verify the shared request-to-review workflow and optional adapted craft guidance; phase 7 has verified study preparation and awaits paid generation, compatible authentication, independent raters, participants and hosted acceptance. These findings remain the inspected baseline, not a quality-uplift result.
 ---
 # isocan as a design partner
 

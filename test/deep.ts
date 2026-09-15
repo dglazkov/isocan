@@ -153,6 +153,7 @@ export interface FastSpawner {
 }
 
 export const FAST_SPAWNERS: readonly FastSpawner[] = [
+  { file: "test/design-partner-tools.test.ts", secs: 2.118, why: "one actual stdio MCP child calls the CLI and owned Chrome; remaining boundary checks stay in process" },
   { file: "packages/cli/test/design-craft.test.ts", secs: 6.7, why: "one actual CLI packet/export/check/reconcile walk on a shared synthetic daemon; measured 15 September" },
   { file: "packages/cli/test/design-request.test.ts", secs: 9.8, why: "one real-home lifecycle and exact-reference walk; measured 14 September, near the ten-second line" },
   { file: "packages/cli/test/migration.test.ts", secs: 9.8, why: "left the deep lane on the measurement that built this list — recorded at 11s, measured at 9.4" },
@@ -223,7 +224,10 @@ export function walksBinary(source: string, siblings: readonly string[] = []): b
   const code = [withoutProse(source), ...siblings.map(withoutProse)].join("\n");
   const target = /bin\/isocan\.js|canvas-board\.mjs|\bnpx\b/.test(code);
   const spawns = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\s*\(/.test(code);
-  return target && spawns;
+  // The native study exposes the real CLI through its explicit stdio MCP
+  // process. All three facts are needed; generic SDK clients are not CLI walkers.
+  const studyMcp = /design-partner-mcp\.mjs/.test(code) && /new\s+StdioClientTransport\s*\(/.test(code) && /callTool\s*\(\s*\{\s*name:\s*["']cli["']/.test(code);
+  return target && spawns || studyMcp;
 }
 
 /** The lane a file is declared to be in, or `undefined` when it is in neither. */

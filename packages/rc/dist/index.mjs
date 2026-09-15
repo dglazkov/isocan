@@ -139,9 +139,17 @@ function parseCanvasAddress(raw) {
   if (!url2.hostname) return null;
   const parts = url2.pathname.replace(/\/+$/, "").split("/");
   if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
-  const canvasId = decodeURIComponent(parts[2] ?? "");
+  const canvasId = decodeSegment(parts[2]);
   if (!canvasId) return null;
   return { origin: url2.origin, canvasId, ...pass !== void 0 ? { pass } : {} };
+}
+function decodeSegment(segment) {
+  if (!segment) return null;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
 }
 function normalizeHomeUrl(raw) {
   const trimmed = raw.trim();

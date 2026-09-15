@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-14
 see: design-competition, evals, context, memory
-note: phases 0–6 closed with the local design journey and optional adapted Impeccable guidance verified across browser and CLI. Exact shared context, accepted choices, exports, freshness and bounded review pass full strict gates. Native playbooks remain unsupported; phase 7 owes generated-design and real-user partnership evidence before default rollout.
+note: phases 0–6 closed; phase 7 preparation verified 15 September with actual A/B runtimes, shared CLI/browser tools, independent task assessment, blinded review and full strict gates. Paid generation, compatible authentication, independent raters, six participants and hosted acceptance remain owed. The workflow stays opt-in; native Impeccable playbooks remain unsupported.
 ---
 # A design partner — the experience
 

@@ -47,6 +47,7 @@ let fakeBrowser: string;
 let homeDaemon: Daemon;
 let homePort: number;
 let awayPort: number;
+let identityHookModule = "./setup-identity-hook.mjs";
 let identityHook: ((message: unknown, release: () => void) => void) | undefined;
 
 /**
@@ -70,11 +71,12 @@ async function browserRecorder(dir: string): Promise<string> {
 }
 
 beforeEach(async () => {
-  homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-home-"));
+  homeDir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-home-")));
   homeWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-home-work-"));
-  awayDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-away-"));
+  awayDir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-away-")));
   awayWork = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-away-work-"));
   identityHook = undefined;
+  identityHookModule = "./setup-identity-hook.mjs";
   fakeBrowser = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-pass-browser-"));
   // The human whose second machine this scene is about. Written rather than
   // claimed through the CLI so that the test is about the pass and not about
@@ -132,13 +134,13 @@ function cli(
   delete env.ISOCAN_HOME_URL;
   for (const v of harnessVars) delete env[v];
   Object.assign(env, extra);
-  const hook = identityHook ? ["--import", fileURLToPath(new URL("../../../node_modules/tsx/dist/loader.mjs", import.meta.url)), "--import", fileURLToPath(new URL("./setup-identity-hook.mjs", import.meta.url))] : [];
+  const hook = identityHook ? ["--import", fileURLToPath(new URL("../../../node_modules/tsx/dist/loader.mjs", import.meta.url)), "--import", fileURLToPath(new URL(identityHookModule, import.meta.url))] : [];
   const child = spawn(process.execPath, [...hook, cliBin, ...args], {
     cwd,
     env,
     stdio: identityHook ? ["ignore", "pipe", "pipe", "ipc"] : ["ignore", "pipe", "pipe"],
   });
-  child.on("message", (message) => identityHook?.(message, () => child.send({ type: "continue" })));
+  child.on("message", (message) => identityHook?.(message, () => { if (child.connected) child.send({ type: "continue" }); }));
   let stdout = "";
   let stderr = "";
   child.stdout!.on("data", (c) => (stdout += c));
@@ -669,6 +671,96 @@ describe("minting from a replica", () => {
       readSpy.mockRestore();
       endowSpy.mockRestore();
       await replica.close();
+    }
+  }, 60_000);
+
+  it("serializes the daemon home badge with the CLI local badge and preserves next-command custody after restart", async () => {
+    const canvasId = await acmeCanvas();
+    const enrol = JSON.parse((await atHome("pass", "--json")).stdout) as { address: string };
+    const origin = `http://127.0.0.1:${homePort}`;
+    const local = `http://127.0.0.1:${awayPort}`;
+    const file = path.join(await fs.realpath(awayDir), "identity.json");
+    await fs.writeFile(file, "{}");
+    const source = await fs.readFile(new URL("../../server/src/badge-store.ts", import.meta.url), "utf8");
+    const readLine = source.split("\n").findIndex((line) => /current = .*JSON.parse\(await fs.readFile/.test(line)) + 1;
+    expect(readLine).toBeGreaterThan(0);
+    const read = fs.readFile.bind(fs);
+    let signalRead!: () => void;
+    const daemonRead = new Promise<void>((resolve) => { signalRead = resolve; });
+    let releaseRead!: () => void;
+    const barrier = new Promise<void>((resolve) => { releaseRead = resolve; });
+    let armed = true;
+    let daemonReleased = false;
+    const releaseDaemon = () => { daemonReleased = true; releaseRead(); };
+    const readSpy = vi.spyOn(fs, "readFile").mockImplementation((async (...args: Parameters<typeof fs.readFile>) => {
+      const writing = new Error().stack?.includes(`badge-store.ts:${readLine}:`);
+      const raw = await read(...args);
+      if (armed && writing && String(args[0]) === file) {
+        armed = false;
+        signalRead();
+        await barrier;
+      }
+      return raw;
+    }) as typeof fs.readFile);
+    let serialized = false;
+    let localBefore: StoredBadge | null = null;
+    let saved: Promise<void> | undefined;
+    let replica: Daemon | undefined;
+    const starting = startDaemon({ port: awayPort, home: awayDir, birthHome: origin });
+    try {
+      await daemonRead;
+      identityHookModule = "../../server/test/identity-write-hook.mjs";
+      identityHook = (message, release) => {
+        switch ((message as { type?: string }).type) {
+          case "identity-lock-contended":
+            serialized = true;
+            releaseDaemon();
+            break;
+          case "identity-write-read":
+            // With the former process-local queue this is a stale concurrent
+            // read. Let its actual local write finish before releasing the
+            // daemon, forcing the original lost-badge schedule deterministically.
+            if (!daemonReleased) expect(serialized).toBe(false);
+            release();
+            break;
+          case "identity-write-saved":
+            saved = readBadge(awayDir, local).then((badge) => { localBefore = badge; releaseDaemon(); });
+            break;
+        }
+      };
+      const joining = away("setup", "--no-install", "--no-open", "--json", enrol.address);
+      replica = await starting;
+      const joined = await joining;
+      await saved;
+      identityHook = undefined;
+      readSpy.mockRestore();
+      expect(joined.code, joined.stderr).toBe(0);
+      const remoteBefore = await readBadge(awayDir, origin);
+      expect(remoteBefore).not.toBeNull();
+      expect(localBefore).not.toBeNull();
+      for (const restart of [false, true]) {
+        if (restart) {
+          await replica.close();
+          replica = await startDaemon({ port: awayPort, home: awayDir, birthHome: origin });
+        }
+        const minted = await away("pass", "--json");
+        expect(minted.code, minted.stderr).toBe(0);
+        const result = JSON.parse(minted.stdout) as { address: string; actor: { id: string } };
+        expect(result.actor.id).toBe(priya.id);
+        expect(result.address.startsWith(canvasUrl(origin, canvasId))).toBe(true);
+        const passId = result.address.split("#")[1]!.split(".")[0]!;
+        expect(await homeDaemon.desk.pass(passId)).toMatchObject({ canvasId, actorId: priya.id });
+        expect(await readBadge(awayDir, local)).toEqual(localBefore);
+        expect(await readBadge(awayDir, origin)).toEqual(remoteBefore);
+      }
+      expect(serialized).toBe(true);
+      expect(JSON.parse(await read(file, "utf8"))).toMatchObject(priya);
+    } finally {
+      releaseDaemon();
+      identityHook = undefined;
+      readSpy.mockRestore();
+      replica ??= await starting.catch(() => undefined);
+      await replica?.close();
     }
   }, 60_000);
 

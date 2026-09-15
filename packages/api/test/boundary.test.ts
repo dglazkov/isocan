@@ -18,6 +18,18 @@ import { describe, expect, it } from "vitest";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../../..");
 
+/** The frozen connected-app stock endpoint is fixture speech, not daemon
+ * transport. Match only that service/path in its one runtime materializer;
+ * any other route on the same line or in the same file remains guarded. */
+function scriptQuotesDaemonRoute(file: string, line: string): boolean {
+  const materializer = path.join(repo, "scripts", "lib", "design-partner-runtime-child.mjs");
+  const daemonCode = file === materializer
+    ? line.replace(/\bservice\.url\s*\+\s*(["'])\/api\/stock(?:\?q=[A-Za-z0-9-]+)?\1/g, "FROZEN_FIXTURE_STOCK_REQUEST")
+    : line;
+  return /(["'`]|\})\/api\//.test(daemonCode);
+}
+
+
 describe("the API/CLI seam", () => {
   it("no file in packages/cli constructs a request to the daemon", () => {
     // The lockstep argument (design.md): after the extraction there is exactly
@@ -70,7 +82,7 @@ describe("the API/CLI seam", () => {
       for (const [i, line] of text.split("\n").entries()) {
         const lead = line.trimStart();
         if (lead.startsWith("//") || lead.startsWith("*") || lead.startsWith("/*")) continue;
-        if (/(["'`]|\})\/api\//.test(line)) {
+        if (scriptQuotesDaemonRoute(file, line)) {
           offenders.push(`${path.relative(repo, file)}:${i + 1}: ${line.trim()}`);
         }
       }
@@ -79,6 +91,17 @@ describe("the API/CLI seam", () => {
       offenders,
       `a script speaks to the daemon through @isocan/api (or by spawning the CLI), never by hand:\n${offenders.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("classifies only the exact frozen fixture endpoint while guarding daemon routes in its materializer", () => {
+    const materializer = path.join(repo, "scripts", "lib", "design-partner-runtime-child.mjs");
+    const stock = 'fetch(service.url + "/api/stock?q=BTL-20")';
+    expect(scriptQuotesDaemonRoute(materializer, stock)).toBe(false);
+    expect(scriptQuotesDaemonRoute(materializer, 'fetch(service.url + "/api/projects/prj_acme")')).toBe(true);
+    expect(scriptQuotesDaemonRoute(materializer, stock + '; fetch(base + "/api/projects")')).toBe(true);
+    expect(scriptQuotesDaemonRoute(materializer, 'fetch(base + "/api/stock")')).toBe(true);
+    expect(scriptQuotesDaemonRoute(path.join(repo, "scripts", "other.mjs"), stock)).toBe(true);
+    expect(scriptQuotesDaemonRoute(materializer, 'fetch(service.url + "/api/stock/private")')).toBe(true);
   });
 
   it("the typed route surface does not import the Node-only half", () => {

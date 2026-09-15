@@ -170,3 +170,15 @@ rerun uses the final staged source without concurrent heavy gates.
 The post-record roadmap, deep-list, unused/undocumented export guards pass
 (18 tests). The conductor status lint is clean; roadmap and decision/lesson
 indexes are regenerated. Every frozen corpus file remains unchanged.
+
+
+## Remote commit and CI
+
+The whole implementation is commit
+`08bbf1017213b2d7a24b269384e1861481958ae7`, pushed to `main`. Its exact
+[release run](https://github.com/dglazkov/isocan/actions/runs/34964878461)
+passed shared checks, all four suite shards and publication. The
+[review run](https://github.com/dglazkov/isocan/actions/runs/34964878487)
+and [pages run](https://github.com/dglazkov/isocan/actions/runs/34964877108)
+also passed. A subsequent remote read found both `main` and `green` at this
+same commit. This records CI publication, not an actual hosted user journey.
