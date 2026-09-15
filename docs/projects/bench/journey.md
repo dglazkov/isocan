@@ -1,9 +1,9 @@
 ---
-status: partial
+status: done
 since: 2026-09-14
 issue: 309
 see: bench, standing-agents, on-demand, agent-custody, sheep-harness, room, memory, inbox
-note: journeys 1, 2 and 3 closed 15 Sep 2026 — phase 0 listed the agents a person has with reachability measured from three different facts, and phase 1 made `@Name` joinable from the agents panel with NO rc parked, which is the constraint that made an agent's fifth canvas as hard as its first. Journey 3 closed the same day: `@Name join` in the Chat, refusing in a sentence that takes the name and nothing else, so a stranger cannot tell a name on somebody's private bench from one that exists nowhere. Journey 4 stays out of scope. Designed 14 Sep from the bench research note; four journeys. The registry is the personal canvas — agents as items on it — so nothing new stores anything; joining is one op with provenance; and a bench row is honest about reachability before any socket is held. Journey 4 (the rc in a cell) is written here so phases 0–3 do not paint it into a corner, and is NOT in this project's phases.
+note: DONE — journeys 1, 2 and 3 closed 15 Sep 2026, all four phases with them; phase 3 made enrolment write its own bench row so the registry stays true without curating, and withdrawal never takes a row off — phase 0 listed the agents a person has with reachability measured from three different facts, and phase 1 made `@Name` joinable from the agents panel with NO rc parked, which is the constraint that made an agent's fifth canvas as hard as its first. Journey 3 closed the same day: `@Name join` in the Chat, refusing in a sentence that takes the name and nothing else, so a stranger cannot tell a name on somebody's private bench from one that exists nowhere. Journey 4 stays out of scope. Designed 14 Sep from the bench research note; four journeys. The registry is the personal canvas — agents as items on it — so nothing new stores anything; joining is one op with provenance; and a bench row is honest about reachability before any socket is held. Journey 4 (the rc in a cell) is written here so phases 0–3 do not paint it into a corner, and is NOT in this project's phases.
 ---
 
 # The bench — the journeys

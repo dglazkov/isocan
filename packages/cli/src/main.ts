@@ -1,6 +1,6 @@
 import { classifyAutomaticSource } from "@isocan/api/context";
 import { registerPersonalContext } from "./personal-context.ts";
-import { registerBench } from "./bench.ts";
+import { noteOnBench, registerBench } from "./bench.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
 import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
@@ -12719,6 +12719,14 @@ async function mintAndEnrol(
   await ctx.client
     .parkClaim({ canvasId, actorId: agent.id, seedAt: enrolled.seq })
     .catch(() => {});
+  // **And the bench records what this machine now has** (the bench, phase 3).
+  // Last, and best-effort by construction: this is the one funnel every
+  // enrolment on this machine passes through, so the registry fills itself —
+  // but the registry must never be able to break the act it records, so
+  // `noteOnBench` cannot throw, never retries, and never creates the personal
+  // canvas it would write to. A person who has never made one enrols exactly
+  // as they did before phase 3.
+  await noteOnBench(ctx, agent.name, { actorId: agent.id, harness: opts.harness }, say);
   return agent;
 }
 

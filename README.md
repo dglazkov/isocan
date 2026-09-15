@@ -643,6 +643,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   agent from what this machine already knows and `isocan bench rm <name>` takes
   it off — and a row confers nothing either way: it does not enrol an agent,
   and removing it withdraws nothing.
+- **The bench fills itself**: enrolling an agent anywhere — `isocan agent add`,
+  `isocan rc add`, or Add from the agents panel — writes that agent's row, so
+  the registry stays true without being curated. The write is best-effort by
+  design, because the registry must never be able to break the act it records:
+  it never creates your personal canvas behind your back, it is never retried,
+  and an enrolment cannot fail because a row could not be written. Withdrawal
+  goes the other way and touches nothing — the bench is the agents you *have*,
+  not the agents standing somewhere, so an agent withdrawn from every canvas
+  keeps its row and reads *unreachable*, which is honest rather than tidy.
 - **Bringing an agent along**: the agents panel lists your bench above *Add an
   agent…*, each row with **Join**, and `isocan bench join <name>` is the same
   act from a terminal. It enrols an agent you already have on *this* canvas —

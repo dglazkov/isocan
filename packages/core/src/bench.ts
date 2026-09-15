@@ -66,6 +66,10 @@ const AGENT_RUNS_AT_PROP = "runsAt";
 const BENCH_ITEM_FILENAME = "agent.md";
 /** What a bench card is, placed: a caption's worth of space, not a screen. */
 export const BENCH_ITEM_SIZE = { width: 320, height: 180 };
+/** Laid out in rows of four rather than stacked: the bench is a list somebody
+ * looks at, and a pile of cards at the origin is not one. */
+const BENCH_PER_ROW = 4;
+const BENCH_GAP = 40;
 
 /**
  * **Reachability is a measurement, and it has three answers.**
@@ -180,6 +184,55 @@ export function benchItemOf(
     mimeType: "text/markdown",
     filename: BENCH_ITEM_FILENAME,
   };
+}
+
+/**
+ * **What recording this agent asks of a bench** — a card to add and where to
+ * put it, the gaps to fill in the row that is already there, or nothing.
+ *
+ * One function because phase 3 made the bench fill itself: `isocan bench add`
+ * used to be the only caller that had to decide *is this actor already a row,
+ * and where does a new card go*, and every enrolment path now asks the same
+ * two questions. Three copies of that decision would be three benches that
+ * lay their cards out differently and disagree about what counts as already
+ * there. It reads through `benchAgents`, so a row is "already there" by the
+ * same test `isocan bench` prints from.
+ *
+ * **Identity is the actor, never the name.** Two rows a person called the
+ * same thing are two agents; one agent renamed is still one row. That is why
+ * a re-enrolment under a new title fills rather than duplicates.
+ *
+ * **Gaps are filled; nothing is overwritten.** An enrolment knows the harness
+ * and the machine it happened on, so a row that was written without them
+ * stops being a blank card — but a `runsAt` a person typed by hand, or one
+ * written by a different machine, is not corrected by whichever machine
+ * enrolled last. The bench is a person's own record: filling a silence keeps
+ * the registry from going stale, and rewriting an answer would make the same
+ * row flip between two machines' opinions, one op per enrolment, forever.
+ */
+export function benchWriteFor(
+  canvas: CanvasContents,
+  agent: { actorId: string; harness?: string | null; runsAt?: string | null },
+):
+  | { kind: "add"; x: number; y: number }
+  | { kind: "fill"; itemId: string; properties: Record<string, string> }
+  | { kind: "already"; itemId: string } {
+  const rows = benchAgents(canvas);
+  const already = rows.find((row) => row.actorId === agent.actorId);
+  if (!already) {
+    const at = rows.length;
+    return {
+      kind: "add",
+      x: (at % BENCH_PER_ROW) * (BENCH_ITEM_SIZE.width + BENCH_GAP),
+      y: Math.floor(at / BENCH_PER_ROW) * (BENCH_ITEM_SIZE.height + BENCH_GAP),
+    };
+  }
+  const properties: Record<string, string> = {};
+  if (agent.harness && !already.harness) properties[AGENT_HARNESS_PROP] = agent.harness;
+  if (agent.runsAt && !already.runsAt) properties[AGENT_RUNS_AT_PROP] = agent.runsAt;
+  return Object.keys(properties).length > 0
+    ? { kind: "fill", itemId: already.itemId, properties }
+    : { kind: "already", itemId: already.itemId };
 }
 
 /**

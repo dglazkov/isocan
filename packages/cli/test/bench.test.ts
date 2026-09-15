@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   BENCH_REACH,
   collectCanvasNames,
@@ -10,6 +12,7 @@ import {
   answeringFor,
   badge,
   base,
+  collect,
   dimitri,
   isocan,
   post,
@@ -20,6 +23,7 @@ import {
   until,
   useRcHome,
 } from "./rc-fixture.ts";
+import { withoutComments } from "../../../test/source.ts";
 
 /**
  * **The bench reads** (`docs/projects/bench/phases.md`, phase 0 — journey 1).
@@ -260,4 +264,150 @@ describe("isocan bench join", () => {
     expect(stranger.code).not.toBe(0);
     expect(stranger.stderr).toContain("on your bench");
   }, 120_000);
+});
+
+/**
+ * **The bench fills itself** (phase 3 — journey 1's residue: a bench that is
+ * true without being curated), walked with the real binary.
+ *
+ * Three things, and the order matters because the first one is the failure
+ * mode rather than the feature.
+ *
+ * **The registry must never be able to break the act it records.** Enrolment
+ * is the real act and the row is a convenience, so a person with no personal
+ * canvas enrols exactly as they did before — and does not come back to find
+ * one has been made for them. A private canvas is a person's own gesture, and
+ * `isocan agent add` is not it.
+ *
+ * **Then the feature**: an agent enrolled the old way is on the bench without
+ * anybody touching the bench, from both verbs, and a second enrolment of the
+ * same agent is not a second row.
+ *
+ * **Then the decision, asserted because it is the shape most likely to be
+ * "tidied" later** (design.md, 15 Sep 2026): *withdrawal never touches the
+ * row.* The bench is the agents you HAVE, not the agents standing somewhere.
+ * Withdrawing Percy from every canvas leaves the ROW in place, reading
+ * `unreachable` — honest about the dead-machine case rather than sweeping it
+ * up — and `bench rm` stays the only way a row leaves.
+ */
+describe("enrolment writes its own bench row", () => {
+  /** What `isocan context personal status` says the binding is, without
+   * creating one — the read that proves nothing was made behind anybody's
+   * back. */
+  async function personalSource(): Promise<{ canvasId: string } | null> {
+    const read = await isocan("--json", "context", "personal", "status");
+    expect(read.code, read.stderr).toBe(0);
+    return (JSON.parse(read.stdout) as { source: { canvasId: string } | null }).source;
+  }
+
+  it("with no bench, from both verbs, and a withdrawal leaves the row standing nowhere", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Acme two" },
+    });
+
+    // **The trap first.** No personal canvas exists, and enrolling must not
+    // care: the act succeeds, and it says plainly that no row was written so
+    // a missing row can never read as a missing agent.
+    expect(await personalSource()).toBeNull();
+    const early = await isocan("--canvas", "prj_1", "rc", "add", "Wooly", ...TEAM);
+    expect(early.code, early.stderr).toBe(0);
+    expect(early.stderr).toContain("no personal canvas");
+    // And nothing was created on their behalf. This is the assertion the
+    // phase names: the bench is a convenience, a private canvas is not.
+    expect(await personalSource()).toBeNull();
+    expect(await agentsOn("prj_1")).toEqual(["Wooly"]);
+    expect((await rcRows()).map((row) => row.name)).toEqual(["Wooly"]);
+    expect(await bench()).toEqual([]);
+
+    // The person makes one themselves. THIS is the gesture.
+    const made = await isocan("context", "personal");
+    expect(made.code, made.stderr).toBe(0);
+    expect(await personalSource()).not.toBeNull();
+
+    // **Now the feature**: enrolled the old way, and on the bench without
+    // anybody running a bench verb.
+    expect((await isocan("--canvas", "prj_1", "rc", "add", "Percy", ...TEAM)).code).toBe(0);
+    const first = await bench();
+    expect(first.map((row) => row.name)).toEqual(["Percy"]);
+    // What the row carries is what the enrolment knew — the harness, and an
+    // opaque label for where it runs. Never a working directory.
+    expect(first[0]).toMatchObject({ harness: "claude-code" });
+    expect(first[0]!.runsAt).toBeTruthy();
+    expect(JSON.stringify(first[0])).not.toContain("/");
+    expect(first[0]!.standing.map((one) => one.canvasId)).toEqual(["prj_1"]);
+    // Wooly, enrolled before there was a bench, is still not on it: the write
+    // is best-effort, not eventually-consistent, and nothing goes back.
+    expect(first.some((row) => row.name === "Wooly")).toBe(false);
+
+    // The other verb, the same funnel. `agent add` refuses an explicit
+    // --canvas (it enrols beside itself), so it is told where it stands the
+    // way a summoned agent is.
+    const added = await collect(
+      spawnCli(["agent", "add", "Sian", ...TEAM], { ISOCAN_CANVAS: "prj_1" }),
+    );
+    expect(added.code, added.stderr).toBe(0);
+    expect((await bench()).map((row) => row.name)).toEqual(["Percy", "Sian"]);
+
+    // A second canvas for an agent already benched is not a second row:
+    // identity is the actor, and one machine has one Percy.
+    expect((await isocan("--canvas", "prj_2", "rc", "add", "Percy", ...TEAM)).code).toBe(0);
+    const twice = await bench();
+    expect(twice.map((row) => row.name)).toEqual(["Percy", "Sian"]);
+    expect(twice[0]!.standing.map((one) => one.canvasId).sort()).toEqual(["prj_1", "prj_2"]);
+
+    // **And the decision.** Withdrawn from every canvas it stood on, Percy
+    // is still an agent this person HAS.
+    for (const canvasId of ["prj_1", "prj_2"]) {
+      const gone = await isocan("--canvas", canvasId, "rc", "remove", "Percy");
+      expect(gone.code, gone.stderr).toBe(0);
+    }
+    expect((await rcRows()).some((row) => row.name === "Percy")).toBe(false);
+    expect(await agentsOn("prj_2")).toEqual([]);
+    const after = await bench();
+    const percy = after.find((row) => row.name === "Percy");
+    expect(percy, "withdrawal must never take a row off the bench").toBeTruthy();
+    expect(percy!.standing).toEqual([]);
+    // Standing nowhere and nothing here can run it — said, not swept up.
+    expect(percy!.reach).toBe("unreachable");
+    const printed = await isocan("bench");
+    expect(printed.stdout).toContain("standing nowhere");
+    expect(printed.stdout).toContain("nothing here can run it");
+
+    // `bench rm` is still the only way a row leaves.
+    expect((await isocan("bench", "rm", "Percy")).code).toBe(0);
+    expect((await bench()).map((row) => row.name)).toEqual(["Sian"]);
+  }, 180_000);
+
+  /**
+   * The funnel, read from the source, because a comment saying "every
+   * enrolment path" is not a thing that can fail. `mintAndEnrol` is the one
+   * place an actor is minted and enrolled — `agent add`, `rc add` and the rc
+   * answering a web ask all reach it — so the bench write belongs there and
+   * exactly there. A fourth path that wrote its own row would be phase 0's
+   * drift in a new place.
+   */
+  it("writes the row from the one funnel, and never creates a personal canvas to do it", () => {
+    const main = withoutComments(
+      readFileSync(fileURLToPath(new URL("../src/main.ts", import.meta.url)), "utf8"),
+    );
+    expect(main.match(/noteOnBench\(/g)).toHaveLength(1);
+    const funnel = main.slice(main.indexOf("async function mintAndEnrol("));
+    expect(funnel.slice(0, funnel.indexOf("\n}\n"))).toContain("noteOnBench(");
+
+    // And the write itself reads the binding rather than ensuring it. The
+    // ONE `ensurePersonal` in the CLI's bench file is `bench add`'s, which is
+    // a person asking for a bench in those words.
+    const source = withoutComments(
+      readFileSync(fileURLToPath(new URL("../src/bench.ts", import.meta.url)), "utf8"),
+    );
+    const write = source.slice(
+      source.indexOf("export async function noteOnBench("),
+      source.indexOf("export function registerBench("),
+    );
+    expect(write).toContain("benchCanvasId(");
+    expect(write).not.toContain("ensurePersonal");
+    expect(source.match(/ensurePersonal/g)).toHaveLength(1);
+  });
 });

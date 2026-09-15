@@ -590,6 +590,30 @@ reads the agent off this machine's own records; for an agent this machine has
 never run, name its actor with `--actor <id>` and say so plainly rather than
 guessing a harness for it.
 
+**You will rarely need `bench add`, because the bench fills itself.** Every
+enrolment this machine makes — `isocan agent add`, `isocan rc add`, and the
+parked rc answering an Add from the web — writes or updates that agent's row,
+so the registry does not have to be curated to stay true. A registry kept by
+hand is a registry that goes stale. Two things follow, and both are
+deliberate:
+
+- **Enrolment never depends on the bench.** The row is a convenience and the
+  enrolment is the real act, so the write is best-effort: it never creates
+  your personal canvas (that is your gesture, not a side effect of adding an
+  agent), it is never retried, and it can never fail an enrolment. If no row
+  was written the command says so on stderr and carries on — a missing row
+  must never read as a missing agent.
+- **It fills silences; it overwrites nothing.** A row that already names a
+  harness or a `runsAt` keeps what it says, so a machine that enrols an agent
+  second does not rewrite what the first one, or you, recorded.
+
+**Withdrawal never touches the row.** `isocan agent remove` takes an agent's
+standing on a canvas; it does not take the agent off your bench, because the
+bench is the agents you HAVE, not the agents standing somewhere. Withdrawing
+Percy from every canvas leaves Percy's row reading `unreachable` — which is
+honest, and is the whole reason that state exists. `isocan bench rm` is the
+only way a row leaves.
+
 **Bringing one to a canvas is `isocan bench join <name>`.** It enrols an agent
 from your bench on the canvas the command is about — `--canvas`, or whatever
 this directory is bound to — and it needs **no parked `isocan rc` there**,

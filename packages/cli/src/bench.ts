@@ -8,6 +8,7 @@ import {
   benchRows,
   benchStandingWords,
   benchWords,
+  benchWriteFor,
   newItemId,
   newVersionId,
   type BenchAgent,
@@ -129,6 +130,23 @@ function oneRow<T extends { name: string; actorId: string; itemId: string }>(
   return matches[0]!;
 }
 
+/**
+ * **Which harness a row records**, when the thing that knows says nothing.
+ *
+ * A null harness — on an rc row, or on an enrolment made without `--harness`
+ * — means "this machine's default", and `isocan who` resolves it the same
+ * way. A bench row that said nothing would be a registry that cannot answer
+ * the one question a person has about a list of agents: which of these is
+ * which. So it is resolved as this machine would run it, and recorded as what
+ * the row says rather than re-read as a live fact every time somebody looks.
+ *
+ * One function because `bench add` and every enrolment now write rows, and
+ * two spellings of "what is Percy" would put two answers on the same bench.
+ */
+async function recordedHarness(ctx: Ctx, harness: string | null | undefined): Promise<string | null> {
+  return harness ?? (await scanHarnesses(ctx.home)).default?.name ?? null;
+}
+
 /** What this machine already knows about an agent by this name: the rc rows
  * and the enrolments they name. `bench add` takes the agent from here so that
  * adding to the bench never mints an actor and never needs an rc handshake. */
@@ -146,19 +164,120 @@ async function knownAgent(ctx: Ctx, name: string): Promise<BenchAgent | null> {
     );
   }
   const row = matches[0]!;
-  // A null harness on an rc row means "this machine's default" — `isocan who`
-  // resolves it the same way, and a bench row that said nothing would be a
-  // registry that cannot answer the one question a person has about a list of
-  // agents: which of these is which. Resolved as this machine would run it,
-  // and recorded as what the row says rather than as a live fact.
-  const harness = row.harness ?? (await scanHarnesses(ctx.home)).default?.name ?? null;
   return {
     itemId: "",
     name: row.name,
     actorId: row.actorId,
-    harness,
+    harness: await recordedHarness(ctx, row.harness),
     runsAt: row.sheep ? row.sheep.kennel : thisMachine(),
   };
+}
+
+/**
+ * **The one write a bench takes** — a new card, or the gaps filled in the row
+ * that is already there. What to do is `benchWriteFor` in core, so the verb
+ * and every enrolment path decide it the same way; this is only the sending.
+ *
+ * No new op either way: adding is an `item.add` and filling a silence is an
+ * `item.update` whose patch merges properties, so both are one undo and both
+ * replicate like anything else on the canvas.
+ */
+async function writeBenchRow(
+  ctx: Ctx,
+  canvasId: string,
+  name: string,
+  agent: { actorId: string; harness?: string | null; runsAt?: string | null },
+): Promise<{ itemId: string; wrote: "add" | "fill" | "already" }> {
+  const snapshot = await ctx.client.snapshot(canvasId);
+  const write = benchWriteFor(snapshot.canvas, agent);
+  if (write.kind === "already") return { itemId: write.itemId, wrote: "already" };
+  if (write.kind === "fill") {
+    await ctx.client.sendOp(canvasId, ctx.actor, {
+      type: "item.update",
+      itemId: write.itemId,
+      patch: { properties: write.properties },
+    });
+    return { itemId: write.itemId, wrote: "fill" };
+  }
+  const card = benchItemOf(name, agent);
+  const upload = await ctx.client.uploadBlob(
+    canvasId,
+    Buffer.from(card.blob),
+    card.mimeType,
+    card.filename,
+  );
+  const itemId = newItemId();
+  await ctx.client.sendOp(canvasId, ctx.actor, {
+    type: "item.add",
+    itemId,
+    version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: card.mimeType, filename: card.filename, size: upload.size },
+    width: BENCH_ITEM_SIZE.width,
+    height: BENCH_ITEM_SIZE.height,
+    placement: { x: write.x, y: write.y, chosen: true },
+    title: name,
+    properties: card.properties,
+  });
+  return { itemId, wrote: "add" };
+}
+
+/**
+ * **The bench row an enrolment writes for itself** (the bench, phase 3 —
+ * journey 1's residue: a registry kept by hand is a registry that goes stale).
+ *
+ * Every enrolment this machine makes lands here — `isocan agent add`, `isocan
+ * rc add`, and the rc answering a web ask all funnel through `mintAndEnrol` —
+ * so the bench fills itself and nobody has to curate it. A join needs no call:
+ * `agent.invite` can only name a row that is already on the bench it carries.
+ *
+ * **It is best-effort, by construction, because the registry must never be
+ * able to break the act it records.** Enrolment is the real act; the row is a
+ * convenience. So:
+ *
+ * - It reads the binding with `personalStatus` and NEVER `ensurePersonal`. A
+ *   personal canvas is private and creating one is the person's own gesture,
+ *   not a side effect of enrolling an agent. Somebody who has never made one
+ *   enrols exactly as they did before.
+ * - Nothing it does can throw into the caller, and nothing is retried: a home
+ *   that refuses costs one request and then the enrolment carries on.
+ * - It is not silent. A missing row must never read as a missing agent, so
+ *   every path that does not write one says which it was, on the narration
+ *   channel the enrolment already uses — stderr for a verb, the rc's own
+ *   lines for a handshake — leaving `--json` on stdout untouched.
+ */
+export async function noteOnBench(
+  ctx: Ctx,
+  name: string,
+  agent: { actorId: string; harness?: string | null },
+  say: (line: string) => void,
+): Promise<void> {
+  let canvasId: string | null;
+  try {
+    canvasId = await benchCanvasId(ctx);
+  } catch (error) {
+    return say(
+      `${name} is enrolled. Its bench could not be read (${error instanceof Error ? error.message : String(error)}), so no row was written — \`isocan bench add ${name}\` puts one on.`,
+    );
+  }
+  if (!canvasId) {
+    return say(
+      `${name} is enrolled, and on no bench: there is no personal canvas here to keep one on, and enrolling does not make one. \`isocan context personal\` creates it privately.`,
+    );
+  }
+  try {
+    // Where it runs, as far as anybody can honestly say at this moment: this
+    // machine holds the rc row and will dispatch for it. `runsAt` is opaque
+    // (journey 4's value is a cell), and core fills a silence rather than
+    // correcting a label somebody else wrote.
+    await writeBenchRow(ctx, canvasId, name, {
+      actorId: agent.actorId,
+      harness: await recordedHarness(ctx, agent.harness),
+      runsAt: thisMachine(),
+    });
+  } catch (error) {
+    say(
+      `${name} is enrolled. Its bench row was not written (${error instanceof Error ? error.message : String(error)}) — \`isocan bench add ${name}\` puts one on.`,
+    );
+  }
 }
 
 export function registerBench(program: Command, contextOf: (cmd: Command) => Promise<Ctx>): void {
@@ -175,7 +294,12 @@ summon it. Reachability is measured every time you look:
 
   ready         something parked would answer for it now
   elsewhere     it stands somewhere, but nothing is parked
-  unreachable   nothing present can run it at all`,
+  unreachable   nothing present can run it at all
+
+It fills itself: enrolling an agent anywhere writes its row, so you rarely
+need \`bench add\`. Withdrawing one does not take it off — the bench is the
+agents you HAVE, so a row that stands nowhere stays, reading unreachable.
+\`bench rm\` is the only way one leaves.`,
     );
 
   const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
@@ -235,40 +359,25 @@ summon it. Reachability is measured every time you look:
           harness: opts.harness ?? known?.harness ?? null,
           runsAt: opts.runsAt ?? known?.runsAt ?? null,
         };
+        // `bench add` is the ONE bench write that may create the canvas: it is
+        // the person's own gesture, said in those words. Every other path
+        // (phase 3's enrolments) reads with `personalStatus` and writes
+        // nothing when there is nothing there.
         const ensured = await ctx.client.ensurePersonal(ctx.actor.id);
         const canvasId = ensured.source?.canvasId;
         if (!canvasId) throw new Error("your personal canvas is not live here, so there is nowhere to keep a bench");
-        const snapshot = await ctx.client.snapshot(canvasId);
-        const already = benchAgents(snapshot.canvas).find((row) => row.actorId === actorId);
-        if (already) {
-          if (ctx.json) return printJson({ canvasId, itemId: already.itemId, added: false, agent: already });
-          return console.log(`${already.name} is already on your bench (${already.itemId}).`);
+        const { itemId, wrote } = await writeBenchRow(ctx, canvasId, name, agent);
+        if (wrote !== "add") {
+          const row = benchAgents((await ctx.client.snapshot(canvasId)).canvas).find(
+            (one) => one.actorId === actorId,
+          );
+          if (ctx.json) return printJson({ canvasId, itemId, added: false, agent: row });
+          return console.log(
+            wrote === "fill"
+              ? `${row?.name ?? name} was already on your bench (${itemId}); its row learned what this machine knows.`
+              : `${row?.name ?? name} is already on your bench (${itemId}).`,
+          );
         }
-        const card = benchItemOf(name, agent);
-        const upload = await ctx.client.uploadBlob(
-          canvasId,
-          Buffer.from(card.blob),
-          card.mimeType,
-          card.filename,
-        );
-        // Laid out in a row rather than stacked: the bench is a list somebody
-        // looks at, and a pile of cards at the origin is not one.
-        const at = benchAgents(snapshot.canvas).length;
-        const itemId = newItemId();
-        await ctx.client.sendOp(canvasId, ctx.actor, {
-          type: "item.add",
-          itemId,
-          version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: card.mimeType, filename: card.filename, size: upload.size },
-          width: BENCH_ITEM_SIZE.width,
-          height: BENCH_ITEM_SIZE.height,
-          placement: {
-            x: (at % 4) * (BENCH_ITEM_SIZE.width + 40),
-            y: Math.floor(at / 4) * (BENCH_ITEM_SIZE.height + 40),
-            chosen: true,
-          },
-          title: name,
-          properties: card.properties,
-        });
         if (ctx.json) return printJson({ canvasId, itemId, added: true, agent: { itemId, name, ...agent } });
         console.log(`${name} is on your bench as ${itemId}. A row grants nothing: it does not enrol ${name} anywhere.`);
       }),

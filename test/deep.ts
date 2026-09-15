@@ -128,8 +128,10 @@ export const DEEP: readonly DeepFile[] = [
   // whole file. Phase 1's `bench join` case added 4.2s of its own — three
   // canvases, an enrolment and two joins against the real binary — and 12.9s
   // is past the line the rule states, so it moves rather than the rule
-  // bending for it.
-  { file: "packages/cli/test/bench.test.ts", secs: 12.9 },
+  // bending for it. Phase 3's case added another 9.4s: a walk with no
+  // personal canvas, two verbs enrolling, and a withdrawal from two canvases
+  // that must leave the row standing.
+  { file: "packages/cli/test/bench.test.ts", secs: 22.3 },
   { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
 ];
 

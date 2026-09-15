@@ -3,7 +3,7 @@ status: designed
 since: 2026-09-14
 issue: 309
 see: bench, standing-agents, on-demand, agent-custody, sheep-harness, room, memory, inbox
-note: phases 0, 1 and 2 closed 15 Sep 2026 — the bench is items on the personal canvas, `isocan bench`/`add`/`rm` and **Your bench…** read one derivation in core with three states from three different facts; `agent.invite` (op-types 40 → 41) then joins an agent you already have to a canvas with NO rc parked, from the panel or `isocan bench join`, preserving `rules` and `writtenBy` so a join cannot widen who may summon; phase 2 put the same act in the Chat as `@Name join`, with a refusal that takes the name and nothing else so it cannot distinguish a name on somebody else's private bench from one that exists nowhere. Four phases, none of which provisions anything or spends money. Phase 0 was the registry and its three-state reachability; phase 1 joins from the panel with `agent.invite` and moves op-types 36 → 37; phase 2 joins from chat; phase 3 makes enrolment write its own rows. The rc in a cell is journey 4 and is NOT here.
+note: all four phases closed 15 Sep 2026 — the bench is items on the personal canvas, `isocan bench`/`add`/`rm` and **Your bench…** read one derivation in core with three states from three different facts; `agent.invite` (op-types 40 → 41) then joins an agent you already have to a canvas with NO rc parked, from the panel or `isocan bench join`, preserving `rules` and `writtenBy` so a join cannot widen who may summon; phase 2 put the same act in the Chat as `@Name join`, with a refusal that takes the name and nothing else so it cannot distinguish a name on somebody else's private bench from one that exists nowhere. Four phases, none of which provisions anything or spends money. Phase 0 was the registry and its three-state reachability; phase 1 joins from the panel with `agent.invite` and moves op-types 36 → 37; phase 2 joins from chat; phase 3 makes enrolment write its own rows. The rc in a cell is journey 4 and is NOT here.
 ---
 
 # The bench — the phases
@@ -13,11 +13,17 @@ bench exists on both surfaces with reachability measured rather than asserted;
 an agent you already have joins a canvas from the agents panel with no rc
 parked anywhere; and `@Name join` does the same from the Chat, sending the same
 op and refusing in a sentence that cannot tell a stranger whether a name exists.
-Phase 3 is next (`bench phase 3`), the last: enrolment writing its own row. Nothing
-waits on a person and nothing waits on another project. Two debts are open and
-named in the trajectories: the two surfaces measure reachability from different
-inputs (needs a daemon route nobody owns yet), and four `op-types` arrived from
-design-partner without an argument beside the number.
+**Phase 3 is CLOSED too, and with it the project**: enrolment writes its own
+bench row, so the registry stays true without anybody curating it. All four
+phases are done and journeys 1–3 are live. Journey 4 — the rc in a cell — was
+never in scope and is the next project's to make; what this one owed it is that
+nothing here forbids it.
+
+Open, and named in the trajectories: the two surfaces measure reachability from
+different inputs (needs a daemon route nobody owns yet); `runsAt` for a sheep
+records the enrolling machine rather than the kennel; an agent enrolling for its
+owner does not fill that owner's bench; and `rc.test.ts`'s narration case is the
+deep lane's load canary.
 No phase here provisions a cloud resource or spends money — the one thing that
 would, the rc in a cell, is journey 4 and deliberately out of scope.
 
@@ -218,20 +224,60 @@ an information leak rather than a typo.
 
 ## Phase 3 — enrolment writes its own row
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 September 2026 — every enrolment a machine makes writes
+its own bench row through the one funnel, best-effort, and a person with no
+personal canvas can still enrol.
 
 **Work.** Enrolling an agent anywhere — `isocan agent add`, the rc's
 handshake, a join — writes or updates its bench row, so the registry fills
-itself. Decide and record whether withdrawal removes the row or marks it.
+itself.
+
+**Withdrawal never touches the row** — decided by the conductor before this
+phase was briefed, with the argument in `design.md`'s Open: the bench is the
+agents you HAVE, not the agents standing somewhere, and `benchRows()` already
+derives `standing` live so a withdrawal shrinks it by itself. `bench rm` stays
+the only way a row leaves.
 
 **Proof.** An agent added the old way appears on the bench without anyone
-touching the bench. Withdrawing it leaves the bench in the state the phase
-decided, with the decision recorded in `design.md`'s Open. A bench with no
+touching the bench. Withdrawing it from every canvas leaves the ROW in place
+and reading `unreachable` — asserted, because that is the decision above and
+the shape most likely to be "tidied" later. A bench with no
 personal canvas yet does not fail the enrolment — the registry is a
 convenience and must never be able to break the act it records.
 
 **Closes.** The residue of journey 1 — a bench that is true without being
 curated.
+
+### Trajectory
+
+- **2026-09-15** — The write hangs off `mintAndEnrol`, which is the single
+  funnel every enrolment already passes through: `isocan agent add`, `rc add`,
+  and the rc answering a web Add. A join needs no call at all — `agent.invite`
+  can only name a row already on the bench it carries, so the row exists by
+  construction.
+- **2026-09-15** — It reads the binding with `personalStatus` and NEVER
+  `ensurePersonal`. A private canvas is a person's gesture, not a side effect
+  of enrolling an agent, and the registry must never be able to break the act
+  it records. Checked by mutation: swapping the call fails three cases.
+- **2026-09-15** — A row's identity is its ACTOR, never its name, and existing
+  answers are filled but never overwritten. Overwriting would let whichever
+  machine enrolled last correct a `runsAt` somebody typed, and the row would
+  flip between two opinions, one op per enrolment, forever.
+- **2026-09-15** — Open: `runsAt` for a sheep is the enrolling machine's
+  hostname, not the kennel, because at `mintAndEnrol` the sheep is not born
+  yet. Fill-never-overwrite means a later `bench add` will not correct it. The
+  fix, if wanted, is a narrow "correct `runsAt` when a sheep is born" write —
+  not general overwriting.
+- **2026-09-15** — Open: an AGENT running `isocan agent add` does not fill its
+  owner's bench; `personalStatus` refuses with `personal-person-required` and
+  the line says the row was not written. Honest and safe. The answer, if it is
+  ever wanted, is delegation on the personal canvas — not the write quietly
+  choosing a different actor.
+- **2026-09-15** — Open: `rc.test.ts`'s enrolment/summons/withdrawal narration
+  is the deep lane's load canary. Under a saturated run it goes red with
+  "another park adopted …'s cursor" — a real race between the CLI's seeding
+  `parkClaim` and the rc's own claim, not a test bug. It will keep costing a
+  re-run until the seed claim is made un-adoptable.
 
 ---
 

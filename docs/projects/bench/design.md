@@ -181,10 +181,30 @@ ask wanted to "tie into the Inbox" ties in by costing zero.
   What this project owes it is only that phases 0–3 do not forbid it: three
   reachability states, `runsAt` not `machineId`, and refusal copy that does
   not say "your machine".
-- **Does enrolling elsewhere write a bench row?** Phase 3 says yes — a
-  registry kept by hand is a registry that goes stale. The question left is
-  whether withdrawing removes the row or marks it, and the answer waits for
-  phase 3 to have something to look at.
+- ~~**Does enrolling elsewhere write a bench row?**~~ **Phase 3 says yes** — a
+  registry kept by hand is a registry that goes stale.
+
+  **And withdrawal never touches the row. Decided 15 Sep 2026, before phase 3
+  was briefed.** Three reasons, and the first is the whole argument: *the bench
+  is the agents you HAVE, not the agents standing somewhere.* Withdrawing Percy
+  from one canvas does not mean you no longer have Percy — you may still have
+  him on four others, and even on none he is still yours, which is exactly what
+  the `elsewhere` and `unreachable` states exist to say.
+
+  Second, it needs no mechanism. `benchRows()` already computes `standing` live
+  from canvas state, so a withdrawal shrinks that list by itself; a row that
+  reacted to withdrawal would be a second derivation of something already
+  derived, which is the drift phase 0 was built to avoid.
+
+  Third, symmetry with the rule the whole project keeps. A bench row confers no
+  standing; standing must confer nothing back. A withdrawal that silently
+  edited somebody's registry is the same coupling read from the other end, and
+  `bench rm` already exists as the explicit way to take an agent off.
+
+  What this costs, stated: a bench can hold an agent that stands nowhere and
+  that nothing present can run. That row reads `unreachable` and is honest —
+  and it is the dead-machine case `agent-custody` is waiting on, made visible
+  rather than swept up.
 - **Cost, stated to the person.** If a bench can one day start something that
   bills, the row is where the price belongs. Nothing in isocan has had to say
   that yet.

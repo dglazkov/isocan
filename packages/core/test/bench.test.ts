@@ -10,6 +10,7 @@ import {
   benchRows,
   benchStandingWords,
   benchWords,
+  benchWriteFor,
   emptyCanvas,
   type BenchCanvas,
   type CanvasContents,
@@ -251,5 +252,83 @@ describe("the bench, read off a personal canvas", () => {
     // The two facts `roster()` owns must be asked of it, not recomputed here.
     expect(source).not.toContain("statusSource");
     expect(source).not.toContain("lastSeen");
+  });
+});
+
+/**
+ * **What an enrolment asks of a bench** (phase 3 — the registry fills itself).
+ *
+ * `isocan bench add` is no longer the only thing that writes a row: every
+ * enrolment this machine makes writes or updates one, so the decision *is
+ * this actor already here, and where does a new card go* is asked from three
+ * places and has to have exactly one answer. The two rules that will be
+ * "tidied" later, asserted here rather than left to a comment: identity is
+ * the ACTOR, never the name, and a row's existing answers are never
+ * overwritten by whichever machine enrolled last.
+ */
+describe("benchWriteFor", () => {
+  const laid = { actorId: percy.id, harness: "claude-code", runsAt: "laptop" };
+
+  it("places a new card in rows of four, counting the rows already there", () => {
+    expect(benchWriteFor(emptyCanvas(), { actorId: "usr_new" })).toEqual({ kind: "add", x: 0, y: 0 });
+    // Three rows already, so the fourth card sits beside them and the fifth
+    // starts the next line — a pile at the origin is not a list.
+    expect(benchWriteFor(bench(), { actorId: "usr_new" })).toEqual({ kind: "add", x: 3 * 360, y: 0 });
+    const four = bench();
+    four.items.itm_four = agentItem("itm_four", "Ada", { actorId: "usr_four" });
+    expect(benchWriteFor(four, { actorId: "usr_new" })).toEqual({ kind: "add", x: 0, y: 220 });
+  });
+
+  it("knows a row by its actor, not by what somebody called it", () => {
+    const renamed = bench();
+    renamed.items.itm_percy!.title = "Percival";
+    // The same agent under a new title is one row, not two: a registry that
+    // counted names would double an agent the day its person renamed it.
+    expect(benchWriteFor(renamed, laid)).toEqual({ kind: "already", itemId: "itm_percy" });
+    // …and a different actor wearing a name already on the bench is a second
+    // agent, because the name is what a person calls it and the actor is what
+    // a summons, an enrolment and a parked rc all name.
+    expect(benchWriteFor(renamed, { actorId: "usr_other", harness: "codex" }).kind).toBe("add");
+  });
+
+  it("fills a silence and overwrites nothing", () => {
+    const quiet = emptyCanvas();
+    quiet.items.itm_quiet = agentItem("itm_quiet", "Percy", { actorId: percy.id });
+    // A row benched by hand with nothing but an actor learns what the
+    // enrolment knows — that is the whole of "a registry kept by hand goes
+    // stale", fixed without a second table.
+    expect(benchWriteFor(quiet, laid)).toEqual({
+      kind: "fill",
+      itemId: "itm_quiet",
+      properties: { harness: "claude-code", runsAt: "laptop" },
+    });
+    // Only the halves that were silent.
+    const half = emptyCanvas();
+    half.items.itm_half = agentItem("itm_half", "Percy", { actorId: percy.id, harness: "codex" });
+    expect(benchWriteFor(half, laid)).toEqual({
+      kind: "fill",
+      itemId: "itm_half",
+      properties: { runsAt: "laptop" },
+    });
+    // And a row that already answers is left alone, however different the
+    // answer: the bench is a person's own record, and a `runsAt` rewritten by
+    // whichever machine enrolled last would flip between two machines'
+    // opinions, one op per enrolment, forever.
+    expect(benchWriteFor(bench(), { actorId: percy.id, harness: "codex", runsAt: "sheep-2" })).toEqual({
+      kind: "already",
+      itemId: "itm_percy",
+    });
+  });
+
+  it("asks nothing of an agent that said nothing", () => {
+    const quiet = emptyCanvas();
+    quiet.items.itm_quiet = agentItem("itm_quiet", "Percy", { actorId: percy.id });
+    // An enrolment with no harness named writes no op at all rather than an
+    // empty patch: a registry that touched the canvas on every enrolment
+    // would fill somebody's history with nothing.
+    expect(benchWriteFor(quiet, { actorId: percy.id, harness: null, runsAt: null })).toEqual({
+      kind: "already",
+      itemId: "itm_quiet",
+    });
   });
 });
