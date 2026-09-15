@@ -916,7 +916,7 @@ describe("the page", () => {
     expect(facts.provider).toMatchObject({ name: null, key: false });
     expect(facts.version).toBeTruthy();
     expect(facts.updated).toMatch(/^\d{4}-\d{2}-\d{2} /);
-    expect(facts.provider.model).toBe("models/gemini-3.1-flash-live-preview");
+    expect(facts.provider.model).toBe("models/gemini-3.8-live");
     // The key itself is never in the facts, only whether one is there.
     await fetch(`${server.state.url}key`, {
       method: "POST",
@@ -2593,7 +2593,7 @@ describe("the ACP face", () => {
 describe("the Live API path", () => {
   it("opens with the setup the API expects, on the model that is current", () => {
     const setup = liveSetup() as { setup: Record<string, unknown> };
-    expect(LIVE_MODEL).toBe("models/gemini-3.1-flash-live-preview");
+    expect(LIVE_MODEL).toBe("models/gemini-3.8-live");
     expect(setup.setup.model).toBe(LIVE_MODEL);
     expect((setup.setup.generationConfig as { responseModalities: string[] }).responseModalities).toEqual(["AUDIO"]);
     const names = ((setup.setup.tools as { functionDeclarations: { name: string }[] }[])[0] ?? { functionDeclarations: [] })
@@ -2604,6 +2604,14 @@ describe("the Live API path", () => {
     expect(names).toContain("say");
     expect(names).not.toContain("trash_empty");
     expect(liveUrl("AIza-x")).toContain("BidiGenerateContent?key=AIza-x");
+  });
+
+  it("names the thinking depth for the extended-thinking model, and omits it for the plain one", () => {
+    const plain = liveSetup("models/gemini-3.8-live") as { setup: { generationConfig: Record<string, unknown> } };
+    expect(plain.setup.generationConfig.thinkingConfig).toBeUndefined();
+    expect(plain.setup.generationConfig.thinkingLevel).toBeUndefined();
+    const thinking = liveSetup("models/gemini-3.8-live-extended-thinking") as { setup: { generationConfig: Record<string, unknown> } };
+    expect(thinking.setup.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
   });
 
   it("speaks the wire: setup first, then audio up and tool calls answered", async () => {

@@ -1497,12 +1497,13 @@ function base64(bytes: Uint8Array): string {
  * belong in the Chat, as the research note says; the tool list here is the
  * fast set.
  *
- * `gemini-3.1-flash-live-preview` verified current on 11 Sep 2026 against
- * Google's Live API docs. It is a preview name and will move; `--model` and
+ * `gemini-3.8-live` verified current on 15 Sep 2026 against Google's Live
+ * API docs; the docs call `gemini-3.1-flash-live-preview` a legacy preview
+ * and recommend 3.8 Live. A preview name moves; `--model` and
  * `LiveSessionOptions.model` exist so a person can move with it without a
  * release.
  */
-export const LIVE_MODEL = "models/gemini-3.1-flash-live-preview";
+export const LIVE_MODEL = "models/gemini-3.8-live";
 
 export function liveUrl(key: string, host = "generativelanguage.googleapis.com"): string {
   return (
@@ -2133,11 +2134,22 @@ export function liveSetup(
   instructions?: { source: string; text: string } | null,
   rules: string = VOICE_RULES,
 ): object {
+  /**
+   * The extended-thinking model needs its thinking depth named at setup
+   * (its docs: `thinking_config`, levels low/medium/high, no minimal), and
+   * the plain 3.8 Live refuses a thinkingLevel outright — so the field is
+   * model-shaped, never sent generally. ponytail: `low` is fixed; expose a
+   * flag when a person asks to trade latency for reasoning depth.
+   */
+  const thinkingConfig = model.includes("extended-thinking")
+    ? { thinkingConfig: { thinkingLevel: "low" } }
+    : {};
   return {
     setup: {
       model,
       generationConfig: {
         responseModalities: ["AUDIO"],
+        ...thinkingConfig,
       },
       systemInstruction: {
         parts: [{ text: voiceInstruction(rules, instructions) }],
@@ -2731,6 +2743,11 @@ export function startLiveSession(options: {
       // exactly how a broken resampler spent a day disguised as a UI problem.
       // Recorded, never inferred from a frame counter.
       if (content.turnComplete) callbacks.onEvent?.("turn_complete", {});
+      // The extended-thinking model keeps reasoning (and calling tools) after
+      // `turnComplete: true` — its docs say the idle signal is this, and it is
+      // passed through for the log rather than interpreted.
+      const status = content.interaction_status ?? message.interaction_status;
+      if (status) callbacks.onEvent?.("interaction_status", { status });
     }
     if (message.toolCall?.functionCalls) {
       const responses: Record<string, unknown>[] = [];
