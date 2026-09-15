@@ -2149,8 +2149,8 @@ export function liveSetup(
    * The extended-thinking model needs its thinking depth named at setup
    * (its docs: `thinking_config`, levels low/medium/high, no minimal), and
    * the plain 3.8 Live refuses a thinkingLevel outright — so the field is
-   * model-shaped, never sent generally. ponytail: `low` is fixed; expose a
-   * flag when a person asks to trade latency for reasoning depth.
+   * model-shaped, never sent generally. The level is fixed at "low"; it
+   * becomes a flag when a person asks to trade latency for reasoning depth.
    */
   const thinkingConfig = model.includes("extended-thinking")
     ? { thinkingConfig: { thinkingLevel: "low" } }
@@ -6118,11 +6118,22 @@ export async function runVoiceAdapter(options: { home: string; name: string; can
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: summons.name, prompt: summons.prompt }),
     }).catch(() => null);
+    if (!response) {
+      return { url: chosen.url, refused: "the standing voice harness did not answer" };
+    }
+    const said = (await response.json().catch(() => ({}))) as { reply?: unknown; error?: unknown };
+    // A refusal is a refusal: a canvas error answered by the harness must not
+    // read as "the summons is in its conversation" — the turn report carries
+    // the harness's own words either way.
+    if (!response.ok) {
+      return {
+        url: chosen.url,
+        refused: String(said.error ?? said.reply ?? `the harness refused (HTTP ${response.status})`),
+      };
+    }
     // The standing server's own sentence about what the summons DID — an
     // operation's ack or a refusal — is the answer the canvas turn reports.
-    const answer = response?.ok
-      ? String(((await response.json().catch(() => ({}))) as { reply?: unknown }).reply ?? "")
-      : "";
+    const answer = String(said.reply ?? "");
     return answer ? { url: chosen.url, answer } : { url: chosen.url };
   };
   const agent = createAcpAgent({ forward, name });

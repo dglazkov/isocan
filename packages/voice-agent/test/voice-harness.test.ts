@@ -2569,6 +2569,25 @@ describe("the ACP face", () => {
     expect(update.params.update.content.text).toContain("isocan rc add Voice --harness voice --canvas prj_9");
   });
 
+  it("turns the standing harness's answer into the turn's own words", async () => {
+    const written: unknown[] = [];
+    const agent = createAcpAgent({
+      name: "Voice",
+      forward: async () => ({ url: "http://127.0.0.1:1/", answer: "added \"summoned note\" [itm_x]" }),
+      out: (m) => written.push(m),
+    });
+    await agent.handle({
+      jsonrpc: "2.0",
+      id: 5,
+      method: "session/prompt",
+      params: { sessionId: "s", prompt: "add a note that says summoned" },
+    });
+    const update = written.find((m) => (m as { method?: string }).method === "session/update") as {
+      params: { update: { content: { text: string } } };
+    };
+    expect(update.params.update.content.text).toBe("added \"summoned note\" [itm_x]");
+  });
+
   it("resolves the canvas and the name from the enrolment record, not the environment", () => {
     const rows = [
       { canvasId: "prj_1", name: "Voice", harness: "voice" },
@@ -2612,6 +2631,28 @@ describe("the Live API path", () => {
     expect(plain.setup.generationConfig.thinkingLevel).toBeUndefined();
     const thinking = liveSetup("models/gemini-3.8-live-extended-thinking") as { setup: { generationConfig: Record<string, unknown> } };
     expect(thinking.setup.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
+  });
+
+  it("routes a summons into the standing conversation instead of the typed pipeline", async () => {
+    const live = await liveServer();
+    try {
+      const res = (await (await fetch(`${live.server.state.url}summons`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Paul", prompt: "add a note that says from the chat" }),
+      })).json()) as { handled: string; reply: string };
+      expect(res.handled).toBe("live");
+      expect(res.reply).toContain("in the conversation");
+      // The prompt went to the PROVIDER as a typed line, not to the local
+      // grammar: the model hears the summons and acts through its tools.
+      const last = JSON.parse(live.providerSocket.sent.at(-1) ?? "{}") as { realtimeInput?: { text?: string } };
+      expect(last.realtimeInput?.text).toBe("add a note that says from the chat");
+      // And nothing landed on the canvas from a second (typed) path.
+      const canvasItems = await items();
+      expect(canvasItems.some((i) => i.title?.includes("from the chat"))).toBe(false);
+    } finally {
+      await live.close();
+    }
   });
 
   it("speaks the wire: setup first, then audio up and tool calls answered", async () => {
