@@ -45,3 +45,6 @@ export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddre
 export * from "./design-system-reader.js";
 export * from "./design-system.js";
 export * from "./design-recipes.js";
+export * from "./design-review.js";
+export * from "./design-review-node.js";
+export * from "./design-repair-reader.js";

@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-14
 see: design-competition, evals, context, memory
-note: phases 0–4 closed with shared requests, scoped systems, working references and useful alternatives verified in real browsers and the CLI. Safe adoption, corrected decisions, durable drafts and cross-entrance rationale pass. Phase 5 is next; shared repair and independent generated-design and partnership evaluation remain ahead.
+note: phases 0–5 closed with the continuous local design journey verified across browser and CLI. Discovery, scoped systems, working alternatives, durable adoption and bounded review/repair pass full strict gates. Phase 6 probes optional Impeccable support; phase 7 still owes generated-design and real-user partnership evidence before default rollout.
 ---
 # A design partner — the experience
 

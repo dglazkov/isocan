@@ -31,6 +31,7 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
   switch (op.type) {
     case "design.decide": return [op.decision.basis.target.artifact.itemId, ...anchorOf(op.threadId)];
     case "design.restore": return [op.effect.item.itemId, ...anchorOf(op.effect.threadId)];
+    case "design.repair": return [op.repair.target.artifact.itemId];
     case "design.compare":
     case "design.respond": return anchorOf(op.threadId);
     case "design.request":

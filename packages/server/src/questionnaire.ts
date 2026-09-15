@@ -14,9 +14,9 @@ export function questionnaireActorKind(registry: ActorRegistry, id: string): Des
   if (isSystemActor(canonical) || !harnesses.length) return "unknown";
   return harnesses.some(isAgentHarness) ? "agent" : "human";
 }
-/** Exposes only canvas-known actor identity and eligibility, never private session or credential data. */
-export function questionnaireActors(state: CanvasState, registry: ActorRegistry): QuestionnaireActor[] {
-  const actors = [state.project.createdBy, state.project.updatedBy, ...Object.values(state.canvas.items).flatMap((item) => [item.createdBy, item.updatedBy]), ...Object.values(state.canvas.threads).flatMap((thread) => thread.comments.map((comment) => comment.author)), ...Object.values(state.canvas.agents ?? {}).map((agent) => agent.actor)];
+/** Exposes canvas authors and current faces through registry-backed eligibility, never private session or credential data. */
+export function questionnaireActors(state: CanvasState, registry: ActorRegistry, liveActors: readonly Actor[] = []): QuestionnaireActor[] {
+  const actors = [state.project.createdBy, state.project.updatedBy, ...Object.values(state.canvas.items).flatMap((item) => [item.createdBy, item.updatedBy]), ...Object.values(state.canvas.threads).flatMap((thread) => thread.comments.map((comment) => comment.author)), ...Object.values(state.canvas.agents ?? {}).map((agent) => agent.actor), ...liveActors];
   for (const thread of Object.values(state.canvas.threads)) for (const comment of thread.comments) {
     const record = comment.designDecision?.record;
     const ids = record?.kind === "comparison" ? [record.audience.kind === "human" ? record.audience.respondentActorId : record.audience.reporterActorId] : record?.kind === "comparison-response" && record.outcome.kind === "delegate" ? [record.outcome.agentActorId] : [];

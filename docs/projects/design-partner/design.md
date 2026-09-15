@@ -174,6 +174,9 @@ drafts and continuation without waiving a later teammate edit.
 
 ## Review and completion
 
+[review-and-repair.md](review-and-repair.md) supplies phase 5’s concrete shared
+run, conditional repair, provenance and capability boundary.
+
 There are three separate readings: deterministic source diagnostics, actual
 browser/task evidence, and a craft critique grounded in the brief. The UI and
 CLI must not collapse them into a single unexplained quality score.

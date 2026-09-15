@@ -1,6 +1,7 @@
-import { type CanvasContents, type CanvasSnapshotResponse, type Operation, type SourceClassificationRequest } from "../../core/src/index.js";
+import { type CanvasContents, type SourceClassificationRequest } from "../../core/src/index.js";
 import type { ScreenAudit } from "../../core/src/designaudit.js";
 import { type ContextReadPort } from "./context-reader.js";
+import type { DesignRepairBasis, PreparedDesignRepairPort, PreparedDesignRepair, DesignRepairSubmission } from "./design-repair-reader.js";
 /** Both transports enforce automatic-source policy on the actual inherited blob read. */
 export interface DesignAuditReadPort extends Pick<ContextReadPort, "classifySource" | "sourceSnapshot"> {
     blobText(canvasId: string, hash: string, signal?: AbortSignal): Promise<string>;
@@ -46,6 +47,8 @@ interface ItemAuditIdentity {
     versionId: string;
     blobHash: string | null;
     input: DesignAuditInput | null;
+    /** Captured with this audit, before source editing; older reports without it cannot authorize a repair. */
+    repairBasis?: DesignRepairBasis;
 }
 /** Unavailable source or policy reads remain explicit instead of yielding a conforming audit. */
 export type ItemDesignAudit = ItemAuditIdentity & ((ScreenAudit & {
@@ -123,25 +126,10 @@ export declare function readDesignSourceAudit(io: DesignAuditReadPort, options: 
 }): Promise<SourceDesignAudit>;
 /** Opt-in automation failure includes unknown/empty coverage; it is never a visual approval signal. */
 export declare function designAuditFails(report: CanvasDesignAudit | SourceDesignAudit): boolean;
-/** Explicit repair transport distinguishes an accepted edit from an offline queue or refused write. */
-export interface DesignRepairPort extends DesignAuditReadPort {
-    snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
-    home(canvasId: string, signal?: AbortSignal): Promise<string>;
-    upload(canvasId: string, text: string, filename: string, signal?: AbortSignal): Promise<{
-        blobHash: string;
-        size: number;
-    }>;
-    edit(canvasId: string, operation: Extract<Operation, {
-        type: "item.edit";
-    }>, signal?: AbortSignal): Promise<{
-        accepted: true;
-    } | {
-        accepted: false;
-        status: "refused" | "pending";
-        reason: string;
-    }>;
+/** Explicit repair transport carries canonical full-intent receipts and historical acceptance. */
+export interface DesignRepairPort extends PreparedDesignRepairPort {
 }
-/** Captured policy and source versions accompany an authored replacement; no token policy edit is implicit. */
+/** Older source-only captures are readable, but a repair needs the original full metadata basis. */
 export interface DesignRepairRequest {
     canvasId: string;
     itemId: string;
@@ -149,10 +137,16 @@ export interface DesignRepairRequest {
     expectedVersionId: string;
     expectedGoverning: DesignAuditProvenance;
     expectedRuleVersion: string;
+    basis?: DesignRepairBasis;
+    opId?: string;
+    versionId?: string;
+    repairId?: string;
+    retry?: boolean;
+    prepared?: PreparedDesignRepair;
     filename?: string;
     signal?: AbortSignal;
 }
-/** Accepted content remains saved even when its post-save audit is unavailable or superseded. */
+/** Compatibility display fields accompany canonical acceptance and the immutable retry intent. */
 export type DesignRepairResult = {
     status: "saved";
     itemId: string;
@@ -163,20 +157,24 @@ export type DesignRepairResult = {
     after: DesignAuditEvidence;
     governingChanged: boolean | null;
     superseded: boolean | null;
+    submission: DesignRepairSubmission;
+    prepared: PreparedDesignRepair;
 } | {
     status: "pending";
     itemId: string;
     versionId: string;
     blobHash: string;
     reason: string;
-    before: ItemDesignAudit;
-    proposed: ItemDesignAudit;
+    before?: ItemDesignAudit;
+    proposed?: ItemDesignAudit;
+    submission: DesignRepairSubmission;
+    prepared: PreparedDesignRepair;
 } | {
     status: "refused";
-    code: "stale-version" | "governing-changed" | "rule-version-changed" | "audit-unavailable" | "write-refused";
+    code: "stale-version" | "governing-changed" | "rule-version-changed" | "audit-unavailable" | "candidate-rejected" | "write-refused";
     reason: string;
     before?: ItemDesignAudit;
 };
-/** Refresh policy before conditional item.edit, then report current evidence without claiming a cross-canvas lock. */
+/** Existing source-audit repair uses the same prepared canonical act; source-only historical captures refuse safely. */
 export declare function repairDesignScreen(io: DesignRepairPort, request: DesignRepairRequest): Promise<DesignRepairResult>;
 export {};

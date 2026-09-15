@@ -4,7 +4,7 @@ import type { Operation } from "./ops.js";
 import type { DesignArtifactRef, DesignQuestionSource } from "./design-partner.js";
 import type { DesignGoverningBinding } from "./design-request.js";
 import type { QuestionnaireRetainedReference } from "./questionnaire.js";
-export { parseDesignApprovalBasis, parseDesignComparison, parseDesignComparisonResponse, parseDesignDecisionInput, parseDesignCompareOperation, parseDesignRespondOperation, parseDesignDecideOperation, parseDesignDecisionOperation, designDecisionIntentHash } from "./design-decision-parse.js";
+export { parseDesignTarget, parseDesignApprovalBasis, parseDesignComparison, parseDesignComparisonResponse, parseDesignDecisionInput, parseDesignCompareOperation, parseDesignRespondOperation, parseDesignDecideOperation, parseDesignDecisionOperation, designDecisionIntentHash } from "./design-decision-parse.js";
 /** Scope facts are captured before approval; current membership cannot be silently substituted at save. */
 export interface DesignScopeBasis {
     containerId: string | null;

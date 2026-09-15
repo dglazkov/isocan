@@ -135,8 +135,12 @@ goal:
   # separate answer/edit cannot enforce this act. The full argument and proof
   # are docs/projects/design-partner/comparisons-and-decisions.md. This records
   # specific vocabulary, not headroom for unspecified later operations.
+  # 44 → 45 on 2026-09-15: design-partner phase 5 adds design.repair, one
+  # conditional item.edit effect with an exact admitted-task continuation edge.
+  # Ordinary repairs strand selected-target context; a fake design decision or
+  # silent request recapture would hide that mismatch. No extra batch/inverse op.
   - name: operations in the vocabulary
-    at most: 44
+    at most: 45
     measured by: node scripts/measure.mjs op-types
     baseline: 40, 2026-09-15, 336e6124
 runs: docs/reviews/

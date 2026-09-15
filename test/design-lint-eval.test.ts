@@ -146,6 +146,26 @@ it("real captured repair and unchanged clean candidate preserve policy and versi
   expect((await staleWriteControl(tasks.find(task => task.id === "card-spacing"), output)).passed).toBe(true);
 }, 30_000);
 
+it("submits a changed eval candidate with its original audit capture and refuses a later metadata change", async () => {
+  const task = (await loadEvalTasks()).find(task => task.id === "card-spacing");
+  const host = await createEvalHost(task);
+  try {
+    const before = await host.readStored(), audit = await host.audit(), protectedBefore = await host.protectedState();
+    expect(audit.repairBasis.repair.target.artifact.versionId).toBe(before.version.id);
+    const changed = await applyCandidate(host, { html: task.repairedHtml, before, audit, protectedBefore });
+    expect(changed.accepted).toBe(true); expect(changed.receipt.status).toBe("saved");
+    expect(changed.stored.html).toBe(task.repairedHtml); expect(changed.stored.item.versions).toHaveLength(before.item.versions.length + 1);
+    expect(changed.protectedUnchanged).toBe(true);
+    expect((await host.client.getLog(host.canvas.id, 0)).at(-1).envelope.op.type).toBe("design.repair");
+    const current = await host.readStored(), captured = await host.audit();
+    await host.client.sendOp(host.canvas.id, host.actor, { type: "item.update", itemId: host.screen.id, patch: { description: "Acme teammate changed the task description" } });
+    const intervening = await host.readStored();
+    const refused = await applyCandidate(host, { html: task.repairedHtml + "\n<!-- Acme follow-up correction -->", before: current, audit: captured, protectedBefore });
+    expect(refused.accepted).toBe(false); expect(refused.receipt.status).toBe("refused");
+    expect(refused.receipt.reason).toMatch(/metadata|scope/); expect(refused.stored.item).toEqual(intervening.item); expect(refused.protectedUnchanged).toBe(true);
+  } finally { await host.close(); }
+}, 30_000);
+
 
 describe("one bounded continuation after a zero-token login refusal", () => {
   async function priorFixture(change = (_report, _provider) => {}) {

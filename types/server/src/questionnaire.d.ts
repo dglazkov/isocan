@@ -2,8 +2,8 @@ import { type Actor, type ActorRegistry, type CanvasState, type DesignActorKind,
 import type { Store } from "./store.js";
 /** Joins preserve identity while known harness records establish eligibility; absence remains unknown. */
 export declare function questionnaireActorKind(registry: ActorRegistry, id: string): DesignActorKind;
-/** Exposes only canvas-known actor identity and eligibility, never private session or credential data. */
-export declare function questionnaireActors(state: CanvasState, registry: ActorRegistry): QuestionnaireActor[];
+/** Exposes canvas authors and current faces through registry-backed eligibility, never private session or credential data. */
+export declare function questionnaireActors(state: CanvasState, registry: ActorRegistry, liveActors?: readonly Actor[]): QuestionnaireActor[];
 /** Narrows the refusing public acts before their writer-only materialization fields are added. */
 export declare const isQuestionnaireOperation: (op: Operation) => op is QuestionnaireOperation;
 /** Rejects invented authority or retained metadata before forwarding and idempotency lookup. */

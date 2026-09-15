@@ -2,6 +2,7 @@ import type { CanvasContents, Comment, Item } from "./model.js";
 import type { Operation } from "./ops.js";
 import type { DesignApprovalBasis, DesignComparisonState, DesignScopeBasis } from "./design-decision.js";
 import { OpValidationError } from "./errors.js";
+import type { DesignRepairTransition } from "./design-repair-state.js";
 /** A paired history conflict must retain its candidate; neither half may be silently skipped. */
 export declare class DesignRestoreConflict extends OpValidationError {
     constructor(message: string);
@@ -21,4 +22,4 @@ export declare function rejectDesignDecisionMetadata(op: Operation): void;
 /** Source identity and exact generated text, not unrelated replies, establish comparison eligibility. */
 export declare function designComparisonStates(canvas: CanvasContents): DesignComparisonState[];
 /** Exact still-present adoption edges may bridge a captured input; arbitrary later edits never do. */
-export declare function designInputTransition(canvas: CanvasContents, briefItemId: string, requestId: string, epoch: number, input: import("./design-partner.js").DesignArtifactRef): boolean;
+export declare function designInputTransition(canvas: CanvasContents, briefItemId: string, requestId: string, epoch: number, input: import("./design-partner.js").DesignArtifactRef, repairs?: readonly DesignRepairTransition[]): boolean;

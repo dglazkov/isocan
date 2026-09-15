@@ -168,9 +168,8 @@ export class UndoStacks {
         if (this.groupOf.get(redo[i]!) !== group) break;
         seqs.push(redo[i]!);
       }
-      // Undone newest-first, so the redo stack holds them newest-last; put
-      // them back in the order they were written.
-      seqs.reverse();
+      // Undo pushed newest-first. Walking the stack from its end already
+      // yields original oldest-first order, including dependent edits.
     }
     const out: { targetSeq: number; undoSeq: number }[] = [];
     for (const targetSeq of seqs) {

@@ -131,6 +131,10 @@ questionnaire answers retain their known-human semantics. Decoder negotiation,
 flat evidence retention and exact context continuation are specified in the
 phase 4 mechanism; a public property or copied JSON cannot establish authority.
 
+[review-and-repair.md](review-and-repair.md) adds phase 5’s explicit
+`design.repair` continuation and ordinary attributed review artifacts. One
+conditional repair is one edit/inverse; run progress is not quality authority.
+
 ## Entrances and rollout
 
 Keep existing `design` commands and flags compatible. The planned native

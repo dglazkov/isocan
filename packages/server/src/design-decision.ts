@@ -50,18 +50,18 @@ function sourceComparison(state: CanvasState, source: import("@isocan/core/desig
   return row!;
 }
 /** Resolves a closed comparison/response or the exact target/comment adoption pair within Engine's writer queue. */
-export async function materializeDesignDecision(store: Store, state: CanvasState, home: string, op: DesignDecisionOperation, actor: Actor, registry: ActorRegistry, opId: string, ts: string): Promise<DesignDecisionOperation> {
-  try { return await materialize(store, state, home, parseDesignDecisionOperation(op), actor, registry, opId, ts); }
+export async function materializeDesignDecision(store: Store, state: CanvasState, home: string, op: DesignDecisionOperation, actor: Actor, registry: ActorRegistry, opId: string, ts: string, history: readonly LogEntry[] = []): Promise<DesignDecisionOperation> {
+  try { return await materialize(store, state, home, parseDesignDecisionOperation(op), actor, registry, opId, ts, history); }
   catch (error) { if (error instanceof DesignPartnerContractError) bad(error.message); throw error; }
 }
-async function materialize(store: Store, state: CanvasState, home: string, op: DesignDecisionOperation, actor: Actor, registry: ActorRegistry, opId: string, ts: string): Promise<DesignDecisionOperation> {
+async function materialize(store: Store, state: CanvasState, home: string, op: DesignDecisionOperation, actor: Actor, registry: ActorRegistry, opId: string, ts: string, history: readonly LogEntry[] = []): Promise<DesignDecisionOperation> {
   if (isSystemActor(actor.id) || !state.canvas.threads[op.threadId]) bad("Design acts require an actual actor and existing thread.");
   if (comments(state).some((row) => row.comment.id === op.commentId)) bad("The design comment identity already exists.");
   const selected = op.type === "design.respond" ? sourceComparison(state, op.response.comparison) : op.type === "design.decide" && op.decision.source.kind === "comparison" ? sourceComparison(state, op.decision.source.source) : undefined;
   const comparison = op.type === "design.compare" ? op.comparison : selected?.comparison ?? (op.type === "design.decide" && op.decision.source.kind === "direct" ? op.decision.source.proposal : bad("Missing comparison source."));
   if (selected && selected.source.threadId !== op.threadId) bad("A design outcome belongs in its comparison thread.");
   const briefRef = op.type === "design.decide" ? op.decision.basis.brief : comparison.brief;
-  const brief = await designDecisionRequest(store, state, home, briefRef, comparison.epoch, registry);
+  const brief = await designDecisionRequest(store, state, home, briefRef, comparison.epoch, registry, history);
   if (brief.requestId !== comparison.requestId || !sameDesignValue(briefRef, comparison.brief) || comparison.target.itemId !== brief.targetItemId || comparison.target.groupId !== brief.groupId) bad("Comparison belongs to another request or target.");
   audience(comparison, brief, registry);
   const previous = effective(state).find((r) => r.record.input.requestId === brief.requestId && r.record.input.basis.brief.itemId === briefRef.itemId && r.record.input.basis.epoch === brief.epoch && r.record.input.decisionKey === comparison.decisionKey);
@@ -140,7 +140,7 @@ export async function readDesignDecisions(store: Store, state: CanvasState, home
     const reasons: string[] = [];
     if (!designTargetMatches(state.canvas, { ...decision.input.basis.target, artifact: decision.adopted })) reasons.push("The adopted output content, metadata or scope changed.");
     const comparison = decision.comparison;
-    try { await designDecisionRequest(store, state, home, comparison.brief, comparison.epoch, registry); } catch (error) { reasons.push(error instanceof Error ? error.message : String(error)); }
+    try { await designDecisionRequest(store, state, home, comparison.brief, comparison.epoch, registry, history); } catch (error) { reasons.push(error instanceof Error ? error.message : String(error)); }
     for (const option of comparison.alternatives) { try { currentRef(state, home, option.artifact); } catch { if (!designInputTransition(state.canvas, comparison.brief.itemId, comparison.requestId, comparison.epoch, option.artifact)) reasons.push(`Alternative ${option.id} changed or is unavailable.`); } }
     if (decision.input.source.kind === "comparison") { const source = decision.input.source.source, saved = state.canvas.threads[source.threadId]?.comments.find((c) => c.id === source.commentId); if (!saved || saved.body !== designDecisionMarkdown(comparison) || !sameDesignValue(saved.designDecision?.record, comparison)) reasons.push("The original comparison source changed or is unavailable."); }
     reasons.push(...governingReasons(state, home, { governing: decision.input.basis.governing }));
@@ -151,7 +151,7 @@ export async function readDesignDecisions(store: Store, state: CanvasState, home
   for (const row of comparisons) {
     const comparison = row.comparison;
     try {
-      const brief = await designDecisionRequest(store, state, home, comparison.brief, comparison.epoch, registry);
+      const brief = await designDecisionRequest(store, state, home, comparison.brief, comparison.epoch, registry, history);
       if (brief.source.entrance === "external-agent") row.currentReporterActorId = brief.continuation?.resumedBy?.actorId ?? brief.requestingActorId;
       for (const option of comparison.alternatives) { try { currentRef(state, home, option.artifact); } catch (error) { if (!designInputTransition(state.canvas, comparison.brief.itemId, comparison.requestId, comparison.epoch, option.artifact)) throw error; } }
       row.reasons.push(...governingReasons(state, home, { governing: comparison.governing }));

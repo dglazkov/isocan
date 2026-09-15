@@ -432,6 +432,45 @@ export class CanvasHandle {
     return this.reach(() => repairDesignItem(this.ctx, { ...request, canvasId: this.id, itemId }));
   }
 
+  /** Shared run history recovers consumed reservations across native entrances and refreshes. */
+  async designReview(requestId?: string, runId?: string) {
+    const { readDesignReviews } = await import("./design-review-reader.ts");
+    const { designReviewPort } = await import("./design-review-node.ts");
+    return readDesignReviews(designReviewPort(this.ctx), { canvasId: this.id, ...(requestId ? { requestId } : {}), ...(runId ? { runId } : {}) });
+  }
+
+  /** Prepare initial review reservation; callers persist the returned immutable envelope before sending it. */
+  async designReviewStart(options: Omit<import("./design-review-write.ts").DesignReviewStartInput, "canvasId">) {
+    const { prepareDesignReviewStart } = await import("./design-review-write.ts"); const { designReviewPort } = await import("./design-review-node.ts");
+    return prepareDesignReviewStart(designReviewPort(this.ctx), { ...options, canvasId: this.id });
+  }
+
+  /** Prepare one conditional record, repair reservation or finish append against the captured run version. */
+  async designReviewStep(options: Omit<import("./design-review-write.ts").DesignReviewStepInput, "canvasId">) {
+    const { prepareDesignReviewStep } = await import("./design-review-write.ts"); const { designReviewPort } = await import("./design-review-node.ts");
+    return prepareDesignReviewStep(designReviewPort(this.ctx), { ...options, canvasId: this.id });
+  }
+
+  /** Submit a previously persisted ordinary review envelope without replacing its actor or identity. */
+  async designReviewSubmit(prepared: import("./design-review-write.ts").PreparedDesignReviewWrite, retry = false) {
+    const { submitDesignReviewWrite } = await import("./design-review-write.ts"); const { designReviewPort } = await import("./design-review-node.ts");
+    if (prepared.canvasId !== this.id) throw new Error("The saved review belongs to a different canvas.");
+    return submitDesignReviewWrite(designReviewPort(this.ctx), prepared, { retry });
+  }
+
+  /** Capture target metadata before editing an explicit standalone repair. */
+  async designRepairBasis(itemId: string) {
+    const { captureDesignRepair } = await import("./design-repair-reader.ts"); const { designReviewPort } = await import("./design-review-node.ts");
+    return captureDesignRepair(designReviewPort(this.ctx), { canvasId: this.id, itemId });
+  }
+
+  /** Submit a stable prepared repair with full canonical acceptance and independent consistency. */
+  async designRepairSubmit(prepared: import("./design-repair-reader.ts").PreparedDesignRepair, retry = false) {
+    const { submitDesignRepair } = await import("./design-repair-reader.ts"); const { designReviewPort } = await import("./design-review-node.ts");
+    if (prepared.canvasId !== this.id) throw new Error("The saved repair belongs to a different canvas.");
+    return submitDesignRepair(designReviewPort(this.ctx), prepared, { retry });
+  }
+
   /** Structured discovery shares the dock's resolver and the writer's refusing acts. */
   designQuestions(options: DesignQuestionsOptions = {}): Promise<DesignQuestionsResult> {
     return this.reach(() => readDesignQuestions(questionnairePort(this.ctx), this.id, options));
@@ -483,8 +522,9 @@ export class CanvasHandle {
   }
 
   /** One on-demand procedure and current next-step plan, using this canvas's shared rollout policy. */
-  designWorkflow(filter: DesignRequestFilter = {}) {
-    return this.reach(() => readDesignWorkflow(designRequestPort(this.ctx), { canvasId: this.id, filter }));
+  async designWorkflow(filter: DesignRequestFilter = {}) {
+    const { designReviewPort } = await import("./design-review-node.ts");
+    return this.reach(() => readDesignWorkflow(designReviewPort(this.ctx), { canvasId: this.id, filter }));
   }
 
   /** Read admitted briefs and evidence by request, source conversation or output identity. */

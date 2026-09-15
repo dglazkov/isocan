@@ -51,26 +51,6 @@ var TEXT_COLUMN_MAX = {
   display: TEXT_COLUMN.display * 2
 };
 
-// packages/core/src/identity.ts
-function resolveActor(joined, actorId) {
-  if (!joined) return actorId;
-  let current = actorId;
-  const seen = /* @__PURE__ */ new Set([current]);
-  for (; ; ) {
-    const next = joined[current];
-    if (next === void 0 || seen.has(next)) return current;
-    seen.add(next);
-    current = next;
-  }
-}
-function sameActor(joined, a, b) {
-  return a === b || resolveActor(joined, a) === resolveActor(joined, b);
-}
-function actorNameIn(names, actor) {
-  const current = names?.[actor.id];
-  return current && current.trim() ? current : actor.name;
-}
-
 // packages/core/src/area.ts
 var AREA_KIND = "area";
 var AREA_TITLE_HEIGHT = 56;
@@ -89,6 +69,26 @@ function inArea(area, item) {
 // packages/core/src/canvas-scope.ts
 function inCanvasScope(canvas, scope, item) {
   return isGroupItem(scope) ? groupAncestors(canvas, item.id).some((parent) => parent.id === scope.id) : inArea(scope, item);
+}
+
+// packages/core/src/identity.ts
+function resolveActor(joined, actorId) {
+  if (!joined) return actorId;
+  let current = actorId;
+  const seen = /* @__PURE__ */ new Set([current]);
+  for (; ; ) {
+    const next = joined[current];
+    if (next === void 0 || seen.has(next)) return current;
+    seen.add(next);
+    current = next;
+  }
+}
+function sameActor(joined, a, b) {
+  return a === b || resolveActor(joined, a) === resolveActor(joined, b);
+}
+function actorNameIn(names, actor) {
+  const current = names?.[actor.id];
+  return current && current.trim() ? current : actor.name;
 }
 
 // packages/core/src/questionnaire.ts
@@ -994,6 +994,8 @@ function itemsTouchedBy(op, canvas) {
       return [op.decision.basis.target.artifact.itemId, ...anchorOf(op.threadId)];
     case "design.restore":
       return [op.effect.item.itemId, ...anchorOf(op.effect.threadId)];
+    case "design.repair":
+      return [op.repair.target.artifact.itemId];
     case "design.compare":
     case "design.respond":
       return anchorOf(op.threadId);
@@ -1176,7 +1178,8 @@ var CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
 var QUESTIONNAIRES_FEATURE = "questionnaires-v1";
 var DESIGN_REQUESTS_FEATURE = "design-requests-v2";
 var DESIGN_DECISIONS_FEATURE = "design-decisions-v1";
-var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1,${DESIGN_REQUESTS_FEATURE},${DESIGN_DECISIONS_FEATURE}`;
+var DESIGN_REPAIRS_FEATURE = "design-repairs-v1";
+var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1,${DESIGN_REQUESTS_FEATURE},${DESIGN_DECISIONS_FEATURE},${DESIGN_REPAIRS_FEATURE}`;
 var CLIENT_FEATURES_HEADER = "x-isocan-features";
 var PARK_ADOPTED_CODE = "park-adopted";
 var rcAnsweringRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/rc`;
@@ -1480,7 +1483,11 @@ var designRequestsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canv
 // packages/core/src/design-decision.ts
 var designDecisionsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/decisions`;
 
+// packages/core/src/design-repair.ts
+var designRepairsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/repairs`;
+
 // packages/api/src/routes.ts
+var OPERATIONS_ROUTE = "/api/ops";
 var platformFetch = (input, init) => fetch(input, init);
 var DaemonRoutes = class {
   constructor(base2, badgeStore, lifetime, sourceContext) {
@@ -1698,7 +1705,7 @@ var DaemonRoutes = class {
   /** Name (or resume) the actor behind a session key — the one op sent
    * without an actor: the response envelope says who you are. */
   claimActor(op) {
-    return this.request("POST", "/api/ops", { canvasId: null, op });
+    return this.request("POST", OPERATIONS_ROUTE, { canvasId: null, op });
   }
   /** Who the given session keys speak as (everyone, when omitted). */
   actorBindings(keys2) {
@@ -1727,7 +1734,7 @@ var DaemonRoutes = class {
    */
   sendOp(canvasId, actor, op, clientId, home, group, originGroupMode, spaceId, opId) {
     const origin = originGroupMode ?? (canvasId ? this.observedGroupModes.get(canvasId) : void 0);
-    return this.request("POST", "/api/ops", {
+    return this.request("POST", OPERATIONS_ROUTE, {
       canvasId,
       actor,
       op,
@@ -1742,7 +1749,7 @@ var DaemonRoutes = class {
   /** Refusing questionnaire acts retain their canonical type and caller-owned retry ID. */
   questionnaire(canvasId, actor, op, opId, originGroupMode) {
     const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
-    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } });
+    return this.request("POST", OPERATIONS_ROUTE, { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } });
   }
   /** Writer-resolved eligibility; a missing agent display badge does not imply a human. */
   questionnaireActors(canvasId) {
@@ -1756,22 +1763,26 @@ var DaemonRoutes = class {
   designDecisions(canvasId, signal) {
     return this.request("GET", designDecisionsRoute(canvasId), void 0, signal);
   }
+  /** Canonical repair history includes archived acceptances and current continuation standing. */
+  designRepairs(canvasId, signal) {
+    return this.request("GET", designRepairsRoute(canvasId), void 0, signal);
+  }
   /** Stable comparison, non-adopting response and paired adoption intents use the existing writer. */
   designDecision(canvasId, actor, op, opId, signal) {
     const origin = this.observedGroupModes.get(canvasId);
-    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } }, signal);
+    return this.request("POST", OPERATIONS_ROUTE, { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } }, signal);
   }
   /** Stable public request/receipt intent reaches the ordinary serialized operation writer. */
   designRecord(canvasId, actor, op, opId, originGroupMode) {
     const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
-    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } });
+    return this.request("POST", OPERATIONS_ROUTE, { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } });
   }
   // ---- presence sessions ----
   /** Semantic group request; canonical resolved patches belong to the
    * authoritative writer. Pass a stable opId when retrying one intent. */
   async changeGroup(canvasId, actor, action, opId, originGroupMode) {
     const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
-    const response = await this.request("POST", "/api/ops", { canvasId, actor, op: { type: "group.change", action }, ...opId ? { opId } : {}, ...origin !== void 0 ? { originGroupMode: origin } : {} });
+    const response = await this.request("POST", OPERATIONS_ROUTE, { canvasId, actor, op: { type: "group.change", action }, ...opId ? { opId } : {}, ...origin !== void 0 ? { originGroupMode: origin } : {} });
     const op = response.envelope?.op;
     if (op?.type === "group.change" && op.action.kind === "apply" && op.action.change.migration) this.observedGroupModes.set(canvasId, op.action.change.migration.mode);
     return response;

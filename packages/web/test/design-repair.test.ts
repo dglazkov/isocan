@@ -1,62 +1,88 @@
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { readDesignAudit, saveDesignRepair } from "../src/lib/design-audit.ts";
+import { newOpId, newVersionId, type CanvasSnapshotResponse, type PostOpResponse } from "@isocan/core";
+import { prepareDesignRepair } from "@isocan/api/design-repair";
+import { captureDesignAuditRepair, saveDesignRepair } from "../src/lib/design-audit.ts";
+import { ApiError, getArchivedOplog } from "../src/lib/api.ts";
+import { archiveDesignRepairDraft, designRepairDraftKey, keepDesignRepairDraft, readDesignRepairDraft, type DesignRepairDraft } from "../src/lib/design-repair-draft.ts";
 import { auditFixture, auditHome } from "../../api/test/design-audit-fixture.ts";
 
+const actor = { id: "usr_acme", name: "Acme" };
 const replacement = '<p style="padding:16px">Acme</p>';
-const replacementHash = createHash("sha256").update(replacement).digest("hex");
-const { send } = vi.hoisted(() => ({ send: vi.fn() }));
-vi.mock("../src/stores/canvasStore.ts", () => ({ sendEchoedResult: send }));
+const sha = (text: string) => createHash("sha256").update(text).digest("hex");
+const { send, state } = vi.hoisted(() => ({ send: vi.fn(), state: { canvasId: "prj_dest", past: null } }));
+vi.mock("../src/stores/canvasStore.ts", () => ({ useCanvasStore: { getState: () => state } }));
+vi.mock("../src/lib/api.ts", async importOriginal => ({ ...await importOriginal<typeof import("../src/lib/api.ts")>(), postOp: send }));
+vi.mock("../src/lib/capability.ts", () => ({ canEditNow: () => true }));
 vi.mock("../src/lib/groupplacement.ts", () => ({ creationDestination: () => ({ originGroupMode: "groups" }) }));
 beforeEach(() => { vi.stubGlobal("window", { location: { origin: auditHome } }); send.mockReset(); });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-async function prepare() {
+async function fixture() {
   const { canvas, blobs } = auditFixture();
-  // The target has a local governing system; unrelated inherited items do
-  // not need to be fetched to establish a conditional repair's receipt.
+  // Strict repair references name real hashes, even in this bounded transport fixture.
+  for (const item of Object.values(canvas.items)) for (const version of item.versions) {
+    const text = blobs[version.blobHash] ?? "fixture"; delete blobs[version.blobHash];
+    version.blobHash = sha(text); version.size = Buffer.byteLength(text); blobs[version.blobHash] = text;
+  }
+  let denied = false; let uploads = 0;
+  const snapshot = { canvas, project: { id: "prj_dest" }, lastSeq: 1 } as CanvasSnapshotResponse;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     if (url === "/api/homes") return Response.json({ canvases: { prj_dest: null } });
-    if (url === "/api/projects/prj_dest/canvas") return Response.json({ canvas, project: { id: "prj_dest" } });
-    if (url === "/api/projects/prj_dest/blobs" && init?.method === "POST") return Response.json({ blobHash: replacementHash, size: replacement.length });
+    if (url === "/api/projects/prj_dest/canvas") return denied ? Response.json({ error: "read unavailable" }, { status: 503 }) : Response.json(snapshot);
+    if (url === "/api/projects/prj_dest/design/repairs") return denied ? Response.json({ error: "history unavailable" }, { status: 503 }) : Response.json({ repairs: [], unavailable: [] });
+    if (url === "/api/projects/prj_dest/blobs" && init?.method === "POST") { uploads++; return Response.json({ blobHash: sha(replacement), size: Buffer.byteLength(replacement) }); }
     const hash = url.split("/blobs/")[1];
     if (hash && blobs[hash]) return new Response(blobs[hash]);
     throw new Error(`Unexpected fixture request ${url}`);
   }));
-  const report = await readDesignAudit("prj_dest", { itemIds: ["nested"] });
-  const row = report.items[0]!;
-  if (row.status !== "audited") throw new Error("fixture must be audited");
-  return { itemId: "nested", text: replacement, expectedVersionId: row.versionId!, expectedGoverning: row.governing, expectedRuleVersion: row.ruleVersion };
+  const basis = await captureDesignAuditRepair("prj_dest", "nested", structuredClone(snapshot));
+  const prepared = await prepareDesignRepair({ basis, text: replacement, actorId: actor.id, opId: newOpId(), versionId: newVersionId(), repairId: "repair_fixture" });
+  const receipt = (as = actor): PostOpResponse => ({ seq: 2, envelope: { id: prepared.opId, canvasId: "prj_dest", actor: as, ts: new Date().toISOString(), op: prepared.operation } } as PostOpResponse);
+  return { snapshot, basis, prepared, receipt, deny: () => { denied = true; }, uploads: () => uploads };
 }
 
-it("a queued browser repair waits for accepted completion before reporting saved", async () => {
-  const options = await prepare();
-  let finish!: (result: { status: "accepted" }) => void;
-  send.mockResolvedValue({ status: "queued", completion: new Promise(resolve => { finish = resolve; }) });
-  const queued = vi.fn();
-  let settled = false;
-  const result = saveDesignRepair("prj_dest", { id: "usr_acme", name: "Acme" }, { ...options, onQueued: queued }).then(value => { settled = true; return value; });
-  await vi.waitFor(() => expect(queued).toHaveBeenCalledOnce());
-  expect(settled).toBe(false);
-  expect(send.mock.calls[0]![2]).toMatchObject({ type: "item.edit", expectedVersionId: options.expectedVersionId });
-  finish({ status: "accepted" });
-  expect((await result).status).toBe("saved");
+it("captures editor metadata before opening; a concurrent title edit refuses without uploading", async () => {
+  const f = await fixture(); f.snapshot.canvas.items.nested!.title = "A collaborator changed this title";
+  const result = await saveDesignRepair(actor, f.prepared);
+  expect(result).toMatchObject({ status: "refused", reason: expect.stringContaining("metadata") });
+  expect(f.uploads()).toBe(0); expect(send).not.toHaveBeenCalled();
 });
 
-it("a queued browser repair can be definitively refused without pretending it saved", async () => {
-  const options = await prepare();
-  send.mockResolvedValue({ status: "queued", completion: Promise.resolve({ status: "refused", message: "A newer version arrived" }) });
-  expect(await saveDesignRepair("prj_dest", { id: "usr_acme", name: "Acme" }, options)).toMatchObject({ status: "refused", code: "write-refused", reason: "A newer version arrived" });
+it("an HTTP408 and a matching current version prove no acceptance; exact retry recovers its full receipt", async () => {
+  const f = await fixture();
+  send.mockImplementationOnce(() => { const item = f.snapshot.canvas.items.nested!; item.versions.push({ ...item.versions[0]!, ...f.prepared.operation.repair.version }); item.currentVersionId = f.prepared.operation.repair.version.id; throw new ApiError(408, "lost acknowledgement"); });
+  const pending = await saveDesignRepair(actor, f.prepared);
+  expect(pending.status).toBe("pending");
+  f.deny(); send.mockResolvedValueOnce(f.receipt());
+  const accepted = await saveDesignRepair(actor, f.prepared, true);
+  expect(accepted).toMatchObject({ status: "accepted", opId: f.prepared.opId, consistency: { status: "unavailable" } });
+  expect(send.mock.calls.map(call => call[3])).toEqual([f.prepared.opId, f.prepared.opId]);
+  expect(f.uploads()).toBe(1);
 });
 
-it("a queue without completion returns pending identity for authoritative snapshot confirmation", async () => {
-  const options = await prepare();
-  send.mockResolvedValue({ status: "queued" });
-  expect(await saveDesignRepair("prj_dest", { id: "usr_acme", name: "Acme" }, options)).toMatchObject({ status: "pending", itemId: "nested", blobHash: replacementHash, versionId: expect.stringMatching(/^ver_/) });
+it("a receipt from another actor never confirms this saved repair", async () => {
+  const f = await fixture(); send.mockResolvedValue(f.receipt({ id: "usr_other", name: "Other" }));
+  expect(await saveDesignRepair(actor, f.prepared)).toMatchObject({ status: "pending", reason: expect.stringContaining("full repair intent") });
 });
 
-it("a transport error after submission keeps acceptance unknown rather than calling it a refusal", async () => {
-  const options = await prepare();
-  send.mockRejectedValue(new Error("Connection vanished"));
-  expect(await saveDesignRepair("prj_dest", { id: "usr_acme", name: "Acme" }, options)).toMatchObject({ status: "pending", reason: expect.stringContaining("Connection vanished") });
+it("repair recovery validates nested bytes and ownership and cannot archive uncertain work", async () => {
+  const f = await fixture();
+  const draft: DesignRepairDraft = { schemaVersion: 1, canvasId: "prj_dest", actorId: actor.id, itemId: "nested", basis: f.basis, editorBaseVersionId: f.basis.repair.target.artifact.versionId, pending: { prepared: f.prepared, refused: false }, accepted: null };
+  const read = (value: unknown, owner = actor.id) => readDesignRepairDraft(JSON.stringify(value), "prj_dest", owner, "nested");
+  expect((await read(draft)).pending?.prepared.opId).toBe(f.prepared.opId);
+  await expect(read({ ...draft, pending: { prepared: { ...f.prepared, text: "<p>Changed</p>" }, refused: false } })).rejects.toThrow();
+  await expect(read({ ...draft, basis: { ...draft.basis, repair: { target: null } } })).rejects.toThrow();
+  await expect(read(draft, "usr_other")).rejects.toThrow();
+  const storage = { getItem: vi.fn(() => JSON.stringify(draft)), setItem: vi.fn(), removeItem: vi.fn() };
+  const key = designRepairDraftKey("prj_dest", actor.id, "nested");
+  expect(() => archiveDesignRepairDraft(storage, key, draft)).toThrow("awaiting confirmation"); expect(storage.removeItem).not.toHaveBeenCalled();
+  const unavailable = { setItem: () => { throw new Error("quota"); } };
+  expect(() => keepDesignRepairDraft(unavailable, key, draft)).toThrow("quota");
+});
+
+it("strict archived history failure stays unavailable while the legacy optional read stays compatible", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "archive unavailable" }, { status: 503 })));
+  await expect(getArchivedOplog("prj_dest", { strict: true })).rejects.toThrow("archive unavailable");
+  expect(await getArchivedOplog("prj_dest")).toEqual([]);
 });

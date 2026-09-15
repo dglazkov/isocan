@@ -5,7 +5,7 @@ import type { Operation } from "./ops.ts";
 import type { DesignArtifactRef, DesignQuestionSource } from "./design-partner.ts";
 import type { DesignGoverningBinding } from "./design-request.ts";
 import type { QuestionnaireRetainedReference } from "./questionnaire.ts";
-export { parseDesignApprovalBasis, parseDesignComparison, parseDesignComparisonResponse, parseDesignDecisionInput, parseDesignCompareOperation, parseDesignRespondOperation, parseDesignDecideOperation, parseDesignDecisionOperation, designDecisionIntentHash } from "./design-decision-parse.ts";
+export { parseDesignTarget, parseDesignApprovalBasis, parseDesignComparison, parseDesignComparisonResponse, parseDesignDecisionInput, parseDesignCompareOperation, parseDesignRespondOperation, parseDesignDecideOperation, parseDesignDecisionOperation, designDecisionIntentHash } from "./design-decision-parse.ts";
 
 /** Scope facts are captured before approval; current membership cannot be silently substituted at save. */
 export interface DesignScopeBasis { containerId: string | null; scopeIds: string[] }

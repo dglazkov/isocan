@@ -4,6 +4,7 @@ import { rcAnsweringRoute } from "@isocan/core";
 import { questionnaireActorsRoute } from "@isocan/core/questionnaire";
 import { designRequestsRoute, type DesignRecordOperation, type DesignRequestsResponse } from "@isocan/core/design-request";
 import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core/design-decision";
+import { designRepairsRoute, type DesignRepairsResponse } from "@isocan/core/design-repair";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type {
   Actor,
@@ -126,6 +127,9 @@ import {
 } from "@isocan/core";
 import type { BadgeStore, BuildStamp, StoredBadge, UpgradeVerdict } from "@isocan/core";
 import { ApiError, askTheDoor, bearerHeader } from "@isocan/core";
+
+/** Ordinary and typed operations share this actual writer endpoint across transports and fault probes. */
+export const OPERATIONS_ROUTE = "/api/ops";
 
 /** One page of a comment's saved context, or of a live one at a revision. */
 export interface ContextPageOptions {
@@ -482,7 +486,7 @@ export class DaemonRoutes {
   /** Name (or resume) the actor behind a session key — the one op sent
    * without an actor: the response envelope says who you are. */
   claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
-    return this.request("POST", "/api/ops", { canvasId: null, op });
+    return this.request("POST", OPERATIONS_ROUTE, { canvasId: null, op });
   }
 
   /** Who the given session keys speak as (everyone, when omitted). */
@@ -529,7 +533,7 @@ export class DaemonRoutes {
     opId?: string,
   ): Promise<PostOpResponse> {
     const origin = originGroupMode ?? (canvasId ? this.observedGroupModes.get(canvasId) : undefined);
-    return this.request("POST", "/api/ops", {
+    return this.request("POST", OPERATIONS_ROUTE, {
       canvasId,
       actor,
       op,
@@ -551,7 +555,7 @@ export class DaemonRoutes {
     originGroupMode?: "legacy" | "groups",
   ): Promise<PostOpResponse> {
     const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
-    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) });
+    return this.request("POST", OPERATIONS_ROUTE, { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) });
   }
 
   /** Writer-resolved eligibility; a missing agent display badge does not imply a human. */
@@ -569,16 +573,21 @@ export class DaemonRoutes {
     return this.request("GET", designDecisionsRoute(canvasId), undefined, signal);
   }
 
+  /** Canonical repair history includes archived acceptances and current continuation standing. */
+  designRepairs(canvasId: string, signal?: AbortSignal): Promise<DesignRepairsResponse> {
+    return this.request("GET", designRepairsRoute(canvasId), undefined, signal);
+  }
+
   /** Stable comparison, non-adopting response and paired adoption intents use the existing writer. */
   designDecision(canvasId: string, actor: Actor, op: Extract<Operation, { type: "design.compare" | "design.respond" | "design.decide" }>, opId: string, signal?: AbortSignal): Promise<PostOpResponse> {
     const origin = this.observedGroupModes.get(canvasId);
-    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) }, signal);
+    return this.request("POST", OPERATIONS_ROUTE, { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) }, signal);
   }
 
   /** Stable public request/receipt intent reaches the ordinary serialized operation writer. */
   designRecord(canvasId: string, actor: Actor, op: DesignRecordOperation, opId: string, originGroupMode?: "legacy" | "groups"): Promise<PostOpResponse> {
     const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
-    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) });
+    return this.request("POST", OPERATIONS_ROUTE, { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) });
   }
 
   // ---- presence sessions ----
@@ -593,7 +602,7 @@ export class DaemonRoutes {
     originGroupMode?: "legacy" | "groups",
   ): Promise<PostOpResponse> {
     const origin = originGroupMode ?? this.observedGroupModes.get(canvasId);
-    const response = await this.request<PostOpResponse>("POST", "/api/ops", { canvasId, actor, op: { type: "group.change", action }, ...(opId ? { opId } : {}), ...(origin !== undefined ? { originGroupMode: origin } : {}) });
+    const response = await this.request<PostOpResponse>("POST", OPERATIONS_ROUTE, { canvasId, actor, op: { type: "group.change", action }, ...(opId ? { opId } : {}), ...(origin !== undefined ? { originGroupMode: origin } : {}) });
     const op = response.envelope?.op;
     if (op?.type === "group.change" && op.action.kind === "apply" && op.action.change.migration) this.observedGroupModes.set(canvasId, op.action.change.migration.mode);
     return response;

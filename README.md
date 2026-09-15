@@ -239,6 +239,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Corrections preserve history, and later agents can read the accepted rationale.
   Drafts keep the version you reviewed; pending choices remain recoverable after
   refresh or source removal. The CLI uses the same compare/respond/decide acts.
+- **Review that tries the task**: a shared review keeps source findings, actual
+  task checks and craft observations separate. Agents can inspect, reserve up to
+  two repairs, recheck the changed output and finish through `design review`.
+  Each repair preserves the reviewed context and has one conditional Undo;
+  concurrent edits are refused with the draft intact. The canvas shows exact
+  evidence, remaining limits and an available verifier. Requesting a verifier
+  does not claim inspection; missing checks stay an unverified draft. Repair
+  history and its budget survive refresh, entrance switches and Undo.
 - **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
   canvases you were on lately, most recent first, then the rest by activity,
   with a field that finds one from a few letters (`lkh` reaches "Lake House";
@@ -791,6 +799,13 @@ isocan design reconcile ./design-work --json
 #   working DESIGN.md and source manifest retain the original conditional base;
 #   uncertain saves retain their exact intent; accepted content and current context differ
 isocan design workflow [request] --json  # shared procedure, policy and resumable tasks
+isocan design review <request> [--run <run>] --json
+isocan design review <request> --start review-start.json --json
+isocan design review <request> --run <run> --record observations.json --json
+isocan design review <request> --run <run> --begin-repair repair_1 --session <session>
+isocan design review <request> --run <run> --finish --json
+#   Source, Task and Craft retain exact evidence; up to two reserved repairs;
+#   --retry reuses the saved intent; an available verifier can offer and accept handoff
 isocan design start request.json --json
 isocan design brief <request> --json
 isocan design brief --update correction.json --json
@@ -814,7 +829,9 @@ isocan design audit [--item <item>|--in <group>] [--json] [--fail]
 isocan design audit --file screen.html --design DESIGN.md
 isocan design repair <item> repaired.html --from-audit audit.json
 #   capture audit.json with design audit --item <item> --json; repair checks
-#   the captured versions, preserves concurrent edits and reports fresh evidence
+#   captured content, metadata and governing context; --retry reuses the saved intent
+isocan design repair <item> repaired.html --request <request> --review <run> --json
+#   reserve the run's pass first; recheck the resulting version before finishing
 #   policy edits use the governing DESIGN.md's ordinary editor/design set and Undo;
 #   native DESIGN.md and --tokens preserve contracts, --css carries token values only
 isocan command list|show|add|rm        # slash commands: work a message can ask for

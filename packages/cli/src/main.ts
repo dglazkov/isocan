@@ -9,6 +9,7 @@ import { registerQuestionnaires } from "./questionnaire.ts";
 import { registerDesignSystems } from "./design-system.ts";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
+import { registerDesignReviews, runDesignRepair } from "./design-review.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
@@ -10385,6 +10386,7 @@ somebody invented and imposed.`,
 registerQuestionnaires(style, ctxOf);
 registerDesignRequests(style, ctxOf);
 registerDesignDecisions(style, ctxOf);
+registerDesignReviews(style, ctxOf);
 registerDesignSystems(style, ctxOf);
 
 /**
@@ -10458,21 +10460,21 @@ style
 style
   .command("repair <item> <file>")
   .description("Save an authored HTML repair against captured screen and design versions")
-  .requiredOption("--from-audit <file>", "JSON captured by design audit --item <item> --json")
+  .option("--from-audit <file>", "JSON captured by design audit --item <item> --json, including original metadata/scope")
+  .option("--review <id>", "exact review run with a reserved repair attempt")
+  .option("--request <id>", "admitted request for --review")
+  .option("--retry", "retry this actor's immutable saved repair, preserving bytes and IDs")
   .action(
-    run(async (ref: string, file: string, opts: { fromAudit: string }, cmd: Command) => {
+    run(async (ref: string, file: string, opts: { fromAudit?: string; review?: string; request?: string; retry?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const item = resolveItem(snapshot, ref);
-      const capture = designRepairCapture(JSON.parse(await fs.readFile(opts.fromAudit, "utf8")), p.id, item.id);
-      const result = await repairDesignItem(ctx, { ...capture, canvasId: p.id, itemId: item.id, text: await fs.readFile(file, "utf8") });
+      const itemId = opts.retry && ref.startsWith("itm_") ? ref : resolveItem(snapshot, ref).id;
+      const result = await runDesignRepair(ctx, new CanvasHandle(ctx, p), itemId, file, opts);
       if (ctx.json) printJson(result);
-      else if (result.status === "saved") {
-        console.log(`saved repair ${result.versionId} of ${item.id}; one undo restores the prior version`);
-        if (result.governingChanged) console.error("note: the governing design changed during the save; review the fresh report.");
-        if (result.superseded) console.error("note: another version is now current; the accepted repair remains in the version stack.");
-        if (result.after.status === "available") printDesignAudit(result.after.report); else console.error(`note: saved; post-save design audit unavailable: ${result.after.reason}`);
-      } else if (result.status === "pending") console.error(`repair ${result.versionId} is unconfirmed: ${result.reason}. Check that version before retrying.`);
+      else if (result.status === "accepted") {
+        console.log(`saved repair of ${itemId}; ${result.opId ? `operation ${result.opId}` : "operation identity unavailable"}; one undo restores the prior version`);
+        if ("consistency" in result && result.consistency) console.log(`Current consistency: ${result.consistency.status}. ${result.consistency.reasons.join(" ")}`);
+      } else if (result.status === "pending") console.error(`repair is unconfirmed: ${result.reason}. Retry the immutable saved intent with --retry.`);
       else console.error(`repair refused: ${result.reason}`);
       if (result.status === "refused") process.exitCode = 1;
       if (result.status === "pending") process.exitCode = 3;

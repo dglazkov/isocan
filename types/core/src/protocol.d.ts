@@ -19,7 +19,9 @@ export declare const QUESTIONNAIRES_REQUIRED = "questionnaires-required";
 /** Decoder support for admitted request/receipt versions and canonical lifecycle effects. */
 export declare const DESIGN_REQUESTS_FEATURE = "design-requests-v2";
 /** Features this build can replay; replicas advertise their own decoder independently of a forwarded caller. */
-export declare const CURRENT_CLIENT_FEATURES = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1";
+export declare const CURRENT_CLIENT_FEATURES = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+/** A plain HTML snapshot needs no repair decoder; canonical repair history does. */
+export declare function supportsDesignRepairs(value: unknown): boolean;
 /** Missing feature declarations cannot imply support for the paired decision inverse. */
 export declare function supportsDesignDecisions(value: unknown): boolean;
 /** Old decoders receive an upgrade refusal before canonical request state reaches them. */

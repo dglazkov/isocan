@@ -1,12 +1,11 @@
 # A design partner — the walk
 
-**Where we are:** phases 0–4 CLOSED; phase 4 closed on 15 September 2026.
-Both entrances share discovery, scoped systems, real alternatives and durable
-adoption. The final browser journey, draft recovery, CLI continuation and full
-strict gates pass. **Phase 5 is next**: shared critique and bounded repair,
-followed by the optional craft integration and measured quality in phases 6–7.
-The workflow stays opt-in; these engineering proofs do not establish design
-quality or real-user partnership uplift.
+**Where we are:** phases 0–5 CLOSED; phase 5 closed on 15 September 2026.
+Both entrances share discovery, scoped systems, working alternatives, durable
+adoption and bounded review/repair. Local Scenes 1–6, exact recovery, API/CLI/web
+parity and full strict gates pass. **Phase 6 is next**: probe and bound the
+optional Impeccable integration, then phase 7 measures results and partnership.
+The workflow stays opt-in; engineering proofs do not establish quality uplift.
 Read [journey.md](journey.md), [design.md](design.md), then this walk.
 
 The first useful release fixes discovery integrity. The next delivers one
@@ -34,7 +33,7 @@ flowchart LR
   P1 --> P2[2 Complete shared flow]
   P2 --> P3[3 Defaults and systems]
   P3 --> P4[4 Alternatives and decisions]
-  P3 --> P5[5 Shared review and repair]
+  P4 --> P5[5 Shared review and repair]
   L[Existing design-lint 300 and 301] --> P5
   P4 --> P7[7 Evaluation and default rollout]
   P5 --> P7
@@ -300,11 +299,14 @@ not an option count or screenshot test, establishes whether choices help.
 
 ## Phase 5 — One critique and repair path on every surface
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 September 2026 — one continuous request-to-review journey, real source/task checks, two bounded repairs and exact browser/CLI recovery passed independent proofs and full strict gates. See [verification/phase-5.md](verification/phase-5.md).
 
-**Depends on:** phases 2–3; #300/#301's required contracts are present in the
-execution baseline. Own the default journey integration jointly with #302;
-phase 4 and design-lint's pending human ratings are not technical prerequisites.
+**Depends on:** phases 2–4; #300/#301's required contracts are present in the
+execution baseline. Own the default journey integration jointly with #302.
+The explicit repair continuation extends phase 4's exact adoption-edge model;
+design-lint's pending human ratings are not a technical prerequisite.
+[review-and-repair.md](review-and-repair.md) settles the shared review artifacts,
+explicit repair transition, budget and verifier handoff before implementation.
 
 **Outcome:** Scene 6 is dependable across add/edit and CLI text/JSON, API and
 web. A clean source check cannot substitute for trying the artifact.
@@ -333,7 +335,13 @@ Undo works. The repair cap terminates with an honest failed/unverified draft.
 Normal unrelated edits make no model call. Complete local Scenes 1–6 as one
 journey and record it as the P0 candidate, not a proven default.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-15** — A conditional repair needs full-target checks before Undo and Redo. Dependent edits also exposed an older grouped-Redo double reversal. Actual archived and candidate daemons establish both failures and their fixes; restoration conflicts do not consume history.
+- **2026-09-15** — Missing or contradictory review history means unknown budget, not remaining attempts. Original canonical request/run bindings isolate proven unrelated history. Reused ordinary version IDs cannot overwrite prior observations or grant a new repair.
+- **2026-09-15** — A finished review remains current only across its exact canonical completion edge. Source coverage, browser task success and craft observations stay separate, and retained completion evidence survives removal and GC without promising every old report eternal storage.
+- **2026-09-15** — Verifier discovery needs actual live canvas actors before their first authored edit. Eligibility still requires registry identity, a current native tool offer, reachability and wake authorization. Responsive remounts preserve the selected review and actor-owned pending intent.
+- **2026-09-15** — An unchanged eval control bypassed repair and concealed a broken consumer. Passing the original audit basis, then proving a changed candidate and metadata race, restored integration without recapturing context or altering the old pilot's evidence.
 
 ## Phase 6 — A bounded Impeccable integration
 

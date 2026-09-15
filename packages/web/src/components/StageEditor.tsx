@@ -1,6 +1,6 @@
 import { creationDestination } from "../lib/groupplacement.ts";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { Actor, AuditRange, Item, NewVersion } from "@isocan/core";
+import type { Actor, AuditRange, CanvasSnapshotResponse, Item, NewVersion } from "@isocan/core";
 import { newVersionId, sourceFaceOf } from "@isocan/core";
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
@@ -11,7 +11,7 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { isocanSyntax } from "../lib/cmtheme.ts";
-import { sendEchoedResult, setNotice } from "../stores/canvasStore.ts";
+import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { getSnapshot, readBlobText, uploadBlob } from "../lib/api.ts";
 import { everyWhileVisible } from "../lib/whilevisible.ts";
 
@@ -79,6 +79,13 @@ export function StageEditor({
   // The version the OPEN BUFFER is edits of — deliberately not live state:
   // a version landing while you type must not re-key your draft.
   const baseVersion = useRef(current.id);
+  // The lazy findings panel may arrive after typing or a teammate's metadata
+  // edit. Preserve what this editor actually opened, before either can happen.
+  const [repairOpening] = useState<CanvasSnapshotResponse | null>(() => {
+    const opened = useCanvasStore.getState();
+    if (opened.canvasId !== canvasId || !opened.project || !opened.canvas) return null;
+    return structuredClone({ project: opened.project, canvas: { ...opened.canvas, items: { ...opened.canvas.items, [item.id]: item } }, lastSeq: opened.lastSeq, colors: opened.actorColors, names: opened.actorNames, joined: opened.actorJoins });
+  });
   const [loaded, setLoaded] = useState(false);
   /**
    * The saved file could not be read, and there was no draft to fall back on.
@@ -382,7 +389,7 @@ export function StageEditor({
         <div ref={host} className="stage-editor-cm" />
       </div>
       {source.mimeType === "text/html" && checkedText !== null && <Suspense fallback={<div className="page-note">Opening design check…</div>}>
-        <DesignLintPanel canvasId={canvasId} itemId={item.id} actor={actor} text={checkedText}
+        <DesignLintPanel key={JSON.stringify([canvasId, actor.id, item.id])} canvasId={canvasId} itemId={item.id} actor={actor} text={checkedText} opened={repairOpening}
           baseVersionId={baseVersion.current} filename={source.filename} dirty={dirty} saving={saving}
           onSelect={selectFinding} onSaved={saved} onBusyChange={busy => { writing.current = busy; setRepairing(busy); }} />
       </Suspense>}

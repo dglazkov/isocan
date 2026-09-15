@@ -1,3 +1,4 @@
+import { requireDesignRepairClient } from "./design-repair-capability.ts";
 import { QUESTIONNAIRES_REQUIRED, supportsQuestionnaires, type CanvasContents, type Comment, type LogEntry, type Operation } from "@isocan/core";
 import { requireDesignRequestClient } from "./design-request-capability.ts";
 import { requireDesignDecisionClient } from "./design-decision-capability.ts";
@@ -14,6 +15,7 @@ export function questionnaireOperation(op: Operation): boolean {
 }
 /** Check snapshots and log tails before delivering either form of typed state. */
 export function requireQuestionnaireClient(features: unknown, canvas?: CanvasContents, entries: readonly LogEntry[] = []): void {
+  requireDesignRepairClient(features, entries);
   requireDesignDecisionClient(features, canvas, entries);
   requireDesignRequestClient(features, canvas, entries);
   if (!supportsQuestionnaires(features) && (canvas && Object.values(canvas.threads).some((t) => t.comments.some(typed)) || entries.some((entry) => questionnaireOperation(entry.envelope.op) || entry.inverse && questionnaireOperation(entry.inverse)))) throw new QuestionnaireClientError();

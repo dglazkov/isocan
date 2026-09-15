@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -13,6 +13,7 @@ import { FileDesk } from "../src/file-desk.ts";
 import { mintBadge } from "../src/badges.ts";
 import { questionnaireActorKind } from "../src/questionnaire.ts";
 import { questionnaireOperation, requireQuestionnaireClient } from "../src/questionnaire-capability.ts";
+import { PresenceHub } from "../src/presence.ts";
 
 const actor = { id: "usr_person", name: "Acme Person" }, agent = { id: "usr_designer", name: "Acme Designer" }, other = { id: "usr_helper", name: "Acme Helper" };
 const canvasId = "prj_questionnaire", authoritativeHome = "https://example.test", threadId = "thr_request";
@@ -50,6 +51,31 @@ beforeEach(async () => {
 afterEach(async () => { await desk.close(); await store.close(); await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
 
 describe("serialized questionnaire authority and retry", () => {
+  it("discovers fresh live canvas actors through registry provenance without exposing unrelated or expired presence", async () => {
+    const unknown = { id: "usr_live_unknown", name: "Acme Unknown" }, replica = { id: "usr_live_replica", name: "Acme Relay" }, elsewhere = { id: "usr_elsewhere", name: "Acme Elsewhere" };
+    await engine.claim({ badgeId, op: { type: "actor.claim", sessionKey: "replica:live", as: replica.id, name: replica.name } });
+    await engine.claim({ badgeId, op: { type: "actor.claim", sessionKey: "codex:elsewhere", as: elsewhere.id, name: elsewhere.name } });
+    expect((await engine.designRespondents(canvasId)).actors.some(a => a.id === other.id)).toBe(false);
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    const presence = new PresenceHub(100);
+    try {
+      // Session labels and asserted harness strings cannot establish agent provenance.
+      presence.createSession(canvasId, { ...other, name: "Untrusted session name" }, "cli", { harness: "browser" });
+      presence.createSession(canvasId, unknown, "cli", { harness: "codex" });
+      presence.createSession(canvasId, replica, "cli", { harness: "codex" });
+      presence.createSession("prj_elsewhere", elsewhere, "cli", { harness: "codex" });
+      engine = new Engine(store, desk, { liveness: id => presence.roster(id) });
+      const rows = (await engine.designRespondents(canvasId)).actors;
+      expect(rows).toEqual(expect.arrayContaining([{ ...other, kind: "agent" }, { ...unknown, kind: "unknown" }, { ...replica, kind: "unknown" }]));
+      expect(rows.some(a => a.id === elsewhere.id)).toBe(false);
+      expect(Object.keys(rows.find(a => a.id === other.id)!).sort()).toEqual(["id", "kind", "name"]);
+      await vi.advanceTimersByTimeAsync(10_001);
+      expect(presence.roster(canvasId)).toEqual([]);
+      const expired = (await engine.designRespondents(canvasId)).actors;
+      expect(expired.some(a => [other.id, unknown.id, replica.id, elsewhere.id].includes(a.id))).toBe(false);
+    } finally { presence.close(); vi.useRealTimers(); }
+  });
+
   it("derives known respondent eligibility, rejects custody/actor/option errors, and never records refused writes", async () => {
     expect((await engine.designRespondents(canvasId)).actors).toEqual(expect.arrayContaining([{ ...actor, kind: "human" }, { ...agent, kind: "agent" }]));
     expect(questionnaireActorKind({ names: {}, colors: {}, joined: {}, harnesses: {} }, "usr_unknown")).toBe("unknown");

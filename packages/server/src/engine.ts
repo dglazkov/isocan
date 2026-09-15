@@ -1,3 +1,4 @@
+import { isDesignRepairOperation, rejectPublicDesignRepair, designRepairRetry, materializeDesignRepair, readDesignRepairs } from "./design-repair.ts";
 import { validateQuestionnaireComment } from "@isocan/core/questionnaire";
 import { PersonalError } from "./personal.ts";
 import type { PersonalSourceRecord } from "./personal-desk.ts";
@@ -86,7 +87,7 @@ import { isQuestionnaireOperation, rejectPublicQuestionnaire, resolveQuestionnai
 import { requireQuestionnaireClient } from "./questionnaire-capability.ts";
 import { isDesignRecordOperation, rejectPublicDesignRecord, guardDesignRecordEdit, designRecordRetry, materializeDesignRecord, readDesignRequests } from "./design-request.ts";
 import { isDesignDecisionOperation, rejectPublicDesignDecision, designDecisionRetry, materializeDesignDecision, readDesignDecisions } from "./design-decision.ts";
-import { DesignRestoreConflict } from "../../core/src/design-decision-state.ts";
+import { designTargetMatches, DesignRestoreConflict } from "../../core/src/design-decision-state.ts";
 import { validateDesignRecordState } from "@isocan/core/design-record";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
@@ -1128,6 +1129,7 @@ export class Engine {
       rejectPublicQuestionnaire(request.op);
       rejectPublicDesignRecord(request.op);
       rejectPublicDesignDecision(request.op);
+      rejectPublicDesignRepair(request.op);
       if (request.op.type === "project.create" && request.op.groupMode !== undefined &&
           request.op.groupMode !== "groups" && request.op.groupMode !== "legacy") {
         throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
@@ -1176,7 +1178,11 @@ export class Engine {
        * the question is answered; asking here as well would be a replica
        * holding an opinion about an order it does not own.
        */
-      if (!home && request.canvasId && isDesignDecisionOperation(request.op)) {
+      if (!home && request.canvasId && isDesignRepairOperation(request.op)) {
+        const runtime = await this.runtime(request.canvasId);
+        const prior = await designRepairRetry([...runtime.entries, ...await this.store.readArchivedLog(request.canvasId)], request.op, request.opId, request.actor.id, (await this.actors()).registry);
+        if (prior) { if (request.clientFeatures !== undefined) requireQuestionnaireClient(request.clientFeatures, undefined, [prior]); return prior; }
+      } else if (!home && request.canvasId && isDesignDecisionOperation(request.op)) {
         const runtime = await this.runtime(request.canvasId);
         const prior = await designDecisionRetry([...runtime.entries, ...await this.store.readArchivedLog(request.canvasId)], request.op, request.opId, request.actor.id, (await this.actors()).registry);
         if (prior) { if (request.clientFeatures !== undefined) requireQuestionnaireClient(request.clientFeatures, undefined, [prior]); return prior; }
@@ -1193,7 +1199,7 @@ export class Engine {
         const live = await this.alreadyWritten(request);
         // Canonical design identities remain reserved after GC archives their
         // operation. An ordinary caller cannot reuse one to mint a new act.
-        const archivedDesign = !live && request.canvasId ? (await this.store.readArchivedLog(request.canvasId)).find((entry) => entry.envelope.id === request.opId && (isDesignDecisionOperation(entry.envelope.op) || isDesignRecordOperation(entry.envelope.op) || isQuestionnaireOperation(entry.envelope.op))) : undefined;
+        const archivedDesign = !live && request.canvasId ? (await this.store.readArchivedLog(request.canvasId)).find((entry) => entry.envelope.id === request.opId && (isDesignRepairOperation(entry.envelope.op) || isDesignDecisionOperation(entry.envelope.op) || isDesignRecordOperation(entry.envelope.op) || isQuestionnaireOperation(entry.envelope.op))) : undefined;
         const already = live ?? archivedDesign;
         if (already) {
           if (request.clientFeatures !== undefined) {
@@ -1202,7 +1208,7 @@ export class Engine {
           }
           if (isQuestionnaireOperation(already.envelope.op)) throw new OpValidationError("bad-op", "questionnaire retry identity conflicts with its original operation type");
           if (isDesignRecordOperation(already.envelope.op)) throw new OpValidationError("bad-op", "design retry identity conflicts with its original operation type");
-          if (isDesignDecisionOperation(already.envelope.op)) throw new OpValidationError("design-intent-conflict", "design retry identity conflicts with its original operation type");
+          if (isDesignRepairOperation(already.envelope.op) || isDesignDecisionOperation(already.envelope.op)) throw new OpValidationError("design-intent-conflict", "design retry identity conflicts with its original operation type");
           return already;
         }
       }
@@ -1707,7 +1713,7 @@ export class Engine {
         checkMigrationHistoryBoundary(runtime, group);
         const inverses = group.map((seq) => undoOperationFor(runtime, runtime.entries.find((entry) => entry.seq === seq)!));
         for (const inverse of inverses) checkMigrationRollback(runtime, inverse);
-        preflightGroupHistory(runtime.state, inverses, actor);
+        preflightGroupHistory(runtime.state, inverses, actor, group.map((seq) => runtime.entries.find((entry) => entry.seq === seq)!), "undo");
         const target = runtime.entries.find((entry) => entry.seq === targetSeq)!;
         const op = repairInverse(runtime.state, undoOperationFor(runtime, target));
         if (op !== null) {
@@ -1768,7 +1774,7 @@ export class Engine {
         preflightGroupHistory(runtime.state, group.map((candidate) => redoOpFor(
           runtime.entries.find((entry) => entry.seq === candidate.targetSeq)!,
           runtime.entries.find((entry) => entry.seq === candidate.undoSeq)!,
-        )), actor);
+        )), actor, group.map((candidate) => runtime.entries.find((entry) => entry.seq === candidate.targetSeq)!), "redo");
         const target = runtime.entries.find((entry) => entry.seq === next.targetSeq)!;
         const undoEntry = runtime.entries.find((entry) => entry.seq === next.undoSeq)!;
         const op = repairInverse(runtime.state, redoOpFor(target, undoEntry));
@@ -2616,12 +2622,16 @@ export class Engine {
   /** Eligibility is a protected canvas read; joins affect comparison, never historical authorship. */
   async designRespondents(canvasId: string): Promise<{ actors: import("@isocan/core").QuestionnaireActor[] }> {
     const state = (await this.runtime(canvasId)).state;
-    return { actors: questionnaireActors(state, (await this.actors()).registry) };
+    return { actors: questionnaireActors(state, (await this.actors()).registry, (this.options.liveness?.(canvasId) ?? []).map(session => session.actor)) };
   }
 
   /** The serialized read binds admitted JSON and canonical discovery history at one local state. */
   async designRequests(canvasId: string, home: string): Promise<import("@isocan/core").DesignRequestsResponse> {
     return this.enqueue(async () => { const runtime = await this.runtime(canvasId); return readDesignRequests(this.store, runtime.state, home, (await this.actors()).registry, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]); });
+  }
+  /** Attributed repair acceptance and Undo/Redo standing use live and archived canonical history. */
+  async designRepairs(canvasId: string, home: string): Promise<import("@isocan/core/design-repair").DesignRepairsResponse> {
+    return this.enqueue(async () => { const runtime = await this.runtime(canvasId); return readDesignRepairs(this.store, runtime.state, home, (await this.actors()).registry, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]); });
   }
   /** Canonical comparison history is read under the same serialized canvas authority as request state. */
   async designDecisions(canvasId: string, home: string): Promise<import("@isocan/core/design-decision").DesignDecisionsResponse> {
@@ -2716,16 +2726,21 @@ export class Engine {
     }
     let designDecisionTimestamp: string | undefined;
     if (cause === undefined) {
+      if (isDesignRepairOperation(normalizedOp)) {
+        request = { ...request, opId: request.opId ?? this.envelope(request, normalizedOp).id };
+        if (!request.authoritativeHome) throw new OpValidationError("bad-op", "design writer has no authoritative home address");
+        normalizedOp = await materializeDesignRepair(this.store, runtime.state, request.authoritativeHome, normalizedOp, request.actor, (await this.actors()).registry, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]);
+      }
       if (isDesignDecisionOperation(normalizedOp)) {
         const prepared = this.envelope(request, normalizedOp); request = { ...request, opId: prepared.id }; designDecisionTimestamp = prepared.ts;
         if (!request.authoritativeHome) throw new OpValidationError("bad-op", "design writer has no authoritative home address");
-        normalizedOp = await materializeDesignDecision(this.store, runtime.state, request.authoritativeHome, normalizedOp, request.actor, (await this.actors()).registry, prepared.id, prepared.ts);
+        normalizedOp = await materializeDesignDecision(this.store, runtime.state, request.authoritativeHome, normalizedOp, request.actor, (await this.actors()).registry, prepared.id, prepared.ts, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]);
       }
       if (isDesignRecordOperation(normalizedOp)) {
         const opId = request.opId ?? this.envelope(request, normalizedOp).id;
         request = { ...request, opId };
         if (!request.authoritativeHome) throw new OpValidationError("bad-op", "design writer has no authoritative home address");
-        normalizedOp = await materializeDesignRecord(this.store, runtime.state, runtime.lastSeq, normalizedOp, request.actor, (await this.actors()).registry, request.authoritativeHome, opId);
+        normalizedOp = await materializeDesignRecord(this.store, runtime.state, runtime.lastSeq, normalizedOp, request.actor, (await this.actors()).registry, request.authoritativeHome, opId, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]);
         const effect = normalizedOp.effect!;
         if (effect.type === "item.add" && runtime.state.project.groupMode !== "groups") normalizedOp = { ...normalizedOp, effect: { ...effect, placement: { ...resolvePlacement(runtime.state.canvas, effect.placement, effect.width, effect.height, positionIsMeaningful(effect)), ...("x" in effect.placement && effect.placement.chosen ? { chosen: true } : {}) } } };
       }
@@ -3018,6 +3033,7 @@ function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
     case "design.restore":
     case "design.request": // restore the admitted version and original provenance
     case "design.receipt":
+    case "design.repair": // restore the original version without minting a second repair
     case "group.change": // exact structural preconditions and restore-based creation redo
       return undoEntry.inverse!;
     default:
@@ -3068,21 +3084,29 @@ function repairInverse(state: CanvasState, op: Operation): Operation | null {
   }
 }
 
-/** A label may include ordinary ops beside one atomic structural change.
+/** Repair history keeps ordinary version inverses, but the writer fences their
+ * exact original target before touching the undo stack. A label may include
+ * ordinary ops beside one atomic structural change.
  * Check the whole gesture first so a later group conflict cannot leave its
  * earlier ordinary members already undone. Ordinary repair still skips the
  * same invalidated items it did before groups existed. */
-function preflightGroupHistory(state: CanvasState, ops: Operation[], actor: Actor): void {
-  if (!ops.some((op) => op.type === "group.change" || op.type === "design.restore")) return;
+function preflightGroupHistory(state: CanvasState, ops: Operation[], actor: Actor, targets: readonly LogEntry[] = [], direction: "undo" | "redo" = "undo"): void {
+  if (!ops.some((op) => op.type === "group.change" || op.type === "design.restore") && !targets.some((entry) => entry.envelope.op.type === "design.repair")) return;
   let preview = state;
-  for (const candidate of ops) {
+  for (const [index, candidate] of ops.entries()) {
+    const original = targets[index]?.envelope.op;
+    if (original?.type === "design.repair") {
+      const repair = original.repair;
+      const expected = direction === "undo" ? { ...repair.target, artifact: { ...repair.target.artifact, versionId: repair.version.id, blobHash: repair.version.blobHash } } : repair.target;
+      if (!designTargetMatches(preview.canvas, expected)) throw new OpValidationError("edit-conflict", "The repair target content, metadata or scope changed; history was not changed.");
+    }
     const op = repairInverse(preview, candidate);
     if (!op) continue;
     try {
       const next = applyOperation(preview, { id: "op_preflight", canvasId: state.project.id, actor, ts: new Date().toISOString(), op });
       if (next) preview = next;
     } catch (err) {
-      if (op.type === "group.change" || op.type === "design.restore" || !(err instanceof OpValidationError)) throw err;
+      if (original?.type === "design.repair" || op.type === "group.change" || op.type === "design.restore" || !(err instanceof OpValidationError)) throw err;
     }
   }
 }

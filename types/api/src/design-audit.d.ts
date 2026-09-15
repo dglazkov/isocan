@@ -5,5 +5,5 @@ import { type CanvasDesignAudit, type DesignAuditOptions, type DesignAuditReadPo
 export declare function designAuditPort(ctx: Ctx): DesignAuditReadPort;
 /** Audit a captured or fresh canvas using the caller's authority and immutable version blobs. */
 export declare function readDesignAudit(ctx: Ctx, canvasId: string, options?: DesignAuditOptions, captured?: Pick<CanvasSnapshotResponse, "canvas">): Promise<CanvasDesignAudit>;
-/** Node adapts conditional repair receipts; transport uncertainty cannot become a confirmed refusal. */
+/** Node routes existing explicit repair through the same prepared canonical repair transport as review. */
 export declare function repairDesignItem(ctx: Ctx, request: DesignRepairRequest): Promise<DesignRepairResult>;

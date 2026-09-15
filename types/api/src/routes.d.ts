@@ -2,10 +2,13 @@ import { type SourceRequestContext, type SourceClassificationRequest, type Sourc
 import { type InboxResponse } from "../../core/src/index.js";
 import { type DesignRecordOperation, type DesignRequestsResponse } from "../../core/src/design-request.js";
 import { type DesignDecisionsResponse } from "../../core/src/design-decision.js";
+import { type DesignRepairsResponse } from "../../core/src/design-repair.js";
 import { type RecapHeadResponse } from "../../core/src/index.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
 import type { BadgeStore, BuildStamp, UpgradeVerdict } from "../../core/src/index.js";
 import { ApiError } from "../../core/src/index.js";
+/** Ordinary and typed operations share this actual writer endpoint across transports and fault probes. */
+export declare const OPERATIONS_ROUTE = "/api/ops";
 /** One page of a comment's saved context, or of a live one at a revision. */
 export interface ContextPageOptions {
     threadId?: string | undefined;
@@ -252,6 +255,8 @@ export declare class DaemonRoutes {
     designRequests(canvasId: string, signal?: AbortSignal): Promise<DesignRequestsResponse>;
     /** Canonical comparisons and decision history keep actual authorship separate from currentness. */
     designDecisions(canvasId: string, signal?: AbortSignal): Promise<DesignDecisionsResponse>;
+    /** Canonical repair history includes archived acceptances and current continuation standing. */
+    designRepairs(canvasId: string, signal?: AbortSignal): Promise<DesignRepairsResponse>;
     /** Stable comparison, non-adopting response and paired adoption intents use the existing writer. */
     designDecision(canvasId: string, actor: Actor, op: Extract<Operation, {
         type: "design.compare" | "design.respond" | "design.decide";

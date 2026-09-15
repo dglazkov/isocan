@@ -12,7 +12,7 @@ export declare function guardDesignRecordEdit(state: CanvasState, op: Operation)
 /** Retry compares original validated intent and join-aware custody before current lifecycle checks. */
 export declare function designRecordRetry(entries: readonly LogEntry[], op: DesignRecordOperation, opId: string | undefined, actorId: string, registry: ActorRegistry): Promise<LogEntry | null>;
 /** Comparison acts use the same live request, source, cancellation and input guards as lifecycle writes. */
-export declare function designDecisionRequest(store: Store, state: CanvasState, home: string, ref: DesignArtifactRef, epoch: number, registry: ActorRegistry): Promise<DesignBrief>;
+export declare function designDecisionRequest(store: Store, state: CanvasState, home: string, ref: DesignArtifactRef, epoch: number, registry: ActorRegistry, history?: readonly LogEntry[]): Promise<DesignBrief>;
 /** Admitted requests add source and effort guards while historical manual briefs keep phase-1 semantics. */
 export declare function validateAdmittedDesignQuestions(state: CanvasState, brief: DesignBrief, questions: DesignQuestionSet, entries: readonly LogEntry[], registry: ActorRegistry, publishing: boolean): void;
 /** Retains exact local source and visual bytes with flat metadata; inherited references remain permission-bearing. */
@@ -20,6 +20,6 @@ export declare function retainReferences(store: Store, state: CanvasState, home:
 /** Reuses canonical scope selection for request receipts and approval guards, without fetching supplied URLs. */
 export declare function governingReasons(state: CanvasState, home: string, receipt: Pick<DesignReceipt, "governing">): string[];
 /** Materializes JSON and one item effect while Engine holds the existing single-writer chain. */
-export declare function materializeDesignRecord(store: Store, state: CanvasState, revision: number, operation: DesignRecordOperation, actor: Actor, registry: ActorRegistry, home: string, opId: string): Promise<DesignRecordOperation>;
+export declare function materializeDesignRecord(store: Store, state: CanvasState, revision: number, operation: DesignRecordOperation, actor: Actor, registry: ActorRegistry, home: string, opId: string, history?: readonly LogEntry[]): Promise<DesignRecordOperation>;
 /** Reads admitted records only; malformed JSON remains an explicit unavailable row, never inferred admission. */
 export declare function readDesignRequests(store: Store, state: CanvasState, home: string, registry: ActorRegistry, history: readonly LogEntry[]): Promise<DesignRequestsResponse>;

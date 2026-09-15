@@ -3,6 +3,8 @@ import type { DesignApprovalBasis, DesignComparison, DesignComparisonResponse, D
 export declare function parseDesignComparison(value: unknown): DesignComparison;
 /** Revision/delegation outcomes are closed typed instructions; option adoption cannot be represented by a response. */
 export declare function parseDesignComparisonResponse(value: unknown): DesignComparisonResponse;
+/** Full target captures are shared by approval and repair without fabricating another semantic record. */
+export declare function parseDesignTarget(value: unknown): DesignApprovalBasis["target"];
 /** Validates a persisted approval draft without fabricating a complete decision intent. */
 export declare function parseDesignApprovalBasis(value: unknown): DesignApprovalBasis;
 /** Human words remain nullable; every agent authority branch requires its own explicit rationale. */

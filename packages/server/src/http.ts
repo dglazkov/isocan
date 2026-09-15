@@ -1,3 +1,5 @@
+import { DesignRepairClientError } from "./design-repair-capability.ts";
+import { supportsDesignRepairs } from "@isocan/core";
 import { DesignDecisionClientError, designDecisionOperation } from "./design-decision-capability.ts";
 import { supportsDesignDecisions } from "@isocan/core";
 import { Readable } from "node:stream";
@@ -836,7 +838,7 @@ export function registerRoutes(
   };
 
   app.setErrorHandler((err, _req, reply) => {
-    if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError) {
+    if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError || err instanceof DesignRepairClientError) {
       return reply.status(426).send({ error: err.message, code: err.code });
     }
     if (err instanceof GroupConflictError || err instanceof MigrationBoundaryError) {
@@ -1696,6 +1698,13 @@ export function registerRoutes(
   });
 
   registerCanvasGroupContext(app, engine, store);
+  app.get("/api/projects/:id/design/repairs", async (req) => {
+    const { id } = req.params as { id: string };
+    const home = options.homes?.for(id);
+    if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req), typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
+    if (!supportsDesignRepairs(req.headers[CLIENT_FEATURES_HEADER])) throw new DesignRepairClientError();
+    return engine.designRepairs(id, localOrigin(req));
+  });
   app.get("/api/projects/:id/design/decisions", async (req) => {
     const { id } = req.params as { id: string };
     const home = options.homes?.for(id);
@@ -1730,6 +1739,7 @@ export function registerRoutes(
     if (body.op && groupOperation(body.op) && !supportsCanvasGroups(clientFeatures)) throw new CanvasGroupsClientError();
     if (body.op && questionnaireOperation(body.op) && !supportsQuestionnaires(clientFeatures)) throw new QuestionnaireClientError();
     if (body.op && designRequestOperation(body.op) && !supportsDesignRequests(clientFeatures)) throw new DesignRequestClientError();
+    if (body.op?.type === "design.repair" && !supportsDesignRepairs(clientFeatures)) throw new DesignRepairClientError();
     if (body.op && designDecisionOperation(body.op) && !supportsDesignDecisions(clientFeatures)) throw new DesignDecisionClientError();
     if (body.canvasId && !supportsCanvasGroups(clientFeatures)) {
       const snapshot = await engine.getSnapshot(body.canvasId).catch(() => null);

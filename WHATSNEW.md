@@ -23,6 +23,13 @@ second week.
 
 ## 15 September 2026
 
+- Open a design task's review to see source findings, task checks and craft
+  observations separately. Agents can make up to two repairs and recheck the
+  result, keeping each repair undoable and preserving teammates' newer edits.
+  Receipts show the exact screen checked and any remaining limits. If inspection
+  is unavailable, the task stays an unverified draft; an available agent can be
+  asked to check it.
+
 - Try an agent's working alternatives before choosing. Compare its recommendation
   and tradeoffs, ask for more, combine specific ideas or delegate the choice.
   Your decision and screen change undo together; earlier options and reasons

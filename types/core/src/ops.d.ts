@@ -201,6 +201,13 @@ export type Operation = {
 } | {
     type: "project.delete";
 } | {
+    type: "design.repair";
+    repair: import("./design-repair.js").DesignRepairInput;
+    effect?: Extract<Operation, {
+        type: "item.edit";
+    }>;
+    canonical?: import("./design-repair.js").DesignRepairCanonical;
+} | {
     type: "design.compare";
     threadId: string;
     commentId: string;

@@ -11,6 +11,7 @@ import { DesignTaskReconcile } from "./DesignTaskReconcile.tsx";
 import { RequestReferenceCard } from "./RequestReferenceCard.tsx";
 import { DesignComparisonButton, hasSavedComparisonPending } from "./DesignComparisonButton.tsx";
 import { DesignSystemsButton } from "./DesignSystemsButton.tsx";
+import { DesignReviewButton } from "./DesignReviewButton.tsx";
 
 const deliveryName: Record<DesignBrief["delivery"], string> = { "html-node": "Runnable HTML node", "connected-app": "Connected application", wireframe: "Working wireframe", exploration: "Design exploration" };
 
@@ -68,6 +69,7 @@ export function DesignTaskCard({ canvasId, actor, row, canEdit, checking = false
     {row.reasons.map((reason) => <p role="status" key={reason}>{reason}</p>)}
     {checking && <p role="status">Checking current task and evidence…</p>}
     {brief.outputIds.map((id) => <a key={id} className="design-task-result" href={workbenchItemPath(canvasId, id)}>Open result · {canvas?.items[id]?.title ?? "Saved output"}</a>)}
+    <DesignReviewButton canvasId={canvasId} actor={actor} requestId={brief.requestId} threadId={brief.source.entrance === "canvas-chat" ? brief.source.threadId : undefined} canEdit={canEdit} />
     {row.receipts.map((receipt) => <DesignReceiptView key={receipt.ref.versionId} canvasId={canvasId} requestId={brief.requestId} saved={receipt} checking={checking} />)}
     {brief.progress === "completed" && row.receipts.length === 0 && <p className="design-task-help">Unverified draft · this completed task has no published evidence yet.</p>}
     {edit && canEdit && <form className="design-task-editor" onSubmit={(event) => { event.preventDefault(); void mutation.run({ type: "design.request", action: operation() }); }}>

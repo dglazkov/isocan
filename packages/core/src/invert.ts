@@ -33,6 +33,9 @@ export function invertOperation(
   };
 
   switch (op.type) {
+    case "design.repair":
+      if (!op.effect) throw new OpValidationError("bad-op", "resolve repair before inversion");
+      return invertOperation(stateBefore, op.effect);
     case "design.compare":
     case "design.respond": return { type: "comment.remove", threadId: op.threadId, commentId: op.commentId };
     case "design.decide": {

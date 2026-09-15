@@ -65,6 +65,7 @@ export function registerDesignRequests(design: Command, contextOf: (cmd: Command
       if (ctx.json) return printJson(result);
       console.log(`Automatic design workflow: ${result.policy}\n\n${result.procedure}`);
       printBriefs(result);
+      for (const review of result.reviews?.runs ?? []) console.log(`Review ${review.run.id}: ${review.status}; next ${review.nextAction}; ${review.remainingRepairs === null ? "repair budget unavailable" : `${review.remainingRepairs} repair attempts remain`}. Source ${review.readings.source}, task ${review.readings.task}, craft ${review.readings.craft}.`);
     }));
 
   design.command("start <file>")

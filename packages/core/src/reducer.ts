@@ -1,3 +1,4 @@
+import { validateDesignRepairCanonical } from "./design-repair-state.ts";
 import { validateTextAnchor } from "./text-anchor.ts";
 import { validateContextManifest } from "./canvas-group-context.ts";
 import type {
@@ -133,6 +134,12 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
   };
 
   switch (op.type) {
+    case "design.repair": {
+      validateDesignRepairCanonical(envelope);
+      if (!designTargetMatches(canvas, op.repair.target)) throw new OpValidationError("edit-conflict", "The captured repair target changed.");
+      const next = reduceOperation(state, { ...envelope, actor: { id: actor.id, name: actor.name }, op: op.effect! })!;
+      return { ...next, project: { ...next.project, lastOp: op.type } };
+    }
     case "design.compare":
     case "design.respond": {
       const comment = op.canonicalComment, expected = op.type === "design.compare" ? op.comparison : op.response;

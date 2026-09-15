@@ -62,6 +62,7 @@ export interface DesignRequestReadResult {
 export interface DesignWorkflowView extends DesignRequestReadResult {
     policy: "off" | "adaptive-v1" | "unsupported";
     procedure: string;
+    reviews?: import("./design-review-reader.js").DesignReviewReadResult;
 }
 /** Delivery uncertainty preserves the caller's retry identity and never invents an accepted operation ID. */
 export interface DesignRequestSubmission {

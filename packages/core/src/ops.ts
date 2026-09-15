@@ -212,6 +212,7 @@ export type Operation =
   | { type: "project.update"; patch: MetaPatch }
   | { type: "project.delete" } // soft: dir moved aside; NOT undoable
   // ---- items ----
+  | { type: "design.repair"; repair: import("./design-repair.ts").DesignRepairInput; effect?: Extract<Operation, { type: "item.edit" }>; canonical?: import("./design-repair.ts").DesignRepairCanonical }
   | { type: "design.compare"; threadId: string; commentId: string; comparison: import("./design-decision.ts").DesignComparison; canonicalComment?: Comment }
   | { type: "design.respond"; threadId: string; commentId: string; response: import("./design-decision.ts").DesignComparisonResponse; canonicalComment?: Comment }
   | { type: "design.decide"; threadId: string; commentId: string; decision: import("./design-decision.ts").DesignDecisionInput; effect?: import("./design-decision.ts").DesignDecisionEffect }

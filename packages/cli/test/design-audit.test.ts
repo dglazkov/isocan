@@ -42,6 +42,6 @@ it("repair captures bind the canvas, item, governing source, base and rule versi
   expect(() => designRepairCapture(report, "prj_dest", "outside")).toThrow("supported completed audit");
   expect(() => designRepairCapture({ ...report, items: report.items.map(item => ({ ...item, input: null })) }, "prj_dest", "nested")).toThrow("supported completed audit");
   const draft = await readCanvasDesignAudit(io, { canvasId: "prj_dest", home: auditHome, canvas, draft: { itemId: "nested", baseVersionId: "ver_opened", text: "<p>Acme draft</p>" } });
-  expect(designRepairCapture(draft, "prj_dest", "nested").expectedVersionId).toBe("ver_opened");
+  expect(() => designRepairCapture(draft, "prj_dest", "nested")).toThrow("original target metadata/scope capture");
   expect(() => designRepairCapture({ ...draft, items: draft.items.map(item => ({ ...item, versionId: "ver_someone_else" })) }, "prj_dest", "nested")).toThrow("actual base version");
 });

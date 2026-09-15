@@ -206,6 +206,18 @@ export declare class CanvasHandle {
     designAudit(options?: DesignAuditOptions): Promise<CanvasDesignAudit>;
     /** Submit an explicitly authored, version-checked repair and retain its before/after audit evidence. */
     designRepair(itemId: string, request: Omit<DesignRepairRequest, "canvasId" | "itemId">): Promise<DesignRepairResult>;
+    /** Shared run history recovers consumed reservations across native entrances and refreshes. */
+    designReview(requestId?: string, runId?: string): Promise<import("./design-review-reader.js").DesignReviewReadResult>;
+    /** Prepare initial review reservation; callers persist the returned immutable envelope before sending it. */
+    designReviewStart(options: Omit<import("./design-review-write.js").DesignReviewStartInput, "canvasId">): Promise<import("./design-review-write.js").PreparedDesignReviewWrite>;
+    /** Prepare one conditional record, repair reservation or finish append against the captured run version. */
+    designReviewStep(options: Omit<import("./design-review-write.js").DesignReviewStepInput, "canvasId">): Promise<import("./design-review-write.js").PreparedDesignReviewWrite>;
+    /** Submit a previously persisted ordinary review envelope without replacing its actor or identity. */
+    designReviewSubmit(prepared: import("./design-review-write.js").PreparedDesignReviewWrite, retry?: boolean): Promise<import("./design-review-write.js").DesignReviewSubmission>;
+    /** Capture target metadata before editing an explicit standalone repair. */
+    designRepairBasis(itemId: string): Promise<import("./design-repair-reader.js").DesignRepairBasis>;
+    /** Submit a stable prepared repair with full canonical acceptance and independent consistency. */
+    designRepairSubmit(prepared: import("./design-repair-reader.js").PreparedDesignRepair, retry?: boolean): Promise<import("./design-repair-reader.js").DesignRepairSubmission>;
     /** Structured discovery shares the dock's resolver and the writer's refusing acts. */
     designQuestions(options?: DesignQuestionsOptions): Promise<DesignQuestionsResult>;
     /** The saved intent owns its IDs so lost delivery can be retried without another question. */
