@@ -1,3 +1,4 @@
+import { validateDesignRepairCanonical } from "./design-repair-state.ts";
 import { validateTextAnchor } from "./text-anchor.ts";
 import { validateContextManifest } from "./canvas-group-context.ts";
 import type {
@@ -133,6 +134,12 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
   };
 
   switch (op.type) {
+    case "design.repair": {
+      validateDesignRepairCanonical(envelope);
+      if (!designTargetMatches(canvas, op.repair.target)) throw new OpValidationError("edit-conflict", "The captured repair target changed.");
+      const next = reduceOperation(state, { ...envelope, actor: { id: actor.id, name: actor.name }, op: op.effect! })!;
+      return { ...next, project: { ...next.project, lastOp: op.type } };
+    }
     case "design.compare":
     case "design.respond": {
       const comment = op.canonicalComment, expected = op.type === "design.compare" ? op.comparison : op.response;
@@ -633,6 +640,33 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
         ...canvas,
         agents: { ...(canvas.agents ?? {}), [op.agent.id]: row },
       });
+    }
+
+    case "agent.invite": {
+      // **Standing here, and not one thing more** (the bench, journey 2).
+      //
+      // Joining is the act of naming an agent you already have on a canvas it
+      // has never worked on, so the ONLY thing it may add is the row. Three
+      // deliberate preservations, each of them a way the rule "a bench row
+      // confers nothing" would otherwise erode:
+      //
+      //   `rules` is carried across untouched — an invite never spells one,
+      //   so a re-invite of an already-enrolled agent cannot widen (or
+      //   narrow) who may summon it. A fresh row carries none, which the rc
+      //   reads as owner-only.
+      //
+      //   `writtenBy` is stamped only on a row this op CREATES. Re-stamping
+      //   an existing row would hand the inviter authorship of a gate
+      //   somebody else wrote, which is the widening above by another door.
+      //
+      //   The recorded `actor` wins over the one carried, so an invitation
+      //   cannot rename an agent the canvas already knows.
+      const agents = { ...(canvas.agents ?? {}) };
+      const standing = agents[op.agent.id];
+      const row = standing
+        ? { ...standing, invitedFrom: op.from }
+        : { actor: op.agent, writtenBy: actor, invitedFrom: op.from };
+      return withCanvas({ ...canvas, agents: { ...agents, [op.agent.id]: row } });
     }
 
     case "agent.withdraw": {

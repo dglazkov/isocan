@@ -41,11 +41,19 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * file no human edits; if that ever stops being true for one of them, it must
  * leave this list first, because the driver will overwrite hand edits without
  * asking on the next conflict.
+ *
+ * **Whole, not partly.** The driver copies the regenerated file over git's
+ * merge result, so listing a file its generator only PARTLY rewrites does not
+ * merely risk overwriting an edit — it discards the incoming side of every
+ * merge, silently, exit 0, with nothing in `git status` to notice.
+ * `docs/projects/README.md` (hand-written since the status column moved into
+ * each project's front matter) and `docs/reviews/README.md` were both listed
+ * here and neither is written by the generator named beside it. They ate the
+ * same projects-index row twice on 15 Sep 2026. Both are gone from this list;
+ * they conflict honestly now, which is the lesser cost.
  */
 export const GENERATED = {
   "docs/ROADMAP.md": ["scripts/roadmap.mjs"],
-  "docs/projects/README.md": ["scripts/roadmap.mjs"],
-  "docs/reviews/README.md": ["scripts/reviews.mjs"],
 };
 
 export function regenerate(target) {

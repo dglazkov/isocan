@@ -38,6 +38,7 @@ export function MentionField({
   peers,
   itemCandidates,
   items,
+  bench = [],
   placeholder,
   autoFocus,
   multiline,
@@ -49,6 +50,13 @@ export function MentionField({
   peers: MentionPeer[];
   itemCandidates: ItemRefCandidate[];
   items: ItemEntry[];
+  /**
+   * The asker's own bench, so `@Sian join` paints as one chip while it is
+   * being typed (the bench, phase 2). Empty everywhere but the Chat: a
+   * comment popover is a conversation about an item, not a place to bring an
+   * agent to a canvas.
+   */
+  bench?: readonly MentionCandidate[];
   placeholder?: string;
   autoFocus?: boolean;
   multiline?: boolean;
@@ -170,7 +178,7 @@ export function MentionField({
   return (
     <div className={`mention-field${multiline ? " multiline" : ""}${grow ? " grow" : ""}`}>
       <div className="mention-backdrop" ref={backdropRef} aria-hidden="true">
-        {paintText(value, candidates, itemCandidates, open ? trigger!.at : null, markerRef)}
+        {paintText(value, candidates, itemCandidates, bench, open ? trigger!.at : null, markerRef)}
         {"​" /* keeps a trailing newline's line box alive */}
       </div>
       {multiline || grow ? (
@@ -218,6 +226,13 @@ interface MenuOption {
   label: string;
   item?: boolean;
   online?: boolean;
+  /**
+   * A word on the row about what picking it would mean — today only *not here
+   * yet*, for a name that is on your bench and not on this canvas (the bench,
+   * phase 2). Without it a bench row reads as somebody who can already hear
+   * you, which is the one thing a mention menu must never say wrongly.
+   */
+  note?: string;
   /** Shown in the card beside the menu: what the command does. */
   hint?: string;
   usage?: string;
@@ -346,6 +361,7 @@ function MentionMenu({
             {option.usage ? <em className="mention-usage"> {option.usage}</em> : null}
           </span>
           {option.online && <span className="mention-live">live</span>}
+          {option.note && <span className="mention-note">{option.note}</span>}
         </button>
       ))}
     </div>
@@ -379,15 +395,18 @@ function paintText(
   value: string,
   candidates: MentionCandidate[],
   itemCandidates: ItemRefCandidate[],
+  bench: readonly MentionCandidate[],
   markAt: number | null,
   markerRef: RefObject<HTMLSpanElement>,
 ) {
   const nodes: ReactNode[] = [];
   let offset = 0;
-  for (const piece of splitChips(value, candidates, itemCandidates)) {
+  for (const piece of splitChips(value, candidates, itemCandidates, [], bench)) {
     const start = offset;
     offset += piece.text.length;
-    const props = piece.mention
+    const props = piece.join
+      ? { className: "bench-join" }
+      : piece.mention
       ? { className: "mention", style: cssVars(mentionChipStyle(piece.mention.actorId)) }
       : piece.item
         ? { className: "item-ref" }
@@ -482,7 +501,12 @@ function matchPeers(peers: MentionPeer[], query: string): MenuOption[] {
       return name.startsWith(needle) || name.split(/\s+/).some((w) => w.startsWith(needle));
     })
     .slice(0, MAX_MATCHES)
-    .map((peer) => ({ id: peer.id, label: peer.name, online: peer.online }));
+    .map((peer) => ({
+      id: peer.id,
+      label: peer.name,
+      online: peer.online,
+      ...(peer.note ? { note: peer.note } : {}),
+    }));
 }
 
 /** The commands worth offering — core decides, so the menu and

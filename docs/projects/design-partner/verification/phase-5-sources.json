@@ -1,0 +1,417 @@
+{
+  "recordedAt": "2026-09-15T10:17:36.168Z",
+  "base": "a60457aa7775fe553db7d6f5faa1494eee7e1ac6",
+  "files": [
+    {
+      "path": "index.mjs",
+      "sha256": "5fc79d0db8cb572aaa009edf1e8999dc81181db3922fe78b4c1d771d631213c0",
+      "size": 4901
+    },
+    {
+      "path": "packages/api/package.json",
+      "sha256": "7f3e64d3e056c05a75272730bf812d53b2ac64b35517a765fb31502d41274dc3",
+      "size": 865
+    },
+    {
+      "path": "packages/api/src/connect.ts",
+      "sha256": "b2ee8c6a189207613143401d299a8d90b88412599fe5b0b8f6f42c480b358631",
+      "size": 48970
+    },
+    {
+      "path": "packages/api/src/design-audit-reader.ts",
+      "sha256": "4747748d9a4dc1c495f3f3572078288f3edcaa88ed9703292414ad7a2da07a8b",
+      "size": 20379
+    },
+    {
+      "path": "packages/api/src/design-audit.ts",
+      "sha256": "618ca4760e4cfb8b9b46fb0712efd17ece893f701ca5843c61459bcc1c441c65",
+      "size": 2092
+    },
+    {
+      "path": "packages/api/src/design-repair-reader.ts",
+      "sha256": "633fa06f46fa6d9b99c7b6dd49b6cd023ebd03a4d437b32c6ba22a39cc6e1e2f",
+      "size": 14633
+    },
+    {
+      "path": "packages/api/src/design-request-reader.ts",
+      "sha256": "1b2808b33bb9f12fe00a74083df069de3c04bc96a0f3f75ed97d9708c46f2cf3",
+      "size": 29107
+    },
+    {
+      "path": "packages/api/src/design-review-contract.ts",
+      "sha256": "515c255709effd21bafc17946664079923cec4e94de54963f2ddb09af3fc84d5",
+      "size": 17202
+    },
+    {
+      "path": "packages/api/src/design-review-node.ts",
+      "sha256": "ad886fe5345886bebf3af33503cd63bd9115ac47edbc3a14e4def387dd4ccf33",
+      "size": 1957
+    },
+    {
+      "path": "packages/api/src/design-review-reader.ts",
+      "sha256": "8e7f3d12cea826268d5b52bfffa0f67620438855411583a1015db465695ad08b",
+      "size": 26337
+    },
+    {
+      "path": "packages/api/src/design-review-write.ts",
+      "sha256": "698eea941b9669ae95f3ae2dbfad56b513b151787a468a0a332437ce612851a3",
+      "size": 34562
+    },
+    {
+      "path": "packages/api/src/design-review.ts",
+      "sha256": "0dc4d8db09648518dc9c6d464fcd3e7191235af59de7ad03f5a53ad695f32082",
+      "size": 233
+    },
+    {
+      "path": "packages/api/src/design-workflow.ts",
+      "sha256": "b812d1b05777959246c49a35c50d3be38356031b5d59df5b7daca665b444a454",
+      "size": 9887
+    },
+    {
+      "path": "packages/api/src/index.ts",
+      "sha256": "3d80ee1c9abeb839b2faabb36590c49f2146146987f46662e35ae3d35bc518b3",
+      "size": 2377
+    },
+    {
+      "path": "packages/api/src/routes.ts",
+      "sha256": "72d1546d436a12138f6940dbff1b9191db5967ec47112b6c17e50783a6c152e5",
+      "size": 63531
+    },
+    {
+      "path": "packages/api/test/design-audit.test.ts",
+      "sha256": "fb76810aec2c7b88b3b1aabcbe514f8a4f3c8d35aeaa5160cb5b94fe5b11b6b7",
+      "size": 18068
+    },
+    {
+      "path": "packages/api/test/design-review-fixture.ts",
+      "sha256": "b51bac8fcfead84021c53aa48c22b7aacdcea3523f61da9221d737489ce262b2",
+      "size": 2940
+    },
+    {
+      "path": "packages/api/test/design-review-history.test.ts",
+      "sha256": "1f14513479cbf8b29e756cf4205d74184cc2342546fbd7963b17eea18305e037",
+      "size": 10175
+    },
+    {
+      "path": "packages/api/test/design-review-offer.test.ts",
+      "sha256": "ef892b61ceef39cb62a2ea7de6ec90da2943de346c1ee240e7c5a0681ca6162d",
+      "size": 14012
+    },
+    {
+      "path": "packages/api/test/design-review.test.ts",
+      "sha256": "9c6329cd8aadb3546b5c58b2592f08253f31d2abee3638c5830b8895d7e48fac",
+      "size": 12360
+    },
+    {
+      "path": "packages/cli/bin/workspace-loader.mjs",
+      "sha256": "3c43b8b96d8a93263c4750ea970ac23aebf3f4ab9da1d62a07eba66ab46ad98f",
+      "size": 4402
+    },
+    {
+      "path": "packages/cli/src/agent-guide.md",
+      "sha256": "081a6834f52e37dd89493d4baf4bfe9e1c54fedb9e6f4d648433392eb5c116b9",
+      "size": 184821
+    },
+    {
+      "path": "packages/cli/src/design-audit.ts",
+      "sha256": "abd4098ade821fb4fff1bd2686c306270c2916400122c99f91aee887d8758d6c",
+      "size": 6680
+    },
+    {
+      "path": "packages/cli/src/design-request.ts",
+      "sha256": "a0819cd6db2a23afc9e57b7a163c37a6363fb3958f7219b068a3fa8eea65b360",
+      "size": 16467
+    },
+    {
+      "path": "packages/cli/src/design-review.ts",
+      "sha256": "43b7678f6cbef703c1667bb052ca6f37a03d20c89777eaf22e9a7b6d20c6917a",
+      "size": 17523
+    },
+    {
+      "path": "packages/cli/src/main.ts",
+      "sha256": "db1f08641d9a6d7b9c4d11bedf9842c5cca8392f4bcbb6303c2d165c57721c4e",
+      "size": 702359
+    },
+    {
+      "path": "packages/cli/test/design-audit.test.ts",
+      "sha256": "1427355d2c51472f989e51253cc4bdd6b69a0a499df2e64326be9b15f0df11fe",
+      "size": 4313
+    },
+    {
+      "path": "packages/cli/test/design-review.test.ts",
+      "sha256": "db1cb3e486a099207edf507a15e7d1a813d09dcefccedb4497d8d870154a27c7",
+      "size": 6941
+    },
+    {
+      "path": "packages/core/package.json",
+      "sha256": "90310535bde5e202098ef1b59bdfc9271a0d9b95474fa2d92aa200e0059e2c43",
+      "size": 1142
+    },
+    {
+      "path": "packages/core/src/design-decision-parse.ts",
+      "sha256": "03c4a402766f425e01ccee8a1e104f1b522269b171077987cc02fe01d60c2f20",
+      "size": 11303
+    },
+    {
+      "path": "packages/core/src/design-decision-state.ts",
+      "sha256": "07ddbefaea676a72127b12435ff7b34c3ac6ded77488280440224247332fba6e",
+      "size": 11887
+    },
+    {
+      "path": "packages/core/src/design-decision.ts",
+      "sha256": "04520044a9b108812d94bdd79d044b8b2f002ac7ad718fb2fd86ee3707f0edaf",
+      "size": 9526
+    },
+    {
+      "path": "packages/core/src/design-repair-parse.ts",
+      "sha256": "3ae92e1bd6d33c5176ef0ca5a176a384500835b990fa78ab442f4459b16b4dc1",
+      "size": 3547
+    },
+    {
+      "path": "packages/core/src/design-repair-state.ts",
+      "sha256": "9cf578a6d92f6c09cc3814b866f0841f1a074bbc82500bdf42b5fb12c187667d",
+      "size": 3690
+    },
+    {
+      "path": "packages/core/src/design-repair.ts",
+      "sha256": "523be57e67f082bbd419a4651548804a29fd7473612bebe0cc133432556fed43",
+      "size": 2227
+    },
+    {
+      "path": "packages/core/src/design-request.ts",
+      "sha256": "9728749fe257f1e51d7ce72eac7151c37ee240d90ec23819853f6cbe59ca0320",
+      "size": 5927
+    },
+    {
+      "path": "packages/core/src/invert.ts",
+      "sha256": "9ac623cb37cee4d1427f311dc164a7ddf0443342140298d433cabe963880215f",
+      "size": 11996
+    },
+    {
+      "path": "packages/core/src/ops.ts",
+      "sha256": "1e2cf80afe101695481f6539d1f2c1e3ce74ab33ac70937e06051079f1b77f1e",
+      "size": 23622
+    },
+    {
+      "path": "packages/core/src/opwords.ts",
+      "sha256": "5d750a48b474f6ba9928cbe26af7d7b3f689d00926792af82c5b39e46cc8b802",
+      "size": 4540
+    },
+    {
+      "path": "packages/core/src/protocol.ts",
+      "sha256": "7d029843dc84e63e95555bdcc61c924d94f431b5e1333affb3e018a673c84b44",
+      "size": 80678
+    },
+    {
+      "path": "packages/core/src/reducer.ts",
+      "sha256": "574c80f45c7053b7738c3c04dea3eb3315e85f1388725f1a2013fe12e2cec5ad",
+      "size": 37345
+    },
+    {
+      "path": "packages/core/src/touches.ts",
+      "sha256": "c98ab93254d92b8bb31aa0e20174cdeeacfb09b2002a3d61c29f44c513685d73",
+      "size": 5867
+    },
+    {
+      "path": "packages/server/src/design-decision.ts",
+      "sha256": "9db67a0738077ed3d20dce590e7bee66da8abf332a6361983d07b248fbbf73c4",
+      "size": 22407
+    },
+    {
+      "path": "packages/server/src/design-repair-capability.ts",
+      "sha256": "9067d0285ed98ce837321575a7b6135c34274c466ff8b30198d3477cccc568bb",
+      "size": 782
+    },
+    {
+      "path": "packages/server/src/design-repair.ts",
+      "sha256": "0e6023395496dcd2208902fb062c454b9483062bd4bd49905cf37657c832f2ad",
+      "size": 7922
+    },
+    {
+      "path": "packages/server/src/design-request.ts",
+      "sha256": "dbb96fbbe6a694951e3b8b2202ab01e7dba70c463eab2e48cd26f8cc8145cc82",
+      "size": 38669
+    },
+    {
+      "path": "packages/server/src/engine.ts",
+      "sha256": "0f548f7c79856cb5444d0b20e546540f4a899648842959416889c0b5295f9a40",
+      "size": 158632
+    },
+    {
+      "path": "packages/server/src/http.ts",
+      "sha256": "fd7ff7580c5c190d3f45a7ae830e2746aac83c68f3fee84d188aa0460a82f48a",
+      "size": 356281
+    },
+    {
+      "path": "packages/server/src/questionnaire-capability.ts",
+      "sha256": "827d94d9f392261f26c4053da03c711864775ee23e1c162f92febe3fa82d1138",
+      "size": 1896
+    },
+    {
+      "path": "packages/server/src/questionnaire.ts",
+      "sha256": "4acaf6fadc31b807073791c988c3512afc41527f2e15289415db412ef56c2cea",
+      "size": 16637
+    },
+    {
+      "path": "packages/server/src/undo.ts",
+      "sha256": "cd01e28334be4b38e244e70273dac9ebf48ea4809962317453cc97fd7d30770c",
+      "size": 9297
+    },
+    {
+      "path": "packages/server/src/ws.ts",
+      "sha256": "ca4d5a6251147368c3b9ed7dd7e85b3754e255f131dd54a8657d84c2bca741c5",
+      "size": 47389
+    },
+    {
+      "path": "packages/server/test/design-repair.test.ts",
+      "sha256": "013d94c02ae91fd0f10dcb84c006e37ef0023c31ac7521556a057bd00163b8f9",
+      "size": 32396
+    },
+    {
+      "path": "packages/server/test/questionnaire.test.ts",
+      "sha256": "6d0aa8ecf1251a2ee5c2f0e2cabbf7013c210ef19cbce4a6c0885376ba67d2b7",
+      "size": 35572
+    },
+    {
+      "path": "packages/server/test/undo-stacks.test.ts",
+      "sha256": "334de12831fec61e274d5a62254206c48dbdb0d7ae4f2da7a327ad428b4cdcc7",
+      "size": 9684
+    },
+    {
+      "path": "packages/web/src/components/DesignLintPanel.tsx",
+      "sha256": "8e5edde7e94a33db7b0600c458f8b3a37b243aa828f9263d1fe36c090964fec3",
+      "size": 14737
+    },
+    {
+      "path": "packages/web/src/components/DesignRecordFace.tsx",
+      "sha256": "01dc786f2c274fa0cef4e2d442515293fcf423ebfee4ef5484885e34da1ec066",
+      "size": 4858
+    },
+    {
+      "path": "packages/web/src/components/DesignReviewButton.tsx",
+      "sha256": "d9b5bfd8dd667cc5285f89bfa60bdc42f65dfc39833c8402fcb5e072695a80dd",
+      "size": 2086
+    },
+    {
+      "path": "packages/web/src/components/DesignReviewHandoff.tsx",
+      "sha256": "51edfa338e70bcfee0920de6a61dfb94158ba3e980e31fd6202a8001185566ee",
+      "size": 6453
+    },
+    {
+      "path": "packages/web/src/components/DesignReviewPanel.tsx",
+      "sha256": "b07c837cf44b2d3adb96dc630e51f3c6ce67e95769a6c0c240a5641db81f5726",
+      "size": 12732
+    },
+    {
+      "path": "packages/web/src/components/DesignTaskCard.tsx",
+      "sha256": "0e79d0c18645cc98eee5cf9f216a2f6aa35ab2e5dee54c941fe8858d9c2e4fb6",
+      "size": 15257
+    },
+    {
+      "path": "packages/web/src/components/DesignTaskReceipt.tsx",
+      "sha256": "ae5920ae3d5e85a46b9be0ed3f13c76589c449630401838231b36615c7284364",
+      "size": 12672
+    },
+    {
+      "path": "packages/web/src/components/StageEditor.tsx",
+      "sha256": "d65ef591424870de07e638028a82a6120592b7eb51fa1aba56d8fa32aa594845",
+      "size": 17781
+    },
+    {
+      "path": "packages/web/src/components/design-review.css",
+      "sha256": "571036bd67458499d51b2b57da53645d4004681e5156408c73837de52382c524",
+      "size": 2867
+    },
+    {
+      "path": "packages/web/src/lib/api.ts",
+      "sha256": "95b06513dfa9caed44a20da343be49b2f631fc5f9210a10116d88abcf42330b5",
+      "size": 59023
+    },
+    {
+      "path": "packages/web/src/lib/design-audit.ts",
+      "sha256": "b43580d534845511ccd65631db000fc094bae144346c9a02602e9fdbc01ea082",
+      "size": 4032
+    },
+    {
+      "path": "packages/web/src/lib/design-repair-draft.ts",
+      "sha256": "9a7fce7fdd237156b08de47a1cb7effd769a199a786609097f6f0d7fdc4e93f3",
+      "size": 4544
+    },
+    {
+      "path": "packages/web/src/lib/design-review-draft.ts",
+      "sha256": "9b645f3e1be48b58faf0bd3d5b34c183a69d55ed42919472fae584f73fe023ab",
+      "size": 2823
+    },
+    {
+      "path": "packages/web/src/lib/design-review.ts",
+      "sha256": "4bfe97faba1c595d118283bae78a666d79bed9999b67f727b5bd22735abb35e7",
+      "size": 2262
+    },
+    {
+      "path": "packages/web/test/design-repair.test.ts",
+      "sha256": "6a8c7fd8ca2bdfa3b815e564b71dabfb9bbb59954efc5f4a62423c6aac4fa0c1",
+      "size": 7045
+    },
+    {
+      "path": "packages/web/test/design-review-draft.test.ts",
+      "sha256": "de8ff3c06b39dbc206c8d25e92fc46680204b415b6191f105b7aaca3ab1ad38a",
+      "size": 2959
+    },
+    {
+      "path": "scripts/journey-design-review.mjs",
+      "sha256": "cd3e3e2d2d4394ef86fbd23be527210e368b91a14d145b3f638d46b14d05d531",
+      "size": 20029
+    },
+    {
+      "path": "scripts/lib/design-lint-eval-runner.mjs",
+      "sha256": "5b0b84b7781ec638e09f0bdca82131a39455146caa50ca4009a5e89e8380e101",
+      "size": 41471
+    },
+    {
+      "path": "scripts/lib/design-review-browser.mjs",
+      "sha256": "54dd2437c0a6689a7879384d7f13c95996f3ed2b09bcf4e3dc55406c1a0c39c8",
+      "size": 9172
+    },
+    {
+      "path": "scripts/lib/design-review-intake.mjs",
+      "sha256": "45bc37d00e89acd4130fd322bde487f40ab9fd75c93806ee35fee3f48896b88a",
+      "size": 8927
+    },
+    {
+      "path": "scripts/lib/design-review-negatives.mjs",
+      "sha256": "544c6543d9bf10a76ea85d2cba91f4c271a28ee1bdf7eb4dbd2758cf3a728df2",
+      "size": 14192
+    },
+    {
+      "path": "scripts/lib/design-review-recovery.mjs",
+      "sha256": "6e88b958b348d5697c959a97d3e61cdac26c63a8c69bf61a8ba75efa715074d3",
+      "size": 6269
+    },
+    {
+      "path": "scripts/lib/design-review-scenario.mjs",
+      "sha256": "4e9f153cbc0e9264244f66fbb8e56647db9aa4e16217729f791dca1c7280be13",
+      "size": 13161
+    },
+    {
+      "path": "test/deep.ts",
+      "sha256": "e98f46a11651f7b16391eeae13820916f57da6e145e09720561ced4413418c95",
+      "size": 16894
+    },
+    {
+      "path": "test/design-lint-eval.test.ts",
+      "sha256": "00964568634a706b4ae31623d8081244e033b32f7a6472b82da9b1ea21b7e18c",
+      "size": 21856
+    },
+    {
+      "path": "test/isomorphism.test.ts",
+      "sha256": "166d1545e7251bcab0928b0cb5e1f3dadcff818ff50a7677e60b035ed49d8566",
+      "size": 10893
+    }
+  ],
+  "entry": {
+    "path": "packages/web/dist/assets/index-BWh8ApdD.js",
+    "sha256": "5c909d5b0a013aaf7d436e95f0a6e90d9747cb7da9406a27dc177727c63550f6",
+    "size": 742261
+  },
+  "entryCeiling": 743900
+}

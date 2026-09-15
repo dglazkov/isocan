@@ -296,6 +296,19 @@ export interface EnrolledAgent {
    * on the machine that answers.
    */
   writtenBy?: Actor;
+  /**
+   * **Which bench vouched for this agent** — the canvas id an `agent.invite`
+   * carried (the bench, journey 2). Absent on every row written by
+   * `agent.enroll`, which is most of them: an enrolment made from the machine
+   * that answers has no bench behind it to name.
+   *
+   * It is provenance and nothing more. Nothing reads it to decide anything —
+   * no reach, no gate, no right to summon — because a bench row confers
+   * nothing, and a field that started deciding would be the fence
+   * `agent-custody` built coming down quietly. It is here so the record can
+   * say where an invitation came from when somebody asks.
+   */
+  invitedFrom?: string;
 }
 
 export interface CanvasContents {

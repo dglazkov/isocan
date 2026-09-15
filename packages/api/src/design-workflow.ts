@@ -69,6 +69,9 @@ either entrance. Choosing a connected-app prototype does not implement its
 repository runtime; use its actual components in the subsequent build.
 
 5. Build one complete task slice.
+Optional: design craft <request> --stage new-work|critique|finish reads attributed
+adapted Impeccable guidance around this same saved context. It opens no interview,
+runs no native playbook and adds no repair allowance; the core procedure remains authoritative.
 Preserve an existing system, or record a
 provisional direction for hierarchy, layout, density, typography, palette purpose
 and interaction treatment in the scoped DESIGN.md. Use design direction to
@@ -86,12 +89,24 @@ run its HTML/CSS/JS. A connected app must use its actual repository, framework,
 components and working runtime; a decorative mock is not that delivery.
 
 6. Try it, repair it, and describe the evidence.
+Read design review <request> --json, then start one shared run with --start.
+Derive its task/state/viewport obligations from this existing brief; do not ask
+the person to configure tools or repeat discovery. Keep the exact run ref before
+using actual native tools. Record their actions, expected/observed results,
+tool versions and retrievable evidence with --record; this shared step runs the
+source analyzer. A returned plan or opened URL is not an executed inspection.
 Run source diagnostics with design audit where applicable, keeping its coverage
 separate from browser behavior and craft judgment. Open the actual output in an
 available supported browser and exercise the primary task, relevant states and
 agreed widths. A loaded iframe or screenshot alone does not prove saving or
-keyboard behavior. Start with one review and at most two repair passes within
-the task's budget. For a working system, design project <folder> captures
+keyboard behavior. Reserve --begin-repair before generating each correction,
+then design repair <item> <file> --request <request> --review <run>. Initial
+inspection is reserved once and at most two attempts are allowed; invalid and
+no-op output consume attempts too. Rechecks belong to that pass. Read shared
+history when another entrance resumes; local journal absence, Undo and a new
+epoch do not reset consumed work. Missing history means budget unavailable.
+Audit-only runs reserve no repairs. Ordinary edits never start model turns.
+For a working system, design project <folder> captures
 DESIGN.md and DESIGN.projection.json with the original authority, version,
 metadata and bytes. Edit DESIGN.md, then design reconcile <folder> conditionally
 saves that same source. Retain DESIGN.intent.json after pending delivery; retry
@@ -101,15 +116,24 @@ new base without replacing the working file. A content save may be accepted
 while its later consistency read is stale or unavailable; report both honestly.
 Use version-conditional edits; re-read after a stale refusal.
 Recheck affected behavior. No browser means an unverified draft, with named limits.
+An actual native verifier can publish --offer-verifier after probing its tools;
+the offer names exact run/output, live actor/session and versions, and expires
+within five minutes. --handoff uses only a current reachable offer and existing
+wake authorization. Requested means requested until actual observations arrive.
 Do not provision paid services or extra agents merely to obtain verification.
 
 7. Finish with a version-linked receipt.
-Complete the brief with its real output, then publish a separate design receipt
+Use design review <request> --run <run> --finish: finish the shared report,
+conditionally complete the brief, then publish a separate design receipt
 bound to that exact completed version. Identify the canvas output or repository
 revision/build/runtime, governing inputs, tools, viewports, checked states,
 retrievable evidence and unresolved limits. Browser checks are attributed reports,
 not daemon attestations. Ready applies only to the agreed scope with the required
 task checks and no known critical defects. Read currentness before reusing proof:
+Static coverage limits remain unsupported; actual source findings fail. A ready
+review may retain named bounded static limits only with all required observed
+task and craft obligations passed, readable current inputs and no critical
+defects. An unavailable source or browser is not a passing check.
 changed outputs, requirements or governing inputs make affected evidence stale;
 unrelated chat does not. Keep pending intents and their original retry IDs.
 

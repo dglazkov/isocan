@@ -12,7 +12,10 @@
     "./routes": "./src/routes.ts",
     "./design-system": "./src/design-system-reader.ts",
     "./design-recipes": "./src/design-recipes.ts",
-    "./design-decision": "./src/design-decision-reader.ts"
+    "./design-decision": "./src/design-decision-reader.ts",
+    "./design-review": "./src/design-review.ts",
+    "./design-repair": "./src/design-repair-reader.ts",
+    "./design-craft": "./src/design-craft-reader.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

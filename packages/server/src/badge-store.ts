@@ -1,6 +1,8 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, type Stats } from "node:fs";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import type { Actor, BadgeStore, StoredBadge } from "@isocan/core";
-import { askTheDoor, normalizeHomeUrl } from "@isocan/core";
+import { askTheDoor, newActorId, normalizeHomeUrl } from "@isocan/core";
 import { writeFileAtomic } from "./fsutil.ts";
 import { identityFile } from "./paths.ts";
 
@@ -55,13 +57,72 @@ export async function readBadge(home: string, base: string): Promise<StoredBadge
   }
 }
 
-/**
- * One process owns setup's credential writes (#284). Replica setup asks its
- * daemon to adopt the pass-returned actor; direct setup writes here in the
- * same process as its badge client. Both share this read/modify/write queue.
- * This is not a cross-process lock for unrelated identity rename commands.
- */
+/** Keep local callers ordered as well as serializing other processes. The lock
+ * covers only the physical home's read/choice/atomic replacement, never a door
+ * request. An abandoned lock requires explicit inspection, not PID guessing. */
 let identityWrites: Promise<unknown> = Promise.resolve();
+
+function hasCode(error: unknown, code: string): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === code;
+}
+
+function sameFile(a: Stats, b: Stats): boolean {
+  return a.dev === b.dev && a.ino === b.ino;
+}
+
+async function identityLock(home: string): Promise<() => Promise<void>> {
+  const directory = path.join(home, ".identity-write.lock");
+  const ownerFile = path.join(directory, "owner.json");
+  const owner = JSON.stringify({ pid: process.pid, nonce: randomUUID() });
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    try {
+      await fs.mkdir(directory, { mode: 0o700 });
+      break;
+    } catch (error) {
+      if (!hasCode(error, "EEXIST")) throw error;
+      if (Date.now() >= deadline) {
+        throw new Error(`Identity write is locked at ${directory}. Inspect the owner and recover an abandoned lock explicitly; it was not removed.`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  const claimed = await fs.lstat(directory);
+  let ownedFile: Stats | undefined;
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
+  try {
+    handle = await fs.open(ownerFile, "wx", 0o600);
+    ownedFile = await handle.stat();
+    await handle.writeFile(owner);
+    await handle.close();
+    handle = undefined;
+  } catch (error) {
+    await handle?.close().catch(() => {});
+    // Only our newly claimed directory and, if created, our own partial file.
+    // A replacement/foreign record is never recursively removed.
+    if (sameFile(claimed, await fs.lstat(directory))) {
+      if (ownedFile && sameFile(ownedFile, await fs.lstat(ownerFile))) await fs.unlink(ownerFile);
+      await fs.rmdir(directory);
+    }
+    throw error;
+  }
+  return async () => {
+    if (!sameFile(claimed, await fs.lstat(directory)) || await fs.readFile(ownerFile, "utf8") !== owner) {
+      throw new Error(`Identity lock ownership changed at ${directory}; the lock was not removed.`);
+    }
+    await fs.unlink(ownerFile);
+    await fs.rmdir(directory);
+  };
+}
+
+function identityObject(value: unknown, file: string): Record<string, unknown> {
+  const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (!object(value) || ["id", "name", "createdAt"].some((key) => value[key] !== undefined && typeof value[key] !== "string") ||
+      (value.auth !== undefined && !object(value.auth))) {
+    throw new Error(`Unsupported identity data at ${file}; the existing file was not replaced.`);
+  }
+  return value;
+}
 
 async function updateIdentity<T>(
   home: string,
@@ -69,22 +130,43 @@ async function updateIdentity<T>(
 ): Promise<T> {
   const work = identityWrites.then(async () => {
     await fs.mkdir(home, { recursive: true });
-    const file = identityFile(home);
-    let current: Record<string, unknown> = {};
+    const physicalHome = await fs.realpath(home);
+    const release = await identityLock(physicalHome);
     try {
-      current = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
-    } catch {
-      // A fresh machine may have a badge before it has a person.
+      const file = identityFile(physicalHome);
+      let current: Record<string, unknown> = {};
+      try {
+        current = identityObject(JSON.parse(await fs.readFile(file, "utf8")), file);
+      } catch (error) {
+        // A fresh machine may have a badge before it has a person. No other
+        // read/parse failure grants permission to replace existing data.
+        if (!hasCode(error, "ENOENT")) throw error;
+      }
+      const { next, result } = update(current);
+      if (next) {
+        const mode = await fs.stat(file).then((stat) => stat.mode & 0o777).catch((error: unknown) => {
+          if (!hasCode(error, "ENOENT")) throw error;
+          return 0o600;
+        });
+        await writeFileAtomic(file, JSON.stringify(next, null, 2), mode);
+      }
+      return result;
+    } finally {
+      await release();
     }
-    const { next, result } = update(current);
-    if (next) {
-      const mode = await fs.stat(file).then((stat) => stat.mode & 0o777).catch(() => 0o600);
-      await writeFileAtomic(file, JSON.stringify(next, null, 2), mode);
-    }
-    return result;
   });
   identityWrites = work.catch(() => {});
   return work;
+}
+
+/** Rename the home person, or explicitly choose a fresh ID, inside the same
+ * transaction as credentials and pass adoption. Unknown fields remain intact. */
+export async function writeIdentityName(home: string, name: string, fresh = false): Promise<Actor> {
+  return updateIdentity(home, (current) => {
+    const id = !fresh && current.id && current.name ? current.id as string : newActorId();
+    const actor = { id, name };
+    return { next: { ...current, ...actor, createdAt: new Date().toISOString() }, result: actor };
+  });
 }
 
 /** Merge a credential without dropping the person, other badges or private fields. */

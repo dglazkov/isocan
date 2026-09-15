@@ -21,6 +21,7 @@ import type {
   HomesResponse,
   NewsResponse,
   PresenceWhereResponse,
+  PresenceSession,
   ActorKinds,
   DocExportResponse,
   KillBadgeResponse,
@@ -641,8 +642,8 @@ export function fetchNews(): Promise<NewsResponse> {
  * argument and downgrades every standing row to `enrolled` without them;
  * `parked` is the add-agent gate. See `useAnswerable`.
  */
-export function fetchRcAnswering(canvasId: string): Promise<RcAnsweringResponse> {
-  return request("GET", rcAnsweringRoute(canvasId));
+export function fetchRcAnswering(canvasId: string, signal?: AbortSignal): Promise<RcAnsweringResponse> {
+  return request("GET", rcAnsweringRoute(canvasId), undefined, signal);
 }
 
 /**
@@ -686,11 +687,13 @@ export function getOplog(canvasId: string, since = 0, signal?: AbortSignal): Pro
  * so this answers `[]` rather than throwing, and the caller can fold either
  * way without a branch.
  */
-export function getArchivedOplog(canvasId: string): Promise<LogEntry[]> {
-  return request<LogEntry[]>(
+export function getArchivedOplog(canvasId: string, options: { strict?: boolean; signal?: AbortSignal } = {}): Promise<LogEntry[]> {
+  const reading = request<LogEntry[]>(
     "GET",
     `/api/projects/${encodeURIComponent(canvasId)}/oplog/archive`,
-  ).catch(() => []);
+    undefined, options.signal,
+  );
+  return options.strict ? reading : reading.catch(() => []);
 }
 
 /**
@@ -1406,4 +1409,9 @@ export async function checkFrameable(
 /** One authoritative read, including remote homes; polling never writes marks. */
 export function fetchInbox(actorId: string, signal?: AbortSignal): Promise<InboxResponse> {
   return request("GET", inboxRoute(actorId), undefined, signal);
+}
+
+/** Actual current sessions establish offer liveness; stored enrollment never substitutes for this read. */
+export function getCurrentSessions(canvasId: string, signal?: AbortSignal): Promise<PresenceSession[]> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/sessions`, undefined, signal);
 }

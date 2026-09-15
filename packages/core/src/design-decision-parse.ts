@@ -34,11 +34,15 @@ export function parseDesignComparisonResponse(value: unknown): DesignComparisonR
   else outcome = { kind };
   return { ...base(v), kind: "comparison-response", id: text(v.id), comparison: source(v.comparison), authority, outcome, supersedesResponseId: nullableText(v.supersedesResponseId) };
 }
+/** Full target captures are shared by approval and repair without fabricating another semantic record. */
+export function parseDesignTarget(value: unknown): DesignApprovalBasis["target"] {
+  const t = object(value, ["artifact", "title", "description", "properties", "scope"]), s = object(t.scope, ["containerId", "scopeIds"]), p = object(t.properties);
+  return { artifact: parseDesignArtifactRef(t.artifact), title: optionalWords(t.title), description: optionalWords(t.description), properties: Object.fromEntries(Object.entries(p).map(([key, value]) => [text(key), optionalWords(value)])), scope: { containerId: nullableText(s.containerId), scopeIds: unique(list(s.scopeIds, text, 128), (id) => id) } };
+}
 /** Validates a persisted approval draft without fabricating a complete decision intent. */
 export function parseDesignApprovalBasis(value: unknown): DesignApprovalBasis {
-  const v = object(value, ["brief", "epoch", "alternatives", "target", "governing"]), t = object(v.target, ["artifact", "title", "description", "properties", "scope"]), s = object(t.scope, ["containerId", "scopeIds"]), p = object(t.properties);
-  const properties = Object.fromEntries(Object.entries(p).map(([key, value]) => [text(key), optionalWords(value)]));
-  return { brief: parseDesignArtifactRef(v.brief), epoch: integer(v.epoch, 1), alternatives: list(v.alternatives, parseDesignArtifactRef, 3), target: { artifact: parseDesignArtifactRef(t.artifact), title: optionalWords(t.title), description: optionalWords(t.description), properties, scope: { containerId: nullableText(s.containerId), scopeIds: unique(list(s.scopeIds, text, 128), (id) => id) } }, governing: parseDesignGoverning(v.governing) };
+  const v = object(value, ["brief", "epoch", "alternatives", "target", "governing"]);
+  return { brief: parseDesignArtifactRef(v.brief), epoch: integer(v.epoch, 1), alternatives: list(v.alternatives, parseDesignArtifactRef, 3), target: parseDesignTarget(v.target), governing: parseDesignGoverning(v.governing) };
 }
 /** Human words remain nullable; every agent authority branch requires its own explicit rationale. */
 export function parseDesignDecisionInput(value: unknown): DesignDecisionInput {

@@ -239,6 +239,20 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Corrections preserve history, and later agents can read the accepted rationale.
   Drafts keep the version you reviewed; pending choices remain recoverable after
   refresh or source removal. The CLI uses the same compare/respond/decide acts.
+- **Review that tries the task**: a shared review keeps source findings, actual
+  task checks and craft observations separate. Agents can inspect, reserve up to
+  two repairs, recheck the changed output and finish through `design review`.
+  Each repair preserves the reviewed context and has one conditional Undo;
+  concurrent edits are refused with the draft intact. The canvas shows exact
+  evidence, remaining limits and an available verifier. Requesting a verifier
+  does not claim inspection; missing checks stay an unverified draft. Repair
+  history and its budget survive refresh, entrance switches and Undo.
+- **Optional craft guidance with the same brief**: open stage-specific guidance
+  adapted from Impeccable while keeping your answers, incumbent system and
+  chosen direction. Agents can export the same exact context into a new working
+  folder and check it later without replacing authored edits. Human choices stay
+  distinct from recommendations. Applying guidance uses the existing review and
+  repair allowance; opening it does not claim a review or native skill execution.
 - **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
   canvases you were on lately, most recent first, then the rest by activity,
   with a field that finds one from a few letters (`lkh` reaches "Lake House";
@@ -629,6 +643,25 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   agent from what this machine already knows and `isocan bench rm <name>` takes
   it off — and a row confers nothing either way: it does not enrol an agent,
   and removing it withdraws nothing.
+- **Bringing an agent along**: the agents panel lists your bench above *Add an
+  agent…*, each row with **Join**, and `isocan bench join <name>` is the same
+  act from a terminal. It enrols an agent you already have on *this* canvas —
+  with no `isocan rc` parked there, because naming an agent whose actor exists
+  is not the same act as introducing a stranger, and bringing one to its fifth
+  canvas should not be as hard as bringing it to its first. Joining grants
+  standing here and nothing else: it starts no turn, widens nobody's right to
+  summon, and touches no other canvas. Each row says whether anything could
+  answer *before* you click, in the same three words the bench uses.
+- **Asking in the Chat**: type `@Name join` on a line of its own and the agent
+  joins — the same act, said where you were already talking. Your bench is in
+  the `@` menu as well as the canvas's own people, marked *not here yet* so a
+  name never reads as somebody who can already hear you, and the line becomes
+  a chip as you write it. When it lands the thread gets one line saying so,
+  because the canvas is the only channel. A name that is not on **your** bench
+  is refused with *"Name is not on your bench"* — never "unknown name", and
+  never a different answer for a name that happens to exist on somebody
+  else's bench, because a bench is a private canvas and a refusal that varied
+  would be a way to read it one name at a time.
 - **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
   can be told what to care about — `--item <ref>` and `--op item.addVersion`
   (or a family, `item.*`) narrow which changes wake it, so a watcher does not
@@ -755,11 +788,15 @@ isocan pass [--admit-only]         # a one-use pass: the command another
 isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
                                    # what each has proved; end one
 isocan bench [add <name> [--actor <id>] [--harness <n>] [--runs-at <label>]]
-             [rm <name>]           # the agents you have, and whether anything
+             [join <name>] [rm <name>]
+                                   # the agents you have, and whether anything
                                    # could answer for one right now: ready /
                                    # elsewhere / unreachable. A row is a
                                    # record — it enrols nobody, and removing
-                                   # it withdraws nobody.
+                                   # it withdraws nobody. `join` brings one to
+                                   # THIS canvas and nothing else: no rc need
+                                   # be parked, no turn starts, no other
+                                   # canvas changes.
 isocan canvas create|list [--all]|show|edit|delete
 isocan use <canvas> [--home]      # bind this dir to a canvas (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
@@ -791,6 +828,18 @@ isocan design reconcile ./design-work --json
 #   working DESIGN.md and source manifest retain the original conditional base;
 #   uncertain saves retain their exact intent; accepted content and current context differ
 isocan design workflow [request] --json  # shared procedure, policy and resumable tasks
+isocan design review <request> [--run <run>] --json
+isocan design review <request> --start review-start.json --json
+isocan design review <request> --run <run> --record observations.json --json
+isocan design review <request> --run <run> --begin-repair repair_1 --session <session>
+isocan design review <request> --run <run> --finish --json
+#   Source, Task and Craft retain exact evidence; up to two reserved repairs;
+#   --retry reuses the saved intent; an available verifier can offer and accept handoff
+isocan design craft <request> --stage new-work|critique|finish --json
+isocan design craft <request> --stage finish --out ./craft-work --json
+isocan design craft <request> --check ./craft-work --json
+#   optional adapted guidance; exact context, original bases and attributed sources;
+#   --package <skill-directory> checks pinned source files without executing them
 isocan design start request.json --json
 isocan design brief <request> --json
 isocan design brief --update correction.json --json
@@ -814,7 +863,9 @@ isocan design audit [--item <item>|--in <group>] [--json] [--fail]
 isocan design audit --file screen.html --design DESIGN.md
 isocan design repair <item> repaired.html --from-audit audit.json
 #   capture audit.json with design audit --item <item> --json; repair checks
-#   the captured versions, preserves concurrent edits and reports fresh evidence
+#   captured content, metadata and governing context; --retry reuses the saved intent
+isocan design repair <item> repaired.html --request <request> --review <run> --json
+#   reserve the run's pass first; recheck the resulting version before finishing
 #   policy edits use the governing DESIGN.md's ordinary editor/design set and Undo;
 #   native DESIGN.md and --tokens preserve contracts, --css carries token values only
 isocan command list|show|add|rm        # slash commands: work a message can ask for

@@ -103,6 +103,112 @@ describe("agent.enroll / agent.withdraw", () => {
   });
 });
 
+/**
+ * **`agent.invite`: standing here, and not one thing more** (the bench, phase
+ * 1 — journey 2).
+ *
+ * The project's third rule is the one this block exists for: *a bench row
+ * confers nothing.* Joining is the act of naming an agent you already own on
+ * a canvas it has never worked on, so the only thing it may add is the row —
+ * and every way it could quietly add more is a case below, because "confers
+ * nothing" is the rule most likely to erode and the erosion is invisible
+ * until somebody's agent answers a stranger.
+ */
+describe("agent.invite", () => {
+  const percy: Actor = { id: "usr_percy", name: "Percy" };
+
+  it("enrols, and records which bench vouched", () => {
+    const s = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(s.canvas.agents).toEqual({
+      usr_percy: { actor: percy, writtenBy: alice, invitedFrom: "prj_bench" },
+    });
+  });
+
+  it("no rules are written, so nobody new may summon", () => {
+    // A fresh row carries no `rules` at all, which the rc reads as
+    // owner-only. An invite has no gesture that could say otherwise.
+    const s = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(s.canvas.agents!["usr_percy"]).not.toHaveProperty("rules");
+  });
+
+  it("joining an agent that already stands here leaves its listen grant alone", () => {
+    // The erosion this forbids: Percy answers everyone here because somebody
+    // deliberately opened him, and a second Join — a stray click, another
+    // person's — quietly narrows him back. Or the reverse, which is worse.
+    let s = apply(seedState(), {
+      type: "agent.enroll",
+      agent: percy,
+      rules: { listen: [LISTEN_ANYONE] },
+    }, bob)!;
+    s = apply(s, { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(s.canvas.agents!["usr_percy"]!.rules).toEqual({ listen: [LISTEN_ANYONE] });
+    // And whose word the rc honours does not move either: re-stamping
+    // `writtenBy` would hand the inviter authorship of a gate Bob wrote,
+    // which is the widening above by another door.
+    expect(s.canvas.agents!["usr_percy"]!.writtenBy).toEqual(bob);
+    expect(s.canvas.agents!["usr_percy"]!.invitedFrom).toBe("prj_bench");
+  });
+
+  it("cannot rename an agent the canvas already knows", () => {
+    let s = apply(seedState(), { type: "agent.enroll", agent: percy })!;
+    s = apply(s, {
+      type: "agent.invite",
+      agent: { id: percy.id, name: "Percy the Second" },
+      from: "prj_bench",
+    })!;
+    expect(s.canvas.agents!["usr_percy"]!.actor).toEqual(percy);
+  });
+
+  it("starts no turn and moves nothing else on the canvas", () => {
+    const before = seedState();
+    const after = apply(before, { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(after.canvas.items).toEqual(before.canvas.items);
+    // A turn is a comment somebody can read; an enrolment that wrote one
+    // would be a summons nobody made.
+    expect(after.canvas.threads).toEqual(before.canvas.threads);
+    expect(after.canvas.trash).toEqual(before.canvas.trash);
+  });
+
+  it("touches no other canvas's rules", () => {
+    // Two canvases, one agent, opened wide on the first. The reducer is pure
+    // and per-canvas, so the only way this could fail is somebody reaching
+    // for shared state — which is exactly the day it would need catching.
+    const elsewhere = apply(seedState(), {
+      type: "agent.enroll",
+      agent: percy,
+      rules: { listen: [LISTEN_ANYONE] },
+    })!;
+    const here = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(elsewhere.canvas.agents!["usr_percy"]!.rules).toEqual({
+      listen: [LISTEN_ANYONE],
+    });
+    expect(here.canvas.agents!["usr_percy"]).not.toHaveProperty("rules");
+  });
+
+  it("is not undoable — a join is not taken back by a casual ⌘Z", () => {
+    expect(
+      invertOperation(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" }),
+    ).toBeNull();
+  });
+
+  it("makes the agent mentionable and puts it in the roster, with no parked anything", () => {
+    // The phase's whole point: no rc, no session, no handshake — and `@Percy`
+    // resolves, which is what makes a summons possible at all.
+    const s = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(extractMentions("@Percy could you look?", collectCanvasNames(s.canvas))).toEqual([
+      percy.id,
+    ]);
+    const row = roster([], s.canvas, Date.now()).find((one) => one.actorId === percy.id);
+    expect(row?.name).toBe("Percy");
+  });
+
+  it("withdrawal takes an invited agent back out, provenance and all", () => {
+    let s = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    s = apply(s, { type: "agent.withdraw", actorId: percy.id })!;
+    expect(s.canvas.agents).toEqual({});
+  });
+});
+
 describe("an enrolled agent is mentionable before it ever speaks", () => {
   it("@Sian resolves with no comment, item or session by Sian anywhere", () => {
     const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;

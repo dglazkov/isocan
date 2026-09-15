@@ -6,6 +6,7 @@ import { parseDesignArtifactRef } from "./design-partner.ts";
 import { object, text, hash } from "./design-partner-values.ts";
 import { OpValidationError } from "./errors.ts";
 import { validateDesignRetainedReferences } from "./design-retention.ts";
+import type { DesignRepairTransition } from "./design-repair-state.ts";
 import { canvasScopes } from "./canvas-scope.ts";
 
 /** A paired history conflict must retain its candidate; neither half may be silently skipped. */
@@ -71,16 +72,16 @@ export function designComparisonStates(canvas: CanvasContents): DesignComparison
   });
 }
 /** Exact still-present adoption edges may bridge a captured input; arbitrary later edits never do. */
-export function designInputTransition(canvas: CanvasContents, briefItemId: string, requestId: string, epoch: number, input: import("./design-partner.ts").DesignArtifactRef): boolean {
-  const records = Object.values(canvas.threads).flatMap((t) => t.comments.flatMap((c) => { const r = c.designDecision?.record; return r?.kind === "adoption-decision" && c.body === designDecisionMarkdown(r) && r.input.requestId === requestId && r.input.basis.brief.itemId === briefItemId && r.input.basis.epoch === epoch && r.adopted.itemId === input.itemId ? [r] : []; }));
-  let current = input, previous: DesignDecisionRecord | undefined; const visited = new Set<string>();
+export function designInputTransition(canvas: CanvasContents, briefItemId: string, requestId: string, epoch: number, input: import("./design-partner.ts").DesignArtifactRef, repairs: readonly DesignRepairTransition[] = []): boolean {
+  const adoptions = Object.values(canvas.threads).flatMap((t) => t.comments.flatMap((c) => { const r = c.designDecision?.record; return r?.kind === "adoption-decision" && c.body === designDecisionMarkdown(r) && r.input.requestId === requestId && r.input.basis.brief.itemId === briefItemId && r.input.basis.epoch === epoch && r.adopted.itemId === input.itemId ? [{ target: r.input.basis.target, adopted: r.adopted, decision: r }] : []; }));
+  const records: Array<{ target: DesignApprovalBasis["target"]; adopted: import("./design-partner.ts").DesignArtifactRef; decision?: DesignDecisionRecord }> = [...adoptions, ...repairs.filter((r) => r.request.brief.itemId === briefItemId && r.request.requestId === requestId && r.request.epoch === epoch && r.adopted.itemId === input.itemId)];
+  let current = input, previous: typeof records[number] | undefined; const visited = new Set<string>();
   for (let i = 0; i <= records.length; i++) {
-    const edges = records.filter((r) => sameDesignValue(r.input.basis.target.artifact, current));
-    if (!edges.length || edges.length > 1 || visited.has(current.versionId)) return false;
+    const edges = records.filter((r) => sameDesignValue(r.target.artifact, current));
+    if (edges.length !== 1 || visited.has(current.versionId)) return false;
     visited.add(current.versionId); const edge = edges[0]!;
-    if (previous && (!sameDesignValue({ ...previous.input.basis.target, artifact: previous.adopted }, edge.input.basis.target) || previous.input.decisionKey === edge.input.decisionKey && edge.input.supersedesDecisionId !== previous.input.id)) return false;
-    const final = { ...edge.input.basis.target, artifact: edge.adopted };
-    if (designTargetMatches(canvas, final)) return true;
+    if (previous && (!sameDesignValue({ ...previous.target, artifact: previous.adopted }, edge.target) || previous.decision && edge.decision && previous.decision.input.decisionKey === edge.decision.input.decisionKey && edge.decision.input.supersedesDecisionId !== previous.decision.input.id)) return false;
+    if (designTargetMatches(canvas, { ...edge.target, artifact: edge.adopted })) return true;
     current = edge.adopted; previous = edge;
   }
   return false;

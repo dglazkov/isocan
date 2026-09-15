@@ -44,7 +44,7 @@ export interface DesignRequestView extends Omit<DesignRequestState, "receipts"> 
 /** Unreadable admitted records remain visible alongside usable request views. */
 export interface DesignRequestReadResult { requests: DesignRequestView[]; unavailable: DesignRequestsResponse["unavailable"] }
 /** The shared procedure travels with current canvas policy and the same request projection. */
-export interface DesignWorkflowView extends DesignRequestReadResult { policy: "off" | "adaptive-v1" | "unsupported"; procedure: string }
+export interface DesignWorkflowView extends DesignRequestReadResult { policy: "off" | "adaptive-v1" | "unsupported"; procedure: string; reviews?: import("./design-review-reader.ts").DesignReviewReadResult }
 /** Delivery uncertainty preserves the caller's retry identity and never invents an accepted operation ID. */
 export interface DesignRequestSubmission {
   status: "accepted" | "pending" | "refused";
@@ -176,8 +176,9 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
       } else affect("This receipt has no captured governing selection.", "stale", policyChecks);
       for (const input of saved.receipt.context) {
         if (input.canvasId === canvasId && normalizeHomeUrl(input.home) === normalizeHomeUrl(home)) {
-          const item = snapshot.canvas.items[input.itemId];
-          if (!item || item.currentVersionId !== input.versionId || item.versions.find(one => one.id === input.versionId)?.blobHash !== input.blobHash) affect(`Context ${input.itemId} changed or is unavailable.`, "stale", policyChecks);
+          // The writer's per-check reading already validates local context through
+          // exact active adoption/repair transitions. A latest-pointer comparison
+          // here would contradict that proof and stale a successfully repaired task.
           continue;
         }
         try {
@@ -219,7 +220,18 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
 /** Both entrances discover the same compact procedure and shared canvas-owned enrollment policy. */
 export async function readDesignWorkflow(io: DesignRequestReadPort, options: { canvasId: string; filter?: DesignRequestFilter; signal?: AbortSignal }): Promise<DesignWorkflowView> {
   const [read, snapshot] = await Promise.all([readDesignRequests(io, options), io.snapshot(options.canvasId, options.signal)]);
-  return { ...read, policy: designPartnerPolicy(snapshot.project.properties ?? {}), procedure: designWorkflowProcedure };
+  const reviewIO = io as Partial<import("./design-review-reader.ts").DesignReviewReadPort>;
+  const reviews = reviewIO.history && reviewIO.repairs && reviewIO.sessions && reviewIO.answering ? await (await import("./design-review-reader.ts")).readDesignReviews(io as import("./design-review-reader.ts").DesignReviewReadPort, { canvasId: options.canvasId, ...(options.filter?.requestId ? { requestId: options.filter.requestId } : {}), ...(options.signal ? { signal: options.signal } : {}) }) : undefined;
+  const requests = read.requests.map(request => {
+    // Keep task discovery, custody and choice decisions ahead of review continuation.
+    if (request.nextAction !== "build" || request.status !== "current" || request.brief.progress !== "active") return request;
+    const reviewing = reviews?.runs.some(row => {
+      const output = row.run.passes.at(-1)!.output;
+      return row.run.request.requestId === request.brief.requestId && row.run.request.epoch === request.brief.epoch && sameDesignArtifact(row.run.request.brief, request.ref) && (output.kind === "repository" ? request.brief.delivery === "connected-app" : request.brief.outputIds.includes(output.artifact.itemId) || request.brief.targetItemId === output.artifact.itemId);
+    });
+    return reviewing ? { ...request, nextAction: "verify" as const } : request;
+  });
+  return { ...read, requests, policy: designPartnerPolicy(snapshot.project.properties ?? {}), procedure: designWorkflowProcedure, ...(reviews ? { reviews } : {}) };
 }
 
 async function submit(io: DesignRequestWritePort, canvasId: string, opId: string, input: DesignRecordOperation, signal?: AbortSignal): Promise<DesignRequestSubmission> {
@@ -277,6 +289,11 @@ export async function readDesignRequestReference(io: DesignRequestReadPort, requ
   const comparisonReferences = [...choices.comparisons.filter(one => one.comparison.requestId === request.requestId).flatMap(one => one.references), ...choices.decisions.filter(one => one.decision.input.requestId === request.requestId).flatMap(one => one.references)];
   const retained: DesignRetainedReference[] = [...[state.marker, ...state.receipts.map(one => one.marker)].flatMap(marker => marker.retainedReferences), ...comparisonReferences];
   const known = [state.ref, ...capturedContextReferences(state), ...state.brief.references.flatMap(one => one.artifact ? [one.artifact] : []), ...state.brief.facts.flatMap(one => one.sources), ...state.receipts.flatMap(one => [one.ref, ...one.receipt.context, ...one.receipt.checks.flatMap(check => check.evidence), ...(one.receipt.governing?.artifact ? [one.receipt.governing.artifact] : []), ...(one.receipt.output.kind === "canvas" ? [one.receipt.output.artifact] : [])]), ...retained.map(one => one.artifact)];
+  // A declared output is current-bound. This adds no latest-version fallback for historical citations.
+  for (const itemId of state.brief.outputIds) {
+    const item = snapshot.canvas.items[itemId], version = item?.versions.find(one => one.id === item.currentVersionId);
+    if (version) known.push({ home: normalizeHomeUrl(home), canvasId, itemId, versionId: version.id, blobHash: version.blobHash });
+  }
   if (!known.some(one => sameDesignArtifact(one, artifact))) {
     let identified = false;
     for (const atId of new Set([state.brief.targetItemId ?? state.brief.groupId, ...state.brief.outputIds])) {

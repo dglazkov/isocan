@@ -1,3 +1,5 @@
+import { DesignRepairClientError } from "./design-repair-capability.ts";
+import { supportsDesignRepairs } from "@isocan/core";
 import { DesignDecisionClientError, designDecisionOperation } from "./design-decision-capability.ts";
 import { supportsDesignDecisions } from "@isocan/core";
 import { textAttention } from "@isocan/core";
@@ -176,6 +178,7 @@ interface Member {
   questionnaireCapable: boolean;
   designRequestCapable: boolean;
   designDecisionCapable: boolean;
+  designRepairCapable: boolean;
   badgeId: string;
   /** Tell this connection its rung changed. */
   standing: (capability: Capability) => void;
@@ -322,6 +325,9 @@ export function attachWebSockets(
       if (!member.questionnaireCapable && message.type === "op-applied" && (questionnaireOperation(message.entry.envelope.op) || message.entry.inverse && questionnaireOperation(message.entry.inverse))) {
         socket.close(WS_STALE_CLIENT, "Typed questionnaires require an updated isocan client");
         continue;
+      }
+      if (!member.designRepairCapable && message.type === "op-applied" && (message.entry.envelope.op.type === "design.repair" || message.entry.inverse?.type === "design.repair")) {
+        socket.close(WS_STALE_CLIENT, new DesignRepairClientError().message); continue;
       }
       if (!member.designDecisionCapable && message.type === "op-applied" && (designDecisionOperation(message.entry.envelope.op) || message.entry.inverse && designDecisionOperation(message.entry.inverse))) {
         socket.close(WS_STALE_CLIENT, "This canvas now uses design decisions; update isocan."); continue;
@@ -747,7 +753,7 @@ export function attachWebSockets(
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
-      if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError) ws.close(WS_STALE_CLIENT, err.message);
+      if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError || err instanceof DesignRepairClientError) ws.close(WS_STALE_CLIENT, err.message);
       else ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
       return;
     }
@@ -766,6 +772,7 @@ export function attachWebSockets(
       questionnaireCapable: supportsQuestionnaires(features),
       designRequestCapable: supportsDesignRequests(features),
       designDecisionCapable: supportsDesignDecisions(features),
+      designRepairCapable: supportsDesignRepairs(features),
       badgeId,
       standing: (next) => {
         if (next === capability) return;

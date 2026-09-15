@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GENERATED } from "../scripts/mergegen.mjs";
+import { withoutComments } from "./source.ts";
 
 /**
  * **The generated docs were the most conflicted files in the repository.**
@@ -34,7 +35,12 @@ describe("generated docs are regenerated at a conflict, not merged", () => {
 
   it("routes files to the driver at all — an empty list always passes", () => {
     expect(routed, "no file is routed; the attributes file has stopped working").toContain("docs/ROADMAP.md");
-    expect(routed.length).toBeGreaterThan(1);
+    // Was `> 1` when three files were routed. Two of them turned out not to be
+    // generated at all (the case below), and a count is the wrong shape for
+    // this check anyway: what it guards is that the attributes file still
+    // works, which one known entry proves. A number here would fail the day
+    // somebody correctly removes a file, which is exactly what happened.
+    expect(routed.length).toBeGreaterThanOrEqual(1);
   });
 
   it("knows how to make each file it claims", () => {
@@ -93,6 +99,51 @@ describe("generated docs are regenerated at a conflict, not merged", () => {
     // And it claims nothing the driver does not know how to make.
     const claimed = [...hook.matchAll(/"(\S+?):(\S+?)"/g)].map((m) => m[1]!);
     expect(claimed.filter((file) => !(file in GENERATED))).toEqual([]);
+  });
+
+  /**
+   * **The half nobody checked: does the generator actually write the file?**
+   *
+   * The driver copies the regenerated file over git's merge result. For a file
+   * that is derived WHOLE that is the right answer and the point of the
+   * driver. For a file that is only partly derived — or not derived at all —
+   * it is silent data loss: the incoming side of the merge is replaced by
+   * whatever is on disk, which during a rebase is the side being replayed
+   * ONTO, so the replayed change simply disappears. Exit 0, no conflict,
+   * nothing in `git status`.
+   *
+   * `docs/projects/README.md` and `docs/reviews/README.md` were both listed as
+   * generated and neither is written by the generator named beside it: the
+   * projects index has been hand-written since the status column moved into
+   * each project's front matter. Between them they ate the same index row
+   * twice on 15 September 2026, and it was found by noticing a row missing
+   * from a file `git status` called clean.
+   *
+   * The other three cases here check that the halves AGREE about which files
+   * are generated. This one checks that the claim is true of the file.
+   */
+  it("names generators that actually write the file they claim", () => {
+    /**
+     * Read, not run. Two earlier versions of this case touched the real tree —
+     * one wrote a marker into `docs/ROADMAP.md` and restored stale bytes, the
+     * other regenerated it — and both made `roadmap.test.ts` go red beside
+     * them, because a guard that exercises a generator races the guard that
+     * checks that generator's output. A file's own source is enough: a script
+     * that writes a path names that path.
+     */
+    for (const [file, generator] of Object.entries(GENERATED)) {
+      for (const script of generator) {
+        const source = withoutComments(readFileSync(path.join(repo, script), "utf8"));
+        expect(
+          source,
+          `${file} is routed to the regenerating merge driver, but \`${script}\` never writes ` +
+            "it — the path does not appear in its code. The driver copies the on-disk file over " +
+            "git's merge result, so the incoming side of every merge is silently discarded; that " +
+            "is lessons.md #85. Remove it from GENERATED and `.gitattributes`, or make the " +
+            "generator write it whole.",
+        ).toContain(file);
+      }
+    }
   });
 
   it("exits 0 even when it cannot regenerate — a stopped rebase is worse than a stale file", () => {

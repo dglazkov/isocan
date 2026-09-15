@@ -28,6 +28,7 @@ export * from "./canvas-scope.ts";
 export * from "./canvas-group-create.ts";
 export * from "./canvasitem.ts";
 export * from "./bench.ts";
+export * from "./benchjoin.ts";
 export * from "./googledoc.ts";
 export * from "./addable.ts";
 export * from "./titleroom.ts";

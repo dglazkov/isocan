@@ -23,6 +23,19 @@ second week.
 
 ## 15 September 2026
 
+- Open **Optional craft guidance** on a design task for advice adapted from
+  Impeccable at the starting, critique or finishing stage. It keeps your saved
+  answers, design system and chosen direction. Agents can export that same
+  context and preserve their working edits when checking for changes. Guidance
+  uses the existing review and repair flow; opening it does not perform a review.
+
+- Open a design task's review to see source findings, task checks and craft
+  observations separately. Agents can make up to two repairs and recheck the
+  result, keeping each repair undoable and preserving teammates' newer edits.
+  Receipts show the exact screen checked and any remaining limits. If inspection
+  is unavailable, the task stays an unverified draft; an available agent can be
+  asked to check it.
+
 - Try an agent's working alternatives before choosing. Compare its recommendation
   and tradeoffs, ask for more, combine specific ideas or delegate the choice.
   Your decision and screen change undo together; earlier options and reasons
@@ -226,6 +239,7 @@ second week.
 - Hover a paper swatch, a size or a face on the text bar and the note you are typing shows it until the pointer leaves; click to keep it.
 - The text bar is bigger, and the sizes are now S, M, L and XL instead of the initials of the step names. Hover one for what it is called and how far out it stays readable; `isocan text --style M` works too, beside `--style heading`.
 - Anything you put somewhere stays there. A note typed next to another, files dropped at the pointer, a paste at a point, `isocan text --at`: each used to be nudged to clear space, and now lands exactly where you put it, like a real post-it. Items placed for you — the rail's file button, `--anchor` — are still kept clear of what is there.
+- **`@Name join`, in the Chat.** Typing `@Percy join` on a line of its own brings an agent from your bench onto this canvas, the way `/anatomy` is a command rather than a sentence. It sends exactly what the agents panel's Join sends, and the thread gets one line once it lands — because the canvas is the only channel an agent reads. If the name is not on your bench you are told so, and nobody else is: the refusal is the same sentence whether the agent belongs to somebody else or does not exist, and it is never posted into the thread, so a name nobody recognises cannot be used to go fishing through somebody's private bench.
 - **Your bench.** A standing agent belongs to a canvas; the agents *you have* belong to you. Click your own face and pick **Your bench…**, or run `isocan bench`, for a row per agent: its name, its harness, where it stands, and whether anything could answer for it right now. That last part is measured every time you look and has three answers rather than two — ready, standing somewhere with nothing parked, or nothing present that can run it at all — because a summons into silence used to look exactly like an agent that was thinking. Your bench is your own private canvas, so it follows you between machines instead of dying with the laptop it was made on, and a row on it grants nothing: it enrols nobody, and taking one off withdraws nobody.
 - A version stack can be pruned. An item a script republishes on every commit grows a stack nobody compares — ×149 by the end of a fortnight — and every one of those versions rode along on every load of the canvas. `isocan version prune <item> --keep 14 --force` keeps the newest fourteen (the one on top always survives, however old), `isocan gc --keep-versions 14 --force` does it for every item before reclaiming storage, and fanning out a stack deeper than fourteen offers the same with a confirm. It is not undoable, and every surface says so before it does it.
 

@@ -98,6 +98,11 @@ describe("the deep lane", () => {
     expect(walksBinary('spawnSync("git", ["status"]);')).toBe(false);
     // Through a fixture beside it, which is how `rc.test.ts` reaches it.
     expect(walksBinary('import { run } from "./fixture.ts";', ['execFile("node", ["bin/isocan.js"])'])).toBe(true);
+    const mcp = 'new StdioClientTransport({ args: ["design-partner-mcp.mjs"] }); client.callTool({ name: "cli", arguments: { args: ["ls"] } });';
+    expect(walksBinary(mcp)).toBe(true);
+    expect(walksBinary(mcp.replace('name: "cli"', 'name: "read_file"'))).toBe(false);
+    expect(walksBinary(mcp.replace("design-partner-mcp.mjs", "another-server.mjs"))).toBe(false);
+    expect(walksBinary(mcp.replace("new StdioClientTransport", "describeTransport"))).toBe(false);
   });
 
   it("is EMPTY of exclusions when CI's anti-skip switch is set", () => {

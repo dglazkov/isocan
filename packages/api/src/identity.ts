@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import type { Actor, ActorBindingRecord, ActorClaimOp } from "@isocan/core";
-import { elapsedLabel, newActorId } from "@isocan/core";
-import { adoptIdentity as adoptStoredIdentity, paths } from "@isocan/server";
+import { elapsedLabel } from "@isocan/core";
+import { adoptIdentity as adoptStoredIdentity, paths, writeIdentityName } from "@isocan/server";
 import { ApiError } from "./routes.ts";
 import type { DaemonClient } from "./client.ts";
 import { harnessSessions, harnessVarsFor } from "./harness.ts";
@@ -407,26 +407,6 @@ export async function reclaimIdentity(
   });
 }
 
-/** Read-merge, never clobber. The file holds the badge too now, and a write
- * that rebuilt it from the actor alone would delete the machine's credential
- * every time somebody renamed themselves. */
-async function write(file: string, actor: Actor): Promise<Actor> {
-  let current: Record<string, unknown> = {};
-  try {
-    current = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
-  } catch {
-    // No file yet, or unreadable — the write below makes one.
-  }
-  const identity: IdentityFile = {
-    ...(current as Partial<IdentityFile>),
-    ...actor,
-    createdAt: new Date().toISOString(),
-  };
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, JSON.stringify(identity, null, 2));
-  return actor;
-}
-
 /**
  * **The person a pass handed this machine** — Scene 5's `setup`, and the one
  * place an identity arrives from outside instead of being chosen here.
@@ -462,8 +442,7 @@ export async function adoptIdentity(
 /** Rename in place — the actor id is the stable key, so your history stays
  * yours — unless `fresh`, which makes you a new person entirely. */
 export async function writeIdentity(home: string, name: string, fresh = false): Promise<Actor> {
-  const existing = fresh ? null : await readIdentity(home);
-  return write(paths.identityFile(home), { id: existing?.id ?? newActorId(), name });
+  return writeIdentityName(home, name, fresh);
 }
 
 /** First-run flow: prompt on a TTY, otherwise fail with instructions. */

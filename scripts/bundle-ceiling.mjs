@@ -359,11 +359,35 @@
  * twenty-five minutes, a tight ceiling is a tax on whoever pushes next rather
  * than a discipline on whoever grew the bundle. GOAL 640,000 and JUMP 20,000
  * remain unchanged, and they are what actually hold the line.
+ *
+ * **743,900 → 745,000 on 15 Sep 2026, for joining an agent from chat** (the
+ * bench, phase 2). Agreed by Dion, asked with the arithmetic rather than after
+ * the fact.
+ *
+ * The composer's `@Name join` chip and the `@` menu's bench rows are EAGER, and
+ * deliberately: a composer paints while you type, so code that decides what a
+ * line looks like cannot arrive after the line is typed. Everything else is
+ * behind two `import()` boundaries — the act itself, both sentences, and the
+ * bench reader — and core's chat vocabulary went into its own module so that
+ * `benchRows()` and `roster()` stay out of first paint.
+ *
+ * The first draft cost **3,936** bytes because those four functions sat at the
+ * bottom of `bench.ts` and dragged that whole module out of its lazy chunk.
+ * Splitting them into `benchjoin.ts` took 1,573 back and deferring the act took
+ * 310 more: **2,070 net**, of which 1,016 is past the old line. That is the
+ * same lesson `arrow.ts` taught this file, arriving a second time — **the eager
+ * half of a feature has to be a separate file from the lazy half**, because an
+ * import is all it takes to undo the split.
+ *
+ * The margin is 84 bytes, which is thinner than the paragraph above argues for.
+ * It is deliberate and it is not a claim that 745,000 is roomy: the next change
+ * to the composer should expect to raise this again and say why, rather than
+ * inheriting headroom nobody agreed to.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 743_900;
+export const CEILING = 745_000;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's

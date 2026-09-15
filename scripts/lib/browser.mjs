@@ -156,10 +156,13 @@ export async function throughTheDoor(b, origin, name, clientId = "browser") {
   })()`);
 }
 
-export async function browser() {
+export async function browser({ proxyServer = null } = {}) {
+  if (proxyServer !== null && !/^http:\/\/127\.0\.0\.1:\d+$/.test(proxyServer)) throw new Error("Browser proxy must be an owned loopback endpoint");
   const dir = mkdtempSync(path.join(tmpdir(), "isocan-cdp-"));
   const proc = spawn(chromeOrDie(), ["--headless=new", "--remote-debugging-port=0",
-    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
+    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars",
+    ...(proxyServer ? [`--proxy-server=${proxyServer}`, "--proxy-bypass-list=<-loopback>", "--disable-quic", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] : []),
+    "about:blank"], { stdio: "ignore" });
   // Ordinary resolution first, and the explicit path only as the fallback it
   // was meant to be. The hardcoded one alone fails in a git WORKTREE, whose
   // `node_modules` is the main checkout's and not `repo/node_modules` — so the

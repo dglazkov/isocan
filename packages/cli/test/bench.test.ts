@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BENCH_REACH, type BenchRow } from "@isocan/core";
+import {
+  BENCH_REACH,
+  collectCanvasNames,
+  extractMentions,
+  type BenchRow,
+  type CanvasContents,
+} from "@isocan/core";
 import {
   answeringFor,
   badge,
@@ -51,12 +57,25 @@ async function parkOn(canvasId: string): Promise<{ stop: () => Promise<void> }> 
   };
 }
 
-async function agentsOn(canvasId: string): Promise<string[]> {
+interface StandingRecord {
+  actor: { id: string; name: string };
+  rules?: unknown;
+  writtenBy?: { id: string };
+  invitedFrom?: string;
+}
+
+/** A canvas as the daemon actually holds it — the same shape core reads, so a
+ * test can ask core its own questions of it rather than re-deriving them. */
+async function canvasOf(canvasId: string): Promise<CanvasContents> {
   const res = await fetch(`${base}/api/projects/${canvasId}/canvas`, { headers: badge.headers });
-  const snapshot = (await res.json()) as {
-    canvas: { agents?: Record<string, { actor: { name: string } }> };
-  };
-  return Object.values(snapshot.canvas.agents ?? {}).map((a) => a.actor.name).sort();
+  return ((await res.json()) as { canvas: CanvasContents }).canvas;
+}
+
+const standingOn = (canvas: CanvasContents): Record<string, StandingRecord> =>
+  (canvas.agents ?? {}) as unknown as Record<string, StandingRecord>;
+
+async function agentsOn(canvasId: string): Promise<string[]> {
+  return Object.values(standingOn(await canvasOf(canvasId))).map((a) => a.actor.name).sort();
 }
 
 async function bench(): Promise<BenchRow[]> {
@@ -148,5 +167,97 @@ describe("isocan bench", () => {
     expect((await rcRows()).map((row) => row.name).sort()).toEqual(["Percy", "Sian"]);
     // And an agent nobody benched is not on the bench to remove.
     expect((await isocan("bench", "rm", "Sian")).code).not.toBe(0);
+  }, 120_000);
+});
+
+/**
+ * **`isocan bench join`** (phase 1 — journey 2), walked with the real binary.
+ *
+ * The phase's whole point is the case the old rule does not cover: **no rc is
+ * parked anywhere in this test.** Naming an agent you already own is not the
+ * same act as introducing a stranger — the actor exists, its custody is
+ * settled, and nothing needs to be asked of any machine — so a join must
+ * succeed against a canvas whose rc is not running. A test that only covered
+ * the parked case would prove nothing about this phase.
+ *
+ * And then the rule most likely to erode, from four sides: joining confers
+ * standing HERE and nothing else. No turn, no widened `listen`, no other
+ * canvas's rules touched, no second join quietly rewriting the first.
+ */
+describe("isocan bench join", () => {
+  it("joins with nothing parked, and confers nothing but standing here", async () => {
+    for (const [id, title] of [["prj_2", "Acme two"], ["prj_3", "Acme three"]]) {
+      await post("/api/ops", {
+        canvasId: null,
+        actor: dimitri,
+        op: { type: "project.create", canvasId: id, title },
+      });
+    }
+
+    // Percy exists and answers on prj_1, opened to everyone there — a real
+    // `listen` grant, so "joining does not alter listen grants" has something
+    // to be false about.
+    expect((await isocan("--canvas", "prj_1", "rc", "add", "Percy", ...TEAM)).code).toBe(0);
+    expect((await isocan("bench", "add", "Percy")).code).toBe(0);
+    const openedOn1 = standingOn(await canvasOf("prj_1"));
+    const percy = Object.values(openedOn1).find((a) => a.actor.name === "Percy")!;
+    expect(percy.rules).toBeTruthy();
+
+    // Nothing is parked on the target. This is the phase, in one assertion:
+    // everything below happens with no `isocan rc` running anywhere.
+    expect(await answeringFor("prj_2")).toEqual([]);
+    const threadsBefore = (await canvasOf("prj_2")).threads;
+
+    const joined = await isocan("--canvas", "prj_2", "bench", "join", "Percy");
+    expect(joined.code, joined.stderr).toBe(0);
+    expect(joined.stdout).toContain("Percy answers on Acme two");
+    // Said in journey 1's words, measured rather than asserted: nothing is
+    // parked, so this is not `ready` however recently it was benched.
+    expect(joined.stdout).toContain("its machine is not here");
+
+    // It is in the roster the terminal prints — the phase's read-back — and
+    // the record carries which bench vouched.
+    const who = await isocan("--json", "--canvas", "prj_2", "who");
+    expect(who.code, who.stderr).toBe(0);
+    const standing = (JSON.parse(who.stdout) as { standing: Array<{ actor: { name: string }; state: string }> }).standing;
+    expect(standing.map((row) => [row.actor.name, row.state])).toEqual([["Percy", "enrolled"]]);
+    const after2 = await canvasOf("prj_2");
+    expect(standingOn(after2)[percy.actor.id]!.invitedFrom).toMatch(/^prj_/);
+
+    // …and `@Percy` resolves here now, which is what makes a summons possible
+    // at all. Asked of the canvas the daemon actually holds, through core's
+    // own resolution rather than a second reading of it.
+    expect(
+      extractMentions("@Percy could you look?", collectCanvasNames(after2)),
+    ).toEqual([percy.actor.id]);
+
+    // **Confers nothing else**, four ways.
+    // No turn: joining wrote no comment and started no session.
+    expect(after2.threads).toEqual(threadsBefore);
+    expect(await answeringFor("prj_2")).toEqual([]);
+    // No listen grant here: the fresh row carries no rules at all, which the
+    // rc reads as owner-only.
+    expect(standingOn(after2)[percy.actor.id]).not.toHaveProperty("rules");
+    // Nothing moved on the canvas Percy already answered on.
+    expect(standingOn(await canvasOf("prj_1"))).toEqual(openedOn1);
+    // And no third canvas learned anything.
+    expect(await agentsOn("prj_3")).toEqual([]);
+
+    // The bench itself is unchanged as a record — one more canvas stood on,
+    // and still nothing parked anywhere.
+    const rows = await bench();
+    expect(rows.map((row) => [row.name, row.reach])).toEqual([["Percy", "elsewhere"]]);
+    expect(rows[0]!.standing.map((one) => one.canvasId).sort()).toEqual(["prj_1", "prj_2"]);
+
+    // A second join is not a second grant: it says so and writes nothing new.
+    const again = await isocan("--canvas", "prj_2", "bench", "join", "Percy");
+    expect(again.code, again.stderr).toBe(0);
+    expect(again.stdout).toContain("already answers");
+    expect(standingOn(await canvasOf("prj_2"))).toEqual(standingOn(after2));
+
+    // And an agent nobody benched cannot be joined from a bench it is not on.
+    const stranger = await isocan("--canvas", "prj_2", "bench", "join", "Wooly");
+    expect(stranger.code).not.toBe(0);
+    expect(stranger.stderr).toContain("on your bench");
   }, 120_000);
 });

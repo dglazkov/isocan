@@ -1,10 +1,12 @@
 import {
-  designSystem, inCanvasScope, itemKind, newVersionId, parseDesign, sourceFaceOf,
+  designSystem, inCanvasScope, itemKind, newVersionId, newOpId, normalizeHomeUrl, parseDesign, sourceFaceOf,
   type CanvasContents, type CanvasSnapshotResponse, type LinkedCanvas, type Operation, type SourceClassificationRequest,
 } from "@isocan/core";
 import type { ScreenAudit } from "@isocan/core/design-audit";
 import { readInheritedCanvases, type ContextReadPort } from "./context-reader.ts";
 import { readGoverningDesign } from "./design-governing.ts";
+import { designDecisionScope } from "@isocan/core/design-decision";
+import type { DesignRepairBasis, PreparedDesignRepairPort, PreparedDesignRepair, DesignRepairSubmission } from "./design-repair-reader.ts";
 
 /** Both transports enforce automatic-source policy on the actual inherited blob read. */
 export interface DesignAuditReadPort extends Pick<ContextReadPort, "classifySource" | "sourceSnapshot"> {
@@ -50,6 +52,8 @@ interface ItemAuditIdentity {
   versionId: string;
   blobHash: string | null;
   input: DesignAuditInput | null;
+  /** Captured with this audit, before source editing; older reports without it cannot authorize a repair. */
+  repairBasis?: DesignRepairBasis;
 }
 
 /** Unavailable source or policy reads remain explicit instead of yielding a conforming audit. */
@@ -109,6 +113,7 @@ export async function readCanvasDesignAudit(
       if (!version) throw new Error("The screen's current version is unavailable.");
       if (sourceFaceOf(version).mimeType !== "text/html") throw new Error("Only an HTML source face can be audited.");
       const governing = await readGoverningDesign(io, { canvasId, canvas, home: options.home, atId: item.id, linked, documents, ...(signal ? { signal } : {}) });
+      if (governing.status !== "unavailable" && version.id === identity.versionId) identity.repairBasis = { canvasId, filename: version.filename, repair: { request: null, review: null, target: { artifact: { home: normalizeHomeUrl(options.home), canvasId, itemId: item.id, versionId: version.id, blobHash: version.blobHash }, title: item.title, description: item.description, properties: structuredClone(item.properties), scope: designDecisionScope(canvas, item) }, governing: { atItemId: item.id, artifact: governing.artifact, explicitNone: governing.exempt }, ruleVersion: DESIGN_AUDIT_VERSION } };
       if (governing.artifact) provenance = { canvasId: governing.artifact.canvasId, itemId: governing.artifact.itemId, versionId: governing.artifact.versionId, blobHash: governing.artifact.blobHash, title: governing.title ?? "Unavailable design system", name: governing.title ?? "Unavailable design system", inherited: governing.artifact.canvasId !== canvasId };
       if (governing.status !== "available") throw new Error(!governing.artifact && !governing.title ? "No readable design system governs this screen." : governing.reason);
       const doc = governing.document;
@@ -195,86 +200,50 @@ export function designAuditFails(report: CanvasDesignAudit | SourceDesignAudit):
   return "items" in report ? report.items.length === 0 || report.refusedSources.length > 0 || report.items.some(failed) : failed(report);
 }
 
-/** Explicit repair transport distinguishes an accepted edit from an offline queue or refused write. */
-export interface DesignRepairPort extends DesignAuditReadPort {
-  snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
-  home(canvasId: string, signal?: AbortSignal): Promise<string>;
-  upload(canvasId: string, text: string, filename: string, signal?: AbortSignal): Promise<{ blobHash: string; size: number }>;
-  edit(canvasId: string, operation: Extract<Operation, { type: "item.edit" }>, signal?: AbortSignal): Promise<{ accepted: true } | { accepted: false; status: "refused" | "pending"; reason: string }>;
-}
+/** Explicit repair transport carries canonical full-intent receipts and historical acceptance. */
+export interface DesignRepairPort extends PreparedDesignRepairPort {}
 
-/** Captured policy and source versions accompany an authored replacement; no token policy edit is implicit. */
+/** Older source-only captures are readable, but a repair needs the original full metadata basis. */
 export interface DesignRepairRequest {
-  canvasId: string;
-  itemId: string;
-  text: string;
-  expectedVersionId: string;
-  expectedGoverning: DesignAuditProvenance;
-  expectedRuleVersion: string;
-  filename?: string;
-  signal?: AbortSignal;
+  canvasId: string; itemId: string; text: string;
+  expectedVersionId: string; expectedGoverning: DesignAuditProvenance; expectedRuleVersion: string;
+  basis?: DesignRepairBasis; opId?: string; versionId?: string; repairId?: string; retry?: boolean;
+  prepared?: PreparedDesignRepair; filename?: string; signal?: AbortSignal;
 }
-
-/** Accepted content remains saved even when its post-save audit is unavailable or superseded. */
+/** Compatibility display fields accompany canonical acceptance and the immutable retry intent. */
 export type DesignRepairResult =
-  | { status: "saved"; itemId: string; versionId: string; blobHash: string; before: ItemDesignAudit; proposed: ItemDesignAudit; after: DesignAuditEvidence; governingChanged: boolean | null; superseded: boolean | null }
-  | { status: "pending"; itemId: string; versionId: string; blobHash: string; reason: string; before: ItemDesignAudit; proposed: ItemDesignAudit }
-  | { status: "refused"; code: "stale-version" | "governing-changed" | "rule-version-changed" | "audit-unavailable" | "write-refused"; reason: string; before?: ItemDesignAudit };
+  | { status: "saved"; itemId: string; versionId: string; blobHash: string; before: ItemDesignAudit; proposed: ItemDesignAudit; after: DesignAuditEvidence; governingChanged: boolean | null; superseded: boolean | null; submission: DesignRepairSubmission; prepared: PreparedDesignRepair }
+  | { status: "pending"; itemId: string; versionId: string; blobHash: string; reason: string; before?: ItemDesignAudit; proposed?: ItemDesignAudit; submission: DesignRepairSubmission; prepared: PreparedDesignRepair }
+  | { status: "refused"; code: "stale-version" | "governing-changed" | "rule-version-changed" | "audit-unavailable" | "candidate-rejected" | "write-refused"; reason: string; before?: ItemDesignAudit };
+function sameGoverning(a: DesignAuditProvenance | null, b: DesignAuditProvenance | null): boolean { return !!a && !!b && a.canvasId === b.canvasId && a.itemId === b.itemId && a.versionId === b.versionId && a.blobHash === b.blobHash; }
 
-function sameGoverning(a: DesignAuditProvenance | null, b: DesignAuditProvenance | null): boolean {
-  return !!a && !!b && a.canvasId === b.canvasId && a.itemId === b.itemId && a.versionId === b.versionId && a.blobHash === b.blobHash;
-}
-
-/** Refresh policy before conditional item.edit, then report current evidence without claiming a cross-canvas lock. */
+/** Existing source-audit repair uses the same prepared canonical act; source-only historical captures refuse safely. */
 export async function repairDesignScreen(io: DesignRepairPort, request: DesignRepairRequest): Promise<DesignRepairResult> {
-  const { canvasId, itemId, signal } = request;
+  const { prepareDesignRepair, submitDesignRepair, parseDesignRepairBasis } = await import("./design-repair-reader.ts");
   const { DESIGN_AUDIT_VERSION } = await import("@isocan/core/design-audit");
-  signal?.throwIfAborted();
   if (request.expectedRuleVersion !== DESIGN_AUDIT_VERSION) return { status: "refused", code: "rule-version-changed", reason: "The audit rules changed; capture a fresh report before repairing." };
-  const read = async (draft?: DesignAuditOptions["draft"]) => {
-    const snapshot = await io.snapshot(canvasId, signal);
-    const home = await io.home(canvasId, signal);
-    const report = await readCanvasDesignAudit(io, { canvasId, canvas: snapshot.canvas, home, itemIds: [itemId], ...(draft ? { draft } : {}), ...(signal ? { signal } : {}) });
-    return { snapshot, report, item: report.items[0]! };
-  };
-  const initial = await read();
-  const before = initial.item;
-  const refusal = (item: ItemDesignAudit): Extract<DesignRepairResult, { status: "refused" }> | null => {
-    if (item.versionId !== request.expectedVersionId) return { status: "refused", code: "stale-version", reason: "The screen changed after this draft was based on it. Read the newer version before repairing.", before: item };
-    if (item.status !== "audited") return { status: "refused", code: "audit-unavailable", reason: item.reason, before: item };
-    if (!sameGoverning(item.governing, request.expectedGoverning)) return { status: "refused", code: "governing-changed", reason: "The governing design changed. Review a fresh audit before repairing.", before: item };
-    return null;
-  };
-  const refused = refusal(before);
-  if (refused) return refused;
-  const original = initial.snapshot.canvas.items[itemId]!;
-  const version = original.versions.find(one => one.id === original.currentVersionId)!;
-  const filename = request.filename ?? version.filename;
-  const proposedRead = await read({ itemId, text: request.text, baseVersionId: request.expectedVersionId, label: filename });
-  if (proposedRead.snapshot.canvas.items[itemId]?.currentVersionId !== request.expectedVersionId) return { status: "refused", code: "stale-version", reason: "The screen changed while auditing the replacement.", before };
-  const proposed = proposedRead.item;
-  const proposalRefused = refusal(proposed);
-  if (proposalRefused) return proposalRefused;
-  signal?.throwIfAborted();
-  const upload = await io.upload(canvasId, request.text, filename, signal);
-  if (upload.blobHash !== proposed.input?.sha256) throw new Error("The uploaded blob does not match the audited replacement text; no edit was submitted.");
-  // Uploading bytes is not a content mutation. Repeat the version/policy check after that I/O.
-  const latest = await read();
-  const lateRefusal = refusal(latest.item);
-  if (lateRefusal) return lateRefusal;
-  const versionId = newVersionId();
-  signal?.throwIfAborted();
-  let accepted: Awaited<ReturnType<DesignRepairPort["edit"]>>;
-  try { accepted = await io.edit(canvasId, { type: "item.edit", itemId, expectedVersionId: request.expectedVersionId, patch: {}, version: { id: versionId, blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, signal); }
-  catch (error) { accepted = { accepted: false, status: "pending", reason: error instanceof Error ? error.message : String(error) }; }
-  if (!accepted || accepted.accepted !== true) {
-    if (accepted?.status === "refused") return { status: "refused", code: "write-refused", reason: accepted.reason, before };
-    return { status: "pending", itemId, versionId, blobHash: upload.blobHash, before, proposed, reason: accepted?.reason ?? "The repair has no accepted write receipt. Check this version before retrying." };
+  if (!request.basis && !request.prepared) return { status: "refused", code: "audit-unavailable", reason: "This historical audit has no original target metadata/scope capture. Read a fresh audit before preparing a repair." };
+  const basis = request.basis ? parseDesignRepairBasis(request.basis) : { canvasId: request.prepared!.canvasId, filename: request.prepared!.filename, repair: request.prepared!.operation.repair };
+  if (basis.repair.target.artifact.versionId !== request.expectedVersionId || basis.canvasId !== request.canvasId || basis.repair.target.artifact.itemId !== request.itemId) return { status: "refused", code: "stale-version", reason: "The audit's full capture disagrees with the requested base version." };
+  const expected = basis.repair.governing.artifact;
+  if (!expected || !sameGoverning({ ...request.expectedGoverning, canvasId: expected.canvasId, itemId: expected.itemId, versionId: expected.versionId, blobHash: expected.blobHash }, request.expectedGoverning)) return { status: "refused", code: "governing-changed", reason: "The audit's captured governing identity disagrees with this repair." };
+  if (!io.actorId) return { status: "refused", code: "write-refused", reason: "A repair needs the actual named actor." };
+  let prepared: PreparedDesignRepair;
+  try { prepared = request.prepared ?? await prepareDesignRepair({ basis, text: request.text, actorId: io.actorId, opId: request.opId ?? newOpId(), versionId: request.versionId ?? newVersionId(), repairId: request.repairId ?? newOpId() }); }
+  catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "candidate-rejected") return { status: "refused", code: "candidate-rejected", reason: error.message };
+    throw error;
   }
-  // All errors after this confirmed write are advisory, including cancellation and source refusal.
-  const after = await readDesignAuditAdvisory(async () => (await read()).report);
-  const current = after.status === "available" ? after.report.items[0] : undefined;
-  return { status: "saved", itemId, versionId, blobHash: upload.blobHash, before, proposed, after,
-    governingChanged: current?.status === "audited" ? !sameGoverning(current.governing, request.expectedGoverning) : null,
-    superseded: current ? current.versionId !== versionId : null };
+  const read = async (draft?: DesignAuditOptions["draft"]) => readCanvasDesignAudit(io, { canvasId: request.canvasId, canvas: (await io.snapshot(request.canvasId, request.signal)).canvas, home: await io.home(request.canvasId, request.signal), itemIds: [request.itemId], ...(draft ? { draft } : {}), ...(request.signal ? { signal: request.signal } : {}) });
+  const beforeRead = await readDesignAuditAdvisory(() => read());
+  const proposedRead = await readDesignAuditAdvisory(() => read({ itemId: request.itemId, text: request.text, baseVersionId: request.expectedVersionId, label: basis.filename }));
+  const before = beforeRead.status === "available" ? beforeRead.report.items[0] : undefined;
+  const proposed = proposedRead.status === "available" ? proposedRead.report.items[0] : undefined;
+  const submission = await submitDesignRepair(io, prepared, { ...(request.retry ? { retry: true } : {}), ...(request.signal ? { signal: request.signal } : {}) });
+  if (submission.status === "refused") return { status: "refused", code: before && before.versionId !== request.expectedVersionId ? "stale-version" : before && !sameGoverning(before.governing, request.expectedGoverning) || submission.reason?.includes("governing design changed") ? "governing-changed" : "write-refused", reason: submission.reason ?? "The writer refused this repair.", ...(before ? { before } : {}) };
+  if (submission.status === "pending") return { status: "pending", itemId: submission.itemId, versionId: submission.versionId, blobHash: submission.blobHash, reason: submission.reason ?? "The exact repair remains unconfirmed.", ...(before ? { before } : {}), ...(proposed ? { proposed } : {}), submission, prepared };
+  const after: DesignAuditEvidence = submission.audit ? { status: "available", report: submission.audit } : { status: "unavailable", reason: submission.consistency?.reasons.join(" ") ?? "Post-save audit unavailable." };
+  const current = submission.audit?.items[0];
+  const unavailable: ItemDesignAudit = { canvasId: request.canvasId, itemId: request.itemId, title: basis.repair.target.title, versionId: request.expectedVersionId, blobHash: basis.repair.target.artifact.blobHash, input: null, status: "unavailable", governing: request.expectedGoverning, reason: "Historical pre-save audit unavailable; acceptance is confirmed independently." };
+  return { status: "saved", itemId: submission.itemId, versionId: submission.versionId, blobHash: submission.blobHash, before: before ?? unavailable, proposed: proposed ?? unavailable, after, governingChanged: current?.status === "audited" ? !sameGoverning(current.governing, request.expectedGoverning) : null, superseded: current ? current.versionId !== submission.versionId : null, submission, prepared };
 }

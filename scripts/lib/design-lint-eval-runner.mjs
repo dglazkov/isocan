@@ -195,7 +195,7 @@ export async function applyCandidate(host, { html, before, audit, protectedBefor
     const current = await host.readStored();
     receipt = same(current.item, before.item) && current.html === html ? { status: "unchanged", versionId: current.version.id } : { status: "refused", code: "stale-version", reason: "Stored input changed while the unchanged candidate was produced." };
   } else {
-    try { receipt = await host.canvas.designRepair(host.screen.id, { text: html, expectedVersionId: before.version.id, expectedGoverning: audit.governing, expectedRuleVersion: audit.ruleVersion, filename: "screen.html" }); }
+    try { receipt = await host.canvas.designRepair(host.screen.id, { text: html, expectedVersionId: before.version.id, expectedGoverning: audit.governing, expectedRuleVersion: audit.ruleVersion, basis: audit.repairBasis, filename: "screen.html" }); }
     catch (error) {
       if (error.status !== 400 || error.code !== "bad-op") throw error;
       receipt = { status: "refused", code: "candidate-rejected", reason: error.message };

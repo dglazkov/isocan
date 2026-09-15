@@ -7,6 +7,7 @@ import { questionnaireStates, questionnaireSourceCurrent } from "@isocan/core/qu
 import { questionnaireActorKind } from "./questionnaire.ts";
 import { hydrateContextManifest, contextBlobAvailable } from "./canvas-group-context.ts";
 import type { Store } from "./store.ts";
+import { designRepairTransitions } from "../../core/src/design-repair-state.ts";
 import { designInputTransition } from "../../core/src/design-decision-state.ts";
 
 const bad = (message: string): never => { throw new OpValidationError("bad-op", message); };
@@ -78,14 +79,15 @@ function designRequestReasons(state: CanvasState, brief: DesignBrief, registry: 
   else if (thread.comments.slice(boundary + 1).some((c) => c.body.trim() === "/cancel" && resolveActor(registry.joined, c.author.id) === resolveActor(registry.joined, brief.requestingActorId))) reasons.push("The requester cancelled this work in its source thread.");
   return reasons;
 }
-function localInputReasons(state: CanvasState, home: string, brief: DesignBrief, ownItemId: string): string[] {
+function localInputReasons(state: CanvasState, home: string, brief: DesignBrief, ownItemId: string, history: readonly LogEntry[] = []): string[] {
+  const transitions = designRepairTransitions(history);
   const refs = [...brief.context.entries.filter((e) => !e.excluded && !e.unavailable && e.version).map((e) => reference(home, state.project.id, e.itemId, e.version!))];
-  return [...new Set(refs.filter((ref) => ref.home === home && ref.canvasId === state.project.id && ref.itemId !== ownItemId && (state.canvas.items[ref.itemId]?.currentVersionId !== ref.versionId || state.canvas.items[ref.itemId]?.versions.find((v) => v.id === ref.versionId)?.blobHash !== ref.blobHash) && !designInputTransition(state.canvas, ownItemId, brief.requestId, brief.epoch, ref)).map((ref) => `Input ${ref.itemId} changed or is unavailable.`))];
+  return [...new Set(refs.filter((ref) => ref.home === home && ref.canvasId === state.project.id && ref.itemId !== ownItemId && (state.canvas.items[ref.itemId]?.currentVersionId !== ref.versionId || state.canvas.items[ref.itemId]?.versions.find((v) => v.id === ref.versionId)?.blobHash !== ref.blobHash) && !designInputTransition(state.canvas, ownItemId, brief.requestId, brief.epoch, ref, transitions)).map((ref) => `Input ${ref.itemId} changed or is unavailable.`))];
 }
 /** Comparison acts use the same live request, source, cancellation and input guards as lifecycle writes. */
-export async function designDecisionRequest(store: Store, state: CanvasState, home: string, ref: DesignArtifactRef, epoch: number, registry: ActorRegistry): Promise<DesignBrief> {
+export async function designDecisionRequest(store: Store, state: CanvasState, home: string, ref: DesignArtifactRef, epoch: number, registry: ActorRegistry, history: readonly LogEntry[] = []): Promise<DesignBrief> {
   const brief = await briefAt(store, state, home, ref);
-  const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, ref.itemId)];
+  const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, ref.itemId, history)];
   if (brief.epoch !== epoch || brief.progress !== "active" || reasons.length) bad(reasons.join(" ") || "The design request is no longer active at this epoch.");
   return brief;
 }
@@ -108,7 +110,7 @@ function initialDesignQuestionIds(entries: readonly LogEntry[], requestId: strin
 /** Admitted requests add source and effort guards while historical manual briefs keep phase-1 semantics. */
 export function validateAdmittedDesignQuestions(state: CanvasState, brief: DesignBrief, questions: DesignQuestionSet, entries: readonly LogEntry[], registry: ActorRegistry, publishing: boolean): void {
   if (!brief.continuation) return;
-  const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, questions.brief.home, brief, questions.brief.itemId)]; if (reasons.length) bad(reasons.join(" "));
+  const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, questions.brief.home, brief, questions.brief.itemId, entries)]; if (reasons.length) bad(reasons.join(" "));
   if (!publishing) return;
   const discovery = questions.discovery; if (!discovery) bad("admitted request questions require discovery purpose and fact bindings");
   if (discovery!.purpose === "initial" && !questions.supersedes && initialDesignQuestionIds(entries, brief.requestId, questions.brief.itemId).length) bad("initial discovery is one batch; further questions need a consequential reason or explicit interview");
@@ -197,11 +199,11 @@ export function governingReasons(state: CanvasState, home: string, receipt: Pick
   return [];
 }
 /** Materializes JSON and one item effect while Engine holds the existing single-writer chain. */
-export async function materializeDesignRecord(store: Store, state: CanvasState, revision: number, operation: DesignRecordOperation, actor: Actor, registry: ActorRegistry, home: string, opId: string): Promise<DesignRecordOperation> {
-  try { return await materialize(store, state, revision, operation, actor, registry, home, opId); }
+export async function materializeDesignRecord(store: Store, state: CanvasState, revision: number, operation: DesignRecordOperation, actor: Actor, registry: ActorRegistry, home: string, opId: string, history: readonly LogEntry[] = []): Promise<DesignRecordOperation> {
+  try { return await materialize(store, state, revision, operation, actor, registry, home, opId, history); }
   catch (error) { if (error instanceof DesignPartnerContractError || error instanceof SyntaxError) bad(error.message); throw error; }
 }
-async function materialize(store: Store, state: CanvasState, revision: number, operation: DesignRecordOperation, actor: Actor, registry: ActorRegistry, home: string, opId: string): Promise<DesignRecordOperation> {
+async function materialize(store: Store, state: CanvasState, revision: number, operation: DesignRecordOperation, actor: Actor, registry: ActorRegistry, home: string, opId: string, history: readonly LogEntry[] = []): Promise<DesignRecordOperation> {
   const op = parseDesignRequestOperation(operation);
   if (isSystemActor(actor.id)) bad("a design request needs an authenticated acting identity");
   let record: DesignBrief | DesignReceipt, itemId: string, versionId: string, title: string, effect: DesignRecordEffect, retained: DesignRetainedReference[];
@@ -221,7 +223,7 @@ async function materialize(store: Store, state: CanvasState, revision: number, o
       before = brief;
       if (brief.epoch !== action.epoch) bad("the request epoch changed");
       if (action.kind !== "resume" && action.kind !== "cancel") {
-        const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, itemId)];
+        const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, itemId, history)];
         if (brief.progress !== "active" || reasons.length) bad(reasons.join(" ") || "the request is no longer active");
       }
       const prior = brief;
@@ -265,8 +267,9 @@ async function materialize(store: Store, state: CanvasState, revision: number, o
     itemId = op.itemId; versionId = op.versionId; record = parseDesignReceipt(op.receipt); title = op.title ?? "Design receipt";
     const brief = await briefAt(store, state, home, record.brief);
     if (brief.progress !== "completed" || brief.epoch !== record.epoch || brief.requestId !== record.requestId) bad("a receipt requires this exact completed request");
-    const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, record.brief.itemId), ...governingReasons(state, home, record)];
-    for (const ref of record.context) if (ref.home === home && ref.canvasId === state.project.id) currentVersion(state, home, ref);
+    const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, record.brief.itemId, history), ...governingReasons(state, home, record)];
+    const transitions = designRepairTransitions(history);
+    for (const ref of record.context) if (ref.home === home && ref.canvasId === state.project.id && !designInputTransition(state.canvas, record.brief.itemId, record.requestId, record.epoch, ref, transitions)) currentVersion(state, home, ref);
     if (reasons.length) bad(reasons.join(" "));
     if (record.output.kind === "canvas" && record.governing?.atItemId !== record.output.artifact.itemId) bad("governing selection must use the actual output scope");
     if (record.output.kind === "repository" && record.governing?.atItemId !== (brief.targetItemId ?? brief.groupId)) bad("repository governing selection must use the request target or scope");
@@ -300,9 +303,14 @@ export async function readDesignRequests(store: Store, state: CanvasState, home:
       if (marker.kind === "receipt") { const receipt = parseDesignReceipt(value); if (receipt.requestId !== marker.requestId || receipt.epoch !== marker.epoch) bad("receipt admission metadata disagrees with its JSON"); receipts.push({ ref, receipt, author: version.createdBy, marker, status: "current", reasons: [], checkFreshness: [] }); continue; }
       const brief = parseDesignBrief(value);
       if (!brief.continuation || brief.requestId !== marker.requestId || brief.epoch !== marker.epoch) bad("brief admission metadata disagrees with its JSON");
-      const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, item.id)];
+      const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, item.id, history)];
       const status = reasons.some((r) => /cancelled/.test(r)) ? "cancelled" : reasons.length ? "stale" : "current";
-      requests.push({ ref, brief, author: version.createdBy, marker, status, reasons, remainingInitialQuestions: initialDesignQuestionIds(history, brief.requestId, item.id).length ? 0 : 3, questions: questionnaireStates(state.canvas, { requestId: brief.requestId }).filter((q) => q.questions.brief.itemId === item.id), receipts: [], allowedActions: status === "current" ? brief.progress === "completed" ? ["resume", "cancel", "receipt"] : ["update", "resume", "cancel", "complete"] : ["resume", "cancel"] });
+      const completion = history.find((entry) => entry.envelope.id === marker.opId && entry.envelope.op.type === "design.request" && entry.envelope.op.action.kind === "complete" && entry.envelope.op.action.versionId === ref.versionId);
+      const action = completion?.envelope.op.type === "design.request" ? completion.envelope.op.action : undefined;
+      const effect = completion?.envelope.op.type === "design.request" ? completion.envelope.op.effect : undefined;
+      const exactCompletion = effect?.type === "item.edit" && effect.itemId === ref.itemId && effect.version.id === ref.versionId && effect.version.blobHash === ref.blobHash && effect.version.designRecord?.intentHash === marker.intentHash && effect.version.designRecord?.opId === marker.opId && completion?.envelope.actor.id === version.createdBy.id;
+      const completedFrom = exactCompletion && brief.progress === "completed" && action?.kind === "complete" && action.epoch === brief.epoch && action.brief.home === ref.home && action.brief.canvasId === ref.canvasId && action.brief.itemId === ref.itemId && history.filter((entry) => entry.cause?.targetSeq === completion!.seq).sort((a, b) => a.seq - b.seq).at(-1)?.cause?.kind !== "undo" ? { brief: action.brief, opId: completion!.envelope.id } : null;
+      requests.push({ ref, brief, author: version.createdBy, marker, status, reasons, completedFrom, remainingInitialQuestions: initialDesignQuestionIds(history, brief.requestId, item.id).length ? 0 : 3, questions: questionnaireStates(state.canvas, { requestId: brief.requestId }).filter((q) => q.questions.brief.itemId === item.id), receipts: [], allowedActions: status === "current" ? brief.progress === "completed" ? ["resume", "cancel", "receipt"] : ["update", "resume", "cancel", "complete"] : ["resume", "cancel"] });
     } catch (error) { unavailable.push({ itemId: item.id, reason: error instanceof Error ? error.message : String(error) }); }
   }
   for (const receipt of receipts) {
@@ -318,7 +326,12 @@ export async function readDesignRequests(store: Store, state: CanvasState, home:
     };
     await inspect(value.brief, "Completed brief", shared);
     if (value.output.kind === "canvas") await inspect(value.output.artifact, "Output", shared);
-    for (const artifact of value.context) await inspect(artifact, `Context ${artifact.itemId}`, policy);
+    const transitions = designRepairTransitions(history);
+    for (const artifact of value.context) {
+      if (artifact.home === home && artifact.canvasId === state.project.id && designInputTransition(state.canvas, value.brief.itemId, value.requestId, value.epoch, artifact, transitions)) {
+        if (!(await contextBlobAvailable(store, state.project.id, artifact.blobHash))) policy.push({ reason: `Context ${artifact.itemId} bytes are unavailable.`, unavailable: true });
+      } else await inspect(artifact, `Context ${artifact.itemId}`, policy);
+    }
     policy.push(...governingReasons(state, home, value).map((reason) => ({ reason, unavailable: false })));
     if (value.governing?.artifact) await inspect(value.governing.artifact, "Governing source", policy);
     const all = [...shared, ...policy];

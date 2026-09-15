@@ -571,6 +571,7 @@ them between machines instead of dying with the laptop it was made on.
 ```sh
 isocan bench                # every agent on your bench, with its reachability
 isocan bench add <name>     # put one on the bench, from what this machine knows
+isocan bench join <name>    # have it answer on THIS canvas too
 isocan bench rm <name>      # take it off — its standing is untouched
 ```
 
@@ -588,6 +589,38 @@ standing on a canvas, and `isocan bench rm` takes none of it away. `bench add`
 reads the agent off this machine's own records; for an agent this machine has
 never run, name its actor with `--actor <id>` and say so plainly rather than
 guessing a harness for it.
+
+**Bringing one to a canvas is `isocan bench join <name>`.** It enrols an agent
+from your bench on the canvas the command is about — `--canvas`, or whatever
+this directory is bound to — and it needs **no parked `isocan rc` there**,
+which is the difference between naming an agent you already have and
+introducing a stranger. `isocan agent add` mints an actor and so must ask the
+machine that will answer for it; an agent on your bench already has one, so
+its fifth canvas costs exactly what its first did.
+
+What joining does NOT do is the part worth reading twice: it grants standing
+on that one canvas and nothing else. No turn is started, nobody new may summon
+it (a re-join leaves an existing `--listen` grant exactly as it was), and no
+other canvas changes. If nothing can answer for the agent yet, the join still
+succeeds and the line says so in the same three words `isocan bench` uses — an
+enrolment that cannot answer yet is legitimate, and one that pretends it can
+is the bug.
+
+**A person can ask for the same thing in the Chat, by typing `@Name join` on
+a line of its own.** It is the same `agent.invite` this verb sends — joining
+from a sentence and joining from a button are one act — and when it lands the
+thread gets one line saying so, because the canvas is the only channel. You
+will see that line like any other message; it is a record, not a request, and
+nothing is being asked of you.
+
+If you are reading a thread and see `@Name join` with no such line after it,
+the ask was refused: the name was not on the asker's bench. **The refusal is
+always *"Name is not on your bench"* and never *"unknown name"*, whether the
+agent exists on somebody else's bench or does not exist at all.** That is
+deliberate and it is a security property rather than a phrasing: a bench is a
+private canvas, and a refusal that read differently for a name that exists
+somewhere would let a stranger enumerate one name at a time. Do not "improve"
+it, and do not offer to look the name up.
 
 ## The Chat
 
@@ -2789,6 +2822,103 @@ then explicitly use `design project <directory> --refresh` to capture it while
 preserving your working file. An accepted save can separately report stale or
 unavailable consistency after another edit; do not call that a current system.
 
+## One shared review and bounded repair
+
+Optional craft guidance: `design craft <request> --stage new-work|critique|finish --json`
+reads an attributed, bounded Impeccable adaptation around the same saved brief,
+settled answers, accepted rationale and governing system. It asks no new interview
+and runs no native playbook. Familiar controls, fonts and operational density remain
+valid when the task calls for them. `--out <new-directory>` exports PRODUCT.md,
+the exact available DESIGN.md and DESIGN.projection.json, a surface brief, permitted
+references, guidance and license/NOTICE. It refuses an existing directory.
+`design craft <request> --check <directory> --json` validates the original packet
+and current source authority, reporting local authored edits separately and preserving
+every working file. Re-export to a new folder for a new capture. Use `design reconcile`
+for deliberate DESIGN.md changes; PRODUCT/surface edits need explicit brief correction.
+`--package <skill-directory>` checks the pinned 56-file Codex variant, without executing
+scripts or downloading an engine. Missing, incomplete, drifted and verified source
+are separate from native execution, which is unsupported/not run. Applying the guidance
+can be recorded in ordinary review evidence with tool `isocan adapted Impeccable guidance`
+and toolVersion `isocan-craft-v1`; opening a packet proves no inspection and adds no
+repair allowance. Native playbooks, hooks, images and review roles are unsupported.
+
+Use `design review <request> --json` before inspecting a designed output. This
+reads ordinary versioned authored reports and live plus archived reservation
+history. It does not execute a browser, attest quality, or restart discovery.
+Derive a small task/state/viewport plan from the existing brief. Start with
+`design review <request> --start review-start.json`; the file contains `runId`,
+`passId`, the actual `sessionId`, exact `output`, and `obligations`. Each obligation
+has `{id,kind:"browser-task"|"craft",task,state,viewport,required}`; browser tasks
+need a concrete `{width,height}`. `mode:"audit-only"` preserves inspection-only
+intent. A connected output names its real repository, revision, build and runtime,
+not a substitute HTML mock. A new explicitly requested run names `preceding`
+with an exact prior run reference and a reason.
+
+Keep the returned run's `ref` before using the harness's actual tools. Exercise
+saving, validation, correction and relevant widths; record only what happened.
+`design review <request> --run <run> --record observations.json` takes
+`{base,record:{outcome,note,observations,findings}}`. `base` is that exact prior
+reference. An observation names `id`, `obligationId`, actual `tool`/`toolVersion`,
+`result`, `action`, `expected`, `observed`, and exact `evidence` references.
+Passing observations require readable retained evidence. Craft findings separately
+name `id`, `kind`, `severity`, `description`, and `rationale` against the brief.
+A screenshot alone cannot establish that saving or keyboard behavior worked.
+The shared record step runs the existing source analyzer and retains its complete
+diagnostics and coverage. For repository source, add `record.repositorySource`
+with actual `text` and `path`, optionally `designText` and `designPath`; its digest
+is bound to the recorded repository revision. The connected runtime remains the
+browser observation target. Unavailable inspection is a valid honest report.
+
+Reserve an attempt **before** generating a correction:
+
+```sh
+isocan design review req_acme --run review_acme --begin-repair repair_1 --session actual-session
+isocan design repair itm_acme repaired.html --request req_acme --review review_acme --json
+isocan design review req_acme --run review_acme --json > review-read.json
+isocan design review req_acme --run review_acme --record recheck.json --json
+isocan design review req_acme --run review_acme --finish --json
+```
+
+The initial inspection is reserved once and at most two repair attempts are
+available. Invalid/no-op proposals consume their reservation: record outcome
+`invalid` or `noop` and its reason. Rechecks belong to that pass. Another entrance
+reads the same history; refresh, Undo, epoch changes and a missing local journal
+never restore budget. Unreadable history reports budget unavailable and blocks
+new work. Do not hide a limit by automatically creating another run.
+
+A standalone `design repair <item> <file> --from-audit audit.json` uses the same
+canonical conditional edit. New audit reports capture the original target content,
+title, description, properties, scope and governing identity. Older captures
+without metadata require a fresh audit; later metadata must not be recaptured as
+though it had been approved. Each repair is one ordinary item edit and one Undo.
+
+Before **every send**, the CLI saves the full immutable actor/canvas-scoped intent
+under its home. After uncertainty, use `design review <request> --retry` (or
+`design repair <item> <file> --retry` for standalone repair); it retries the saved
+bytes and IDs. A changed file cannot silently replace pending work. Refused and
+accepted journals are archived before clearing; another actor does not inherit
+uncertain custody. Accepted content is separate from a later stale/unavailable
+consistency read. `--finish` keeps report, brief completion and receipt as separate
+conditional acts; if interrupted after completion, run `--finish` again to prepare
+only the remaining receipt. No ordinary add/edit launches a paid model turn.
+
+A verifier publishes `design review <request> --offer-verifier offer.json` only
+after an actual tool probe. The strict offer names exact `run`/`output`, `runId`,
+`requestId`, `sessionId`, `observedAt`, `expiresAt` (within five minutes), `delivery`,
+`available`, `reason`, and `tools:[{name,version}]`, plus schemaVersion 1, kind
+`verifier-offer`, and stable `id`. Actual version authorship and a live native agent
+session supply attribution. A browser-open command, harness name or online dot is
+not a tool capability. `--handoff <offer-id> --run <run>` uses only a current
+reachable offer and existing wake authorization; it creates one addressed request,
+not an inspection result. With no eligible verifier, finish an unverified draft.
+
+Source, task checks and craft remain independent. A real source finding fails;
+bounded static coverage is unsupported with named limits. Ready requires every
+declared required task/state/viewport and craft check to pass on readable current
+inputs, with no critical defects or source findings. Unsupported static limits
+remain visible in the final receipt. Older manual receipts retain their original
+semantics and are not retrospectively branded a completed shared review.
+
 ## Quick reference of the whole surface
 
 **Canvas membership (new canvases use groups):** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
@@ -2915,7 +3045,9 @@ on the thread before putting one on somebody else's canvas,
 `design [--css|--tokens] [set|check]`, `design check [--in <scope>] [--provenance]`,
 `design direction [file] [--in <scope>|--item <id>]`, `design project <directory> [--in <scope>|--item <id>] [--refresh]`,
 `design reconcile <directory>`, `design recipes`, `design recipe <id> [--design|--out <directory>]`, `design audit [--item|--in|--file|--fail]`,
-`design repair <item> <file> --from-audit <report.json>`,
+`design repair <item> <file> [--from-audit <report.json>|--request <id> --review <run>] [--retry]`,
+`design review <request> [--run <id>] [--start|--record|--begin-repair|--offer-verifier|--handoff|--finish|--retry]`,
+`design craft <request> --stage new-work|critique|finish [--out <new-directory>] [--package <skill-directory>]`, `design craft <request> --check <directory>`,
 `design questions [payload] [--respondents]`, `design ask <file> [--thread <id>]`,
 `design answer [payload] [--file <file>]`, `design reference <thread> <comment> <reference> [--out <file>]`,
 `design workflow [request] [--thread|--comment|--output]`, `design start <file> [--automatic]`,

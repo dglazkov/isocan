@@ -190,6 +190,16 @@ time-to-task-success for every attempted run; do not discard A's failures.
 Use a preregistered absolute latency budget in that case, with the ratio marked
 unavailable. Keep image-heavy and fast-edit workloads visible separately.
 
+**Execution clarification, 15 September, before any results:** the automated
+comparison operationalizes an acceptable output as an independently verified
+primary-task pass plus majority overall craft of at least 4. Use its recorded
+delivery latency; measure participant acceptance time separately. “Seldom” means
+fewer than half the planned A runs qualify (exactly half meets the denominator
+rule). In that case the ratio is unavailable, with descriptive successful-task
+latency and all-run capped time still reported. The first execution has a
+15-minute absolute run bound; satisfying that bound alone does not replace the
+missing comparative timing gate or authorize broader enablement.
+
 ## Rollout and continued learning
 
 Phase 7 first enables an opt-in cohort using one shared policy across entrances.

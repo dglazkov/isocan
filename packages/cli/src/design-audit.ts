@@ -51,7 +51,7 @@ export function printDesignAudit(report: CanvasDesignAudit | SourceDesignAudit, 
 }
 
 /** Require a concrete audit capture for the addressed item; unrelated or older shapes cannot authorize repair. */
-export function designRepairCapture(value: unknown, canvasId: string, itemId: string): Pick<DesignRepairRequest, "expectedVersionId" | "expectedGoverning" | "expectedRuleVersion"> {
+export function designRepairCapture(value: unknown, canvasId: string, itemId: string): Pick<DesignRepairRequest, "expectedVersionId" | "expectedGoverning" | "expectedRuleVersion" | "basis"> {
   if (!value || typeof value !== "object") throw new Error("--from-audit needs the JSON from design audit --item <item>.");
   const report = value as Partial<CanvasDesignAudit>;
   const item = Array.isArray(report.items) ? report.items.find(one => one?.itemId === itemId) : undefined;
@@ -59,5 +59,6 @@ export function designRepairCapture(value: unknown, canvasId: string, itemId: st
   if ((item.input.kind !== "stored" && item.input.kind !== "draft") || (item.input.kind === "draft" && (item.input.baseVersionId !== item.versionId || item.blobHash !== null)) || (item.input.kind === "stored" && !item.blobHash)) throw new Error("The capture does not identify a stored screen or an editor draft's actual base version.");
   const governing = item.governing;
   if (!governing || [governing.canvasId, governing.itemId, governing.versionId, governing.blobHash].some(field => typeof field !== "string" || !field)) throw new Error("The capture has no complete governing-design identity.");
-  return { expectedVersionId: item.versionId, expectedGoverning: governing, expectedRuleVersion: report.ruleVersion };
+  if (!item.repairBasis) throw new Error("This historical audit has no original target metadata/scope capture. Run a fresh design audit before preparing a repair.");
+  return { expectedVersionId: item.versionId, expectedGoverning: governing, expectedRuleVersion: report.ruleVersion, basis: item.repairBasis };
 }

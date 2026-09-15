@@ -205,3 +205,11 @@ responses and recovery, without adding a manual schema-authoring form. README,
 release notes and final source manifest describe the verified behavior. The
 physical architecture still has one daemon writer, operation vocabulary and
 existing comment/version stores; no separate workflow service was introduced.
+
+## Remote verification
+
+The exact phase commit `9631383f9ba4c6f6b561cb5f80293969ad20c06a` completed
+release run `34948823923`, review run `34948823932`, pages run `34948821740`
+and persona run `34949317727` successfully. These outcomes were read from
+GitHub after landing. They establish those checks, not hosted Phase 5 behavior
+or generated-design quality.

@@ -1,15 +1,5 @@
-import { useEffect, useState } from "react";
-import {
-  benchAgents,
-  benchRows,
-  benchStandingWords,
-  benchWords,
-  type Actor,
-  type BenchCanvas,
-  type BenchRow,
-} from "@isocan/core";
-import { fetchRcAnswering, getSnapshot, listCanvases } from "../lib/api.ts";
-import { personalApi } from "../lib/personal.ts";
+import { benchStandingWords, benchWords, type Actor } from "@isocan/core";
+import { useBench } from "../lib/bench.ts";
 import "./yourbench.css";
 
 /**
@@ -22,67 +12,21 @@ import "./yourbench.css";
  * is drawn in the workbench; a BENCH belongs to a person, which is why it
  * hangs off the face and not off Share.
  *
- * **The rows are not computed here.** Every word in the third column comes
- * from `benchRows()` in `@isocan/core`, which is a fourth caller of
- * `roster()` — the same fold `isocan who`, the agent tray and the workbench
- * read. This component fetches and renders; a state decided in a browser would
- * disagree with the CLI within the week, which is the drift the isomorphism
- * law exists to stop, and `packages/web/test/yourbench.test.ts` fails if this
- * file starts spelling one of the three states for itself.
+ * **The rows are not computed here, and they are not fetched here either.**
+ * `useBench()` in `../lib/bench.ts` does the reading, and every word in the
+ * third column comes from `benchRows()` in `@isocan/core` — a fourth caller
+ * of `roster()`, the same fold `isocan who`, the agent tray and the workbench
+ * read. This component renders. A state decided in a browser would disagree
+ * with the CLI within the week, which is the drift the isomorphism law exists
+ * to stop, and `packages/web/test/yourbench.test.ts` fails if this file starts
+ * spelling one of the three states for itself.
  *
- * What a browser cannot measure it does not claim. The machine-local running
- * half — `~/.isocan/rc-agents.json` — is not readable from a tab, so the set
- * is passed empty and `elsewhere` is carried by the enrolments, which are
- * canvas state and travel. Likewise the sessions: the per-canvas presence
- * lists belong to the socket for the canvas you are looking at, so `ready`
- * here rests on the daemon's connection-bound rc holds, which is the
- * strongest fact available either way.
+ * The reader moved out when the agents panel needed the same rows for journey
+ * 2's **Join** (`BenchJoin.tsx`); two copies of the fetch would have drifted
+ * the same way two copies of the fold would.
  */
 export function YourBench({ actor, onClose }: { actor: Actor; onClose: () => void }) {
-  const [rows, setRows] = useState<BenchRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const control = new AbortController();
-    void (async () => {
-      try {
-        const status = await personalApi.personalStatus(actor.id, control.signal);
-        const source = status.source?.state === "live" ? status.source.canvasId : null;
-        if (!source) {
-          if (!control.signal.aborted) setRows([]);
-          return;
-        }
-        const mine = await getSnapshot(source, control.signal);
-        const canvases = await listCanvases();
-        const seen = await Promise.all(
-          canvases.map(async (canvas): Promise<BenchCanvas | null> => {
-            const snapshot = await getSnapshot(canvas.id, control.signal).catch(() => null);
-            if (!snapshot) return null;
-            const answering = await fetchRcAnswering(canvas.id).catch(() => null);
-            return {
-              canvasId: canvas.id,
-              canvasTitle: canvas.title,
-              canvas: snapshot.canvas,
-              sessions: [],
-              ...(answering ? { answerable: new Set(answering.actorIds) } : {}),
-            };
-          }),
-        );
-        if (control.signal.aborted) return;
-        setRows(
-          benchRows(
-            benchAgents(mine.canvas),
-            seen.filter((one): one is BenchCanvas => one !== null),
-            new Set<string>(),
-            Date.now(),
-          ),
-        );
-      } catch (err) {
-        if (!control.signal.aborted) setError(err instanceof Error ? err.message : String(err));
-      }
-    })();
-    return () => control.abort();
-  }, [actor.id]);
+  const { rows, error } = useBench(actor.id);
 
   return (
     <div className="identity-menu bench-panel" onKeyDown={(e) => e.key === "Escape" && onClose()}>

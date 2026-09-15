@@ -45,3 +45,8 @@ export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddre
 export * from "./design-system-reader.ts";
 export * from "./design-system.ts";
 export * from "./design-recipes.ts";
+export * from "./design-review.ts";
+export * from "./design-review-node.ts";
+export * from "./design-repair-reader.ts";
+export * from "./design-craft-reader.ts";
+export * from "./design-craft-files.ts";

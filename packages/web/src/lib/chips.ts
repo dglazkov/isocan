@@ -7,20 +7,34 @@
  * catapult to the item.
  */
 import type { Element, ElementContent, Root } from "hast";
-import type { CommandSpan, ItemRefCandidate, ItemRefSpan, MentionCandidate, MentionSpan } from "@isocan/core";
-import { findCommandSpans, findItemRefSpans, findMentionSpans } from "@isocan/core";
+import type { BenchJoinAsk, CommandSpan, ItemRefCandidate, ItemRefSpan, MentionCandidate, MentionSpan } from "@isocan/core";
+import { benchJoinAsk, findCommandSpans, findItemRefSpans, findMentionSpans } from "@isocan/core";
 import { actorColor } from "./colors.ts";
 
-/** `[plain text, chip, plain text, …]` — at most one of `mention`/`item`/`command`. */
-type ChipPiece = { text: string; mention?: MentionSpan; item?: ItemRefSpan; command?: CommandSpan };
+/** `[plain text, chip, plain text, …]` — at most one of `mention`/`item`/`command`/`join`. */
+type ChipPiece = { text: string; mention?: MentionSpan; item?: ItemRefSpan; command?: CommandSpan; join?: BenchJoinAsk };
 
 export function splitChips(
   body: string,
   candidates: MentionCandidate[],
   items: ItemRefCandidate[],
   commands: readonly string[] = [],
+  /**
+   * The asker's own bench (the bench, phase 2). `@Sian join` becomes one chip
+   * when Sian is on it — the whole line, the way `/anatomy` is one chip — and
+   * stays plain text when she is not, which is `findCommandSpans`' own rule
+   * about only chipping verbs this canvas actually has: a chip that offers
+   * something that will be refused is worse than no chip. The refusal for an
+   * unresolved name is the composer's, not the chip's.
+   */
+  bench: readonly MentionCandidate[] = [],
 ): ChipPiece[] {
+  const ask = bench.length > 0 ? benchJoinAsk(body, bench) : null;
   const spans = [
+    // First in the list, so a stable sort keeps it ahead of the `@Sian`
+    // mention that starts at the same index and would otherwise split the
+    // line into a chip and a loose word.
+    ...(ask && ask.actorId !== null ? [{ start: ask.start, end: ask.end, join: ask }] : []),
     ...findMentionSpans(body, candidates).map((s) => ({ start: s.start, end: s.end, mention: s })),
     ...findItemRefSpans(body, items).map((s) => ({ start: s.start, end: s.end, item: s })),
     ...findCommandSpans(body, commands).map((s) => ({ start: s.start, end: s.end, command: s })),
@@ -32,11 +46,13 @@ export function splitChips(
     if (span.start > cursor) pieces.push({ text: body.slice(cursor, span.start) });
     pieces.push({
       text: body.slice(span.start, span.end),
-      ...("mention" in span
-        ? { mention: span.mention }
-        : "command" in span
-          ? { command: span.command }
-          : { item: span.item }),
+      ...("join" in span
+        ? { join: span.join }
+        : "mention" in span
+          ? { mention: span.mention }
+          : "command" in span
+            ? { command: span.command }
+            : { item: span.item }),
     });
     cursor = span.end;
   }

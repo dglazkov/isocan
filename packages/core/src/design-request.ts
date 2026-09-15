@@ -55,9 +55,19 @@ export interface DesignRequestState {
   remainingInitialQuestions: number;
   questions: QuestionnaireState[];
   receipts: DesignReceiptState[];
+  /** Exact current canonical completion source; absence never proves continuity on an older reader. */
+  completedFrom?: { brief: DesignArtifactRef; opId: string } | null;
   allowedActions: Array<"update" | "resume" | "cancel" | "complete" | "receipt">;
 }
 /** Unreadable admitted JSON is explicit and never silently replaced by a guessed brief. */
 export interface DesignRequestsResponse { requests: DesignRequestState[]; unavailable: Array<{ itemId: string; reason: string }> }
 /** Both clients read canonical admission through the existing canvas permission boundary. */
 export const designRequestsRoute = (canvasId: string): string => `/api/projects/${encodeURIComponent(canvasId)}/design/requests`;
+
+export { parseDesignGoverning } from "./design-request-parse.ts";
+
+/** A finished report may follow only its exact canonical completion, never a corrected or resumed brief. */
+export function designRequestBasisCurrent(row: DesignRequestState, basis: { brief: DesignArtifactRef; requestId: string; epoch: number }): boolean {
+  const same = (a: DesignArtifactRef, b: DesignArtifactRef) => a.home === b.home && a.canvasId === b.canvasId && a.itemId === b.itemId && a.versionId === b.versionId && a.blobHash === b.blobHash;
+  return row.status === "current" && row.brief.requestId === basis.requestId && row.brief.epoch === basis.epoch && (same(row.ref, basis.brief) || row.brief.progress === "completed" && !!row.completedFrom && same(row.completedFrom.brief, basis.brief));
+}

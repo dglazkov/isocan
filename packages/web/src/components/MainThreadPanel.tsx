@@ -5,7 +5,7 @@ import { Markdown } from "../lib/markdown.tsx";
 const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
 const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
-import { commentReferencedItemIds, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
+import { benchJoinAsk, commentReferencedItemIds, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -16,6 +16,7 @@ import { glideToBox, revealItem } from "../lib/zoomactions.ts";
 import { type FollowState, nextFollow } from "../lib/lanefollow.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
+import { useBenchMentions } from "../lib/benchmentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
@@ -53,6 +54,17 @@ import { useCanEdit } from "../lib/capability.ts";
  * is cheaper than six.
  */
 export { PANEL_MIN_WIDTH } from "../stores/uiStore.ts";
+
+/**
+ * **What the `@` menu says beside a name that is on your bench and not on this
+ * canvas** (the bench, phase 2 — journey 3).
+ *
+ * A name in a mention menu reads as somebody who can hear you. Sian cannot,
+ * until the next word is `join` — so the row says so rather than letting the
+ * menu imply otherwise. Present tense and no apology: it is not an error, it
+ * is the state, and the fix is one word away.
+ */
+const NOT_HERE_YET = "not here yet";
 
 import { PanelResizer } from "./PanelResizer.tsx";
 import { PanelHead } from "./PanelHead.tsx";
@@ -382,6 +394,11 @@ function Panel({
   const [draft, setDraft] = useChatDraft(canvasId, actor.id);
   const context = useMessageContext(canvasId, messageContextRoots(canvas, draft, selected));
   const sending = useMessageSend(canvasId, context, draft);
+  /** What a `@Name join` was answered with, when it was not carried out. Its
+   *  own state rather than `sending.error`: nothing was sent, so nothing was
+   *  refused by a home, and saying "the message was refused" would be wrong
+   *  about which refusal this is. */
+  const [refused, setRefused] = useState("");
   const canEdit = useCanEdit();
   const questionnaireViewer = JSON.stringify([canvasId, actor.id]);
   const [publisherFor, setPublisherFor] = useState<string | null>(null);
@@ -409,6 +426,35 @@ function Panel({
     useUiStore.getState().setPendingChat(null);
   }, [pendingChat, setDraft]);
   const { candidates, peers } = useMentionRoster(actor.id);
+  /**
+   * **The composer's candidates gain the asker's own bench** (the bench, phase
+   * 2 — journey 3): `@Sian` has to resolve here BEFORE Sian is on this canvas,
+   * or `@Sian join` is a line nobody can type.
+   *
+   * Only the composer's. `rehypeChips` below keeps the canvas's own
+   * candidates, because a rendered body is read by everybody and a bench is
+   * read by one person — painting somebody else's message with names off MY
+   * bench would be the canvas showing me a chip nobody else can see.
+   *
+   * And only the ASKER's. `useBenchMentions` takes one actor id and reads one
+   * personal canvas; there is no argument anywhere here that could reach a
+   * second bench, which is what makes "Theo cannot see Sian" structural
+   * rather than a filter somebody has to remember.
+   */
+  const bench = useBenchMentions(actor.id);
+  const composerCandidates = useMemo(
+    () => [...candidates, ...bench.mentions],
+    [candidates, bench.mentions],
+  );
+  const composerPeers = useMemo(() => {
+    const here = new Set(peers.map((peer) => peer.id));
+    return [
+      ...peers,
+      ...bench.mentions
+        .filter((one) => one.notHereYet && !here.has(one.id))
+        .map((one) => ({ id: one.id, name: one.name, online: false, note: NOT_HERE_YET })),
+    ];
+  }, [peers, bench.mentions]);
   const itemRoster = useItemRefRoster();
   const commands = useCommands();
   /* The verbs this canvas actually has, for the chips. A command is chipped
@@ -592,6 +638,36 @@ function Panel({
           e.preventDefault();
           const body = draft.trim();
           if (!body || sending.disabled) return;
+          setRefused("");
+          /**
+           * **`@Sian join` is carried out here, not posted** (the bench,
+           * phase 2 — journey 3), for `/help`'s reason: the act is the
+           * message, and posting it would leave a request in the thread for
+           * an agent that is not here to answer.
+           *
+           * A line that named nobody on YOUR bench is refused rather than
+           * posted, and the refusal is shown to you rather than written into
+           * the thread — it is an answer to the person who typed it, and
+           * posting it would tell the whole canvas which names somebody
+           * tried. `benchJoinAsk` returns an ask for an unresolved name
+           * precisely so this branch exists: silence here would read as *no
+           * such agent*, which is a claim about a canvas the speaker cannot
+           * see.
+           */
+          const ask = benchJoinAsk(body, bench.mentions);
+          if (ask) {
+            // Fetched on the Enter that asks for it, never on the visit that
+            // renders the composer: recognising the line is a dozen bytes of
+            // core, and CARRYING IT OUT — the op, the thread's line, both
+            // sentences — is a chunk that most people never touch. The same
+            // boundary `lib/benchmentions.ts` puts round the bench reader,
+            // for the same reason.
+            const { joinFromChat } = await import("../lib/benchjoin.ts");
+            const said = await joinFromChat(canvasId, actor, ask, bench);
+            if (said) setRefused(said);
+            else setDraft("");
+            return;
+          }
           // /help and its kind are answered here rather than posted: see
           // lib/localcommands.ts.
           if (runLocalCommand(body, commands)) {
@@ -604,6 +680,7 @@ function Panel({
       >
         {context.enabled ? <MessageContextPreview context={context} /> : <Attached canvasId={canvasId} />}
         {sending.error && <p role="alert">{sending.error}</p>}
+        {refused && <p role="alert">{refused}</p>}
         <MentionField
           // One placeholder, both states: what the CHANNEL is beats what the
           // moment is. Everything typed here reaches every agent listening
@@ -614,9 +691,17 @@ function Panel({
           placeholder="Message everyone — agents included"
           grow
           value={draft}
-          onChange={setDraft}
-          candidates={candidates}
-          peers={peers}
+          // A refusal is about the line that was typed. Keep it on screen
+          // while that line is still there — and drop it the moment it is
+          // not, rather than leaving "Sian is not on your bench" sitting
+          // under a message about something else entirely.
+          onChange={(next) => {
+            setDraft(next);
+            if (refused) setRefused("");
+          }}
+          candidates={composerCandidates}
+          peers={composerPeers}
+          bench={bench.mentions}
           itemCandidates={itemRoster.candidates}
           items={itemRoster.entries}
         />

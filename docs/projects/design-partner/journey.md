@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-14
 see: design-competition, evals, context, memory
-note: phases 0–4 closed with shared requests, scoped systems, working references and useful alternatives verified in real browsers and the CLI. Safe adoption, corrected decisions, durable drafts and cross-entrance rationale pass. Phase 5 is next; shared repair and independent generated-design and partnership evaluation remain ahead.
+note: phases 0–6 closed; phase 7 preparation verified 15 September with actual A/B runtimes, shared CLI/browser tools, independent task assessment, blinded review and full strict gates. Paid generation, compatible authentication, independent raters, six participants and hosted acceptance remain owed. The workflow stays opt-in; native Impeccable playbooks remain unsupported.
 ---
 # A design partner — the experience
 

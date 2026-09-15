@@ -82,6 +82,7 @@ export interface DeepFile {
 export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/design-system.test.ts", secs: 17.5 },
   { file: "packages/cli/test/design-decision.test.ts", secs: 10.4 },
+  { file: "packages/cli/test/design-review.test.ts", secs: 13.5 },
   { file: "test/questionnaire-cli.test.ts", secs: 11.1 },
   { file: "test/canvas-board.test.ts", secs: 73 },
   { file: "packages/cli/test/dispatch.test.ts", secs: 77 },
@@ -123,6 +124,12 @@ export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/desk.test.ts", secs: 11 },
   { file: "packages/cli/test/documents.test.ts", secs: 11 },
   { file: "packages/cli/test/sprint.test.ts", secs: 10 },
+  // 15 Sep: it was 7.5s and in the fast lane while the phase 0 proof was the
+  // whole file. Phase 1's `bench join` case added 4.2s of its own — three
+  // canvases, an enrolment and two joins against the real binary — and 12.9s
+  // is past the line the rule states, so it moves rather than the rule
+  // bending for it.
+  { file: "packages/cli/test/bench.test.ts", secs: 12.9 },
   { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
 ];
 
@@ -152,6 +159,8 @@ export interface FastSpawner {
 }
 
 export const FAST_SPAWNERS: readonly FastSpawner[] = [
+  { file: "test/design-partner-tools.test.ts", secs: 2.118, why: "one actual stdio MCP child calls the CLI and owned Chrome; remaining boundary checks stay in process" },
+  { file: "packages/cli/test/design-craft.test.ts", secs: 6.7, why: "one actual CLI packet/export/check/reconcile walk on a shared synthetic daemon; measured 15 September" },
   { file: "packages/cli/test/design-request.test.ts", secs: 9.8, why: "one real-home lifecycle and exact-reference walk; measured 14 September, near the ten-second line" },
   { file: "packages/cli/test/migration.test.ts", secs: 9.8, why: "left the deep lane on the measurement that built this list — recorded at 11s, measured at 9.4" },
   { file: "packages/cli/test/correspondence.test.ts", secs: 9.9, why: "two cases, two walks — and the closest file to the line, so the one to watch" },
@@ -174,7 +183,6 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "test/deeplist.test.ts", secs: 0.2, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },
   { file: "packages/voice-agent/test/voice-model.test.ts", secs: 9.8, why: "nineteen cases over one daemon, and the closest file to the line: only the model verbs it cannot drive from the page walk the CLI at all" },
-  { file: "packages/cli/test/bench.test.ts", secs: 7.5, why: "one case: it parks a single rc to reach `ready` and stops it on the way out, where the rc files park several and drive turns through an adapter. Measured 6.5s and 7.5s on two runs of 15 Sep — near the line, and worth the ordinary lane because it is the whole proof that reachability has three answers" },
 ];
 
 /**
@@ -221,7 +229,10 @@ export function walksBinary(source: string, siblings: readonly string[] = []): b
   const code = [withoutProse(source), ...siblings.map(withoutProse)].join("\n");
   const target = /bin\/isocan\.js|canvas-board\.mjs|\bnpx\b/.test(code);
   const spawns = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\s*\(/.test(code);
-  return target && spawns;
+  // The native study exposes the real CLI through its explicit stdio MCP
+  // process. All three facts are needed; generic SDK clients are not CLI walkers.
+  const studyMcp = /design-partner-mcp\.mjs/.test(code) && /new\s+StdioClientTransport\s*\(/.test(code) && /callTool\s*\(\s*\{\s*name:\s*["']cli["']/.test(code);
+  return target && spawns || studyMcp;
 }
 
 /** The lane a file is declared to be in, or `undefined` when it is in neither. */

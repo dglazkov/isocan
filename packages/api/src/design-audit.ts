@@ -25,26 +25,8 @@ export async function readDesignAudit(ctx: Ctx, canvasId: string, options: Desig
   });
 }
 
-/** Node adapts conditional repair receipts; transport uncertainty cannot become a confirmed refusal. */
+/** Node routes existing explicit repair through the same prepared canonical repair transport as review. */
 export async function repairDesignItem(ctx: Ctx, request: DesignRepairRequest): Promise<DesignRepairResult> {
-  return repairDesignScreen({
-    ...designAuditPort(ctx),
-    snapshot: (id, signal) => ctx.client.snapshot(id, signal),
-    home: (id) => contextHome(ctx, id),
-    upload: (id, text, filename, signal) => ctx.client.uploadBlob(id, Buffer.from(text), "text/html", filename, signal),
-    edit: async (id, operation, signal) => {
-      try {
-        signal?.throwIfAborted();
-        await ctx.client.sendOp(id, ctx.actor, operation);
-        return { accepted: true };
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        // The daemon reports validation, admission, missing-resource, conflict,
-        // and incompatible-client refusals with these statuses. A timeout
-        // (including an HTTP 408 from a proxy) is no receipt of non-acceptance.
-        if (error instanceof ApiError && [400, 401, 403, 404, 405, 409, 410, 413, 415, 422, 426].includes(error.status)) return { accepted: false, status: "refused", reason };
-        return { accepted: false, status: "pending", reason };
-      }
-    },
-  }, request);
+  const { designReviewPort } = await import("./design-review-node.ts");
+  return repairDesignScreen(designReviewPort(ctx), request);
 }

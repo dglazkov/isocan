@@ -91,6 +91,11 @@ describe("every shared fact is an operation either surface can send", () => {
       .toMatchObject({ unreachable: false });
   });
 
+  it("reaches canonical design repair through the actual shared prepared API on both surfaces", () => {
+    expect(rows.find((row: { op: string }) => row.op === "design.repair"))
+      .toMatchObject({ web: true, cli: true, unreachable: false });
+  });
+
   it("counts inversion as a way an operation is reached", () => {
     /**
      * The mistake that would have deleted working code. `comment.restore`,

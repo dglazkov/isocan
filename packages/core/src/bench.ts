@@ -29,6 +29,21 @@ import { roster, type RowState } from "./roster.ts";
 
 /** `properties.kind` on an item that is an agent on somebody's bench. */
 export const AGENT_KIND = "agent";
+/**
+ * **The property names, spelled once and promised to nobody.**
+ *
+ * These three and `BENCH_ITEM_FILENAME` below are module-local on purpose.
+ * They exist so `benchAgentOf` and `benchItemOf` cannot disagree about what a
+ * bench item wears — that is the whole job, and it is done entirely inside
+ * this file. Exporting them added a fourth promise nothing outside had asked
+ * for, and `test/unused-exports.test.ts` is right that a promise to nobody
+ * costs the next reader a lookup before they find out it is not API.
+ *
+ * The day something outside genuinely needs to read `actorId` off an item, the
+ * honest move is to export `benchAgentOf` (already exported) rather than the
+ * string — a reader that knows the property name knows the schema, and the
+ * point of this file is that only it does.
+ */
 /** `actorId=<id>` — the actor this agent speaks as. The row's identity: the
  * title is what a person calls it and can be renamed, the actor is what a
  * summons, an enrolment and a parked rc all name. */
@@ -64,15 +79,21 @@ export const BENCH_ITEM_SIZE = { width: 320, height: 180 };
  * cannot say *unreachable*, the dead-machine case `agent-custody` waits on,
  * and it assumes the question is about THIS machine, which journey 4 makes
  * false. Never reduce this to two.
+ *
+ * Module-local: the surfaces meet this union through `BenchRow.reach`, which
+ * is exported and carries it structurally, and they check themselves against
+ * `BENCH_REACH` below rather than against the type. Nothing outside ever
+ * needed to WRITE the name, and a type nobody names is not API.
  */
 type BenchReach = "ready" | "elsewhere" | "unreachable";
 
 /**
  * Every reachability a bench row can read, in the order a person meets them.
  *
- * Exported so the surfaces can be checked against the vocabulary rather than
- * against each other: a build that collapsed the middle state would still type
- * check, and this is what a test holds on to.
+ * Exported — and it is the one of the pair that has to be, because it is a
+ * VALUE a test can iterate: a build that collapsed the middle state would
+ * still type check, so the guard has to hold the three answers in its hand
+ * rather than trust the union it would be checking against.
  */
 export const BENCH_REACH: readonly BenchReach[] = ["ready", "elsewhere", "unreachable"];
 
@@ -99,6 +120,10 @@ export interface BenchAgent {
   runsAt: string | null;
 }
 
+/** Is this item a bench row at all? The `kind` test, spelled once — and kept
+ * inside this file, because the question a caller outside actually has is
+ * "what agent is this item", which `benchAgentOf` answers and which already
+ * returns null for anything that is not one. */
 function isAgentItem(item: Item): boolean {
   return item.properties.kind === AGENT_KIND;
 }
@@ -174,7 +199,9 @@ export interface BenchCanvas {
 }
 
 /** A canvas this agent stands on — its enrolment, named so a row can say
- * "standing on 4 canvases" and a reader can go and look. */
+ * "standing on 4 canvases" and a reader can go and look. Module-local for
+ * `BenchReach`'s reason: readers reach it through `BenchRow.standing`, and
+ * nothing outside has ever written the name. */
 interface BenchStanding {
   canvasId: string;
   canvasTitle: string;

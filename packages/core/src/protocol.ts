@@ -23,8 +23,12 @@ export const QUESTIONNAIRES_REQUIRED = "questionnaires-required";
 export const DESIGN_REQUESTS_FEATURE = "design-requests-v2";
 /** These callers can decode immutable comparisons, attributed responses and paired adoption restoration. */
 const DESIGN_DECISIONS_FEATURE = "design-decisions-v1";
+/** Decoder capability for attributed conditional repair operations and their history. */
+const DESIGN_REPAIRS_FEATURE = "design-repairs-v1";
 /** Features this build can replay; replicas advertise their own decoder independently of a forwarded caller. */
-export const CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1,${DESIGN_REQUESTS_FEATURE},${DESIGN_DECISIONS_FEATURE}`;
+export const CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1,${DESIGN_REQUESTS_FEATURE},${DESIGN_DECISIONS_FEATURE},${DESIGN_REPAIRS_FEATURE}`;
+/** A plain HTML snapshot needs no repair decoder; canonical repair history does. */
+export function supportsDesignRepairs(value: unknown): boolean { return typeof value === "string" && value.split(",").some((s) => s.trim() === DESIGN_REPAIRS_FEATURE); }
 /** Missing feature declarations cannot imply support for the paired decision inverse. */
 export function supportsDesignDecisions(value: unknown): boolean { return typeof value === "string" && value.split(",").map((s) => s.trim()).includes(DESIGN_DECISIONS_FEATURE); }
 /** Old decoders receive an upgrade refusal before canonical request state reaches them. */

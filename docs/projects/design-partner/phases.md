@@ -1,12 +1,15 @@
 # A design partner — the walk
 
-**Where we are:** phases 0–4 CLOSED; phase 4 closed on 15 September 2026.
-Both entrances share discovery, scoped systems, real alternatives and durable
-adoption. The final browser journey, draft recovery, CLI continuation and full
-strict gates pass. **Phase 5 is next**: shared critique and bounded repair,
-followed by the optional craft integration and measured quality in phases 6–7.
-The workflow stays opt-in; these engineering proofs do not establish design
-quality or real-user partnership uplift.
+**Where we are:** phases 0–6 CLOSED; phase 7 PART-DONE on 15 September 2026.
+Both entrances share discovery, scoped systems, working alternatives, durable
+adoption and bounded review/repair, with optional adapted Impeccable guidance.
+The actual A/B runtimes, native runner, independent assessment, blinded review,
+participant instruments and local rollback pass their available proofs and full
+strict gates. **Next: design-partner phase 7's measured smoke comparison**,
+with the exact [provision request](provision.md): compatible API authentication
+and a $40 ceiling. Independent raters, six participants, authenticated hosted
+acceptance and the rollout decision remain owed. The workflow stays opt-in;
+engineering proofs do not establish quality uplift.
 Read [journey.md](journey.md), [design.md](design.md), then this walk.
 
 The first useful release fixes discovery integrity. The next delivers one
@@ -34,7 +37,7 @@ flowchart LR
   P1 --> P2[2 Complete shared flow]
   P2 --> P3[3 Defaults and systems]
   P3 --> P4[4 Alternatives and decisions]
-  P3 --> P5[5 Shared review and repair]
+  P4 --> P5[5 Shared review and repair]
   L[Existing design-lint 300 and 301] --> P5
   P4 --> P7[7 Evaluation and default rollout]
   P5 --> P7
@@ -300,11 +303,14 @@ not an option count or screenshot test, establishes whether choices help.
 
 ## Phase 5 — One critique and repair path on every surface
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 September 2026 — one continuous request-to-review journey, real source/task checks, two bounded repairs and exact browser/CLI recovery passed independent proofs and full strict gates. See [verification/phase-5.md](verification/phase-5.md).
 
-**Depends on:** phases 2–3; #300/#301's required contracts are present in the
-execution baseline. Own the default journey integration jointly with #302;
-phase 4 and design-lint's pending human ratings are not technical prerequisites.
+**Depends on:** phases 2–4; #300/#301's required contracts are present in the
+execution baseline. Own the default journey integration jointly with #302.
+The explicit repair continuation extends phase 4's exact adoption-edge model;
+design-lint's pending human ratings are not a technical prerequisite.
+[review-and-repair.md](review-and-repair.md) settles the shared review artifacts,
+explicit repair transition, budget and verifier handoff before implementation.
 
 **Outcome:** Scene 6 is dependable across add/edit and CLI text/JSON, API and
 web. A clean source check cannot substitute for trying the artifact.
@@ -333,13 +339,21 @@ Undo works. The repair cap terminates with an honest failed/unverified draft.
 Normal unrelated edits make no model call. Complete local Scenes 1–6 as one
 journey and record it as the P0 candidate, not a proven default.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-15** — A conditional repair needs full-target checks before Undo and Redo. Dependent edits also exposed an older grouped-Redo double reversal. Actual archived and candidate daemons establish both failures and their fixes; restoration conflicts do not consume history.
+- **2026-09-15** — Missing or contradictory review history means unknown budget, not remaining attempts. Original canonical request/run bindings isolate proven unrelated history. Reused ordinary version IDs cannot overwrite prior observations or grant a new repair.
+- **2026-09-15** — A finished review remains current only across its exact canonical completion edge. Source coverage, browser task success and craft observations stay separate, and retained completion evidence survives removal and GC without promising every old report eternal storage.
+- **2026-09-15** — Verifier discovery needs actual live canvas actors before their first authored edit. Eligibility still requires registry identity, a current native tool offer, reachability and wake authorization. Responsive remounts preserve the selected review and actor-owned pending intent.
+- **2026-09-15** — An unchanged eval control bypassed repair and concealed a broken consumer. Passing the original audit basis, then proving a changed candidate and metadata race, restored integration without recapturing context or altering the old pilot's evidence.
 
 ## Phase 6 — A bounded Impeccable integration
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 September 2026 — pinned resource/launcher compatibility, shared adapted guidance, exact context/export/freshness, real browser/CLI and bounded receipt proofs passed with full fast/typecheck/build and strict emulator gates. See [verification/phase-6.md](verification/phase-6.md).
 
 **Depends on:** phase 2's context and receipt contracts. Optional for rollout.
+[craft-integration.md](craft-integration.md) records the pinned compatibility
+probe and settles the supported adapted-guidance subset before implementation.
 
 **Outcome:** Scene 7 uses a verified package or states precisely which adapted
 guidance ran. The integration cannot impose a second discovery ceremony.
@@ -365,14 +379,20 @@ The matched craft condition in `evaluation.md` tests added value; compatibility
 alone does not enable it by default. Record negative findings rather than
 leaving an incompatible package as an invisible dependency.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-15** — The native package loads supplied context but still imposes generic interview, image and role instructions. The supported integration is explicit adapted guidance with pinned resources, not native playbook execution. Its quality advantage remains a separate phase 7 condition.
+- **2026-09-15** — Recommendation and accepted choice differ. Actual human choice against the recommendation now survives export and readable guidance. Structural actor DTOs also required explicit public attribution before closed-packet validation; types alone did not remove extra runtime fields.
+- **2026-09-15** — Canonical completion can change an author's envelope without changing the underlying facts. Original source attribution and exact completion history establish currentness; substantive patches, forged authors and missing evidence do not. Open views recheck their original capture and preserve it until explicit refresh.
 
 ## Phase 7 — Measure the partnership, then enable the default
 
-**Status: NOT STARTED.**
+**Status: PART-DONE.** 15 September 2026 — all zero-provider preparation, actual CLI/browser assessment and full strict gates pass; measured generation, independent ratings, participant sessions and hosted rollout wait on the provision and people below. See [verification/phase-7.md](verification/phase-7.md).
 
 **Depends on:** phases 1–5. Include phase 6's experimental condition only if
 it has a supported implementation; record its omission otherwise.
+[execution.md](execution.md) defines the preserved runtime, matched inputs,
+execution accounting and blinded analysis preparation before provision.
 
 **Outcome:** the project has evidence of better results and useful collaboration,
 and a reversible default rollout on both entrances. A negative or inconclusive
@@ -407,7 +427,13 @@ candidate and reviewable results comes first.
 
 **Trajectory:**
 
-- **2026-09-14** — Open: real-user quality and partnership evidence is still owed. The executing agent owns the dataset and analysis; the product owner supplies the paid-run ceiling, participants and final rollout decision when the candidate is ready. No model spend or recruitment is authorized by writing this plan.
+- **2026-09-15** — Evaluator controls can invent product defects. Actual MCP proofs caught broken input replacement, native Enter and concurrent source edits during capture. Native control behavior and the complete checked file/CLI operation now have direct regression guards.
+- **2026-09-15** — The isolated study browser cannot authenticate the canvas UI. Both arms receive that limit and use the bound CLI for canvas state; task pages remain interactive. Product-canvas acceptance requires its separate actual browser walk.
+- **2026-09-15** — Complete failures are negative evidence; missing provenance is unavailable. Independent task observations determine success, producer browser usage stays descriptive, and false-ready gates apply to the candidate. Review packets preserve task states and explicit runtime limits.
+- **2026-09-15** — A normal green run hid the incoming release's identity race. An independent forced schedule proved that daemon and CLI badge writes could erase each other after successful setup. All shared identity writers now serialize across processes; next-command custody and both-daemon restart pass. See [identity-persistence.md](identity-persistence.md).
+- **2026-09-15** — Open: execute the prepared 16-cell smoke comparison after the product owner approves the $40 API-equivalent ceiling and configures compatible isolated authentication. The ordinary subscription login does not authenticate this profile; [provision.md](provision.md) names exact sources, model, bounds and stop rules.
+- **2026-09-15** — Open: three independent reviewers and six intended users must supply the quality and partnership evidence. The product owner supplies access, effort and any compensation; a reviewed smoke result precedes any separately funded full study. Empty forms and synthetic checks are not human observations.
+- **2026-09-15** — Open: the executing agent must walk an authorized hosted canvas and opt-in cohort, then the product owner decides broad enablement against the completed evidence. Local rollback and public dev identity pass; authenticated hosted acceptance and a rollout decision remain unperformed.
 
 ## Outside this P0
 

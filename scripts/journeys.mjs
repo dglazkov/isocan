@@ -793,6 +793,120 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "bench-join",
+    /**
+     * **The bench, phase 1 — journey 2, walked.**
+     *
+     * The phase's proof is a sentence no source-scanning guard can check:
+     * *join an agent from the panel on a canvas whose rc is not running, and
+     * read the roster back from the CLI.* Nothing is parked anywhere in this
+     * journey — that is the point. Naming an agent you already own is not the
+     * same act as introducing a stranger, and until this phase the app made
+     * them the same act ("no rc, no button"), which is why bringing an agent
+     * to its fifth canvas was as hard as bringing it to its first.
+     *
+     * Both halves are here because the claim spans both surfaces: the click
+     * happens in the panel, and the terminal is asked afterwards what it can
+     * see. A person at the browser and a person in the terminal have to be
+     * the same person for a bench to mean anything, so the CLI is given the
+     * identity the door handed the page.
+     */
+    what: "an agent joins from the agents panel with no rc parked, and the terminal reads it back",
+    async run(rig) {
+      const runCli = (...args) =>
+        execFileSync(process.execPath, [cli, ...args], {
+          cwd: rig.home,
+          encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port },
+        });
+
+      /**
+       * **One person, two surfaces** — and the terminal goes first.
+       *
+       * A bench belongs to an actor, so the panel is only showing anything if
+       * the page is the same person who benched. The honest way to make that
+       * true is the product's own: the terminal holds the identity, mints a
+       * pass, and the browser redeems it and arrives BEING them. Claiming the
+       * page's actor from the terminal instead is refused, correctly — a
+       * badge may not speak for somebody another surface still speaks as.
+       */
+      writeFileSync(
+        path.join(rig.home, "identity.json"),
+        JSON.stringify({ id: "usr_bench_theo", name: "Theo", createdAt: new Date().toISOString() }),
+      );
+
+      // Percy is a RECORD: an actor this machine has never run, benched by
+      // name. Nothing is enrolled and nothing is parked.
+      runCli("bench", "add", "Percy", "--actor", "usr_journey_percy", "--harness", "sheep");
+      const id = JSON.parse(runCli("--json", "canvas", "create", "Bench journey")).canvasId;
+      const { address } = JSON.parse(runCli("--json", "--canvas", id, "pass"));
+
+      await rig.b.ev(`(() => { localStorage.clear(); return true; })()`);
+      await rig.b.send("Page.navigate", { url: address });
+      await sleep(2500);
+      await until(rig.b, `!!document.querySelector(".world")`, "the canvas to open for Theo");
+      const who = await rig.b.ev(`(JSON.parse(localStorage.getItem("isocan.identity") ?? "{}")).id ?? ""`);
+      if (who !== "usr_bench_theo") throw new Error(`the pass did not land the page as Theo (it is ${who || "nobody"})`);
+
+      await rig.click('button[aria-label="More"]', "the ··· menu");
+      await until(
+        rig.b,
+        `[...document.querySelectorAll(".menu-entry,[role=menuitem],.ctx-entry")].some(e => e.textContent.trim().startsWith("Agents"))`,
+        "the ··· menu to offer Agents",
+      );
+      await rig.clickText(".menu-entry,[role=menuitem],.ctx-entry", "Agents", "the Agents entry");
+      await until(rig.b, `!!document.querySelector(".tray-bench .bench-row")`, "your bench in the agents panel");
+
+      // The refusal that matters, before the click: the row says whether
+      // anything could answer, in the words the terminal uses. An enrolment
+      // that cannot answer yet is legitimate; one that pretends it can is the
+      // bug, so this sentence has to be on the row rather than in a
+      // disappointment afterwards.
+      const said = await rig.b.ev(`(document.querySelector(".tray-bench .bench-reach")?.textContent ?? "").trim()`);
+      if (!said) throw new Error("the bench row says nothing about whether anything could answer");
+
+      // And it is above Add an agent… — which is absent entirely here,
+      // because no rc is parked. That absence is the whole phase: the Join
+      // must not inherit the stranger gate.
+      const order = await rig.b.ev(`(() => {
+        const panel = document.querySelector(".agents-panel");
+        const bench = panel?.querySelector(".tray-bench");
+        const add = panel?.querySelector(".add-agent");
+        if (!bench) return { missing: true };
+        return { above: !add || (bench.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+                 addShown: !!add };
+      })()`);
+      if (order.missing) throw new Error("the agents panel has no bench section");
+      if (!order.above) throw new Error("your bench is below Add an agent…, not above it");
+
+      await rig.click(".tray-bench .tray-bench-join", "Percy's Join");
+      await until(
+        rig.b,
+        `[...document.querySelectorAll(".agents-body")].some(b => b.textContent.includes("Percy"))`,
+        "Percy to appear in the roster on this canvas",
+      );
+
+      // Read back from the terminal — the other surface, asked independently.
+      const roster = JSON.parse(runCli("--json", "--canvas", id, "who"));
+      const standing = (roster.standing ?? []).map((row) => row.actor.name);
+      if (!standing.includes("Percy")) {
+        throw new Error(`the terminal does not see Percy standing here: ${JSON.stringify(roster.standing)}`);
+      }
+
+      // And joining conferred nothing else: nothing is parked (no rc was ever
+      // started), and no turn was started — the canvas has no conversation.
+      const bench = JSON.parse(runCli("--json", "bench"));
+      const row = bench.bench.find((one) => one.name === "Percy");
+      if (!row) throw new Error("Percy fell off the bench");
+      if (row.reach === "ready") throw new Error("nothing is parked, yet the bench reads ready");
+      if (!row.standing.some((one) => one.canvasId === id)) {
+        throw new Error("the bench does not show Percy standing on the canvas just joined");
+      }
+      const errors = rig.b.takeErrors();
+      if (errors.length > 0) throw new Error(`the panel threw on Join: ${errors[0]}`);
+    },
+  },
+  {
     name: "panels",
     /** The bug: the Personas panel's header collapsed to `display: block` and
      *  its icon sat on its own title, while every test passed. */

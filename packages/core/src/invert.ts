@@ -33,6 +33,9 @@ export function invertOperation(
   };
 
   switch (op.type) {
+    case "design.repair":
+      if (!op.effect) throw new OpValidationError("bad-op", "resolve repair before inversion");
+      return invertOperation(stateBefore, op.effect);
     case "design.compare":
     case "design.respond": return { type: "comment.remove", threadId: op.threadId, commentId: op.commentId };
     case "design.decide": {
@@ -64,6 +67,7 @@ export function invertOperation(
       return null; // home-scoped and never undoable; never reaches a canvas
 
     case "agent.enroll":
+    case "agent.invite":
     case "agent.withdraw":
       // Standing is granted and withdrawn deliberately, never by a casual ⌘Z
       // — an undo that silently re-armed (or silently silenced) an agent
