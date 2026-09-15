@@ -28,9 +28,17 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
 const quiet = process.argv.includes("--quiet");
 
-/** Read through the CLI so there is one parser — the roadmap's lesson. */
+/**
+ * Read through the CLI so there is one parser — the roadmap's lesson.
+ *
+ * `--root repo` because `persona ls` answers with the BOUND directory's
+ * personas by default, which is right for a person standing in a project and
+ * wrong here: a git worktree is a second copy of the source bound to the
+ * first, so without this the ratchet measured the worktree's code against the
+ * main checkout's bounds and invented a miss out of the difference.
+ */
 const personas = JSON.parse(
-  execFileSync("node", [cli, "--json", "persona", "ls"], {
+  execFileSync("node", [cli, "--json", "persona", "--root", repo, "ls"], {
     cwd: repo,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

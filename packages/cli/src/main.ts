@@ -9132,13 +9132,35 @@ async function personaFiles(root: string): Promise<Array<{ file: string; persona
 /** Where personas live for THIS invocation: the bound directory when there is
  *  one, otherwise the cwd — so `isocan persona ls` works in a checkout that
  *  has never been bound to a canvas. */
-async function personaRoot(ctx: Ctx): Promise<string> {
+/**
+ * **Whose personas.** A persona belongs to a project directory, so the binding
+ * answers first: standing in a subdirectory of a bound tree, `persona ls` means
+ * that tree's roles, not none.
+ *
+ * `--root` is for the one caller that means something else. `scripts/ratchet.mjs`
+ * measures THIS checkout against THIS checkout's bounds, and a git worktree is a
+ * second copy of the source bound to the first — so from a worktree the binding
+ * handed back the main checkout's `.agents/personas`, and the ratchet reported a
+ * bound the tree in front of it had already moved. It read as a real miss and was
+ * an artefact of where it ran (14 Sep 2026: op-types "36, past at most 35", from a
+ * worktree whose own file said 36).
+ *
+ * A flag rather than a rule about cwd: the default is untouched, so nothing that
+ * works today changes its mind.
+ */
+async function personaRoot(ctx: Ctx, cmd: Command): Promise<string> {
+  const chosen = (cmd.optsWithGlobals() as { root?: string }).root;
+  if (chosen) return path.resolve(chosen);
   return ctx.binding?.root ?? process.cwd();
 }
 
 const persona = program
   .command("persona")
-  .description("The roles an agent can take on here — `.agents/personas/`");
+  .description("The roles an agent can take on here — `.agents/personas/`")
+  .option(
+    "--root <dir>",
+    "read personas from this directory instead of the one this directory is bound to",
+  );
 
 persona
   .command("ls", { isDefault: true })
@@ -9146,7 +9168,7 @@ persona
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const root = await personaRoot(ctx);
+      const root = await personaRoot(ctx, cmd);
       const found = await personaFiles(root);
       if (found.length === 0) {
         console.log(
@@ -9177,7 +9199,7 @@ persona
   .action(
     run(async (name: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const root = await personaRoot(ctx);
+      const root = await personaRoot(ctx, cmd);
       const found = await personaFiles(root);
       const match =
         found.find((f) => f.persona.name === name) ??
@@ -9220,7 +9242,7 @@ persona
   .action(
     run(async (name: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
-      const root = await personaRoot(ctx);
+      const root = await personaRoot(ctx, cmd);
       const found = await personaFiles(root);
       const match =
         found.find((f) => f.persona.name === name) ??
