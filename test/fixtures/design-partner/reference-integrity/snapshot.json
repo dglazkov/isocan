@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "canvasId": "acme-eval-reference-integrity",
+  "title": "Misleading/inaccessible reference",
+  "groups": [
+    {
+      "id": "primary",
+      "title": "Acme product"
+    }
+  ],
+  "selectedItemIds": [],
+  "items": [
+    {
+      "id": "reference-integrity-reference",
+      "versionId": "reference-integrity-reference-v1",
+      "path": "reference.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    },
+    {
+      "id": "reference-integrity-untrusted-reference",
+      "versionId": "reference-integrity-untrusted-reference-v1",
+      "path": "untrusted-reference.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    }
+  ],
+  "decisions": [],
+  "repository": null
+}

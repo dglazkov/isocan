@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "id": "reading",
+  "title": "Reading surface",
+  "family": "editorial",
+  "instruction": "Create a reading page for the supplied Acme field guide. Make a long article comfortable to navigate.",
+  "deliveryType": "standalone-html",
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1280,
+      "height": 900
+    }
+  ],
+  "knownFacts": {
+    "content": "Supplied long-form synthetic guide"
+  },
+  "answerBank": [
+    {
+      "id": "audience",
+      "questionMeaning": "audience",
+      "answer": "Casual hikers reading on phones and laptops.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "primary-task",
+      "questionMeaning": "primary-task",
+      "answer": "Read a long field guide and find a specific section.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "constraints",
+      "questionMeaning": "constraints",
+      "answer": "Preserve the supplied article and its note; no summary replacing the article.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "tradeoff",
+      "questionMeaning": "tradeoff",
+      "answer": "Prefer comfortable measure and orientation over dashboard cards.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "reference",
+      "itemId": "reading-reference",
+      "versionId": "reading-reference-v1",
+      "kind": "local",
+      "state": "available",
+      "path": "reference.md"
+    }
+  ],
+  "initialSnapshot": "snapshot.json",
+  "files": [
+    "reference.md",
+    "article.md",
+    "snapshot.json"
+  ],
+  "primaryTask": {
+    "id": "reading-primary",
+    "goal": "Find the section about water, read its guidance, and navigate back to the table of contents without losing orientation.",
+    "steps": [
+      "Read article title and summary",
+      "Navigate to Water using the contents",
+      "Read a long section at phone width",
+      "Follow a footnote and return",
+      "Return to the contents with keyboard navigation"
+    ]
+  },
+  "forbiddenRegressions": [
+    "No missing article sections",
+    "No horizontal text scrolling",
+    "No card grid replacing the reading sequence"
+  ],
+  "entryPoints": {
+    "canvas-chat": {
+      "requestingActor": "acme-human",
+      "targetGroupId": "primary",
+      "threadId": "reading-main",
+      "selectedItemIds": []
+    },
+    "external-agent": {
+      "requestingActor": "acme-human",
+      "targetGroupId": "primary",
+      "projectBinding": "same-canvas",
+      "selectedItemIds": []
+    }
+  }
+}

@@ -9,17 +9,17 @@ what it describes. Run `node scripts/roadmap.mjs` after changing one.
 The same board lives on a canvas, [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),
 open to anyone with the address — it should say what `main` says.
 
-**32 built · 51 still open** — of which 37 partly
+**32 built · 52 still open** — of which 38 partly
 built, 13 designed, 0 blocked, and
 **1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
 9 more are `noted` — read, absorbed, owing nothing — and
-3 superseded. Neither counts as done: reading is not building,
+4 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-## Partly built <sub>37</sub>
+## Partly built <sub>38</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -34,6 +34,7 @@ and the done column should not be flattered by either.
 | research | [Design lint that explains the repair](research/2026-09-14-design-lint.md) | 2026-09-14 | measured @shadcn/lint 0.1.0 against JSX and isocan's HTML auditor against seven synthetic cases. Adopt actionable, scoped diagnostics in the existing HTML path; reserve the Tailwind plugin for an optional repository adapter. Phase 1 now corrects missing-variable credit, spacing/font shorthand gaps and prose false positives, with parsed ranges, coverage and governing provenance. Phase 2 adds browser findings, local-file audits and conditional repair with honest write receipts. Phase 3 adds scoped recipe contracts, effective policy views and native/DTCG preservation. Phase 4 adds a measured advisory Tailwind repository runner and isolated CSS/HTML/accessibility probes. Phase 5 now completed its approved 36-run model pilot: both conditions complete 14/18 tasks, with no objective benefit threshold met. Human ratings for 18 blind pairs remain pending. · see design-competition, evals, context · [#299](https://github.com/dglazkov/isocan/issues/299) |
 | **project** | [design-competition](projects/design-competition/journey.md) | 2026-09-11 | technical integration built 13 Sep on explicit groups, with nine packs, CLI workflow, lazy picker, scoped systems, templates, data contributions and winner versioning. Independent CLI/browser and source/runtime removal proofs passed. Phase 0 human distinctiveness/cost, real fighters, hosted dev/prod and container-image removal remain; blind is deferred and refused · see sprint, modules, personas, on-demand, standing-agents, evals · [#250](https://github.com/dglazkov/isocan/issues/250) |
 | **project** | [design-lint](projects/design-lint/journey.md) | 2026-09-14 | phases 1–4 deliver parsed diagnostics, conditional repair and scoped contracts on both surfaces, plus an advisory repository runner and measured optional-tool fixtures. Phase 5 completed its approved 36-run model comparison and verified the stored evidence; the objective benefit threshold is unmet. Human intent/preference ratings for 18 blind pairs are the only remaining gate. · see design-competition, evals · [#299](https://github.com/dglazkov/isocan/issues/299) |
+| **project** | [design-partner](projects/design-partner/journey.md) | 2026-09-14 | phase 0 closed with shared contracts and a verified twelve-case evaluation preparation path. Phase 1 is next; the live workflow and generated-design outcome evaluation remain unbuilt. · see design-competition, evals, context, memory |
 | **project** | [embed](projects/embed/phases.md) | 2026-09-09 | phases 1 and 2 built. The framed pane keeps its own badge over HTTPS. MCP now has sixteen tools after memory phase 4, current canvas and layered Context resources, explicit durable agent sessions, attributed item/comment writes and cancellable feedback waits; ordinary tools retain ambient identity by default, while personal text requires an explicit claimed session. Real stdio overlap, restart, frozen content and admission proofs passed 13 Sep. Phase 3 MCP Apps remains unbuilt and outside this continuation; phase 4 retains the decision against per-IDE extensions · see harnesses, context, memory, iso-api · [#220](https://github.com/dglazkov/isocan/issues/220) |
 | **project** | [evals](projects/evals/plan.md) | 2026-08-29 | stages 1 and 2 are built, and stage 1's hand-labelling was done 3 Sep — it corrected the 1 Sep headline (73% of the corpus was agents' own prose; people's asks were 95% answered) and found a sixteen-fold cancel bug; a calibrated classifier ships in `isocan evals corpus`. Stage 3's twenty golden tasks are in `evals/golden/v1/`, weighted by that distribution and self-testing in both directions. Stage 5's harness `scripts/lift.mjs` measured `/sprint` (same result, a third of the cost) and `isocan-collab` (same result, fewer turns) on 3 Sep. Stage 4's harness `scripts/calibrate.mjs` gave its first reading 4 Sep — 30 comparisons, 63% agreement, κ 0.26, and the finding that over half the pairs were an agent's choice, not a person's; the converge lane is built · see evals |
 | **project** | [extensions](projects/extensions/design.md) | 2026-09-06 | stages 1 and 2 built 6 Sep — a declarative tool as an item with `role=tool`, `does` limited to a slash command that exists, a closed icon set, reserved labels, and the capability list printed before `--yes`; `isocan tool list/add` and the rail render from ONE reader in core. Stages 3 (declarative panels), 4 (extension actors — which has no subject to attribute until a panel ACTS, checked 6 Sep) and 5 (hosted panels; its content-origin gate cleared 6 Sep) not built · see extensions |
@@ -136,10 +137,11 @@ and the done column should not be flattered by either.
 | research | [Skills worth stealing: what the ecosystem has built](research/agent-skills.md) | 2026-08-30 | import/read/skip verdicts recorded per repo |
 | research | [What Headlong knows](research/2026-08-24-headlong.md) | 2026-08-30 | its three asks are owned elsewhere: backoff by the night shift, convergence by atlas · see atlas |
 
-## Superseded <sub>3</sub>
+## Superseded <sub>4</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
 | research | [Eighteen roads out: readiness of the proposed features](research/feature-readiness.md) | 2026-08-30 |  |
+| research | [isocan as a design partner](research/2026-09-14-design-partner.md) | 2026-09-14 | execution outline promoted to the design-partner project and its eight-phase plan. Findings and source probes remain the evidence baseline; implementation and outcome evaluation have not started. · see design-partner, design-competition, evals, context, memory |
 | **project** | [launch](projects/launch/design.md) | 2026-08-30 | kept as the measured record of the dispatch shape — spike run 30 Aug, 4 of 5 guesses answered; guess 3 (the fine-grained token) is moot unless a dispatch hook returns · see launch, on-demand |
 | research | [Sheepdog](research/2026-09-04-sheepdog.md) | 2026-09-04 | designed 4 Sep, then superseded the same day by an external sheep CLI that covers the pet-agent role and works with isocan rather than inside it; kept as the record of the options weighed — a pet agent a person owns, on every canvas they can reach by default, that listens to its owner, to named people, or to everyone, with one switch for spend; four ways to home it in the cloud weighed, a kennel record and a wake signal recommended, in four stages. ONE of the three facts is built (9 Sep) — "whom it listens to", as `AgentRules.listen` on the enrolment, an outer gate in `dispatchReason` that a mention does not pierce and that never reaches the ceiling, `isocan rc listen <name> --to`, and the words in `who`, `agent rules` and the tray; on 11 Sep its default became this design's own — the owner, the person whose rc runs it — as owner-only summons, with the rc announcing its policy with its hold and only the owner's word widening. The supersession stands for WHERE a pet is hosted and never covered this: a gate is a fact about the canvas, and no external tool can supply it. Not built: the kennel record, the on/off switch (deliberately not on the enrolments — N ops, and a flip mid-write leaves a pet half asleep), derived admission, and everything cloud · see standing-agents, on-demand, agent-custody, multi-identity |

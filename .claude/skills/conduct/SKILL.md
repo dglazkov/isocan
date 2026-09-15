@@ -165,6 +165,12 @@ The checklist, every phase:
 - `git status --short`: only the phase's files changed, no leftovers,
   no `.env` or `prod.env` in the diff, nothing under `docs/projects/`,
   nothing under `.isocan/`.
+- Stage this phase's intended paths, including new files, before the full
+  gate. Inspect `git diff --cached --stat` for scope; never stage another
+  agent's work. Git-driven measures use `git ls-files`, so an untracked source
+  file can be invisible locally and fail the same guard after the commit in
+  CI. Keep the verified files unchanged until landing; update the staged
+  paths and rerun affected checks after a fix. See lessons.md #70.
 - The whole suite and typecheck, not just the new tests: `npm test`
   (vitest, from the root, every workspace) and `npm run typecheck`. The
   surface guard in `packages/cli/test/surface.test.ts` is part of the

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "canvasId": "acme-eval-small-edit",
+  "title": "Small edit",
+  "groups": [
+    {
+      "id": "primary",
+      "title": "Acme product"
+    }
+  ],
+  "selectedItemIds": [
+    "small-edit-screen"
+  ],
+  "items": [
+    {
+      "id": "small-edit-reference",
+      "versionId": "small-edit-reference-v1",
+      "path": "reference.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    },
+    {
+      "id": "small-edit-system",
+      "versionId": "small-edit-system-v1",
+      "path": "DESIGN.md",
+      "mime": "text/markdown",
+      "scope": "primary",
+      "properties": {
+        "role": "design-system"
+      }
+    },
+    {
+      "id": "small-edit-screen",
+      "versionId": "small-edit-screen-v1",
+      "path": "initial.html",
+      "mime": "text/html",
+      "scope": "primary"
+    }
+  ],
+  "decisions": [],
+  "repository": null
+}

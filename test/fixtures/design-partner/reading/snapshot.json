@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "canvasId": "acme-eval-reading",
+  "title": "Reading surface",
+  "groups": [
+    {
+      "id": "primary",
+      "title": "Acme product"
+    }
+  ],
+  "selectedItemIds": [],
+  "items": [
+    {
+      "id": "reading-reference",
+      "versionId": "reading-reference-v1",
+      "path": "reference.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    },
+    {
+      "id": "reading-article",
+      "versionId": "reading-article-v1",
+      "path": "article.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    }
+  ],
+  "decisions": [],
+  "repository": null
+}

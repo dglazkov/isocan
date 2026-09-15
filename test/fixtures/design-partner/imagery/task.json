@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "id": "imagery",
+  "title": "Imagery-dependent page",
+  "family": "assets",
+  "instruction": "Design an Acme trail-weekend page around the supplied landscape illustration. Image generation is unavailable.",
+  "deliveryType": "standalone-html",
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1280,
+      "height": 900
+    }
+  ],
+  "knownFacts": {
+    "image-generation": "Unavailable",
+    "imagery": "Original local SVG landscape illustration"
+  },
+  "answerBank": [
+    {
+      "id": "audience",
+      "questionMeaning": "audience",
+      "answer": "First-time day hikers planning an easy weekend.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "primary-task",
+      "questionMeaning": "primary-task",
+      "answer": "Decide whether the route and dates fit.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "constraints",
+      "questionMeaning": "constraints",
+      "answer": "Use supplied SVG illustration; no image-generation tool or remote stock dependency.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "tradeoff",
+      "questionMeaning": "tradeoff",
+      "answer": "Let the landscape shape the composition while preserving legible itinerary details.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "reference",
+      "itemId": "imagery-reference",
+      "versionId": "imagery-reference-v1",
+      "kind": "local",
+      "state": "available",
+      "path": "reference.md"
+    },
+    {
+      "id": "landscape",
+      "itemId": "imagery-landscape",
+      "versionId": "imagery-landscape-v1",
+      "kind": "local",
+      "state": "available",
+      "path": "landscape.svg"
+    }
+  ],
+  "initialSnapshot": "snapshot.json",
+  "files": [
+    "reference.md",
+    "landscape.svg",
+    "itinerary.md",
+    "snapshot.json"
+  ],
+  "primaryTask": {
+    "id": "imagery-primary",
+    "goal": "Understand the weekend itinerary, inspect the route illustration, and choose a date for an inquiry.",
+    "steps": [
+      "Inspect the supplied landscape without broken media",
+      "Read the two-day itinerary",
+      "Compare two dates",
+      "Choose a date",
+      "Reach the inquiry with that date"
+    ]
+  },
+  "forbiddenRegressions": [
+    "No broken external image URLs",
+    "No pretending the illustration is a real destination photo",
+    "No image-generation spending"
+  ],
+  "entryPoints": {
+    "canvas-chat": {
+      "requestingActor": "acme-human",
+      "targetGroupId": "primary",
+      "threadId": "imagery-main",
+      "selectedItemIds": []
+    },
+    "external-agent": {
+      "requestingActor": "acme-human",
+      "targetGroupId": "primary",
+      "projectBinding": "same-canvas",
+      "selectedItemIds": []
+    }
+  }
+}

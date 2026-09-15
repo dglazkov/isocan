@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "canvasId": "acme-eval-analytics",
+  "title": "Dense analytics dashboard",
+  "groups": [
+    {
+      "id": "primary",
+      "title": "Acme product"
+    }
+  ],
+  "selectedItemIds": [],
+  "items": [
+    {
+      "id": "analytics-reference",
+      "versionId": "analytics-reference-v1",
+      "path": "reference.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    },
+    {
+      "id": "analytics-queues",
+      "versionId": "analytics-queues-v1",
+      "path": "queues.csv",
+      "mime": "text/csv",
+      "scope": "primary"
+    },
+    {
+      "id": "analytics-tickets",
+      "versionId": "analytics-tickets-v1",
+      "path": "tickets.csv",
+      "mime": "text/csv",
+      "scope": "primary"
+    }
+  ],
+  "decisions": [],
+  "repository": null
+}
