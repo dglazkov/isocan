@@ -12,6 +12,7 @@ import { statSync } from "node:fs";
 import { ApiError, connect, matchRef, type CanvasHandle, type ListedItem } from "@isocan/api";
 import {
   BROWSER_MIME,
+  CANVAS_GROUPS_REQUIRED,
   canvasUrlWithPass,
   drawingSvg,
   drawingViewBox,
@@ -3656,6 +3657,17 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
           : `this machine was let in at the door, but “${canvasId}” has not arrived here yet — try again in a moment`,
       };
     } catch (err) {
+      // The daemon refuses an old client outright (426 canvas-groups-required):
+      // the harness process was started before the pull and is frozen there.
+      // Say the fix, not the daemon's "update isocan" sentence.
+      if (err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED) {
+        return {
+          ok: false,
+          error:
+            "this harness build is older than the daemon it speaks to — pull the latest isocan, " +
+            "rebuild, and restart the voice harness",
+        };
+      }
       return { ok: false, error: `not joined — ${(err as Error).message}` };
     }
   }
@@ -4379,7 +4391,12 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
             switched: switched.ok,
           });
         } catch (err) {
-          respond(502, { error: (err as Error).message });
+          const stale = (err as { code?: string }).code === CANVAS_GROUPS_REQUIRED;
+          respond(502, {
+            error: stale
+              ? "this harness build is older than the daemon it speaks to — pull the latest isocan, rebuild, and restart the voice harness"
+              : (err as Error).message,
+          });
         }
         return;
       }
