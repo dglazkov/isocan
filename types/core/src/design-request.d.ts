@@ -36,7 +36,7 @@ export interface DesignContinuation {
         reason: string;
     };
 }
-/** Governing selection is distinct from incidental references; adding a nearer system can invalidate proof. */
+/** Governing selection and the independent canvas exemption coexist; either changing can invalidate policy evidence. */
 export interface DesignGoverningBinding {
     atItemId: string | null;
     artifact: DesignArtifactRef | null;

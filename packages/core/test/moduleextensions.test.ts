@@ -72,12 +72,12 @@ describe("a design system scoped to an area (gap 4)", () => {
     expect(designSystem(c, { at: empty })?.id).toBe("ds");
   });
 
-  it("is null on the canvas when every system is scoped — and the canvas is still not 'owed' one", () => {
+  it("does not let a numeric canvas summary infer coverage from scoped systems", () => {
     const c = canvasOf([laneA, laneB, inA, inB]);
     expect(designSystem(c)).toBeNull();
     expect(scopedDesignSystems(c).map((s) => s.area.id).sort()).toEqual(["laneA", "laneB"]);
-    // A canvas whose lanes all wrote their style down has written it down.
-    expect(designStanding(c, 12)).toBe("fine");
+    // Only the actual-item helper can establish that every lane is covered.
+    expect(designStanding(c, 12)).toBe("overdue");
   });
 
   it("governs in the order area → canvas → linked", () => {

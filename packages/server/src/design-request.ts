@@ -181,7 +181,6 @@ function governingReasons(state: CanvasState, home: string, receipt: DesignRecei
   if (binding.atItemId !== null && !at) return ["The governing scope is unavailable."];
   const none = state.project.properties.design === "none";
   if (none !== binding.explicitNone) return ["The explicit design policy changed."];
-  if (none) return [];
   const system = designSystem(state.canvas, at ? { at } : undefined), version = system?.versions.find((v) => v.id === system.currentVersionId);
   if (system && version) return binding.artifact && sameRef(binding.artifact, reference(home, state.project.id, system.id, version)) ? [] : ["The governing design system changed."];
   if (binding.artifact?.home === home && binding.artifact.canvasId === state.project.id) return ["The governing design system is unavailable."];

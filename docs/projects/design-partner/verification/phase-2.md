@@ -153,6 +153,15 @@ final full fast run, focused cleanup guards and clean complete Chrome journey
 cover those changes. The record does not claim that the new cleanup test was
 present in that earlier strict run. Logs and local evidence remain in the scratch directory.
 
+## Release CI confirmation
+
+[Release run 34931641129](https://github.com/dglazkov/isocan/actions/runs/34931641129)
+completed successfully on exact phase commit
+`57966f46330c7e1b753a19e98a4dd16b956e6f83`. All four strict suite shards, workspace
+typecheck, metric/roadmap guards and publishing passed. This includes the final
+cleanup regression in the committed tree. The earlier local strict-run scope
+above remains accurate; CI supplies the subsequent complete committed-tree gate.
+
 ## Done on both surfaces
 
 1. **Operations:** canonical `design.request` and `design.receipt`, refusing

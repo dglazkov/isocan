@@ -9,7 +9,9 @@
     "./design-audit": "./src/design-audit-reader.ts",
     "./questionnaire": "./src/questionnaire-reader.ts",
     "./design-request": "./src/design-request-reader.ts",
-    "./routes": "./src/routes.ts"
+    "./routes": "./src/routes.ts",
+    "./design-system": "./src/design-system-reader.ts",
+    "./design-recipes": "./src/design-recipes.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

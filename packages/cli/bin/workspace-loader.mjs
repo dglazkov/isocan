@@ -18,6 +18,10 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const sources = new Map([
+  ["@isocan/api/design-system", new URL("../../api/src/design-system-reader.ts", import.meta.url).href],
+  ["@isocan/api/design-recipes", new URL("../../api/src/design-recipes.ts", import.meta.url).href],
+  ["@isocan/core/design-direction", new URL("../../core/src/design-direction.ts", import.meta.url).href],
+  ["@isocan/core/design-partner-plan", new URL("../../core/src/design-partner-plan.ts", import.meta.url).href],
   ["@isocan/api/context", new URL("../../api/src/context-reader.ts", import.meta.url).href],
   ["@isocan/api/design-audit", new URL("../../api/src/design-audit-reader.ts", import.meta.url).href],
   ["@isocan/api/questionnaire", new URL("../../api/src/questionnaire-reader.ts", import.meta.url).href],

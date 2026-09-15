@@ -223,8 +223,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   draft, and changed inputs make affected evidence stale. Automatic enrollment
   is opt-in through the canvas's `design.workflow=adaptive-v1` property. Turning
   it off preserves existing briefs, answers and receipts; manual starts and
-  continuation remain available. Contextual defaults and measured design-quality
-  improvements are still being developed.
+  continuation remain available. Independent design-quality improvements still
+  require controlled evaluation.
+- **Design systems that carry forward**: inspect the actual scoped source,
+  record a provisional direction or reusable treatments, and carry those choices
+  into later screens through the browser or CLI. Working-file projections keep
+  their original version and preserve edits when the source changes. Inspect
+  three runnable receiving, editorial and campaign references with their design
+  rationale. Library creation uses groups for explicit scope; legacy canvases
+  retain previews, downloads and source editing until migrated.
 - **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
   canvases you were on lately, most recent first, then the rest by activity,
   with a field that finds one from a few letters (`lkh` reaches "Lake House";
@@ -603,6 +610,18 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   stranger with none of your personas, and whether a stranger gets in is what
   the link grant decides. The two gestures compose, and neither pretends to be
   the other.
+- **Your bench**: a standing agent belongs to a canvas; the agents *you have*
+  belong to you. Click your own face and pick **"Your bench…"**, or run
+  `isocan bench`, for a row per agent — its name, its harness, where it stands,
+  and **whether anything could answer for it right now**. That last column is
+  measured every time you look and has three answers, never two: *ready*,
+  *elsewhere* (it stands somewhere, but nothing is parked — a summons lands in
+  silence), and *unreachable* (nothing present can run it at all). The bench
+  itself is your own private canvas, so it follows you between machines instead
+  of dying with the laptop it was made on. `isocan bench add <name>` takes the
+  agent from what this machine already knows and `isocan bench rm <name>` takes
+  it off — and a row confers nothing either way: it does not enrol an agent,
+  and removing it withdraws nothing.
 - **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
   can be told what to care about — `--item <ref>` and `--op item.addVersion`
   (or a family, `item.*`) narrow which changes wake it, so a watcher does not
@@ -728,6 +747,12 @@ isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
 isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
                                    # what each has proved; end one
+isocan bench [add <name> [--actor <id>] [--harness <n>] [--runs-at <label>]]
+             [rm <name>]           # the agents you have, and whether anything
+                                   # could answer for one right now: ready /
+                                   # elsewhere / unreachable. A row is a
+                                   # record — it enrols nobody, and removing
+                                   # it withdraws nobody.
 isocan canvas create|list [--all]|show|edit|delete
 isocan use <canvas> [--home]      # bind this dir to a canvas (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
@@ -751,6 +776,13 @@ isocan activity [who] [-n N]           # what has been happening here, newest fi
 isocan design [--css|--tokens] · design set <file> · design check
 #   the canvas's own design system: a DESIGN.md whose front matter is
 #   typed design tokens (W3C-compatible) and whose sections are the reasoning
+isocan design direction [intent.json] [--in <group>|--item <item>] --json
+isocan design recipes --json
+isocan design recipe receiving --out ./receiving-reference
+isocan design project ./design-work [--in <group>|--item <item>]
+isocan design reconcile ./design-work --json
+#   working DESIGN.md and source manifest retain the original conditional base;
+#   uncertain saves retain their exact intent; accepted content and current context differ
 isocan design workflow [request] --json  # shared procedure, policy and resumable tasks
 isocan design start request.json --json
 isocan design brief <request> --json

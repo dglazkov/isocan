@@ -13,7 +13,8 @@
     "./questionnaire-adoption": "./src/questionnaire-adoption.ts",
     "./design-brief": "./src/design-brief.ts",
     "./design-request": "./src/design-request.ts",
-    "./design-record": "./src/design-record.ts"
+    "./design-record": "./src/design-record.ts",
+    "./design-direction": "./src/design-direction.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -1,12 +1,12 @@
 # A design partner — the walk
 
-**Where we are:** phases 0–2 CLOSED on 14 September 2026; **phase 3 is next**.
-Shared contracts, reliable questions and one complete opt-in design task work
-through canvas chat and the external CLI. Both entrances resume the same brief
-and retain exact references, corrections and attributed evidence. Phases 3–7
-are NOT STARTED: contextual craft defaults, alternatives, shared repair and
-measured design quality remain ahead. Read [journey.md](journey.md),
-[design.md](design.md), then this walk.
+**Where we are:** phases 0–3 CLOSED; phase 3 closed on 15 September 2026.
+Both entrances resume one opt-in design task, resolve the same scoped system,
+and carry authored reusable treatments into a second screen. Three working
+references, source projections and their recovery paths passed real browser,
+CLI and full strict verification. **Phase 4 is next**: useful alternatives and
+safe decisions, followed by shared repair and measured quality in phases 5–7.
+Read [journey.md](journey.md), [design.md](design.md), then this walk.
 
 The first useful release fixes discovery integrity. The next delivers one
 complete design task through either entrance. Stronger systems, comparisons
@@ -218,9 +218,11 @@ contract behavior; model-generated quality remains phase 7's proof.
 
 ## Phase 3 — Defaults that fit, systems that carry forward
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 September 2026 — scoped defaults, all three runnable references, cross-entrance reuse, incumbent components and recoverable source projections passed actual browser/CLI and full repository gates. See [verification/phase-3.md](verification/phase-3.md).
 
 **Depends on:** phase 2. Coordinate governing-system resolution with #300/#301.
+[systems-and-defaults.md](systems-and-defaults.md) settles selection, explicit
+exemption and projection before implementation.
 
 **Outcome:** Scenes 4 and 5 work: a first screen has deliberate craft, and
 a later screen extends the accepted design through either entrance.
@@ -250,7 +252,12 @@ the old context receipt; `design=none` remains an explicit supported decision.
 Record a brief-grounded craft review of the kit separately from automated
 conformance; phase 7 supplies the independent human quality judgment.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-15** — Exemption and incumbent policy are independent facts. Combining them widened request decoding, so `design-requests-v2` gates the change; actual old-daemon refusal and current HTTP/WebSocket paths prove compatibility instead of relying on parser tests.
+- **2026-09-15** — Validate authored content before freezing retry intent. Accepted writes and later consistency reads are separate outcomes; exact canonical payload and actor establish acceptance even after removal, while uncertainty preserves the original intent.
+- **2026-09-15** — A standalone task pass does not prove its embedded preview. Actual opaque frames exposed blocked form submission and history navigation failures; references now keep local navigation, focus and honest temporary state in that exact runtime.
+- **2026-09-15** — Different governing winners need archive-before-close recovery. Legacy area geometry cannot promise scoped creation in one ordinary add, so the library requires groups for new creation while preserving previews, downloads and existing source editing.
 
 ## Phase 4 — Useful alternatives and a decision that survives
 

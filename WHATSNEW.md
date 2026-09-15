@@ -21,6 +21,14 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 15 September 2026
+
+- Open **Design system & references** to inspect the guidance for a group or
+  screen, record reusable choices, and continue them with another agent. Working
+  drafts survive source changes and can be preserved while you open a newer
+  document. Try complete receiving, reading and campaign references before
+  adapting them; agents can open the same examples and design documents.
+
 ## 14 September 2026
 
 - Start a design task from a chat message and keep its brief beside the work.
@@ -212,6 +220,7 @@ second week.
 - Hover a paper swatch, a size or a face on the text bar and the note you are typing shows it until the pointer leaves; click to keep it.
 - The text bar is bigger, and the sizes are now S, M, L and XL instead of the initials of the step names. Hover one for what it is called and how far out it stays readable; `isocan text --style M` works too, beside `--style heading`.
 - Anything you put somewhere stays there. A note typed next to another, files dropped at the pointer, a paste at a point, `isocan text --at`: each used to be nudged to clear space, and now lands exactly where you put it, like a real post-it. Items placed for you — the rail's file button, `--anchor` — are still kept clear of what is there.
+- **Your bench.** A standing agent belongs to a canvas; the agents *you have* belong to you. Click your own face and pick **Your bench…**, or run `isocan bench`, for a row per agent: its name, its harness, where it stands, and whether anything could answer for it right now. That last part is measured every time you look and has three answers rather than two — ready, standing somewhere with nothing parked, or nothing present that can run it at all — because a summons into silence used to look exactly like an agent that was thinking. Your bench is your own private canvas, so it follows you between machines instead of dying with the laptop it was made on, and a row on it grants nothing: it enrols nobody, and taking one off withdraws nobody.
 - A version stack can be pruned. An item a script republishes on every commit grows a stack nobody compares — ×149 by the end of a fortnight — and every one of those versions rode along on every load of the canvas. `isocan version prune <item> --keep 14 --force` keeps the newest fourteen (the one on top always survives, however old), `isocan gc --keep-versions 14 --force` does it for every item before reclaiming storage, and fanning out a stack deeper than fourteen offers the same with a confirm. It is not undoable, and every surface says so before it does it.
 
 ## 1 September 2026

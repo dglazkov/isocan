@@ -117,7 +117,7 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
     const key = atItemId ?? "";
     let value = governingReads.get(key);
     if (!value) {
-      value = readGoverningDesign(governingIo, { canvasId, canvas: snapshot.canvas, home, ...(atItemId ? { atId: atItemId } : {}), ...(signal ? { signal } : {}) });
+      value = readGoverningDesign(governingIo, { canvasId, canvas: snapshot.canvas, project: snapshot.project, home, ...(atItemId ? { atId: atItemId } : {}), ...(signal ? { signal } : {}) });
       governingReads.set(key, value);
     }
     return value;
@@ -126,7 +126,7 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
     const atItemId = state.brief.targetItemId ?? state.brief.groupId;
     const governing = await governingAt(atItemId);
     const explicitNone = designSkipped(snapshot.project);
-    const governingBinding: DesignGoverningBinding = { atItemId, artifact: explicitNone ? null : governing.artifact, explicitNone };
+    const governingBinding: DesignGoverningBinding = { atItemId, artifact: governing.artifact, explicitNone };
     const reasons = [...state.reasons];
     const current = snapshot.canvas.items[state.ref.itemId];
     const changedDuringRead = !current || current.currentVersionId !== state.ref.versionId;
@@ -161,8 +161,8 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
       const expected = saved.receipt.governing;
       if (expected) {
         const actual = await governingAt(saved.receipt.output.kind === "canvas" ? saved.receipt.output.artifact.itemId : expected.atItemId);
-        if (!expected.explicitNone && actual.status === "unavailable") { unavailable = true; affect(actual.reason, "unavailable", policyChecks); }
-        else if (!sameRef(expected.artifact, explicitNone ? null : actual.artifact) || expected.explicitNone !== explicitNone) affect("The design system governing this output changed.", "stale", policyChecks);
+        if (actual.status === "unavailable") { unavailable = true; affect(actual.reason, "unavailable", policyChecks); }
+        else if (!sameRef(expected.artifact, actual.artifact) || expected.explicitNone !== explicitNone) affect("The design system governing this output changed.", "stale", policyChecks);
       } else affect("This receipt has no captured governing selection.", "stale", policyChecks);
       for (const input of saved.receipt.context) {
         if (input.canvasId === canvasId && normalizeHomeUrl(input.home) === normalizeHomeUrl(home)) {
@@ -192,7 +192,7 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
     const reconciliation = state.questions.filter(question => question.status !== "superseded" && question.questions.epoch === state.brief.epoch && !question.outstandingQuestionIds.length && questionnaireSourceCurrent(snapshot.canvas, question)).flatMap(question => question.responses.filter(one => !question.responses.some(later => later.response.supersedesResponseId === one.response.id) && !accepted.some(prior => prior.responseId === one.response.id && prior.question.threadId === question.source.threadId && prior.question.commentId === question.source.commentId && prior.question.payloadId === question.source.payloadId && prior.question.revision === question.source.revision)).map(one => ({ question: question.source, responseId: one.response.id })));
     const missingFactIds = [!state.brief.audience ? "audience" : null, !state.brief.primaryTask ? "primaryTask" : null].filter((one): one is string => one !== null);
     const initialDiscovery = missingFactIds.length > 0 && !state.questions.length && state.remainingInitialQuestions > 0;
-    const outputGovernings = await Promise.all(state.brief.outputIds.map(async itemId => { const governing = await governingAt(itemId); return { itemId, governing, binding: { atItemId: itemId, artifact: explicitNone ? null : governing.artifact, explicitNone } }; }));
+    const outputGovernings = await Promise.all(state.brief.outputIds.map(async itemId => { const governing = await governingAt(itemId); return { itemId, governing, binding: { atItemId: itemId, artifact: governing.artifact, explicitNone } }; }));
     requests.push({ ...state, status: stale ? "stale" : state.status, reasons, allowedActions: changedDuringRead ? [] : unavailableCitations.length ? state.allowedActions.filter(action => action === "resume" || action === "cancel") : state.allowedActions, governing, governingBinding, outputGovernings, contextReferences: capturedContextReferences(state), receipts, reconciliation, missingFactIds,
       nextAction: state.status === "cancelled" || stale ? "resume" : open ? "answer" : reconciliation.length ? "reconcile" : state.brief.progress === "completed" ? receipts.some(one => one.status === "current" && one.receipt.status === "ready") ? "review" : "verify" : initialDiscovery ? "clarify" : "build" });
   }
@@ -260,8 +260,8 @@ export async function readDesignRequestReference(io: DesignRequestReadPort, requ
   const known = [state.ref, ...capturedContextReferences(state), ...state.brief.references.flatMap(one => one.artifact ? [one.artifact] : []), ...state.brief.facts.flatMap(one => one.sources), ...state.receipts.flatMap(one => [one.ref, ...one.receipt.context, ...one.receipt.checks.flatMap(check => check.evidence), ...(one.receipt.governing?.artifact ? [one.receipt.governing.artifact] : []), ...(one.receipt.output.kind === "canvas" ? [one.receipt.output.artifact] : [])]), ...retained.map(one => one.artifact)];
   if (!known.some(one => sameDesignArtifact(one, artifact))) {
     let identified = false;
-    if (!designSkipped(snapshot.project)) for (const atId of new Set([state.brief.targetItemId ?? state.brief.groupId, ...state.brief.outputIds])) {
-      const governing = await readGoverningDesign(io, { canvasId, canvas: snapshot.canvas, home, ...(atId ? { atId } : {}), ...(signal ? { signal } : {}) });
+    for (const atId of new Set([state.brief.targetItemId ?? state.brief.groupId, ...state.brief.outputIds])) {
+      const governing = await readGoverningDesign(io, { canvasId, canvas: snapshot.canvas, project: snapshot.project, home, ...(atId ? { atId } : {}), ...(signal ? { signal } : {}) });
       if (governing.status === "available" && sameDesignArtifact(governing.artifact, artifact)) { identified = true; break; }
     }
     if (!identified) throw new Error("This artifact is not an identified input, governing document or evidence of this request.");

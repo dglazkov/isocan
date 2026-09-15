@@ -20,7 +20,7 @@ export interface DesignContinuation {
   factProvenance: DesignFactProvenance[];
   resumedBy?: { actorId: string; reason: string };
 }
-/** Governing selection is distinct from incidental references; adding a nearer system can invalidate proof. */
+/** Governing selection and the independent canvas exemption coexist; either changing can invalidate policy evidence. */
 export interface DesignGoverningBinding { atItemId: string | null; artifact: DesignArtifactRef | null; explicitNone: boolean }
 /** Published questions declare why they consume discovery effort and which durable facts they settle. */
 export interface DesignDiscovery {

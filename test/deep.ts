@@ -80,6 +80,7 @@ export interface DeepFile {
 }
 
 export const DEEP: readonly DeepFile[] = [
+  { file: "packages/cli/test/design-system.test.ts", secs: 17.5 },
   { file: "test/questionnaire-cli.test.ts", secs: 11.1 },
   { file: "test/canvas-board.test.ts", secs: 73 },
   { file: "packages/cli/test/dispatch.test.ts", secs: 77 },
@@ -172,6 +173,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "test/deeplist.test.ts", secs: 0.2, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },
   { file: "packages/voice-agent/test/voice-model.test.ts", secs: 9.8, why: "nineteen cases over one daemon, and the closest file to the line: only the model verbs it cannot drive from the page walk the CLI at all" },
+  { file: "packages/cli/test/bench.test.ts", secs: 7.5, why: "one case: it parks a single rc to reach `ready` and stops it on the way out, where the rc files park several and drive turns through an adapter. Measured 6.5s and 7.5s on two runs of 15 Sep — near the line, and worth the ordinary lane because it is the whole proof that reachability has three answers" },
 ];
 
 /**

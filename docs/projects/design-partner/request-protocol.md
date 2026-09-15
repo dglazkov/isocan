@@ -107,7 +107,9 @@ The Node port retains `automaticSourceClient` checks on actual reads and the
 browser uses its existing design-audit I/O. Do not reuse the old CLI handlers:
 `design show` is local-only and `design check` downloads inherited bytes without
 the scoped source client. `designStanding` is not target-governing selection.
-Preserve explicit `design=none` separately.
+Preserve explicit `design=none` separately. Phase 3’s
+[systems mechanism](systems-and-defaults.md) clarifies that it exempts a required
+system without erasing an incumbent, with a versioned decoder widening.
 
 Local or explicitly copied/pinned references retain exact source and visual
 versions. Retained entries are flat, deduplicated and bounded, with design
@@ -187,7 +189,9 @@ capability, the result is an unverified draft. Ready remains limited to the
 agreed scope and requires the existing check/critical-defect contract.
 
 Add a bounded governing binding: selected scope/target and expected governing
-winner reference or explicit-none. The shared reader re-resolves it at the
+winner reference and the independent explicit exemption. Historical phase-2
+null-artifact bindings remain readable; phase 3 widens the combination under
+`design-requests-v2`, as [recorded here](systems-and-defaults.md). The shared reader re-resolves it at the
 output's actual scope, so a new closer system, group move or inheritance-order
 change invalidates relevant evidence even if the old hashes still exist.
 Compare relevant input identities, not whole canvas revision or unrelated chat.

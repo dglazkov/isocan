@@ -48,7 +48,6 @@ export function parseDesignDiscovery(value: unknown): DesignDiscovery {
 export function parseDesignGoverning(value: unknown): DesignGoverningBinding {
   const v = object(value, ["atItemId", "artifact", "explicitNone"]);
   const result = { atItemId: nullableText(v.atItemId), artifact: v.artifact === null ? null : parseDesignArtifactRef(v.artifact), explicitNone: bool(v.explicitNone) };
-  if (result.explicitNone && result.artifact) bad("Explicit design=none cannot name a governing system.");
   return result;
 }
 function contextRequest(value: unknown): ContextRequest {

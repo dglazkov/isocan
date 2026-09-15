@@ -524,6 +524,8 @@ export class DaemonRoutes {
     originGroupMode?: "legacy" | "groups",
     /** A canvas's birth space at its home; only valid with project.create. */
     spaceId?: string,
+    /** Retain one caller-owned identity across uncertain conditional-edit delivery. */
+    opId?: string,
   ): Promise<PostOpResponse> {
     const origin = originGroupMode ?? (canvasId ? this.observedGroupModes.get(canvasId) : undefined);
     return this.request("POST", "/api/ops", {
@@ -533,6 +535,7 @@ export class DaemonRoutes {
       ...(clientId !== undefined ? { clientId } : {}),
       ...(home !== undefined ? { home } : {}),
       ...(spaceId !== undefined ? { spaceId } : {}),
+      ...(opId !== undefined ? { opId } : {}),
       ...(group !== undefined ? { group } : {}),
       ...(origin !== undefined ? { originGroupMode: origin } : {}),
     });

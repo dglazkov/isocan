@@ -108,6 +108,9 @@ states. Do not imply a URL was inspected merely because it was entered.
 
 ## Defaults and systems
 
+[systems-and-defaults.md](systems-and-defaults.md) settles phase 3 selection,
+explicit exemption, authored direction and working-file reconciliation.
+
 The default standard is strong hierarchy, considered typography, sensible
 density, useful content, accessible interactions, responsive layout and a
 complete primary task. The default aesthetic is chosen for the product.

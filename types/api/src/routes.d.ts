@@ -232,7 +232,9 @@ export declare class DaemonRoutes {
      *  ⌘Z on the screen watching it. */
     group?: string, originGroupMode?: "legacy" | "groups", 
     /** A canvas's birth space at its home; only valid with project.create. */
-    spaceId?: string): Promise<PostOpResponse>;
+    spaceId?: string, 
+    /** Retain one caller-owned identity across uncertain conditional-edit delivery. */
+    opId?: string): Promise<PostOpResponse>;
     /** Refusing questionnaire acts retain their canonical type and caller-owned retry ID. */
     questionnaire(canvasId: string, actor: Actor, op: Extract<Operation, {
         type: "questionnaire.ask" | "questionnaire.answer";

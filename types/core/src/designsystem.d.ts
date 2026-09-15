@@ -26,12 +26,32 @@ export declare function isDesignSystem(item: Item): boolean;
  * for the first canvas with two systems, and a canvas holding a marketing
  * site and an admin app has always been one.
  */
-export declare function designSystem(canvas: CanvasContents, opts?: {
+export declare function designSystem(canvas: CanvasContents, opts?: DesignScopeOptions): Item | null;
+/** An existing item or legacy point has scope; a proposed screen can explicitly name its group or canvas root. */
+export interface DesignScopeOptions {
     at?: {
         x: number;
         y: number;
     } | Item;
-}): Item | null;
+    groupId?: string | null;
+}
+/** The winning local level keeps all its candidates visible, while preserving the existing newest-item rule. */
+export interface DesignSystemSelection {
+    status: "selected" | "none" | "unavailable";
+    item: Item | null;
+    level: "scope" | "canvas" | "none";
+    scopeId: string | null;
+    scopeDepth: number | null;
+    candidates: Item[];
+    reason: string;
+}
+/** Scope resolution is shared by winner selection and per-target screen counts, including planned membership. */
+export declare function designTargetScopes(canvas: CanvasContents, opts?: DesignScopeOptions): {
+    scopes: Item[];
+    unavailable?: string;
+};
+/** Explains direct scope, ancestor and canvas selection without treating another lane as coverage. */
+export declare function selectDesignSystem(canvas: CanvasContents, opts?: DesignScopeOptions): DesignSystemSelection;
 /** Every design system that governs an area rather than the canvas, with
  *  the area it governs — what the Context view lists under each area. */
 export declare function scopedDesignSystems(canvas: CanvasContents): {

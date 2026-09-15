@@ -21,6 +21,7 @@ import { postToMain } from "../lib/mainthread.ts";
 import { useNavigate } from "react-router-dom";
 import { modulePagePath } from "@isocan/core";
 import { moduleProjectViews } from "../modules.ts";
+import { DesignSystemsButton } from "./DesignSystemsButton.tsx";
 
 /**
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
@@ -295,6 +296,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       ))}
       <button className="tool-btn tool-more" data-tip="More tools" aria-label="More tools" aria-expanded={more} onClick={() => setMore(!more)}>⋯</button>
       <div className="tool-sep" />
+      <DesignSystemsButton canvasId={canvasId} actor={actor} compact />
       <button
         className={`tool-btn${marksOpen ? " active" : ""}`}
         data-tip={hasMarks ? "Reactions — the canvas by its marks" : "Reactions — nothing marked yet"}

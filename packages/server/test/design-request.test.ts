@@ -59,7 +59,7 @@ describe("canonical request lifecycle", () => {
     const base = `http://127.0.0.1:${(daemon.app.server.address() as { port: number }).port}`;
     const badge = await mintTestBadge(base), by = { id: "usr_http_agent", name: "Acme HTTP" };
     await badge.speakAs(by, "codex:transport");
-    const oldFeatures = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE}`, sockets: WebSocket[] = [];
+    const oldFeatures = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1`, sockets: WebSocket[] = [];
     let relay: Awaited<ReturnType<typeof startDaemon>> | undefined;
     async function request(url: string, body?: unknown, features = CURRENT_CLIENT_FEATURES) {
       return fetch(base + url, { method: body === undefined ? "GET" : "POST", headers: { ...badge.headers, [CLIENT_FEATURES_HEADER]: features, ...(body === undefined ? {} : { "content-type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -234,6 +234,23 @@ describe("canonical request lifecycle", () => {
     const retained = await read(); expect(retained.status).toBe("current"); expect(retained.marker.retainedReferences).toHaveLength(2); expect(retained.marker.retainedReferences.every((r) => !("designRecord" in r.version) && r.version.visual?.filename)).toBe(true);
     expect(await post(op, agent, "op_retained_start")).toEqual(original);
     await post(change(retained, "update", "ver_retained_update", { audience: "Acme staff" })); expect((await read()).marker.retainedReferences).toEqual(retained.marker.retainedReferences);
+  });
+  it("keeps an exempt incumbent visible and stales historical null bindings and later changed policy evidence", async () => {
+    await post({ type: "project.update", patch: { properties: { design: "none" } } }, person);
+    await post(start()); const first = await read(), output = await add("itm_output", "ver_output", "<button>Receive</button>");
+    await post(change(first, "complete", "ver_complete", { outputIds: [output.itemId] })); const complete = await read();
+    const original: DesignReceipt = { schemaVersion: 1, kind: "receipt", id: "receipt_legacy", requestId: complete.brief.requestId, epoch: 1, brief: complete.ref, output: { kind: "canvas", artifact: output }, context: [], fidelity: "designed", status: "draft", governing: { atItemId: output.itemId, explicitNone: true, artifact: null }, checks: [{ id: "source", kind: "source", tool: "Acme source fixture", toolVersion: "1", result: "passed", coverage: "Original source", state: "receiving", viewport: null, evidence: [] }, { id: "browser", kind: "browser-task", tool: "Acme browser fixture", toolVersion: "1", result: "unavailable", coverage: "Browser not run", state: "receiving", viewport: null, evidence: [] }], unresolved: [] };
+    await post({ type: "design.receipt", itemId: "itm_legacy_receipt", versionId: "ver_legacy_receipt", receipt: original });
+    expect((await read()).receipts[0]?.status).toBe("current");
+    const system = await add("itm_system", "ver_system", "---\nname: Acme stockroom\ncolors:\n  action: '#135b35'\n---\n", "text/markdown");
+    await post({ type: "item.update", itemId: system.itemId, patch: { properties: { role: "design-system" } } });
+    expect((await read()).receipts[0]).toMatchObject({ status: "stale", checkFreshness: [{ checkId: "source", status: "stale" }, { checkId: "browser", status: "current" }] });
+    const widened = { ...original, id: "receipt_incumbent", governing: { ...original.governing!, artifact: system } };
+    await post({ type: "design.receipt", itemId: "itm_incumbent_receipt", versionId: "ver_incumbent_receipt", receipt: widened });
+    expect((await read()).receipts.find((r) => r.receipt.id === widened.id)).toMatchObject({ status: "current", receipt: { governing: { explicitNone: true, artifact: system } } });
+    const blob = await engine.putBlob(canvasId, Buffer.from("---\nname: Changed Acme system\n---\n"), { mimeType: "text/markdown", filename: "DESIGN.md" });
+    await post({ type: "item.addVersion", itemId: system.itemId, version: { id: "ver_system_changed", ...blob, filename: "DESIGN.md" } });
+    expect((await read()).receipts.find((r) => r.receipt.id === widened.id)).toMatchObject({ status: "stale", checkFreshness: [{ checkId: "source", status: "stale" }, { checkId: "browser", status: "current" }] });
   });
   it("publishes attributed draft evidence for completed output and detects output drift", async () => {
     await post(start()); const first = await read(), output = await add("itm_output", "ver_output", "<button>Receive</button>");

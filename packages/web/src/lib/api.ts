@@ -356,6 +356,7 @@ export function postOp(
   group?: string,
   originGroupMode?: "legacy" | "groups",
   spaceId?: string,
+  transport?: { signal?: AbortSignal | undefined; headers?: Record<string, string> | undefined },
 ): Promise<PostOpResponse> {
   return request("POST", "/api/ops", {
     canvasId,
@@ -366,7 +367,7 @@ export function postOp(
     ...(group !== undefined ? { group } : {}),
     ...(originGroupMode ? { originGroupMode } : {}),
     ...(spaceId !== undefined ? { spaceId } : {}),
-  });
+  }, transport?.signal, "identity", transport?.headers);
 }
 
 /**
@@ -766,6 +767,7 @@ export async function uploadBlob(
   canvasId: string,
   file: File | Blob,
   filename: string,
+  transport?: { signal?: AbortSignal | undefined; headers?: Record<string, string> | undefined },
 ): Promise<BlobUploadResponse> {
   // Bypasses `request` (raw bytes), so the recovery retry is spelled out —
   // a 401 here would read as a drop that silently failed.
@@ -775,8 +777,10 @@ export async function uploadBlob(
       headers: {
         "Content-Type": file.type || "application/octet-stream",
         [FILENAME_HEADER]: encodeFilename(filename),
+        ...transport?.headers,
       },
       body: file,
+      ...(transport?.signal ? { signal: transport.signal } : {}),
     });
   let res: Response;
   try {

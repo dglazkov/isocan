@@ -27,8 +27,8 @@ function printBriefs(result: DesignRequestReadResult): void {
     console.log(`${brief.requestId} · ${brief.progress} · ${request.status} · next: ${request.nextAction}\n${brief.audience ?? "Audience not yet supplied"} · ${brief.primaryTask ?? "Primary task not yet supplied"}\n${brief.delivery} · ${brief.fidelity} · ${request.ref.itemId}@${request.ref.versionId}`);
     console.log(`  ${request.remainingInitialQuestions > 0 ? "Canvas discovery: initial batch unused (up to 3 questions)" : "Canvas initial batch already used"}; allowed: ${request.allowedActions.join(", ") || "read only"}`);
     if (request.missingFactIds.length) console.log(`  Missing facts: ${request.missingFactIds.join(", ")}; resolve from context, stated assumptions or consequential questions.`);
-    if (request.governingBinding.explicitNone) console.log("  Using: this canvas explicitly chose no design system.");
-    else if (request.governing.status === "available") console.log(`  Using: ${request.governing.title} (${request.governing.artifact.itemId}@${request.governing.artifact.versionId})${request.governing.inherited ? " · inherited" : ""}`);
+    if (request.governingBinding.explicitNone) console.log("  This canvas is exempt from requiring a design system; any incumbent still applies.");
+    if (request.governing.status === "available") console.log(`  Using: ${request.governing.title} (${request.governing.artifact.itemId}@${request.governing.artifact.versionId})${request.governing.inherited ? " · inherited" : ""}`);
     else console.log(`  Design system: ${request.governing.reason}`);
     for (const constraint of brief.constraints) console.log(`  Constraint: ${constraint}`);
     for (const fact of brief.facts) console.log(`  ${fact.name}: ${fact.value} · ${fact.origin}`);

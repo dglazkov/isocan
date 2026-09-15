@@ -3,14 +3,15 @@ status: superseded
 since: 2026-09-14
 supersededBy: docs/projects/design-partner/phases.md — execution and verification; findings remain the research baseline
 see: design-partner, design-competition, evals, context, memory
-note: the design-partner project owns execution. Phases 0–2 now verify shared contracts, question/reference recovery and a complete opt-in task through both entrances. These findings describe the inspected baseline; craft defaults and outcome evaluation remain ahead.
+note: the design-partner project owns execution. Phases 0–3 verify shared requests, reliable questions and references, scoped craft defaults and cross-entrance reuse. These findings describe the inspected baseline; alternatives, shared repair and independent outcome evaluation remain ahead.
 ---
 # isocan as a design partner
 
 **Execution now lives in [the design-partner project](../projects/design-partner/journey.md),
 with [eight phases and their proofs](../projects/design-partner/phases.md).**
 That plan supersedes this report's implementation outline; the findings below
-remain its evidence baseline. No product work or quality study is marked complete.
+remain its evidence baseline. Product progress is recorded in that project;
+independent quality and partnership evaluation remains ahead.
 
 **Make the ordinary request produce the design partnership.** Someone should be
 able to say “build me an inventory app” and receive thoughtful questions,

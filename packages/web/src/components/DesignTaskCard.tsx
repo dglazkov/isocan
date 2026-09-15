@@ -9,6 +9,7 @@ import { MutationNotice } from "./DesignTaskPanel.tsx";
 import { DesignReceiptView, DesignReceiptEditor } from "./DesignTaskReceipt.tsx";
 import { DesignTaskReconcile } from "./DesignTaskReconcile.tsx";
 import { RequestReferenceCard } from "./RequestReferenceCard.tsx";
+import { DesignSystemsButton } from "./DesignSystemsButton.tsx";
 
 const deliveryName: Record<DesignBrief["delivery"], string> = { "html-node": "Runnable HTML node", "connected-app": "Connected application", wireframe: "Working wireframe", exploration: "Design exploration" };
 
@@ -52,7 +53,8 @@ export function DesignTaskCard({ canvasId, actor, row, canEdit, checking = false
     {brief.facts.length > 0 && <section className="design-task-fact-list">{brief.facts.map((fact) => <div key={fact.id}><strong>{fact.origin === "assumed" ? "Assuming: " : "Using: "}{fact.name}</strong><p>{fact.value}</p>{provenance(`facts.${fact.id}`)}{editable && <button onClick={() => begin("fact", fact.value, fact.id)}>Correct {fact.name}</button>}</div>)}</section>}
     <details><summary>Context, constraints and references</summary><p>{brief.constraints.length ? brief.constraints.join(" · ") : "No additional constraints recorded."}</p>{editable && <button className="btn secondary" onClick={() => begin("constraints", brief.constraints.join("\n"))}>Correct constraints</button>}
       <p>Using {brief.context.entries.filter((entry) => !entry.excluded && !entry.unavailable).map((entry) => entry.title).join(", ") || "the supplied request"}.</p>
-      <p>{row.governing.status === "unavailable" ? `Design context unavailable: ${row.governing.reason}` : row.governingBinding.explicitNone ? "No design system, explicitly requested." : row.governing.artifact ? "Using the governing design system." : "No governing design system was found; a provisional direction is needed."}</p>
+      <p>{row.governing.status === "unavailable" ? `Design context unavailable: ${row.governing.reason}` : row.governing.artifact ? `Using the governing design system.${row.governingBinding.explicitNone ? " This canvas is exempt from requiring a system." : ""}` : row.governingBinding.explicitNone ? "No written system is required on this canvas." : "No governing design system was found; a provisional direction is needed."}</p>
+      {actor && <DesignSystemsButton canvasId={canvasId} actor={actor} target={brief.targetItemId ? { kind: "item", itemId: brief.targetItemId } : brief.groupId ? { kind: "group", groupId: brief.groupId } : { kind: "canvas" }} />}
       {row.governing.artifact && <RequestReferenceCard canvasId={canvasId} requestId={brief.requestId} artifact={row.governing.artifact} />}
       {brief.references.map((reference) => reference.artifact ? <RequestReferenceCard key={reference.id} canvasId={canvasId} requestId={brief.requestId} artifact={reference.artifact} /> : <p key={reference.id}><a href={reference.url} target="_blank" rel="noopener noreferrer">{reference.url}</a> · {reference.state === "supplied" ? "Supplied, not inspected" : reference.state}{reference.reason && `: ${reference.reason}`}</p>)}
       <small>{brief.continuation?.resumedBy ? "Context refreshed when this task resumed." : brief.continuation?.scopeCapture.kind === "source-comment" ? "Context captured with the original message." : "Context captured when this task started; the source had no saved selection."}</small>

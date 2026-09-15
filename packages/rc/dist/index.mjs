@@ -1167,8 +1167,8 @@ var CLAIM_REFUSAL = {
 // packages/core/src/protocol.ts
 var CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
 var QUESTIONNAIRES_FEATURE = "questionnaires-v1";
-var DESIGN_REQUESTS_FEATURE = "design-requests-v1";
-var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},${DESIGN_REQUESTS_FEATURE}`;
+var DESIGN_REQUESTS_FEATURE = "design-requests-v2";
+var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1,${DESIGN_REQUESTS_FEATURE}`;
 var CLIENT_FEATURES_HEADER = "x-isocan-features";
 var PARK_ADOPTED_CODE = "park-adopted";
 var rcAnsweringRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/rc`;
@@ -1714,7 +1714,7 @@ var DaemonRoutes = class {
    * is why an agent can say "the canvas I am creating right now is born at X"
    * and can never say "send this command somewhere else".
    */
-  sendOp(canvasId, actor, op, clientId, home, group, originGroupMode, spaceId) {
+  sendOp(canvasId, actor, op, clientId, home, group, originGroupMode, spaceId, opId) {
     const origin = originGroupMode ?? (canvasId ? this.observedGroupModes.get(canvasId) : void 0);
     return this.request("POST", "/api/ops", {
       canvasId,
@@ -1723,6 +1723,7 @@ var DaemonRoutes = class {
       ...clientId !== void 0 ? { clientId } : {},
       ...home !== void 0 ? { home } : {},
       ...spaceId !== void 0 ? { spaceId } : {},
+      ...opId !== void 0 ? { opId } : {},
       ...group !== void 0 ? { group } : {},
       ...origin !== void 0 ? { originGroupMode: origin } : {}
     });
@@ -2781,9 +2782,9 @@ async function room(deps, life, announce) {
     return snapshot.canvas.agents ?? {};
   };
   const rcCwd = deps.cwd;
-  const reap = async (roster, when) => {
+  const reap = async (roster2, when) => {
     for (const row of await rows.list()) {
-      if (row.canvasId === p.id && !roster[row.actorId]) {
+      if (row.canvasId === p.id && !roster2[row.actorId]) {
         await rows.remove(p.id, row.actorId);
         if (row.harness === SHEEP_HARNESS && row.sessionId) {
           narrate(`${row.name} was withdrawn ${when} \u2014 ending what it left`);
@@ -2792,8 +2793,8 @@ async function room(deps, life, announce) {
       }
     }
   };
-  const reconcile = async (roster) => {
-    for (const record of Object.values(roster)) {
+  const reconcile = async (roster2) => {
+    for (const record of Object.values(roster2)) {
       if (notHeld.has(record.actor.id)) continue;
       await rows.adopt({
         canvasId: p.id,
@@ -2804,7 +2805,7 @@ async function room(deps, life, announce) {
         sessionId: null
       });
     }
-    await reap(roster, "while no rc ran here");
+    await reap(roster2, "while no rc ran here");
   };
   const known = /* @__PURE__ */ new Map();
   const opening = await rosterOf();
@@ -3206,8 +3207,8 @@ async function room(deps, life, announce) {
     for (const d of dispatches.values()) if (d.scannedTip < from) from = d.scannedTip;
     return from;
   };
-  const takeUp = async (roster) => {
-    for (const record of Object.values(roster)) {
+  const takeUp = async (roster2) => {
+    for (const record of Object.values(roster2)) {
       if (dispatches.has(record.actor.id) || notHeld.has(record.actor.id)) continue;
       known.set(record.actor.id, record.actor.name);
       const parked = await parkAgent(record.actor.id, await ownRow(record.actor.id));
@@ -3279,8 +3280,8 @@ async function room(deps, life, announce) {
         await refreshHands();
       }
     }
-    const roster = lastRoster;
-    await takeUp(roster);
+    const roster2 = lastRoster;
+    await takeUp(roster2);
     for (const entry of batch.entries) {
       const op = entry.envelope.op;
       const by = entry.envelope.actor;
@@ -3292,7 +3293,7 @@ async function room(deps, life, announce) {
             await sayNotHeld(op.agent.id);
             continue;
           }
-          const record = roster[op.agent.id];
+          const record = roster2[op.agent.id];
           narrate(`${by.name} enrolled ${op.agent.name} \u2014 answerable here${record ? ` \xB7 ${policyLine(record)}` : ""}`);
           if (record) await sayPolicy(record);
           const adopted = await rows.adopt({
@@ -3321,7 +3322,7 @@ async function room(deps, life, announce) {
         if (row) await deps.endSession(row, (line) => narrate(`${name} \xB7 ${line}`));
         continue;
       }
-      for (const record of Object.values(roster)) {
+      for (const record of Object.values(roster2)) {
         const dispatch = dispatches.get(record.actor.id);
         if (!dispatch || entry.seq <= dispatch.scannedTip) continue;
         const joined = snapshot?.joined;
@@ -3372,9 +3373,9 @@ async function room(deps, life, announce) {
     for (const [actorId, dispatch] of dispatches) {
       if (dispatch.busy || dispatch.pending.length === 0) continue;
       if (clock.now() < dispatch.retryAfter) continue;
-      const record = roster[actorId];
+      const record = roster2[actorId];
       if (!record) continue;
-      const enrolledIds = new Set(Object.keys(roster));
+      const enrolledIds = new Set(Object.keys(roster2));
       const hasPersonWord = dispatch.pending.some(
         (e2) => !enrolledIds.has(e2.envelope.actor.id) && !isSystemActor(e2.envelope.actor.id)
       );

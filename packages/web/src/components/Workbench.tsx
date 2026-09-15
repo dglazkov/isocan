@@ -30,6 +30,7 @@ import { moduleInspectorsFor } from "../modules.ts";
 import { useWebHost } from "../lib/modulehost.ts";
 import { readBlobText } from "../lib/api.ts";
 const DesignTaskPanel = lazy(() => import("./DesignTaskPanel.tsx").then((module) => ({ default: module.DesignTaskPanel })));
+import { DesignSystemsButton } from "./DesignSystemsButton.tsx";
 import { useAnswerable } from "../lib/answerable.ts";
 
 /**
@@ -170,6 +171,7 @@ export function Workbench({
             else's faces. Losing the pile on the way into the room where the
             agents are was the worst of it. */}
         <div className="floats fs-cluster">
+          <DesignSystemsButton canvasId={canvasId} actor={actor} target={itemId ? { kind: "item", itemId } : { kind: "canvas" }} compact />
           <ShareButton actor={actor} />
           <CanvasPresence actor={actor} onIdentity={onIdentity} />
         </div>
@@ -312,4 +314,3 @@ function Roster({
     </section>
   );
 }
-

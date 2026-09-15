@@ -1,10 +1,12 @@
 import { classifyAutomaticSource } from "@isocan/api/context";
 import { registerPersonalContext } from "./personal-context.ts";
+import { registerBench } from "./bench.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
 import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
 import { registerContextReads, reportContext, contextReceipt } from "./context-reads.ts";
 import { registerQuestionnaires } from "./questionnaire.ts";
+import { registerDesignSystems } from "./design-system.ts";
 import { registerDesignRequests } from "./design-request.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
@@ -149,7 +151,8 @@ import {
   extractItemRefs,
   ALIGN_EDGES,
   itemKinds,
-  designStanding,
+  designScopeStanding,
+  resolvePlacement,
   DESIGN_SYSTEM_LIMIT,
   designSkipPatch,
   designUnskipPatch,
@@ -226,7 +229,6 @@ import {
   copyProperties,
   duplicatePlacements,
   newGroupId,
-  needsDesignSystem,
   TEXT_FACES,
   TEXT_FACE_PROP,
   TEXT_FILENAME,
@@ -340,7 +342,6 @@ import {
   contextMark,
   markPatch,
   layersReport,
-  governingDesign,
   memoryOf,
   memoryPatch,
   contextSheet,
@@ -469,6 +470,8 @@ import {
   readIdentity,
   claimSessionIdentity,
   linkedCanvasesOf,
+  readDesignSystem,
+  designSystemPort,
   readDesignAudit,
   readDesignAuditAdvisory,
   readDesignSourceAudit,
@@ -6425,20 +6428,24 @@ function printArrivalAudit(audit: DesignAuditEvidence | undefined): void {
  * this canvas does not want one. There is no flag: a flag leaves no trace, has
  * to be passed every time, and tells the next person nothing.
  */
-function refuseUnsystematisedScreen(
-  canvas: CanvasContents,
+async function refuseUnsystematisedScreen(
+  ctx: Ctx, snapshot: CanvasSnapshotResponse,
   project: { id: string; title: string; properties?: Record<string, string> },
-  mimeType: string,
-): void {
-  if (mimeType !== "text/html") return;
-  const screens = Object.values(canvas.items).filter((item) => itemKind(item) === "screen").length;
-  if (designStanding(canvas, screens, project) !== "overdue") return;
+  placement: Placement, size: { width: number; height: number },
+): Promise<void> {
+  const canvas = snapshot.canvas;
+  const point = resolvePlacement(canvas, placement, size.width, size.height, "chosen" in placement && !!placement.chosen);
+  const containerId = (placement as Placement & { containerId?: string }).containerId;
+  const scope = snapshot.project.groupMode === "groups" ? { groupId: containerId ?? null } : { at: { x: point.x + size.width / 2, y: point.y + size.height / 2 } };
+  const linked = await linkedCanvasesOf(ctx, project.id, snapshot);
+  const standing = designScopeStanding(canvas, Object.values(canvas.items).filter(item => itemKind(item) === "screen"), project, { ...scope, linked });
+  if (standing.standing !== "overdue") return;
   throw new Error(
-    `${project.title} has ${screens} screens and no design system, which is past ` +
-      `${DESIGN_SYSTEM_LIMIT} — every one of them decided something nobody wrote down.\n` +
-      "  ask for `/design-system`      derive one from the screens already here\n" +
-      "  isocan design set <file>      write one you have\n" +
-      "  isocan design skip            this canvas does not want one, on the record",
+    `${project.title}: this target scope has ${standing.screenCount} screens without a governing design system, which is past ` +
+      `${DESIGN_SYSTEM_LIMIT}. ${standing.selection.reason}\n` +
+      "  ask for `/design-system`      derive one from the screens in this scope\n" +
+      "  isocan design set <file>      write one you have (use --in for this scope)\n" +
+      "  isocan design skip            record an exemption for this canvas",
   );
 }
 
@@ -6463,12 +6470,11 @@ async function noteMissingDesignSystem(ctx: Ctx, canvasId: string): Promise<void
   if (ctx.json) return;
   try {
     const snapshot = await ctx.client.snapshot(canvasId);
-    const screens = Object.values(snapshot.canvas.items).filter(
-      (item) => itemKind(item) === "screen",
-    ).length;
-    if (!needsDesignSystem(snapshot.canvas, screens)) return;
+    const screens = Object.values(snapshot.canvas.items).filter(item => itemKind(item) === "screen");
+    const standing = designScopeStanding(snapshot.canvas, screens, snapshot.project, { linked: await linkedCanvasesOf(ctx, canvasId, snapshot) });
+    if (standing.standing === "fine") return;
     console.error(
-      `note: ${screens} screens here and no design system. ` +
+      `note: ${standing.uncoveredIds.length} screens here have no governing design system. ` +
         "`/design-system` derives one from what these screens already do; " +
         "`isocan design set <file>` writes one you have.",
     );
@@ -6570,7 +6576,9 @@ program
         if (opts.drawing && mimeType !== DRAWING_MIME) {
           throw new Error(`--drawing needs an SVG; ${filename} is ${mimeType}`);
         }
-        refuseUnsystematisedScreen(snapshot.canvas, p, mimeType);
+        const plannedSize = sizeFor(opts.size, defaultSize(mimeType));
+        const plannedPlacement = mimeType === "text/html" ? placementFor(snapshot, opts, plannedSize) : undefined;
+        if (plannedPlacement) await refuseUnsystematisedScreen(ctx, snapshot, p, plannedPlacement, plannedSize);
         await narrate(ctx, p.id, { status: `adding ${truncate(filename, 24)}…` });
 
         // Check if there is a distinct visual face (explicit --visual, or HTML with inlined assets)
@@ -6644,7 +6652,7 @@ program
         // goes through `placementFor`, where `--at` is the chosen case.
         const placement = inkBox
           ? (groupPlacementFor(snapshot, { ...opts, at: `${Math.floor(inkBox.minX)},${Math.floor(inkBox.minY)}` }) ?? { x: Math.floor(inkBox.minX), y: Math.floor(inkBox.minY) })
-          : placementFor(snapshot, opts, { width, height });
+          : plannedPlacement ?? placementFor(snapshot, opts, { width, height });
         const itemId = newItemId();
         const versionId = newVersionId();
         const result = await sendOp(ctx, p.id, {
@@ -9519,6 +9527,10 @@ const context = program
 
 registerContextReads(context, ctxOf);
 registerPersonalContext(context, ctxOf);
+// Your bench (docs/projects/bench/design.md): the personal canvas read as a
+// registry of agents. Its body is `bench.ts`, because this file is the list of
+// verbs and every verb that keeps its body here makes the list harder to read.
+registerBench(program, ctxOf);
 
 /**
  * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,
@@ -10371,6 +10383,7 @@ somebody invented and imposed.`,
 
 registerQuestionnaires(style, ctxOf);
 registerDesignRequests(style, ctxOf);
+registerDesignSystems(style, ctxOf);
 
 /**
  * **Saying no, and where that decision lives.**
@@ -10498,17 +10511,10 @@ style
     run(async (opts: { css?: boolean; tokens?: boolean; in?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const item = designSystem(snapshot.canvas, designScope(snapshot, opts.in));
-      if (!item) {
-        throw new Error(
-          `${p.title} has no design system yet — write one with \`isocan design set DESIGN.md\`, ` +
-            `or ask for /design-system and an agent will derive it from the screens already here`,
-        );
-      }
-      const version = item.versions.find((v) => v.id === item.currentVersionId);
-      if (!version) throw new Error(`${item.title} has no current version`);
-      const text = (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8");
-      const doc = parseDesign(text);
+      const scope = designScope(snapshot, opts.in);
+      const { governing } = await readDesignSystem(designSystemPort(ctx), { canvasId: p.id, ...(scope.at ? { target: { kind: "item", itemId: scope.at.id } } : {}) });
+      if (governing.status !== "available") throw new Error(governing.reason);
+      const text = governing.text, doc = governing.document;
 
       // The machine-readable halves. A design system nobody can export stops
       // at the edge of this canvas.
@@ -10516,18 +10522,9 @@ style
       if (opts.css) return console.log(toCss(doc.tokens));
       if (opts.tokens) return printJson(toDtcg(doc.tokens));
       if (ctx.json) {
-        return printJson({
-          itemId: item.id,
-          title: item.title,
-          versions: item.versions.length,
-          tokens: doc.tokens,
-          sections: doc.sections.map((section) => section.title),
-          body: text,
-        });
+        return printJson({ itemId: governing.artifact.itemId, title: governing.title, versions: governing.versions, tokens: doc.tokens, sections: doc.sections.map(section => section.title), body: text, governing });
       }
-      // The body alone on stdout so it can be piped into something that
-      // follows it; everything else goes to stderr.
-      console.error(`${item.title} (${item.id}, v${item.versions.length})`);
+      console.error(`${governing.title} (${governing.artifact.itemId}, v${governing.versions}) · ${governing.selection.reason}${governing.exempt ? " · requirement exempt; incumbent retained" : ""}`);
       console.log(text);
     }),
   );
@@ -10536,31 +10533,18 @@ style
   .command("check")
   .description("Is the design system usable — references, colours, contrast, sections")
   .option("--in <area>", "check the one that governs this area")
+  .option("--provenance", "with --json, include the exact governing identity and selection beside findings")
   .action(
-    run(async (opts: { in?: string }, cmd: Command) => {
+    run(async (opts: { in?: string; provenance?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      // The one that governs: the area's own (with --in), else this canvas's,
-      // else the first a linked canvas contributes (memory phase 1) — and the
-      // check says whose.
-      const governing = governingDesign(
-        snapshot.canvas,
-        await linkedCanvasesOf(ctx, p.id, snapshot),
-        designScope(snapshot, opts.in),
-      );
-      if (!governing) {
-        throw new Error(
-          `${p.title} has no design system — isocan design set DESIGN.md, or ask for /design-system`,
-        );
-      }
-      const item = governing.item;
-      if (governing.from) console.error(`checking against ${governing.from.title}'s design system, inherited here`);
-      const version = item.versions.find((v) => v.id === item.currentVersionId);
-      if (!version) throw new Error(`${item.title} has no current version`);
-      const text = (await ctx.client.downloadBlob(governing.from?.canvasId ?? p.id, version.blobHash)).toString("utf8");
-      const findings = bySeverity(checkDesign(parseDesign(text)));
-      if (ctx.json) return printJson(findings);
-      if (findings.length === 0) return console.error(`${item.title}: nothing to fix`);
+      const scope = designScope(snapshot, opts.in);
+      const { governing } = await readDesignSystem(designSystemPort(ctx), { canvasId: p.id, ...(scope.at ? { target: { kind: "item", itemId: scope.at.id } } : {}) });
+      if (governing.status !== "available") throw new Error(governing.reason);
+      const findings = bySeverity(checkDesign(governing.document));
+      if (ctx.json) return printJson(opts.provenance ? { findings, governing } : findings);
+      console.error(`${governing.title} · ${governing.selection.reason}${governing.exempt ? " · requirement exempt; incumbent retained" : ""}`);
+      if (findings.length === 0) return console.error(`${governing.title}: nothing to fix`);
       printTable(
         findings.map((f) => ({
           "": f.severity === "error" ? "✗" : f.severity === "warning" ? "!" : "·",

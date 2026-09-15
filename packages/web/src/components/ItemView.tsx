@@ -1553,7 +1553,7 @@ function VersionFace({
     );
   }
   if (designSystem && (mimeType === "text/markdown" || mimeType === "text/plain")) {
-    return <Suspense fallback={<p>Reading design system…</p>}><DesignSystemView canvasId={canvasId} blobHash={blobHash} /></Suspense>;
+    return <Suspense fallback={<p>Reading design system…</p>}><DesignSystemView canvasId={canvasId} blobHash={blobHash} author={designVersion?.createdBy} /></Suspense>;
   }
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
     return (

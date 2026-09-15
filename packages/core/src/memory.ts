@@ -3,7 +3,7 @@ import { canvasIdOf, canvasItemOf, isCanvasItem } from "./canvasitem.ts";
 import { areasOf } from "./area.ts";
 import { isGroupItem } from "./canvas-groups.ts";
 import { PLACEMENT_GAP } from "./placement.ts";
-import { designSystem } from "./designsystem.ts";
+import { designSystem, selectDesignSystem, designSkipped, type DesignScopeOptions, type DesignSystemSelection } from "./designsystem.ts";
 import { ambientContextItems, excludedInAmbient } from "./canvas-group-context.ts";
 import { type ContextExtras, type ContextPiece, contextPieces } from "./context.ts";
 import type { RecapHeadResponse } from "./recap-head.ts";
@@ -232,16 +232,30 @@ export function contextLayers(
 export function governingDesign(
   canvas: CanvasContents,
   linked: LinkedCanvas[],
-  opts?: { at?: { x: number; y: number } | Item },
+  opts?: DesignScopeOptions,
 ): { item: Item; from: { canvasId: string; title: string } | null } | null {
-  const own = designSystem(canvas, opts);
-  if (own) return { item: own, from: null };
+  const selected = selectGoverningDesign(canvas, linked, opts);
+  return selected.item ? { item: selected.item, from: selected.from } : null;
+}
+
+/** Inherited candidates retain their source and refused predecessors; exemption never hides an incumbent. */
+export interface GoverningDesignSelection extends Omit<DesignSystemSelection, "level"> {
+  level: DesignSystemSelection["level"] | "inherited";
+  from: { canvasId: string; title: string } | null;
+  exempt: boolean;
+  refusedSources: Array<{ canvasId: string; itemId: string; reason: string }>;
+}
+/** One ordered governing selection supports creation, checking and standing without merging distinct documents. */
+export function selectGoverningDesign(canvas: CanvasContents, linked: LinkedCanvas[], opts: DesignScopeOptions & { project?: { properties?: Record<string, string> } } = {}): GoverningDesignSelection {
+  const own = selectDesignSystem(canvas, opts), exempt = designSkipped(opts.project ?? {});
+  const refusedSources = linked.flatMap((link) => !link.canvas ? [{ canvasId: link.canvasId, itemId: link.item.id, reason: link.refused ?? "The inherited canvas could not be read." }] : []);
+  if (own.status !== "none") return { ...own, from: null, exempt, refusedSources };
   for (const link of linked) {
     if (!link.canvas) continue;
-    const theirs = designSystem(link.canvas);
-    if (theirs) return { item: theirs, from: { canvasId: link.canvasId, title: link.title } };
+    const selected = selectDesignSystem(link.canvas);
+    if (selected.item) return { ...selected, level: "inherited", from: { canvasId: link.canvasId, title: link.title }, exempt, refusedSources, reason: `First readable inherited system, from “${link.title}”. ${selected.reason}` };
   }
-  return null;
+  return { ...own, status: refusedSources.length ? "unavailable" : "none", from: null, exempt, refusedSources, reason: refusedSources.length ? "A possible inherited governing source could not be read." : "No design system governs this target." };
 }
 
 /** The layers as a terminal prints them: a heading per source, the pieces

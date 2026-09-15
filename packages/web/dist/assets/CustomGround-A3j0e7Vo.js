@@ -1,0 +1,1 @@
+import{j as s,a4 as e,cM as r}from"./index-Fng6AsTc.js";function n({canvasId:a,hash:c}){return s.jsxs("div",{className:"canvas-theme canvas-theme-custom",children:[s.jsx("div",{className:"canvas-ground-picture",style:{backgroundImage:`url(${e(a,c)})`}}),s.jsx("div",{className:"canvas-ground-scrim",style:{opacity:r}})]})}export{n as CustomGround};

@@ -40,3 +40,6 @@ export * from "./export.js";
  * compose a pass address, read one a person pasted, ask whether a home is
  * this machine. The same three `isocan/rc` hands a host with no Node. */
 export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "../../core/src/index.js";
+export * from "./design-system-reader.js";
+export * from "./design-system.js";
+export * from "./design-recipes.js";

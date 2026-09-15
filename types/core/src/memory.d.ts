@@ -1,5 +1,6 @@
 import type { CanvasContents, Item, ItemVersion } from "./model.js";
 import { canvasItemOf } from "./canvasitem.js";
+import { type DesignScopeOptions, type DesignSystemSelection } from "./designsystem.js";
 import { type ContextExtras, type ContextPiece } from "./context.js";
 import type { RecapHeadResponse } from "./recap-head.js";
 /**
@@ -119,18 +120,33 @@ export declare function contextLayers(canvas: CanvasContents, linked: LinkedCanv
  * linked**. `design check` on a canvas with none of its own checks against the
  * inherited one, and says whose.
  */
-export declare function governingDesign(canvas: CanvasContents, linked: LinkedCanvas[], opts?: {
-    at?: {
-        x: number;
-        y: number;
-    } | Item;
-}): {
+export declare function governingDesign(canvas: CanvasContents, linked: LinkedCanvas[], opts?: DesignScopeOptions): {
     item: Item;
     from: {
         canvasId: string;
         title: string;
     } | null;
 } | null;
+/** Inherited candidates retain their source and refused predecessors; exemption never hides an incumbent. */
+export interface GoverningDesignSelection extends Omit<DesignSystemSelection, "level"> {
+    level: DesignSystemSelection["level"] | "inherited";
+    from: {
+        canvasId: string;
+        title: string;
+    } | null;
+    exempt: boolean;
+    refusedSources: Array<{
+        canvasId: string;
+        itemId: string;
+        reason: string;
+    }>;
+}
+/** One ordered governing selection supports creation, checking and standing without merging distinct documents. */
+export declare function selectGoverningDesign(canvas: CanvasContents, linked: LinkedCanvas[], opts?: DesignScopeOptions & {
+    project?: {
+        properties?: Record<string, string>;
+    };
+}): GoverningDesignSelection;
 /** The layers as a terminal prints them: a heading per source, the pieces
  *  under it the way `contextReport` prints them, and a refusal in words. */
 export declare function layersReport(layers: ContextLayer[], report: (pieces: ContextPiece[]) => string): string;

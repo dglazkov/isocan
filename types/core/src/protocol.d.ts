@@ -17,9 +17,9 @@ export declare const QUESTIONNAIRES_FEATURE = "questionnaires-v1";
 /** Upgrade refusal is distinct from denied access and cannot be fixed by retrying a stale client. */
 export declare const QUESTIONNAIRES_REQUIRED = "questionnaires-required";
 /** Decoder support for admitted request/receipt versions and canonical lifecycle effects. */
-export declare const DESIGN_REQUESTS_FEATURE = "design-requests-v1";
+export declare const DESIGN_REQUESTS_FEATURE = "design-requests-v2";
 /** Features this build can replay; replicas advertise their own decoder independently of a forwarded caller. */
-export declare const CURRENT_CLIENT_FEATURES = "canvas-groups-v4,questionnaires-v1,design-requests-v1";
+export declare const CURRENT_CLIENT_FEATURES = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2";
 /** Old decoders receive an upgrade refusal before canonical request state reaches them. */
 export declare const DESIGN_REQUESTS_REQUIRED = "design-requests-required";
 /** Missing declarations cannot imply support for lifecycle admission or retained evidence. */

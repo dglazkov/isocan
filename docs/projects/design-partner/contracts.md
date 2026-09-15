@@ -104,6 +104,9 @@ unadmitted v1 records. Explicit Undo restores prior eligibility only when the
 current source/cancellation/context guards hold; it is not permanent worker
 revocation.
 
+[systems-and-defaults.md](systems-and-defaults.md) records phase 3’s deliberate
+binding widening, decoder negotiation and authored direction semantics.
+
 ## One selection, one conditional edit
 
 For an existing screen, the planner emits one `item.edit` containing the

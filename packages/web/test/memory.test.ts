@@ -79,8 +79,18 @@ describe("the link is one property on the card, set where the card is placed", (
     expect(cli).toContain('inheritVerb("inherit", "inherit"');
     expect(cli).toContain('inheritVerb("uninherit", null');
     expect(cli).toContain("layersReport(layers, (pieces) => contextReport(pieces))");
-    // With an area's scope as the third argument since scoped design systems
-    // (11 Sep): area, then this canvas, then the linked one.
-    expect(cli).toMatch(/governingDesign\(\s*snapshot\.canvas,\s*await linkedCanvasesOf\(ctx, p\.id, snapshot\),\s*designScope\(snapshot, opts\.in\),?\s*\)/);
+    // CLI show/check now use the shared permission-bearing reader. Follow the
+    // scope and inherited links through that boundary instead of demanding a
+    // second resolver in main.ts. Core design-scope.test.ts exercises precedence;
+    // API design-system.test.ts exercises inherited byte reads and source policy.
+    const systems = read("../../api/src/design-system-reader.ts");
+    const governing = read("../../api/src/design-governing.ts");
+    expect(cli).toMatch(/const scope = designScope\(snapshot, opts\.in\);\s*const \{ governing \} = await readDesignSystem\(designSystemPort\(ctx\), \{ canvasId: p\.id, \.\.\.\(scope\.at \? \{ target: \{ kind: "item", itemId: scope\.at\.id \} \} : \{\}\) \}\)/);
+    expect(systems).toContain("const linked = await readInheritedCanvases(io, snapshot.canvas, home, options.signal)");
+    expect(systems).toContain("readGoverningDesign(io, { canvasId: options.canvasId, canvas: snapshot.canvas, project: snapshot.project, home, linked,");
+    expect(systems).toContain('target.kind === "item" ? { atId: target.itemId }');
+    expect(governing).toContain("canvas.items[options.atId]");
+    expect(governing).toContain("selectGoverningDesign(canvas, linked, { ...scope,");
+    expect(governing).toContain("io.sourceBlobText({ canvasId: artifact.canvasId, expectedHome: artifact.home }, version.blobHash, signal)");
   });
 });

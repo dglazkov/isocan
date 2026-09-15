@@ -1,6 +1,6 @@
 import type { CanvasContents, Item } from "./model.ts";
 import type { MetaPatch } from "./ops.ts";
-import { areasOf } from "./area.ts";
+import { areasOf, isArea } from "./area.ts";
 import { canvasScopes } from "./canvas-scope.ts";
 
 /**
@@ -60,25 +60,57 @@ export function isDesignSystem(item: Item): boolean {
  * for the first canvas with two systems, and a canvas holding a marketing
  * site and an admin app has always been one.
  */
-export function designSystem(canvas: CanvasContents, opts?: { at?: { x: number; y: number } | Item }): Item | null {
-  const systems = Object.values(canvas.items).filter(isDesignSystem);
-  if (systems.length === 0) return null;
-  const areas = areasOf(canvas);
-  const areaHolding = (item: Item) => canvasScopes(canvas, item)[0] ?? null;
-  const newest = (list: Item[]) =>
-    [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))[0] ?? null;
-  const at = opts?.at;
-  if (at) {
-    const point = "id" in at ? { x: at.x + at.width / 2, y: at.y + at.height / 2 } : at;
-    const holding = "id" in at ? canvasScopes(canvas, at) : areas
-      .filter((a) => point.x >= a.x && point.x < a.x + a.width && point.y >= a.y && point.y < a.y + a.height)
-      .sort((a, b) => a.width * a.height - b.width * b.height);
-    for (const area of holding) {
-      const here = newest(systems.filter((s) => areaHolding(s)?.id === area.id));
-      if (here) return here;
-    }
+export function designSystem(canvas: CanvasContents, opts?: DesignScopeOptions): Item | null {
+  return selectDesignSystem(canvas, opts).item;
+}
+
+/** An existing item or legacy point has scope; a proposed screen can explicitly name its group or canvas root. */
+export interface DesignScopeOptions { at?: { x: number; y: number } | Item; groupId?: string | null }
+/** The winning local level keeps all its candidates visible, while preserving the existing newest-item rule. */
+export interface DesignSystemSelection {
+  status: "selected" | "none" | "unavailable";
+  item: Item | null;
+  level: "scope" | "canvas" | "none";
+  scopeId: string | null;
+  scopeDepth: number | null;
+  candidates: Item[];
+  reason: string;
+}
+/** Scope resolution is shared by winner selection and per-target screen counts, including planned membership. */
+export function designTargetScopes(canvas: CanvasContents, opts: DesignScopeOptions = {}): { scopes: Item[]; unavailable?: string } {
+  if (opts.groupId !== undefined) {
+    if (opts.groupId === null) return { scopes: [] };
+    const group = canvas.items[opts.groupId];
+    if (!group || group.properties.kind !== "group" && !isArea(group)) return { scopes: [], unavailable: `The requested design scope ${opts.groupId} is unavailable.` };
+    return { scopes: canvasScopes(canvas, group) };
   }
-  return newest(systems.filter((s) => areaHolding(s) === null));
+  const at = opts.at;
+  if (!at) return { scopes: [] };
+  if ("id" in at) {
+    const current = canvas.items[at.id];
+    if (!current) return { scopes: [], unavailable: `The design target ${at.id} is unavailable.` };
+    return { scopes: canvasScopes(canvas, current) };
+  }
+  if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) return { scopes: [], unavailable: "The proposed design location is invalid." };
+  return { scopes: areasOf(canvas).filter((area) => at.x >= area.x && at.x < area.x + area.width && at.y >= area.y && at.y < area.y + area.height).sort((a, b) => a.width * a.height - b.width * b.height) };
+}
+/** Explains direct scope, ancestor and canvas selection without treating another lane as coverage. */
+export function selectDesignSystem(canvas: CanvasContents, opts: DesignScopeOptions = {}): DesignSystemSelection {
+  const target = designTargetScopes(canvas, opts);
+  const empty = { item: null, level: "none" as const, scopeId: null, scopeDepth: null, candidates: [] };
+  if (target.unavailable) return { ...empty, status: "unavailable", reason: target.unavailable };
+  const systems = Object.values(canvas.items).filter(isDesignSystem);
+  const pick = (items: Item[], scope: Item | null, depth: number | null): DesignSystemSelection | null => {
+    const candidates = [...items].sort((a, b) => a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0);
+    if (!candidates.length) return null;
+    const location = scope ? `${depth === 0 ? "direct scope" : "ancestor scope"} “${scope.title}”` : "canvas level";
+    return { status: "selected", item: candidates[0]!, level: scope ? "scope" : "canvas", scopeId: scope?.id ?? null, scopeDepth: depth, candidates, reason: `Selected the newest system at ${location}.${candidates.length > 1 ? ` ${candidates.length} systems compete at this level.` : ""}` };
+  };
+  for (const [depth, scope] of target.scopes.entries()) {
+    const selected = pick(systems.filter((item) => canvasScopes(canvas, item)[0]?.id === scope.id), scope, depth);
+    if (selected) return selected;
+  }
+  return pick(systems.filter((item) => !canvasScopes(canvas, item).length), null, null) ?? { ...empty, status: "none", reason: "No local design system governs this target." };
 }
 
 /** Every design system that governs an area rather than the canvas, with
@@ -191,11 +223,10 @@ export function designStanding(
   screens: number,
   project?: HasProperties,
 ): DesignStanding {
-  // ANY written system counts — the canvas's own or one scoped to an area. A
-  // canvas whose every lane carries its own `DESIGN.md` has written its style
-  // down; asking it for a canvas-wide one on top would be a nudge about a
-  // shape, not about the thing the nudge exists for.
-  if (Object.values(canvas.items).some(isDesignSystem)) return "fine";
+  // A numeric caller cannot prove coverage of individual scopes. Actual-item
+  // callers use designScopeStanding; this compatibility wrapper recognizes
+  // only a canvas-wide incumbent and retains the original numeric thresholds.
+  if (designSystem(canvas)) return "fine";
   if (project !== undefined && designSkipped(project)) return "fine";
   if (screens >= DESIGN_SYSTEM_LIMIT) return "overdue";
   return screens >= DESIGN_SYSTEM_AFTER ? "owed" : "fine";
