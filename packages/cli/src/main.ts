@@ -35,6 +35,7 @@ import type {
   Placement,
   PresenceSession,
   Canvas,
+  MintPassResponse,
   Capability,
   Grant,
   GrantResponse,
@@ -3676,8 +3677,17 @@ program
     "--admit-only",
     "admit the machine but hand over no identity — it names itself when it arrives",
   )
+  .option(
+    "--agent <name>",
+    "mint for an agent this machine answers for, not for you — whoever redeems it answers for that agent (e.g. `collie new --pass`)",
+  )
   .action(
-    run(async (opts: { admitOnly?: boolean }, cmd: Command) => {
+    run(async (opts: { admitOnly?: boolean; agent?: string }, cmd: Command) => {
+      if (opts.admitOnly && opts.agent !== undefined) {
+        throw new Error(
+          "`--admit-only` hands over no identity and `--agent` hands over an agent's — say one of them",
+        );
+      }
       const ctx = await ctxOf(cmd);
       const canvas = await resolveCanvas(ctx);
       // The one origin again, and per canvas: a pass is minted at the home
@@ -3685,6 +3695,7 @@ program
       // is that home's — not this machine's next one, which is all a birth
       // default ever knows.
       const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
+      if (opts.agent !== undefined) return passForAgent(ctx, canvas, origin, opts.agent);
       /**
        * **Two real shapes, and the default endows.**
        *
@@ -3738,6 +3749,86 @@ program
       );
     }),
   );
+
+/**
+ * **`isocan pass --agent <name>` — handing an agent's answering to another
+ * host** (sheep's collie, phase 3: an agent moves in).
+ *
+ * An agent this machine enrolled is claimed on this machine's badge, under
+ * the key `mintAndEnrol` derives — which is the whole of what "this machine
+ * answers for it" means at the desk. A pass minted for that actor carries the
+ * claim to whoever redeems it: a hosted rc (the collie's badge, pasted into
+ * `collie new --pass`) arrives BEING the agent, and once it takes up the
+ * agent's cursor this machine's `isocan rc` says *"another park adopted …'s
+ * cursor — standing down for it"* and keeps answering for everyone else.
+ *
+ * **Nothing new at the desk.** `mintPass(canvasId, actorId)` is already
+ * allowed for exactly an actor the minting badge holds, and refused with
+ * `not-your-actor` otherwise — mechanism 5's sentence, spoken by the home, so
+ * this verb does not pre-check the claim and cannot say it differently. What
+ * it adds is the name → actor step on the canvas's roster, and the words.
+ *
+ * **It prints the address, not the `setup` command.** The line is for a host
+ * that takes a pass at a prompt; `isocan setup` with it would make a
+ * machine's person the agent, which is not what handing an agent over means.
+ */
+async function passForAgent(ctx: Ctx, canvas: Canvas, origin: string, name: string): Promise<void> {
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const agents = Object.values(snapshot.canvas.agents ?? {});
+  const record = agents.find(
+    (a) => a.actor.id === name || a.actor.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!record) {
+    const standing = agents.map((a) => a.actor.name);
+    throw new Error(
+      `no standing agent "${name}" on "${canvas.title}"` +
+        (standing.length > 0 ? ` — standing here: ${standing.join(", ")}` : " — nobody is enrolled here"),
+    );
+  }
+  const agent = record.actor;
+  let minted: MintPassResponse;
+  try {
+    minted = await ctx.client.mintPass(canvas.id, agent.id);
+  } catch (err) {
+    // The desk's own sentence goes out as it came; the line after it is the
+    // one thing the home cannot know — which machine to run this on.
+    if (err instanceof ApiError && err.code === "not-your-actor") {
+      console.error(`error: ${err.message}`);
+      console.error(
+        `${agent.name} is not answered by this machine — \`--agent\` mints only for an agent ` +
+          "this machine's badge holds; run it on the machine whose `isocan rc` enrolled them.",
+      );
+      process.exitCode = 1;
+      return;
+    }
+    throw err;
+  }
+  const { pass, token } = minted;
+  const address = canvasUrlWithPass(origin, canvas.id, token);
+  const minutes = Math.round(PASS_TTL_MS / 60_000);
+  if (ctx.json) {
+    return printJson({
+      address,
+      canvas: canvasUrl(origin, canvas.id),
+      expiresAt: pass.expiresAt,
+      actor: agent,
+      agent: true,
+    });
+  }
+  printKeyValues({
+    canvas: `${canvas.title} (${canvasUrl(origin, canvas.id)})`,
+    identity: `${agent.name} (${agent.id}) — an agent: whoever redeems this arrives as ${agent.name}, not as you`,
+    expires: `in ${minutes} minutes (${pass.expiresAt})`,
+  });
+  console.log(`\nPaste this where ${agent.name}'s new host asks for a pass (\`collie new --pass\` takes it at a hidden prompt):\n`);
+  console.log(`  ${address}\n`);
+  console.log(
+    `Whoever redeems it answers for ${agent.name} from then on; once it takes up ${agent.name}'s cursor,\n` +
+      `this machine's \`isocan rc\` stands down for ${agent.name} and keeps answering for everyone else.\n` +
+      `That address is a credential — it works once, and only for the next ${minutes} minutes.\n` +
+      "Do not post it on a thread and do not commit it.",
+  );
+}
 
 /**
  * **`isocan embed` — the address to paste into somebody else's window**

@@ -1792,6 +1792,13 @@ this canvas. It is not the address, and the difference is the whole point:
   it is admitted **whether or not the link grant is on**, and by default
   arrives speaking as the actor this CLI speaks as.
 
+- `isocan pass --agent <name>` prints an **address carrying a credential for an
+  agent** this machine's `isocan rc` answers for — its badge holds the claim.
+  Whoever redeems it (a hosted rc: `collie new --pass`) arrives as that agent,
+  not as the person, and this machine's rc stands down for it. An agent this
+  badge does not hold is refused with `not-your-actor`. Handing an agent over
+  is the person's decision, like every pass.
+
 - `isocan embed` prints an **address carrying the same credential**. You hand
   that to a *window* — an agent manager's pane, an IDE panel, a tab beside the
   conversation you are having. Not a terminal: a `npx` line pasted into an
@@ -1800,6 +1807,7 @@ this canvas. It is not the address, and the difference is the whole point:
 ```sh
 isocan pass               # the whole command to paste on the other machine
 isocan pass --admit-only  # admit it, but hand over no identity
+isocan pass --agent Percy # an address that arrives as Percy, for his new host
 isocan embed              # the address to paste into a pane or an IDE panel
 isocan embed --admit-only # let the window in, but hand it no identity
 ```
