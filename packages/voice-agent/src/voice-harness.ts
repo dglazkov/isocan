@@ -4299,9 +4299,11 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         const asked = typeof body === "string" ? {} : body;
         // A reference, not an id: the page sends what the picker holds, and a
         // person may type a title into the same field — or paste a whole
-        // canvas address with its `#pss_…` pass on the end, or the bare pass
-        // token, which is how a stranger joins a canvas this machine does not
-        // know yet (`isocan setup <address>`'s act, from the drawer).
+        // canvas address with its `#pss_…` pass on the end, the bare pass
+        // token, or even the entire "Bring your own agent…" paragraph with the
+        // address buried in a command line. Any of them joins a canvas this
+        // machine does not know yet (`isocan setup <address>`'s act, from the
+        // drawer).
         const wanted = String(asked.ref ?? asked.id ?? asked.canvas ?? "").trim();
         const fail = (error: string, notFound = false): void => {
           recordToolLog({
@@ -4313,14 +4315,21 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
           });
           respond(notFound ? 404 : 400, { error });
         };
-        const address = parseCanvasAddress(wanted);
-        const barePass = /^pss_[^.\s]+\.[\w-]+$/.test(wanted) ? wanted : null;
+        // The paste may be the whole "Bring your own agent…" paragraph — the
+        // address sits inside a command line with prose around it. Pull the
+        // address (and its #pss_… pass) out of whatever surrounds it; a bare
+        // pass token may likewise ride in prose. The regex only NOMINATES a
+        // candidate; parseCanvasAddress does the real validation.
+        const embedded = /(?:https?:\/\/)?[A-Za-z0-9][A-Za-z0-9.-]*(?::\d+)?\/p\/[A-Za-z0-9_-]+(?:#[^\s"']+)?/.exec(wanted)?.[0];
+        const address = parseCanvasAddress(wanted) ?? (embedded ? parseCanvasAddress(embedded) : null);
+        const barePass = /pss_[^.\s]+\.[\w-]+/.exec(wanted)?.[0] ?? null;
         let moved;
         if (address || barePass) {
+          const pass = address?.pass ?? barePass ?? undefined;
           const arrival = await joinCanvasArrival(
             address
-              ? { canvasId: address.canvasId, origin: address.origin, ...(address.pass ? { pass: address.pass } : {}) }
-              : { pass: barePass! },
+              ? { canvasId: address.canvasId, origin: address.origin, ...(pass ? { pass } : {}) }
+              : { pass: pass! },
           );
           if (!arrival.ok) {
             fail(arrival.error);

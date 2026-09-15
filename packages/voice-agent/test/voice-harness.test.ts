@@ -8,7 +8,7 @@ import { startDaemon, type Daemon } from "@isocan/server";
 import { agentSessionOf, machineAgentKey } from "../src/agent-key.ts";
 import { readRcAgents } from "../src/rc-rows.ts";
 import { harnessVars } from "@isocan/api";
-import { shelvePatch, grantsRoute, passesRoute, passRoute, publicListingRoute } from "@isocan/core";
+import { shelvePatch, grantsRoute, passesRoute, passRoute, publicListingRoute, cloudAgentInstructions } from "@isocan/core";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 import {
   DEFAULT_VOICE_PORT,
@@ -1510,6 +1510,20 @@ describe("the person's gate", () => {
     });
     expect(movedBack.status, await movedBack.clone().text()).toBe(200);
     expect(((await movedBack.json()) as { canvas: { id: string } }).canvas.id).toBe("prj_1");
+
+    // 2b. The whole "Bring your own agent…" paragraph — address and pass
+    // buried in prose and a command line — extracts the same way.
+    const dialogPass = await fetch(`${base}${passesRoute("prj_2")}`, { method: "POST", headers: badge.headers });
+    const { token: dialogToken } = (await dialogPass.json()) as { token: string };
+    const paragraph = cloudAgentInstructions(base, "prj_2", dialogToken);
+    expect(paragraph).toContain(dialogToken); // the dialog really carries it
+    const viaDialog = await fetch(`${server.state.url}canvas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: paragraph }),
+    });
+    expect(viaDialog.status, await viaDialog.clone().text()).toBe(200);
+    expect(((await viaDialog.json()) as { canvas: { id: string } }).canvas.id).toBe("prj_2");
 
     // 3. A published canvas shows in the picker, and POSTing its id joins it.
     const granted = await fetch(`${base}${grantsRoute("prj_3")}`, {
