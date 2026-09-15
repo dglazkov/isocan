@@ -2660,6 +2660,11 @@ describe("the Live API path", () => {
     expect(audio.realtimeInput.audio.mimeType).toBe("audio/pcm;rate=16000");
     expect(Buffer.from(audio.realtimeInput.audio.data, "base64")).toEqual(Buffer.from([1, 2, 3, 4]));
 
+    // A summons while listening is a typed line into the same conversation.
+    session.sendText("add a note that says summoned");
+    const text = JSON.parse(sent[2] ?? "{}") as { realtimeInput: { text: string } };
+    expect(text.realtimeInput.text).toBe("add a note that says summoned");
+
     // A tool call is a blocking question: the answer is the operation's RESULT.
     socket.emit({
       toolCall: { functionCalls: [{ id: "call-1", name: "rename_item", args: { item_ref: "checkout", title: "Checkout v2" } }] },
@@ -3401,6 +3406,24 @@ describe("the harness session & tool-call log API", () => {
     expect(addLog).toBeDefined();
     expect(addLog.source).toBe("typed");
     expect(addLog.op.type).toBe("item.add");
+  });
+
+  it("acts on a summons when nothing is listening: the typed pipeline runs the command", async () => {
+    const server = await serve();
+
+    const res = (await (await fetch(`${server.state.url}summons`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Paul", prompt: "add a note that says summoned into being" }),
+    })).json()) as { handled: string; reply: string; sent: string[] };
+
+    // A summons is an inbound command, not a line in a log.
+    expect(res.handled).toBe("typed");
+    expect(res.sent.length).toBe(1);
+    expect(res.reply).toContain("summoned into being");
+
+    const canvasItems = await items();
+    expect(canvasItems.some((i) => i.title?.includes("summoned into being"))).toBe(true);
   });
 
   it("persists toolLog to ~/.isocan/voice/log.json so it survives harness restarts", async () => {

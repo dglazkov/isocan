@@ -2639,6 +2639,9 @@ export interface LiveCallbacks {
 
 export interface LiveSession {
   send(pcm: Uint8Array): void;
+  /** A typed line into the same conversation — what a summons becomes when
+   * the microphone is already standing: the model hears it, not the grammar. */
+  sendText(text: string): void;
   close(): void;
   readonly ready: Promise<boolean>;
 }
@@ -2788,6 +2791,10 @@ export function startLiveSession(options: {
           realtimeInput: { audio: { data: Buffer.from(pcm).toString("base64"), mimeType: "audio/pcm;rate=16000" } },
         }),
       );
+    },
+    sendText(text) {
+      if (socket.readyState !== 1 || !text.trim()) return;
+      socket.send(JSON.stringify({ realtimeInput: { text } }));
     },
     close() {
       try {
@@ -4757,10 +4764,17 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         respond(200, { text: out.text, provider: out.provider });
         return;
       }
-      if (url.pathname === "/utterance") {
-        const asObject = typeof body === "string" ? {} : body;
-        const text = String(asObject.text ?? "");
-        const source = String(asObject.source ?? "spoken");
+      /**
+       * **One inbound line, one pipeline** — typed commands, the page's own
+       * typed box, and a summons from the canvas all run through this: the
+       * local grammar, the person's gate for destructive ops, and the apply.
+       * The model's spoken path is the other implementation of the same
+       * vocabulary; this is the one that works with no key and no session.
+       */
+      const runUtterance = async (
+        text: string,
+        source: string,
+      ): Promise<{ reply: string; sent: string[]; failed: string[]; state: string; source: string }> => {
         const items = await target.canvas.items();
         const ctx: PlanContext = { items, mainThreadId: target.mainThreadId };
         const { plans, what } = planVoice(text, ctx);
@@ -4771,8 +4785,7 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         const asked = theQuestion(destroying, items);
         if (destroying.length > 0 && !(await askThePerson(asked))) {
           const refused = `not done — the person did not confirm: ${asked}`;
-          respond(200, { reply: refused, sent: [], failed: [], state: "refused", source });
-          return;
+          return { reply: refused, sent: [], failed: [], state: "refused", source };
         }
         const sent: string[] = [];
         const failed: string[] = [];
@@ -4808,13 +4821,20 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
             });
           }
         }
-        respond(200, {
+        return {
           reply: what ?? (sent.length ? sent.join("; ") : "nothing to send"),
           sent,
           failed,
           state: failed.length ? "some operations were refused" : "ready",
           source,
-        });
+        };
+      };
+
+      if (url.pathname === "/utterance") {
+        const asObject = typeof body === "string" ? {} : body;
+        const text = String(asObject.text ?? "");
+        const source = String(asObject.source ?? "spoken");
+        respond(200, await runUtterance(text, source));
         return;
       }
       if (url.pathname === "/summons") {
@@ -4834,7 +4854,25 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
           event: `summoned by ${who}`,
           details: { kind: "summons", by: who, prompt },
         });
-        respond(200, { lines });
+        if (!prompt.trim()) {
+          respond(200, { handled: false, reply: "an empty summons is not a command", lines });
+          return;
+        }
+        /**
+         * **A summons is an inbound command, not a line in a log.** When the
+         * conversation is standing (the model is listening), the prompt goes
+         * INTO it — the model acts through its tool path, gates and all. When
+         * nothing is listening, the typed pipeline runs it: the same grammar,
+         * the same gate, no key or provider needed, and the outcome is the
+         * answer the rc's turn report carries back to the canvas.
+         */
+        if (activeLiveSession && (sessionState === "live" || sessionState === "muted")) {
+          activeLiveSession.sendText(prompt);
+          respond(200, { handled: "live", reply: "the summons is in the conversation", lines });
+          return;
+        }
+        const result = await runUtterance(prompt, "summons");
+        respond(200, { handled: "typed", ...result, lines });
         return;
       }
       respond(404, { error: "no such door" });
@@ -5857,7 +5895,7 @@ interface Rpc {
  * holding a 10-minute ceiling open on a room that may be empty.
  */
 export function createAcpAgent(options: {
-  forward: (summons: { name: string; prompt: string }) => Promise<{ url?: string; refused?: string } | null>;
+  forward: (summons: { name: string; prompt: string }) => Promise<{ url?: string; refused?: string; answer?: string } | null>;
   name: string;
   out?: (message: unknown) => void;
 }): { handle: (message: Rpc) => Promise<void> } {
@@ -5898,9 +5936,11 @@ export function createAcpAgent(options: {
             // it, which is the whole of what it is for.
             const text = forwarded?.refused
               ? forwarded.refused
-              : forwarded?.url
-                ? `The voice harness is standing at ${forwarded.url} — the summons is in its conversation.`
-                : "The voice harness could not open its local page; start one with `npm start -w @isocan/voice-agent`.";
+              : forwarded?.answer
+                ? forwarded.answer
+                : forwarded?.url
+                  ? `The voice harness is standing at ${forwarded.url} — the summons is in its conversation.`
+                  : "The voice harness could not open its local page; start one with `npm start -w @isocan/voice-agent`.";
             out({
               jsonrpc: "2.0",
               method: "session/update",
@@ -6073,12 +6113,17 @@ export async function runVoiceAdapter(options: { home: string; name: string; can
         ? `attached to the voice harness already standing on port ${chosen.port}`
         : `started a voice harness detached on port ${chosen.port}`,
     );
-    await fetch(`http://127.0.0.1:${chosen.port}/summons`, {
+    const response = await fetch(`http://127.0.0.1:${chosen.port}/summons`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: summons.name, prompt: summons.prompt }),
-    }).catch(() => {});
-    return { url: chosen.url };
+    }).catch(() => null);
+    // The standing server's own sentence about what the summons DID — an
+    // operation's ack or a refusal — is the answer the canvas turn reports.
+    const answer = response?.ok
+      ? String(((await response.json().catch(() => ({}))) as { reply?: unknown }).reply ?? "")
+      : "";
+    return answer ? { url: chosen.url, answer } : { url: chosen.url };
   };
   const agent = createAcpAgent({ forward, name });
   let buffer = "";
