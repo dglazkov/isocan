@@ -527,6 +527,12 @@ export class CanvasHandle {
     return this.reach(() => readDesignWorkflow(designReviewPort(this.ctx), { canvasId: this.id, filter }));
   }
 
+  /** Read optional adapted craft guidance around this canvas's exact admitted request. */
+  async designCraft(requestId: string, stage: import("./design-craft-packet.ts").DesignCraftStage) {
+    const { readDesignCraft } = await import("./design-craft-reader.ts");
+    return this.reach(() => readDesignCraft(designRequestPort(this.ctx), { canvasId: this.id, requestId, stage }));
+  }
+
   /** Read admitted briefs and evidence by request, source conversation or output identity. */
   designBrief(filter: DesignRequestFilter = {}) {
     return this.reach(() => readDesignRequests(designRequestPort(this.ctx), { canvasId: this.id, filter }));

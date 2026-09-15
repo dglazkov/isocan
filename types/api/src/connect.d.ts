@@ -240,6 +240,8 @@ export declare class CanvasHandle {
     designComparisonReference(request: Omit<Parameters<typeof readDesignComparisonReference>[1], "canvasId">): Promise<import("./design-decision-reader.js").DesignComparisonReference>;
     /** One on-demand procedure and current next-step plan, using this canvas's shared rollout policy. */
     designWorkflow(filter?: DesignRequestFilter): Promise<import("./design-request-reader.js").DesignWorkflowView>;
+    /** Read optional adapted craft guidance around this canvas's exact admitted request. */
+    designCraft(requestId: string, stage: import("./design-craft-packet.js").DesignCraftStage): Promise<import("./design-craft-packet.js").DesignCraftPacket>;
     /** Read admitted briefs and evidence by request, source conversation or output identity. */
     designBrief(filter?: DesignRequestFilter): Promise<import("./design-request-reader.js").DesignRequestReadResult>;
     /** Start carries stable caller-owned IDs; authenticated admission materializes the brief. */

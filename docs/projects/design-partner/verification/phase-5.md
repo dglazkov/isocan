@@ -198,3 +198,11 @@ agent guide, shared logic, README and meaningful tests. Agent publication stays
 an API/CLI act; the web presents review, recovery and verifier handoff without
 requiring a manual schema form. Actual browser interactions are named above;
 contract fixtures are not offered as visual proof.
+
+## Remote verification
+
+The exact phase commit `cdcf22d39da6e2a03c5448f97e7f2eee8289ad75` completed
+release run `34958329400` successfully, including checks, all four suite shards
+and publication. Review run `34958329298` and pages run `34958327552` also
+succeeded. These results were read from GitHub after landing; they do not
+establish hosted journey behavior or generated-design quality.

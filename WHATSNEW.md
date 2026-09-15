@@ -23,6 +23,12 @@ second week.
 
 ## 15 September 2026
 
+- Open **Optional craft guidance** on a design task for advice adapted from
+  Impeccable at the starting, critique or finishing stage. It keeps your saved
+  answers, design system and chosen direction. Agents can export that same
+  context and preserve their working edits when checking for changes. Guidance
+  uses the existing review and repair flow; opening it does not perform a review.
+
 - Open a design task's review to see source findings, task checks and craft
   observations separately. Agents can make up to two repairs and recheck the
   result, keeping each repair undoable and preserving teammates' newer edits.

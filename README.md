@@ -247,6 +247,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   evidence, remaining limits and an available verifier. Requesting a verifier
   does not claim inspection; missing checks stay an unverified draft. Repair
   history and its budget survive refresh, entrance switches and Undo.
+- **Optional craft guidance with the same brief**: open stage-specific guidance
+  adapted from Impeccable while keeping your answers, incumbent system and
+  chosen direction. Agents can export the same exact context into a new working
+  folder and check it later without replacing authored edits. Human choices stay
+  distinct from recommendations. Applying guidance uses the existing review and
+  repair allowance; opening it does not claim a review or native skill execution.
 - **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
   canvases you were on lately, most recent first, then the rest by activity,
   with a field that finds one from a few letters (`lkh` reaches "Lake House";
@@ -806,6 +812,11 @@ isocan design review <request> --run <run> --begin-repair repair_1 --session <se
 isocan design review <request> --run <run> --finish --json
 #   Source, Task and Craft retain exact evidence; up to two reserved repairs;
 #   --retry reuses the saved intent; an available verifier can offer and accept handoff
+isocan design craft <request> --stage new-work|critique|finish --json
+isocan design craft <request> --stage finish --out ./craft-work --json
+isocan design craft <request> --check ./craft-work --json
+#   optional adapted guidance; exact context, original bases and attributed sources;
+#   --package <skill-directory> checks pinned source files without executing them
 isocan design start request.json --json
 isocan design brief <request> --json
 isocan design brief --update correction.json --json

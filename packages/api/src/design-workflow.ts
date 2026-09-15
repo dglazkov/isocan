@@ -69,6 +69,9 @@ either entrance. Choosing a connected-app prototype does not implement its
 repository runtime; use its actual components in the subsequent build.
 
 5. Build one complete task slice.
+Optional: design craft <request> --stage new-work|critique|finish reads attributed
+adapted Impeccable guidance around this same saved context. It opens no interview,
+runs no native playbook and adds no repair allowance; the core procedure remains authoritative.
 Preserve an existing system, or record a
 provisional direction for hierarchy, layout, density, typography, palette purpose
 and interaction treatment in the scoped DESIGN.md. Use design direction to

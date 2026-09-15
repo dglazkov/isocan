@@ -1,10 +1,11 @@
 # A design partner — the walk
 
-**Where we are:** phases 0–5 CLOSED; phase 5 closed on 15 September 2026.
+**Where we are:** phases 0–6 CLOSED; phase 6 closed on 15 September 2026.
 Both entrances share discovery, scoped systems, working alternatives, durable
-adoption and bounded review/repair. Local Scenes 1–6, exact recovery, API/CLI/web
-parity and full strict gates pass. **Phase 6 is next**: probe and bound the
-optional Impeccable integration, then phase 7 measures results and partnership.
+adoption and bounded review/repair. Optional adapted Impeccable guidance uses
+that same context, with exact exports, freshness and honest native limits.
+Local browser/CLI proofs and full strict gates pass. **Phase 7 is next**:
+measure generated-design results and real-user partnership, then decide rollout.
 The workflow stays opt-in; engineering proofs do not establish quality uplift.
 Read [journey.md](journey.md), [design.md](design.md), then this walk.
 
@@ -345,9 +346,11 @@ journey and record it as the P0 candidate, not a proven default.
 
 ## Phase 6 — A bounded Impeccable integration
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 September 2026 — pinned resource/launcher compatibility, shared adapted guidance, exact context/export/freshness, real browser/CLI and bounded receipt proofs passed with full fast/typecheck/build and strict emulator gates. See [verification/phase-6.md](verification/phase-6.md).
 
 **Depends on:** phase 2's context and receipt contracts. Optional for rollout.
+[craft-integration.md](craft-integration.md) records the pinned compatibility
+probe and settles the supported adapted-guidance subset before implementation.
 
 **Outcome:** Scene 7 uses a verified package or states precisely which adapted
 guidance ran. The integration cannot impose a second discovery ceremony.
@@ -373,7 +376,11 @@ The matched craft condition in `evaluation.md` tests added value; compatibility
 alone does not enable it by default. Record negative findings rather than
 leaving an incompatible package as an invisible dependency.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-15** — The native package loads supplied context but still imposes generic interview, image and role instructions. The supported integration is explicit adapted guidance with pinned resources, not native playbook execution. Its quality advantage remains a separate phase 7 condition.
+- **2026-09-15** — Recommendation and accepted choice differ. Actual human choice against the recommendation now survives export and readable guidance. Structural actor DTOs also required explicit public attribution before closed-packet validation; types alone did not remove extra runtime fields.
+- **2026-09-15** — Canonical completion can change an author's envelope without changing the underlying facts. Original source attribution and exact completion history establish currentness; substantive patches, forged authors and missing evidence do not. Open views recheck their original capture and preserve it until explicit refresh.
 
 ## Phase 7 — Measure the partnership, then enable the default
 

@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-14
 see: design-competition, evals, context, memory
-note: phases 0–5 closed with the continuous local design journey verified across browser and CLI. Discovery, scoped systems, working alternatives, durable adoption and bounded review/repair pass full strict gates. Phase 6 probes optional Impeccable support; phase 7 still owes generated-design and real-user partnership evidence before default rollout.
+note: phases 0–6 closed with the local design journey and optional adapted Impeccable guidance verified across browser and CLI. Exact shared context, accepted choices, exports, freshness and bounded review pass full strict gates. Native playbooks remain unsupported; phase 7 owes generated-design and real-user partnership evidence before default rollout.
 ---
 # A design partner — the experience
 

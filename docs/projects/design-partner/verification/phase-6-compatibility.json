@@ -1,0 +1,499 @@
+{
+  "schemaVersion": 1,
+  "stage": "compatibility-before-implementation",
+  "candidateBaseline": "cdcf22d39da6e2a03c5448f97e7f2eee8289ad75",
+  "package": {
+    "upstream": "2149fcce39a90bb409df5f16515f316a76dc6199",
+    "source": "https://github.com/pbakaus/impeccable",
+    "files": [
+      {
+        "path": ".agents/skills/impeccable/SKILL.md",
+        "bytes": 11658,
+        "gitBlob": "f000bc443eaaa933a0268c0206b48ffc25688d72",
+        "sha256": "38c2e839e130008b6da814ab9c16f3fcbbedfdf721a9638eebd31a9e65341a7a"
+      },
+      {
+        "path": ".agents/skills/impeccable/agents/impeccable_asset_producer.toml",
+        "bytes": 7296,
+        "gitBlob": "30f49ab65fff68050f4a7ba6cc389bc8ae840636",
+        "sha256": "37080ea5e5b381adb7eae7a427231b0ad0dee0f0916fc1d6b673b7101a5b425b"
+      },
+      {
+        "path": ".agents/skills/impeccable/agents/impeccable_documenter.toml",
+        "bytes": 3203,
+        "gitBlob": "45203ec73dc5d2509d0bd4f13e0eccbe51b4366e",
+        "sha256": "2feb3768125ba6469c92a50d516727e6d42f44579165ddfd33409948e2a3803d"
+      },
+      {
+        "path": ".agents/skills/impeccable/agents/impeccable_finish_reviewer.toml",
+        "bytes": 15297,
+        "gitBlob": "cdecfe4dc2bef1990ca255cdcd99c54ade23d2e9",
+        "sha256": "869fa5390b84bfd00d072f5280a9002ea3e3936edf5985241be641a87f03ff7b"
+      },
+      {
+        "path": ".agents/skills/impeccable/agents/impeccable_manual_edit_applier.toml",
+        "bytes": 7032,
+        "gitBlob": "469dd2da6512966a110b94e20abd18283d3689e7",
+        "sha256": "6c9ce3e27ec4520ead001da3aad2a2ebba481c4e5cd22873db8890259ee579fe"
+      },
+      {
+        "path": ".agents/skills/impeccable/agents/openai.yaml",
+        "bytes": 235,
+        "gitBlob": "ee6cae7726ef85d3744c1b978608668a07aefeef",
+        "sha256": "cbd8bd68fa00935dd0f179adb169252629cf7ee443ea9dc7db77e7ef2cf77446"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/adapt.md",
+        "bytes": 11301,
+        "gitBlob": "85f7c022f5c65baebdd8df16b996898a4f520e3a",
+        "sha256": "871a8e4d749b807c693ebabd83defbd6c76e1bd2a0f53a28a460cb1308ba8634"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/adapt.native.md",
+        "bytes": 3910,
+        "gitBlob": "88975b36f38bc6b709eec052d398ce8996d55d19",
+        "sha256": "6acc0bf221a4ddc6e5c6438348920b2ca2393b29c4314dbde2cdc23f2b1a9639"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/android.md",
+        "bytes": 4093,
+        "gitBlob": "1f67a6bb574960cccb1692f460cc5432baebad65",
+        "sha256": "058f81f256134841875fd3183e06b37a023de0c877fd2b9eecd97011640791fe"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/animate.md",
+        "bytes": 5236,
+        "gitBlob": "c8fb9e038bb74a125646b64c49bc39711f63e8f4",
+        "sha256": "d658c48ffbe0031e8e3b318996cad6ceafe29e40aa50d5bb25e4bf1d6839dc7c"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/audit.md",
+        "bytes": 8528,
+        "gitBlob": "0af13e165f6768d7b20e1d03dbd64ce36a2704ab",
+        "sha256": "d5f83912eda93d42f93522bb74aeff0ea04d9c559577ec52fcccc130dd03166d"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/audit.native.md",
+        "bytes": 8364,
+        "gitBlob": "321847a79680fd61908fced1ddab0ac20581aeb7",
+        "sha256": "960cb922bc934adbf9192e9428ff6bec1f382038166f02a785939c93b7391067"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/bolder.md",
+        "bytes": 3564,
+        "gitBlob": "0ea9bcc0eb5f94d06bb3c3b52c5079eb1d0ca22a",
+        "sha256": "f964506c0fae87b3c2c1db7016ddc9be9ef970bbcf5548d684b997b5d5991586"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/clarify.md",
+        "bytes": 4590,
+        "gitBlob": "4506a31c95e02b2ad918367a0ef4461643d51532",
+        "sha256": "173dd66abe65633910dcb04a51f40d6ff2a793f87088f022a02fc4cad24dd133"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/colorize.md",
+        "bytes": 4537,
+        "gitBlob": "02fa661efac9229d6e869a20ef8ee928d4b986a0",
+        "sha256": "bc5f71f1129d0f2c310d913d07c8dc609a1d25644121bd78c308f42d52a0b9e9"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/craft-floor.md",
+        "bytes": 5500,
+        "gitBlob": "ae213ce801ebb2085033b309b4144e8d7e9996ba",
+        "sha256": "e802e4f7bdc89050a9c0f2ca506e1d493a2316e6e810c0336c57aa073717ef3e"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/craft.md",
+        "bytes": 555,
+        "gitBlob": "dbbc9402c07cdab21f2b6eb69279b8435fecfd7f",
+        "sha256": "9205e222bc6565b37fb504ceec93233c2d2a456802b69d16e6b1c44723907c4c"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/critique.md",
+        "bytes": 45944,
+        "gitBlob": "c1285ca137d9aa1280e538601a0e84140246fe56",
+        "sha256": "cb8caddbb3919e5bf7f252143b519fb16db28a244642d937b186cb89962d9201"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/degraded/asset-producer.md",
+        "bytes": 7458,
+        "gitBlob": "903b977764fd1a6e864e0862a7d1d695a7c4a6e8",
+        "sha256": "a8547c8565979894f0c07f92a96ac2a38e681a31fbf155ffeefc7566e185d9c2"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/degraded/documenter.md",
+        "bytes": 3325,
+        "gitBlob": "e9dfb799bcece32233386bf9702bc3141d56d196",
+        "sha256": "bcc05ea92faebb5c74037a9d4263a5ce9a56f5ab07c8ab3c59ee704d8cade745"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/degraded/finish-reviewer.md",
+        "bytes": 15397,
+        "gitBlob": "b5a131005b3bb617dbdfec584ac79100e17af02f",
+        "sha256": "5f24c5a97b4ffcabc7c432b064cfdd04c7a2ad52f52e765be648dc0aadab8f38"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/degraded/manual-edit-applier.md",
+        "bytes": 7196,
+        "gitBlob": "ef5095b924623ce04e02188a6790ebd98a273bcd",
+        "sha256": "5fae7f8a2fc3ddd49ad0a413446dc44daedef5b6b7de5eb935bd2fbfad646d58"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/delight.md",
+        "bytes": 3716,
+        "gitBlob": "60a8e83ee48d50901acfa886d3ec4bc72b40ec6f",
+        "sha256": "098a891028ce59c212b747d3c70468dd750aff7053a703d1336045ed31e0da7c"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/distill.md",
+        "bytes": 5717,
+        "gitBlob": "13f6cd5840c2030406c8fa59b70cb5fa86c239ab",
+        "sha256": "ea8432c90c30ecb0426662a681ead5c0941113079704e1a766cda09e85b15b4f"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/doctor.md",
+        "bytes": 5481,
+        "gitBlob": "2d41282821fab74e95165d0277d9d561e32311b9",
+        "sha256": "a98b397cedeeaa1da57f3395b3d9b6c1fc477f4247fb9dc13e4da3da588283ff"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/document.md",
+        "bytes": 27521,
+        "gitBlob": "83abb54b8ea773577a464f08ab78beaa411f4c70",
+        "sha256": "3673248740bcdd1122ccc610093ba2fe52f3943a61ce0b7170b74dc49e5b6098"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/extract.md",
+        "bytes": 3433,
+        "gitBlob": "7e98bd04605aaa8e6e7200deff5fe5cd5cc28841",
+        "sha256": "31b90048c0b540daec46762a10c2b6b6434737a89af005054d8b848d829d003b"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/harden.md",
+        "bytes": 9450,
+        "gitBlob": "124742e1cca3caff2c495009a8f408382e73e7d1",
+        "sha256": "16ba7fca1973c5faf53dd2ca523559129c0fe9e5f8d50b645f527afa78186cd2"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/hooks.md",
+        "bytes": 13312,
+        "gitBlob": "bf297ed66bc9242760177d7375e921d0302e267c",
+        "sha256": "12fefe52d80d25014e5f7e2f9b278275a675653d3d99ae8f0ecf344cdb9abbe6"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/init.md",
+        "bytes": 11536,
+        "gitBlob": "0612fdde8a82dfe585a0a84eaaee833a5f0b146a",
+        "sha256": "bb069b43c09109d7031b0374e31955749fec657b252d39782f11e8985aca2b51"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/ios.md",
+        "bytes": 3812,
+        "gitBlob": "c6244dfe32176e5718d86211b7d1eb5601eb0860",
+        "sha256": "40c87038b5f75147a5952a96237acf312a327bf70c1bcd8e0a5f064625ae9668"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/layout.md",
+        "bytes": 5161,
+        "gitBlob": "aa547c742fc373bc459bdbb7977683441aa48ec0",
+        "sha256": "0bc7d7971b3edf2acd0580e847458dc6d84129d90715b452799ace3bed815c7c"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/live-setup.md",
+        "bytes": 8186,
+        "gitBlob": "6e10f00f7f2a789da582f38cdaef89de39ead266",
+        "sha256": "2b5b2fbf5f658f34ea1997fb1aeebe01604d05187f75c6a4f1f55a5bc78520a4"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/live.md",
+        "bytes": 36490,
+        "gitBlob": "fb85b3fdd99f94c78752da4c4d2d2c06bdaa1439",
+        "sha256": "68c5636a7858dd0b5137a9229c15e25fdc2ee40a0f8a4e9d809f78e809256262"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/new-work.md",
+        "bytes": 52769,
+        "gitBlob": "cd2a22b98eac53ddfe5c2d61b4a31be693e58fe4",
+        "sha256": "85b9c2d051de94ee9129c58be111946f73035ca62bbd2a3936f4fa48768fe5cf"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/onboard.md",
+        "bytes": 7740,
+        "gitBlob": "90e33916ef348f050681d400a67e5745bfdb6d41",
+        "sha256": "ef2dde00030580ed2765cbf7be9b2ea4a6f64cb915b804fd6f6abcf38051c7b9"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/operate.md",
+        "bytes": 4145,
+        "gitBlob": "524f2c3ae9fa497284e9699f3ca5320cce5d05cf",
+        "sha256": "a9d2203acd45ca33a13d5c68b02b23ed512425ac15f0e8438318ed124b43729d"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/optimize.md",
+        "bytes": 7614,
+        "gitBlob": "fc56c22376854d77e8099b925232bba25001e5e6",
+        "sha256": "f672ef8251a3ed4051a053d30819664951b17540b2899acd27d20e500c234abc"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/overdrive.md",
+        "bytes": 9178,
+        "gitBlob": "34dface28cb99425f4153ee08447220ea1839b79",
+        "sha256": "fce6688138d2ceb1e3d2cde5231f54b1d8dc8748b4c95a7919aa83b6f924cf96"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/polish.md",
+        "bytes": 6646,
+        "gitBlob": "f93170f773cac058f51e289603aed7575d62a6a2",
+        "sha256": "81666fc7f783b4e3514db6554e713dc0479bd9cdedb06e93d15f8b579aae869a"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/quieter.md",
+        "bytes": 4952,
+        "gitBlob": "870ea86599bebf65509291df22533e4b5c3d4ceb",
+        "sha256": "190a4e642ca362d7499f3c3ab123e21f18f75457d11f072b545a183f296e6495"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/routing.md",
+        "bytes": 3257,
+        "gitBlob": "6d48b47a02dece1f9edf2f071dba9f674433c8ba",
+        "sha256": "ef0b8eca20e1321cf7216fd0bda41ce54b0cca197cfd1b075eb51f3436f59059"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/shape.md",
+        "bytes": 3547,
+        "gitBlob": "90a74ae813331cbce8fff6beb498ced77970fadf",
+        "sha256": "a55f016c046cb6a27c55bd7f346375aeb506a755c4fbca19a5f92dbd42309c23"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/typeset.md",
+        "bytes": 5256,
+        "gitBlob": "6f117f429cdefe60c0a07cbd5f02f72a40eb8a7d",
+        "sha256": "442749aed338f51c1a3ccfb182c6ade9b74b90590b67984062ac94a5b100e914"
+      },
+      {
+        "path": ".agents/skills/impeccable/reference/visualize.md",
+        "bytes": 11757,
+        "gitBlob": "f4dc6613eff861e34aa9123392afc9e59b0ca3a2",
+        "sha256": "896da399bafcffb0623bdd81bb18709d6eab25c9d5917e739c8798f31ff0d076"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/VERSION",
+        "bytes": 6,
+        "gitBlob": "9faa1b7a7339db85692f91ad4b922554624a3ef7",
+        "sha256": "800cf1c0392b24de7c0a1c6ea6778ecb433dec71c49a150bce96a98477527b2f"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/command-metadata.json",
+        "bytes": 7934,
+        "gitBlob": "dad8ef2e0ca304f6a0fe48c0c6b90880df93e01b",
+        "sha256": "6bdbc3f745ceee15e10b050f109ce42bbeb53ab3c3b5239257de1d596654dee7"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/data/font-index-failures.json",
+        "bytes": 2437,
+        "gitBlob": "1aca67220413ef163570c75405b444d7a27a32be",
+        "sha256": "835f19a0a3812f3652dd6979a2ce5597f654fd01f26e1b420b92d5f42b997ce4"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/data/font-index.json",
+        "bytes": 1100013,
+        "gitBlob": "9d2029971df232a72ff6584d264c104490521742",
+        "sha256": "47edbdfaf27073c47033d1ac7dfee881be49e2dcbda7671d1157300481dde6da"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/impeccable",
+        "bytes": 8514,
+        "gitBlob": "eb60f8667dd6924bc6271e9e1a0761ea5f945751",
+        "sha256": "39d9600489073e227e4f4d55c451ce4252a6632ed7ae37923efbbcbc91f16d07"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/impeccable.cmd",
+        "bytes": 8472,
+        "gitBlob": "7ebe419bfe5b58c6214e39e8ce566181c72781d2",
+        "sha256": "759bab1d8adc071fdde2efcf6e2157aa4026f3c2b4f3c342a8070bf328011616"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/live-browser-dom.js",
+        "bytes": 4917,
+        "gitBlob": "e85c95c43ead132f04fe61dc3d0bf90b04e22d37",
+        "sha256": "de1b7404f4cdfd7b515196afb17b74b1980f0bc88cb8681ae93a76ca48ec7bdb"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/live-browser-ignores.js",
+        "bytes": 10346,
+        "gitBlob": "1c8514c7bcd8b8d889a1763965326fb6adec24a1",
+        "sha256": "c1cb6877ca99a0c1b38ba0c7d59f32702d3022f6821d8045f7133f7c40b6362f"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/live-browser-session.js",
+        "bytes": 4090,
+        "gitBlob": "1514bf472a5bb6dffdec1c67176713e3fab47af6",
+        "sha256": "edddeb3fad88adec9a055b1bf9d5c75418cbe97a13b1a7f6765e73249e482563"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/live-browser.js",
+        "bytes": 522871,
+        "gitBlob": "ac6f185861ed917d88f039a696b0602a1b7ad9f2",
+        "sha256": "7af0a8665057c83b39bca2c8c7427ef2343734f70d4128c377113a6726a1e3b1"
+      },
+      {
+        "path": ".agents/skills/impeccable/scripts/modern-screenshot.umd.js",
+        "bytes": 29290,
+        "gitBlob": "a9c5208f6b141d3bafdb8eb843d6fcbdcf23e370",
+        "sha256": "bb36665889124a0b6e15f16045265737449c3bdcf2712cdb08af3cfa01563e2b"
+      },
+      {
+        "path": ".claude/agents/impeccable-asset-producer.md",
+        "bytes": 7099,
+        "gitBlob": "0ef2b3cdaa8cd7e21a1c0b4bab4bc5d4a790c601",
+        "sha256": "c6a0ec6c28ae55fe539f0f41a507b1638495afd285d6eb15c00245fc8cc7e7fe"
+      },
+      {
+        "path": ".claude/agents/impeccable-documenter.md",
+        "bytes": 3144,
+        "gitBlob": "eb12233534675517c97b6ba526c6f8d7182d9f1a",
+        "sha256": "6bc62a59f6fef0b749927c8d10e9849ab2411199d86d70772a86f8e83ac309f5"
+      },
+      {
+        "path": ".claude/agents/impeccable-finish-reviewer.md",
+        "bytes": 15230,
+        "gitBlob": "f838093253451d0bd2b2f890fd75ac816d91ab40",
+        "sha256": "8f651cb1f8cde0acc5cc511b77fddd98558a527f54974698a1650b0fd7e849a7"
+      },
+      {
+        "path": ".claude/agents/impeccable-manual-edit-applier.md",
+        "bytes": 6983,
+        "gitBlob": "a1e179cbed669cf4f25267d5684fa813553df6a7",
+        "sha256": "b2d71ff0df7ed49e06dfc4acfce3d3f7eb48afa68be04763ee8c08354df50a07"
+      },
+      {
+        "path": "LICENSE",
+        "bytes": 10766,
+        "gitBlob": "bb3f6d23b1f8025514a62a12b51b47d73e3c9aa9",
+        "sha256": "02bb8c3b4e70190e3986c0404ad2fd8d639b4f534252d82379cc1b502b6d1812"
+      },
+      {
+        "path": "NOTICE.md",
+        "bytes": 503,
+        "gitBlob": "0468271c904ae334cfaf27da6f8df3d5f419a1f0",
+        "sha256": "c60a093c2845fd9fb82f9c6f742ece31f379f8190b535309d32d66c45ccffdcb"
+      },
+      {
+        "path": "README.md",
+        "bytes": 26932,
+        "gitBlob": "c4b9831a5cd45fdd02a0215f376bbb9f6e6217ff",
+        "sha256": "a09ed9744f85d9c9d289108cb102354c2fdd7745509f31fd28998c960de1ae75"
+      },
+      {
+        "path": "package.json",
+        "bytes": 3800,
+        "gitBlob": "6dba5016328d9347d6066c96a31d4c3ff1f1c83f",
+        "sha256": "cf1048fcf33cb38019b58fdf8a67b4eb086dd936ba1bf750ed3c6737082084b6"
+      },
+      {
+        "path": "crates/context/src/artifact_schema.rs",
+        "bytes": 2500,
+        "gitBlob": "e7f0e5bd2249355372d3bff0eeded87dd36b0a52",
+        "sha256": "2647bf2f1d20d3e95a5eef4dcc59954642155807ffb96ea89e4caf245885ed38"
+      },
+      {
+        "path": "crates/context/src/context.rs",
+        "bytes": 45265,
+        "gitBlob": "d6317788bc61c2c2f844b31863c41e96a067d01d",
+        "sha256": "941b3ef46aabd0fbf0367b3c34605a928ffebedc593e48e5840f4214b86a5297"
+      },
+      {
+        "path": "crates/context/src/context_cli.rs",
+        "bytes": 35068,
+        "gitBlob": "5bd7e60af4e24cd19322cd0521e35da8e57b53b6",
+        "sha256": "acf31f37a98d2313bd8a0cfe66f7923672c4041d39fc67f8171baa24c94a8cec"
+      },
+      {
+        "path": "crates/context/src/provider.rs",
+        "bytes": 4534,
+        "gitBlob": "d95e961a4baab93c20fa5ddaf0eb8841c24cf830",
+        "sha256": "bf846e10060d30ce6b7100d2f65dbd0a552e324559f9f9c80480ae8d673e8517"
+      },
+      {
+        "path": "crates/context/src/staleness.rs",
+        "bytes": 22539,
+        "gitBlob": "4f7d9b92b710ccfc41abdf7bd0d0e29da9838685",
+        "sha256": "cbeb4fe5939a2a2ac8b7411b88e5da864a4aa71aa827b37bfadd496af7e81201"
+      },
+      {
+        "path": "crates/context/src/staleness_deep.rs",
+        "bytes": 21444,
+        "gitBlob": "fb3ea4622a624d06134ee1ca9011896201df9d27",
+        "sha256": "993feaa22c406970320712bafc8bf214a4e7973f1665eb393f040b3863fe0b1a"
+      },
+      {
+        "path": "crates/context/src/staleness_notice.rs",
+        "bytes": 6093,
+        "gitBlob": "4e47c7816ed7a492efd785ceddec0b380afef13b",
+        "sha256": "01427e2e1551f8dd111926532a29b5fba54714978d1fc2c85d1d9ff25c1cd09f"
+      },
+      {
+        "path": "crates/context/src/surface_briefs.rs",
+        "bytes": 15732,
+        "gitBlob": "be2be1cd8facb32b51d3dc83c9e588c2fbdf6494",
+        "sha256": "a7dc07a71a5948854cb5965a18610f8411ab114667e569c7273110a8edd418f9"
+      },
+      {
+        "path": "crates/context/src/util.rs",
+        "bytes": 10396,
+        "gitBlob": "1fe435030e1614482a97cdd9834c368143158b18",
+        "sha256": "014c3d8bdb061b6808fe44e5a0b02f1b926db33d920bf001bfbb3aee2a194787"
+      }
+    ]
+  },
+  "engine": {
+    "release": "https://github.com/pbakaus/impeccable/releases/tag/engine-v0.1.5",
+    "tag": "engine-v0.1.5",
+    "files": [
+      {
+        "name": "impeccable-darwin-arm64",
+        "bytes": 12762240,
+        "sha256": "0d48b6e16aa97664fdbe607d5da9ae320e389a1843e0ff1328f8c2530530320d",
+        "url": "https://github.com/pbakaus/impeccable/releases/download/engine-v0.1.5/impeccable-darwin-arm64"
+      },
+      {
+        "name": "impeccable-darwin-arm64.sha256",
+        "bytes": 90,
+        "sha256": "fc60f4e7d4da21ca73fba210c33b78c3444c4dba7f508f8ee0aaac83ab2b4ee0",
+        "url": "https://github.com/pbakaus/impeccable/releases/download/engine-v0.1.5/impeccable-darwin-arm64.sha256"
+      }
+    ],
+    "sidecarVerified": true
+  },
+  "launcherProbe": {
+    "upstream": "2149fcce39a90bb409df5f16515f316a76dc6199",
+    "skillVersion": "4.3.1",
+    "engineVersion": "0.1.5",
+    "npmPackageVersion": "4.1.0",
+    "fixture": "/tmp/isocan-design-partner-execution/phase6-launcher-fixture",
+    "results": [
+      {
+        "name": "engine",
+        "exitCode": 0,
+        "stdoutSha256": "c091df7a7a5be905287c888bf092eefd33c5f9f44ab51ccfcdcf01ccbaaf1c26",
+        "stderrBytes": 0
+      },
+      {
+        "name": "context",
+        "exitCode": 0,
+        "stdoutSha256": "c34fc8e8005d3159811e11c9dbb3bd1f71c18bb152a32575064bbcbf9d1c15de",
+        "stderrBytes": 0
+      },
+      {
+        "name": "missing-engine-no-download",
+        "exitCode": 127,
+        "stdoutBytes": 0,
+        "stderrBytes": 0
+      }
+    ],
+    "scope": "Actual local Darwin launcher and context resolution only; no native design playbook, model, image generation, review role or hosted runtime executed."
+  },
+  "supportedSubsetDecision": "adapted-guidance only; native playbook orchestration unsupported",
+  "providerCalls": 0,
+  "nativePlaybooksExecuted": []
+}

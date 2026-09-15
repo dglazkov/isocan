@@ -34,6 +34,7 @@ export interface DesignSystemPort extends DesignAuditReadPort {
         type: "item.edit";
     }>, opId: string, signal?: AbortSignal): Promise<PostOpResponse>;
 }
+type DesignSystemReadPort = Pick<DesignSystemPort, keyof DesignAuditReadPort | "snapshot" | "home">;
 /** The original bytes and captured source metadata make a working file an identifiable projection. */
 export interface DesignProjection {
     schemaVersion: 1;
@@ -90,13 +91,13 @@ export type DesignReconcileResult = {
     };
 };
 /** Read the real governing document and direction at one explicit canvas location. */
-export declare function readDesignSystem(io: DesignSystemPort, options: {
+export declare function readDesignSystem(io: DesignSystemReadPort, options: {
     canvasId: string;
     target?: DesignSystemTarget;
     signal?: AbortSignal;
 }): Promise<DesignSystemRead>;
 /** Capture exact permitted bytes; export never creates a second canvas system or private-byte copy. */
-export declare function projectDesignSystem(io: DesignSystemPort, options: {
+export declare function projectDesignSystem(io: DesignSystemReadPort, options: {
     canvasId: string;
     target?: DesignSystemTarget;
     signal?: AbortSignal;

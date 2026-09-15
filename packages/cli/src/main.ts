@@ -10,6 +10,7 @@ import { registerDesignSystems } from "./design-system.ts";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
 import { registerDesignReviews, runDesignRepair } from "./design-review.ts";
+import { registerDesignCraft } from "./design-craft.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
@@ -10387,6 +10388,7 @@ registerQuestionnaires(style, ctxOf);
 registerDesignRequests(style, ctxOf);
 registerDesignDecisions(style, ctxOf);
 registerDesignReviews(style, ctxOf);
+registerDesignCraft(style, ctxOf);
 registerDesignSystems(style, ctxOf);
 
 /**

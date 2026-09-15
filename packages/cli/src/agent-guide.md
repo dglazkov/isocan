@@ -2791,6 +2791,24 @@ unavailable consistency after another edit; do not call that a current system.
 
 ## One shared review and bounded repair
 
+Optional craft guidance: `design craft <request> --stage new-work|critique|finish --json`
+reads an attributed, bounded Impeccable adaptation around the same saved brief,
+settled answers, accepted rationale and governing system. It asks no new interview
+and runs no native playbook. Familiar controls, fonts and operational density remain
+valid when the task calls for them. `--out <new-directory>` exports PRODUCT.md,
+the exact available DESIGN.md and DESIGN.projection.json, a surface brief, permitted
+references, guidance and license/NOTICE. It refuses an existing directory.
+`design craft <request> --check <directory> --json` validates the original packet
+and current source authority, reporting local authored edits separately and preserving
+every working file. Re-export to a new folder for a new capture. Use `design reconcile`
+for deliberate DESIGN.md changes; PRODUCT/surface edits need explicit brief correction.
+`--package <skill-directory>` checks the pinned 56-file Codex variant, without executing
+scripts or downloading an engine. Missing, incomplete, drifted and verified source
+are separate from native execution, which is unsupported/not run. Applying the guidance
+can be recorded in ordinary review evidence with tool `isocan adapted Impeccable guidance`
+and toolVersion `isocan-craft-v1`; opening a packet proves no inspection and adds no
+repair allowance. Native playbooks, hooks, images and review roles are unsupported.
+
 Use `design review <request> --json` before inspecting a designed output. This
 reads ordinary versioned authored reports and live plus archived reservation
 history. It does not execute a browser, attest quality, or restart discovery.
@@ -2996,6 +3014,7 @@ on the thread before putting one on somebody else's canvas,
 `design reconcile <directory>`, `design recipes`, `design recipe <id> [--design|--out <directory>]`, `design audit [--item|--in|--file|--fail]`,
 `design repair <item> <file> [--from-audit <report.json>|--request <id> --review <run>] [--retry]`,
 `design review <request> [--run <id>] [--start|--record|--begin-repair|--offer-verifier|--handoff|--finish|--retry]`,
+`design craft <request> --stage new-work|critique|finish [--out <new-directory>] [--package <skill-directory>]`, `design craft <request> --check <directory>`,
 `design questions [payload] [--respondents]`, `design ask <file> [--thread <id>]`,
 `design answer [payload] [--file <file>]`, `design reference <thread> <comment> <reference> [--out <file>]`,
 `design workflow [request] [--thread|--comment|--output]`, `design start <file> [--automatic]`,

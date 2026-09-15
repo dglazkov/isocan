@@ -19,6 +19,7 @@ export interface DesignSystemPort extends DesignAuditReadPort {
   upload(source: DesignSystemSource, text: string, filename: string, mimeType: string, signal?: AbortSignal): Promise<{ blobHash: string; size: number }>;
   edit(source: DesignSystemSource, operation: Extract<Operation, { type: "item.edit" }>, opId: string, signal?: AbortSignal): Promise<PostOpResponse>;
 }
+type DesignSystemReadPort = Pick<DesignSystemPort, keyof DesignAuditReadPort | "snapshot" | "home">;
 /** The original bytes and captured source metadata make a working file an identifiable projection. */
 export interface DesignProjection {
   schemaVersion: 1;
@@ -57,7 +58,7 @@ const hash = async (text: string) => [...new Uint8Array(await crypto.subtle.dige
 const sourceOf = (projection: DesignProjection): DesignSystemSource => ({ canvasId: projection.source.canvasId, expectedHome: normalizeHomeUrl(projection.source.home), mode: projection.source.canvasId === projection.destination.canvasId && normalizeHomeUrl(projection.source.home) === projection.destination.home ? "direct" : "inherited" });
 
 /** Read the real governing document and direction at one explicit canvas location. */
-export async function readDesignSystem(io: DesignSystemPort, options: { canvasId: string; target?: DesignSystemTarget; signal?: AbortSignal }): Promise<DesignSystemRead> {
+export async function readDesignSystem(io: DesignSystemReadPort, options: { canvasId: string; target?: DesignSystemTarget; signal?: AbortSignal }): Promise<DesignSystemRead> {
   const [snapshot, home] = await Promise.all([io.snapshot(options.canvasId, options.signal), io.home(options.canvasId, options.signal)]);
   const target = options.target ?? { kind: "canvas" };
   const linked = await readInheritedCanvases(io, snapshot.canvas, home, options.signal);
@@ -69,7 +70,7 @@ export async function readDesignSystem(io: DesignSystemPort, options: { canvasId
 }
 
 /** Capture exact permitted bytes; export never creates a second canvas system or private-byte copy. */
-export async function projectDesignSystem(io: DesignSystemPort, options: { canvasId: string; target?: DesignSystemTarget; signal?: AbortSignal }): Promise<DesignProjection> {
+export async function projectDesignSystem(io: DesignSystemReadPort, options: { canvasId: string; target?: DesignSystemTarget; signal?: AbortSignal }): Promise<DesignProjection> {
   const { governing } = await readDesignSystem(io, options);
   if (governing.status !== "available") throw new Error(governing.reason);
   if (await hash(governing.text) !== governing.artifact.blobHash) throw new Error("The governing document bytes disagree with their source identity.");

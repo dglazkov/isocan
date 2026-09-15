@@ -289,6 +289,11 @@ export async function readDesignRequestReference(io: DesignRequestReadPort, requ
   const comparisonReferences = [...choices.comparisons.filter(one => one.comparison.requestId === request.requestId).flatMap(one => one.references), ...choices.decisions.filter(one => one.decision.input.requestId === request.requestId).flatMap(one => one.references)];
   const retained: DesignRetainedReference[] = [...[state.marker, ...state.receipts.map(one => one.marker)].flatMap(marker => marker.retainedReferences), ...comparisonReferences];
   const known = [state.ref, ...capturedContextReferences(state), ...state.brief.references.flatMap(one => one.artifact ? [one.artifact] : []), ...state.brief.facts.flatMap(one => one.sources), ...state.receipts.flatMap(one => [one.ref, ...one.receipt.context, ...one.receipt.checks.flatMap(check => check.evidence), ...(one.receipt.governing?.artifact ? [one.receipt.governing.artifact] : []), ...(one.receipt.output.kind === "canvas" ? [one.receipt.output.artifact] : [])]), ...retained.map(one => one.artifact)];
+  // A declared output is current-bound. This adds no latest-version fallback for historical citations.
+  for (const itemId of state.brief.outputIds) {
+    const item = snapshot.canvas.items[itemId], version = item?.versions.find(one => one.id === item.currentVersionId);
+    if (version) known.push({ home: normalizeHomeUrl(home), canvasId, itemId, versionId: version.id, blobHash: version.blobHash });
+  }
   if (!known.some(one => sameDesignArtifact(one, artifact))) {
     let identified = false;
     for (const atId of new Set([state.brief.targetItemId ?? state.brief.groupId, ...state.brief.outputIds])) {
