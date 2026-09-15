@@ -119,6 +119,14 @@ const PROVIDER_LIST = {
       description: "Fast text.",
       supportedGenerationMethods: ["generateContent", "countTokens"],
     },
+    {
+      // The transcribe family holds a Live session but is not a voice to talk
+      // WITH — it answers the setup and refuses the AUDIO response modality.
+      name: "models/gemini-3.5-transcribe-live",
+      displayName: "Gemini 3.5 Transcribe Live",
+      description: "Transcription.",
+      supportedGenerationMethods: ["bidiGenerateContent"],
+    },
   ],
 };
 
@@ -204,12 +212,16 @@ describe("the provider's list, in the provider's words", () => {
       "models/gemini-3.1-flash-live-preview",
       "models/gemini-2.5-flash-native-audio-latest",
       "models/gemini-2.5-flash",
+      "models/gemini-3.5-transcribe-live",
     ]);
     // `bidiGenerateContent` is the Live API's own method name; it is read from
     // the provider rather than guessed at here.
-    expect(list.models.map((one) => one.live)).toEqual([true, true, false]);
+    expect(list.models.map((one) => one.live)).toEqual([true, true, false, true]);
+    // Conversational is the narrower truth the picker shows: a transcribe
+    // model is Live but is not a voice to talk with.
+    expect(list.models.map((one) => one.conversational)).toEqual([true, true, false, false]);
     expect(list.models[0]?.description).toBe("Live, audio in and out.");
-    expect(list.answer).toBe("the provider lists 3 models, 2 of them Live");
+    expect(list.answer).toBe("the provider lists 4 models, 2 of them Live");
   });
 
   it("hands a refusal over verbatim rather than inventing one", async () => {
@@ -237,6 +249,7 @@ const KNOWN = [
     description: "Live, audio in and out.",
     methods: ["bidiGenerateContent"],
     live: true,
+    conversational: true,
   },
   {
     name: "models/gemini-2.5-flash-native-audio-latest",
@@ -244,6 +257,7 @@ const KNOWN = [
     description: "Native audio.",
     methods: ["countTokens", "bidiGenerateContent"],
     live: true,
+    conversational: true,
   },
   {
     name: "models/gemini-2.5-flash",
@@ -251,6 +265,7 @@ const KNOWN = [
     description: "Fast text.",
     methods: ["generateContent", "countTokens"],
     live: false,
+    conversational: false,
   },
 ];
 
@@ -347,6 +362,7 @@ describe("whether a model works is the provider's answer", () => {
           description: "Live transcription.",
           methods: ["bidiGenerateContent"],
           live: true,
+          conversational: false,
         },
       ],
       WebSocketImpl: FakeLive as unknown as typeof WebSocket,
@@ -357,9 +373,9 @@ describe("whether a model works is the provider's answer", () => {
     const result = await checking;
     expect(result.ok).toBe(false);
     expect(result.answer).toContain("1007");
-    expect(result.why).toContain("Live model, but not a conversational one");
-    expect(result.why).toContain("does not send AUDIO back");
-    expect(result.why).toContain("Transcription and translation models");
+    expect(result.why).toContain("refused the session after setup");
+    expect(result.why).toContain("transcribe and translate families");
+    expect(result.why).toContain("thinking level");
   });
 
   it("says the provider did not answer, rather than pretending it refused", async () => {
@@ -454,8 +470,9 @@ describe("the harness's own routes", () => {
       models: { live: boolean }[];
     };
     expect(list.ok).toBe(true);
-    expect(list.models).toHaveLength(3);
-    expect(list.models.filter((one) => one.live)).toHaveLength(2);
+    expect(list.models).toHaveLength(4);
+    expect(list.models.filter((one) => one.live)).toHaveLength(3);
+    expect((list.models as unknown as { conversational: boolean }[]).filter((one) => one.conversational)).toHaveLength(2);
 
     const checking = fetch(`${server.state.url}model/test`, {
       method: "POST",

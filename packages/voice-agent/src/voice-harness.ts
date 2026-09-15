@@ -1027,6 +1027,12 @@ export interface ProviderModel {
   methods: string[];
   /** The provider's OWN signal that this model holds a Live session. */
   live: boolean;
+  /** Live AND a voice you can talk WITH: audio in and audio out. The
+   * transcribe and translate families also carry `bidiGenerateContent` and
+   * answer the setup, then refuse the AUDIO response modality (measured,
+   * 1007) — the list carries no field for that, and their names say what
+   * they are, so the name is the filter. */
+  conversational: boolean;
 }
 
 /**
@@ -1051,14 +1057,18 @@ export async function listModels(
     const parsed = JSON.parse(body) as {
       models?: { name?: string; displayName?: string; description?: string; supportedGenerationMethods?: string[] }[];
     };
-    const models = (parsed.models ?? []).map((one) => ({
-      name: one.name ?? "",
-      displayName: one.displayName ?? one.name ?? "",
-      description: (one.description ?? "").split("\n")[0]!.slice(0, 240),
-      methods: one.supportedGenerationMethods ?? [],
-      live: (one.supportedGenerationMethods ?? []).includes("bidiGenerateContent"),
-    }));
-    const live = models.filter((one) => one.live).length;
+    const models = (parsed.models ?? []).map((one) => {
+      const live = (one.supportedGenerationMethods ?? []).includes("bidiGenerateContent");
+      return {
+        name: one.name ?? "",
+        displayName: one.displayName ?? one.name ?? "",
+        description: (one.description ?? "").split("\n")[0]!.slice(0, 240),
+        methods: one.supportedGenerationMethods ?? [],
+        live,
+        conversational: live && !/(transcrib|translat)/i.test(one.name ?? ""),
+      };
+    });
+    const live = models.filter((one) => one.conversational).length;
     return { ok: true, models, answer: `the provider lists ${models.length} models, ${live} of them Live` };
   } catch (err) {
     return { ok: false, models: [], answer: `could not reach the provider: ${String((err as Error).message ?? err)}` };
@@ -1165,9 +1175,10 @@ export async function testModel(options: {
    */
   const why =
     outcome.code === 1007
-      ? `${model} is a Live model, but not a conversational one: the provider accepted the setup and then refused the ` +
-        `response modality — this one does not send AUDIO back. Transcription and translation models are Live and are ` +
-        `not a voice to talk with; the conversation needs a model that takes audio in AND answers in audio.`
+      ? `${model} is a Live model, but the provider refused the session after setup — its words are above. ` +
+        `Measured causes: the transcribe and translate families refuse the AUDIO response modality this way, ` +
+        `and the extended-thinking model refuses this way when its thinking level is missing from the ` +
+        `setup — this build names one for it.`
       : known
         ? known.live
           ? `the provider lists ${model} as Live, so this refusal is about something else — its own words are above`
@@ -1497,12 +1508,13 @@ function base64(bytes: Uint8Array): string {
  * belong in the Chat, as the research note says; the tool list here is the
  * fast set.
  *
- * `gemini-3.1-flash-live-preview` verified current on 11 Sep 2026 against
- * Google's Live API docs. It is a preview name and will move; `--model` and
+ * `gemini-3.8-live` verified current on 15 Sep 2026 against Google's Live
+ * API docs; the docs call `gemini-3.1-flash-live-preview` a legacy preview
+ * and recommend 3.8 Live. A preview name moves; `--model` and
  * `LiveSessionOptions.model` exist so a person can move with it without a
  * release.
  */
-export const LIVE_MODEL = "models/gemini-3.1-flash-live-preview";
+export const LIVE_MODEL = "models/gemini-3.8-live";
 
 export function liveUrl(key: string, host = "generativelanguage.googleapis.com"): string {
   return (
@@ -2133,11 +2145,22 @@ export function liveSetup(
   instructions?: { source: string; text: string } | null,
   rules: string = VOICE_RULES,
 ): object {
+  /**
+   * The extended-thinking model needs its thinking depth named at setup
+   * (its docs: `thinking_config`, levels low/medium/high, no minimal), and
+   * the plain 3.8 Live refuses a thinkingLevel outright — so the field is
+   * model-shaped, never sent generally. The level is fixed at "low"; it
+   * becomes a flag when a person asks to trade latency for reasoning depth.
+   */
+  const thinkingConfig = model.includes("extended-thinking")
+    ? { thinkingConfig: { thinkingLevel: "low" } }
+    : {};
   return {
     setup: {
       model,
       generationConfig: {
         responseModalities: ["AUDIO"],
+        ...thinkingConfig,
       },
       systemInstruction: {
         parts: [{ text: voiceInstruction(rules, instructions) }],
@@ -2616,6 +2639,9 @@ export interface LiveCallbacks {
 
 export interface LiveSession {
   send(pcm: Uint8Array): void;
+  /** A typed line into the same conversation — what a summons becomes when
+   * the microphone is already standing: the model hears it, not the grammar. */
+  sendText(text: string): void;
   close(): void;
   readonly ready: Promise<boolean>;
 }
@@ -2731,6 +2757,11 @@ export function startLiveSession(options: {
       // exactly how a broken resampler spent a day disguised as a UI problem.
       // Recorded, never inferred from a frame counter.
       if (content.turnComplete) callbacks.onEvent?.("turn_complete", {});
+      // The extended-thinking model keeps reasoning (and calling tools) after
+      // `turnComplete: true` — its docs say the idle signal is this, and it is
+      // passed through for the log rather than interpreted.
+      const status = content.interaction_status ?? message.interaction_status;
+      if (status) callbacks.onEvent?.("interaction_status", { status });
     }
     if (message.toolCall?.functionCalls) {
       const responses: Record<string, unknown>[] = [];
@@ -2760,6 +2791,10 @@ export function startLiveSession(options: {
           realtimeInput: { audio: { data: Buffer.from(pcm).toString("base64"), mimeType: "audio/pcm;rate=16000" } },
         }),
       );
+    },
+    sendText(text) {
+      if (socket.readyState !== 1 || !text.trim()) return;
+      socket.send(JSON.stringify({ realtimeInput: { text } }));
     },
     close() {
       try {
@@ -4729,10 +4764,17 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         respond(200, { text: out.text, provider: out.provider });
         return;
       }
-      if (url.pathname === "/utterance") {
-        const asObject = typeof body === "string" ? {} : body;
-        const text = String(asObject.text ?? "");
-        const source = String(asObject.source ?? "spoken");
+      /**
+       * **One inbound line, one pipeline** — typed commands, the page's own
+       * typed box, and a summons from the canvas all run through this: the
+       * local grammar, the person's gate for destructive ops, and the apply.
+       * The model's spoken path is the other implementation of the same
+       * vocabulary; this is the one that works with no key and no session.
+       */
+      const runUtterance = async (
+        text: string,
+        source: string,
+      ): Promise<{ reply: string; sent: string[]; failed: string[]; state: string; source: string }> => {
         const items = await target.canvas.items();
         const ctx: PlanContext = { items, mainThreadId: target.mainThreadId };
         const { plans, what } = planVoice(text, ctx);
@@ -4743,8 +4785,7 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         const asked = theQuestion(destroying, items);
         if (destroying.length > 0 && !(await askThePerson(asked))) {
           const refused = `not done — the person did not confirm: ${asked}`;
-          respond(200, { reply: refused, sent: [], failed: [], state: "refused", source });
-          return;
+          return { reply: refused, sent: [], failed: [], state: "refused", source };
         }
         const sent: string[] = [];
         const failed: string[] = [];
@@ -4780,13 +4821,20 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
             });
           }
         }
-        respond(200, {
+        return {
           reply: what ?? (sent.length ? sent.join("; ") : "nothing to send"),
           sent,
           failed,
           state: failed.length ? "some operations were refused" : "ready",
           source,
-        });
+        };
+      };
+
+      if (url.pathname === "/utterance") {
+        const asObject = typeof body === "string" ? {} : body;
+        const text = String(asObject.text ?? "");
+        const source = String(asObject.source ?? "spoken");
+        respond(200, await runUtterance(text, source));
         return;
       }
       if (url.pathname === "/summons") {
@@ -4806,7 +4854,25 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
           event: `summoned by ${who}`,
           details: { kind: "summons", by: who, prompt },
         });
-        respond(200, { lines });
+        if (!prompt.trim()) {
+          respond(200, { handled: false, reply: "an empty summons is not a command", lines });
+          return;
+        }
+        /**
+         * **A summons is an inbound command, not a line in a log.** When the
+         * conversation is standing (the model is listening), the prompt goes
+         * INTO it — the model acts through its tool path, gates and all. When
+         * nothing is listening, the typed pipeline runs it: the same grammar,
+         * the same gate, no key or provider needed, and the outcome is the
+         * answer the rc's turn report carries back to the canvas.
+         */
+        if (activeLiveSession && (sessionState === "live" || sessionState === "muted")) {
+          activeLiveSession.sendText(prompt);
+          respond(200, { handled: "live", reply: "the summons is in the conversation", lines });
+          return;
+        }
+        const result = await runUtterance(prompt, "summons");
+        respond(200, { handled: "typed", ...result, lines });
         return;
       }
       respond(404, { error: "no such door" });
@@ -5829,7 +5895,7 @@ interface Rpc {
  * holding a 10-minute ceiling open on a room that may be empty.
  */
 export function createAcpAgent(options: {
-  forward: (summons: { name: string; prompt: string }) => Promise<{ url?: string; refused?: string } | null>;
+  forward: (summons: { name: string; prompt: string }) => Promise<{ url?: string; refused?: string; answer?: string } | null>;
   name: string;
   out?: (message: unknown) => void;
 }): { handle: (message: Rpc) => Promise<void> } {
@@ -5870,9 +5936,11 @@ export function createAcpAgent(options: {
             // it, which is the whole of what it is for.
             const text = forwarded?.refused
               ? forwarded.refused
-              : forwarded?.url
-                ? `The voice harness is standing at ${forwarded.url} — the summons is in its conversation.`
-                : "The voice harness could not open its local page; start one with `npm start -w @isocan/voice-agent`.";
+              : forwarded?.answer
+                ? forwarded.answer
+                : forwarded?.url
+                  ? `The voice harness is standing at ${forwarded.url} — the summons is in its conversation.`
+                  : "The voice harness could not open its local page; start one with `npm start -w @isocan/voice-agent`.";
             out({
               jsonrpc: "2.0",
               method: "session/update",
@@ -6045,12 +6113,28 @@ export async function runVoiceAdapter(options: { home: string; name: string; can
         ? `attached to the voice harness already standing on port ${chosen.port}`
         : `started a voice harness detached on port ${chosen.port}`,
     );
-    await fetch(`http://127.0.0.1:${chosen.port}/summons`, {
+    const response = await fetch(`http://127.0.0.1:${chosen.port}/summons`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: summons.name, prompt: summons.prompt }),
-    }).catch(() => {});
-    return { url: chosen.url };
+    }).catch(() => null);
+    if (!response) {
+      return { url: chosen.url, refused: "the standing voice harness did not answer" };
+    }
+    const said = (await response.json().catch(() => ({}))) as { reply?: unknown; error?: unknown };
+    // A refusal is a refusal: a canvas error answered by the harness must not
+    // read as "the summons is in its conversation" — the turn report carries
+    // the harness's own words either way.
+    if (!response.ok) {
+      return {
+        url: chosen.url,
+        refused: String(said.error ?? said.reply ?? `the harness refused (HTTP ${response.status})`),
+      };
+    }
+    // The standing server's own sentence about what the summons DID — an
+    // operation's ack or a refusal — is the answer the canvas turn reports.
+    const answer = String(said.reply ?? "");
+    return answer ? { url: chosen.url, answer } : { url: chosen.url };
   };
   const agent = createAcpAgent({ forward, name });
   let buffer = "";

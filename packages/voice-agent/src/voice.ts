@@ -77,6 +77,9 @@ export interface ProviderModel {
   description: string;
   methods: string[];
   live: boolean;
+  /** Live AND a voice to talk WITH — the picker's filter (transcribe and
+   * translate families are Live but refuse AUDIO responses). */
+  conversational: boolean;
 }
 
 interface ModelList {

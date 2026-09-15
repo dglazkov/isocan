@@ -916,7 +916,7 @@ describe("the page", () => {
     expect(facts.provider).toMatchObject({ name: null, key: false });
     expect(facts.version).toBeTruthy();
     expect(facts.updated).toMatch(/^\d{4}-\d{2}-\d{2} /);
-    expect(facts.provider.model).toBe("models/gemini-3.1-flash-live-preview");
+    expect(facts.provider.model).toBe("models/gemini-3.8-live");
     // The key itself is never in the facts, only whether one is there.
     await fetch(`${server.state.url}key`, {
       method: "POST",
@@ -2569,6 +2569,25 @@ describe("the ACP face", () => {
     expect(update.params.update.content.text).toContain("isocan rc add Voice --harness voice --canvas prj_9");
   });
 
+  it("turns the standing harness's answer into the turn's own words", async () => {
+    const written: unknown[] = [];
+    const agent = createAcpAgent({
+      name: "Voice",
+      forward: async () => ({ url: "http://127.0.0.1:1/", answer: "added \"summoned note\" [itm_x]" }),
+      out: (m) => written.push(m),
+    });
+    await agent.handle({
+      jsonrpc: "2.0",
+      id: 5,
+      method: "session/prompt",
+      params: { sessionId: "s", prompt: "add a note that says summoned" },
+    });
+    const update = written.find((m) => (m as { method?: string }).method === "session/update") as {
+      params: { update: { content: { text: string } } };
+    };
+    expect(update.params.update.content.text).toBe("added \"summoned note\" [itm_x]");
+  });
+
   it("resolves the canvas and the name from the enrolment record, not the environment", () => {
     const rows = [
       { canvasId: "prj_1", name: "Voice", harness: "voice" },
@@ -2593,7 +2612,7 @@ describe("the ACP face", () => {
 describe("the Live API path", () => {
   it("opens with the setup the API expects, on the model that is current", () => {
     const setup = liveSetup() as { setup: Record<string, unknown> };
-    expect(LIVE_MODEL).toBe("models/gemini-3.1-flash-live-preview");
+    expect(LIVE_MODEL).toBe("models/gemini-3.8-live");
     expect(setup.setup.model).toBe(LIVE_MODEL);
     expect((setup.setup.generationConfig as { responseModalities: string[] }).responseModalities).toEqual(["AUDIO"]);
     const names = ((setup.setup.tools as { functionDeclarations: { name: string }[] }[])[0] ?? { functionDeclarations: [] })
@@ -2604,6 +2623,36 @@ describe("the Live API path", () => {
     expect(names).toContain("say");
     expect(names).not.toContain("trash_empty");
     expect(liveUrl("AIza-x")).toContain("BidiGenerateContent?key=AIza-x");
+  });
+
+  it("names the thinking depth for the extended-thinking model, and omits it for the plain one", () => {
+    const plain = liveSetup("models/gemini-3.8-live") as { setup: { generationConfig: Record<string, unknown> } };
+    expect(plain.setup.generationConfig.thinkingConfig).toBeUndefined();
+    expect(plain.setup.generationConfig.thinkingLevel).toBeUndefined();
+    const thinking = liveSetup("models/gemini-3.8-live-extended-thinking") as { setup: { generationConfig: Record<string, unknown> } };
+    expect(thinking.setup.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
+  });
+
+  it("routes a summons into the standing conversation instead of the typed pipeline", async () => {
+    const live = await liveServer();
+    try {
+      const res = (await (await fetch(`${live.server.state.url}summons`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Paul", prompt: "add a note that says from the chat" }),
+      })).json()) as { handled: string; reply: string };
+      expect(res.handled).toBe("live");
+      expect(res.reply).toContain("in the conversation");
+      // The prompt went to the PROVIDER as a typed line, not to the local
+      // grammar: the model hears the summons and acts through its tools.
+      const last = JSON.parse(live.providerSocket.sent.at(-1) ?? "{}") as { realtimeInput?: { text?: string } };
+      expect(last.realtimeInput?.text).toBe("add a note that says from the chat");
+      // And nothing landed on the canvas from a second (typed) path.
+      const canvasItems = await items();
+      expect(canvasItems.some((i) => i.title?.includes("from the chat"))).toBe(false);
+    } finally {
+      await live.close();
+    }
   });
 
   it("speaks the wire: setup first, then audio up and tool calls answered", async () => {
@@ -2651,6 +2700,11 @@ describe("the Live API path", () => {
     const audio = JSON.parse(sent[1] ?? "{}") as { realtimeInput: { audio: { mimeType: string; data: string } } };
     expect(audio.realtimeInput.audio.mimeType).toBe("audio/pcm;rate=16000");
     expect(Buffer.from(audio.realtimeInput.audio.data, "base64")).toEqual(Buffer.from([1, 2, 3, 4]));
+
+    // A summons while listening is a typed line into the same conversation.
+    session.sendText("add a note that says summoned");
+    const text = JSON.parse(sent[2] ?? "{}") as { realtimeInput: { text: string } };
+    expect(text.realtimeInput.text).toBe("add a note that says summoned");
 
     // A tool call is a blocking question: the answer is the operation's RESULT.
     socket.emit({
@@ -3393,6 +3447,24 @@ describe("the harness session & tool-call log API", () => {
     expect(addLog).toBeDefined();
     expect(addLog.source).toBe("typed");
     expect(addLog.op.type).toBe("item.add");
+  });
+
+  it("acts on a summons when nothing is listening: the typed pipeline runs the command", async () => {
+    const server = await serve();
+
+    const res = (await (await fetch(`${server.state.url}summons`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Paul", prompt: "add a note that says summoned into being" }),
+    })).json()) as { handled: string; reply: string; sent: string[] };
+
+    // A summons is an inbound command, not a line in a log.
+    expect(res.handled).toBe("typed");
+    expect(res.sent.length).toBe(1);
+    expect(res.reply).toContain("summoned into being");
+
+    const canvasItems = await items();
+    expect(canvasItems.some((i) => i.title?.includes("summoned into being"))).toBe(true);
   });
 
   it("persists toolLog to ~/.isocan/voice/log.json so it survives harness restarts", async () => {

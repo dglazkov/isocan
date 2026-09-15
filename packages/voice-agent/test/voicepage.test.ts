@@ -33,6 +33,7 @@ let modelsReply: unknown = {
       description: "Live, audio in and out.",
       methods: ["bidiGenerateContent"],
       live: true,
+      conversational: true,
     },
     {
       name: "models/gemini-2.5-flash",
@@ -40,6 +41,7 @@ let modelsReply: unknown = {
       description: "Fast text.",
       methods: ["generateContent"],
       live: false,
+      conversational: false,
     },
   ],
 };

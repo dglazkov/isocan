@@ -790,8 +790,12 @@ export function wireVoice(doc: Document = document): VoicePage {
         return;
       }
       modelChoices = answer.models;
-      const live = modelChoices.filter((one) => one.live);
-      const others = modelChoices.filter((one) => !one.live);
+      // The picker offers only the models that can hold a voice conversation:
+      // audio in AND audio out. The rest stay in the note's sentence — the
+      // field itself still takes any exact name, which is the escape hatch a
+      // beta model needs.
+      const live = modelChoices.filter((one) => one.conversational);
+      const others = modelChoices.filter((one) => !one.conversational);
       const groups: [string, ProviderModel[]][] = [
         ["Live — audio in and out", live],
         ["Listed, but not a Live model", others],
