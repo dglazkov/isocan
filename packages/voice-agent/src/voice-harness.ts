@@ -1027,6 +1027,12 @@ export interface ProviderModel {
   methods: string[];
   /** The provider's OWN signal that this model holds a Live session. */
   live: boolean;
+  /** Live AND a voice you can talk WITH: audio in and audio out. The
+   * transcribe and translate families also carry `bidiGenerateContent` and
+   * answer the setup, then refuse the AUDIO response modality (measured,
+   * 1007) — the list carries no field for that, and their names say what
+   * they are, so the name is the filter. */
+  conversational: boolean;
 }
 
 /**
@@ -1051,14 +1057,18 @@ export async function listModels(
     const parsed = JSON.parse(body) as {
       models?: { name?: string; displayName?: string; description?: string; supportedGenerationMethods?: string[] }[];
     };
-    const models = (parsed.models ?? []).map((one) => ({
-      name: one.name ?? "",
-      displayName: one.displayName ?? one.name ?? "",
-      description: (one.description ?? "").split("\n")[0]!.slice(0, 240),
-      methods: one.supportedGenerationMethods ?? [],
-      live: (one.supportedGenerationMethods ?? []).includes("bidiGenerateContent"),
-    }));
-    const live = models.filter((one) => one.live).length;
+    const models = (parsed.models ?? []).map((one) => {
+      const live = (one.supportedGenerationMethods ?? []).includes("bidiGenerateContent");
+      return {
+        name: one.name ?? "",
+        displayName: one.displayName ?? one.name ?? "",
+        description: (one.description ?? "").split("\n")[0]!.slice(0, 240),
+        methods: one.supportedGenerationMethods ?? [],
+        live,
+        conversational: live && !/(transcrib|translat)/i.test(one.name ?? ""),
+      };
+    });
+    const live = models.filter((one) => one.conversational).length;
     return { ok: true, models, answer: `the provider lists ${models.length} models, ${live} of them Live` };
   } catch (err) {
     return { ok: false, models: [], answer: `could not reach the provider: ${String((err as Error).message ?? err)}` };
@@ -1165,9 +1175,10 @@ export async function testModel(options: {
    */
   const why =
     outcome.code === 1007
-      ? `${model} is a Live model, but not a conversational one: the provider accepted the setup and then refused the ` +
-        `response modality — this one does not send AUDIO back. Transcription and translation models are Live and are ` +
-        `not a voice to talk with; the conversation needs a model that takes audio in AND answers in audio.`
+      ? `${model} is a Live model, but the provider refused the session after setup — its words are above. ` +
+        `Measured causes: the transcribe and translate families refuse the AUDIO response modality this way, ` +
+        `and the extended-thinking model refuses this way when its thinking level is missing from the ` +
+        `setup — this build names one for it.`
       : known
         ? known.live
           ? `the provider lists ${model} as Live, so this refusal is about something else — its own words are above`
