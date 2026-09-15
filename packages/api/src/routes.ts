@@ -3,6 +3,7 @@ import { inboxRoute, type InboxResponse } from "@isocan/core";
 import { rcAnsweringRoute } from "@isocan/core";
 import { questionnaireActorsRoute } from "@isocan/core/questionnaire";
 import { designRequestsRoute, type DesignRecordOperation, type DesignRequestsResponse } from "@isocan/core/design-request";
+import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core/design-decision";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type {
   Actor,
@@ -561,6 +562,17 @@ export class DaemonRoutes {
   /** Only canonical admitted records contribute continuation, budget and lifecycle eligibility. */
   designRequests(canvasId: string, signal?: AbortSignal): Promise<DesignRequestsResponse> {
     return this.request("GET", designRequestsRoute(canvasId), undefined, signal);
+  }
+
+  /** Canonical comparisons and decision history keep actual authorship separate from currentness. */
+  designDecisions(canvasId: string, signal?: AbortSignal): Promise<DesignDecisionsResponse> {
+    return this.request("GET", designDecisionsRoute(canvasId), undefined, signal);
+  }
+
+  /** Stable comparison, non-adopting response and paired adoption intents use the existing writer. */
+  designDecision(canvasId: string, actor: Actor, op: Extract<Operation, { type: "design.compare" | "design.respond" | "design.decide" }>, opId: string, signal?: AbortSignal): Promise<PostOpResponse> {
+    const origin = this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...(origin === undefined ? {} : { originGroupMode: origin }) }, signal);
   }
 
   /** Stable public request/receipt intent reaches the ordinary serialized operation writer. */

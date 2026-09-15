@@ -243,3 +243,10 @@ evidence stay in the named scratch directories.
    independent design-quality evidence; include legacy library creation limits.
 6. Tests: pure contracts, real daemon/CLI transport and actual browser tasks,
    embedded context and responsive rendering; unchanged entry/packaging guards.
+
+## Remote verification
+
+The exact phase commit `336e6124396906d2bb307233e1e1c296c20b5417` also
+completed release run `34940979617`, review run `34940979610` and pages run
+`34940978779` successfully. Read from GitHub after landing; this confirms
+those runs, not a hosted Phase 4 or generated-design quality claim.

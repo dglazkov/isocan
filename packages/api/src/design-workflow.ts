@@ -42,8 +42,34 @@ or an explicitly requested interview. Resume does not reset the initial budget.
 Read submitted resolutions, wait until a batch is settled, then reconcile its
 exact response/source bindings into the brief once. Preserve partial answers.
 
-4. Build one complete task slice.
-Start with one recommended direction. Preserve an existing system, or record a
+4. Show a decision only when it could change the result.
+Use two useful options by default: working wireframes for uncertain workflow,
+or polished previews for settled structure with open visual direction. Keep the
+same realistic scenario and fidelity; explain each hypothesis and tradeoff,
+then give an attributed recommendation. Use design compare to publish/read the
+exact versions and design decide for one choice and its adoption. Trying an
+option does not choose it. Keep the brief and rejected options available.
+One batch holds one to three options; link further batches for requested wider
+exploration. A single proposal is the direct/delegated speed path, not a claim
+of comparison. Precise edits need no comparison or new interview.
+Use design respond for more, a specific combination, named-agent delegation,
+skip or dismissal. More/combine request real revision work; they do not adopt
+an imaginary merged output. Human choice has an optional human reason; never
+fill it with the agent recommendation. A delegated choice remains the named
+agent's decision. Native external choice/delegation is an authenticated agent
+report of that admitted conversation, without a fabricated human answer or a
+second interview. A different reporter explicitly resumes first. Direct agent
+judgment makes no delegation claim and cannot settle a named human comparison.
+Capture the comparison, every option, brief, target content/metadata and scope
+before approval. Retain that basis and stable IDs after uncertain delivery;
+refresh explicitly after a stale refusal. Never substitute the latest target
+for the version the person saw. One Undo restores choice and adoption together.
+Read accepted rationale and currentness separately before continuing through
+either entrance. Choosing a connected-app prototype does not implement its
+repository runtime; use its actual components in the subsequent build.
+
+5. Build one complete task slice.
+Preserve an existing system, or record a
 provisional direction for hierarchy, layout, density, typography, palette purpose
 and interaction treatment in the scoped DESIGN.md. Use design direction to
 read its authored stage and actual version author. Before a second screen,
@@ -59,7 +85,7 @@ states where relevant, keyboard focus and narrow widths. A standalone node must
 run its HTML/CSS/JS. A connected app must use its actual repository, framework,
 components and working runtime; a decorative mock is not that delivery.
 
-5. Try it, repair it, and describe the evidence.
+6. Try it, repair it, and describe the evidence.
 Run source diagnostics with design audit where applicable, keeping its coverage
 separate from browser behavior and craft judgment. Open the actual output in an
 available supported browser and exercise the primary task, relevant states and
@@ -77,7 +103,7 @@ Use version-conditional edits; re-read after a stale refusal.
 Recheck affected behavior. No browser means an unverified draft, with named limits.
 Do not provision paid services or extra agents merely to obtain verification.
 
-6. Finish with a version-linked receipt.
+7. Finish with a version-linked receipt.
 Complete the brief with its real output, then publish a separate design receipt
 bound to that exact completed version. Identify the canvas output or repository
 revision/build/runtime, governing inputs, tools, viewports, checked states,

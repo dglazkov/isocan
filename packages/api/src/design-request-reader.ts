@@ -8,15 +8,19 @@ import type { DesignAuditReadPort } from "./design-audit-reader.ts";
 import { readGoverningDesign, type GoverningDesignRead } from "./design-governing.ts";
 import { designWorkflowProcedure } from "./design-workflow.ts";
 import { questionnaireFailureStatus } from "./questionnaire-reader.ts";
+import { effectiveOutstandingDecisionIds, type DesignDecisionsResponse } from "@isocan/core/design-decision";
+import type { DesignComparisonView, DesignDecisionView } from "./design-decision-reader.ts";
 
 /** Request selection uses canonical identities; neither client scans arbitrary JSON artifacts. */
 export interface DesignRequestFilter { requestId?: string; threadId?: string; commentId?: string; outputItemId?: string }
 /** Browsers and Node inject their existing authenticated and source-policy-bearing transports. */
 export interface DesignRequestReadPort extends DesignAuditReadPort {
-  actorId?: string;
+  actorId?: string | undefined;
   snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
   home(canvasId: string, signal?: AbortSignal): Promise<string>;
   requests(canvasId: string, signal?: AbortSignal): Promise<DesignRequestsResponse>;
+  decisions(canvasId: string, signal?: AbortSignal): Promise<DesignDecisionsResponse>;
+  decisionActors(canvasId: string, signal?: AbortSignal): Promise<{ actors: Array<{ id: string; name: string; kind: "human" | "agent" | "unknown" }> }>;
   blobBytes(canvasId: string, hash: string, signal?: AbortSignal): Promise<Uint8Array>;
   sourceBlobBytes(source: SourceClassificationRequest, hash: string, signal?: AbortSignal): Promise<Uint8Array>;
 }
@@ -31,7 +35,11 @@ export interface DesignRequestView extends Omit<DesignRequestState, "receipts"> 
   receipts: DesignReceiptView[];
   reconciliation: DesignAcceptedResponse[];
   missingFactIds: string[];
-  nextAction: "clarify" | "reconcile" | "answer" | "build" | "verify" | "resume" | "review";
+  comparisons: DesignComparisonView[];
+  decisionHistory: DesignDecisionView[];
+  effectiveDecisions: DesignDecisionView[];
+  outstandingDecisionIds: string[];
+  nextAction: "clarify" | "reconcile" | "answer" | "compare" | "decide" | "build" | "verify" | "resume" | "review";
 }
 /** Unreadable admitted records remain visible alongside usable request views. */
 export interface DesignRequestReadResult { requests: DesignRequestView[]; unavailable: DesignRequestsResponse["unavailable"] }
@@ -65,8 +73,8 @@ const sameRef = (a: DesignArtifactRef | null, b: DesignArtifactRef | null) => a 
 function capturedContextReferences(state: DesignRequestState): DesignArtifactRef[] {
   return state.brief.context.entries.flatMap(entry => !entry.excluded && !entry.unavailable && entry.version ? [{ home: state.ref.home, canvasId: state.brief.context.canvasId, itemId: entry.itemId, versionId: entry.version.id, blobHash: entry.version.blobHash }] : []);
 }
-const matches = (state: DesignRequestState, filter: DesignRequestFilter) => (!filter.requestId || state.brief.requestId === filter.requestId)
-  && (!filter.outputItemId || state.brief.outputIds.includes(filter.outputItemId))
+const matches = (state: DesignRequestState, filter: DesignRequestFilter, decisions: readonly DesignDecisionView[]) => (!filter.requestId || state.brief.requestId === filter.requestId)
+  && (!filter.outputItemId || state.brief.outputIds.includes(filter.outputItemId) || decisions.some(one => one.decision.input.requestId === state.brief.requestId && one.decision.input.basis.brief.itemId === state.ref.itemId && one.decision.adopted.itemId === filter.outputItemId))
   && (!filter.threadId || state.brief.source.entrance === "canvas-chat" && state.brief.source.threadId === filter.threadId)
   && (!filter.commentId || state.brief.source.entrance === "canvas-chat" && state.brief.source.commentId === filter.commentId);
 
@@ -76,6 +84,8 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
   signal?.throwIfAborted();
   const response = await io.requests(canvasId, signal);
   const [snapshot, home] = await Promise.all([io.snapshot(canvasId, signal), io.home(canvasId, signal)]);
+  const { readDesignComparisons } = await import("./design-decision-reader.ts");
+  const choices = await readDesignComparisons(io, { canvasId, ...(signal ? { signal } : {}) });
   const requests: DesignRequestView[] = [];
   const sourceSnapshots = new Map<string, Promise<CanvasSnapshotResponse>>();
   const sourceBytes = new Map<string, Promise<Uint8Array>>();
@@ -122,7 +132,7 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
     }
     return value;
   };
-  for (const state of response.requests.filter(one => matches(one, options.filter ?? {}))) {
+  for (const state of response.requests.filter(one => matches(one, options.filter ?? {}, choices.decisions))) {
     const atItemId = state.brief.targetItemId ?? state.brief.groupId;
     const governing = await governingAt(atItemId);
     const explicitNone = designSkipped(snapshot.project);
@@ -193,8 +203,15 @@ export async function readDesignRequests(io: DesignRequestReadPort, options: { c
     const missingFactIds = [!state.brief.audience ? "audience" : null, !state.brief.primaryTask ? "primaryTask" : null].filter((one): one is string => one !== null);
     const initialDiscovery = missingFactIds.length > 0 && !state.questions.length && state.remainingInitialQuestions > 0;
     const outputGovernings = await Promise.all(state.brief.outputIds.map(async itemId => { const governing = await governingAt(itemId); return { itemId, governing, binding: { atItemId: itemId, artifact: governing.artifact, explicitNone } }; }));
-    requests.push({ ...state, status: stale ? "stale" : state.status, reasons, allowedActions: changedDuringRead ? [] : unavailableCitations.length ? state.allowedActions.filter(action => action === "resume" || action === "cancel") : state.allowedActions, governing, governingBinding, outputGovernings, contextReferences: capturedContextReferences(state), receipts, reconciliation, missingFactIds,
-      nextAction: state.status === "cancelled" || stale ? "resume" : open ? "answer" : reconciliation.length ? "reconcile" : state.brief.progress === "completed" ? receipts.some(one => one.status === "current" && one.receipt.status === "ready") ? "review" : "verify" : initialDiscovery ? "clarify" : "build" });
+    const comparisons = choices.comparisons.filter(one => one.comparison.requestId === state.brief.requestId && one.comparison.brief.itemId === state.ref.itemId);
+    const decisionHistory = choices.decisions.filter(one => one.decision.input.requestId === state.brief.requestId && one.decision.input.basis.brief.itemId === state.ref.itemId);
+    const effectiveDecisions = decisionHistory.filter(one => one.standing === "effective");
+    const outstandingDecisionIds = effectiveOutstandingDecisionIds(state.brief, state.ref.itemId, decisionHistory);
+    const unresolvedComparisonKeys = effectiveOutstandingDecisionIds({ ...state.brief, outstandingDecisionIds: comparisons.map(one => one.comparison.decisionKey) }, state.ref.itemId, decisionHistory);
+    const pendingChoice = comparisons.find(one => one.comparison.epoch === state.brief.epoch && one.status !== "superseded" && unresolvedComparisonKeys.includes(one.comparison.decisionKey) && !["skip", "dismiss"].includes(one.effectiveResponse?.response.outcome.kind ?? ""));
+    const choiceAction = pendingChoice && (pendingChoice.effectiveResponse?.response.outcome.kind === "delegate" || pendingChoice.comparison.audience.kind === "external-agent") && pendingChoice.status !== "stale" && !["more", "combine"].includes(pendingChoice.effectiveResponse?.response.outcome.kind ?? "") ? "decide" : "compare";
+    requests.push({ ...state, status: stale ? "stale" : state.status, reasons, allowedActions: changedDuringRead ? [] : unavailableCitations.length ? state.allowedActions.filter(action => action === "resume" || action === "cancel") : state.allowedActions, governing, governingBinding, outputGovernings, contextReferences: capturedContextReferences(state), receipts, reconciliation, missingFactIds, comparisons, decisionHistory, effectiveDecisions, outstandingDecisionIds,
+      nextAction: state.status === "cancelled" || stale ? "resume" : open ? "answer" : reconciliation.length ? "reconcile" : pendingChoice ? choiceAction : state.brief.progress === "completed" ? receipts.some(one => one.status === "current" && one.receipt.status === "ready") ? "review" : "verify" : initialDiscovery ? "clarify" : "build" });
   }
   return { requests, unavailable: response.unavailable };
 }
@@ -256,7 +273,9 @@ export async function readDesignRequestReference(io: DesignRequestReadPort, requ
   const state = response.requests.find(one => one.brief.requestId === request.requestId);
   if (!state) throw new Error("No admitted request has this identity.");
   const [snapshot, home] = await Promise.all([io.snapshot(canvasId, signal), io.home(canvasId, signal)]);
-  const retained: DesignRetainedReference[] = [state.marker, ...state.receipts.map(one => one.marker)].flatMap(marker => marker.retainedReferences);
+  const choices = await io.decisions(canvasId, signal);
+  const comparisonReferences = [...choices.comparisons.filter(one => one.comparison.requestId === request.requestId).flatMap(one => one.references), ...choices.decisions.filter(one => one.decision.input.requestId === request.requestId).flatMap(one => one.references)];
+  const retained: DesignRetainedReference[] = [...[state.marker, ...state.receipts.map(one => one.marker)].flatMap(marker => marker.retainedReferences), ...comparisonReferences];
   const known = [state.ref, ...capturedContextReferences(state), ...state.brief.references.flatMap(one => one.artifact ? [one.artifact] : []), ...state.brief.facts.flatMap(one => one.sources), ...state.receipts.flatMap(one => [one.ref, ...one.receipt.context, ...one.receipt.checks.flatMap(check => check.evidence), ...(one.receipt.governing?.artifact ? [one.receipt.governing.artifact] : []), ...(one.receipt.output.kind === "canvas" ? [one.receipt.output.artifact] : [])]), ...retained.map(one => one.artifact)];
   if (!known.some(one => sameDesignArtifact(one, artifact))) {
     let identified = false;

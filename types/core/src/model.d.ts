@@ -177,6 +177,8 @@ export interface Comment {
     id: string;
     author: Actor;
     body: string;
+    /** Writer-owned comparisons and adoption facts; ordinary comment input cannot mint their authority. */
+    designDecision?: import("./design-decision.js").DesignDecisionComment;
     /** Immutable canonical questionnaire facts; ordinary comment writes cannot supply these. */
     design?: import("./design-partner.js").DesignQuestionSet | import("./design-partner.js").DesignResponse;
     designReferences?: import("./questionnaire.js").QuestionnaireRetainedReference[];

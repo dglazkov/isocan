@@ -25,7 +25,7 @@ is a conflict, not a second accepted answer.
 | Question set | Immutable typed `design` metadata on a comment. Contains request ID/epoch, question-set ID/revision, intended respondent, headline, inferred answers and renderer-specific questions/options. Its exact source is thread ID, comment ID and payload revision. Reissuing a question produces a new identity and explicitly supersedes the old set. |
 | Answer | A new comment with typed `design` metadata referring to the exact question set, request epoch and respondent. Each question has an explicit selected-option, freeform, reference, skipped, dismissed or delegated outcome. Human-readable Markdown is its projection. |
 | Reference | Canvas/item/version/blob identity when bytes are available, plus supplied URL and availability where applicable. A filename alone is not a reference. Ordinary selected scope uses the existing retained context manifest; exact typed references additionally retain their identified versions on the comment. Neither introduces another inheritance resolver. |
-| Decision | A typed JSON record in the adopted target's `designPartner.decision` property. Includes request/epoch, compared alternatives and versions, selected version, recommendation, reason and deciding actor/kind. The brief and comparison items remain independent of the adoption target. |
+| Decision | Phase 4 canonical adoption-decision comment beside its comparison, with exact approval basis, compared versions, authorship, authority and adopted output. The phase 0 `designPartner.decision` property remains legacy authored data, never proof of a human preference. |
 | Receipt | A versioned JSON record tying results to output/build, context/system and rule/tool/package identities, with check scope, coverage, viewport/states, failures and evidence. It cannot declare quality measured by an offline fixture. |
 
 The implementing core types supply precise field names and limits. Changes to
@@ -107,23 +107,29 @@ revocation.
 [systems-and-defaults.md](systems-and-defaults.md) records phase 3’s deliberate
 binding widening, decoder negotiation and authored direction semantics.
 
-## One selection, one conditional edit
+## One selection, one conditional edit and decision
 
-For an existing screen, the planner emits one `item.edit` containing the
-selected compatible content and the decision property together. Both
-`expectedVersionId` and `expectedMetadata` protect the adoption target. The
-new version is a copy of selected content, with a fresh version identity;
-the source candidate and rejected alternatives stay available.
+[comparisons-and-decisions.md](comparisons-and-decisions.md) deliberately
+supersedes the phase 0 property representation and its planning-only authority.
+`design.decide` materializes exactly one conditional target edit plus one
+immutable decision comment, with a dedicated paired Undo/Redo. The brief and
+all candidates remain independent. Greenfield adds a fresh version to the
+selected screen; existing-screen adoption copies compatible bytes onto the
+brief's target. Neither overwrites a brief nor removes rejected options.
 
-Greenfield selection uses the selected item as the adoption target and adds
-a version with the same content plus decision metadata. It does not overwrite
-the brief. Existing item-edit inverses restore both version and metadata.
+Capture target version, title, description, properties and relevant scope
+before approval. The writer validates that basis, every option, current
+brief/request/source and governing context. Its canonical comment records
+actual human choice, actual canvas delegation, honest external reports or
+explicit agent judgment as distinct authority branches. Human reasons may be
+null; agent rationale cannot stand in for human words. Ordinary later HTML
+editing remains legal, and historic choice is separate from current evidence.
 
-This protects the target, not every input. Phase 4 must additionally validate
-the request epoch and source alternative versions at the authoritative write
-boundary. A pure planner operating on a supplied snapshot does not enforce
-concurrency. A refusing specialized act is required if those guards cannot
-be expressed safely by the existing write path.
+`design.compare` publishes and `design.respond` records typed non-adopting
+revision/delegation outcomes using the existing comment store. Ordinary
+questionnaire answers retain their known-human semantics. Decoder negotiation,
+flat evidence retention and exact context continuation are specified in the
+phase 4 mechanism; a public property or copied JSON cannot establish authority.
 
 ## Entrances and rollout
 

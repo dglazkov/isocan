@@ -201,6 +201,27 @@ export type Operation = {
 } | {
     type: "project.delete";
 } | {
+    type: "design.compare";
+    threadId: string;
+    commentId: string;
+    comparison: import("./design-decision.js").DesignComparison;
+    canonicalComment?: Comment;
+} | {
+    type: "design.respond";
+    threadId: string;
+    commentId: string;
+    response: import("./design-decision.js").DesignComparisonResponse;
+    canonicalComment?: Comment;
+} | {
+    type: "design.decide";
+    threadId: string;
+    commentId: string;
+    decision: import("./design-decision.js").DesignDecisionInput;
+    effect?: import("./design-decision.js").DesignDecisionEffect;
+} | {
+    type: "design.restore";
+    effect: import("./design-decision.js").DesignRestoreEffect;
+} | {
     type: "design.request";
     action: import("./design-request.js").DesignRequestAction;
     effect?: import("./design-record.js").DesignRecordEffect;

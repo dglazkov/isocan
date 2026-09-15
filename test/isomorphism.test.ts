@@ -79,6 +79,18 @@ describe("every shared fact is an operation either surface can send", () => {
     }
   });
 
+  it("reaches agent comparison publication and both-surface response and adoption and paired restoration through Undo", () => {
+    expect(rows.find((row: { op: string }) => row.op === "design.compare"))
+      .toMatchObject({ cli: true, unreachable: false });
+    for (const op of ["design.respond", "design.decide"]) {
+      expect(rows.find((row: { op: string }) => row.op === op))
+        .toMatchObject({ web: true, cli: true, unreachable: false });
+    }
+    expect(producedByUndo().has("design.restore")).toBe(true);
+    expect(rows.find((row: { op: string }) => row.op === "design.restore"))
+      .toMatchObject({ unreachable: false });
+  });
+
   it("counts inversion as a way an operation is reached", () => {
     /**
      * The mistake that would have deleted working code. `comment.restore`,

@@ -85,6 +85,8 @@ import { contextBlobAvailable, hydrateContextManifest } from "./canvas-group-con
 import { isQuestionnaireOperation, rejectPublicQuestionnaire, resolveQuestionnaireOperation, questionnaireRetry, questionnaireActors } from "./questionnaire.ts";
 import { requireQuestionnaireClient } from "./questionnaire-capability.ts";
 import { isDesignRecordOperation, rejectPublicDesignRecord, guardDesignRecordEdit, designRecordRetry, materializeDesignRecord, readDesignRequests } from "./design-request.ts";
+import { isDesignDecisionOperation, rejectPublicDesignDecision, designDecisionRetry, materializeDesignDecision, readDesignDecisions } from "./design-decision.ts";
+import { DesignRestoreConflict } from "../../core/src/design-decision-state.ts";
 import { validateDesignRecordState } from "@isocan/core/design-record";
 import type { BlobUploadRequest, Store } from "./store.ts";
 import type { Desk } from "./desk.ts";
@@ -1125,6 +1127,7 @@ export class Engine {
       rejectPublicContext(request.op);
       rejectPublicQuestionnaire(request.op);
       rejectPublicDesignRecord(request.op);
+      rejectPublicDesignDecision(request.op);
       if (request.op.type === "project.create" && request.op.groupMode !== undefined &&
           request.op.groupMode !== "groups" && request.op.groupMode !== "legacy") {
         throw new OpValidationError("bad-op", "groupMode must be groups or legacy");
@@ -1173,7 +1176,11 @@ export class Engine {
        * the question is answered; asking here as well would be a replica
        * holding an opinion about an order it does not own.
        */
-      if (!home && request.canvasId && isDesignRecordOperation(request.op)) {
+      if (!home && request.canvasId && isDesignDecisionOperation(request.op)) {
+        const runtime = await this.runtime(request.canvasId);
+        const prior = await designDecisionRetry([...runtime.entries, ...await this.store.readArchivedLog(request.canvasId)], request.op, request.opId, request.actor.id, (await this.actors()).registry);
+        if (prior) { if (request.clientFeatures !== undefined) requireQuestionnaireClient(request.clientFeatures, undefined, [prior]); return prior; }
+      } else if (!home && request.canvasId && isDesignRecordOperation(request.op)) {
         const runtime = await this.runtime(request.canvasId);
         const prior = await designRecordRetry([...runtime.entries, ...await this.store.readArchivedLog(request.canvasId)], request.op, request.opId, request.actor.id, (await this.actors()).registry);
         if (prior) { if (request.clientFeatures !== undefined) { requireGroupClient(request.clientFeatures, undefined, [prior]); requireQuestionnaireClient(request.clientFeatures, undefined, [prior]); } return prior; }
@@ -1183,7 +1190,11 @@ export class Engine {
         const prior = questionnaireRetry([...runtime.entries, ...await this.store.readArchivedLog(request.canvasId)], request.op, request.opId, request.actor.id, registry);
         if (prior) { if (request.clientFeatures !== undefined) { requireGroupClient(request.clientFeatures, undefined, [prior]); requireQuestionnaireClient(request.clientFeatures, undefined, [prior]); } return prior; }
       } else if (!home && request.opId !== undefined) {
-        const already = await this.alreadyWritten(request);
+        const live = await this.alreadyWritten(request);
+        // Canonical design identities remain reserved after GC archives their
+        // operation. An ordinary caller cannot reuse one to mint a new act.
+        const archivedDesign = !live && request.canvasId ? (await this.store.readArchivedLog(request.canvasId)).find((entry) => entry.envelope.id === request.opId && (isDesignDecisionOperation(entry.envelope.op) || isDesignRecordOperation(entry.envelope.op) || isQuestionnaireOperation(entry.envelope.op))) : undefined;
+        const already = live ?? archivedDesign;
         if (already) {
           if (request.clientFeatures !== undefined) {
             requireGroupClient(request.clientFeatures, undefined, [already]);
@@ -1191,6 +1202,7 @@ export class Engine {
           }
           if (isQuestionnaireOperation(already.envelope.op)) throw new OpValidationError("bad-op", "questionnaire retry identity conflicts with its original operation type");
           if (isDesignRecordOperation(already.envelope.op)) throw new OpValidationError("bad-op", "design retry identity conflicts with its original operation type");
+          if (isDesignDecisionOperation(already.envelope.op)) throw new OpValidationError("design-intent-conflict", "design retry identity conflicts with its original operation type");
           return already;
         }
       }
@@ -1709,7 +1721,7 @@ export class Engine {
             if (group.length === 1) return written;
             continue;
           } catch (err) {
-            if (op.type === "group.change" || err instanceof GroupConflictError) throw err;
+            if (op.type === "group.change" || op.type === "design.restore" || err instanceof GroupConflictError || err instanceof DesignRestoreConflict) throw err;
             if (!(err instanceof OpValidationError)) throw err;
           }
         }
@@ -1769,7 +1781,7 @@ export class Engine {
             if (group.length === 1) return redone;
             continue;
           } catch (err) {
-            if (op.type === "group.change" || err instanceof GroupConflictError) throw err;
+            if (op.type === "group.change" || op.type === "design.restore" || err instanceof GroupConflictError || err instanceof DesignRestoreConflict) throw err;
             if (!(err instanceof OpValidationError)) throw err;
           }
         }
@@ -2611,6 +2623,10 @@ export class Engine {
   async designRequests(canvasId: string, home: string): Promise<import("@isocan/core").DesignRequestsResponse> {
     return this.enqueue(async () => { const runtime = await this.runtime(canvasId); return readDesignRequests(this.store, runtime.state, home, (await this.actors()).registry, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]); });
   }
+  /** Canonical comparison history is read under the same serialized canvas authority as request state. */
+  async designDecisions(canvasId: string, home: string): Promise<import("@isocan/core/design-decision").DesignDecisionsResponse> {
+    return this.enqueue(async () => { const runtime = await this.runtime(canvasId); return readDesignDecisions(this.store, runtime.state, home, (await this.actors()).registry, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]); });
+  }
 
   /** Core pipeline. Runs inside the queue. */
   private async applyAndPersist(
@@ -2698,7 +2714,13 @@ export class Engine {
         }
       }
     }
+    let designDecisionTimestamp: string | undefined;
     if (cause === undefined) {
+      if (isDesignDecisionOperation(normalizedOp)) {
+        const prepared = this.envelope(request, normalizedOp); request = { ...request, opId: prepared.id }; designDecisionTimestamp = prepared.ts;
+        if (!request.authoritativeHome) throw new OpValidationError("bad-op", "design writer has no authoritative home address");
+        normalizedOp = await materializeDesignDecision(this.store, runtime.state, request.authoritativeHome, normalizedOp, request.actor, (await this.actors()).registry, prepared.id, prepared.ts);
+      }
       if (isDesignRecordOperation(normalizedOp)) {
         const opId = request.opId ?? this.envelope(request, normalizedOp).id;
         request = { ...request, opId };
@@ -2716,6 +2738,7 @@ export class Engine {
       }
     }
     const envelope = this.envelope(request, normalizedOp);
+    if (designDecisionTimestamp) envelope.ts = designDecisionTimestamp;
     if (cause?.kind === "redo" && isMigrationChange(normalizedOp, "groups")) {
       normalizedOp = { ...normalizedOp, action: { kind: "apply", change: { ...normalizedOp.action.change, migration: { ...normalizedOp.action.change.migration!, boundary: { version: 1, opId: envelope.id, seq: runtime.lastSeq + 1 } } } } };
       envelope.op = normalizedOp;
@@ -2989,6 +3012,10 @@ function redoOpFor(target: LogEntry, undoEntry: LogEntry): Operation {
     case "thread.reply": // comment.restore keeps author + timestamp
     case "questionnaire.ask":
     case "questionnaire.answer":
+    case "design.compare":
+    case "design.respond":
+    case "design.decide":
+    case "design.restore":
     case "design.request": // restore the admitted version and original provenance
     case "design.receipt":
     case "group.change": // exact structural preconditions and restore-based creation redo
@@ -3046,7 +3073,7 @@ function repairInverse(state: CanvasState, op: Operation): Operation | null {
  * earlier ordinary members already undone. Ordinary repair still skips the
  * same invalidated items it did before groups existed. */
 function preflightGroupHistory(state: CanvasState, ops: Operation[], actor: Actor): void {
-  if (!ops.some((op) => op.type === "group.change")) return;
+  if (!ops.some((op) => op.type === "group.change" || op.type === "design.restore")) return;
   let preview = state;
   for (const candidate of ops) {
     const op = repairInverse(preview, candidate);
@@ -3055,7 +3082,7 @@ function preflightGroupHistory(state: CanvasState, ops: Operation[], actor: Acto
       const next = applyOperation(preview, { id: "op_preflight", canvasId: state.project.id, actor, ts: new Date().toISOString(), op });
       if (next) preview = next;
     } catch (err) {
-      if (op.type === "group.change" || !(err instanceof OpValidationError)) throw err;
+      if (op.type === "group.change" || op.type === "design.restore" || !(err instanceof OpValidationError)) throw err;
     }
   }
 }

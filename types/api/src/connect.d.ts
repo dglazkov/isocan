@@ -3,6 +3,7 @@ import { type ActivityEntry } from "../../core/src/index.js";
 import { type Ctx } from "./ctx.js";
 import { type ExplicitIdentity } from "./identity.js";
 import { type ContextSummaryOptions } from "./context-summary.js";
+import { readDesignComparisonReference, type DesignComparisonFilter, type DesignCompareRequest, type DesignRespondRequest, type DesignDecideRequest } from "./design-decision-reader.js";
 import { readDesignRequestReference, type DesignRequestFilter, type DesignStartRequest, type DesignChangeRequest, type DesignPublishRequest } from "./design-request-reader.js";
 import { type DesignQuestionsOptions, type DesignQuestionsResult, type DesignAskRequest, type DesignAnswerRequest, type QuestionnaireSubmission, type DesignReferenceRequest, type DesignReferenceContent } from "./questionnaire-reader.js";
 import type { CanvasDesignAudit, DesignAuditOptions, DesignRepairRequest, DesignRepairResult } from "./design-audit-reader.js";
@@ -215,6 +216,16 @@ export declare class CanvasHandle {
     designReference(request: DesignReferenceRequest): Promise<DesignReferenceContent>;
     /** Eligibility comes from registry-backed writer classification, not the display-only agent map. */
     designRespondents(): ReturnType<DaemonRoutes["questionnaireActors"]>;
+    /** Read exact comparisons and authored decision history without changing the selected option. */
+    designComparisons(filter?: DesignComparisonFilter): Promise<import("./design-decision-reader.js").DesignComparisonReadResult>;
+    /** Publish one immutable comparison or an explicit linked reissue with stable source identities. */
+    designCompare(request: Omit<DesignCompareRequest, "canvasId">): Promise<import("./design-decision-reader.js").DesignDecisionSubmission>;
+    /** Request revision, delegate, skip or dismiss without adopting output or inventing a human answer. */
+    designRespond(request: Omit<DesignRespondRequest, "canvasId">): Promise<import("./design-decision-reader.js").DesignDecisionSubmission>;
+    /** Adopt the exact captured target and record its actual decision author in one undoable act. */
+    designDecide(request: Omit<DesignDecideRequest, "canvasId">): Promise<import("./design-decision-reader.js").DesignDecisionSubmission>;
+    /** Open retained option bytes by exact comparison source, never by the latest item version. */
+    designComparisonReference(request: Omit<Parameters<typeof readDesignComparisonReference>[1], "canvasId">): Promise<import("./design-decision-reader.js").DesignComparisonReference>;
     /** One on-demand procedure and current next-step plan, using this canvas's shared rollout policy. */
     designWorkflow(filter?: DesignRequestFilter): Promise<import("./design-request-reader.js").DesignWorkflowView>;
     /** Read admitted briefs and evidence by request, source conversation or output identity. */

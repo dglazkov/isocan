@@ -232,6 +232,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   three runnable receiving, editorial and campaign references with their design
   rationale. Library creation uses groups for explicit scope; legacy canvases
   retain previews, downloads and source editing until migrated.
+- **Useful alternatives and durable choices**: agents publish exact working
+  wireframes or visual directions with a recommendation and tradeoffs. Try each,
+  choose, delegate or ask for more or a specific combination. Adopting a choice
+  keeps the brief and rejected options, with one Undo for the target and decision.
+  Corrections preserve history, and later agents can read the accepted rationale.
+  Drafts keep the version you reviewed; pending choices remain recoverable after
+  refresh or source removal. The CLI uses the same compare/respond/decide acts.
 - **Switching canvases (`⌘O`)**: the launcher's second face — a list of the
   canvases you were on lately, most recent first, then the rest by activity,
   with a field that finds one from a few letters (`lkh` reaches "Lake House";

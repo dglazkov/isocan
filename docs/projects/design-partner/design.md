@@ -166,6 +166,12 @@ and delegated decisions stay distinguishable. Later work reads the accepted
 direction and relevant reason, not every abandoned option. Promotion into
 cross-project memory remains the existing explicit pin action.
 
+[comparisons-and-decisions.md](comparisons-and-decisions.md) fixes the phase 4
+write boundary: canonical comparison and response comments, one target edit
+plus decision comment, one paired Undo, nullable human reasons and explicit
+native-report provenance. It also defines exact interactive previews, preserved
+drafts and continuation without waiving a later teammate edit.
+
 ## Review and completion
 
 There are three separate readings: deterministic source diagnostics, actual

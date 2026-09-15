@@ -35,6 +35,12 @@ function printBriefs(result: DesignRequestReadResult): void {
     for (const provenance of brief.continuation?.factProvenance ?? []) console.log(`  ${provenance.field}: ${provenance.kind} by ${provenance.actorId}${provenance.responseId ? ` · answer ${provenance.responseId}` : ""}`);
     for (const reason of request.reasons) console.log(`  ${reason}`);
     for (const question of request.questions) console.log(`  Questions ${question.questions.id}: ${question.status}; unresolved ${question.outstandingQuestionIds.join(", ") || "none"}`);
+    for (const comparison of request.comparisons) console.log(`  Comparison ${comparison.comparison.id}: ${comparison.status} · ${comparison.comparison.uncertainty}; read design compare ${brief.requestId}.`);
+    for (const accepted of request.effectiveDecisions) {
+      const decision = accepted.decision, authority = decision.input.authority;
+      console.log(`  Accepted ${decision.input.chosenAlternativeId} · ${authority.kind} by ${accepted.author.name}; current consistency ${accepted.status}.`);
+      console.log(`    ${authority.kind === "human-choice" ? authority.reason ?? "No human reason supplied." : authority.rationale}`);
+    }
   }
   for (const failure of result.unavailable) console.log(`${failure.itemId} · unavailable: ${failure.reason}`);
 }

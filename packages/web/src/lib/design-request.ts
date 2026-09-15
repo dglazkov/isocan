@@ -1,5 +1,7 @@
 import type { Actor } from "@isocan/core";
 import { designRequestsRoute } from "@isocan/core/design-request";
+import { questionnaireActorsRoute } from "@isocan/core/questionnaire";
+import { designDecisionsRoute } from "@isocan/core/design-decision";
 import type { DesignRequestReadPort, DesignRequestWritePort } from "@isocan/api/design-request";
 import { designAuditIO } from "./design-audit.ts";
 import { getSnapshot, postOp, readBlob, request } from "./api.ts";
@@ -14,6 +16,8 @@ export const designRequestReadIO: DesignRequestReadPort = {
   snapshot: getSnapshot,
   home: authoritativeHome,
   requests: (canvasId, signal) => request("GET", designRequestsRoute(canvasId), undefined, signal),
+  decisionActors: (canvasId, signal) => request("GET", questionnaireActorsRoute(canvasId), undefined, signal),
+  decisions: (canvasId, signal) => request("GET", designDecisionsRoute(canvasId), undefined, signal),
   blobBytes: async (canvasId, hash, signal) => new Uint8Array(await (await readBlob(canvasId, hash, signal)).arrayBuffer()),
   sourceBlobBytes: (source, hash, signal) => sourceBytes(source.canvasId, hash, source.expectedHome, signal),
 };

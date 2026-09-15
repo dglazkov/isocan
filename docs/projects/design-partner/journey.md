@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-14
 see: design-competition, evals, context, memory
-note: phases 0–3 closed with shared requests, reliable questions and references, scoped systems, three working craft references and cross-entrance reuse verified in real browsers and the CLI. Phase 4 is next; useful alternatives, shared repair and independent generated-design outcome evaluation remain ahead.
+note: phases 0–4 closed with shared requests, scoped systems, working references and useful alternatives verified in real browsers and the CLI. Safe adoption, corrected decisions, durable drafts and cross-entrance rationale pass. Phase 5 is next; shared repair and independent generated-design and partnership evaluation remain ahead.
 ---
 # A design partner — the experience
 

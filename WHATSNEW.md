@@ -23,6 +23,12 @@ second week.
 
 ## 15 September 2026
 
+- Try an agent's working alternatives before choosing. Compare its recommendation
+  and tradeoffs, ask for more, combine specific ideas or delegate the choice.
+  Your decision and screen change undo together; earlier options and reasons
+  remain available to the next agent. Draft choices survive refresh and newer
+  proposals, and an uncertain save can be retried from the design task.
+
 - Open **Design system & references** to inspect the guidance for a group or
   screen, record reusable choices, and continue them with another agent. Working
   drafts survive source changes and can be preserved while you open a newer

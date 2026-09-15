@@ -17,7 +17,7 @@
  * wire errors so branching on it does not load refusal policy helpers.
  */
 export declare const REFUSED = "refused";
-type OpErrorCode = "edit-conflict" | "unknown-item" | "unknown-version" | "unknown-thread" | "unknown-comment" | "unknown-anchor" | "not-in-trash" | "duplicate-id" | "empty-body" | "last-comment" | "main-exists" | "name-taken" | "unknown-actor"
+type OpErrorCode = "design-intent-conflict" | "edit-conflict" | "unknown-item" | "unknown-version" | "unknown-thread" | "unknown-comment" | "unknown-anchor" | "not-in-trash" | "duplicate-id" | "empty-body" | "last-comment" | "main-exists" | "name-taken" | "unknown-actor"
 /** The speaker named an actor its badge does not claim (the identity desk's
  * mechanism 5). The remedy is always the same and always available: claim
  * the actor first. */

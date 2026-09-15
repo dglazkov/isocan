@@ -14,7 +14,8 @@
     "./design-brief": "./src/design-brief.ts",
     "./design-request": "./src/design-request.ts",
     "./design-record": "./src/design-record.ts",
-    "./design-direction": "./src/design-direction.ts"
+    "./design-direction": "./src/design-direction.ts",
+    "./design-decision": "./src/design-decision.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

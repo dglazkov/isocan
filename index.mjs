@@ -74,6 +74,13 @@ export const {
   changeDesignRequest,
   publishDesignReceipt,
   readDesignRequestReference,
+  designDecisionPort,
+  readDesignComparisons,
+  prepareDesignDecision,
+  publishDesignComparison,
+  respondDesignComparison,
+  submitDesignDecision,
+  readDesignComparisonReference,
   waitForFeedback,
   waitForResolvedFeedback,
   // canvas-groups.ts — explicit membership and resolved dry-run reports

@@ -211,6 +211,8 @@ export interface Comment {
   id: string;
   author: Actor;
   body: string;
+  /** Writer-owned comparisons and adoption facts; ordinary comment input cannot mint their authority. */
+  designDecision?: import("./design-decision.ts").DesignDecisionComment;
   /** Immutable canonical questionnaire facts; ordinary comment writes cannot supply these. */
   design?: import("./design-partner.ts").DesignQuestionSet | import("./design-partner.ts").DesignResponse;
   designReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];

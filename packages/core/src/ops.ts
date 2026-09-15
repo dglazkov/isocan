@@ -212,6 +212,10 @@ export type Operation =
   | { type: "project.update"; patch: MetaPatch }
   | { type: "project.delete" } // soft: dir moved aside; NOT undoable
   // ---- items ----
+  | { type: "design.compare"; threadId: string; commentId: string; comparison: import("./design-decision.ts").DesignComparison; canonicalComment?: Comment }
+  | { type: "design.respond"; threadId: string; commentId: string; response: import("./design-decision.ts").DesignComparisonResponse; canonicalComment?: Comment }
+  | { type: "design.decide"; threadId: string; commentId: string; decision: import("./design-decision.ts").DesignDecisionInput; effect?: import("./design-decision.ts").DesignDecisionEffect }
+  | { type: "design.restore"; effect: import("./design-decision.ts").DesignRestoreEffect }
   | { type: "design.request"; action: import("./design-request.ts").DesignRequestAction; effect?: import("./design-record.ts").DesignRecordEffect }
   | { type: "design.receipt"; itemId: string; versionId: string; receipt: import("./design-partner.ts").DesignReceipt; placement?: Placement; width?: number; height?: number; title?: string; effect?: import("./design-record.ts").DesignRecordEffect }
   | { type: "group.change"; action: GroupAction }
@@ -459,6 +463,7 @@ export type OperationType = Operation["type"];
 
 /** Ops the engine accepts directly from clients (everything non-internal). */
 export const INTERNAL_OP_TYPES: ReadonlySet<OperationType> = new Set([
+  "design.restore",
   "item.removeVersion",
   "item.restoreVersion",
   "comment.remove",

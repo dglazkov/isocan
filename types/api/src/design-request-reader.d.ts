@@ -3,6 +3,8 @@ import { type DesignArtifactRef } from "../../core/src/design-partner.js";
 import { type DesignAcceptedResponse, type DesignRequestAction, type DesignRecordOperation, type DesignReceiptPublication, type DesignRequestsResponse, type DesignRequestState, type DesignReceiptState, type DesignGoverningBinding } from "../../core/src/design-request.js";
 import type { DesignAuditReadPort } from "./design-audit-reader.js";
 import { type GoverningDesignRead } from "./design-governing.js";
+import { type DesignDecisionsResponse } from "../../core/src/design-decision.js";
+import type { DesignComparisonView, DesignDecisionView } from "./design-decision-reader.js";
 /** Request selection uses canonical identities; neither client scans arbitrary JSON artifacts. */
 export interface DesignRequestFilter {
     requestId?: string;
@@ -12,10 +14,18 @@ export interface DesignRequestFilter {
 }
 /** Browsers and Node inject their existing authenticated and source-policy-bearing transports. */
 export interface DesignRequestReadPort extends DesignAuditReadPort {
-    actorId?: string;
+    actorId?: string | undefined;
     snapshot(canvasId: string, signal?: AbortSignal): Promise<CanvasSnapshotResponse>;
     home(canvasId: string, signal?: AbortSignal): Promise<string>;
     requests(canvasId: string, signal?: AbortSignal): Promise<DesignRequestsResponse>;
+    decisions(canvasId: string, signal?: AbortSignal): Promise<DesignDecisionsResponse>;
+    decisionActors(canvasId: string, signal?: AbortSignal): Promise<{
+        actors: Array<{
+            id: string;
+            name: string;
+            kind: "human" | "agent" | "unknown";
+        }>;
+    }>;
     blobBytes(canvasId: string, hash: string, signal?: AbortSignal): Promise<Uint8Array>;
     sourceBlobBytes(source: SourceClassificationRequest, hash: string, signal?: AbortSignal): Promise<Uint8Array>;
 }
@@ -37,7 +47,11 @@ export interface DesignRequestView extends Omit<DesignRequestState, "receipts"> 
     receipts: DesignReceiptView[];
     reconciliation: DesignAcceptedResponse[];
     missingFactIds: string[];
-    nextAction: "clarify" | "reconcile" | "answer" | "build" | "verify" | "resume" | "review";
+    comparisons: DesignComparisonView[];
+    decisionHistory: DesignDecisionView[];
+    effectiveDecisions: DesignDecisionView[];
+    outstandingDecisionIds: string[];
+    nextAction: "clarify" | "reconcile" | "answer" | "compare" | "decide" | "build" | "verify" | "resume" | "review";
 }
 /** Unreadable admitted records remain visible alongside usable request views. */
 export interface DesignRequestReadResult {

@@ -8,10 +8,13 @@ import type { DesignRequestReadPort, DesignRequestWritePort } from "./design-req
 export function designRequestPort(ctx: Ctx): DesignRequestReadPort & DesignRequestWritePort {
   return {
     ...designAuditPort(ctx),
-    get actorId() { return ctx.actor.id; },
+    // Read-only discovery must remain available before an agent has named itself.
+    get actorId() { try { return ctx.actor.id; } catch { return undefined; } },
     snapshot: (id, signal) => ctx.client.snapshot(id, signal),
     home: id => contextHome(ctx, id),
     requests: (id, signal) => ctx.client.designRequests(id, signal),
+    decisions: (id, signal) => ctx.client.designDecisions(id, signal),
+    decisionActors: id => ctx.client.questionnaireActors(id),
     blobBytes: (id, hash, signal) => ctx.client.downloadBlob(id, hash, signal),
     sourceBlobBytes: (source, hash, signal) => automaticSourceClient(ctx, source.expectedHome, signal).downloadBlob(source.canvasId, hash, signal),
     send: async (id, op, options) => {

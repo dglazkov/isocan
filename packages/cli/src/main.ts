@@ -8,6 +8,7 @@ import { registerContextReads, reportContext, contextReceipt } from "./context-r
 import { registerQuestionnaires } from "./questionnaire.ts";
 import { registerDesignSystems } from "./design-system.ts";
 import { registerDesignRequests } from "./design-request.ts";
+import { registerDesignDecisions } from "./design-decision.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
@@ -10383,6 +10384,7 @@ somebody invented and imposed.`,
 
 registerQuestionnaires(style, ctxOf);
 registerDesignRequests(style, ctxOf);
+registerDesignDecisions(style, ctxOf);
 registerDesignSystems(style, ctxOf);
 
 /**

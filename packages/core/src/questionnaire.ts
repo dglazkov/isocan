@@ -1,10 +1,10 @@
 import type { Actor, CanvasContents, Comment, ItemVersion } from "./model.ts";
 import type { Operation } from "./ops.ts";
-import { validateContextManifest } from "./canvas-group-context.ts";
+import { validateDesignRetainedReferences } from "./design-retention.ts";
 import { OpValidationError } from "./errors.ts";
 import { DesignPartnerContractError, parseDesignArtifactRef, parseDesignQuestionSet, parseDesignResponse, type DesignArtifactRef, type DesignQuestionSet, type DesignQuestionSource, type DesignResolution, type DesignResponse } from "./design-partner.ts";
 import { sameActor, type ActorJoins } from "./identity.ts";
-import { sameDesignArtifact } from "./design-partner-plan.ts";
+import { validateDesignDecisionComment } from "./design-decision-state.ts";
 
 /** Exact legacy text selected for explicit adoption; another reply cannot infer its respondent. */
 export interface LegacyQuestionSource { threadId: string; commentId: string; body: string }
@@ -93,21 +93,14 @@ export function validateQuestionnaireComment(comment: Comment, canvasId: string)
   }
 }
 function validateCanonicalComment(comment: Comment, canvasId: string): void {
+  if (comment.designDecision !== undefined) { validateDesignDecisionComment(comment, canvasId); return; }
   if (comment.design === undefined) {
     if (comment.designReferences !== undefined || comment.designLegacySource !== undefined) throw new OpValidationError("bad-op", "questionnaire metadata requires a typed record");
     return;
   }
   const design = comment.design?.kind === "questions" ? parseDesignQuestionSet(comment.design) : parseDesignResponse(comment.design);
   if (comment.designLegacySource !== undefined && (design.kind !== "questions" || !obj(comment.designLegacySource, ["threadId", "commentId", "body"]) || !str(comment.designLegacySource.threadId) || !str(comment.designLegacySource.commentId) || !parseLegacyQuestionnaire(comment.designLegacySource.body))) throw new OpValidationError("bad-op", "invalid retained legacy questionnaire source");
-  if (!Array.isArray(comment.designReferences) || comment.designReferences.length > 1024) throw new OpValidationError("bad-op", "questionnaire canonical references are missing");
-  for (const reference of comment.designReferences) {
-    if (!obj(reference, ["artifact", "version"])) throw new OpValidationError("bad-op", "invalid retained questionnaire metadata");
-    const artifact = parseDesignArtifactRef(reference.artifact), version = reference.version as ItemVersion;
-    if (artifact.canvasId !== canvasId || artifact.versionId !== version?.id || artifact.blobHash !== version.blobHash) throw new OpValidationError("bad-op", "retained questionnaire reference identity disagrees");
-    if (version.visual && !/^[a-f0-9]{64}$/.test(version.visual.blobHash)) throw new OpValidationError("bad-op", "retained questionnaire visual hash is invalid");
-    validateContextManifest({ canvasId, revision: 0, rootIds: [artifact.itemId], expandedIds: [artifact.itemId], includeExcluded: false, ambient: false, entries: [{ itemId: artifact.itemId, parentId: null, depth: 0, title: "Retained reference", kind: version.mimeType, excluded: false, version, threadIds: [] }], counts: { included: 1, excluded: 0, unavailable: 0 } }, canvasId);
-  }
-  for (const artifact of questionnaireArtifacts(design)) if (!comment.designReferences.some((r) => sameDesignArtifact(r.artifact, artifact))) throw new OpValidationError("bad-op", "typed reference lacks retained metadata");
+  validateDesignRetainedReferences(comment.designReferences, canvasId, questionnaireArtifacts(design), 1024);
 }
 
 /** Old visual cards may contain swatches; adoption never claims these are actual artifact previews. */

@@ -177,6 +177,14 @@ questions; and an explicit governing binding on receipts. Old unadmitted v1
 JSON stays readable. Canonical admission requires these new invariants, and
 unknown future fields remain invalid rather than guessed.
 
+Phase 4 [comparison and decision semantics](comparisons-and-decisions.md)
+reuse this admitted source and custody. They do not spend another initial
+question allowance or fabricate native human answers. An exact canonical
+adoption chain can explain a captured target's intended before→adopted change
+within one brief item/request/epoch; subsequent content, metadata or scope
+drift still invalidates continuation. Only effective canonical decisions settle
+brief decision keys. Historical choice and present evidence remain separate.
+
 ## Evidence and currentness
 
 A receipt binds an exact completed brief and exact canvas output, or an actual

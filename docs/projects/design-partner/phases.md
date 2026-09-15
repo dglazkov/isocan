@@ -1,11 +1,12 @@
 # A design partner — the walk
 
-**Where we are:** phases 0–3 CLOSED; phase 3 closed on 15 September 2026.
-Both entrances resume one opt-in design task, resolve the same scoped system,
-and carry authored reusable treatments into a second screen. Three working
-references, source projections and their recovery paths passed real browser,
-CLI and full strict verification. **Phase 4 is next**: useful alternatives and
-safe decisions, followed by shared repair and measured quality in phases 5–7.
+**Where we are:** phases 0–4 CLOSED; phase 4 closed on 15 September 2026.
+Both entrances share discovery, scoped systems, real alternatives and durable
+adoption. The final browser journey, draft recovery, CLI continuation and full
+strict gates pass. **Phase 5 is next**: shared critique and bounded repair,
+followed by the optional craft integration and measured quality in phases 6–7.
+The workflow stays opt-in; these engineering proofs do not establish design
+quality or real-user partnership uplift.
 Read [journey.md](journey.md), [design.md](design.md), then this walk.
 
 The first useful release fixes discovery integrity. The next delivers one
@@ -261,7 +262,7 @@ conformance; phase 7 supplies the independent human quality judgment.
 
 ## Phase 4 — Useful alternatives and a decision that survives
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 September 2026 — actual structural/visual tasks, safe adoption and correction, cross-entrance rationale, recovery and full strict gates passed. See [verification/phase-4.md](verification/phase-4.md).
 
 **Depends on:** phase 3.
 
@@ -276,7 +277,7 @@ person sees an actual decision, a recommendation and a safe way to adopt it.
   open interactive examples. Show the hypothesis, recommendation and tradeoff.
   The CLI reads the same options and can select or delegate without a pointer.
 - Implement safe greenfield and existing-screen adoption as specified in
-  `design.md`. Preserve the brief, references, rejected alternatives and reason;
+  [comparisons-and-decisions.md](comparisons-and-decisions.md). Preserve the brief, references, rejected alternatives and reason;
   do not reuse `choose` in a way that overwrites a Markdown brief. Capture
   a human preference separately from an agent's recommendation.
 - Let the next request read the accepted decision. Version changes to an
@@ -290,7 +291,12 @@ target edit. One undo restores decision and adoption; brief/history remain
 readable. A follow-up screen uses the accepted rationale. The study in phase 7,
 not an option count or screenshot test, establishes whether choices help.
 
-**Trajectory:** to be written at close.
+**Trajectory:**
+
+- **2026-09-15** — Adoption needs one canonical edit/comment pair and a non-consuming conditional Undo. After GC, its operation identity must also remain reserved on the generic submit path; an ordinary edit previously reused an archived decision ID. Real writer, archive and relay probes now refuse that collision.
+- **2026-09-15** — Context continuation follows exact adopted-version edges, not merely matching request IDs. Brief corrections within an epoch retain those edges; a missing decision, fork or unrelated metadata edit breaks them. Later repair work must preserve this distinction instead of silently recapturing context.
+- **2026-09-15** — One request for more alternatives remains one request across linked batches. Each batch retains the original effective response and exact authored predecessor; repeating the human response or accepting an unrelated chain changes the requested exploration.
+- **2026-09-15** — Responsive layout must not own an active approval or prototype. A stable page host preserves its exact frame, focus and selected source. Recovery exposes the original pending action even when publication disappears, and every Retry must save that identity before sending.
 
 ## Phase 5 — One critique and repair path on every surface
 

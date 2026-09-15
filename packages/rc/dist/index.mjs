@@ -71,6 +71,26 @@ function actorNameIn(names, actor) {
   return current && current.trim() ? current : actor.name;
 }
 
+// packages/core/src/area.ts
+var AREA_KIND = "area";
+var AREA_TITLE_HEIGHT = 56;
+var AREA_CARD_HEIGHT = 120;
+var AREA_HEAD = AREA_TITLE_HEIGHT + AREA_CARD_HEIGHT;
+function isArea(item) {
+  return item.properties.kind === AREA_KIND;
+}
+function inArea(area, item) {
+  if (item.id === area.id || isArea(item)) return false;
+  const cx = item.x + item.width / 2;
+  const cy = item.y + item.height / 2;
+  return cx >= area.x && cx < area.x + area.width && cy >= area.y && cy < area.y + area.height;
+}
+
+// packages/core/src/canvas-scope.ts
+function inCanvasScope(canvas, scope, item) {
+  return isGroupItem(scope) ? groupAncestors(canvas, item.id).some((parent) => parent.id === scope.id) : inArea(scope, item);
+}
+
 // packages/core/src/questionnaire.ts
 var questionnaireActorsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/questionnaire/actors`;
 
@@ -134,26 +154,6 @@ function normalizeHomeUrl(raw) {
   }
 }
 var INSTALL_SPEC = "github:dglazkov/isocan#release";
-
-// packages/core/src/area.ts
-var AREA_KIND = "area";
-var AREA_TITLE_HEIGHT = 56;
-var AREA_CARD_HEIGHT = 120;
-var AREA_HEAD = AREA_TITLE_HEIGHT + AREA_CARD_HEIGHT;
-function isArea(item) {
-  return item.properties.kind === AREA_KIND;
-}
-function inArea(area, item) {
-  if (item.id === area.id || isArea(item)) return false;
-  const cx = item.x + item.width / 2;
-  const cy = item.y + item.height / 2;
-  return cx >= area.x && cx < area.x + area.width && cy >= area.y && cy < area.y + area.height;
-}
-
-// packages/core/src/canvas-scope.ts
-function inCanvasScope(canvas, scope, item) {
-  return isGroupItem(scope) ? groupAncestors(canvas, item.id).some((parent) => parent.id === scope.id) : inArea(scope, item);
-}
 
 // packages/core/src/canvas-groups.ts
 var GROUP_KIND = "group";
@@ -990,6 +990,13 @@ function itemsTouchedBy(op, canvas) {
     return anchor ? [anchor] : [];
   };
   switch (op.type) {
+    case "design.decide":
+      return [op.decision.basis.target.artifact.itemId, ...anchorOf(op.threadId)];
+    case "design.restore":
+      return [op.effect.item.itemId, ...anchorOf(op.effect.threadId)];
+    case "design.compare":
+    case "design.respond":
+      return anchorOf(op.threadId);
     case "design.request":
     case "design.receipt":
       return op.effect ? itemsTouchedBy(op.effect, canvas) : [op.type === "design.receipt" ? op.itemId : op.action.kind === "start" ? op.action.itemId : op.action.brief.itemId];
@@ -1168,7 +1175,8 @@ var CLAIM_REFUSAL = {
 var CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
 var QUESTIONNAIRES_FEATURE = "questionnaires-v1";
 var DESIGN_REQUESTS_FEATURE = "design-requests-v2";
-var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1,${DESIGN_REQUESTS_FEATURE}`;
+var DESIGN_DECISIONS_FEATURE = "design-decisions-v1";
+var CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1,${DESIGN_REQUESTS_FEATURE},${DESIGN_DECISIONS_FEATURE}`;
 var CLIENT_FEATURES_HEADER = "x-isocan-features";
 var PARK_ADOPTED_CODE = "park-adopted";
 var rcAnsweringRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/rc`;
@@ -1469,6 +1477,9 @@ function inboxRoute(actorId, options = {}) {
 // packages/core/src/design-request.ts
 var designRequestsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/requests`;
 
+// packages/core/src/design-decision.ts
+var designDecisionsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/decisions`;
+
 // packages/api/src/routes.ts
 var platformFetch = (input, init) => fetch(input, init);
 var DaemonRoutes = class {
@@ -1740,6 +1751,15 @@ var DaemonRoutes = class {
   /** Only canonical admitted records contribute continuation, budget and lifecycle eligibility. */
   designRequests(canvasId, signal) {
     return this.request("GET", designRequestsRoute(canvasId), void 0, signal);
+  }
+  /** Canonical comparisons and decision history keep actual authorship separate from currentness. */
+  designDecisions(canvasId, signal) {
+    return this.request("GET", designDecisionsRoute(canvasId), void 0, signal);
+  }
+  /** Stable comparison, non-adopting response and paired adoption intents use the existing writer. */
+  designDecision(canvasId, actor, op, opId, signal) {
+    const origin = this.observedGroupModes.get(canvasId);
+    return this.request("POST", "/api/ops", { canvasId, actor, op, opId, ...origin === void 0 ? {} : { originGroupMode: origin } }, signal);
   }
   /** Stable public request/receipt intent reaches the ordinary serialized operation writer. */
   designRecord(canvasId, actor, op, opId, originGroupMode) {

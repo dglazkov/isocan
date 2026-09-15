@@ -53,6 +53,8 @@ import { readContextSummary, type ContextSummaryOptions } from "./context-summar
 import { readDesignAudit, repairDesignItem } from "./design-audit.ts";
 import { questionnairePort } from "./questionnaire.ts";
 import { designRequestPort } from "./design-request.ts";
+import { designDecisionPort } from "./design-decision.ts";
+import { readDesignComparisons, publishDesignComparison, respondDesignComparison, submitDesignDecision, readDesignComparisonReference, type DesignComparisonFilter, type DesignCompareRequest, type DesignRespondRequest, type DesignDecideRequest } from "./design-decision-reader.ts";
 import { readDesignRequests, readDesignWorkflow, startDesignRequest, changeDesignRequest, publishDesignReceipt, readDesignRequestReference, type DesignRequestFilter, type DesignStartRequest, type DesignChangeRequest, type DesignPublishRequest } from "./design-request-reader.ts";
 import { readDesignQuestions, askDesignQuestions, answerDesignQuestions, readDesignReference, type DesignQuestionsOptions, type DesignQuestionsResult, type DesignAskRequest, type DesignAnswerRequest, type QuestionnaireSubmission, type DesignReferenceRequest, type DesignReferenceContent } from "./questionnaire-reader.ts";
 import type { CanvasDesignAudit, DesignAuditOptions, DesignRepairRequest, DesignRepairResult } from "./design-audit-reader.ts";
@@ -453,6 +455,31 @@ export class CanvasHandle {
   /** Eligibility comes from registry-backed writer classification, not the display-only agent map. */
   designRespondents(): ReturnType<DaemonRoutes["questionnaireActors"]> {
     return this.reach(() => this.ctx.client.questionnaireActors(this.id));
+  }
+
+  /** Read exact comparisons and authored decision history without changing the selected option. */
+  designComparisons(filter: DesignComparisonFilter = {}) {
+    return this.reach(() => readDesignComparisons(designDecisionPort(this.ctx), { canvasId: this.id, filter }));
+  }
+
+  /** Publish one immutable comparison or an explicit linked reissue with stable source identities. */
+  designCompare(request: Omit<DesignCompareRequest, "canvasId">) {
+    return this.reach(() => publishDesignComparison(designDecisionPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Request revision, delegate, skip or dismiss without adopting output or inventing a human answer. */
+  designRespond(request: Omit<DesignRespondRequest, "canvasId">) {
+    return this.reach(() => respondDesignComparison(designDecisionPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Adopt the exact captured target and record its actual decision author in one undoable act. */
+  designDecide(request: Omit<DesignDecideRequest, "canvasId">) {
+    return this.reach(() => submitDesignDecision(designDecisionPort(this.ctx), { ...request, canvasId: this.id }));
+  }
+
+  /** Open retained option bytes by exact comparison source, never by the latest item version. */
+  designComparisonReference(request: Omit<Parameters<typeof readDesignComparisonReference>[1], "canvasId">) {
+    return this.reach(() => readDesignComparisonReference(designDecisionPort(this.ctx), { ...request, canvasId: this.id }));
   }
 
   /** One on-demand procedure and current next-step plan, using this canvas's shared rollout policy. */

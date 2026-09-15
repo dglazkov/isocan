@@ -120,10 +120,25 @@ goal:
   # every replica that folds it. It refuses to invert (`invert.ts`, beside
   # `trash.empty`), it is confirmation-gated on both surfaces, and
   # `web-only-ops` stays 0 — `isocan version prune` is the same act.
+  # 36 → 40 was omitted when design-partner phases 1–2 shipped. Recorded on
+  # 2026-09-15: questionnaire.ask/answer refuse old decoders instead of silently
+  # dropping typed authorship; design.request/receipt admit briefs and evidence
+  # at the writer instead of trusting public JSON. Their inverses reuse existing
+  # effects. All four have actual API, CLI and web producers.
+  #
+  # 40 → 44 is the deliberate phase 4 mechanism, committed before code:
+  # design.compare publishes an exact comparison; design.respond records a
+  # non-adopting revision/delegation with human or honest native-report custody;
+  # design.decide adopts content and records the choice in one fixed pair;
+  # internal design.restore makes that pair one conflict-safe Undo/Redo.
+  # Ordinary questionnaire answers remain known-human-only. A generic batch or
+  # separate answer/edit cannot enforce this act. The full argument and proof
+  # are docs/projects/design-partner/comparisons-and-decisions.md. This records
+  # specific vocabulary, not headroom for unspecified later operations.
   - name: operations in the vocabulary
-    at most: 36
+    at most: 44
     measured by: node scripts/measure.mjs op-types
-    baseline: 36, 2026-09-14, e56e7acc
+    baseline: 40, 2026-09-15, 336e6124
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *

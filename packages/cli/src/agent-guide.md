@@ -2674,6 +2674,79 @@ Put every asset on the canvas — `isocan add icon.png --title "App icon"
 --prop parent=<the screen it came from>` — so it hangs under its source when
 anyone runs `isocan tidy`, instead of landing in a folder nobody opens.
 
+### Comparing and adopting a design
+
+Use `design compare` when a real structural or visual decision remains.
+Publish two working wireframes for workflow uncertainty, or two polished
+previews for visual uncertainty, with the same realistic scenario and fidelity.
+Name each hypothesis/tradeoff and give your attributed recommendation. A batch
+holds one to three options; one is an explicit direct/delegated speed path.
+Link further batches for requested wider exploration. A precise incumbent edit
+needs neither comparison nor another interview.
+
+```sh
+isocan design compare req_acme_receiving --json > comparison-read.json
+isocan design compare --publish comparison.json --thread thr_acme --json
+isocan design compare req_acme_receiving --thread thr_acme --comment cmt_acme_comparison --option continuous --out /tmp/acme-continuous.html
+isocan design respond response.json --json
+isocan design decide decision.json --json
+isocan design decide decision.json --retry --json
+isocan design compare --target item_acme_receiving --json
+```
+
+A publication file is `{threadId,comparison,opId?,commentId?,retry?}`, or a
+bare comparison with `--thread`. The comparison has schemaVersion 1,
+kind `comparison`, stable id/revision, requestId/epoch, exact admitted `brief`,
+decisionKey, audience, mode, uncertainty, scenario, fidelity, alternatives,
+recommendedAlternativeId, recommendation, target, governing, supersedes,
+correctsDecisionId and followsResponseId. Initial predecessor fields are null.
+Each alternative has id/title/hypothesis/tradeoff and an exact artifact ref.
+Audience is `{kind:'human',respondentActorId}` or
+`{kind:'external-agent',externalRequestId,reporterActorId}`. A reissue is a new
+identity with `supersedes` naming the old exact thread/comment/payload/revision;
+it does not change the older source. Option downloads retain exact bytes.
+
+The JSON read supplies `approvalBases` per option. Capture the basis when the
+choice is reviewed: exact brief/epoch, all options, target content, title,
+description, properties, scope and governing version. A decision file wraps
+`{threadId,decision,opId?,commentId?,retry?}`; decision contains id, requestId,
+decisionKey, source `{kind:'comparison',source}`, that captured basis,
+chosenAlternativeId, fresh versionId, supersedesDecisionId and authority.
+Use the exact source and basis already seen; never recapture latest metadata
+at the final submit. Reading or trying an option never selects it.
+
+Authority is one of these explicit forms:
+
+- `human-choice`: nullable human `reason`; the writer verifies the named person.
+- `canvas-delegation`: effective responseId and the named agent's own rationale.
+- `external-report`: externalRequestId, reportedOutcome (`choice` or
+  `delegation`), statement, nullable reportedReason and your rationale.
+- `agent-judgment`: your rationale for a direct proposal; no delegation claim,
+  and no resolution of an outstanding comparison addressed to a person.
+
+A native external report is authored by the original reporting agent, or its
+current worker after explicit reasoned resume. Do not manufacture a human
+questionnaire response or repeat the conversation to obtain one. A human's
+missing reason remains null, never a copy of the recommendation.
+
+`design respond` takes `{threadId,response,opId?,commentId?,retry?}`. Its typed
+`comparison-response` names requestId/epoch, exact comparison source, authority
+`human` or `external-report`, an outcome and supersedesResponseId. Outcomes are
+delegate (agentActorId), more (nullable count/instruction), combine (at least
+two optionId/part entries plus a specific instruction), skip or dismiss.
+More/combine request real new work; they do not adopt an imaginary merge.
+These responses remain distinct from ordinary `design answer`.
+
+One `design decide` conditionally adopts compatible content and records the
+choice together. One Undo restores both. The brief and rejected alternatives
+remain available; an existing screen keeps its filename. A connected-app
+prototype choice records a direction, not an implemented repository runtime.
+Invalid local files remain editable. After pending delivery, preserve the exact
+file and IDs and use `--retry`; changed inputs require explicit review and a new
+intent. Accepted with stale/unavailable consistency is still accepted. Read
+history and the effective rationale through `design compare`, `design brief`
+or `design workflow` before extending another screen through either entrance.
+
 ### Carrying an authored design into the next screen
 
 Run `design workflow` for the shared procedure. `design show --in <scope>`
@@ -2849,6 +2922,8 @@ on the thread before putting one on somebody else's canvas,
 `design brief [request] [--update|--resume|--cancel|--complete <file>]`,
 `design brief <request> --reference <file> [--face source|visual] [--out <file>]`,
 `design receipt [request] [--publish <file>]`,
+`design compare [request] [--publish <file>|--target <item>] [--option <id> --out <file>]`,
+`design respond <file> [--thread <id>] [--retry]`, `design decide <file> [--thread <id>] [--retry]`,
 `add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle

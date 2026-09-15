@@ -93,6 +93,7 @@ import { revealItem, zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "../li
 import { findNextItem, nearestToPoint, type Direction } from "../lib/spatialnav.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { TrashPanel } from "../components/LazyTrashPanel.tsx";
+import { DesignComparisonHost } from "../components/DesignComparisonButton.tsx";
 import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
 import { RailStrip } from "../components/RailStrip.tsx";
 import { openPanel } from "../lib/panels.ts";
@@ -1103,6 +1104,7 @@ function CanvasSurface({
       </>}
       {/* Native collaboration and files remain reachable from the launcher
           while a module owns the canvas chrome. */}
+      <DesignComparisonHost canvasId={canvasId} actor={actor} />
       {!phone && <MainThreadPanel canvasId={canvasId} actor={actor} />}
       <FilesPanel canvasId={canvasId} actor={actor} />
       <AgentTray canvasId={canvasId} actor={actor} />

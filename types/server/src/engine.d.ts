@@ -970,6 +970,8 @@ export declare class Engine {
     }>;
     /** The serialized read binds admitted JSON and canonical discovery history at one local state. */
     designRequests(canvasId: string, home: string): Promise<import("../../core/src/index.js").DesignRequestsResponse>;
+    /** Canonical comparison history is read under the same serialized canvas authority as request state. */
+    designDecisions(canvasId: string, home: string): Promise<import("../../core/src/design-decision.js").DesignDecisionsResponse>;
     /** Core pipeline. Runs inside the queue. */
     private applyAndPersist;
     /**

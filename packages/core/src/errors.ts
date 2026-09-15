@@ -19,6 +19,7 @@
 export const REFUSED = "refused";
 
 type OpErrorCode =
+  | "design-intent-conflict"
   | "edit-conflict"
   | "unknown-item"
   | "unknown-version"

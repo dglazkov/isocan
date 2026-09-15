@@ -7,6 +7,7 @@ import { questionnaireStates, questionnaireSourceCurrent } from "@isocan/core/qu
 import { questionnaireActorKind } from "./questionnaire.ts";
 import { hydrateContextManifest, contextBlobAvailable } from "./canvas-group-context.ts";
 import type { Store } from "./store.ts";
+import { designInputTransition } from "../../core/src/design-decision-state.ts";
 
 const bad = (message: string): never => { throw new OpValidationError("bad-op", message); };
 const sha = (text: string | Buffer) => createHash("sha256").update(text).digest("hex");
@@ -79,7 +80,14 @@ function designRequestReasons(state: CanvasState, brief: DesignBrief, registry: 
 }
 function localInputReasons(state: CanvasState, home: string, brief: DesignBrief, ownItemId: string): string[] {
   const refs = [...brief.context.entries.filter((e) => !e.excluded && !e.unavailable && e.version).map((e) => reference(home, state.project.id, e.itemId, e.version!))];
-  return [...new Set(refs.filter((ref) => ref.home === home && ref.canvasId === state.project.id && ref.itemId !== ownItemId && (state.canvas.items[ref.itemId]?.currentVersionId !== ref.versionId || state.canvas.items[ref.itemId]?.versions.find((v) => v.id === ref.versionId)?.blobHash !== ref.blobHash)).map((ref) => `Input ${ref.itemId} changed or is unavailable.`))];
+  return [...new Set(refs.filter((ref) => ref.home === home && ref.canvasId === state.project.id && ref.itemId !== ownItemId && (state.canvas.items[ref.itemId]?.currentVersionId !== ref.versionId || state.canvas.items[ref.itemId]?.versions.find((v) => v.id === ref.versionId)?.blobHash !== ref.blobHash) && !designInputTransition(state.canvas, ownItemId, brief.requestId, brief.epoch, ref)).map((ref) => `Input ${ref.itemId} changed or is unavailable.`))];
+}
+/** Comparison acts use the same live request, source, cancellation and input guards as lifecycle writes. */
+export async function designDecisionRequest(store: Store, state: CanvasState, home: string, ref: DesignArtifactRef, epoch: number, registry: ActorRegistry): Promise<DesignBrief> {
+  const brief = await briefAt(store, state, home, ref);
+  const reasons = [...designRequestReasons(state, brief, registry), ...localInputReasons(state, home, brief, ref.itemId)];
+  if (brief.epoch !== epoch || brief.progress !== "active" || reasons.length) bad(reasons.join(" ") || "The design request is no longer active at this epoch.");
+  return brief;
 }
 function admittedQuestionEntries(entries: readonly LogEntry[], requestId: string, briefItemId: string): LogEntry[] {
   const versions = new Map<string, string>();
@@ -149,7 +157,8 @@ function accepted(state: CanvasState, briefItemId: string, brief: DesignBrief, a
   }
   return result;
 }
-async function retainReferences(store: Store, state: CanvasState, home: string, refs: DesignArtifactRef[], previous: DesignRetainedReference[] = []): Promise<DesignRetainedReference[]> {
+/** Retains exact local source and visual bytes with flat metadata; inherited references remain permission-bearing. */
+export async function retainReferences(store: Store, state: CanvasState, home: string, refs: DesignArtifactRef[], previous: DesignRetainedReference[] = []): Promise<DesignRetainedReference[]> {
   const result: DesignRetainedReference[] = [];
   const queue = [...refs];
   while (queue.length) {
@@ -175,7 +184,8 @@ async function retainReferences(store: Store, state: CanvasState, home: string, 
 function briefReferences(brief: DesignBrief, home: string): DesignArtifactRef[] {
   return [...brief.context.entries.flatMap((e) => e.version && !e.excluded && !e.unavailable ? [reference(home, brief.context.canvasId, e.itemId, e.version)] : []), ...brief.facts.flatMap((f) => f.sources), ...brief.references.flatMap((r) => r.artifact && r.state === "fetched" ? [r.artifact] : [])];
 }
-function governingReasons(state: CanvasState, home: string, receipt: DesignReceipt): string[] {
+/** Reuses canonical scope selection for request receipts and approval guards, without fetching supplied URLs. */
+export function governingReasons(state: CanvasState, home: string, receipt: Pick<DesignReceipt, "governing">): string[] {
   const binding = receipt.governing; if (!binding) return ["The receipt has no governing selection."];
   const at = binding.atItemId === null ? undefined : state.canvas.items[binding.atItemId];
   if (binding.atItemId !== null && !at) return ["The governing scope is unavailable."];

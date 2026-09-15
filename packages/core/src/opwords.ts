@@ -38,6 +38,10 @@ export function activityOpType(op: Operation): OperationType {
  * differently — the web through an actor map, the CLI through its own.
  */
 const OP_WORDS: Partial<Record<OperationType, string>> = {
+  "design.compare": "published design alternatives",
+  "design.respond": "responded to design alternatives",
+  "design.decide": "adopted a design direction",
+  "design.restore": "restored a design decision",
   "design.request": "updated a design task",
   "design.receipt": "published design evidence",
   "group.change": "changed a canvas group",

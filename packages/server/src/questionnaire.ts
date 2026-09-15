@@ -17,6 +17,11 @@ export function questionnaireActorKind(registry: ActorRegistry, id: string): Des
 /** Exposes only canvas-known actor identity and eligibility, never private session or credential data. */
 export function questionnaireActors(state: CanvasState, registry: ActorRegistry): QuestionnaireActor[] {
   const actors = [state.project.createdBy, state.project.updatedBy, ...Object.values(state.canvas.items).flatMap((item) => [item.createdBy, item.updatedBy]), ...Object.values(state.canvas.threads).flatMap((thread) => thread.comments.map((comment) => comment.author)), ...Object.values(state.canvas.agents ?? {}).map((agent) => agent.actor)];
+  for (const thread of Object.values(state.canvas.threads)) for (const comment of thread.comments) {
+    const record = comment.designDecision?.record;
+    const ids = record?.kind === "comparison" ? [record.audience.kind === "human" ? record.audience.respondentActorId : record.audience.reporterActorId] : record?.kind === "comparison-response" && record.outcome.kind === "delegate" ? [record.outcome.agentActorId] : [];
+    for (const id of ids) { const canonical = resolveActor(registry.joined, id); actors.push({ id, name: registry.names[canonical]?.name ?? id }); }
+  }
   const found = new Map<string, QuestionnaireActor>();
   for (const actor of actors) {
     const id = resolveActor(registry.joined, actor.id); if (isSystemActor(id)) continue;
