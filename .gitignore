@@ -152,3 +152,7 @@ vite.config.ts.timestamp-*
 
 # A module built for runtime loading (scripts/module-build.mjs) lands here by default.
 packages/modules/*/build/
+
+# A sheep kennel is per machine — it names a home and can hold credentials.
+# `sheep setup` writes one here; it must never be committed.
+.sheep/
