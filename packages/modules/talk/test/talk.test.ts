@@ -90,7 +90,7 @@ describe("a WebSocket frame is decoded whatever the browser makes of it", () => 
 });
 
 describe("a spoken request becomes the same operations a click sends", () => {
-  it("add_item mints ids, puts the text through the host, and sends one op", async () => {
+  it("add_item mints ids, puts the text through the host, and sends one groups-shaped op", async () => {
     const result = await runTool("add_item", { title: "Banana", text: "a note" }, facts);
     expect(result.ok).toBe(true);
     expect(blobs.at(-1)).toEqual({ body: "a note", filename: "note.md" });
@@ -98,6 +98,13 @@ describe("a spoken request becomes the same operations a click sends", () => {
     expect(op.type).toBe("item.add");
     expect(String(op.itemId)).toMatch(/^itm_/);
     expect(op.version).toMatchObject({ blobHash: "h1", mimeType: "text/markdown", filename: "note.md" });
+    // The wire wants geometry, a position, and — on a groups canvas — the
+    // insertion named, the same shape the shell's own creators send.
+    expect(Number(op.width)).toBeGreaterThan(0);
+    expect(Number(op.height)).toBeGreaterThan(0);
+    expect(op.placement).toEqual({ x: 160, y: 120 });
+    expect(op.containerId).toBeNull();
+    expect(op.groupPlacement).toBe("auto");
   });
 
   it("rename_item resolves the spoken ref against this canvas's items", async () => {

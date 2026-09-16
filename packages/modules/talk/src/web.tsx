@@ -14,6 +14,7 @@ import {
 } from "@isocan/core";
 import { Playback, capture, fromBytes, rmsOf, type Capture } from "@isocan/voice-agent/audio";
 import { LIVE_MODEL, liveSetup, liveUrl, planForCall } from "@isocan/voice-agent/live";
+import { defaultSize } from "@isocan/core";
 import { voiceCore } from "./core.ts";
 
 /**
@@ -137,6 +138,24 @@ export async function runTool(
       delete op.text;
       delete op.mime;
       delete op.filename;
+      // The wire wants geometry and a position, whatever the planner set:
+      // a drawing carries its own box, a note takes the shared default size.
+      const box = defaultSize(mime);
+      op.width = Number(op.width ?? box.width);
+      op.height = Number(op.height ?? box.height);
+      op.placement = {
+        x: Math.round(Number(op.x ?? 160)),
+        y: Math.round(Number(op.y ?? 120)),
+      };
+      delete op.x;
+      delete op.y;
+      // A groups canvas refuses a bare item.add: the insertion has to be
+      // named. Loose pile, auto — the same shape the shell's own creators
+      // send when nothing is selected.
+      if (facts.groupMode === "groups") {
+        op.containerId = null;
+        op.groupPlacement = "auto";
+      }
     }
     if (op.type === "item.update") {
       // The planner speaks semantics; the wire speaks a patch. One spelling
@@ -227,12 +246,19 @@ interface PanelFacts {
   canvas: CanvasContents;
   host: WebHost;
   canEdit: boolean;
+  /** The saved canvas mode — `item.add` on a groups canvas must name its
+   *  insertion (`containerId` + `groupPlacement`), which a legacy canvas
+   *  never sees. */
+  groupMode: "groups" | "legacy";
 }
 
 /** The panel both doors share: key, model, one mic button, the meters and
  *  the conversation. The microphone button pulses while live — the whole of
- *  the page's animation, kept to what a dialog-sized surface can use. */
-function VoicePanel({ facts }: { facts: PanelFacts }) {
+ *  the page's animation, kept to what a dialog-sized surface can use.
+ *
+ *  `autoStart`: the door was itself a press (the floating mic, ⌘K), so a
+ *  stored key means the session starts on open — one press, not two. */
+function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart?: boolean }) {
   const [key, setKey] = useState(() => localStorage.getItem(KEY_SHELF) ?? "");
   const [model, setModel] = useState(() => localStorage.getItem(MODEL_SHELF) ?? LIVE_MODEL);
   const [state, setState] = useState<SessionState>("idle");
@@ -242,6 +268,7 @@ function VoicePanel({ facts }: { facts: PanelFacts }) {
   const playbackRef = useRef<Playback | null>(null);
   const inMeterRef = useRef<{ paint: (level: number) => void } | null>(null);
   const outMeterRef = useRef<{ paint: (level: number) => void } | null>(null);
+  const autoStartedRef = useRef(false);
 
   const say = useCallback((who: Line["who"], text: string) => {
     setLines((prev) => [...prev.slice(-40), { who, text }]);
@@ -363,6 +390,16 @@ function VoicePanel({ facts }: { facts: PanelFacts }) {
     }
   }, [key, model, say, facts]);
 
+  // The door was the press: with a key already in the shelf, open means
+  // listen. The guard holds once per mount — StrictMode's double mount in
+  // dev must not open two sockets, and a re-open is a new mount anyway.
+  useEffect(() => {
+    if (autoStart && !autoStartedRef.current && localStorage.getItem(KEY_SHELF)?.trim()) {
+      autoStartedRef.current = true;
+      void listen();
+    }
+  }, [autoStart, listen]);
+
   return (
     <div className="talk-panel">
       <div className="talk-row">
@@ -441,7 +478,12 @@ function VoicePanel({ facts }: { facts: PanelFacts }) {
 
 /** The ⌘K dialog's mount: the panel, with the shell's facts. */
 function VoiceDialog(facts: DialogFacts) {
-  return <VoicePanel facts={{ canvasId: facts.canvasId, canvas: facts.canvas, host: facts.host, canEdit: facts.canEdit }} />;
+  return (
+    <VoicePanel
+      autoStart
+      facts={{ canvasId: facts.canvasId, canvas: facts.canvas, host: facts.host, canEdit: facts.canEdit, groupMode: facts.groupMode }}
+    />
+  );
 }
 
 /** The overlay: a floating mic button at the bottom of the screen that opens
@@ -472,10 +514,16 @@ function MicOverlay({ canvasId, canvas, host }: OverlayFacts) {
             ×
           </button>
           <VoicePanel
+            autoStart
             facts={{
               canvasId,
               canvas,
               canEdit: true,
+              // OverlayFacts does not carry the canvas mode, so the overlay
+              // assumes the groups default — canvases born today. A legacy
+              // canvas reached from here gets the same ops the dialog would
+              // send, and its daemon says so if a field offends it.
+              groupMode: "groups",
               host,
             }}
           />
