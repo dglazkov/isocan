@@ -145,3 +145,66 @@ describe("mention roster", () => {
     expect(peers).toEqual([{ id: "usr_dion", name: "Di", online: true }]);
   });
 });
+
+/**
+ * **A name you cannot summon is marked, not hidden.**
+ *
+ * Asked the other way round — *"if you type '@' it shouldn't show you names
+ * that you can't control… filter it"* — and argued in
+ * `docs/research/2026-09-15-reading-the-facepile.md`. A name that is absent
+ * reads as *does not exist*, which makes "no such agent" and "not yours" the
+ * same thing to a reader; and the refusal a person currently gets after
+ * sending is the most useful sentence in the flow. Saying it before the click
+ * is better than saying it after. Saying nothing is worse than both.
+ */
+describe("the menu marks an agent whose gate is shut to you", () => {
+  const scout = { id: "usr_scout", name: "Scout" };
+  const shutToAlice = () => ({ canSummon: false, owner: "Admiral One" });
+
+  it("keeps the name, says whose it is, and says it will not answer", () => {
+    const { peers } = mentionRoster(emptyCanvas(), [session(scout)], alice.id, undefined, undefined, shutToAlice);
+    expect(peers).toEqual([
+      { id: scout.id, name: "Scout", online: true, shut: true, note: "won't answer you — Admiral One's" },
+    ]);
+  });
+
+  it("still RESOLVES it, so a body naming it is a real mention", () => {
+    // The gate decides whether a summons is answered, never whether the words
+    // point at somebody. A mention that stopped resolving would silently
+    // become plain text in the comment.
+    const { candidates } = mentionRoster(emptyCanvas(), [session(scout)], alice.id, undefined, undefined, shutToAlice);
+    expect(candidates.map((c) => c.name)).toContain("Scout");
+  });
+
+  it("ranks it below a name that will answer, however it sorts otherwise", () => {
+    // "Alice" sorts before "Scout" alphabetically AND Scout is the live one,
+    // so only the shut flag can put Scout last — if it stops being consulted
+    // this test fails rather than passing by luck.
+    const { peers } = mentionRoster(
+      emptyCanvas(),
+      [session(scout)],
+      kenny.id,
+      undefined,
+      undefined,
+      (id) => (id === scout.id ? shutToAlice() : null),
+    );
+    // Alice is offline and merely remembered; Scout is live. Shut still loses.
+    const withAlice = mentionRoster(
+      emptyCanvas(),
+      [session(scout), session(alice)],
+      kenny.id,
+      undefined,
+      undefined,
+      (id) => (id === scout.id ? shutToAlice() : null),
+    );
+    expect(peers.map((p) => p.name)).toEqual(["Scout"]);
+    expect(withAlice.peers.map((p) => p.name)).toEqual(["Alice", "Scout"]);
+  });
+
+  it("marks nothing when no gate is known — silence is not a refusal", () => {
+    // Nothing answering for an agent is a different fact from an agent that
+    // will not answer YOU, and the menu must not merge them.
+    const { peers } = mentionRoster(emptyCanvas(), [session(scout)], alice.id);
+    expect(peers).toEqual([{ id: scout.id, name: "Scout", online: true }]);
+  });
+});
