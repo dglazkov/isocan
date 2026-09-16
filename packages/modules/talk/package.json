@@ -1,0 +1,22 @@
+{
+  "name": "@isocan/talk",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Talk: voice the canvas from the browser from the browser, with your own key — the module that speaks the standing harness's provider contract",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*",
+    "@isocan/voice-agent": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

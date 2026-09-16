@@ -71,6 +71,7 @@ const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb];
  */
 const BEHIND_EXPERIMENT: Record<string, string> = {
   stickers: "modules.stickers",
+  talk: "modules.talk",
 };
 
 /**
@@ -87,6 +88,7 @@ const BEHIND_EXPERIMENT: Record<string, string> = {
  */
 const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>> = {
   "modules.stickers": () => import("@isocan/stickers/web") as Promise<{ default: ShellModule }>,
+  "modules.talk": () => import("@isocan/talk/web") as Promise<{ default: ShellModule }>,
 };
 
 /**

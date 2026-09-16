@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "exports": {
+    "./audio": "./src/voiceAudio.ts",
+    "./live": "./src/live.ts"
+  },
   "//": "The voice agent is a page and a harness that run themselves: `npm start` here (or `npx voice-agent`) starts the harness a person talks to, and `npx isocan rc` starts the SAME entry as a supervisor \u2014 see bin/voice-agent.js. No runtime dependencies beyond the isocan packages it speaks to: the page is markup, a controller and two modules that import nothing but browser globals, and that is the point of the package.",
   "bin": {
     "voice-agent": "./bin/voice-agent.js"
