@@ -51,6 +51,11 @@ export const EXPERIMENTS: readonly Experiment[] = [
     what: "A tray of emoji you drag onto the canvas — the first module built on the overlay, drop and host APIs, which are still changing.",
   },
   {
+    id: "modules.talk",
+    name: "Talk to the canvas",
+    what: "A voice dialog on the canvas: a Gemini Live session from this browser with your own key. The dialogs slot is proposed and the tool wiring covers the fast set — say what it cannot do.",
+  },
+  {
     id: "design.partner",
     name: "Design partner",
     what: "Start a design task from any message, and publish design questions into a thread. Off while its shape settles: today it puts a control under EVERY comment and one at the foot of every thread, which is a lot of surface for something a reader cannot yet explain.",
