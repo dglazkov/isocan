@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { mainThread } from "@isocan/core";
 import type { DialogFacts } from "@isocan/core";
-import { runTool, talkWeb } from "../src/web.tsx";
+import { decodeMessage, runTool, talkWeb } from "../src/web.tsx";
 
 /**
  * **Talk: the dialog's tool-call half, driven with a fake host.**
@@ -55,7 +55,7 @@ const facts = {
   },
 } as unknown as DialogFacts;
 
-describe("the talk dialog declares the door and the dialog", () => {
+describe("the talk dialog declares the door, the dialog and the floating mic", () => {
   it("is a palette action that opens its dialog", () => {
     expect(talkWeb.actions?.map((a) => [a.id, a.name, a.opens])).toEqual([
       ["talk", "Talk to the canvas", "voice"],
@@ -63,9 +63,29 @@ describe("the talk dialog declares the door and the dialog", () => {
     expect(talkWeb.dialogs?.map((d) => [d.id, d.title])).toEqual([["voice", "Talk to the canvas"]]);
   });
 
+  it("floats a mic overlay on the right edge", () => {
+    expect(talkWeb.overlays?.map((o) => [o.region, o.label])).toEqual([["right", "Voice"]]);
+  });
+
   it("imports nothing from the shell's stores — facts in, ops out", () => {
     const web = readFileSync(fileURLToPath(new URL("../src/web.tsx", import.meta.url)), "utf8");
     expect(web).not.toMatch(/useCanvasStore|useUiStore/);
+  });
+});
+
+describe("a WebSocket frame is decoded whatever the browser makes of it", () => {
+  it("reads a string, a Blob and an ArrayBuffer the same way", async () => {
+    const json = { setupComplete: {} };
+    expect(await decodeMessage(JSON.stringify(json))).toEqual(json);
+    expect(await decodeMessage(new Blob([JSON.stringify(json)]))).toEqual(json);
+    expect(await decodeMessage(new TextEncoder().encode(JSON.stringify(json)).buffer)).toEqual(json);
+  });
+
+  it("returns null for the provider's binary audio frames and for garbage", async () => {
+    // A raw PCM Blob is a binary frame, not JSON — it must be SKIPPED, not
+    // parsed into "[object Blob]" (the bug the first build shipped).
+    expect(await decodeMessage(new Blob([new Uint8Array([1, 2, 3, 4])]))).toBeNull();
+    expect(await decodeMessage("not json at all")).toBeNull();
   });
 });
 
