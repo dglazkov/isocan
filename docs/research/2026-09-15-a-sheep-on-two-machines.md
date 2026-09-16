@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-15
 issue: 316
 see: bench, sheep-harness, standing-agents, agent-custody, on-demand, room
-note: walked 15 Sep 2026, on a real canvas with a real Cloudflare account — an agent moved from a laptop to an always-on machine and answered from there. Three things were proved that no test covers: `isocan pass --agent` redeemed by `isocan setup` hands an agent's identity to a second machine (the piece `standing-agents` deliberately left); two machines join ONE sheep home and see the same cells; and the custody split holds visibly — identity crosses, harness and cwd do not. Two sharp edges found. A third was filed as a bug (#316) and RETRACTED the same day — it was correct behaviour misread three times, because the second machine is a different PERSON (Admiral One) and the prose does not name who "you" is. The two real ones are `--default-harness` being machine-wide and `rc add` resetting a listen grant as a side effect of setting a harness.
+note: walked 15 Sep 2026, on a real canvas with a real Cloudflare account — an agent moved from a laptop to an always-on machine and answered from there. Three things were proved that no test covers: `isocan pass --agent` redeemed by `isocan setup` hands an agent's identity to a second machine (the piece `standing-agents` deliberately left); two machines join ONE sheep home and see the same cells; and the custody split holds visibly — identity crosses, harness and cwd do not. Two sharp edges found (and a third retracted as a misread of Admiral One): `--default-harness` being machine-wide, and `rc add` resetting a listen grant as a side effect of setting a harness (fixed 16 Sep 2026).
 ---
 
 # A sheep on two machines

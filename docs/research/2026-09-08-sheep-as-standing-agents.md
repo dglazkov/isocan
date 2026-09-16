@@ -1,9 +1,9 @@
 ---
-status: designed
+status: partial
 since: 2026-09-08
 issue: 210
 see: standing-agents, on-demand, personas, agent-custody
-note: phase 2 (the badge) turned out DONE on 15 Sep 2026 — built by sheep-harness for turns and satisfying all four obligations of that day's bearer decision: a birth pass scoped to the agent, held once on the rc row, labelled `cell (<agent>'s sheep)` in `isocan badges`, ended with the agent on withdrawal. Phase 3 (a parked rc in a cell, with the bill measured) is the first unbuilt one, and its gap is a number rather than a credential. Originally: a standing agent's one structural weakness is that `isocan rc` is a process on a MACHINE, and a sheep is a session in a cell that is not. But the obvious join — the summons calling the cell's address — is a shape on-demand's design already withdrew on custody grounds, and the reconciliation is that custody is about who started it and whose credentials it uses, not which computer it is on. Start with personas as the cheap tier: no parking, no summons, no custody question, and a gap that is real today.
+note: phases 2 and 3 DONE (15–16 Sep 2026) — phase 2 (the badge) via sheep-harness, and phase 3 (a parked rc in a cell, with the bill measured) via @sheep/collie running runRoom in a Durable Object rather than a container cell (~$0.13/night list price or $0 incremental under Workers Paid plan included 400k GB-s duration; 0 container minutes idle), with replica liveness (#306) and immediate hold release on stop (#308). Phase 4 (the roster across enrolments) is now the first unbuilt phase.
 ---
 
 # Sheep as standing agents
