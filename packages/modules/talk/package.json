@@ -13,8 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@isocan/core": "*",
-    "@isocan/voice-agent": "*"
+    "@isocan/core": "*"
   },
   "peerDependencies": {
     "react": "^18.3.1"

@@ -13,8 +13,8 @@ import {
   type WebHost,
   type WebModule,
 } from "@isocan/core";
-import { LevelMeter, Playback, capture, fromBytes, type Capture } from "@isocan/voice-agent/audio";
-import { LIVE_MODEL, canvasSnapshotText, liveSetup, liveUrl, planForCall } from "@isocan/voice-agent/live";
+import { LevelMeter, Playback, capture, fromBytes, type Capture } from "./audio.ts";
+import { LIVE_MODEL, canvasSnapshotText, liveSetup, liveUrl, planForCall } from "./live.ts";
 import { voiceCore } from "./core.ts";
 
 /**

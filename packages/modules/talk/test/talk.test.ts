@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { mainThread } from "@isocan/core";
 import type { DialogFacts } from "@isocan/core";
-import { canvasSnapshotText } from "@isocan/voice-agent/live";
+import { canvasSnapshotText } from "../src/live.ts";
 import { decodeMessage, runTool, talkWeb } from "../src/web.tsx";
 
 /**
