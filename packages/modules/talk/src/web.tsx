@@ -283,6 +283,11 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
     inMeterRef.current?.paint(0);
     outMeterRef.current?.paint(0);
     setState("idle");
+    // The once-guard is per SESSION, not per mount: StrictMode unmounts a
+    // fresh mount in dev (start, stop, start), and the second mount must be
+    // allowed to begin again — a guard that never resets is how the
+    // auto-start silently became a dead panel on the dev server.
+    autoStartedRef.current = false;
   }, []);
 
   useEffect(() => stop, [stop]);
