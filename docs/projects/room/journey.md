@@ -1,5 +1,5 @@
 ---
-status: done
+status: built
 since: 2026-09-13
 issue: 294
 see: sheep-harness, on-demand, standing-agents, agent-custody, harnesses, iso-api

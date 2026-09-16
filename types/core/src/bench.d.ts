@@ -121,6 +121,9 @@ export declare function benchWriteFor(canvas: CanvasContents, agent: {
     actorId: string;
     harness?: string | null;
     runsAt?: string | null;
+}, explicit?: {
+    harness?: boolean;
+    runsAt?: boolean;
 }): {
     kind: "add";
     x: number;

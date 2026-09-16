@@ -213,6 +213,7 @@ export function benchItemOf(
 export function benchWriteFor(
   canvas: CanvasContents,
   agent: { actorId: string; harness?: string | null; runsAt?: string | null },
+  explicit?: { harness?: boolean; runsAt?: boolean },
 ):
   | { kind: "add"; x: number; y: number }
   | { kind: "fill"; itemId: string; properties: Record<string, string> }
@@ -228,8 +229,12 @@ export function benchWriteFor(
     };
   }
   const properties: Record<string, string> = {};
-  if (agent.harness && !already.harness) properties[AGENT_HARNESS_PROP] = agent.harness;
-  if (agent.runsAt && !already.runsAt) properties[AGENT_RUNS_AT_PROP] = agent.runsAt;
+  if (agent.harness && (!already.harness || (explicit?.harness && agent.harness !== already.harness))) {
+    properties[AGENT_HARNESS_PROP] = agent.harness;
+  }
+  if (agent.runsAt && (!already.runsAt || (explicit?.runsAt && agent.runsAt !== already.runsAt))) {
+    properties[AGENT_RUNS_AT_PROP] = agent.runsAt;
+  }
   return Object.keys(properties).length > 0
     ? { kind: "fill", itemId: already.itemId, properties }
     : { kind: "already", itemId: already.itemId };

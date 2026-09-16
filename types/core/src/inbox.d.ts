@@ -76,12 +76,13 @@ export declare function addressesActor(comment: NewComment | Comment, names: rea
  */
 /**
  * Why one comment is yours, or null when it is ether. THE routing rule,
- * stated once: named — by id or a name you answer to — or the main thread,
- * or a conversation you are already in. `inboxOn` folds a canvas with it and
- * `isocan wait` decides a summons with it, so a parked agent and the inbox
- * can never disagree about what is for you — and a daemon that summons
- * agents (`docs/projects/on-demand/design.md`) asks this same function
- * rather than growing a third copy.
+ * stated once: named — by id or a name you answer to — or (when not
+ * addressed to someone else) the main thread, or a conversation you are
+ * already in. `inboxOn` folds a canvas with it and `isocan wait` decides a
+ * summons with it, so a parked agent and the inbox can never disagree about
+ * what is for you — and a daemon that summons agents
+ * (`docs/projects/on-demand/design.md`) asks this same function rather than
+ * growing a third copy.
  *
  * The comment may be a `NewComment` (an op still in flight, no author yet);
  * skipping your own words is the caller's job, since only the caller knows
@@ -90,7 +91,9 @@ export declare function addressesActor(comment: NewComment | Comment, names: rea
  */
 export declare function reasonFor(comment: NewComment | Comment, thread: CommentThread | undefined, actorId: string, names: readonly MentionCandidate[], 
 /** The registry's joins, when the caller holds them — see `addressesActor`. */
-joined?: ActorJoins): InboxReason | null;
+joined?: ActorJoins, 
+/** Known actors on the canvas, so un-resolved text mentions of other actors are recognized as for others. */
+candidates?: readonly MentionCandidate[]): InboxReason | null;
 /**
  * **What a rule may say** (agents-on-demand phase 4, decided 2026-08-30):
  * today's filters, exactly — the items it names, the op types (or families,

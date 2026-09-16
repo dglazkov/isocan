@@ -20,6 +20,7 @@ import type { Ctx } from "./ctx.ts";
 import { printJson, printTable, truncate } from "./output.ts";
 import { scanHarnesses } from "./harnesses.ts";
 import { readRcAgents } from "./rc.ts";
+import { SHEEP_HARNESS, sheepPlaceFor, type SheepPlace } from "./sheep.ts";
 
 /**
  * **`isocan bench` — the agents you have, and whether anything could answer
@@ -41,6 +42,19 @@ import { readRcAgents } from "./rc.ts";
  * machine id (journey 4's value is a cell), so this is only ever a default a
  * person can override with `--runs-at`. */
 const thisMachine = (): string => os.hostname();
+
+/** Where an agent runs: for a sheep at a remote station, the station's host
+ * (journey 4 — "ready (sheep-2)"); otherwise this machine's hostname. */
+function runsAtFor(harness: string | null, place: SheepPlace | null | undefined): string {
+  if (harness === SHEEP_HARNESS && place && place.home !== "local") {
+    try {
+      return new URL(place.home).host;
+    } catch {
+      return place.home;
+    }
+  }
+  return thisMachine();
+}
 
 /** The bench's canvas, or null when this person has never made one. Reading
  * must not create: `isocan bench` on a machine with no personal canvas should
@@ -164,12 +178,14 @@ async function knownAgent(ctx: Ctx, name: string): Promise<BenchAgent | null> {
     );
   }
   const row = matches[0]!;
+  const harness = await recordedHarness(ctx, row.harness);
+  const place = row.sheep ?? (harness === SHEEP_HARNESS ? sheepPlaceFor(row.cwd) : null);
   return {
     itemId: "",
     name: row.name,
     actorId: row.actorId,
-    harness: await recordedHarness(ctx, row.harness),
-    runsAt: row.sheep ? row.sheep.kennel : thisMachine(),
+    harness,
+    runsAt: runsAtFor(harness, place),
   };
 }
 
@@ -187,9 +203,10 @@ async function writeBenchRow(
   canvasId: string,
   name: string,
   agent: { actorId: string; harness?: string | null; runsAt?: string | null },
+  explicit?: { harness?: boolean; runsAt?: boolean },
 ): Promise<{ itemId: string; wrote: "add" | "fill" | "already" }> {
   const snapshot = await ctx.client.snapshot(canvasId);
-  const write = benchWriteFor(snapshot.canvas, agent);
+  const write = benchWriteFor(snapshot.canvas, agent, explicit);
   if (write.kind === "already") return { itemId: write.itemId, wrote: "already" };
   if (write.kind === "fill") {
     await ctx.client.sendOp(canvasId, ctx.actor, {
@@ -247,7 +264,7 @@ async function writeBenchRow(
 export async function noteOnBench(
   ctx: Ctx,
   name: string,
-  agent: { actorId: string; harness?: string | null },
+  agent: { actorId: string; harness?: string | null; cwd?: string },
   say: (line: string) => void,
 ): Promise<void> {
   let canvasId: string | null;
@@ -265,13 +282,14 @@ export async function noteOnBench(
   }
   try {
     // Where it runs, as far as anybody can honestly say at this moment: this
-    // machine holds the rc row and will dispatch for it. `runsAt` is opaque
-    // (journey 4's value is a cell), and core fills a silence rather than
-    // correcting a label somebody else wrote.
+    // machine holds the rc row and will dispatch for it — unless the harness
+    // is sheep at a remote station (journey 4), where the cell runs there.
+    const harness = await recordedHarness(ctx, agent.harness);
+    const place = harness === SHEEP_HARNESS ? sheepPlaceFor(agent.cwd ?? process.cwd()) : null;
     await writeBenchRow(ctx, canvasId, name, {
       actorId: agent.actorId,
-      harness: await recordedHarness(ctx, agent.harness),
-      runsAt: thisMachine(),
+      harness,
+      runsAt: runsAtFor(harness, place),
     });
   } catch (error) {
     say(
@@ -366,7 +384,10 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
         const ensured = await ctx.client.ensurePersonal(ctx.actor.id);
         const canvasId = ensured.source?.canvasId;
         if (!canvasId) throw new Error("your personal canvas is not live here, so there is nowhere to keep a bench");
-        const { itemId, wrote } = await writeBenchRow(ctx, canvasId, name, agent);
+        const { itemId, wrote } = await writeBenchRow(ctx, canvasId, name, agent, {
+          harness: Boolean(opts.harness),
+          runsAt: Boolean(opts.runsAt),
+        });
         if (wrote !== "add") {
           const row = benchAgents((await ctx.client.snapshot(canvasId)).canvas).find(
             (one) => one.actorId === actorId,

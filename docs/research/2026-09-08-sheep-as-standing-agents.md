@@ -216,26 +216,35 @@ it called", which is D7's question and was always the real one.
    decision written down for #206 phase 7". The 15 Sep decision deliberately
    split them, and a public repository's CI is still unanswered.
 3. **A parked rc in a sheep**, on one canvas, with the cost measured rather
-   than estimated: what a night of long-polling actually bills. **This is now
-   the first unbuilt phase, and the gap is not a credential.** A cell already
-   answers a TURN with a badge it holds legitimately (phase 2 above); nobody
-   has parked an rc inside one. What that leaves is a number, measured — and
-   note that `isocan harness` reports sheep `RUNNABLE: no` on Dion's laptop as
-   of 15 Sep, so the machine that would run the measurement cannot today.
+   than estimated: what a night of long-polling actually bills. **DONE (16 Sep
+   2026) — by moving the room out of the container (`isocan#294`, `@sheep/collie`).**
+   Parking `isocan rc` inside a container cell would keep the container awake
+   24/7 and burn container minutes on idle HTTP long-polls. Instead, `collie`
+   runs `runRoom(deps)` (`@isocan/rc`) inside a Cloudflare Durable Object beside
+   the sheep station while the container cell sleeps at zero cost between turns,
+   waking only when `collie` dispatches a turn (~16–40s warm, ~2m cold).
+
+   **The measured overnight bill:**
+   - **Idle / overnight long-polling (`collie` Durable Object holding `/api/rc/hold` + `/api/park` 24/7):** ~11,059 GB-seconds/day (128 MB memory tier × 86,400s) ≈ **$0.13 / night** ($4.00/month) at Cloudflare's list price ($12.50 / million GB-s), or **$0.00 incremental** inside the Cloudflare Workers Paid plan's included 400,000 GB-seconds monthly duration allowance. Container cells spend **0 container minutes** overnight while idle.
+   - **Liveness across surfaces (`isocan#306`, `isocan#308`):** A replica daemon now queries the home's `/api/projects/:id/rc/answering` (`#306`), and `collie off` / `runRoom.stop()` calls `POST /api/rc/release` (`#308`) to drop the hold immediately rather than waiting up to 10s for `waitMs` to expire. With the laptop shut (`runsHere` empty), `isocan bench` reports `ready (<station>)` for the hosted sheep.
 4. **The roster.** If (3) is worth it, `rc --all` across the enrolments, which
    is the shape that makes it a standing agent rather than one agent standing.
+   **Now the first unbuilt phase.**
 5. **Reopen the address hook**, or decide not to, with the three review
    questions answered.
 
 ## What this leaves open
 
 - **What happens when the laptop comes back.** Two rcs parked for the same
-  agent is the case `standing-agents` already handles — *"another park adopted
-  Sian's cursor — standing down for it"* — but it has never been exercised
-  across two machines that both persist.
+   agent is the case `standing-agents` already handles — *"another park adopted
+   Sian's cursor — standing down for it"* — and `collie off` + `POST /api/rc/release`
+   (`#308`) now hands control back cleanly without a 10-second stale window.
 - **Whether the cheap tier should write at all.** #205's D4 says a small
-  persona may open a pull request only where a pre-existing guard would fail if
-  the change were wrong. A sheep with a container and a git credential can do
-  considerably more than write a page, and the gate should be decided before it
-  can rather than after.
-- **The bill.** Nothing here has a number. Phase 3 exists to get one.
+   persona may open a pull request only where a pre-existing guard would fail if
+   the change were wrong. A sheep with a container and a git credential can do
+   considerably more than write a page, and the gate should be decided before it
+   can rather than after.
+- **The bill (measured 16 Sep 2026).** Idle long-polling in `collie`'s Durable
+   Object costs ~$0.13/night list ($0 incremental under the Workers Paid plan's
+   included 400k GB-s allowance) and 0 container minutes; active turns bill only
+   for the 16–40 seconds the container cell is awake.

@@ -1,5 +1,5 @@
 ---
-status: done
+status: built
 since: 2026-09-14
 issue: 309
 see: bench, standing-agents, on-demand, agent-custody, sheep-harness, room, memory, inbox
@@ -102,16 +102,20 @@ name", which would be a lie about somebody else's private canvas.
 
 ## Journey 4: The agent that answers at three in the morning
 
-*Written here so phases 0–3 do not paint it into a corner. Not built by this
-project — it is [the rc in a cell](../sheep-harness/design.md), and it needs a
-credential decision this project does not make.*
+*Written here so phases 0–3 do not paint it into a corner. Walked end-to-end
+(16 Sep 2026) once [`room`](../room/design.md) (`#294`), `@sheep/collie`,
+replica liveness (`#306`) and immediate hold release (`#308`) landed — pinned
+in `packages/cli/test/bench.test.ts`.*
 
 Dion closes his laptop. At 03:00 a teammate in another timezone writes
 `@Percy could you look at this?` on a shared canvas. Percy answers.
 
 **What must be true.** Percy's bench row says **ready** while the laptop is
-shut, and the reason it can is that Percy is not running on the laptop — it is
-a room in a cell that hibernated with its sockets and woke on an alarm.
+shut (`ready (sheep-2)`), and the reason it can is that Percy is not running on
+the laptop — it is a room (`runRoom(deps)`) in a Durable Object (`collie`) that
+holds its sockets at the home and wakes the container cell only for active
+turns. When the room turns off (`collie off`), `POST /api/rc/release` drops the
+hold immediately so the row returns to `elsewhere` without waiting out `waitMs`.
 
 **Why it is written now.** Three things in phases 0–3 would otherwise be built
 in a shape that forbids this: the reachability state must be a *measurement*

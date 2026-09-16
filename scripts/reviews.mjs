@@ -611,4 +611,5 @@ writeFileSync(out, page);
 console.log(
   `docs/reviews/README.md — ${pages.length} runs, ${openTotal} findings unanswered, ${missedTotal} runs with a missed bound`,
 );
+import("./grade-night.mjs").then((m) => m.drainGradePRs?.()).catch(() => {});
 }

@@ -43,6 +43,13 @@ export interface RoomRoutes {
         ok: true;
     }>;
     rcHold(request: RcHoldRequest, signal?: AbortSignal): Promise<RcHoldResponse>;
+    /** Explicit release when the room stops (issue #308). */
+    rcRelease?(request: {
+        canvasId: string;
+    }): Promise<{
+        ok: true;
+        released?: number;
+    }>;
     /** The room writes as the system voice only; `DaemonRoutes.sendOp`'s later
      * parameters (client id, home, group…) it never passes. */
     sendOp(canvasId: string | null, actor: Actor, op: Operation): Promise<PostOpResponse>;

@@ -3,7 +3,7 @@ import type { NewComment, Operation } from "./ops.ts";
 import type { MentionCandidate } from "./mentions.ts";
 import type { ActorJoins } from "./identity.ts";
 import type { RcPolicy } from "./protocol.ts";
-import { extractMentions } from "./mentions.ts";
+import { collectCanvasNames, extractMentions } from "./mentions.ts";
 import { sameActor } from "./identity.ts";
 import { isSystemActor } from "./model.ts";
 import { opMatchesFilters, opTouchesAreas } from "./touches.ts";
@@ -89,6 +89,28 @@ export function addressesActor(
   return extractMentions(comment.body, names as MentionCandidate[]).length > 0;
 }
 
+/**
+ * Does this comment explicitly address someone else (and not you)?
+ *
+ * A comment in the main Chat or a shared thread that @-mentions `@Dolly` is
+ * a direct question to Dolly — not a broadcast to the room or a reply to
+ * everyone who ever spoke in that thread (`agent-guide.md`: "comments for
+ * others ... is ether and won't wake you").
+ */
+function addressesOthers(
+  comment: NewComment | Comment,
+  names: readonly MentionCandidate[],
+  joined?: ActorJoins,
+  candidates?: readonly MentionCandidate[],
+): boolean {
+  if (addressesActor(comment, names, joined)) return false;
+  if ((comment.mentions ?? []).length > 0) return true;
+  if (candidates && extractMentions(comment.body, candidates as MentionCandidate[]).length > 0) {
+    return true;
+  }
+  return false;
+}
+
 /** Are you already in this conversation — did you write in it, or were you
  *  named in it? A reply to a thread you are part of is for you even when it
  *  does not repeat your name. */
@@ -112,12 +134,13 @@ function inYourThread(
  */
 /**
  * Why one comment is yours, or null when it is ether. THE routing rule,
- * stated once: named — by id or a name you answer to — or the main thread,
- * or a conversation you are already in. `inboxOn` folds a canvas with it and
- * `isocan wait` decides a summons with it, so a parked agent and the inbox
- * can never disagree about what is for you — and a daemon that summons
- * agents (`docs/projects/on-demand/design.md`) asks this same function
- * rather than growing a third copy.
+ * stated once: named — by id or a name you answer to — or (when not
+ * addressed to someone else) the main thread, or a conversation you are
+ * already in. `inboxOn` folds a canvas with it and `isocan wait` decides a
+ * summons with it, so a parked agent and the inbox can never disagree about
+ * what is for you — and a daemon that summons agents
+ * (`docs/projects/on-demand/design.md`) asks this same function rather than
+ * growing a third copy.
  *
  * The comment may be a `NewComment` (an op still in flight, no author yet);
  * skipping your own words is the caller's job, since only the caller knows
@@ -131,8 +154,11 @@ export function reasonFor(
   names: readonly MentionCandidate[],
   /** The registry's joins, when the caller holds them — see `addressesActor`. */
   joined?: ActorJoins,
+  /** Known actors on the canvas, so un-resolved text mentions of other actors are recognized as for others. */
+  candidates?: readonly MentionCandidate[],
 ): InboxReason | null {
   if (addressesActor(comment, names, joined)) return "mentioned";
+  if (addressesOthers(comment, names, joined, candidates)) return null;
   if (thread?.main) return "main-thread";
   if (thread && inYourThread(thread, actorId, names, joined)) return "in-your-thread";
   return null;
@@ -839,13 +865,15 @@ export function dispatchReason(
   if (!admitted) return null;
   if (op.type === "thread.create" || op.type === "thread.reply") {
     const thread = canvas?.threads[op.threadId];
-    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined);
+    const candidates = canvas ? collectCanvasNames(canvas) : undefined;
+    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined, candidates);
     if (reason) return reason;
   }
   if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas?.threads[op.threadId];
     const comment = thread?.comments.find((c) => c.id === op.commentId);
-    const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined);
+    const candidates = canvas ? collectCanvasNames(canvas) : undefined;
+    const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined, candidates);
     if (reason) return reason;
   }
   const rules = agent.rules;
@@ -869,11 +897,12 @@ export function inboxOn(
   /** The registry's joins, when the caller holds them — see `addressesActor`. */
   joined?: ActorJoins,
 ): InboxEntry[] {
+  const candidates = collectCanvasNames(canvas);
   const out: InboxEntry[] = [];
   for (const thread of Object.values(canvas.threads ?? {})) {
     for (const comment of thread.comments) {
       if (sameActor(joined, comment.author.id, actor.id)) continue;
-      const reason = reasonFor(comment, thread, actor.id, names, joined);
+      const reason = reasonFor(comment, thread, actor.id, names, joined, candidates);
       if (!reason) continue;
       out.push({
         canvasId,

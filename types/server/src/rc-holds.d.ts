@@ -47,6 +47,7 @@ export declare function rcPoliciesOf(raw: unknown, actorIds: ReadonlySet<string>
 /** What an rc says about itself beside its agents. Both absent from an rc
  * older than owner-only summons. */
 interface HoldPolicy {
+    badgeId?: string | undefined;
     owner?: Actor | undefined;
     policies?: Readonly<Record<string, RcPolicy>> | undefined;
 }
@@ -98,6 +99,16 @@ export declare class RcHolds {
         done: Promise<RcAsk[]>;
         release: () => void;
     };
+    /**
+     * **Explicitly release holds owned by this badge on this canvas** (issue #308).
+     *
+     * On a hosted home, a client aborting its hold fetch (`life.abort()`) does
+     * not immediately close the upstream connection behind Cloud Run's front
+     * end, leaving the hold open until `waitMs` runs out. An explicit release
+     * ends the badge's holds immediately and cancels any pending flap timer so
+     * `answering()` reads down at once.
+     */
+    release(canvasId: string, badgeId: string): number;
     /** The queued asks this owner's hold may carry: those routed to it, and
      * those routed to nobody in particular (an rc too old to say whose). */
     private drain;

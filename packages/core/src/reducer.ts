@@ -629,11 +629,16 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
     case "agent.enroll": {
       // Re-enrolling updates the record in place: the standing was already
       // there, the rules (or the name) changed. `rules` is stored verbatim;
+      // omitting it on re-enrolment leaves whatever rules stood untouched,
+      // so `rc add <name> --harness sheep` (or any other re-enrolment that
+      // names no rules) never silently wipes an existing `listen` grant.
       // `writtenBy` is the envelope's author, so the rc can tell its owner's
       // gate from anybody else's (`EnrolledAgent.writtenBy`).
+      const standing = canvas.agents?.[op.agent.id];
+      const rules = op.rules !== undefined ? op.rules : standing?.rules;
       const row = {
         actor: op.agent,
-        ...(op.rules !== undefined ? { rules: op.rules } : {}),
+        ...(rules !== undefined ? { rules } : {}),
         writtenBy: actor,
       };
       return withCanvas({

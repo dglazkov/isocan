@@ -75,6 +75,7 @@ const HOLD_FLAP_MS = 250;
 /** What an rc says about itself beside its agents. Both absent from an rc
  * older than owner-only summons. */
 interface HoldPolicy {
+  badgeId?: string | undefined;
   owner?: Actor | undefined;
   policies?: Readonly<Record<string, RcPolicy>> | undefined;
 }
@@ -158,6 +159,7 @@ export class RcHolds {
     let open = true;
     const entry: LocalHold = {
       actorIds,
+      ...(policy.badgeId ? { badgeId: policy.badgeId } : {}),
       ...(policy.owner ? { owner: policy.owner } : {}),
       ...(policy.policies ? { policies: policy.policies } : {}),
       deliver: (asks) => finish(asks),
@@ -189,6 +191,31 @@ export class RcHolds {
     const waiting = this.drain(canvasId, entry.owner);
     if (waiting.length > 0) finish(waiting);
     return { done, release: () => finish([]) };
+  }
+
+  /**
+   * **Explicitly release holds owned by this badge on this canvas** (issue #308).
+   *
+   * On a hosted home, a client aborting its hold fetch (`life.abort()`) does
+   * not immediately close the upstream connection behind Cloud Run's front
+   * end, leaving the hold open until `waitMs` runs out. An explicit release
+   * ends the badge's holds immediately and cancels any pending flap timer so
+   * `answering()` reads down at once.
+   */
+  release(canvasId: string, badgeId: string): number {
+    const holds = this.local.get(canvasId);
+    if (!holds) return 0;
+    const ending = [...holds].filter((h) => h.badgeId === badgeId);
+    for (const hold of ending) hold.deliver([]);
+    if (!this.local.has(canvasId)) {
+      const down = this.sinking.get(canvasId);
+      if (down) {
+        clearTimeout(down);
+        this.sinking.delete(canvasId);
+      }
+      for (const listener of this.listeners) listener(canvasId);
+    }
+    return ending.length;
   }
 
   /** The queued asks this owner's hold may carry: those routed to it, and

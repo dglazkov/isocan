@@ -195,24 +195,28 @@ function* canvasActors(canvas: CanvasContents): Generator<Actor> {
   // still be mentionable — `@Sian` resolving is what makes a summons
   // possible at all — and first means the enrolment's name wins the
   // first-name-used rule below over any older stamp.
-  for (const enrolled of Object.values(canvas.agents ?? {})) yield enrolled.actor;
+  for (const enrolled of Object.values(canvas.agents ?? {})) {
+    if (enrolled?.actor) yield enrolled.actor;
+  }
   const items = [
-    ...Object.values(canvas.items),
-    ...canvas.trash.map((entry) => entry.item),
+    ...Object.values(canvas.items ?? {}),
+    ...(canvas.trash ?? []).map((entry) => entry.item),
   ];
   // The system voice is a voice, not a participant: its comments must not
   // make "@isocan" resolvable or put a machinery face in any roster.
-  const person = function* (actor: Actor) {
-    if (!isSystemActor(actor.id)) yield actor;
+  const person = function* (actor: Actor | undefined) {
+    if (actor && !isSystemActor(actor.id)) yield actor;
   };
   for (const item of items) {
+    if (!item) continue;
     yield* person(item.createdBy);
     yield* person(item.updatedBy);
-    for (const version of item.versions) yield* person(version.createdBy);
+    for (const version of item.versions ?? []) yield* person(version.createdBy);
   }
-  for (const thread of Object.values(canvas.threads)) {
+  for (const thread of Object.values(canvas.threads ?? {})) {
+    if (!thread) continue;
     yield* person(thread.createdBy);
-    for (const comment of thread.comments) yield* person(comment.author);
+    for (const comment of thread.comments ?? []) yield* person(comment.author);
   }
 }
 

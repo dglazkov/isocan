@@ -112,6 +112,12 @@ bench, phase 1, mutation-tested). Two ops, opposite behaviour, both right.
 What is missing is a third thing: a way to set a row's harness that touches
 nothing else.
 
+**Resolved (16 Sep 2026):** `agent.enroll` in the reducer (`packages/core/src/reducer.ts`)
+and `enrolAgent` (`packages/cli/src/main.ts`) now preserve `standing?.rules`
+whenever `op.rules === undefined` (i.e. when `--rules` and `--listen` are
+omitted). Re-running `rc add Dolly --harness sheep` or `--dir` updates the
+machine's `rc-agents.json` row without wiping her listen grant.
+
 ## Two smaller things seen on the way
 
 - **Two actors can wear one name.** `Scout → usr_eP709VeUL3` and `Scout →

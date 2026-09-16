@@ -152,6 +152,17 @@ describe("the enrolment record, in two halves", () => {
     expect(who.stdout).toContain("listens to you (Nico) and Dimitri");
     const rules = await isocan("--canvas", "prj_1", "agent", "rules", "Sian");
     expect(rules.stdout).toContain("listens to you (Nico) and Dimitri");
+
+    // Re-enrolling to set `--harness` or `--dir` without `--listen` preserves
+    // the gate that already stands rather than resetting it to owner-only.
+    const rerun = await isocan("rc", "add", "Sian", "--harness", "codex");
+    expect(rerun.code).toBe(0);
+    expect(rerun.stdout).toContain("listens to you (Nico) and Dimitri");
+    const afterAgents = await snapshotAgents();
+    const afterRow = Object.values(afterAgents).find((a) => a.actor.name === "Sian") as
+      | { rules?: { listen?: string[] } }
+      | undefined;
+    expect(afterRow?.rules?.listen).toEqual([dimitri.id]);
   });
 
   it("`rc listen --to` reaches every canvas the agent stands on, in one gesture", async () => {

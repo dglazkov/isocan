@@ -1,0 +1,1 @@
+import{B as i,ag as r,ah as c,K as d,ai as p}from"./index-DLL1qAgV.js";function h(n,o){const e=i.getState();if(e.canvasId!==n)return;const t=e.canvas?.threads[o];if(t?.main)r(n,!0);else if(t&&e.canvas){const s=c(e.canvas,t),a=d.getState();a.setViewport(p(a.viewport,s.x,s.y,window.innerWidth,window.innerHeight)),a.setOpenThread(t.id)}}export{h as openConversation};

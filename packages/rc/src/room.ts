@@ -92,6 +92,8 @@ export interface RoomRoutes {
   parkClaim(request: ParkClaimRequest): Promise<ParkClaimResponse>;
   parkDelivered(request: ParkDeliveredRequest): Promise<{ ok: true }>;
   rcHold(request: RcHoldRequest, signal?: AbortSignal): Promise<RcHoldResponse>;
+  /** Explicit release when the room stops (issue #308). */
+  rcRelease?(request: { canvasId: string }): Promise<{ ok: true; released?: number }>;
   /** The room writes as the system voice only; `DaemonRoutes.sendOp`'s later
    * parameters (client id, home, group…) it never passes. */
   sendOp(canvasId: string | null, actor: Actor, op: Operation): Promise<PostOpResponse>;
@@ -276,7 +278,10 @@ export function runRoom(deps: RoomDeps): Room {
     life.abort();
     const announced = announcement;
     announcement = null;
-    if (announced) await deps.routes.endSession(deps.canvas.id, announced.sessionId).catch(() => {});
+    await Promise.all([
+      deps.routes.rcRelease?.({ canvasId: deps.canvas.id }).catch(() => {}),
+      announced ? deps.routes.endSession(deps.canvas.id, announced.sessionId).catch(() => {}) : undefined,
+    ]);
   };
   const done = room(deps, life.signal, (made) => {
     announcement = made;

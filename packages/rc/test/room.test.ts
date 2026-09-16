@@ -239,6 +239,10 @@ class AcmeHome {
         home.holds.push(signal!);
         return home.wait(10_000, signal).then(() => ({ ok: true, asks: [] }));
       },
+      rcRelease: async (request: { canvasId: string }) => {
+        home.calls.push(`release:${request.canvasId}`);
+        return { ok: true, released: 1 };
+      },
       watchLog: async (request: WatchLogRequest, signal?: AbortSignal) => {
         if (!request.cursors) {
           home.beforeStartTip?.();
@@ -959,5 +963,18 @@ describe("the room over in-memory deps", () => {
     expect(home.calls.filter((c) => c === `hold-refused:${PERCY.id}`).length).toBeGreaterThan(2);
     await room.stop();
     await room.done;
+  });
+
+  it("stop() calls rcRelease to end its hold immediately on hosted homes (#308)", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const { deps } = roomOver(home, clock);
+    const room = runRoom(deps);
+    await clock.advance(0);
+    expect(home.calls).not.toContain(`release:${CANVAS.id}`);
+    await room.stop();
+    await room.done;
+    expect(home.calls).toContain(`release:${CANVAS.id}`);
   });
 });

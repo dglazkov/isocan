@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { DaemonClient } from "@isocan/api";
 import {
   BENCH_REACH,
   collectCanvasNames,
@@ -14,6 +15,7 @@ import {
   base,
   collect,
   dimitri,
+  home,
   isocan,
   post,
   rcRows,
@@ -23,6 +25,7 @@ import {
   until,
   useRcHome,
 } from "./rc-fixture.ts";
+import { removeRcAgent } from "../src/rc.ts";
 import { withoutComments } from "../../../test/source.ts";
 
 /**
@@ -409,5 +412,69 @@ describe("enrolment writes its own bench row", () => {
     expect(write).toContain("benchCanvasId(");
     expect(write).not.toContain("ensurePersonal");
     expect(source.match(/ensurePersonal/g)).toHaveLength(1);
+  });
+});
+
+/**
+ * **Journey 4: The agent that answers at three in the morning**
+ * (`docs/projects/bench/journey.md`, journey 4; `sheep-as-standing-agents` phase 3).
+ *
+ * The laptop's `isocan rc` is NOT running, and this machine has no running row
+ * for Percy (`runsHere` is empty). A cell (`collie`, or another machine's rc)
+ * holds `/api/rc/hold` at the home. Percy's bench row must read **ready**, and
+ * `benchWords` must include where it runs (`ready (sheep-2)`), because
+ * reachability is measured from the canvas's home and not from whether this
+ * machine has a process open. When the cell releases its hold via
+ * `POST /api/rc/release` (#308), the bench row immediately drops back to
+ * `elsewhere`.
+ */
+describe("journey 4: the agent that answers at three in the morning", () => {
+  it("reads ready (<cell>) while this machine's rc is shut, and drops to elsewhere immediately on rc/release", async () => {
+    expect((await isocan("context", "personal")).code).toBe(0);
+    expect((await isocan("--canvas", "prj_1", "rc", "add", "Percy", ...TEAM)).code).toBe(0);
+    const percy = Object.values(await snapshotAgents()).find((a) => a.actor.name === "Percy")!.actor;
+
+    // Benched with `--runs-at sheep-2` (the cell where it runs).
+    expect((await isocan("bench", "add", "Percy", "--runs-at", "sheep-2")).code).toBe(0);
+
+    // Simulate the laptop being shut / having no local running row for Percy.
+    await removeRcAgent(home, "prj_1", percy.id);
+    expect(await rcRows()).toEqual([]);
+
+    // With no hold open anywhere, Percy stands on prj_1 and reads `elsewhere`.
+    expect((await bench()).map((r) => [r.name, r.reach, r.runsAt])).toEqual([
+      ["Percy", "elsewhere", "sheep-2"],
+    ]);
+
+    // A hosted cell (collie) holds `/api/rc/hold` for Percy at the home.
+    const cellClient = new DaemonClient(base, home);
+    const controller = new AbortController();
+    const holdPromise = cellClient
+      .rcHold({ canvasId: "prj_1", actorIds: [percy.id], waitMs: 30_000 }, controller.signal)
+      .catch(() => {});
+
+    try {
+      await until(() => answeringFor("prj_1"), (ids) => ids.includes(percy.id), "the cell hold to register");
+
+      // With NO local rc running and NO local rc row, the bench reads `ready (sheep-2)`.
+      const readyRows = await bench();
+      expect(readyRows.map((r) => [r.name, r.reach, r.runsAt])).toEqual([
+        ["Percy", "ready", "sheep-2"],
+      ]);
+      const printed = await isocan("bench");
+      expect(printed.stdout).toContain("ready (sheep-2)");
+
+      // When the cell stops (`collie off`), `POST /api/rc/release` releases the hold immediately (#308).
+      const rel = await cellClient.rcRelease({ canvasId: "prj_1" });
+      expect(rel.ok).toBe(true);
+
+      const afterRows = await bench();
+      expect(afterRows.map((r) => [r.name, r.reach])).toEqual([
+        ["Percy", "elsewhere"],
+      ]);
+    } finally {
+      controller.abort();
+      await holdPromise;
+    }
   });
 });

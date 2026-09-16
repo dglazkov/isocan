@@ -88,6 +88,11 @@ export interface HomeConnection {
      * goes up first.
      */
     rcAnswering(canvasId: string): Promise<RcAnsweringResponse>;
+    /** Explicit hold release when a replica's rc stops (issue #308). */
+    rcRelease(canvasId: string): Promise<{
+        ok: true;
+        released: number;
+    }>;
     /** The web's add-agent ask, forwarded when nothing is parked HERE: the rc
      * it is for may be holding at the home on a badge this daemon never sees.
      * The home's refusal (`no-rc`, `not-your-rc`) comes back verbatim. */
@@ -689,6 +694,10 @@ export declare class HomeLink implements HomeConnection {
      * a grant is about badges, never about actors. */
     grants(canvasId: string): Promise<GrantsResponse>;
     rcAnswering(canvasId: string): Promise<RcAnsweringResponse>;
+    rcRelease(canvasId: string): Promise<{
+        ok: true;
+        released: number;
+    }>;
     rcAsk(canvasId: string, body: RcAskRequest): Promise<RcAskResponse>;
     setPublicListing(canvasId: string, grantId: string, listed: boolean, actor?: Actor): Promise<GrantResponse>;
     createGrant(canvasId: string, subject: GrantSubject, capability?: Capability, actor?: Actor, bars?: boolean): Promise<GrantResponse>;

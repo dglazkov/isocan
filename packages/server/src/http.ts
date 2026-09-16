@@ -5618,6 +5618,7 @@ export function registerRoutes(
         : undefined;
     const policies = owner ? rcPoliciesOf(body.policies, actorIds, owner) : undefined;
     const hold = rc.hold(canvasId, actorIds, Math.min(Number(body.waitMs) || 0, 55_000), {
+      badgeId: req.badge!.badgeId,
       ...(owner ? { owner } : {}),
       ...(policies ? { policies } : {}),
     });
@@ -5630,6 +5631,21 @@ export function registerRoutes(
     else reply.raw.once("close", hold.release);
     const asks = await hold.done;
     return { ok: true, asks };
+  });
+
+  /**
+   * Explicit hold release when an rc stops (issue #308). On a hosted home an
+   * aborted fetch's close can take seconds to cross Cloud Run's front end, so
+   * `stop()` hits this endpoint before aborting its long polls to end the
+   * badge's hold at once.
+   */
+  app.post("/api/rc/release", async (req) => {
+    const body = (req.body ?? {}) as { canvasId?: string };
+    const canvasId = body.canvasId ?? "";
+    const released = rc.release(canvasId, req.badge!.badgeId);
+    const home = options.homes?.for(canvasId) ?? null;
+    if (home) await home.rcRelease(canvasId).catch(() => {});
+    return { ok: true, released };
   });
 
   /**

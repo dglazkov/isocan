@@ -12726,7 +12726,7 @@ async function mintAndEnrol(
   // `noteOnBench` cannot throw, never retries, and never creates the personal
   // canvas it would write to. A person who has never made one enrols exactly
   // as they did before phase 3.
-  await noteOnBench(ctx, agent.name, { actorId: agent.id, harness: opts.harness }, say);
+  await noteOnBench(ctx, agent.name, { actorId: agent.id, harness: opts.harness, cwd: opts.cwd }, say);
   return agent;
 }
 
@@ -12747,7 +12747,15 @@ async function enrolAgent(
   // The rc half's harness: a flag (rc add), else the enrolling caller's own
   // — an agent enrolls an agent like itself — else null, "not yet said".
   const harness = opts.harness ?? ctx.harness ?? null;
-  const handed: unknown = opts.rules !== undefined ? JSON.parse(opts.rules) : undefined;
+  // Re-enrolling an agent that already stands here (for instance to set
+  // `--harness sheep` or `--dir` via `rc add <name>`) must preserve its
+  // existing routing rules and `listen` grant unless `--rules` or `--listen`
+  // explicitly changes them.
+  const snap = await ctx.client.snapshot(p.id);
+  const existing = Object.values(snap.canvas.agents ?? {}).find(
+    (a) => a.actor.name.toLowerCase() === name.toLowerCase(),
+  );
+  const handed: unknown = opts.rules !== undefined ? JSON.parse(opts.rules) : existing?.rules;
   // `--listen` is sugar over the same field `--rules` writes by hand, laid
   // ON TOP of it, so the two flags together are legible rather than a race:
   // the specific flag wins the key it names, and nothing else is touched.
@@ -12763,7 +12771,7 @@ async function enrolAgent(
   const person = (await readIdentity(ctx.home).catch(() => null)) ?? ctx.actor;
   const policy = answerPolicy(rulesOf(rules), { owner: person }, undefined);
   const named = policy.listen.length > 0 && !policy.listen.includes(LISTEN_ANYONE)
-    ? nameResolver(await ctx.client.snapshot(p.id))
+    ? nameResolver(snap)
     : () => undefined;
   const gate =
     policyWords(policy, (id) => (id === person.id ? person.name : named(id)), ctx.actor.id) ??

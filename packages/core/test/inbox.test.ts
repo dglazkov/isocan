@@ -71,6 +71,28 @@ describe("what is addressed to you", () => {
     expect(inboxOn(canvas, dion, names, "prj_a")[0]!.reason).toBe("main-thread");
   });
 
+  it("NEVER a comment in the Chat addressed to someone else", () => {
+    const dolly: Actor = { id: "usr_dolly", name: "Dolly" };
+    const canvas = canvasWith({
+      t1: {
+        id: "t1",
+        main: true,
+        comments: [
+          comment("c1", kenny, "@Dolly what day is it in Sydney?", "2026-08-01", ["usr_dolly"]),
+          comment("c2", kenny, "@Dolly and un-resolved text mention?", "2026-08-02"),
+        ],
+      },
+      t2: {
+        id: "t2",
+        comments: [comment("c0", dolly, "I am on this canvas", "2026-08-01")],
+      },
+    });
+    expect(inboxOn(canvas, dion, names, "prj_a")).toEqual([]);
+    const forDolly = inboxOn(canvas, dolly, namesFor(dolly), "prj_a");
+    expect(forDolly.map((f) => f.comment.id)).toEqual(["c1", "c2"]);
+    expect(forDolly.every((f) => f.reason === "mentioned")).toBe(true);
+  });
+
   it("a reply to a thread you are in, even when it does not repeat your name", () => {
     const canvas = canvasWith({
       t1: {
@@ -84,6 +106,23 @@ describe("what is addressed to you", () => {
     const found = inboxOn(canvas, dion, names, "prj_a");
     expect(found.map((f) => f.comment.id)).toEqual(["c2"]);
     expect(found[0]!.reason).toBe("in-your-thread");
+  });
+
+  it("NEVER a reply in your thread that explicitly addresses someone else", () => {
+    const dolly: Actor = { id: "usr_dolly", name: "Dolly" };
+    const canvas = canvasWith({
+      t1: {
+        id: "t1",
+        comments: [
+          comment("c1", dion, "what about the dock?", "2026-08-01"),
+          comment("c2", kenny, "@Dolly can you check the dock?", "2026-08-02", ["usr_dolly"]),
+          comment("c3", kenny, "@Dion @Dolly both of you look", "2026-08-03", ["usr_dion", "usr_dolly"]),
+        ],
+      },
+    });
+    const found = inboxOn(canvas, dion, names, "prj_a");
+    expect(found.map((f) => f.comment.id)).toEqual(["c3"]);
+    expect(found[0]!.reason).toBe("mentioned");
   });
 
   it("NEVER your own words", () => {

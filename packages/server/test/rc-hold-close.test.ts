@@ -109,6 +109,27 @@ describe("POST /api/rc/hold: the connection is the fact", () => {
     client.destroy();
     expect(await until(async () => !(await answering()).parked, 1_000)).toBeLessThan(1_000);
   });
+
+  it("POST /api/rc/release ends a badge's hold immediately without waiting for socket close or waitMs (#308)", async () => {
+    const client = openHold({ canvasId: CANVAS, actorIds: [PERCY.id], waitMs: 50_000 });
+    expect(await until(async () => (await answering()).parked, 2_000)).toBeLessThan(2_000);
+    expect((await answering()).actorIds).toEqual([PERCY.id]);
+
+    // Do NOT destroy the socket — simulate a hosted front end (Cloud Run / Cloudflare)
+    // where client fetch abort does not close the upstream TCP connection.
+    const res = await fetch(`${base}/api/rc/release`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({ canvasId: CANVAS }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, released: 1 });
+
+    // Released immediately, bypassing both waitMs and the flap window.
+    expect((await answering()).parked).toBe(false);
+    expect((await answering()).actorIds).toEqual([]);
+    client.destroy();
+  });
 });
 
 describe("no route waits on a request's close", () => {

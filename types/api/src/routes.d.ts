@@ -500,6 +500,16 @@ export declare class DaemonRoutes {
      * carries any web asks that arrived while held (agent-custody) — the rc
      * enrolls each and keeps holding. */
     rcHold(request: RcHoldRequest, signal?: AbortSignal): Promise<RcHoldResponse>;
+    /** Explicit release when an rc stops (issue #308), beside socket close:
+     * on a hosted home an aborted fetch's close can take seconds to cross
+     * Cloud Run's front end, so `stop()` releases the hold at once before
+     * aborting its long polls. */
+    rcRelease(request: {
+        canvasId: string;
+    }): Promise<{
+        ok: true;
+        released?: number;
+    }>;
     /** Who a live rc answers for on this canvas — and whether any is parked at
      * all — as the canvas's home has it: a daemon that is not the home asks the
      * home and folds in its own holds (issue #306). */

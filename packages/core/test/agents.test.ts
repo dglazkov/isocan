@@ -74,6 +74,19 @@ describe("agent.enroll / agent.withdraw", () => {
     expect(s.canvas.agents!["usr_sian"]!.rules).toEqual({ a: 2 });
   });
 
+  it("re-enrolment with no rules leaves existing listen grants and routing rules untouched", () => {
+    let s = apply(seedState(), {
+      type: "agent.enroll",
+      agent: sian,
+      rules: { listen: ["*"], items: ["itm_1"] },
+    })!;
+    s = apply(s, { type: "agent.enroll", agent: sian })!;
+    expect(s.canvas.agents!["usr_sian"]!.rules).toEqual({
+      listen: ["*"],
+      items: ["itm_1"],
+    });
+  });
+
   it("withdrawal removes the standing, not the rest of the canvas", () => {
     const before = apply(seedState(), { type: "agent.enroll", agent: sian })!;
     const after = apply(before, { type: "agent.withdraw", actorId: sian.id })!;

@@ -1129,28 +1129,40 @@ function isWordChar(ch) {
   return /[\p{L}\p{N}_]/u.test(ch);
 }
 function* canvasActors(canvas) {
-  for (const enrolled of Object.values(canvas.agents ?? {})) yield enrolled.actor;
+  for (const enrolled of Object.values(canvas.agents ?? {})) {
+    if (enrolled?.actor) yield enrolled.actor;
+  }
   const items = [
-    ...Object.values(canvas.items),
-    ...canvas.trash.map((entry) => entry.item)
+    ...Object.values(canvas.items ?? {}),
+    ...(canvas.trash ?? []).map((entry) => entry.item)
   ];
   const person = function* (actor) {
-    if (!isSystemActor(actor.id)) yield actor;
+    if (actor && !isSystemActor(actor.id)) yield actor;
   };
   for (const item of items) {
+    if (!item) continue;
     yield* person(item.createdBy);
     yield* person(item.updatedBy);
-    for (const version of item.versions) yield* person(version.createdBy);
+    for (const version of item.versions ?? []) yield* person(version.createdBy);
   }
-  for (const thread of Object.values(canvas.threads)) {
+  for (const thread of Object.values(canvas.threads ?? {})) {
+    if (!thread) continue;
     yield* person(thread.createdBy);
-    for (const comment of thread.comments) yield* person(comment.author);
+    for (const comment of thread.comments ?? []) yield* person(comment.author);
   }
 }
 function collectCanvasActors(canvas) {
   const seen = /* @__PURE__ */ new Map();
   for (const actor of canvasActors(canvas)) {
     if (!seen.has(actor.id)) seen.set(actor.id, actor);
+  }
+  return [...seen.values()];
+}
+function collectCanvasNames(canvas) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const actor of canvasActors(canvas)) {
+    const key = `${actor.id} ${actor.name}`;
+    if (!seen.has(key)) seen.set(key, { id: actor.id, name: actor.name });
   }
   return [...seen.values()];
 }
@@ -1258,13 +1270,22 @@ function addressesActor(comment, names, joined) {
   if (self && (comment.mentions ?? []).some((id) => sameActor(joined, id, self))) return true;
   return extractMentions(comment.body, names).length > 0;
 }
+function addressesOthers(comment, names, joined, candidates) {
+  if (addressesActor(comment, names, joined)) return false;
+  if ((comment.mentions ?? []).length > 0) return true;
+  if (candidates && extractMentions(comment.body, candidates).length > 0) {
+    return true;
+  }
+  return false;
+}
 function inYourThread(thread, actorId, names, joined) {
   return thread.comments.some(
     (c) => sameActor(joined, c.author.id, actorId) || addressesActor(c, names, joined)
   );
 }
-function reasonFor(comment, thread, actorId, names, joined) {
+function reasonFor(comment, thread, actorId, names, joined, candidates) {
   if (addressesActor(comment, names, joined)) return "mentioned";
+  if (addressesOthers(comment, names, joined, candidates)) return null;
   if (thread?.main) return "main-thread";
   if (thread && inYourThread(thread, actorId, names, joined)) return "in-your-thread";
   return null;
@@ -1413,13 +1434,15 @@ function dispatchReason(op, authorId, agent, canvas) {
   if (!admitted) return null;
   if (op.type === "thread.create" || op.type === "thread.reply") {
     const thread = canvas?.threads[op.threadId];
-    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined);
+    const candidates = canvas ? collectCanvasNames(canvas) : void 0;
+    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined, candidates);
     if (reason) return reason;
   }
   if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas?.threads[op.threadId];
     const comment = thread?.comments.find((c) => c.id === op.commentId);
-    const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined);
+    const candidates = canvas ? collectCanvasNames(canvas) : void 0;
+    const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined, candidates);
     if (reason) return reason;
   }
   const rules = agent.rules;
@@ -2242,6 +2265,13 @@ var DaemonRoutes = class {
   rcHold(request, signal) {
     return this.request("POST", "/api/rc/hold", request, signal);
   }
+  /** Explicit release when an rc stops (issue #308), beside socket close:
+   * on a hosted home an aborted fetch's close can take seconds to cross
+   * Cloud Run's front end, so `stop()` releases the hold at once before
+   * aborting its long polls. */
+  rcRelease(request) {
+    return this.request("POST", "/api/rc/release", request);
+  }
   /** Who a live rc answers for on this canvas — and whether any is parked at
    * all — as the canvas's home has it: a daemon that is not the home asks the
    * home and folds in its own holds (issue #306). */
@@ -2805,8 +2835,12 @@ function runRoom(deps) {
     life.abort();
     const announced = announcement;
     announcement = null;
-    if (announced) await deps.routes.endSession(deps.canvas.id, announced.sessionId).catch(() => {
-    });
+    await Promise.all([
+      deps.routes.rcRelease?.({ canvasId: deps.canvas.id }).catch(() => {
+      }),
+      announced ? deps.routes.endSession(deps.canvas.id, announced.sessionId).catch(() => {
+      }) : void 0
+    ]);
   };
   const done = room(deps, life.signal, (made) => {
     announcement = made;
