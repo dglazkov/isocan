@@ -55,12 +55,12 @@ const facts = {
   },
 } as unknown as DialogFacts;
 
-describe("the talk dialog declares the door, the dialog and the floating mic", () => {
-  it("is a palette action that opens its dialog", () => {
+describe("the talk module declares the door, the dialog and the floating mic", () => {
+  it("is a palette action that opens the config dialog", () => {
     expect(talkWeb.actions?.map((a) => [a.id, a.name, a.opens])).toEqual([
-      ["talk", "Talk to the canvas", "voice"],
+      ["talk", "Configure voice", "voice"],
     ]);
-    expect(talkWeb.dialogs?.map((d) => [d.id, d.title])).toEqual([["voice", "Talk to the canvas"]]);
+    expect(talkWeb.dialogs?.map((d) => [d.id, d.title])).toEqual([["voice", "Voice settings"]]);
   });
 
   it("floats a mic overlay on the right edge", () => {

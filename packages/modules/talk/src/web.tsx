@@ -5,6 +5,7 @@ import {
   newItemId,
   newThreadId,
   newVersionId,
+  defaultSize,
   type CanvasContents,
   type DialogFacts,
   type Operation,
@@ -14,20 +15,19 @@ import {
 } from "@isocan/core";
 import { Playback, capture, fromBytes, rmsOf, type Capture } from "@isocan/voice-agent/audio";
 import { LIVE_MODEL, liveSetup, liveUrl, planForCall } from "@isocan/voice-agent/live";
-import { defaultSize } from "@isocan/core";
 import { voiceCore } from "./core.ts";
 
 /**
  * **Talk to the canvas** — a Gemini Live session from THIS browser, with
- * THIS person's key, in two doors: the ⌘K dialog and a floating mic button
- * at the bottom of the screen. Both mount the same panel; the button is the
- * overlay slot, whose component anchors its own fixed bottom-right chrome.
+ * THIS person's key, in two doors that have settled into two jobs:
  *
- * The standing harness (Paul, 11 Sep) is the machine's voice: one enrolled
- * agent, one key on the machine, summoned through the rc. This is the
- * browser's voice: whoever presses the mic talks as THEMSELVES — every op
- * the model asks for is sent through the shell's `host.send`, so it carries
- * the viewer's identity, undo and the oplog exactly like a click.
+ * - The floating mic is the TALKING: one press starts (a stored key makes
+ *   the press the whole gesture), one press stops, and the feedback — the
+ *   pulsing button, the level bars, the last words — floats by the button
+ *   and is gone when the turn is. Nothing pops up, the way the voice-agent
+ *   page's chrome disappears.
+ * - The ⌘K dialog is the CONFIGURATION: the key, the model, and a test
+ *   listen. It only needs to open on first run.
  *
  * The module rule is honoured to the letter: the key is a string in this
  * browser's storage (per-user, per-origin — never on the canvas, never in
@@ -64,6 +64,20 @@ export async function decodeMessage(data: unknown): Promise<Record<string, unkno
   } catch {
     return null;
   }
+}
+
+/** What the shared pieces need: the canvas, the host to write through, and
+ *  whether writes are allowed. Both doors hand these — the dialog's facts
+ *  carry more, the overlay's fewer, and the session asks for nothing else. */
+export interface PanelFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+  host: WebHost;
+  canEdit: boolean;
+  /** The saved canvas mode — `item.add` on a groups canvas must name its
+   *  insertion (`containerId` + `groupPlacement`), which a legacy canvas
+   *  never sees. */
+  groupMode: "groups" | "legacy";
 }
 
 /**
@@ -238,27 +252,14 @@ function Meter({ label, live, onReady }: { label: string; live: boolean; onReady
   );
 }
 
-/** What the shared panel needs: the canvas, the host to write through, and
- *  whether writes are allowed. Both doors hand these — the dialog's facts
- *  carry more, the overlay's fewer, and the panel asks for nothing else. */
-interface PanelFacts {
-  canvasId: string;
-  canvas: CanvasContents;
-  host: WebHost;
-  canEdit: boolean;
-  /** The saved canvas mode — `item.add` on a groups canvas must name its
-   *  insertion (`containerId` + `groupPlacement`), which a legacy canvas
-   *  never sees. */
-  groupMode: "groups" | "legacy";
-}
-
-/** The panel both doors share: key, model, one mic button, the meters and
- *  the conversation. The microphone button pulses while live — the whole of
- *  the page's animation, kept to what a dialog-sized surface can use.
- *
- *  `autoStart`: the door was itself a press (the floating mic, ⌘K), so a
- *  stored key means the session starts on open — one press, not two. */
-function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart?: boolean }) {
+/**
+ * **One live session, wherever it is mounted** — the socket, the capture,
+ * the playback, the captions and the meters. Both doors share it; the mic
+ * overlay and the config dialog differ only in what chrome they put around
+ * it. `autoStart`: the door was itself a press, so a stored key means the
+ * session starts on open — one press, not two.
+ */
+function useTalkSession(facts: PanelFacts, autoStart = false) {
   const [key, setKey] = useState(() => localStorage.getItem(KEY_SHELF) ?? "");
   const [model, setModel] = useState(() => localStorage.getItem(MODEL_SHELF) ?? LIVE_MODEL);
   const [state, setState] = useState<SessionState>("idle");
@@ -266,8 +267,8 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
   const socketRef = useRef<WebSocket | null>(null);
   const captureRef = useRef<Capture | null>(null);
   const playbackRef = useRef<Playback | null>(null);
-  const inMeterRef = useRef<{ paint: (level: number) => void } | null>(null);
-  const outMeterRef = useRef<{ paint: (level: number) => void } | null>(null);
+  const inPaintRef = useRef<(level: number) => void>(() => undefined);
+  const outPaintRef = useRef<(level: number) => void>(() => undefined);
   const autoStartedRef = useRef(false);
 
   const say = useCallback((who: Line["who"], text: string) => {
@@ -280,8 +281,8 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
     socketRef.current?.close();
     socketRef.current = null;
     playbackRef.current?.stopNow();
-    inMeterRef.current?.paint(0);
-    outMeterRef.current?.paint(0);
+    inPaintRef.current(0);
+    outPaintRef.current(0);
     setState("idle");
     // The once-guard is per SESSION, not per mount: StrictMode unmounts a
     // fresh mount in dev (start, stop, start), and the second mount must be
@@ -290,9 +291,7 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
     autoStartedRef.current = false;
   }, []);
 
-  useEffect(() => stop, [stop]);
-
-  const listen = useCallback(async () => {
+  const start = useCallback(async () => {
     if (!key.trim()) {
       setState("refused");
       say("system", "paste your Gemini API key first — it stays in this browser");
@@ -312,8 +311,8 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
     socket.onclose = (event: CloseEvent) => {
       captureRef.current?.stop();
       captureRef.current = null;
-      inMeterRef.current?.paint(0);
-      outMeterRef.current?.paint(0);
+      inPaintRef.current(0);
+      outPaintRef.current(0);
       setState("idle");
       // The provider's own words, verbatim: an invalid key and a dead model
       // both close here, and a silent close is how a refusal reads as "nothing
@@ -336,7 +335,7 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
       }
       if (message.setupComplete) {
         setState("live");
-        say("system", "listening — talk, or press End");
+        say("system", "listening — talk, or press the mic to end");
       }
       const content = message.serverContent as Record<string, unknown> | undefined;
       if (content) {
@@ -349,7 +348,7 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
           if (inline?.data) {
             const bytes = Uint8Array.from(atob(inline.data), (c) => c.charCodeAt(0));
             const pcm = await fromBytes(bytes.buffer as ArrayBuffer);
-            outMeterRef.current?.paint(rmsOf(pcm));
+            outPaintRef.current(rmsOf(pcm));
             await playback.push(pcm);
           }
         }
@@ -369,7 +368,7 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
     try {
       const captureHandle = await capture(
         (pcm) => {
-          inMeterRef.current?.paint(rmsOf(pcm));
+          inPaintRef.current(rmsOf(pcm));
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(
               JSON.stringify({
@@ -396,24 +395,200 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
   }, [key, model, say, facts]);
 
   // The door was the press: with a key already in the shelf, open means
-  // listen. The guard holds once per mount — StrictMode's double mount in
-  // dev must not open two sockets, and a re-open is a new mount anyway.
+  // listen.
   useEffect(() => {
     if (autoStart && !autoStartedRef.current && localStorage.getItem(KEY_SHELF)?.trim()) {
       autoStartedRef.current = true;
-      void listen();
+      void start();
     }
-  }, [autoStart, listen]);
+  }, [autoStart, start]);
 
+  useEffect(() => stop, [stop]);
+
+  return {
+    state,
+    lines,
+    key,
+    model,
+    setKey,
+    setModel,
+    start,
+    stop,
+    registerInMeter: useCallback((paint: (level: number) => void) => (inPaintRef.current = paint), []),
+    registerOutMeter: useCallback((paint: (level: number) => void) => (outPaintRef.current = paint), []),
+  };
+}
+
+/** The two line-fragments that float by the mic while a turn is on — the
+ *  person's last words and the model's. */
+function CaptionToast({ lines }: { lines: Line[] }) {
+  const said = lines.filter((l) => l.who !== "system").slice(-2);
+  if (said.length === 0) return null;
+  return (
+    <div className="talk-toast" aria-live="polite">
+      {said.map((line, i) => (
+        <div key={i} className={line.who === "you" ? "talk-toast-you" : "talk-toast-model"}>
+          {line.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The floating mic: one press starts (or stops), and the feedback — the
+ *  pulse, the bars, the last words — floats with it and is gone when the
+ *  turn is. The config panel only opens when there is no key yet; with a
+ *  key, a press is the whole gesture. */
+function MicOverlay({ canvasId, canvas, host }: OverlayFacts) {
+  const session = useTalkSession({
+    canvasId,
+    canvas,
+    canEdit: true,
+    // OverlayFacts does not carry the canvas mode, so the overlay assumes
+    // the groups default — canvases born today.
+    groupMode: "groups",
+    host,
+  });
+  const [configOpen, setConfigOpen] = useState(false);
+
+  const onMic = () => {
+    if (!session.key.trim()) {
+      setConfigOpen((v) => !v);
+      return;
+    }
+    if (session.state === "live") session.stop();
+    else void session.start();
+  };
+
+  return (
+    <>
+      {session.state === "live" && (
+        <div className="talk-live">
+          <CaptionToast lines={session.lines} />
+          <div className="talk-live-meters">
+            <Meter label="You" live onReady={session.registerInMeter} />
+            <Meter label="Voice" live onReady={session.registerOutMeter} />
+          </div>
+        </div>
+      )}
+      <button
+        type="button"
+        className={`talk-float ${session.state === "live" ? "talk-float-live" : ""}`}
+        onClick={onMic}
+        aria-label={session.state === "live" ? "End the conversation" : "Talk to the canvas"}
+        aria-pressed={session.state === "live"}
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
+          />
+        </svg>
+      </button>
+      {configOpen && (
+        <div className="talk-pop" role="dialog" aria-label="Configure voice">
+          <button type="button" className="talk-pop-close" onClick={() => setConfigOpen(false)} aria-label="Close">
+            ×
+          </button>
+          <label className="talk-field">
+            Gemini API key
+            <input
+              type="password"
+              value={session.key}
+              onChange={(e) => session.setKey(e.target.value)}
+              placeholder="stored in this browser only"
+              autoComplete="off"
+            />
+          </label>
+          <label className="talk-field">
+            Model
+            <input value={session.model} onChange={(e) => session.setModel(e.target.value)} autoComplete="off" />
+          </label>
+          <p className="talk-note">Saved in this browser only — never on the canvas, never in the daemon.</p>
+          <button
+            type="button"
+            className="talk-save"
+            onClick={() => {
+              localStorage.setItem(KEY_SHELF, session.key.trim());
+              localStorage.setItem(MODEL_SHELF, session.model.trim());
+              setConfigOpen(false);
+              // Saving is the gesture: the session starts on the same press.
+              void session.start();
+            }}
+            disabled={!session.key.trim()}
+          >
+            Save and start
+          </button>
+        </div>
+      )}
+      <style>{`
+        .talk-float {
+          position: fixed; right: 20px; bottom: 20px; z-index: 9999;
+          width: 48px; height: 48px; border-radius: 50%;
+          display: grid; place-items: center; border: 1px solid var(--line);
+          background: var(--card); color: var(--ink);
+          box-shadow: var(--shadow-pop); cursor: pointer;
+        }
+        .talk-float-live { background: var(--ink); color: var(--card);
+          animation: talk-pulse 1.6s ease-out infinite; }
+        @keyframes talk-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(60, 140, 255, .45); }
+          70% { box-shadow: 0 0 0 16px rgba(60, 140, 255, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(60, 140, 255, 0); }
+        }
+        .talk-live {
+          position: fixed; right: 20px; bottom: 80px; z-index: 9999;
+          display: grid; gap: 6px; justify-items: end; pointer-events: none;
+        }
+        .talk-live-meters { display: flex; gap: 10px; padding: 6px 10px;
+          background: var(--card); border: 1px solid var(--line);
+          border-radius: 12px; box-shadow: var(--shadow-pop); }
+        .talk-toast { display: grid; gap: 4px; max-width: min(320px, calc(100vw - 40px)); }
+        .talk-toast div { padding: 6px 10px; border-radius: 10px; font-size: 13px;
+          background: var(--card); border: 1px solid var(--line);
+          box-shadow: var(--shadow-pop); }
+        .talk-toast-model { color: var(--ink); }
+        .talk-toast-you { color: var(--ink-muted); }
+        .talk-meter { display: flex; align-items: center; gap: 3px; height: 24px; }
+        .talk-meter span {
+          width: 4px; border-radius: 2px; background: var(--line);
+          height: 4px; transition: height 80ms linear;
+        }
+        .talk-meter[data-live="1"] span[data-on="1"] { background: #3c8cff; height: 20px; }
+        .talk-pop {
+          position: fixed; right: 20px; bottom: 84px; z-index: 9999;
+          width: min(360px, calc(100vw - 40px));
+          background: var(--card); border: 1px solid var(--line);
+          border-radius: 16px; box-shadow: var(--shadow-pop);
+          padding: 14px; display: grid; gap: 8px;
+        }
+        .talk-pop-close {
+          position: absolute; top: 8px; right: 8px; border: none; background: none;
+          color: var(--ink-muted); font-size: 18px; cursor: pointer;
+        }
+        .talk-field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
+        .talk-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
+        .talk-save { justify-self: start; }
+      `}</style>
+    </>
+  );
+}
+
+/** The ⌘K dialog is the CONFIGURATION surface: key, model, and a test
+ *  listen with the full captions — open it when something needs changing. */
+function ConfigDialog(facts: DialogFacts) {
+  const session = useTalkSession(
+    { canvasId: facts.canvasId, canvas: facts.canvas, host: facts.host, canEdit: facts.canEdit, groupMode: facts.groupMode },
+    true,
+  );
   return (
     <div className="talk-panel">
       <div className="talk-row">
         <button
           type="button"
-          className={`talk-mic ${state === "live" ? "talk-mic-live" : ""}`}
-          onClick={() => void listen()}
-          disabled={state === "live"}
-          aria-label={state === "live" ? "Listening — press End to stop" : "Listen"}
+          className={`talk-mic ${session.state === "live" ? "talk-mic-live" : ""}`}
+          onClick={() => (session.state === "live" ? session.stop() : void session.start())}
+          aria-label={session.state === "live" ? "Listening — press to end" : "Test listen"}
         >
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path
@@ -422,32 +597,29 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
             />
           </svg>
         </button>
-        <Meter label="You" live={state === "live"} onReady={(paint) => (inMeterRef.current = { paint })} />
-        <Meter label="Voice" live={state === "live"} onReady={(paint) => (outMeterRef.current = { paint })} />
-        <button type="button" onClick={stop} disabled={state !== "live"}>
-          End
-        </button>
+        <Meter label="You" live={session.state === "live"} onReady={session.registerInMeter} />
+        <Meter label="Voice" live={session.state === "live"} onReady={session.registerOutMeter} />
         <span aria-live="polite" className="talk-state">
-          {state}
+          {session.state}
         </span>
       </div>
       <label className="talk-field">
         Gemini API key
         <input
           type="password"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
+          value={session.key}
+          onChange={(e) => session.setKey(e.target.value)}
           placeholder="stored in this browser only"
           autoComplete="off"
         />
       </label>
       <label className="talk-field">
         Model
-        <input value={model} onChange={(e) => setModel(e.target.value)} autoComplete="off" />
+        <input value={session.model} onChange={(e) => session.setModel(e.target.value)} autoComplete="off" />
       </label>
       {!facts.canEdit && <p>This canvas is read-only here, so the model can talk but not write.</p>}
       <ul className="talk-lines" aria-live="polite">
-        {lines.map((line, i) => (
+        {session.lines.map((line, i) => (
           <li key={i}>
             <strong>{line.who}:</strong> {line.text}
           </li>
@@ -481,96 +653,19 @@ function VoicePanel({ facts, autoStart = false }: { facts: PanelFacts; autoStart
   );
 }
 
-/** The ⌘K dialog's mount: the panel, with the shell's facts. */
-function VoiceDialog(facts: DialogFacts) {
-  return (
-    <VoicePanel
-      autoStart
-      facts={{ canvasId: facts.canvasId, canvas: facts.canvas, host: facts.host, canEdit: facts.canEdit, groupMode: facts.groupMode }}
-    />
-  );
-}
-
-/** The overlay: a floating mic button at the bottom of the screen that opens
- *  the panel in a popover of its own. The overlay slot's container sits
- *  mid-edge; this component anchors itself bottom-right with `fixed`, which
- *  is the "little icon near the bottom" the slot does not own. */
-function MicOverlay({ canvasId, canvas, host }: OverlayFacts) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        className="talk-float"
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Talk to the canvas"
-        aria-expanded={open}
-      >
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
-          />
-        </svg>
-      </button>
-      {open && (
-        <div className="talk-pop" role="dialog" aria-label="Talk to the canvas">
-          <button type="button" className="talk-pop-close" onClick={() => setOpen(false)} aria-label="Close">
-            ×
-          </button>
-          <VoicePanel
-            autoStart
-            facts={{
-              canvasId,
-              canvas,
-              canEdit: true,
-              // OverlayFacts does not carry the canvas mode, so the overlay
-              // assumes the groups default — canvases born today. A legacy
-              // canvas reached from here gets the same ops the dialog would
-              // send, and its daemon says so if a field offends it.
-              groupMode: "groups",
-              host,
-            }}
-          />
-        </div>
-      )}
-      <style>{`
-        .talk-float {
-          position: fixed; right: 20px; bottom: 20px; z-index: 9999;
-          width: 48px; height: 48px; border-radius: 50%;
-          display: grid; place-items: center; border: 1px solid var(--line);
-          background: var(--card); color: var(--ink);
-          box-shadow: var(--shadow-pop); cursor: pointer;
-        }
-        .talk-pop {
-          position: fixed; right: 20px; bottom: 84px; z-index: 9999;
-          width: min(360px, calc(100vw - 40px));
-          background: var(--card); border: 1px solid var(--line);
-          border-radius: 16px; box-shadow: var(--shadow-pop);
-          padding: 14px; display: grid; gap: 8px;
-        }
-        .talk-pop-close {
-          position: absolute; top: 8px; right: 8px; border: none; background: none;
-          color: var(--ink-muted); font-size: 18px; cursor: pointer;
-        }
-      `}</style>
-    </>
-  );
-}
-
-/** The module's shell record: one palette door and one dialog, plus the
- *  floating mic. */
-export const talkWeb: WebModule<never, never, never, never, typeof MicOverlay, typeof VoiceDialog> = {
+/** The module's shell record: the floating mic, the config dialog, the
+ *  palette door. */
+export const talkWeb: WebModule<never, never, never, never, typeof MicOverlay, typeof ConfigDialog> = {
   core: voiceCore,
   actions: [
     {
       id: "talk",
-      name: "Talk to the canvas",
-      hint: "a Gemini Live session in this browser, with your own key",
+      name: "Configure voice",
+      hint: "your Gemini API key, the model, and a test listen",
       opens: "voice",
     },
   ],
-  dialogs: [{ id: "voice", title: "Talk to the canvas", component: VoiceDialog }],
+  dialogs: [{ id: "voice", title: "Voice settings", component: ConfigDialog }],
   overlays: [{ region: "right", label: "Voice", component: MicOverlay }],
 };
 
