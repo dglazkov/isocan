@@ -55,7 +55,29 @@ export interface Face {
   cursor: { x: number; y: number } | null;
   unread: number;
   self: boolean;
+  /**
+   * **Whose agent this is — and, by being null, that it is a person.**
+   *
+   * One field answers both questions the pile could not answer before ("is
+   * that a human?", "whose is it?"), which is why it is one field rather than
+   * an `agent` boolean beside an `owner`. An agent IS a thing somebody owns;
+   * a person is not owned by anybody. Two fields could disagree, and the day
+   * they did, the face would say one thing and the card another.
+   *
+   * It is the live policy's owner where an rc is answering, falling back to
+   * the enrolment's `writtenBy`, and null when neither is known. Null is
+   * always safe: the face then draws exactly as it did before there was an
+   * owner to draw, which is the right failure for an unknown rather than a
+   * guess at one.
+   */
+  owner: { id: string; name: string } | null;
 }
+
+/** Whose agent an actor is, or null for a person — what `facesFor` asks so
+ * the pile can colour a ring and the card can name a name. Deliberately not
+ * exported: callers pass a plain function and TypeScript matches it
+ * structurally, so exporting it would be a promise to nobody. */
+type OwnerOf = (actorId: string) => { id: string; name: string } | null;
 
 /** A quiet agent is still here — say so, and say for how long — but never
  * invent an activity it didn't claim. */
@@ -117,13 +139,21 @@ export function facesFor(
    * it has never opened is neither present nor absent.
    */
   answerable: Actor[] = [],
+  /**
+   * Whose agent each actor is. Asked HERE, once per face, rather than at the
+   * four places a face is pushed: every one of them would have had to ask the
+   * same question, and the fifth — whenever somebody adds a fifth state — would
+   * have forgotten to. A face with no owner is a person, and that is the only
+   * way a face becomes a person, so there is no path that leaves it unset.
+   */
+  ownerOf: OwnerOf = () => null,
 ): Face[] {
   const faces: Face[] = [];
   const seen = new Set<string>();
-  const push = (face: Face) => {
+  const push = (face: Omit<Face, "owner">) => {
     if (seen.has(face.actor.id)) return;
     seen.add(face.actor.id);
-    faces.push(face);
+    faces.push({ ...face, owner: ownerOf(face.actor.id) });
   };
 
   for (const session of sessions) {

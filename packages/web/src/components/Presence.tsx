@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { Actor, ActivityEntry, PresenceSession, ActorMarks, ActorKinds } from "@isocan/core";
-import { atLeast, capabilityWord, elapsedLabel, recentActivity, sameActor } from "@isocan/core";
+import { atLeast, capabilityWord, elapsedLabel, policyWords, recentActivity, sameActor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
@@ -11,7 +11,7 @@ import { describe, facesFor, unreadByAuthor, type Face } from "../lib/facepile.t
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
-import { useAnswerable } from "../lib/answerable.ts";
+import { useAnswerable, useRcPolicies } from "../lib/answerable.ts";
 
 /**
  * Who is on this canvas, top right — and, in the same cluster, who has said
@@ -64,6 +64,9 @@ export function Presence({ actor }: { actor: Actor }) {
   // connection-bound set the agent tray reads, so the facepile and the tray
   // cannot disagree about who is standing by.
   const answerable = useAnswerable(canvasId);
+  // The live gate the answering rc announces — the same source AgentRow reads,
+  // so the pile and the tray cannot name different owners for one agent.
+  const policies = useRcPolicies(canvasId);
   if (!canvas) return null;
 
   const pending = unreadThreads(canvas, seen, actor.id, joined);
@@ -71,12 +74,41 @@ export function Presence({ actor }: { actor: Actor }) {
   const standing = Object.values(canvas.agents ?? {})
     .filter((row) => answerable.has(row.actor.id))
     .map((row) => row.actor);
+  /**
+   * **Whose agent each face is** — the plumbing the design note listed as its
+   * one open question, and it turned out to be already computed twice.
+   *
+   * The answering rc announces `policy.owner` with its hold, which is the
+   * truth dispatch actually applies. Where nothing is answering there is still
+   * the enrolment's `writtenBy` — the actor whose word the gate was written
+   * under — which is the same person by construction. Neither: null, and the
+   * face draws as a person, because an agent whose owner is unknown is better
+   * drawn plainly than drawn wrong.
+   */
+  const ownerOf = (id: string): { id: string; name: string } | null => {
+    const announced = policies[id]?.owner;
+    if (announced) return { id: announced.id, name: announced.name };
+    const written = canvas.agents?.[id]?.writtenBy;
+    return written ? { id: written.id, name: written.name } : null;
+  };
   // One entry per PERSON, you included — see lib/facepile.ts for why that is
   // a rule and not a preference.
-  const faces = facesFor(sessions, unreadBy, actor, standing);
+  const faces = facesFor(sessions, unreadBy, actor, standing, ownerOf);
 
   const shown = faces.length > MAX_FACES ? faces.slice(0, MAX_FACES - 1) : faces;
   const overflow = faces.length - shown.length;
+  /**
+   * **People first, agents after, a rule between them.** People first because
+   * a person scans for the humans they know; agents are read as a fleet.
+   *
+   * The separator carries person-or-agent STRUCTURALLY, which is why no badge
+   * is needed on each face — one mark for a group rather than a decoration on
+   * every member. It is drawn only when both groups are present: a rule with
+   * nothing on one side of it is a line that means nothing.
+   */
+  const people = shown.filter((face) => face.owner === null);
+  const agents = shown.filter((face) => face.owner !== null);
+  const ordered = [...people, ...agents];
 
   function goTo(face: Face) {
     // Your own face has nowhere to fly to — it is the handle for who you are
@@ -113,6 +145,19 @@ export function Presence({ actor }: { actor: Actor }) {
   }
 
   const peeked = shown.find((face) => face.actor.id === peek) ?? null;
+  /**
+   * **What the card says about who may summon this agent — in core's words.**
+   *
+   * `policyWords` is the same sentence the tray shows, the rc announces with
+   * its hold, and a refusal puts in the thread. Saying it here in different
+   * words would be a fourth account of one fact, and the one that disagreed
+   * would be the one a person happened to read.
+   */
+  const nameOf = (id: string) => actorNameIn(names, { id, name: id });
+  const gateOf = (face: Face): string | null => {
+    const policy = policies[face.actor.id];
+    return policy ? policyWords(policy, nameOf, actor.id, joined) : null;
+  };
 
   return (
     <div
@@ -127,26 +172,37 @@ export function Presence({ actor }: { actor: Actor }) {
       }}
       onPointerLeave={() => setPeek(null)}
     >
-      {shown.map((face) => (
-        <button
-          key={face.actor.id}
-          data-face-id={face.actor.id}
-          className={`face ${face.presence}${
-            face.self ? " self" : ""
-          }${face.unread > 0 ? " badged" : ""}${
-            face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
-          }`}
-          aria-label={tooltip(face, kinds)}
-          onClick={() => goTo(face)}
-          onDoubleClick={() => toggleFollow(face)}
-        >
-          {/* The disc, not the button, carries the dimming — a badge on an
-              absent author still has to read at full strength. */}
-          <span className={faceMarkClass(marks, face.actor)} style={faceMarkStyle(colors, face.actor)}>
-            {initial(face.label, marks, face.actor)}
-          </span>
-          {face.unread > 0 && <span className="face-badge">{face.unread}</span>}
-        </button>
+      {ordered.map((face, i) => (
+        <Fragment key={face.actor.id}>
+          {/* Drawn before the first agent, and only when somebody stands on
+              each side of it. `aria-hidden` because the rule is a restatement
+              for the eye: every face already SAYS which it is, in the label
+              a reader is handed. */}
+          {i === people.length && people.length > 0 && agents.length > 0 && (
+            <span className="face-sep" aria-hidden="true" />
+          )}
+          <button
+            data-face-id={face.actor.id}
+            className={`face ${face.presence}${
+              face.self ? " self" : ""
+            }${face.unread > 0 ? " badged" : ""}${
+              face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
+            }`}
+            aria-label={tooltip(face, kinds)}
+            onClick={() => goTo(face)}
+            onDoubleClick={() => toggleFollow(face)}
+          >
+            {/* The disc, not the button, carries the dimming — a badge on an
+                absent author still has to read at full strength. */}
+            <span
+              className={faceMarkClass(marks, face.actor, undefined, face.owner !== null)}
+              style={faceMarkStyle(colors, face.actor, face.owner)}
+            >
+              {initial(face.label, marks, face.actor)}
+            </span>
+            {face.unread > 0 && <span className="face-badge">{face.unread}</span>}
+          </button>
+        </Fragment>
       ))}
       {overflow > 0 && (
         <span className="face" title={faces.slice(shown.length).map((f) => tooltip(f, kinds)).join("\n")}>
@@ -154,7 +210,7 @@ export function Presence({ actor }: { actor: Actor }) {
         </span>
       )}
       {peeked && !identityOpen && (
-        <FaceCard face={peeked} names={names} colors={colors} onGo={goTo} />
+        <FaceCard face={peeked} names={names} colors={colors} gate={gateOf(peeked)} onGo={goTo} />
       )}
     </div>
   );
@@ -173,11 +229,15 @@ function FaceCard({
   face,
   names,
   colors,
+  gate,
   onGo,
 }: {
   face: Face;
   names: ReturnType<typeof useActorNames>;
   colors: ReturnType<typeof useActorColors>;
+  /** Who may summon this agent, in `policyWords`' wording — null for a person,
+   * and for an agent nothing is currently answering for. */
+  gate: string | null;
   onGo: (face: Face) => void;
 }) {
   const canvas = useCanvasStore((s) => s.canvas);
@@ -191,7 +251,10 @@ function FaceCard({
   return (
     <div className="hover-card face-card" onPointerDown={(e) => e.stopPropagation()}>
       <div className="face-card-head">
-        <span className={faceMarkClass(marks, face.actor)} style={faceMarkStyle(colors, face.actor)}>
+        <span
+          className={faceMarkClass(marks, face.actor, undefined, face.owner !== null)}
+          style={faceMarkStyle(colors, face.actor, face.owner)}
+        >
           {initial(face.label, marks, face.actor)}
         </span>
         <span className="face-card-who">
@@ -209,6 +272,26 @@ function FaceCard({
           </span>
         </span>
       </div>
+      {/**
+        * **The two things a person wants about an agent and could not get.**
+        *
+        * Whose it is, and who may summon it. Both were already computed — the
+        * enrolment carries the owner and the rc announces the gate with its
+        * hold — and neither was anywhere a pointer goes. Asked for by name
+        * (Dion, 16 Sep 2026: *"if I mouse over 'Scout' it should point to the
+        * owner / who has access to it"*).
+        *
+        * Only for agents. A person is not owned by anybody, and a card that
+        * said so about a colleague would be saying something false.
+        */}
+      {face.owner && (
+        <div className="face-card-owned">
+          <span>
+            owned by <b>{actorNameIn(names, face.owner)}</b>
+          </span>
+          {gate && <span className="face-card-gate">{gate}</span>}
+        </div>
+      )}
       {/* The live half: what they say they are doing, right now. */}
       <div className={`face-card-status${face.status ? "" : " idle"}`}>
         {face.status ?? (face.self ? "click to rename or switch" : "nothing to report")}

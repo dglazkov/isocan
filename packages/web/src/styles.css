@@ -2651,6 +2651,15 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 }
 .face-card-status { font-size: 12px; color: var(--ink); }
 .face-card-status.idle { color: var(--ink-muted); font-style: italic; }
+/* Whose agent this is, and who may summon it — two quiet lines above the live
+   status, because they are standing facts about the agent rather than news
+   about what it is doing this second. */
+.face-card-owned {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 11.5px; color: var(--ink-muted);
+}
+.face-card-owned b { color: var(--ink); font-weight: 600; }
+.face-card-gate { color: var(--ink-soft); }
 .face-card-unread {
   align-self: flex-start; padding: 3px 8px; border-radius: 999px;
   background: var(--accent); color: var(--accent-ink); border: none;
@@ -2737,6 +2746,15 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 }
 /* An unread comment outranks dimming: the badge must stay legible. */
 .face.away .face-badge { opacity: 1; filter: none; }
+/* **People, then a hairline, then the agents.** The rule carries
+   person-or-agent structurally, so no face needs a badge saying which it is —
+   one mark for a group instead of a decoration on every member. Shorter than
+   the discs it separates, so it reads as a divider rather than a tally mark. */
+.face-sep {
+  flex: none; align-self: center;
+  width: 1px; height: 16px; margin: 0 1px;
+  background: var(--line);
+}
 /* max-height comes from the placement hook: the popover is clamped to the
    window and the comment list — not the reply box — takes the scroll. */
 .thread-popover {
