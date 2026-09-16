@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { mainThread } from "@isocan/core";
 import type { DialogFacts } from "@isocan/core";
+import { canvasSnapshotText } from "@isocan/voice-agent/live";
 import { decodeMessage, runTool, talkWeb } from "../src/web.tsx";
 
 /**
@@ -86,6 +87,20 @@ describe("a WebSocket frame is decoded whatever the browser makes of it", () => 
     // parsed into "[object Blob]" (the bug the first build shipped).
     expect(await decodeMessage(new Blob([new Uint8Array([1, 2, 3, 4])]))).toBeNull();
     expect(await decodeMessage("not json at all")).toBeNull();
+  });
+});
+
+describe("the session is handed the canvas it is standing on", () => {
+  it("writes the snapshot in the one wording — ids first, titles for a person", () => {
+    const text = canvasSnapshotText(
+      [{ id: "itm_1", title: "Checkout screen" }],
+      [{ id: "thr_1", comments: [{}, {}] }],
+    );
+    expect(text).toBe(
+      "Current canvas state (ids are authoritative — echo them in tool calls):\n" +
+        "- items: Checkout screen [itm_1]\n" +
+        "- threads: thr_1 (2 comments)",
+    );
   });
 });
 

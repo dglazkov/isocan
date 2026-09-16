@@ -33,6 +33,7 @@ import {
 } from "@isocan/core";
 
 import {
+  canvasSnapshotText,
   describeMintedOp,
   LIVE_MODEL,
   LIVE_TOOLS,
@@ -184,10 +185,7 @@ export async function liveInstructionParts(
   const effective = edited ?? VOICE_RULES;
   const contextItems = await target.canvas.items().catch(() => []);
   const contextThreads = await target.canvas.threads().catch(() => []);
-  const snapshotText =
-    "Current canvas state (ids are authoritative — echo them in tool calls):\n" +
-    `- items: ${contextItems.map((i) => `${i.title ?? "untitled"} [${i.id}]`).join("; ") || "none"}\n` +
-    `- threads: ${contextThreads.map((t) => `${t.id} (${t.comments.length} comments)`).join("; ") || "none"}`;
+  const snapshotText = canvasSnapshotText(contextItems, contextThreads);
   const project = await resolveProjectInstructions(home, target.canvasId).catch(() => null);
   const instructions = {
     source: project?.source ?? "canvas",

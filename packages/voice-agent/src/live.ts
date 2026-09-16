@@ -715,6 +715,24 @@ export function liveSetup(
 }
 
 /* ---- planForCall ---- */
+/**
+ * **The canvas facts a live session is handed, in the one wording** — the
+ * standing harness's instruction builder and the browser dialog both send
+ * it, so the ids the model echoes are described the same way on both
+ * surfaces. The ids are authoritative and are what a tool call must echo;
+ * the titles are what a person reads.
+ */
+export function canvasSnapshotText(
+  items: { id: string; title?: string }[],
+  threads: { id: string; comments: unknown[] }[],
+): string {
+  return (
+    "Current canvas state (ids are authoritative — echo them in tool calls):\n" +
+    `- items: ${items.map((i) => `${i.title ?? "untitled"} [${i.id}]`).join("; ") || "none"}\n` +
+    `- threads: ${threads.map((t) => `${t.id} (${t.comments.length} comments)`).join("; ") || "none"}`
+  );
+}
+
 /** A tool call, as a plan: the same vocabulary the typed grammar produces, so
  * a spoken `move` and a typed one are one implementation. */
 export function planForCall(name: string, args: Record<string, unknown>): { plans: PlannedOp[]; what?: string } {

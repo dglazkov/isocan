@@ -14,7 +14,7 @@ import {
   type WebModule,
 } from "@isocan/core";
 import { LevelMeter, Playback, capture, fromBytes, type Capture } from "@isocan/voice-agent/audio";
-import { LIVE_MODEL, liveSetup, liveUrl, planForCall } from "@isocan/voice-agent/live";
+import { LIVE_MODEL, canvasSnapshotText, liveSetup, liveUrl, planForCall } from "@isocan/voice-agent/live";
 import { voiceCore } from "./core.ts";
 
 /**
@@ -322,7 +322,15 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     playbackRef.current = playback;
 
     socket.onopen = () => {
-      socket.send(JSON.stringify(liveSetup(model.trim())));
+      // The session is handed the canvas it is standing on, in the one
+      // wording the standing harness sends: ids are what a tool call echoes,
+      // titles are what a person reads. The shell handed the module these
+      // facts, so no store and no route were needed to know them.
+      const snapshot = canvasSnapshotText(
+        Object.values(facts.canvas.items ?? {}).map((i) => ({ id: i.id, title: i.title })),
+        Object.values(facts.canvas.threads ?? {}).map((t) => ({ id: t.id, comments: t.comments })),
+      );
+      socket.send(JSON.stringify(liveSetup(model.trim(), { source: "canvas", text: snapshot })));
     };
     socket.onclose = (event: CloseEvent) => {
       captureRef.current?.stop();
