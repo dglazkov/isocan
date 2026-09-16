@@ -1,0 +1,94 @@
+{
+  "recordedOn": "2026-09-15",
+  "kind": "execution-retrospective",
+  "source": "Original local session events, git phase commits, and the exact GitHub release run; raw conversation logs are not included.",
+  "threadId": "01a0a17f-6d41-7520-b8d6-9207afd6998b",
+  "windows": {
+    "research": {
+      "startedAt": "2026-09-14T19:57:58Z",
+      "durationMs": 929349
+    },
+    "planning": {
+      "startedAt": "2026-09-14T20:30:22Z",
+      "durationMs": 1107684
+    },
+    "engineeringThroughRelease": {
+      "startedAt": "2026-09-15T00:21:15Z",
+      "completedAt": "2026-09-15T14:34:22Z",
+      "durationSeconds": 51187
+    }
+  },
+  "phaseLandings": [
+    {
+      "phase": "0",
+      "commit": "1f7d12e1",
+      "at": "2026-09-15T01:00:58Z"
+    },
+    {
+      "phase": "1",
+      "commit": "aca35fc9",
+      "at": "2026-09-15T03:28:24Z"
+    },
+    {
+      "phase": "2",
+      "commit": "57966f46",
+      "at": "2026-09-15T05:09:59Z"
+    },
+    {
+      "phase": "3",
+      "commit": "336e6124",
+      "at": "2026-09-15T07:17:40Z"
+    },
+    {
+      "phase": "4",
+      "commit": "9631383f",
+      "at": "2026-09-15T08:46:34Z"
+    },
+    {
+      "phase": "5",
+      "commit": "cdcf22d3",
+      "at": "2026-09-15T10:30:31Z"
+    },
+    {
+      "phase": "6",
+      "commit": "08bbf101",
+      "at": "2026-09-15T11:43:50Z"
+    },
+    {
+      "phase": "7-preparation",
+      "commit": "22641004",
+      "at": "2026-09-15T13:50:02Z"
+    },
+    {
+      "phase": "landing-identity-fix",
+      "commit": "472524844927dfa34d9e351ab01d4a3016eb6bc6",
+      "at": "2026-09-15T14:24:52Z"
+    }
+  ],
+  "conductor": {
+    "completedShellCommandItems": 2195,
+    "progressMessageItems": 321,
+    "imageInspections": 88,
+    "contextCompactions": 24,
+    "contextCompactionSeconds": 5353.823,
+    "longBroadVerificationGroups": 38,
+    "nonzeroLongBroadVerificationGroups": 15,
+    "broadVerificationCumulativeSeconds": 11193.398733,
+    "broadVerificationIntervalUnionSeconds": 10525.897001,
+    "method": "Unique completed command items over 60 seconds launching npm test, npm run test:ci or the strict-test wrapper; combined invocations retain their entire duration."
+  },
+  "release": {
+    "url": "https://github.com/dglazkov/isocan/actions/runs/34981470350",
+    "commit": "472524844927dfa34d9e351ab01d4a3016eb6bc6",
+    "createdAt": "2026-09-15T14:24:56Z",
+    "completedAt": "2026-09-15T14:34:22Z",
+    "conclusion": "success"
+  },
+  "limits": [
+    "Time categories overlap and are not additive.",
+    "Conductor counts exclude builder tools and GitHub execution.",
+    "Elapsed session time is not billed compute or agent-hours.",
+    "Phase 7 output-quality and human-partnership studies remain unperformed.",
+    "The proposed 25\u201335 percent improvement is an unmeasured target."
+  ]
+}

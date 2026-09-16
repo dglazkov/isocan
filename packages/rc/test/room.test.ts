@@ -532,7 +532,7 @@ describe("the room over in-memory deps", () => {
     // A stranger asks: turned away, said in words once.
     home.mention(STRANGER, PERCY, "@Percy can you look?");
     await clock.advance(0);
-    const turnedAway = "Percy · Sam asked; listens only to you — said so in the thread, nothing started";
+    const turnedAway = "Percy · Sam asked; listens only to you (Ada) — said so in the thread, nothing started";
     expect(first.lines).toContain(turnedAway);
     // Ada asks twice, a minute apart: two turns, the whole ceiling.
     home.mention(OWNER, PERCY, "@Percy the empty state reads wrong");

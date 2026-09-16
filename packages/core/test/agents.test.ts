@@ -528,7 +528,11 @@ describe("owner-only summons — the rc's reading of the gate", () => {
     const nameOf = (id: string) => ({ usr_nico: "Nico", usr_usama: "Usama", usr_alice: "Alice" })[id];
     const alone = { owner: nico, listen: [] };
     expect(policyWords(alone, nameOf)).toBe("listens only to Nico");
-    expect(policyWords(alone, nameOf, nico.id)).toBe("listens only to you");
+    // "you" names who you are: a second machine arrives as its OWN person, and
+    // a bare "you" is read as whoever the reader assumed they were (15 Sep
+    // 2026 — three wrong readings of one sentence, none of which survives the
+    // name being there).
+    expect(policyWords(alone, nameOf, nico.id)).toBe("listens only to you (Nico)");
     expect(policyWords({ owner: nico, listen: ["usr_usama"] }, nameOf)).toBe("listens to Nico and Usama");
     expect(policyWords({ owner: nico, listen: ["usr_usama", "usr_alice"] }, nameOf)).toBe(
       "listens to Nico and 2 others",

@@ -633,14 +633,30 @@ export function policyWords(
   now: number = Date.now(),
 ): string | null {
   if (policy.listen.includes(LISTEN_ANYONE)) return null;
+  /**
+   * **"you" always says who you are.** The bare word cost an hour on 15 Sep
+   * 2026: a second machine had been set up with a plain address and so arrived
+   * as its OWN person, and `listens only to you` was read three different wrong
+   * ways by somebody who had assumed whose machine it was. Every wrong reading
+   * — a silent no-op, a silent narrowing, replica lag — is available from that
+   * sentence, and none of them survives naming the actor. The `--json` form was
+   * unambiguous immediately, which is the tell: the words were carrying less
+   * than the data.
+   *
+   * It stays "you" first, because whose gate it is matters more than what they
+   * are called; the name is the disambiguation, in brackets, behind it.
+   */
   const you = (id: string) => viewerId !== undefined && sameActor(joined, id, viewerId);
-  const owner = you(policy.owner.id) ? "you" : (nameOf(policy.owner.id) ?? policy.owner.name);
+  const called = (id: string, fallback: string) => nameOf(id) ?? fallback;
+  const said = (id: string, fallback: string) =>
+    you(id) ? `you (${called(id, fallback)})` : called(id, fallback);
+  const owner = said(policy.owner.id, policy.owner.name);
   // Only the grants that still stand are named: a lapsed one is a name this
   // gate will turn away, and the whole point of one wording is that what it
   // says and what dispatch does are the same sentence.
   const live = listenGrants(policy.listen, now).filter((g) => !g.lapsed);
   if (live.length === 0) return `listens only to ${owner}`;
-  const others = live.map((g) => (you(g.id) ? "you" : (nameOf(g.id) ?? g.id)));
+  const others = live.map((g) => said(g.id, g.id));
   if (others.length === 1) return `listens to ${owner} and ${others[0]}`;
   return `listens to ${owner} and ${others.length} others`;
 }

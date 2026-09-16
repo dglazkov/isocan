@@ -13,7 +13,7 @@ Run by `scripts/persona-run.mjs` at `9631383`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| runtime dependencies of @isocan/core is 9, past 1 | unanswered |
+| runtime dependencies of @isocan/core is 9, past 1 | accepted — same question as 2026-09-12, answered there: the entry's runtime closure reaches 1 of the 9, so what the bound protects is held and the instrument is measuring the package. The bound stays at 1. |
 | lines in the files every feature must edit is 25054, past 24058 | unanswered |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days

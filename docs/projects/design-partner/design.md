@@ -246,3 +246,33 @@ Disable automatic enrollment to roll back. Existing briefs, answers, decisions
 and receipts must remain readable, editable and resumable, and existing screens
 must still render. No migration may require the new orchestration to display
 old content. The shipped README describes only the behavior actually enabled.
+
+## Raised from outside the project, 16 September 2026
+
+**The two canvas-chat entrances are behind an experiment now** (`design.partner`
+in `packages/web/src/lib/experiments.ts`), and this is a note for whoever owns
+this project rather than a decision taken over their head — reverse it if the
+reasoning below is wrong.
+
+**What prompted it.** `Start design task` renders under EVERY comment in the
+Chat (`MainThreadPanel.tsx`, gated only on `canEdit`), and `Ask design
+questions` sits at the foot of every thread. On `[isocan] History` — a canvas
+with a long thread — that is a control per message for a feature that landed
+the same day. Dion's reading, verbatim: *"where did this come from? I kinda
+want to get rid of it… it's verbose and I don't get it"*.
+
+**Why an experiment rather than a removal.** It is the house answer for exactly
+this, and `experiments.ts` states it: *"A module behind an experiment ships in
+the bundle, is off"*. The Inbox went behind one on 14 Sep for the same reason —
+*"off while its shape settles"* — and this project is seven phases old today.
+Nothing is deleted; it is one checkbox in Settings away.
+
+**What was NOT gated, deliberately.** Only the two always-on entrances. A
+canvas that already carries design requests or questions still draws
+`DesignTaskPanel` and `QuestionnairePanel`, because hiding work somebody has
+already started would be a worse bug than the clutter this fixes.
+
+**The feedback worth more than the gate.** *"I don't get it"* is the part to
+act on. A control under every comment that a reader cannot explain is a
+discovery problem an experiment flag only postpones — and if it goes behind a
+flag and nobody turns it on, that is itself the finding.

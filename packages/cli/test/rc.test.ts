@@ -130,12 +130,12 @@ describe("the enrolment record, in two halves", () => {
     // Owner-only summons: with nothing said, an agent already listens to its
     // owner alone — so the flag that means something now is a widening.
     const plain = await isocan("agent", "add", "Percy");
-    expect(plain.stdout).toContain("listens only to you");
+    expect(plain.stdout).toContain("listens only to you (Nico)");
     expect(plain.stdout).toContain("isocan rc listen Percy --to <names|everyone>");
 
     const run = await isocan("agent", "add", "Sian", "--listen", "Dimitri");
     expect(run.code).toBe(0);
-    expect(run.stdout).toContain("listens to you and Dimitri");
+    expect(run.stdout).toContain("listens to you (Nico) and Dimitri");
 
     const agents = await snapshotAgents();
     const row = Object.values(agents).find((a) => a.actor.name === "Sian") as
@@ -149,9 +149,9 @@ describe("the enrolment record, in two halves", () => {
 
     // And it is readable where somebody looks after being ignored.
     const who = await isocan("--canvas", "prj_1", "who");
-    expect(who.stdout).toContain("listens to you and Dimitri");
+    expect(who.stdout).toContain("listens to you (Nico) and Dimitri");
     const rules = await isocan("--canvas", "prj_1", "agent", "rules", "Sian");
-    expect(rules.stdout).toContain("listens to you and Dimitri");
+    expect(rules.stdout).toContain("listens to you (Nico) and Dimitri");
   });
 
   it("`rc listen --to` reaches every canvas the agent stands on, in one gesture", async () => {
@@ -167,8 +167,8 @@ describe("the enrolment record, in two halves", () => {
     // summons that means its owner alone, on both canvases.
     const before = await isocan("--json", "rc", "listen", "Percy");
     expect(JSON.parse(before.stdout).map((r: { listens: string }) => r.listens)).toEqual([
-      "listens only to you",
-      "listens only to you",
+      "listens only to you (Nico)",
+      "listens only to you (Nico)",
     ]);
 
     const set = await isocan("rc", "listen", "Percy", "--to", "me,Dimitri");
@@ -200,7 +200,7 @@ describe("the enrolment record, in two halves", () => {
     await isocan("--canvas", "prj_1", "rc", "add", "Percy");
     const set = await isocan("rc", "listen", "Percy", "--to", "Dimitri", "--until", "7d");
     expect(set.code).toBe(0);
-    expect(set.stdout).toContain("listens to you and Dimitri for 7d");
+    expect(set.stdout).toContain("listens to you (Nico) and Dimitri for 7d");
 
     const agents = await snapshotAgents();
     const row = Object.values(agents).find((a) => a.actor.name === "Percy") as

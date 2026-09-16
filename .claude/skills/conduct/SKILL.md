@@ -81,6 +81,15 @@ cite; the Trajectory (or Findings) of the phases before it (they are the
 things the design did not know); `AGENTS.md`. Note the wall clock; the
 commit message records what a phase cost.
 
+For a long run, keep a compact handoff with the current commit, owned paths,
+settled decisions, open failures and exact evidence paths. Update it at phase
+boundaries; read historical logs only when the next decision needs them. Record
+build-ready, first proof, gate/retry and CI times separately so parallel work
+is not counted twice. Prefer command summaries and log paths to full output.
+For quality studies, identify the smallest useful comparison and its access,
+spending and reviewer needs early, while independent implementation proceeds.
+Preparation is not outcome evidence, and these needs do not imply permission.
+
 **Three gates before any code:**
 
 - **The docs agree.** If the phase's Proof, the journey's steps, and the
@@ -171,6 +180,15 @@ The checklist, every phase:
   file can be invisible locally and fail the same guard after the commit in
   CI. Keep the verified files unchanged until landing; update the staged
   paths and rerun affected checks after a fix. See lessons.md #70.
+- Before expensive gates, run the existing cheap checks relevant to the staged
+  change: exports, CLI surface, documentation, dependency boundaries and bundle
+  limits. Check downstream consumers when a shared contract changes. Reuse
+  existing runtime/browser helpers; preserve real input and cleanup proofs.
+- Run one heavy local verification job at a time: full fast suite, strict
+  emulator suite or heavy browser walk. Keep independent lightweight work
+  parallel, without changing the frozen source. Resolve a known failure before
+  launching the next expensive gate; contention is not grounds to raise a
+  timeout. These ordering rules do not remove any required proof.
 - The whole suite and typecheck, not just the new tests: `npm test`
   (vitest, from the root, every workspace) and `npm run typecheck`. The
   surface guard in `packages/cli/test/surface.test.ts` is part of the
@@ -248,12 +266,15 @@ for anything smaller. The body is the argument: what was built, what the
 proof showed, what changed course, in prose a reader who was not here
 can follow. End with the session trailer the harness gives you.
 
-Land on `main`, no pull request: `git fetch` and rebase onto
-`origin/main` first, because other sessions push all day and
+Land on `main`, no pull request. Fetch and integrate `origin/main` before
+freezing the phase for its final gates; other sessions push all day and
 `WHATSNEW.md` and `docs/ROADMAP.md` conflict routinely (after resolving,
-`node scripts/roadmap.mjs` regenerates the roadmap). Run `npm test` and
-`npm run typecheck` once more on the rebased tree, then push. Do not
-bunch phases on a branch. The user reads progress from the commits.
+`node scripts/roadmap.mjs` regenerates the roadmap). `npm test` and
+`npm run typecheck` must pass on the resulting tree. A changed integration
+requires renewed validation; an unchanged, already-verified tree does not need
+a duplicate run solely because it is time to commit. Push each phase and track
+CI against its exact commit while doing independent useful preparation.
+Do not bunch phases on a branch. The user reads progress from the commits.
 
 Then go on to the next phase. Write a short report between phases (the
 phase, its new status, the proof and what it printed, what changed

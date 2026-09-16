@@ -1375,10 +1375,12 @@ function speakersFor(authorIds, carried) {
 function policyWords(policy, nameOf, viewerId, joined, now = Date.now()) {
   if (policy.listen.includes(LISTEN_ANYONE)) return null;
   const you = (id) => viewerId !== void 0 && sameActor(joined, id, viewerId);
-  const owner = you(policy.owner.id) ? "you" : nameOf(policy.owner.id) ?? policy.owner.name;
+  const called = (id, fallback) => nameOf(id) ?? fallback;
+  const said = (id, fallback) => you(id) ? `you (${called(id, fallback)})` : called(id, fallback);
+  const owner = said(policy.owner.id, policy.owner.name);
   const live = listenGrants(policy.listen, now).filter((g) => !g.lapsed);
   if (live.length === 0) return `listens only to ${owner}`;
-  const others = live.map((g) => you(g.id) ? "you" : nameOf(g.id) ?? g.id);
+  const others = live.map((g) => said(g.id, g.id));
   if (others.length === 1) return `listens to ${owner} and ${others[0]}`;
   return `listens to ${owner} and ${others.length} others`;
 }

@@ -584,7 +584,7 @@ describe("the roster tells the truth (journey 7, phase 6)", () => {
         actor: expect.objectContaining({ name: "Sian" }),
         state: "enrolled",
         harness: "fake",
-        listens: "listens only to you",
+        listens: "listens only to you (Nico)",
       },
     ]);
 
@@ -651,8 +651,8 @@ describe("the rules are readable in one place (journey 4)", () => {
     expect(run.code).toBe(0);
     // The gate first — who, before what — and since owner-only summons there
     // always is one to say: the owner alone, unless the owner widened it.
-    expect(run.stdout).toContain("Sian — listens only to you; changes touching itm_9; ops: item.move");
-    expect(run.stdout).toContain("Percy — listens only to you; comments addressed to them (the default)");
+    expect(run.stdout).toContain("Sian — listens only to you (Nico); changes touching itm_9; ops: item.move");
+    expect(run.stdout).toContain("Percy — listens only to you (Nico); comments addressed to them (the default)");
     expect(run.stdout).toContain("comes through any rule set");
     expect(run.stdout).toContain("isocan rc listen <name> --to <names|everyone>");
   }, 30_000);
@@ -677,7 +677,7 @@ describe("owner-only summons (issue #238)", () => {
     // `rc.test.ts` five releases on 11 Sep 2026.
     await until(
       async () => rc.out(),
-      (o) => o.includes("Sian listens only to you"),
+      (o) => o.includes("Sian listens only to you (Nico)"),
       "the rc to come up and announce Sian's gate",
     );
 
@@ -703,7 +703,7 @@ describe("owner-only summons (issue #238)", () => {
       "Sian listens only to Nico — this did not wake Sian, and spent nothing. " +
         "Nico can widen it: isocan rc listen Sian --to Dimitri",
     );
-    expect(rc.out()).toContain("Sian · Dimitri asked; listens only to you — said so in the thread, nothing started");
+    expect(rc.out()).toContain("Sian · Dimitri asked; listens only to you (Nico) — said so in the thread, nothing started");
     expect(rc.out()).not.toContain("starting a session");
 
     // Asked again in the same thread: said once, not once per ask.

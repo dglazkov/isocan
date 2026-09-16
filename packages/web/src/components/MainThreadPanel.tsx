@@ -400,6 +400,23 @@ function Panel({
    *  about which refusal this is. */
   const [refused, setRefused] = useState("");
   const canEdit = useCanEdit();
+  /**
+   * **The design partner's two entrances, behind their experiment.**
+   *
+   * `Start design task` renders under EVERY comment and `Ask design questions`
+   * at the foot of every thread, unconditionally for anyone who can edit — so
+   * a canvas with forty messages grew forty controls for a feature that landed
+   * the same day. Dion's reading, 16 Sep 2026: *"verbose and I don't get it"*.
+   *
+   * The gate is the house answer for exactly this, and `experiments.ts` says so
+   * — a module behind an experiment ships in the bundle and is off. The Inbox
+   * went behind one for the same reason: off while its shape settles.
+   *
+   * Only the ALWAYS-ON entrances are gated. A canvas that already carries
+   * design requests or questions still draws them, because hiding work
+   * somebody has already started would be a different and worse bug.
+   */
+  const designPartner = useUiStore((s) => s.experiments.includes("design.partner"));
   const questionnaireViewer = JSON.stringify([canvasId, actor.id]);
   const [publisherFor, setPublisherFor] = useState<string | null>(null);
   const showDesignQuestions = publisherFor === questionnaireViewer;
@@ -605,7 +622,7 @@ function Panel({
                   .map((itemId) => (
                     <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} onOpenItem={onOpenItem} />
                   ))}
-                {canEdit && !comment.design && !isSystemActor(comment.author.id) && <button className="main-design-ask" type="button" onClick={() => setDesignSource({ entrance: "canvas-chat", threadId: thread.id, commentId: comment.id })}>Start design task</button>}
+                {designPartner && canEdit && !comment.design && !isSystemActor(comment.author.id) && <button className="main-design-ask" type="button" onClick={() => setDesignSource({ entrance: "canvas-chat", threadId: thread.id, commentId: comment.id })}>Start design task</button>}
               </CommentFold>
               {/* The refusal is the control (#272): the Chat reaches everyone,
                   so a mention here is turned away exactly as one in a thread
@@ -628,7 +645,7 @@ function Panel({
         {(hasDesignRequests || designSource) && <Suspense fallback={<p>Opening design task…</p>}><DesignTaskPanel key={questionnaireViewer} canvasId={canvasId} actor={actor} startSource={designSource} onStarted={() => setDesignSource(null)} /></Suspense>}
         </div>
       </div>
-      {hasDesignQuestions || showDesignQuestions ? <Suspense fallback={null}><QuestionnairePanel key={questionnaireViewer} canvasId={canvasId} canvas={canvas} actor={actor} thread={thread} canEdit={canEdit} startPublishing={showDesignQuestions} /></Suspense> : canEdit && thread && <button className="main-design-ask" type="button" onClick={() => setPublisherFor(questionnaireViewer)}>Ask design questions</button>}
+      {hasDesignQuestions || showDesignQuestions ? <Suspense fallback={null}><QuestionnairePanel key={questionnaireViewer} canvasId={canvasId} canvas={canvas} actor={actor} thread={thread} canEdit={canEdit} startPublishing={showDesignQuestions} /></Suspense> : designPartner && canEdit && thread && <button className="main-design-ask" type="button" onClick={() => setPublisherFor(questionnaireViewer)}>Ask design questions</button>}
       {canEdit && <form
         onKeyDown={(e) => {
           submitOnEnter(e);
