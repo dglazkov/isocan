@@ -151,7 +151,10 @@ export async function runTool(
     if (op.type === "item.add") {
       const body = String(op.content ?? op.text ?? "");
       const mime = String(op.mime ?? "text/markdown");
-      const filename = String(op.filename ?? (mime === "text/markdown" ? "note.md" : "note.txt"));
+      // A drawing is an SVG file; a note is markdown. The mime says which.
+      const filename = String(
+        op.filename ?? (mime === "image/svg+xml" ? "sketch.svg" : mime === "text/markdown" ? "note.md" : "note.txt"),
+      );
       const { blobHash, size } = await facts.host.putBlob(new Blob([body]), filename);
       op.itemId = newItemId();
       op.version = { id: newVersionId(), blobHash, mimeType: mime, filename, size };
@@ -356,12 +359,21 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         if (content.outputTranscription && (content.outputTranscription as { text?: string }).text)
           say("model", (content.outputTranscription as { text: string }).text);
         for (const part of (content.modelTurn as { parts?: unknown[] } | undefined)?.parts ?? []) {
-          const inline = (part as { inlineData?: { data?: string } }).inlineData;
+          const inline = (part as { inlineData?: { data?: string; mimeType?: string } }).inlineData;
           if (inline?.data) {
-            const bytes = Uint8Array.from(atob(inline.data), (c) => c.charCodeAt(0));
-            const pcm = await fromBytes(bytes.buffer as ArrayBuffer);
-            outMeter.current.feed(pcm);
-            await playback.push(pcm);
+            // The model is multimodal: it can emit image parts beside the
+            // audio. Only audio is this dialog's business — an image part fed
+            // to the playback as PCM is exactly the noise the first build
+            // made of it.
+            const mime = String(inline.mimeType ?? "");
+            if (mime.startsWith("audio/")) {
+              const bytes = Uint8Array.from(atob(inline.data), (c) => c.charCodeAt(0));
+              const pcm = await fromBytes(bytes.buffer as ArrayBuffer);
+              outMeter.current.feed(pcm);
+              await playback.push(pcm);
+            } else if (mime.startsWith("image/")) {
+              say("system", "the model sent an image part — this dialog speaks and writes; the pen tool draws with strokes");
+            }
           }
         }
       }
