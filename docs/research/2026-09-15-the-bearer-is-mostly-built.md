@@ -1,9 +1,9 @@
 ---
-status: designed
+status: built
 since: 2026-09-15
 issue: 309
 see: bench, sheep-harness, standing-agents, on-demand, agent-custody, room, embed
-note: measured AND DECIDED 15 Sep 2026 — the decision: yes for a cell holding a badge that claims a DEDICATED AGENT's actor in the owner's own secrets store, never the person's own badge; not yet for a public repository's CI, which is a different risk that had been bundled with it. Measured — `ISOCAN_BEARER` has been described in three research notes as an unbuilt credential whose blast radius nobody has decided, and it is blocking four things. It is mostly built. `askTheDoor()` already mints with `carrier: "bearer"` and that is the CLI's ORDINARY path, so every `isocan` on every machine already holds the thing: a long-lived bearer badge with no expiry. Revocation exists too — `isocan badges` lists surfaces and `--kill` ends one at the home, and `surfaceKind()` already says "browser" or "machine". What is missing is narrow: a badge minted deliberately for a headless holder and labelled as one, and a decision about scope. The door's per-address mint meter is the real constraint and it argues FOR the long-lived shape.
+note: measured, decided AND built 15 Sep 2026 — a dedicated agent badge minted once per rc row, labelled `cell (<agent>'s sheep)` in `isocan badges`, and revoked with the agent on withdrawal (leaving public repo CI credentials deliberately separate under #206).
 ---
 
 # The bearer is mostly built
