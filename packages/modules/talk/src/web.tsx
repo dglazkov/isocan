@@ -13,7 +13,7 @@ import {
   type WebHost,
   type WebModule,
 } from "@isocan/core";
-import { Playback, capture, fromBytes, rmsOf, type Capture } from "@isocan/voice-agent/audio";
+import { LevelMeter, Playback, capture, fromBytes, type Capture } from "@isocan/voice-agent/audio";
 import { LIVE_MODEL, liveSetup, liveUrl, planForCall } from "@isocan/voice-agent/live";
 import { voiceCore } from "./core.ts";
 
@@ -39,6 +39,13 @@ import { voiceCore } from "./core.ts";
  *  canvas's — the one scope a module may hold without a server route. */
 const KEY_SHELF = "isocan:voice:key";
 const MODEL_SHELF = "isocan:voice:model";
+
+/** How many bars each meter shows; the shared paint divides the level into
+ *  this many buckets. */
+const METER_COUNT = 5;
+/** How often the meters are re-painted, in milliseconds. The CSS transition
+ *  between paints is what makes the bars glide rather than jump. */
+const METER_INTERVAL_MS = 60;
 
 type SessionState = "idle" | "live" | "refused";
 
@@ -270,6 +277,10 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   const inPaintRef = useRef<(level: number) => void>(() => undefined);
   const outPaintRef = useRef<(level: number) => void>(() => undefined);
   const autoStartedRef = useRef(false);
+  // The page's own meter maths: dB gating, attack, release, a held peak.
+  // Raw PCM RMS would read 0..32767, which is how the first bars pegged.
+  const inMeter = useRef(new LevelMeter(METER_COUNT));
+  const outMeter = useRef(new LevelMeter(METER_COUNT));
 
   const say = useCallback((who: Line["who"], text: string) => {
     setLines((prev) => [...prev.slice(-40), { who, text }]);
@@ -281,6 +292,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     socketRef.current?.close();
     socketRef.current = null;
     playbackRef.current?.stopNow();
+    inMeter.current.reset();
+    outMeter.current.reset();
     inPaintRef.current(0);
     outPaintRef.current(0);
     setState("idle");
@@ -336,8 +349,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       if (message.setupComplete) {
         setState("live");
         say("system", "listening — talk, or press the mic to end");
-      }
-      const content = message.serverContent as Record<string, unknown> | undefined;
+      }      const content = message.serverContent as Record<string, unknown> | undefined;
       if (content) {
         if (content.inputTranscription && (content.inputTranscription as { text?: string }).text)
           say("you", (content.inputTranscription as { text: string }).text);
@@ -348,7 +360,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
           if (inline?.data) {
             const bytes = Uint8Array.from(atob(inline.data), (c) => c.charCodeAt(0));
             const pcm = await fromBytes(bytes.buffer as ArrayBuffer);
-            outPaintRef.current(rmsOf(pcm));
+            outMeter.current.feed(pcm);
             await playback.push(pcm);
           }
         }
@@ -368,7 +380,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     try {
       const captureHandle = await capture(
         (pcm) => {
-          inPaintRef.current(rmsOf(pcm));
+          inMeter.current.feed(pcm);
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(
               JSON.stringify({
@@ -402,6 +414,18 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       void start();
     }
   }, [autoStart, start]);
+
+  // The display half of the meters: one tick paints both bars from the
+  // window each meter has accumulated, with the page's attack/release/peak
+  // maths. The interval lives only while a session is live.
+  useEffect(() => {
+    if (state !== "live") return;
+    const timer = setInterval(() => {
+      inPaintRef.current(inMeter.current.tick().level);
+      outPaintRef.current(outMeter.current.tick().level);
+    }, METER_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [state]);
 
   useEffect(() => stop, [stop]);
 
@@ -451,7 +475,13 @@ function MicOverlay({ canvasId, canvas, host }: OverlayFacts) {
   });
   const [configOpen, setConfigOpen] = useState(false);
 
-  const onMic = () => {
+  const onMic = (event: { ctrlKey?: boolean; metaKey?: boolean }) => {
+    // Ctrl/⌘-click is the configuration door even when a key is stored —
+    // changing the model must not require losing the key first.
+    if (event.ctrlKey || event.metaKey) {
+      setConfigOpen((v) => !v);
+      return;
+    }
     if (!session.key.trim()) {
       setConfigOpen((v) => !v);
       return;
@@ -475,6 +505,7 @@ function MicOverlay({ canvasId, canvas, host }: OverlayFacts) {
         type="button"
         className={`talk-float ${session.state === "live" ? "talk-float-live" : ""}`}
         onClick={onMic}
+        title="Talk · ctrl-click to configure"
         aria-label={session.state === "live" ? "End the conversation" : "Talk to the canvas"}
         aria-pressed={session.state === "live"}
       >
