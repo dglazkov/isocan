@@ -74,6 +74,9 @@ export function Presence({ actor }: { actor: Actor }) {
   const standing = Object.values(canvas.agents ?? {})
     .filter((row) => answerable.has(row.actor.id))
     .map((row) => row.actor);
+  const enrolled = Object.values(canvas.agents ?? {})
+    .filter((row) => !answerable.has(row.actor.id))
+    .map((row) => row.actor);
   /**
    * **Whose agent each face is** — the plumbing the design note listed as its
    * one open question, and it turned out to be already computed twice.
@@ -93,7 +96,7 @@ export function Presence({ actor }: { actor: Actor }) {
   };
   // One entry per PERSON, you included — see lib/facepile.ts for why that is
   // a rule and not a preference.
-  const faces = facesFor(sessions, unreadBy, actor, standing, ownerOf);
+  const faces = facesFor(sessions, unreadBy, actor, standing, ownerOf, enrolled);
 
   const shown = faces.length > MAX_FACES ? faces.slice(0, MAX_FACES - 1) : faces;
   const overflow = faces.length - shown.length;
@@ -184,6 +187,8 @@ export function Presence({ actor }: { actor: Actor }) {
           <button
             data-face-id={face.actor.id}
             className={`face ${face.presence}${
+              face.working ? " working" : ""
+            }${
               face.self ? " self" : ""
             }${face.unread > 0 ? " badged" : ""}${
               face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
@@ -264,11 +269,13 @@ function FaceCard({
               ? "you"
               : face.presence === "available"
                 ? "standing by"
-                : face.presence === "here"
-                  ? rungWord(face) ?? face.harness ?? (isAgentActor(kinds, face.actor.id) ? "agent" : face.kind === "cli" ? "terminal" : "here")
-                  : isAgentActor(kinds, face.actor.id)
-                    ? "agent · away"
-                    : "away"}
+                : face.presence === "enrolled"
+                  ? "enrolled · offline"
+                  : face.presence === "here"
+                    ? rungWord(face) ?? face.harness ?? (isAgentActor(kinds, face.actor.id) ? "agent" : face.kind === "cli" ? "terminal" : "here")
+                    : isAgentActor(kinds, face.actor.id)
+                      ? "agent · away"
+                      : "away"}
           </span>
         </span>
       </div>

@@ -83,6 +83,9 @@ describe("a face says whether it is an agent, and whose", () => {
   });
 });
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 describe("the ring is the agent's shape, and the owner's colour", () => {
   it("rings an agent that wears no mark at all", () => {
     // Without this an unmarked agent falls back to a filled disc, which is
@@ -105,5 +108,59 @@ describe("the ring is the agent's shape, and the owner's colour", () => {
     expect(faceMarkStyle(colors, dolly, { id: dion.id })).toEqual({ "--face": mine });
     expect(faceMarkStyle(colors, dolly, null)).toEqual({ "--face": hers });
     expect(faceMarkStyle(colors, dolly)).toEqual({ "--face": hers });
+  });
+});
+
+describe("the two ladders: lightness for reachability, ring thickness for activity (#309)", () => {
+  it("distinguishes enrolled (offline) from available (answering) and working (active turn)", () => {
+    const workingSession = {
+      ...session(dolly, "ses_dolly"),
+      kind: "cli" as const,
+      activity: { verb: "reading", subject: "main.ts" },
+    } as unknown as PresenceSession;
+    const idleSession = session(dion, "ses_dion");
+    const percy: Actor = { id: "usr_percy", name: "Percy" };
+
+    // Dolly is working, Scout is answerable (available), Percy is enrolled (offline)
+    const faces = facesFor(
+      [idleSession, workingSession],
+      noUnread,
+      dion,
+      [scout],
+      ownerOf,
+      [percy],
+    );
+
+    const byId = new Map(faces.map((f) => [f.actor.id, f]));
+    expect(byId.get(dion.id)).toMatchObject({ presence: "here", working: false });
+    expect(byId.get(dolly.id)).toMatchObject({ presence: "here", working: true });
+    expect(byId.get(scout.id)).toMatchObject({ presence: "available", working: false });
+    expect(byId.get(percy.id)).toMatchObject({ presence: "enrolled", working: false });
+  });
+
+  it("enrolled outranks away, and preserves unread counts", () => {
+    const unread = new Map([[scout.id, { actor: scout, count: 3 }]]);
+    const faces = facesFor([], unread, dion, [], ownerOf, [scout]);
+    const scoutFace = faces.find((f) => f.actor.id === scout.id);
+    expect(scoutFace).toMatchObject({
+      presence: "enrolled",
+      working: false,
+      unread: 3,
+      owner: { id: "usr_admiral", name: "Admiral One" },
+    });
+  });
+
+  it("declares the lightness and ring-thickness ladders in CSS without crossing them", () => {
+    const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
+    // Lightness ladder (away .55 < enrolled .6 < available .75 < here 1.0)
+    expect(css).toMatch(/\.face\.away\s+\.face-mark\s*\{[^}]*opacity:\s*0\.55/);
+    expect(css).toMatch(/\.face\.enrolled\s+\.face-mark\s*\{[^}]*opacity:\s*0\.6/);
+    expect(css).toMatch(/\.face\.available\s+\.face-mark\s*\{[^}]*opacity:\s*0\.75/);
+    // Ring thickness ladder (enrolled hairline dashed -> available 1px -> here 2px -> working 3px + pulse)
+    expect(css).toMatch(/\.face\.enrolled\s+\.face-mark\.ringed\s*\{[^}]*border-width:\s*1px;[^}]*border-style:\s*dashed/);
+    expect(css).toMatch(/\.face\.available\s+\.face-mark\.ringed\s*\{[^}]*border-width:\s*1px/);
+    expect(css).toMatch(/\.face-mark\.ringed\s*\{[^}]*border-width:\s*2px/);
+    expect(css).toMatch(/\.face\.working\s+\.face-mark\.ringed\s*\{[^}]*border-width:\s*3px/);
+    expect(css).toMatch(/\.face\.working\s+\.face-mark\s*\{[^}]*animation:\s*face-working-pulse/);
   });
 });

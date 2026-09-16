@@ -42,7 +42,11 @@ export interface Face {
    * working on has stopped meaning anything, which is the whole value of
    * presence being honest. A boolean had nowhere to put that.
    */
-  presence: "here" | "available" | "away";
+  presence: "here" | "available" | "enrolled" | "away";
+  /** Whether this face is actively working right now (`session.activity != null`).
+   *  The ring thickness ladder's top rung (`enrolled` hairline -> `available` 1px ->
+   *  `here` 2px -> `working` 3px, and only `working` animates). */
+  working: boolean;
   /** The rung their connection holds, when the server said one — `read`
    * for somebody looking over your shoulder (roles design, "Presence says
    * the rung"). Null for an editor, and for anyone without a session. */
@@ -147,6 +151,12 @@ export function facesFor(
    * way a face becomes a person, so there is no path that leaves it unset.
    */
   ownerOf: OwnerOf = () => null,
+  /**
+   * Enrolled on this canvas with no rc currently holding for them — the
+   * lightness and ring-thickness ladders' lowest standing rung (`enrolled`:
+   * 0.6 opacity, hairline dashed ring).
+   */
+  enrolled: Actor[] = [],
 ): Face[] {
   const faces: Face[] = [];
   const seen = new Set<string>();
@@ -166,6 +176,7 @@ export function facesFor(
       sessionId: session.sessionId,
       label: session.label ?? session.actor.name,
       presence: "here",
+      working: session.activity != null,
       capability: session.capability ?? null,
       kind: session.kind,
       harness: session.harness,
@@ -196,6 +207,7 @@ export function facesFor(
       sessionId: null,
       label: actor.name,
       presence: "available",
+      working: false,
       capability: null,
       kind: null,
       harness: null,
@@ -208,12 +220,36 @@ export function facesFor(
     });
   }
 
+  /**
+   * Then whoever is ENROLLED here with no rc listening right now — still in the
+   * room as a standing record, distinct from somebody who left a comment and
+   * wandered off (`away`), and wearing the lightness (0.6) and hairline ring
+   * (`docs/research/2026-09-15-reading-the-facepile.md`).
+   */
+  for (const actor of enrolled) {
+    push({
+      actor,
+      sessionId: null,
+      label: actor.name,
+      presence: "enrolled",
+      working: false,
+      capability: null,
+      kind: null,
+      harness: null,
+      status: "enrolled here — no rc is listening right now",
+      cursor: null,
+      unread: unreadBy.get(actor.id)?.count ?? 0,
+      self: false,
+    });
+  }
+
   for (const [, { actor: author, count }] of unreadBy) {
     push({
       actor: author,
       sessionId: null,
       label: author.name,
       presence: "away",
+      working: false,
       capability: null,
       kind: null,
       harness: null,
@@ -234,6 +270,7 @@ export function facesFor(
       sessionId: null,
       label: self.name,
       presence: "here",
+      working: false,
       capability: null,
       kind: "web",
       harness: null,

@@ -2714,16 +2714,14 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 }
 /* Here NOW — the same ring the pins wear. */
 .face.live .face-mark { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--good); }
-/* Not here, but they left something behind. */
-.face.away .face-mark { opacity: 0.45; filter: grayscale(0.5); }
-/* **Standing by is its own thing, and must not read as here.** A solid ring
-   says somebody is at the canvas; a dashed one says something is listening for
-   them. Neither the full-strength face of a participant nor the greyed-out one
-   of somebody who has gone. */
-.face.available .face-mark {
-  opacity: 0.7;
-  box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--live-wash);
-}
+/* **The two ladders: lightness for reachability, ring thickness for activity.**
+   (`docs/research/2026-09-15-reading-the-facepile.md`).
+   Lightness promotes what `.share-roster-row` already does (away .55, enrolled
+   .6, available .75); ring thickness steps from enrolled hairline -> available
+   1px -> here 2px -> working 3px, and only working animates. */
+.face.away .face-mark { opacity: 0.55; filter: grayscale(0.5); }
+.face.enrolled .face-mark { opacity: 0.6; }
+.face.available .face-mark { opacity: 0.75; }
 .face.self .face-mark { box-shadow: 0 0 0 1.5px var(--accent); }
 /* Being watched: the camera is tethered to this face right now. */
 .face.followed .face-mark { box-shadow: 0 0 0 2px var(--accent); }
@@ -2737,6 +2735,16 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   background: var(--card); border-width: 2px; border-color: var(--face);
   color: var(--ink);
 }
+.face.enrolled .face-mark.ringed { border-width: 1px; border-style: dashed; }
+.face.available .face-mark.ringed { border-width: 1px; }
+@keyframes face-working-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 2.5px var(--face); }
+}
+.face.working .face-mark {
+  animation: face-working-pulse 1.6s ease-in-out infinite;
+}
+.face.working .face-mark.ringed { border-width: 3px; }
 .face-more { background: var(--chip); color: var(--ink-muted); font-size: 10px; }
 .face-badge {
   position: absolute; top: -4px; right: -5px; min-width: 15px; height: 15px;
@@ -2745,7 +2753,9 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   font-size: 9.5px; font-weight: 700; line-height: 11px;
 }
 /* An unread comment outranks dimming: the badge must stay legible. */
-.face.away .face-badge { opacity: 1; filter: none; }
+.face.away .face-badge,
+.face.enrolled .face-badge,
+.face.available .face-badge { opacity: 1; filter: none; }
 /* **People, then a hairline, then the agents.** The rule carries
    person-or-agent structurally, so no face needs a badge saying which it is —
    one mark for a group instead of a decoration on every member. Shorter than

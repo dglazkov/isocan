@@ -1,14 +1,14 @@
 ---
-status: designed
+status: built
 since: 2026-09-15
 issue: 309
 see: ui-refresh, bench, standing-agents, on-demand, roles
-note: asked 15 Sep 2026 after an hour of watching a facepile of identical blue discs and being unable to tell an agent from a person, or a reachable agent from a dead one. The proposal is one channel per question — hue and glyph say WHO, a separator says person-or-agent, lightness says reachable, ring thickness says busy — and Dion's refinement is the best part: an agent wears its OWNER's colour, so "whose agent is that" is answered by the same glyph that says what it is. The colour goes on the RING rather than the fill, because `face.ts` already learned that an emoji on a saturated disc fights it.
+note: built 15–16 Sep 2026 — one channel per question: people first, hairline separator, then agents ringed in their OWNER's colour (044375ae); hover card showing owner and gate; @-mention menu marking non-controllable agents as "won't answer you" rather than hiding them (fba4b87e); and the two ladders — lightness for reachability (away .55, enrolled .6, available .75) and ring thickness for activity (enrolled hairline dashed -> available 1px -> here 2px -> working 3px with pulse animation).
 ---
 
 # Reading the facepile
 
-**15 September 2026.** A design note. Nothing built.
+**15 September 2026.** Built 15–16 September 2026 (`044375ae`, `fba4b87e`, and the two ladders).
 
 > *"How do I make Dolly show up with a sheep emoji? In fact, when I look at the
 > top right, we can do more to separate out the people from the agents… Maybe a
@@ -129,22 +129,12 @@ questions, two channels, never crossed.
 - `.face-mark.ringed` — the ring, already 2px and already coloured.
 - `roster()` — all eight states, already shared by four surfaces.
 
-## Open
+## Resolved while building (15–16 Sep 2026)
 
-- **Where does the owner come from?** `roster()`'s rows do not carry one today;
-  the enrolment record's `policy.owner` does. That is the plumbing this needs,
-  and it is the same field `isocan --json rc listen` already prints.
-- **An agent with no mark.** Falls back to its initial on a ringed card fill —
-  still legibly an agent, just a duller one. Whether the system should pick a
-  default emoji per harness (🐑 for sheep) or leave it blank is a taste call
-  nobody has made.
-- **A person's own agent, on their own canvas.** Every ring the same colour as
-  every disc. Correct, and possibly monotonous; worth looking at before
-  deciding it is fine.
-- **Colour-blind readers.** Owner-by-hue is a colour-only encoding. The glyph
-  and the grouping survive it; *whose* does not. The hover card already names
-  the owner, which may be the honest answer — but it should be a decision
-  rather than an oversight.
+- **Where does the owner come from?** Resolved (`044375ae`): the answering rc announces `policy.owner` with its hold; where nothing is answering, the enrolment's `writtenBy` supplies it; otherwise `null` (drawn as a person rather than guessing).
+- **The two ladders in the facepile.** Built (16 Sep 2026): `facesFor` now includes `enrolled` standing agents alongside `available` (answerable) and `here` (live sessions), and carries `working: session.activity != null`. CSS steps lightness (`.away` 0.55 → `.enrolled` 0.6 → `.available` 0.75 → `.here` 1.0) separately from ring thickness (`.enrolled` 1px dashed hairline → `.available` 1px solid → `.here` 2px solid → `.working` 3px solid with pulse animation).
+- **An agent with no mark.** Falls back to its initial on a ringed card fill — still legibly an agent, just a duller one (`faceMarkClass` rings any face with `owner !== null`).
+- **Colour-blind readers.** The hover card (`FaceCard`) explicitly names `owned by <Owner>` and the summons gate (`policyWords`), and the hairline separator groups people before agents structurally.
 
 ## Asked the next day: the hover card, and hiding
 
