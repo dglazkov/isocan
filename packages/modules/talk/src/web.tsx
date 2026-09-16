@@ -135,18 +135,59 @@ export async function runTool(
   if (what) return { ok: false, error: what };
   if (plans.length === 0) return { ok: false, error: `the model called ${name}, which this dialog does not wire` };
 
-  const items = Object.values(facts.canvas.items ?? {}).map((i) => ({ id: i.id, title: i.title }));
+  const items = Object.values(facts.canvas.items ?? {});
+  // Restore is the one verb that names something in the TRASH, which the
+  // live list no longer holds.
+  const trashItems = (facts.canvas.trash ?? []).map((t) => t.item);
+  const resolve = (ref: string, pool: typeof items): (typeof items)[number] | null => {
+    const byId = pool.find((i) => i.id === ref);
+    if (byId) return byId;
+    const byTitle = pool.filter((i) => (i.title ?? "").toLowerCase().startsWith(ref.toLowerCase()));
+    return byTitle.length === 1 ? byTitle[0]! : null;
+  };
   const ops: Operation[] = [];
   for (const plan of plans) {
     const op = { ...plan.op } as Record<string, unknown>;
     if (typeof op.ref === "string") {
-      const ref = op.ref;
-      const byId = items.find((i) => i.id === ref);
-      const byTitle = byId ? [] : items.filter((i) => (i.title ?? "").toLowerCase().startsWith(ref.toLowerCase()));
-      const item = byId ?? (byTitle.length === 1 ? byTitle[0] : null);
+      const ref = op.ref as string;
+      const item =
+        op.type === "item.restore" ? resolve(ref, trashItems) : resolve(ref, items);
       if (!item) return { ok: false, error: `no item matches "${ref}"` };
-      op.itemId = item.id;
+      // The planner speaks refs; each operation speaks its own field name.
+      if (op.type === "thread.create" || op.type === "thread.setAnchor") {
+        op.anchorItemId = item.id;
+        // An anchored thread needs finite coordinates; the planner supplies
+        // none. The item's own spot is where the pin goes.
+        if (op.type === "thread.create" && (op.x === undefined || op.y === undefined)) {
+          op.x = item.x;
+          op.y = item.y;
+        }
+      } else {
+        op.itemId = item.id;
+      }
       delete op.ref;
+      // A relative move is a delta the planner hands over with `by`; the wire
+      // wants the absolute landing spot.
+      if (op.type === "item.move" && op.by === true) {
+        op.x = item.x + Number(op.x ?? 0);
+        op.y = item.y + Number(op.y ?? 0);
+        delete op.by;
+      }
+      // "switch to the first/last/filename" resolves against the item's real
+      // version stack — the wire wants a version id, never a ref.
+      if (op.type === "item.setCurrentVersion") {
+        const vRef = String(op.versionRef ?? "");
+        const versions = item.versions ?? [];
+        const byId = versions.find((v) => v.id === vRef);
+        const byFile = byId ? null : versions.find((v) => v.filename === vRef || v.filename.startsWith(vRef));
+        const versionId =
+          vRef === "first" ? versions[0]?.id
+          : vRef === "last" ? versions[versions.length - 1]?.id
+          : byId?.id ?? byFile?.id;
+        if (!versionId) return { ok: false, error: `no version matches "${vRef}" on "${item.title ?? ref}"` };
+        op.versionId = versionId;
+        delete op.versionRef;
+      }
     }
     if (op.type === "item.add") {
       const body = String(op.content ?? op.text ?? "");
@@ -155,7 +196,10 @@ export async function runTool(
       const filename = String(
         op.filename ?? (mime === "image/svg+xml" ? "sketch.svg" : mime === "text/markdown" ? "note.md" : "note.txt"),
       );
-      const { blobHash, size } = await facts.host.putBlob(new Blob([body]), filename);
+      // The blob carries its declared type, so the daemon stores it under the
+      // mime the op announces — an untyped blob uploads as octet-stream and
+      // the renderer serves the wrong face.
+      const { blobHash, size } = await facts.host.putBlob(new Blob([body], { type: mime }), filename);
       op.itemId = newItemId();
       op.version = { id: newVersionId(), blobHash, mimeType: mime, filename, size };
       delete op.content;
@@ -284,17 +328,38 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   // Raw PCM RMS would read 0..32767, which is how the first bars pegged.
   const inMeter = useRef(new LevelMeter(METER_COUNT));
   const outMeter = useRef(new LevelMeter(METER_COUNT));
+  // The latest facts, read by the socket handlers: a handler closed over the
+  // facts object from when start() ran would resolve tool calls against a
+  // stale canvas (an item added earlier in the conversation would not exist).
+  const factsRef = useRef(facts);
+  factsRef.current = facts;
+  // The capture's setup is abortable: a stop while the microphone permission
+  // is still pending must not hand a live capture to an idle panel.
+  const abortRef = useRef<AbortController | null>(null);
 
   const say = useCallback((who: Line["who"], text: string) => {
-    setLines((prev) => [...prev.slice(-40), { who, text }]);
+    setLines((prev) => {
+      // Transcriptions arrive as PARTIALS that grow within a turn ("read",
+      // "read the", "read the canvas") — a person's line and the model's line
+      // each REPLACE their previous one until the next speaker, so the
+      // captions evolve instead of stacking. System lines still append.
+      const rest = (who === "you" || who === "model") &&
+          prev.length > 0 && prev[prev.length - 1]!.who === who
+        ? prev.slice(0, -1)
+        : prev;
+      return [...rest.slice(-40), { who, text }];
+    });
   }, []);
 
   const stop = useCallback(() => {
     captureRef.current?.stop();
     captureRef.current = null;
+    abortRef.current?.abort();
     socketRef.current?.close();
     socketRef.current = null;
-    playbackRef.current?.stopNow();
+    // close(), not stopNow(): stopNow leaves the AudioContext behind, and a
+    // browser only allows so many — repeated sessions used to leak one each.
+    playbackRef.current?.close();
     inMeter.current.reset();
     outMeter.current.reset();
     inPaintRef.current(0);
@@ -327,8 +392,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       // titles are what a person reads. The shell handed the module these
       // facts, so no store and no route were needed to know them.
       const snapshot = canvasSnapshotText(
-        Object.values(facts.canvas.items ?? {}).map((i) => ({ id: i.id, title: i.title })),
-        Object.values(facts.canvas.threads ?? {}).map((t) => ({ id: t.id, comments: t.comments })),
+        Object.values(factsRef.current.canvas.items ?? {}).map((i) => ({ id: i.id, title: i.title })),
+        Object.values(factsRef.current.canvas.threads ?? {}).map((t) => ({ id: t.id, comments: t.comments })),
       );
       socket.send(JSON.stringify(liveSetup(model.trim(), { source: "canvas", text: snapshot })));
     };
@@ -366,6 +431,13 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
           say("you", (content.inputTranscription as { text: string }).text);
         if (content.outputTranscription && (content.outputTranscription as { text?: string }).text)
           say("model", (content.outputTranscription as { text: string }).text);
+        // Barge-in: the person spoke over the model. Queued chunks must not
+        // play on over the new turn — stopNow exists for exactly this.
+        if (content.interrupted) {
+          playbackRef.current?.stopNow();
+          outMeter.current.reset();
+          say("system", "interrupted");
+        }
         for (const part of (content.modelTurn as { parts?: unknown[] } | undefined)?.parts ?? []) {
           const inline = (part as { inlineData?: { data?: string; mimeType?: string } }).inlineData;
           if (inline?.data) {
@@ -389,7 +461,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         const calls = (message.toolCall as { functionCalls: { id: string; name: string; args?: Record<string, unknown> }[] }).functionCalls;
         const responses: { id: string; name: string; response: Record<string, unknown> }[] = [];
         for (const call of calls) {
-          const response = await runTool(call.name, call.args ?? {}, facts);
+          const response = await runTool(call.name, call.args ?? {}, factsRef.current);
           say("system", `${call.name} → ${response.ok ? "done" : String(response.error)}`);
           responses.push({ id: call.id, name: call.name, response });
         }
@@ -398,6 +470,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     };
 
     try {
+      const abort = new AbortController();
+      abortRef.current = abort;
       const captureHandle = await capture(
         (pcm) => {
           inMeter.current.feed(pcm);
@@ -416,15 +490,22 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         },
         undefined,
         undefined,
-        new AbortController().signal,
+        abort.signal,
       );
+      // Stopped while the permission was pending: the capture that just
+      // resolved belongs to nobody, and a microphone left running under an
+      // idle panel is the bug this closes.
+      if (socketRef.current !== socket) {
+        captureHandle.stop();
+        return;
+      }
       captureRef.current = captureHandle;
     } catch (err) {
       setState("refused");
       say("system", `microphone refused — ${String((err as Error).message ?? err)}`);
       socket.close();
     }
-  }, [key, model, say, facts]);
+  }, [key, model, say]);
 
   // The door was the press: with a key already in the shelf, open means
   // listen.

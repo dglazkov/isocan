@@ -752,6 +752,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   than a duplicate-id refusal. Two things deliberately do not work offline
   and say so: adding a **file** (bytes are not queued) and **undo** (the
   stack is the home's, walked over the whole oplog).
+- **Talk to the canvas** (experiment, `modules.talk`): a floating mic that opens
+  a Gemini Live session from the browser with **your own key** — stored in that
+  browser only, never on the canvas or the daemon. Spoken requests become the
+  same operations a click sends, wearing your identity and undo; the captions
+  and level bars float by the button and disappear with the turn. ⌘K →
+  "Configure voice" is the settings door; `isocan voice` says where the button is.
 - **Canvases**: a canvas is the unit of work; create/list/edit/delete from
   either surface.
 - **A directory is its canvas** (#60): `<dir>/.isocan/project.json` binds a

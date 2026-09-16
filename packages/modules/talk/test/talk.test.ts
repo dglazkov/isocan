@@ -18,15 +18,23 @@ import { decodeMessage, runTool, talkWeb } from "../src/web.tsx";
  * harness's, shared via `@isocan/voice-agent/live`.
  */
 
+const versionOf = (id: string, filename: string) => ({ id, filename, blobHash: "h", mimeType: "text/markdown", size: 3 });
 const canvas = {
   items: {
-    itm_1: { id: "itm_1", title: "Checkout screen" },
-    itm_2: { id: "itm_2", title: "Launch plan" },
+    itm_1: {
+      id: "itm_1", title: "Checkout screen", x: 10, y: 20, width: 320, height: 240,
+      description: "", properties: {},
+      versions: [versionOf("ver_1", "a.md"), versionOf("ver_2", "b.md")],
+      currentVersionId: "ver_2",
+    },
+    itm_2: { id: "itm_2", title: "Launch plan", x: 400, y: 100, width: 320, height: 240, description: "", properties: {}, versions: [versionOf("ver_3", "plan.md")], currentVersionId: "ver_3" },
   },
   threads: {
     thr_main: { id: "thr_main", comments: [], main: true },
   },
-  trash: [],
+  trash: [
+    { item: { id: "itm_gone", title: "Old banner", x: 0, y: 0, width: 100, height: 100, description: "", properties: {}, versions: [versionOf("ver_9", "old.md")], currentVersionId: "ver_9" } },
+  ],
   agents: {},
 };
 
@@ -153,6 +161,43 @@ describe("a spoken request becomes the same operations a click sends", () => {
     expect(result.ok).toBe(true);
     expect(String(result.answer)).toContain("Checkout screen [itm_1]");
     expect(sent.length).toBe(before);
+  });
+
+  it("resolves a relative move against the item's real position", async () => {
+    const result = await runTool("move_item", { item_ref: "checkout", by_x: 50, by_y: -10 }, facts);
+    expect(result.ok).toBe(true);
+    const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
+    expect(op).toMatchObject({ type: "item.move", itemId: "itm_1", x: 60, y: 10 });
+    expect(op.by).toBeUndefined();
+  });
+
+  it("restores an item from the trash, where the live list no longer holds it", async () => {
+    const result = await runTool("restore_item", { item_ref: "old banner" }, facts);
+    expect(result.ok).toBe(true);
+    const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
+    expect(op).toMatchObject({ type: "item.restore", itemId: "itm_gone" });
+  });
+
+  it("switches versions by first, last, and filename — the wire gets a version id", async () => {
+    for (const [ref, expected] of [["first", "ver_1"], ["last", "ver_2"], ["a.md", "ver_1"]] as const) {
+      const result = await runTool("item_set_current_version", { item_ref: "checkout", version_ref: ref }, facts);
+      expect(result.ok, ref).toBe(true);
+      const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
+      expect(op.versionId, ref).toBe(expected);
+      expect(op.versionRef).toBeUndefined();
+    }
+    const bad = await runTool("item_set_current_version", { item_ref: "checkout", version_ref: "nope" }, facts);
+    expect(bad.ok).toBe(false);
+  });
+
+  it("anchors a thread at the item's own coordinates when the planner gives none", async () => {
+    const result = await runTool("comment_on_item", { item_ref: "checkout", text: "look at this" }, facts);
+    expect(result.ok).toBe(true);
+    const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
+    expect(op.type).toBe("thread.create");
+    expect(op.anchorItemId).toBe("itm_1");
+    expect(op.x).toBe(10);
+    expect(op.y).toBe(20);
   });
 
   it("a tool the dialog does not wire is said so, not faked", async () => {

@@ -1,7 +1,8 @@
 ## isocan voice
 
 `isocan voice` says where the browser voice lives: open the canvas in the web
-app and choose **Talk to the canvas** (⌘K, Canvas group). The dialog opens a
+app and choose **Configure voice** (⌘K, Canvas group) — that is the settings
+door (key and model); the floating mic is the talking. The dialog opens a
 Gemini Live session from that browser with that person's own API key — the
 key is stored in the browser's storage, never on the canvas and never in the
 daemon — and hands the model the canvas's operations as tools, so a spoken

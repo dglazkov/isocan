@@ -4,7 +4,7 @@
  *
  * This used to live inside `voice-harness.ts`, beside the node-only session
  * plumbing, which was fine while the harness was the only speaker. The web
- * module `@isocan/voice` opens the same provider socket from a browser and
+ * browser module (which carries its own copy) opens the same provider socket and
  * must send the SAME setup, declare the SAME tools and map tool calls to the
  * SAME operations — a second spelling would be the house bug (one string,
  * two spellings) wearing a module hat.
@@ -904,7 +904,7 @@ export function planForCall(name: string, args: Record<string, unknown>): { plan
             op: {
               type: "thread.setAnchor",
               threadId: String(args.thread_id ?? ""),
-              ...(typeof args.item_ref === "string" && args.item_ref !== "" ? { ref: args.item_ref } : {}),
+              ...(typeof args.item_ref === "string" && args.item_ref !== "" ? { ref: args.item_ref } : { anchorItemId: null }),
               ...(args.x !== undefined ? { x: Number(args.x) } : {}),
               ...(args.y !== undefined ? { y: Number(args.y) } : {}),
             },

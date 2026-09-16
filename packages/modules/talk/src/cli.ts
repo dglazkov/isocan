@@ -27,9 +27,10 @@ export const talkCli: CliModule = {
           const canvas = await host.resolveCanvas(ctx);
           const url = canvasUrl(ctx.client.base, canvas.id);
           console.log(
-            `The browser holds the voice: open ${url} and choose ` +
-              `"Talk to the canvas" (⌘K), or paste your Gemini API key there. ` +
-              `The key lives in that browser's storage — never on the canvas, never in the daemon.`,
+            `The browser holds the voice: open ${url} and press the floating mic ` +
+              `(bottom right). ⌘K → "Configure voice" is where the key and the model ` +
+              `live — the key stays in that browser's storage, never on the canvas, ` +
+              `never in the daemon.`,
           );
         }),
       );
