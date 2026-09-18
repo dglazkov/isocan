@@ -1,10 +1,18 @@
 # Memory — the walk
 
-**Where we are:** phases 0–5 are closed. CLI, web and MCP share bounded
-inherited Recent work; Public and memory Journeys 1–5 are verified.
-Memory phase 6 is next: pin-from-source under [pin-from-source.md](pin-from-source.md).
-It copies a selected ordinary inherited piece into a local pin in one undoable
-act. No credential, resource or person blocks that work.
+**Where we are: every phase is CLOSED, 18 September 2026.** Phase 6 landed
+pin-from-source — `isocan context pin --from` and the Context picker copy one
+current piece of an ordinary inherited source into a local pin, one
+`group.change`, one undo, durable provenance, no governing design role
+imported. Journeys 1–6 are verified; Journey 6's browser half was walked at
+1440px and 390px with a real browser against a real daemon
+(`scripts/journey-pin-from-source.mjs`), and the walk was proved able to fail
+by mutating the product twice and watching it go red.
+
+Nothing is owed to a person on this project. Two things are owed to work, and
+both are Open entries rather than phases: the acceptance walks are run once at
+acceptance and nothing re-runs them, and the phone's group-context line reads
+"1 items".
 
 ## Phase 0 — Context with headings
 
@@ -169,7 +177,32 @@ Personal current-piece reading and frozen-request semantics stay unchanged.
 
 ## Phase 6 — Copy a source piece into a local pin
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 18 September 2026 — `isocan context pin <item> --from
+<canvas>` and the Context picker copy one current piece of an ordinary
+inherited source into a local pin, in one `group.change` that one undo takes
+back whole, carrying durable `contextSource` provenance and no governing
+design role.
+
+**Outcome:** the act is one existing copy, not a new one. `groupCopySource`
+and `groupCopyAction` freeze and remap exactly as an ordinary copy does;
+`groupCopyAction` gained one optional `decorate` hook, so the pin, the
+provenance and the design-role stripping ride the same act rather than a
+second write — which is what makes one undo take all three. The byte transfer
+and hash verification moved out of `CanvasGroups.copyFrom` into
+`api/copy-bytes.ts` with the digest injected, and `copyFrom` now calls it, so
+there is one byte path and a browser cannot grow a second answer to "are these
+the bytes the new item will claim". `api/context-pin.ts` owns the order of the
+checks for both surfaces: destination first (a legacy canvas gets its
+conversion guidance before anyone's content arrives), classify before any
+read, freeze, resolve with no bytes written, transfer and verify, then re-read
+the destination and re-check the visible edge before submitting.
+
+The provenance is a RECORD and never a capability — six plain facts, no badge,
+no token, nothing private — and it lives in its own core module,
+`context-source.ts`, apart from the eligibility rules, because local Context
+reads it on every canvas and the picker is opened rarely. Malformed provenance
+is ignored as metadata rather than refused: a property is a string anyone can
+set, and an item whose `contextSource` is nonsense is still a good item.
 
 **Proof:** actual CLI and desktop/390px browser select and copy ordinary
 inherited pins and a nested group with its current source/visual faces.
@@ -233,3 +266,30 @@ is the provenance READER only, measured, and the ceiling stands at 747,000.
   the original omission's historical record. Inheritance uses a bounded
   metadata head, with coherent archive/live assembly, instead of copying its
   raw recent operations or claiming a new persistent index.
+
+- **2026-09-18** — The eager half of a feature must be its own core module.
+  One module holding both a copy's provenance reader and the picker's
+  eligibility rules put 1,627 bytes of picker logic into the entry, because a
+  bundler hoists what a lazy chunk and an eager one share. Third instance.
+- **2026-09-18** — A copy that must decorate descendants cannot use a
+  root-only properties hook. The existing copy act gained one optional
+  `decorate` callback instead, keeping the pin, the provenance and the role
+  stripping inside a single undoable `group.change`.
+- **2026-09-18** — Byte transfer and hash verification are now one shared leaf
+  with an injected digest, called by both `CanvasGroups.copyFrom` and
+  pin-from-source. A second implementation's one freedom was the thing that
+  matters: verify before you write.
+- **2026-09-18** — "No Chrome found" named the launcher's candidate list, not
+  the machine. Chromium was installed outside `CHROME_CANDIDATES` and refused
+  to start as root without `--no-sandbox`; on that error a rendered-layout
+  proof was downgraded to a stylesheet assertion. Check the filesystem before
+  a phase believes its own tooling about the environment.
+- **2026-09-18** — Open: no acceptance walk in this project is re-run by
+  anything. `scripts/journey-pin-from-source.mjs` and phase 5's
+  `scripts/journey-recap.mjs` are both absent from `JOURNEYS` in
+  `scripts/journeys.mjs`, so neither is in the nightly runner; they pass at
+  acceptance and are never asked again. Waits on a decision about whether a
+  phase walk should become a standing journey.
+- **2026-09-18** — Open: `packages/web/src/components/GroupContext.tsx:38`
+  renders "1 items" — no singular form, visible on the 390px walk. Pre-existing
+  and owned by canvas-groups' context inspection, not by this phase.

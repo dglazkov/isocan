@@ -157,6 +157,19 @@ describe("the browser's transport is the automatic-source one", () => {
   });
 });
 
+/**
+ * **What this file can and cannot say about the picker's appearance.**
+ *
+ * The rules below are read out of `context-pin.css`, and a rule is not a
+ * rendered layout: `display:none` on an ancestor, a covering overlay and a
+ * zero-height box all satisfy a stylesheet check and none of them put the
+ * sentence in front of a person. So these two guard the DECLARATION — that the
+ * one-column intent and the wrap are written down, and that a later edit which
+ * deletes them is noticed by the fast lane — and the rendered layout at 1440px
+ * and 390px is measured for real in `scripts/journey-pin-from-source.mjs`,
+ * which drives a browser through `scripts/lib/browser.mjs` and asserts
+ * geometry from `getBoundingClientRect` and `elementFromPoint`.
+ */
 describe("both surfaces, and both widths", () => {
   it("reaches the shared act rather than rolling a second copy in the browser", () => {
     const panel = read("components/ContextPanel.tsx");
@@ -167,13 +180,17 @@ describe("both surfaces, and both widths", () => {
     expect(picker).not.toMatch(/groupCopyAction|group\.change|item\.update/);
   });
 
-  it("shows where a copied pin came from beside it, in local Context", () => {
+  it("renders the copied piece's source from the shared field, not a second fold", () => {
+    // That a person can READ it, beside the piece, at both widths is measured
+    // in the browser walk; what is guarded here is that the panel takes it
+    // from the core `copied` field rather than re-deriving provenance.
     const panel = read("components/ContextPanel.tsx");
     expect(panel).toMatch(/piece\.copied/);
     expect(panel).toMatch(/one\.source\.canvasTitle/);
+    expect(panel).not.toMatch(/parseContextSource|contextSourceOf/);
   });
 
-  it("lays the picker out for a 390px phone as well as the rail", () => {
+  it("declares the one-column phone layout the browser walk then measures", () => {
     const sheet = rules(read("components/context-pin.css"));
     const piece = sheet.find((rule) => rule.selector === ".ctx-pin-piece")!;
     // One column: a radio, a title and a count in a row wrap into nonsense on

@@ -21,6 +21,19 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 18 September 2026
+
+- **Keep a piece of a shared source here.** Open an inherited source in Context
+  and choose **Copy a piece here**: pick one of its pinned pieces or its design
+  note, press **Copy and pin**, and it becomes yours — editable, pinned into
+  this canvas's context, and showing where it came from. It is a copy of the
+  current version, so later edits on the source do not change it, and your copy
+  keeps working after the source is edited, removed or unlinked. Copying a
+  group brings its contents, and the panel says how many items that is.
+  Copying a design note keeps it as a reference without replacing the design
+  that governs this canvas. One undo takes the whole copy back. Agents do the
+  same with `isocan context pin <item> --from <canvas>`.
+
 ## 15 September 2026
 
 - Open **Optional craft guidance** on a design task for advice adapted from
