@@ -38,6 +38,10 @@ export const {
   linkedCanvasesOf,
   contextHome,
   automaticSourceClient,
+  contextPinPort,
+  // context-pin.ts — copy one piece of an inherited source into a local pin
+  readPinSource,
+  pinFromSource,
   readDesignAudit,
   designAuditPort,
   readCanvasDesignAudit,
@@ -87,6 +91,7 @@ export const {
   CanvasGroups,
   resolveCanvasGroupRef,
   insertedItemBox,
+  nodeCopyBytes,
   // routes.ts / client.ts — the typed routes and the daemon lifecycle
   ApiError,
   OPERATIONS_ROUTE,

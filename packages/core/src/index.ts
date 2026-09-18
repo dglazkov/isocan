@@ -101,6 +101,7 @@ export * from "./summons.ts";
 export * from "./docstatus.ts";
 export * from "./jsoncanvas.ts";
 export * from "./contextmark.ts";
+export * from "./context-source.ts";
 export * from "./context-pin.ts";
 export * from "./slides.ts";
 export * from "./deckexport.ts";

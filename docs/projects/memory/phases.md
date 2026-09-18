@@ -182,8 +182,10 @@ revocation, held-transfer link removal and browser identity change refuse
 without a visible partial copy; private refusals open no source data.
 Authoritative forwarding retains exclusion and cancellation. Existing group
 copy and memory behavior pass. Run full required-deep/emulator/bundle tests,
-typecheck, build and actual browser acceptance with the unchanged entry
-ceiling. Journey 6 and pin-from-source.md define the exact scope.
+typecheck, build and actual browser acceptance. Journey 6 and
+pin-from-source.md define the exact scope, including the entry ceiling, whose
+stale number was corrected there on 18 Sep 2026: the eager cost of this phase
+is the provenance READER only, measured, and the ceiling stands at 747,000.
 
 ## Trajectory
 

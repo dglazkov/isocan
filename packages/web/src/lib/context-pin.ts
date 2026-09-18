@@ -1,4 +1,3 @@
-import { SOURCE_POLICY_HEADER, sourcePolicyHeader } from "@isocan/core";
 import type { ContextPinPort } from "@isocan/api/context-pin";
 import { getSnapshot, uploadBlob } from "./api.ts";
 import { personalApi, sourceBytes, sourceSnapshot } from "./personal.ts";
@@ -42,8 +41,3 @@ export const contextPinIO: ContextPinPort = {
       : result.message ?? "The copy was refused.");
   },
 };
-
-/** Exported so the panel can name the policy it reads under without a second
- *  spelling of the header. */
-export const sourcePolicyHeaders = (expectedHome: string): Record<string, string> =>
-  ({ [SOURCE_POLICY_HEADER]: sourcePolicyHeader({ policy: { mode: "exclude" }, expectedHome }) });
