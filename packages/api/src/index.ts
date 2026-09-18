@@ -18,6 +18,7 @@
  */
 export * from "./connect.ts";
 export * from "./context-summary.ts";
+export * from "./context-pin.ts";
 export * from "./design-audit.ts";
 export * from "./design-audit-reader.ts";
 export * from "./questionnaire-reader.ts";

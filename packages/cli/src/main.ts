@@ -1,4 +1,5 @@
 import { classifyAutomaticSource } from "@isocan/api/context";
+import { contextPinPort, pinFromSource } from "@isocan/api";
 import { registerPersonalContext } from "./personal-context.ts";
 import { noteOnBench, registerBench } from "./bench.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
@@ -344,6 +345,7 @@ import {
   describeLosses,
   contextMark,
   markPatch,
+  formatContextSource,
   layersReport,
   memoryOf,
   memoryPatch,
@@ -9583,14 +9585,28 @@ inheritVerb("uninherit", null, "Stop inheriting a placed canvas's memory — the
  * adds no operation — the same answer `mapParent` reached for edges.
  */
 function markVerb(name: "pin" | "exclude" | "unmark", mark: "pinned" | "excluded" | null, blurb: string) {
-  context
+  const verb = context
     .command(`${name} <item>`)
     .description(blurb)
-    .option("--canvas <canvas>")
+    .option("--canvas <canvas>");
+  /**
+   * **`--from` is a different act wearing the same verb, on purpose**
+   * (`docs/projects/memory/pin-from-source.md`). Without it, `context pin`
+   * keeps its meaning exactly: mark an item that is already here. With it,
+   * `<item>` names a piece on an inherited SOURCE, and what lands here is a
+   * copy of that piece's current version, pinned in the same act.
+   *
+   * One verb because it is one intent — "an agent should read this here" —
+   * and one act because a copy whose pin arrived in a second write would undo
+   * in two steps and leave an unpinned orphan in between.
+   */
+  if (name === "pin") verb.option("--from <canvas>", "copy this piece from a visible inherited source and pin the copy here");
+  verb
     .action(
-      run(async (itemRef: string, opts: { canvas?: string }, cmd: Command) => {
+      run(async (itemRef: string, opts: { canvas?: string; from?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
         if (opts.canvas) ctx.canvasRef = opts.canvas;
+        if (opts.from) return pinFromInheritedSource(ctx, itemRef, opts.from);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const item = resolveItem(snapshot, itemRef);
         const was = contextMark(item);
@@ -9615,7 +9631,26 @@ function markVerb(name: "pin" | "exclude" | "unmark", mark: "pinned" | "excluded
     );
 }
 
-markVerb("pin", "pinned", "Say an agent should read this first");
+/**
+ * The copy half of `context pin --from`: reuse the shared act, then say the
+ * two things a person actually needs to know afterwards — that this is a copy
+ * of the current version and will not follow the source, and that one undo
+ * takes the whole thing back.
+ */
+async function pinFromInheritedSource(ctx: Ctx, pieceRef: string, from: string): Promise<void> {
+  const p = await resolveCanvas(ctx);
+  const result = await pinFromSource(contextPinPort(ctx), {
+    canvasId: p.id, home: await contextHome(ctx, p.id), actor: ctx.actor, from, piece: pieceRef,
+  });
+  if (ctx.json) return printJson(result);
+  console.log(`“${result.title}” is copied here and pinned into context — ${result.count} item${result.count === 1 ? "" : "s"}, ${formatContextSource(result.source)}.`);
+  console.log(
+    `This is a copy of the current version, including a group's contents; later edits on “${result.source.canvasTitle}” will not update it.` +
+      `\nOne \`isocan undo\` removes the whole copy and its pin.`,
+  );
+}
+
+markVerb("pin", "pinned", "Say an agent should read this first — with `--from <canvas>`, copy a piece from an inherited source and pin the copy");
 markVerb("exclude", "excluded", "Say an agent should skip this — it stays on the canvas");
 markVerb("unmark", null, "Take back a pin or an exclusion");
 

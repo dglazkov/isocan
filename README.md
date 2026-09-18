@@ -156,6 +156,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   `isocan context` and MCP summaries show the same bounded reading and say
   what was omitted. Missing history leaves readable design and pins in place.
   Personal history does not enter this inherited reading.
+- **Copy a piece from a source**: **Copy a piece here** on an inherited layer in
+  Context lists that source's current design and pinned pieces; **Copy and pin**
+  brings the chosen one's current version — a group with its contents — into
+  this canvas as an ordinary editable item, pinned, with the source shown beside
+  it. It is a copy, not a link: later source edits, removal or unlinking leave
+  it alone, and one undo takes the whole copy and its pin back. A copied design
+  note stays a reference rather than becoming the design that governs here.
+  Agents use `isocan context pin <item> --from <canvas>`.
 - **Personal memory**: **Your canvas** in Context creates one private canvas
   for your identity at this home. Pin a preference there, link it into a
   project, and explicitly allow the agents who may read it. The project shows

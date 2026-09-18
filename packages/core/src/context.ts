@@ -4,6 +4,7 @@ import { designSystem } from "./designsystem.ts";
 import { moduleContextPieces } from "./modules.ts";
 import { excludedItems } from "./contextmark.ts";
 import { ambientContextItems } from "./canvas-group-context.ts";
+import { copiedContextItems, formatContextSource, type ContextSource } from "./context-pin.ts";
 import type { RecapHeadResponse } from "./recap-head.ts";
 
 // Preserve direct imports while keeping terminal formatting outside Context assembly.
@@ -53,6 +54,13 @@ export interface ContextPiece {
   stale?: string;
   /** What to do about it, when there is something. */
   fix?: string;
+  /** Local items copied from a source, each with where it came from
+   *  (`context-pin.ts`). A copy does not follow its source, so the source is
+   *  a durable fact about these bytes rather than a link to fetch — and it is
+   *  shown BESIDE the piece, because a pin whose origin is invisible is how
+   *  somebody ends up editing "the team's checklist" believing the team will
+   *  see it. */
+  copied?: Array<{ itemId: string; title: string; source: ContextSource }>;
 }
 
 /** Facts only the machine running the CLI can know. The web has none of them,
@@ -155,6 +163,21 @@ export function contextPieces(
       ? { size: pinned.map((item) => item.title).join(", ") }
       : { fix: "`isocan context pin <item>` to say what an agent should read first" }),
   });
+
+  /**
+   * Only when there are any, for the same reason "Excluded items: 0" is not a
+   * row: this is news on the canvases that have it and noise everywhere else.
+   */
+  const copied = copiedContextItems(canvas);
+  if (copied.length > 0) {
+    pieces.push({
+      name: "Copied from a source",
+      source: "canvas",
+      present: true,
+      size: copied.map(({ item, source }) => `${item.title} (${formatContextSource(source)})`).join("; "),
+      copied: copied.map(({ item, source }) => ({ itemId: item.id, title: item.title, source })),
+    });
+  }
 
   const marked = markedItems(canvas);
   pieces.push({
