@@ -17,6 +17,8 @@ import { PersonalContext, PersonalRead } from "./PersonalContext.tsx";
 import "./personal-context.css";
 import { sourceRecap } from "../lib/context-recap.ts";
 import "./context-recap.css";
+import { PinFromSource } from "./LazyPinFromSource.tsx";
+import "./context-pin.css";
 
 const contextIO = { ...personalApi, sourceRecap, sourceSnapshot, designText: readBlobText };
 
@@ -72,6 +74,10 @@ function ContextInspection({ canvasId, actor, canvas, scope, home, close }: { ca
       {groupMode === "groups" && <LiveContextInspection key={canvasId} canvasId={canvasId} />}
       {layers.map((layer) => <Layer key={contextLayerKey(layer)} layer={layer}>
         {layer.kind === "personal" && !layer.refused && <PersonalRead key={`${scope}:${revision}:${layer.itemId}`} canvasId={canvasId} actor={actor} itemId={layer.itemId} sourceCanvasId={layer.canvasId} home={home} canUnlink={canEdit && !past && !!ownerId && ownerId === layer.owner?.id} refresh={refresh} />}
+        {/* Ordinary inheritance only, and only where this canvas can be
+            edited: a personal layer's pieces are somebody's private canvas,
+            and this picker is the shared-source one. */}
+        {layer.kind === "inherited" && !layer.refused && !past && groupMode === "groups" && <PinFromSource key={`${scope}:${layer.itemId}`} canvasId={canvasId} canvas={canvas} actor={actor} home={home} from={layer.itemId} refresh={refresh} />}
       </Layer>)}
       {!past && <PersonalContext canvasId={canvasId} actor={actor} refresh={refresh} onOwner={setOwnerId} />}
     </div>
@@ -109,6 +115,16 @@ function Layer({ layer, children }: { layer: ContextLayer; children?: ReactNode 
               accusation. */}
           {piece.stale && <div className="ctx-why">{piece.stale}</div>}
           {piece.recap && <p className="ctx-recap" data-source-canvas={piece.recap.canvasId}>{formatRecapHead(piece.recap.head)}</p>}
+          {/* A copy does not follow its source, so where it came from is a
+              durable fact about these bytes — shown beside the piece, on the
+              phone as well, because a pin whose origin is invisible is how
+              somebody edits "the team's checklist" believing the team sees it. */}
+          {piece.copied && <div className="ctx-copied">{piece.copied.map((one) => (
+            <div key={one.itemId} className="ctx-copied-row" data-source-canvas={one.source.canvasId}>
+              <span className="ctx-copied-name">{one.title}</span>
+              <span className="ctx-copied-from">from “{one.source.itemTitle}” on {one.source.canvasTitle}</span>
+            </div>
+          ))}</div>}
           {piece.fix && (piece.stale || !piece.present) && (
             <div className="ctx-fix">{piece.fix}</div>
           )}

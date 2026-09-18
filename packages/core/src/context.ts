@@ -4,11 +4,11 @@ import { designSystem } from "./designsystem.ts";
 import { moduleContextPieces } from "./modules.ts";
 import { excludedItems } from "./contextmark.ts";
 import { ambientContextItems } from "./canvas-group-context.ts";
-import { copiedContextItems, formatContextSource, type ContextSource } from "./context-pin.ts";
+import { copiedContextItems, type ContextSource } from "./context-source.ts";
 import type { RecapHeadResponse } from "./recap-head.ts";
 
 // Preserve direct imports while keeping terminal formatting outside Context assembly.
-export { contextReport } from "./context-report.ts";
+export { contextReport, formatContextSource } from "./context-report.ts";
 
 /**
  * **What an agent will actually read when it starts work here.**
@@ -174,7 +174,7 @@ export function contextPieces(
       name: "Copied from a source",
       source: "canvas",
       present: true,
-      size: copied.map(({ item, source }) => `${item.title} (${formatContextSource(source)})`).join("; "),
+      size: `${copied.length} item${copied.length === 1 ? "" : "s"}`,
       copied: copied.map(({ item, source }) => ({ itemId: item.id, title: item.title, source })),
     });
   }

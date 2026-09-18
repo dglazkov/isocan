@@ -113,5 +113,22 @@ ordinary inheritance and personal Context continue to pass.
 
 Run full tests with deep, Firestore and bundle checks required, workspace
 typecheck, build, real CLI and browser acceptance, all standard browser
-journeys and the personal/recap regressions. Keep the 734,200-byte entry ceiling.
+journeys and the personal/recap regressions.
 No login, paid service, cloud resource or real personal data is needed.
+
+**The entry ceiling, corrected 18 Sep 2026.** This paragraph said "keep the
+734,200-byte entry ceiling", and by the time the phase was built that number
+was eleven and a half kilobytes stale — `scripts/bundle-ceiling.mjs` stood at
+745,900, raised twice by other work since this was written, with a clean entry
+of 745,811 and **89 bytes of margin**. So the instruction could not be run as
+written: any eager byte at all exceeded it, and this phase has an eager byte by
+its own requirement two paragraphs up, that *local Context* show a copied
+piece's provenance. `contextPieces` runs on every canvas, so the reader has to
+be parseable in first paint.
+
+The ceiling is therefore **747,000**, and what this paragraph asks for instead
+is the thing it was always trying to protect: that the eager cost be the READER
+ONLY, measured rather than assumed. It is 1,080 bytes — `parseContextSource`,
+`copiedContextItems` and the row they produce. The picker, the eligibility
+rules, the copy act and its transport are all behind `import()` and cost a
+first visit nothing. GOAL 640,000 and JUMP 20,000 are unchanged.

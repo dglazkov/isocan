@@ -12,7 +12,7 @@ describe("retireStrandedIdentities", () => {
     if (origHome === undefined) delete process.env.HOME;
     else process.env.HOME = origHome;
     for (const d of dirs.splice(0)) {
-      await fs.rm(d, { recursive: true, force: true });
+      await fs.rm(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 

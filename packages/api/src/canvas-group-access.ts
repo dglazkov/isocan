@@ -11,10 +11,10 @@ import { atLeast, type CanvasSnapshotResponse } from "@isocan/core";
  * structural rewrite somebody did not ask for. So an old canvas is told what
  * to run, **before** any source is read or any byte is uploaded.
  */
-export const LEGACY_CANVAS_GUIDANCE = "canvas groups are not enabled on this legacy canvas; preview conversion with `isocan canvas group migrate --dry-run`, then apply it with `isocan canvas group migrate`. Existing areas remain readable with `isocan area ls`.";
+const LEGACY_CANVAS_GUIDANCE = "canvas groups are not enabled on this legacy canvas; preview conversion with `isocan canvas group migrate --dry-run`, then apply it with `isocan canvas group migrate`. Existing areas remain readable with `isocan area ls`.";
 
 /** One sentence for a read-only destination, so every writing act refuses alike. */
-export const NEEDS_EDIT_GUIDANCE = "editing this canvas requires edit access; groups can still be listed and inspected";
+const NEEDS_EDIT_GUIDANCE = "editing this canvas requires edit access; groups can still be listed and inspected";
 
 /** Refuse a legacy or read-only destination with the guidance above. */
 export function assertGroupDestination(state: CanvasSnapshotResponse, edit: boolean): CanvasSnapshotResponse {

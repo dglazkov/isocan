@@ -1,0 +1,28 @@
+/* One column, because the Context rail is narrow on a desktop and narrower on
+   a 390px phone: a row of radio + title + count wraps into nonsense below
+   about 320px, and this panel is read on a phone by design. */
+.ctx-pin { margin: 8px 0 2px; }
+.ctx-pin-picker { display: grid; gap: 6px; margin-top: 8px; }
+.ctx-pin-piece {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.ctx-pin-piece input { grid-row: 1; }
+.ctx-pin-name { grid-row: 1; overflow-wrap: anywhere; }
+.ctx-pin-kind, .ctx-pin-count, .ctx-pin-piece .ctx-why { grid-column: 2; color: var(--ink-soft); overflow-wrap: anywhere; }
+.ctx-pin-piece.refused { opacity: 0.7; }
+.ctx-pin-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Where a copy came from, beside the copy — never a tooltip, because the
+   whole point of the row is that it is readable without pointing at it. */
+.ctx-copied { display: grid; gap: 2px; margin-top: 6px; font-size: 12px; }
+.ctx-copied-row { display: grid; gap: 2px; overflow-wrap: anywhere; }
+.ctx-copied-from { color: var(--ink-soft); }
+@media (max-width: 480px) {
+  .ctx-pin-actions .btn { flex: 1 1 auto; }
+}

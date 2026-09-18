@@ -391,11 +391,36 @@
  * `#309` (facepile lightness and ring-thickness ladders) and `#320` (the talk
  * module experiment entry in Settings), leaving the fresh entry at 745,811
  * bytes with 89 bytes of margin.
+ *
+ * **745,900 → 747,000 on 18 Sep 2026, for pin-from-source** (memory phase 6):
+ * local Context now says where a copied piece came from. The fresh entry is
+ * 746,891, a net **1,080** over 745,811, and it is the READING half only —
+ * `contextPieces` runs on every canvas, so the provenance a copy carries has
+ * to be parseable in first paint.
+ *
+ * **The eager/lazy split was measured, not assumed, and it cost three builds.**
+ * The first attempt put the whole feature in one core module, `context-pin.ts`,
+ * and the entry went to 748,687 — because the Context panel's lazy chunk and
+ * the eager `contextPieces` both reached into it, so rollup hoisted the shared
+ * module into the entry, eligibility rules and all. That is the `arrow.ts` and
+ * `facts.ts` lesson a third time: **the eager half of a feature has to be a
+ * separate file from the lazy half.** Splitting the record into
+ * `core/context-source.ts` took 1,627 bytes back; moving `formatContextSource`
+ * into `context-report.ts` (which exists to keep terminal formatting out of
+ * eager assembly) took 114 more; moving `contextSourceProperty` beside the act
+ * that writes it took 55. The remaining 1,080 is the reader: `parseContextSource`,
+ * `copiedContextItems` and the row they produce. The picker, the eligibility
+ * rules, the copy act and its transport are all behind `import()` and cost the
+ * first paint nothing.
+ *
+ * The margin is 109 bytes, in line with the argument three entries up: a margin
+ * thinner than one ordinary commit is a tax on whoever pushes next. GOAL 640,000
+ * and JUMP 20,000 remain unchanged, and 1,080 is well inside JUMP.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 745_900;
+export const CEILING = 747_000;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's
