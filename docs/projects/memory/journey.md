@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-09-02
 see: context, inception, standing-agents, embed, public
-note: phases 0–5 are verified, 13 Sep. Phase 6 next copies an ordinary inherited piece into a local pin under Journey 6 and pin-from-source.md
+note: every phase closed 18 Sep 2026. Phases 0–5 were verified 13 Sep; phase 6 landed pin-from-source — `isocan context pin --from` and the Context picker copy one current piece of an ordinary inherited source into a local pin, in one `group.change` that one undo takes back whole, carrying durable `contextSource` provenance and importing no governing design role. It is the existing copy act with one `decorate` hook, and the byte path is now shared with `CanvasGroups.copyFrom` rather than forked. Journey 6's browser half was walked at 1440px and 390px against a real daemon, and the walk was proved able to fail. Two Open entries remain, neither a phase: no acceptance walk in this project is re-run by anything, and canvas-groups' context line reads "1 items"
 ---
 # Memory — bring a source, see where it came from
 
