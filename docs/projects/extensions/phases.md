@@ -4,14 +4,18 @@
 phase ends with **Trajectory**: only what the phase discovered that changes the
 project's course. A phase that went as planned leaves it empty.
 
-**Where we are: phases 1 and 2 CLOSED 6 Sep 2026 — a declarative tool is an
-item with `role=tool`, read by one reader in core, and its capabilities are
-printed before `--yes`. Phase 3 is next: the panel manifest and its one reader.
+**Where we are: phases 1, 2 and 3 are CLOSED — tools on 6 Sep 2026, the panel
+manifest on 18 Sep. A panel is an item with `role=panel` whose `src` names a
+page item on the same canvas; `readPanelExtension` answers with a panel or a
+sentence naming the field, `isocan panel list/add` prints derived capabilities
+and adds nothing without `--yes`, and nothing renders yet, on purpose. Phase 4
+is next: the frame on the content origin.**
+
 Phases 3, 4 and 6 are the design's stage 5 (hosted panels) cut into the three
 acts it turned out to be, and phase 5 is the design's stage 4 (extension
 actors), which moved behind them because that is where it finally has a
 subject. Phase 7 is the design's stage 3 (declarative panels), moved to the
-end: its gate is evidence, and the evidence has not arrived.** No phase needs
+end: its gate is evidence, and the evidence has not arrived. No phase needs
 a person: no ⚑ step, no cloud resource, no second machine. The content origin
 — the gate the design named for the hosted tier — went live on prod 6 Sep.
 
@@ -54,12 +58,39 @@ exist before the tier that depends on it.
 
 ## Phase 3 — The panel manifest, and one reader
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 18 September 2026 — `role=panel` is an item with a manifest
+read by one reader in core, refused in prose naming the field, with derived
+capabilities printed before `--yes`. Nothing renders, by design.
+
+**What it turned out to be.** Two refinements to the outcome below, both made
+against the shell rather than guessed, and both recorded in the Trajectory:
+`src` names an **item on this canvas by its filename**, not a blob hash — the
+reader resolves it to that item's *current* version, so editing the page is
+what changes the panel and a bad one rolls back with `S`, which is the whole
+argument for an extension being an item. And `PANEL_SIDES` has exactly one
+member, `left`, because the app has exactly one dock (`.dock-panel` is
+`left: var(--edge)`, 320px, one panel at a time) and the right edge belongs to
+the tool rail. A closed set of slots is `EXTENSION_ICONS`' argument applied to
+geometry: the app draws the slot, so a manifest may only name a slot that
+exists. Accepting `"right"` would have promised phase 4 a slot nobody built.
+
+**Verified:** the conductor ran the phase's own tests (core 28, CLI 3 against a
+real daemon, surface guard 8 — 39 passed, exit 0), then `npm run typecheck`
+(exit 0) and the whole fast suite (5,902 passed, the only failures this
+container's shallow clone and a stdio child that does not inherit
+`CHROME_PATH`, both reproduced independently and neither touching this diff).
+
+The CLI test's claim is that the terminal's refusal IS the reader's, not a
+copy — it asserts stderr contains what `readPanelExtension` returned rather
+than transcribing a sentence. The conductor falsified that directly: replacing
+the CLI's `${problem}` with its own hard-coded sentence turned two cases red.
+A second parser cannot appear quietly.
 
 **Outcome:** `role=panel` makes an item a panel the way `role=tool` makes one a
 tool and `role=design-system` makes one a design system — no new kind, no new
-op. A manifest names `title`, `side` and `src`, where `src` names a blob **on
-this canvas**, and one reader in core — `readPanelExtension`, beside
+op. A manifest names `title`, `side` and `src`, where `src` names a page item
+**on this canvas** and the reader resolves it to that item's current version,
+and one reader in core — `readPanelExtension`, beside
 `readToolExtension` in `packages/core/src/extensions.ts` — answers with a panel
 or a sentence naming the field. Reserved titles follow the tool's reserved
 labels and are compared with case and punctuation flattened, for the same
@@ -73,8 +104,8 @@ removable before there is a frame to argue about, and a refusal that arrives
 when the file is read beats one that arrives when the panel is already on
 screen.
 
-**Proof:** `isocan panel add` on a manifest naming a `src` that is not a blob on
-this canvas refuses in a sentence naming `src`, and writes nothing; the same
+**Proof:** `isocan panel add` on a manifest naming a `src` this canvas does not
+have refuses in a sentence naming `src`, and writes nothing; the same
 manifest is refused by the app's reader with the same sentence, asserted
 against the same function. A reserved title is refused with punctuation and
 case flattened ("I S O C A N" and "isocan" are one attempt). `isocan panel add`
@@ -83,6 +114,27 @@ added panel as an ordinary item with `role=panel`, and `rm` removes it — no ve
 of its own. The surface guard in `packages/cli/test/surface.test.ts` passes,
 which means the new verbs are in the agent guide's quick reference. `npm test`
 and `npm run typecheck` whole.
+
+**Trajectory:**
+
+- **2026-09-18** — A panel's `src` names an ITEM on this canvas, not a blob
+  hash, and the reader resolves it to that item's current version. Editing the
+  page changes the panel and a bad one rolls back with `S`; a pinned hash would
+  have taken away the versioning an extension is an item for.
+- **2026-09-18** — `PANEL_SIDES` has one member. The app has one dock and the
+  right edge is the rail's, so a set of one states what exists rather than
+  offering a choice nobody built. A second side lands when a panel needs one.
+- **2026-09-18** — Open: phase 7's tier-2 example is the SAME `"kind": "panel"`
+  with `rows` and no `src`, which this reader requires. `readPanelExtension`
+  branches on which is present rather than growing a second kind. Waits on
+  phase 7's evidence gate.
+- **2026-09-18** — Open: `panels.ts` types the dock as a closed union of five
+  literals, read in four places. A canvas-carried panel is an item id, not a
+  literal, so phase 4 must widen that type — not a one-line change. Waits on
+  phase 4.
+- **2026-09-18** — Open: the dock shows one panel at a time on purpose, so a
+  canvas carrying three needs an answer to which one shows. Same shape as the
+  design's open question about a rail with forty buttons. Waits on phase 4.
 
 ## Phase 4 — The frame on the content origin
 

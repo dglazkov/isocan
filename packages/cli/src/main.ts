@@ -143,6 +143,12 @@ import {
   toolCapabilities,
   toolExtensionItems,
   toolProperties,
+  readPanelExtension,
+  panelCapabilities,
+  panelExtensionItems,
+  panelProperties,
+  type PanelExtension,
+  type PanelSide,
   parseDesign,
   toCss,
   toDtcg,
@@ -10805,6 +10811,140 @@ gets answered before it lands rather than after.`,
       });
       if (ctx.json) return printJson({ itemId, ...read, can, added: true });
       console.error(`${itemId} — ${read.label} is on the rail of ${p.title}`);
+    }),
+  );
+
+// ---------- panels: the hosted tier, before there is a frame ----------
+
+/**
+ * **Phase 3 of `docs/projects/extensions/phases.md`, on the surface an agent
+ * has.** A panel is an item with `role=panel` whose bytes are a small JSON
+ * manifest, so every verb here could have been typed as `isocan add
+ * panel.json --prop role=panel` — which is the point, and the reason removal
+ * has no verb of its own. These exist because the manifest has rules, and a
+ * refusal that arrives when the file is read beats one that arrives when the
+ * panel is already on screen.
+ *
+ * **Nothing renders yet.** `panel add` is the whole of it in this phase: the
+ * manifest is readable, refusable and removable before there is a frame to
+ * argue about, and `panel list` says what each one WILL be able to do and
+ * that it cannot yet.
+ */
+const panel = program
+  .command("panel")
+  .description("Panels this canvas puts in the dock")
+  .addHelpText(
+    "after",
+    `
+A panel is a PAGE this canvas carries — a title, a slot, and the bytes to show,
+which are an item that is already here. It is an ordinary item, so it versions,
+undoes, comments, trashes and travels with the canvas.
+
+  { "kind": "panel", "title": "Acme Review", "side": "left", "src": "review.html" }
+
+\`src\` names an item ON THIS CANVAS, because an extension may not read past the
+canvas it is on. Nothing renders a panel in this build: the manifest is read,
+refused or kept, and the frame comes later — which is deliberate, because a
+refusal is worth more when the file is written than when the panel is up.`,
+  );
+
+/** One spelling of how a panel reads back, used by both verbs — the title it
+ * wears, the slot it will take, and the item its bytes come from. Two copies
+ * of this line is how `panel list` and `panel add` would come to describe the
+ * same manifest differently. */
+function panelLine(read: PanelExtension): string {
+  return `${read.title} (${read.side}) ← ${read.src}`;
+}
+
+panel
+  .command("list", { isDefault: true })
+  .description("Every panel on this canvas, and what each may do")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      type Row = { itemId: string; title: string; side?: PanelSide; src?: string; can?: string[]; problem?: string };
+      const items = panelExtensionItems(snapshot.canvas);
+      if (items.length === 0) {
+        if (ctx.json) return printJson([]);
+        return console.error("no panels on this canvas — isocan panel add <file>");
+      }
+      const rows: Row[] = [];
+      for (const item of items) {
+        const version = item.versions.find((v) => v.id === item.currentVersionId);
+        const text = version ? (await ctx.client.downloadBlob(p.id, version.blobHash)).toString("utf8") : "";
+        const { panel: read, problem } = readPanelExtension(text, snapshot.canvas);
+        if (!read) {
+          // Named, not dropped — the design's own open question, *what happens
+          // to a canvas whose extension is gone*: a panel whose page was
+          // removed is a thing somebody needs to be told about, in the place
+          // they would look for it.
+          rows.push({ itemId: item.id, title: item.title, problem });
+          if (!ctx.json) console.log(`${item.id}  ${item.title} — unavailable: ${problem}`);
+          continue;
+        }
+        const can = panelCapabilities(read);
+        rows.push({ itemId: item.id, title: read.title, side: read.side, src: read.src, can });
+        if (!ctx.json) {
+          console.log(`${item.id}  ${panelLine(read)}`);
+          for (const line of can) console.log(`    ${line}`);
+        }
+      }
+      if (ctx.json) printJson(rows);
+    }),
+  );
+
+panel
+  .command("add")
+  .description("Put a panel on this canvas's dock, having read what it may do")
+  .argument("<file>", "the manifest: a small JSON file")
+  .option("--yes", "add it, having read what it may do")
+  .addHelpText(
+    "after",
+    `
+Prints the manifest and everything the panel may do, and adds NOTHING until you
+run it again with --yes. The same ceremony \`tool add\` and \`command add --from\`
+have, for the same reason: an extension is code with a seat at the table, and
+what it may do gets answered before it lands rather than after.
+
+It is an item, so \`isocan rm <item>\` takes one out of the dock again.`,
+  )
+  .action(
+    run(async (file: string, opts: { yes?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const text = await fs.readFile(file, "utf8");
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
+
+      // Read BEFORE anything is uploaded: a refused manifest leaves no blob
+      // behind, and the reader is the one the app uses, so a manifest the
+      // terminal refuses is one the dock refuses for the same reason.
+      const { panel: read, problem } = readPanelExtension(text, snapshot.canvas);
+      if (!read) throw new Error(`not a panel: ${problem}`);
+      const can = panelCapabilities(read);
+
+      if (!opts.yes) {
+        if (ctx.json) return printJson({ ...read, can, added: false });
+        console.error(panelLine(read));
+        for (const line of can) console.error(`  ${line}`);
+        console.error(`\nread that? then: isocan panel add ${file} --yes`);
+        return;
+      }
+
+      const filename = path.basename(file);
+      const upload = await ctx.client.uploadBlob(p.id, Buffer.from(text, "utf8"), "application/json", filename);
+      const itemId = newItemId();
+      await sendOp(ctx, p.id, {
+        type: "item.add",
+        itemId,
+        version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "application/json", filename, size: upload.size },
+        width: 240,
+        height: 120,
+        placement: placementFor(snapshot, {}),
+        title: read.title,
+        properties: panelProperties(),
+      });
+      if (ctx.json) return printJson({ itemId, ...read, can, added: true });
+      console.error(`${itemId} — ${read.title} is a panel on ${p.title}, and nothing renders it yet`);
     }),
   );
 

@@ -901,6 +901,12 @@ isocan tool list|add [--yes]           # tools this canvas puts in its own rail
 #   whose ask is a slash command that exists — an extension may only ask for
 #   what a person could ask for. `add` prints what it may do, and adds nothing
 #   until --yes.
+isocan panel list|add [--yes]          # panels this canvas puts in its dock
+#   a panel is an item ({"kind":"panel","title":"Acme Review","side":"left",
+#   "src":"review.html"}) whose `src` names a page ON THIS CANVAS — an
+#   extension may not read past the canvas it is on. Nothing renders one yet:
+#   the manifest is read, and refused, before there is a frame. `add` prints
+#   what it may do, and adds nothing until --yes.
 isocan format [--dry-run]              # tidy the canvas: rows, children, references
 isocan merge <drawings...>             # several drawings into one, exactly
 isocan shortcuts                       # every key the canvas answers to
