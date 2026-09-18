@@ -1081,6 +1081,35 @@ If you are asked for a button that does something new, the answer is usually a
 **slash command** first (`isocan command add`) and then a tool that names it —
 a tool asking for a command nobody wrote is refused when it is read.
 
+## Panels: a canvas that carries its own page
+
+A **panel** is a page this canvas brought with it, headed for the dock beside
+the Chat and the Files. Same shape as a tool: an ordinary item, this one with
+`role=panel`, whose bytes are a small JSON manifest.
+
+```json
+{ "kind": "panel", "title": "Acme Review", "side": "left", "src": "review.html" }
+```
+
+`src` names an item **on this canvas** — the page itself, added the ordinary
+way — because an extension may not read past the canvas it is on. So the order
+is: `isocan add review.html`, then the manifest that names it. A panel whose
+`src` is a URL, or a name nothing here answers to, is refused when the manifest
+is read. Its bytes are that item's current version, so editing the page changes
+the panel and a bad one rolls back with the item's own history.
+
+**Nothing renders a panel yet** — the frame and the door it talks through are
+later phases — and `panel list` says so rather than implying otherwise. What
+exists today is the manifest, read and refused before anything is on screen.
+
+- `isocan panel list` — every panel on this canvas, where it sits, which item
+  it shows, and what that means it may do. One whose page is gone is listed as
+  **unavailable** with the reason, rather than quietly dropped.
+- `isocan panel add <file>` — prints the manifest and everything the panel may
+  do, and adds nothing until you run it again with `--yes`.
+- It is an item, so `isocan rm <item>` removes one — no verb of its own — and
+  the trash gives it back.
+
 ## Saying where a document stands
 
 Every note in `docs/research/` and every project's primary doc carries its
