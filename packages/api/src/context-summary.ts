@@ -1,6 +1,8 @@
 import type { CanvasSnapshotResponse, ContextExtras, ContextLayer, LinkedCanvas } from "@isocan/core";
 import type { Ctx } from "./ctx.ts";
 import { readInheritedCanvases, readLayeredContext, type ContextReadPort } from "./context-reader.ts";
+import type { ContextPinPort } from "./context-pin.ts";
+import { nodeCopyBytes } from "./canvas-groups.ts";
 import { DaemonClient } from "./client.ts";
 
 /** Personal inclusion is deliberate; ambient resources retain the existing shared-only default. */
@@ -53,4 +55,27 @@ export async function readContextSummary(ctx: Ctx, canvasId: string, extras: Con
     canvasId, home: await contextHome(ctx, canvasId), canvas: snapshot.canvas,
     extras, personal: options.personal ?? "exclude", ...(signal ? { signal } : {}),
   });
+}
+
+/**
+ * Node transport for the deliberate pin-from-source copy (memory phase 6).
+ *
+ * Two authorities, deliberately kept apart. The DESTINATION is read and
+ * written with this caller's ordinary authority. Every SOURCE read — the
+ * classification, the snapshot and each blob request — goes through
+ * `automaticSourceClient`, so the immutable automatic-exclusion policy and the
+ * expected home ride the actual request rather than only a preflight. A badge
+ * that recovers mid-copy recovers into the same restriction.
+ */
+export function contextPinPort(ctx: Ctx): ContextPinPort {
+  return {
+    classifySource: (request, signal) => ctx.client.classifySource(request, signal),
+    sourceSnapshot: (source, signal) => automaticSourceClient(ctx, source.expectedHome, signal).snapshot(source.canvasId, signal),
+    snapshot: (canvasId, signal) => ctx.client.snapshot(canvasId, signal),
+    copyBytes: (source, destinationCanvasId) => ({
+      ...nodeCopyBytes(ctx.client, source.canvasId, destinationCanvasId),
+      downloadBlob: (hash, signal) => automaticSourceClient(ctx, source.expectedHome, signal).downloadBlob(source.canvasId, hash, signal),
+    }),
+    submit: (canvasId, actor, action, opId, originGroupMode) => ctx.client.changeGroup(canvasId, actor, action, opId, originGroupMode),
+  };
 }

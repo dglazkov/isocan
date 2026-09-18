@@ -41,6 +41,22 @@ export function isDesignSystem(item: Item): boolean {
 }
 
 /**
+ * The same properties with any governing design role taken off.
+ *
+ * A deliberate copy of another canvas's design note is a REFERENCE here, not
+ * this canvas's system: `role=design-system` is what makes an item govern, so
+ * a copy that kept it would silently replace the design every screen on this
+ * canvas is checked against. Both spellings come off, because a canvas written
+ * in the `house-style` window still says that one.
+ */
+export function withoutDesignRole(properties: Record<string, string>): Record<string, string> {
+  const role = properties[ROLE_PROP];
+  if (role !== DESIGN_SYSTEM_ROLE && role !== LEGACY_DESIGN_ROLE) return properties;
+  const { [ROLE_PROP]: _role, ...rest } = properties;
+  return rest;
+}
+
+/**
  * **The design system that governs a place on the canvas**, if there is one.
  *
  * With no `at`: the canvas's own — a design-system item in NO scope. Most

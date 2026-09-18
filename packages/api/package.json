@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./context": "./src/context-reader.ts",
+    "./context-pin": "./src/context-pin.ts",
     "./design-audit": "./src/design-audit-reader.ts",
     "./questionnaire": "./src/questionnaire-reader.ts",
     "./design-request": "./src/design-request-reader.ts",

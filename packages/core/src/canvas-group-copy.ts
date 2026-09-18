@@ -18,6 +18,10 @@ export function groupCopySource(canvasId: string, canvas: CanvasContents, rootId
 export function groupCopyAction(source: GroupCopySource, destinationCanvasId: string, options: {
   newItemId: () => string; newVersionId: () => string;
   containerId?: string | null; at?: { x: number; y: number }; cell?: GroupCell; groupPlacement?: GroupPlacementPolicy;
+  /** A deliberate copy may re-decorate each copied item AFTER remapping — the
+   *  pin-from-source act rides this rather than a second write, so one undo
+   *  takes back the copy and everything the copy decided about itself. */
+  decorate?: (properties: Record<string, string>, source: Item, isRoot: boolean) => Record<string, string>;
 }): Extract<GroupAction, { kind: "copy" }> {
   const remap = new Map(source.items.map((item) => [item.id, options.newItemId()]));
   if (new Set(remap.values()).size !== remap.size) throw new OpValidationError("bad-op", "copy needs distinct new item IDs");
@@ -41,8 +45,9 @@ export function groupCopyAction(source: GroupCopySource, destinationCanvasId: st
       } else if (!sameCanvas && references.has(key)) delete properties[key];
     }
     if (!properties.annotates) delete properties.region;
+    const decorated = options.decorate ? options.decorate(properties, item, source.rootIds.includes(item.id)) : properties;
     return {
-      id: remap.get(item.id)!, title: item.title, description: item.description, properties,
+      id: remap.get(item.id)!, title: item.title, description: item.description, properties: decorated,
       box: { x: item.x, y: item.y, width: item.width, height: item.height },
       ...(item.containerId && remap.has(item.containerId) ? { containerId: remap.get(item.containerId)! } : {}),
       ...(item.groupLayout ? { layout: structuredClone(item.groupLayout) } : {}),

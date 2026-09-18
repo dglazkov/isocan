@@ -886,6 +886,27 @@ Both are `item.update` with a property, so they replicate, undo and are visible
 to everybody like any other fact. The same two verbs are on an item's menu in
 the app.
 
+**Keeping a piece of a source here.** Inheritance keeps following a source. To
+stop following and keep one piece instead, `isocan context pin <item> --from
+<canvas> [--canvas <target>]` copies that piece's **current version** out of a
+visible inherited source and pins the copy here. `--from` resolves only among
+this canvas's visible ordinary inheritance links, by exact canvas or card ID or
+unambiguous title/ID prefix; `<item>` is an exact ID or unambiguous prefix among
+the pieces that source **offers**, which are its current design system and its
+ambient pinned items — not its whole item list. A refusal names the candidates.
+
+The copy is an ordinary local item from then on: edit it, and the source does
+not change; the source team edits, removes or you unlink the card, and your copy
+and its saved bytes stay. It is not a live reference. Copying a group brings its
+actual children and their current faces together; one `isocan undo` removes the
+whole copy and its pin, and redo restores it. A copied design note is kept as a
+reference — its governing role is stripped, so it does not become the design
+this canvas is checked against. Each copied item carries a `contextSource`
+property naming where it came from, which `isocan context` prints under
+*Copied from a source*. Canvas links are not copied by this act: place and
+inherit that canvas instead. Without `--from`, `context pin` keeps its
+ordinary meaning.
+
 **Context comes in layers.** `isocan context` prints *This canvas* first, then
 one heading per canvas this one **inherits from** — a canvas card (see *A
 canvas on a canvas*) wearing `memory=inherit`. A linked canvas contributes its
@@ -2959,6 +2980,10 @@ Standalone personal/status defaults to this daemon; `--home <url>` chooses a hom
 Destination commands accept the global `--canvas <canvas>` and all support `--json`.
 MCP uses `read_personal_context` with required claimed `session` and link `item`,
 plus optional `canvas`, `cursor` and `limit` (pieces); ambient resources omit this layer.
+
+**Copy a source piece:** `context pin <item> --from <canvas> [--canvas <target>]`
+copies one current design or pinned piece out of a visible inherited source and
+pins the copy here, in one undoable act, with `contextSource` provenance.
 
 **Group context:** `context --in <group> [--include-excluded]` reads the complete
 current hierarchy. `context request <thread> <comment>` reads the complete

@@ -1,7 +1,19 @@
 import { createHash } from "node:crypto";
 import type { Actor, CanvasContents, CanvasGroupMigrationPreview, CanvasSnapshotResponse, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupCreation, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "@isocan/core";
-import { atLeast, captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupCopyAction, groupCopySource, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation, visualFaceOf } from "@isocan/core";
+import { captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupCopyAction, groupCopySource, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation } from "@isocan/core";
 import type { DaemonRoutes } from "./routes.ts";
+import { copyFaces, transferCopyFaces, type CopyBytesPort } from "./copy-bytes.ts";
+import { assertGroupDestination } from "./canvas-group-access.ts";
+
+/** Node's digest and the daemon's blob routes, bound to one source and one
+ *  destination — the browser binds its own fetches to the same port. */
+export function nodeCopyBytes(client: Pick<DaemonRoutes, "downloadBlob" | "uploadBlob">, sourceCanvasId: string, destinationCanvasId: string): CopyBytesPort {
+  return {
+    downloadBlob: (hash, signal) => client.downloadBlob(sourceCanvasId, hash, signal),
+    uploadBlob: (bytes, mimeType, filename, signal) => client.uploadBlob(destinationCanvasId, bytes, mimeType, filename, signal),
+    digest: async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  };
+}
 
 type PublicAction = Exclude<GroupAction, { kind: "apply" | "migrate" }>;
 type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "downloadBlob" | "changeGroup" | "groupMigrationPreview">;
@@ -95,9 +107,7 @@ export class CanvasGroups {
 
   private async read(edit = false): Promise<CanvasSnapshotResponse> {
     const state = await this.client.snapshot(this.canvasId);
-    if (state.project.groupMode !== "groups") throw new Error("canvas groups are not enabled on this legacy canvas; preview conversion with `isocan canvas group migrate --dry-run`, then apply it with `isocan canvas group migrate`. Existing areas remain readable with `isocan area ls`.");
-    if (edit && state.capability && !atLeast(state.capability, "edit")) throw new Error("editing this canvas requires edit access; groups can still be listed and inspected");
-    return state;
+    return assertGroupDestination(state, edit);
   }
 
   /** Listing reads explicit group identities, including valid empty groups. */
@@ -227,24 +237,9 @@ export class CanvasGroups {
     if (options.properties) for (const item of action.items) if (action.rootIds.includes(item.id)) item.properties = { ...item.properties, ...options.properties };
     // Perform's first pass validates geometry and metadata without writing bytes.
     await this.perform(state, action, true);
-    if (!options.dryRun) {
-      const faces = new Map<string, { blobHash: string; mimeType: string; filename: string }>();
-      for (const item of source.items) {
-        const version = item.versions.find((entry) => entry.id === item.currentVersionId)!;
-        faces.set(version.blobHash, version);
-        const visual = visualFaceOf(version);
-        faces.set(visual.blobHash, visual);
-      }
-      // Same-canvas copy also checks every byte: a missing face refuses the whole paste.
-      for (const face of faces.values()) {
-        const bytes = await this.client.downloadBlob(sourceCanvasId, face.blobHash);
-        if (createHash("sha256").update(bytes).digest("hex") !== face.blobHash) throw new Error(`copy could not verify saved bytes ${face.blobHash}`);
-        if (sourceCanvasId !== this.canvasId) {
-          const uploaded = await this.client.uploadBlob(this.canvasId, bytes, face.mimeType, face.filename);
-          if (uploaded.blobHash !== face.blobHash) throw new Error("copied blob upload hash disagreed with its bytes");
-        }
-      }
-    }
+    // One byte-transfer path for every copy act, including pin-from-source:
+    // read, verify, then upload where the canvas differs. See `copy-bytes.ts`.
+    if (!options.dryRun) await transferCopyFaces(nodeCopyBytes(this.client, sourceCanvasId, this.canvasId), copyFaces(source.items), { upload: sourceCanvasId !== this.canvasId });
     return this.perform(state, action, !!options.dryRun);
   }
 
