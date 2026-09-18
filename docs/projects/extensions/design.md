@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-06
 see: extensions
-note: stages 1 and 2 built 6 Sep — a declarative tool as an item with `role=tool`, `does` limited to a slash command that exists, a closed icon set, reserved labels, and the capability list printed before `--yes`; `isocan tool list/add` and the rail render from ONE reader in core. Stages 3 (declarative panels), 4 (extension actors — which has no subject to attribute until a panel ACTS, checked 6 Sep) and 5 (hosted panels; its content-origin gate cleared 6 Sep) not built
+note: stages 1 and 2 built 6 Sep — a declarative tool as an item with `role=tool`, `does` limited to a slash command that exists, a closed icon set, reserved labels, and the capability list printed before `--yes`; `isocan tool list/add` and the rail render from ONE reader in core. The walk was re-cut 18 Sep and now lives in phases.md: the demand went to the other end of the list, so the hosted tier (stage 5, whose content-origin gate cleared 6 Sep) comes first as phases 3, 4 and 6, the extension actor (stage 4) follows as phase 5 because that is where it first has a subject, and declarative panels (stage 3) go last as phase 7, waiting on evidence rather than on work. Phase 3, the panel manifest and its one reader, is next
 ---
 # Extending the canvas from inside it
 
@@ -157,6 +157,26 @@ by typing.
 
 ## Stages
 
+**The order changed on 18 September 2026, and the reason is in this design's
+own rule.** Stage 3 said declarative panels come next *"once two real tools have
+asked for the same shape"*, and stage 4 said its real predecessor is **a panel
+that acts**. Both are still right. What was wrong was the numbering, because
+the demand that arrived went to the other end of the list: nothing has asked
+for the rows shape, and **two things have asked for the hosted tier** — modules
+phase 5's browser sandbox node, which names a panel that acts, an extension
+actor and `connect-src` as its three blockers, and the workbench Sandboxes
+section, which the modules research note calls "a page plus a hosted panel".
+
+So stage 4 cannot come third: it would be the machinery with nothing to
+attribute that the 6 Sep check already found. And stage 3 cannot come third
+either, for the reason stage 3 itself gives — a declarative vocabulary grows
+until it is a bad programming language, and one shaped by fixtures instead of
+by a second real tool is exactly that. The walk is therefore **hosted panel
+first, actor with it, declarative panels last**, and it is written out phase by
+phase in [phases.md](phases.md). The stages below keep their numbers, because
+other projects cite them by number; phases.md maps each one to where it now
+falls.
+
 1. **Declarative tools.** ✅ **Built 6 Sep.** Manifest, named icons, `does`
    limited to existing commands. No new ops, no frames, no actors — the rail
    becomes editable and most of the want is met.
@@ -186,8 +206,12 @@ by typing.
    its own capabilities could understate them — and `tool add` prints it and
    adds nothing until `--yes`, the gate `command add --from` already has.
 3. **Declarative panels**, once two real tools have asked for the same shape.
+   **Last in the walk, as phase 7** (18 Sep): the gate is evidence and the
+   evidence has not arrived. Nothing else waits on it.
 4. **Extension actors and grants**, which is mostly wiring the identity desk to
-   a non-human subject.
+   a non-human subject. **Phase 5 in the walk** (18 Sep), behind the hosted
+   panel rather than in front of it, for the reason this stage's own note gives
+   and which is repeated below.
 
    **It has no subject yet, and that is a finding rather than a delay.**
    Checked on 6 Sep with stages 1 and 2 built: a tier-1 tool does not *act*, it
@@ -213,7 +237,11 @@ by typing.
    WHO is at that door, not a second door.
 5. **Hosted panels**, after the content origin lands. Not before.
    *(The content origin landed on prod 6 Sep, so this gate is clear — the two
-   in front of it are not.)*
+   in front of it are not.)* **First in the walk, cut into three: phase 3 the
+   manifest and its one reader, phase 4 the frame, phase 6 the narrow door**
+   (18 Sep). The two that were in front of it turned out not to be in front of
+   it: one has no demand and one has no subject until this lands. The gate this
+   stage names is the only one that was ever real, and it is clear.
 
 ## Open
 

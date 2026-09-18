@@ -437,8 +437,18 @@ blob deliberately, which is how the JSON one was found too.
 **What remains of phase 5**, and it is the half the gate still binds: the
 **browser sandbox node** — HTML and JavaScript in a frame on the content
 origin, the extensions design's tier 3 — which needs a panel that acts
-(extensions stage 3), an extension actor to stamp its writes (stage 4), and
-`connect-src <content-origin>` in the served CSP before the first frame
-renders. Also unbuilt and smaller: a Sandboxes *section* in the workbench
-(logs, a terminal), which the research note calls "a page plus a hosted
-panel" and which therefore waits on the same gate.
+(extensions phase 4, the frame, and phase 6, the narrow door), an extension
+actor to stamp its writes (extensions phase 5), and `connect-src
+<content-origin>` in the served CSP before the first frame renders. Also
+unbuilt and smaller: a Sandboxes *section* in the workbench (logs, a
+terminal), which the research note calls "a page plus a hosted panel" and
+which therefore waits on the same gate.
+
+**What that gate turned out to be, 18 Sep 2026.** It was named here as
+"extensions stage 3" and "stage 4", and both numbers moved: this paragraph and
+the workbench section are the two things that asked for the hosted tier, so
+the extensions walk was re-cut to build it first (extensions phases 3, 4 and
+6), with the actor behind it (phase 5) rather than in front. Declarative
+panels — the old stage 3 — are last and wait on evidence, and nothing here
+needs them. So this half waits on work now rather than on an ordering, and the
+work is being done in the extensions project.
