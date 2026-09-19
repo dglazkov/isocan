@@ -731,6 +731,40 @@ export function liveSetup(
   };
 }
 
+/**
+ * **What one item looks like to a live session.**
+ *
+ * `kind` is asked of the caller rather than derived here, because the two
+ * callers already have it by different routes — the harness lists
+ * `ListedItem`, which carries it, and the browser holds ordinary `Item`s and
+ * calls `itemKind`. Making it required is what keeps the two surfaces from
+ * quietly describing the same canvas differently.
+ */
+export interface SnapshotItem {
+  id: string;
+  title?: string;
+  kind: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** The group this sits in, when it sits in one. */
+  containerId?: string;
+}
+
+/**
+ * **How many items a session is told about.**
+ *
+ * A canvas has no upper bound and a system instruction does; at roughly
+ * fourteen tokens a row this is about eight hundred, which is a reasonable
+ * share of a message that also carries the rules and the project's own
+ * instructions. What is left out is DISCLOSED rather than dropped silently,
+ * for the reason the inherited recap discloses its omissions: a bounded list
+ * that admits its bound can be asked about, and one that does not is a model
+ * confidently talking about a canvas it was shown a third of.
+ */
+export const SNAPSHOT_ITEM_CAP = 60;
+
 /* ---- planForCall ---- */
 /**
  * **The canvas facts a live session is handed, in the one wording** — the
@@ -738,6 +772,32 @@ export function liveSetup(
  * it, so the ids the model echoes are described the same way on both
  * surfaces. The ids are authoritative and are what a tool call must echo;
  * the titles are what a person reads.
+ *
+ * ## Why this carries geometry (#337)
+ *
+ * It used to be a title and an id per item, and that made a whole class of
+ * ordinary sentence impossible rather than merely hard: *"move the red one
+ * next to the blue one"* cannot be attempted by any model, however good, when
+ * nothing it was shown says where anything is. `move_item` takes pixels, so
+ * **"next to" is arithmetic the model can only do if it is given the
+ * operands.**
+ *
+ * So each row carries what the sentence needs — the kind, the size, the
+ * corner, and the group it is in — and the header states the coordinate
+ * convention, because a model that assumes y grows upward will place things
+ * below when it meant above and no test of ours would catch it.
+ *
+ * Colour is deliberately NOT here yet: `Item` has no colour field, a stroke's
+ * is hex and a card's face is only pixels, and half of "red" is worse than
+ * none. That is its own piece of work.
+ *
+ * ## The order, and why it is not the viewport
+ *
+ * Reading order — top to bottom, then left to right, ties by id, the sort
+ * `memory.ts` and `area.ts` already use — and NOT what the person is looking
+ * at. A viewport is a fact the browser has and the standing harness does not,
+ * so ordering by it would fork the one wording this function exists to keep.
+ * A deterministic order is also a testable one.
  */
 /**
  * **The commands the canvas's agents execute, in the one catalogue the
@@ -752,14 +812,34 @@ export function commandsBrief(): string {
 }
 
 export function canvasSnapshotText(
-  items: { id: string; title?: string }[],
+  items: SnapshotItem[],
   threads: { id: string; comments: unknown[] }[],
+  cap: number = SNAPSHOT_ITEM_CAP,
 ): string {
-  return (
-    "Current canvas state (ids are authoritative — echo them in tool calls):\n" +
-    `- items: ${items.map((i) => `${i.title ?? "untitled"} [${i.id}]`).join("; ") || "none"}\n` +
-    `- threads: ${threads.map((t) => `${t.id} (${t.comments.length} comments)`).join("; ") || "none"}`
+  const ordered = [...items].sort(
+    (a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id),
   );
+  const shown = ordered.slice(0, Math.max(0, cap));
+  const rest = ordered.length - shown.length;
+  const row = (i: SnapshotItem) =>
+    `- ${JSON.stringify(i.title ?? "untitled")} [${i.id}] ${i.kind} ` +
+    `${Math.round(i.width)}x${Math.round(i.height)} at (${Math.round(i.x)},${Math.round(i.y)})` +
+    (i.containerId ? ` inside [${i.containerId}]` : "");
+  const heading = ordered.length === 0
+    ? "Items: none."
+    : rest > 0
+      ? `Items (${shown.length} of ${ordered.length}, in reading order):`
+      : `Items (${ordered.length}, in reading order):`;
+  return [
+    "Current canvas state (ids are authoritative — echo them in tool calls).",
+    "Geometry is world pixels: x grows right, y grows down, and (x,y) is an item's top-left corner.",
+    heading,
+    ...shown.map(row),
+    ...(rest > 0
+      ? [`- ${rest} more not listed — ask for one by title if what you want is not here.`]
+      : []),
+    `Threads: ${threads.map((t) => `${t.id} (${t.comments.length} comments)`).join("; ") || "none"}`,
+  ].join("\n");
 }
 
 /** A tool call, as a plan: the same vocabulary the typed grammar produces, so
