@@ -2,7 +2,7 @@
 status: designed
 since: 2026-09-19
 issue: 337
-see: judge, voice, talk, evals
+see: judge, evals, embed
 note: a video of voice-driven canvas editing ("move the red one next to the blue one, actually undo that") asked whether Gemini Live 3.8 and Jev could do this in isocan. Both halves of the marriage are further along than expected — `models/gemini-3.8-live` is wired and verified, `@isocan/talk` already hands the model 47 canvas ops as tools, and function calling is synchronous. The blocker is neither model. `canvasSnapshotText` hands a live session `title [id]` per item and nothing else — no position, no size, no kind, no colour — so "the red one" is not hard to resolve but IMPOSSIBLE, and "next to" is uncomputable from what the model is shown. The finding is that the bottleneck is the projection, not the judge: widening it needs no vendor at all and gets most of the demo with Gemini alone. Jev's contribution is specifically latency and a confidence that decides act-versus-ask — not capability. `Item` carries no colour field, so "red" is derivable for strokes and unknowable for a picture's face; that is the one genuinely new mechanism the demo needs.
 ---
 
@@ -197,7 +197,20 @@ The order falls out of what needs a vendor and what does not.
 **Needs nobody:** widen `canvasSnapshotText` (position, size, kind, containment,
 and a derived colour), and give the movement tool a second referent so *next
 to* is expressible over the `groupArrangeAction` and `PLACEMENT_GAP` primitives
-core already has. That is most of the video, in isocan's own code, testable
+core already has.
+
+> **Built 19 Sep 2026 — the geometry half.** Each row now reads
+> `"Title" [id] kind WxH at (x,y)` with the group named when there is one, the
+> header states the coordinate convention, and the list is capped at sixty in
+> reading order with the remainder disclosed rather than dropped. Two things
+> came out of building it. **The order is not the viewport**, though this note
+> said it would be: a viewport is a fact the browser has and the standing
+> harness does not, so ordering by it would fork the one wording the function
+> exists to keep. And `packages/modules/talk/src/live.ts` turned out to be a
+> deliberate byte-copy of the harness's file — reconciled *by hand*, per its
+> own header, with nothing checking — so this change, the first to touch both,
+> left `test/live-copy.test.ts` behind to make that a bound rather than a
+> comment. Colour and the relational tool are still owed. That is most of the video, in isocan's own code, testable
 without a key and valuable even if no judge ever lands — a live session that
 knows where things are is better at everything.
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { mainThread } from "@isocan/core";
 import type { DialogFacts } from "@isocan/core";
 import { canvasSnapshotText } from "../src/live.ts";
-import { decodeMessage, runTool, talkWeb } from "../src/web.tsx";
+import { decodeMessage, runTool, snapshotItemsFor, talkWeb } from "../src/web.tsx";
 
 /**
  * **Talk: the dialog's tool-call half, driven with a fake host.**
@@ -99,16 +99,101 @@ describe("a WebSocket frame is decoded whatever the browser makes of it", () => 
 });
 
 describe("the session is handed the canvas it is standing on", () => {
-  it("writes the snapshot in the one wording — ids first, titles for a person", () => {
-    const text = canvasSnapshotText(
-      [{ id: "itm_1", title: "Checkout screen" }],
-      [{ id: "thr_1", comments: [{}, {}] }],
-    );
+  const acme = (over: Partial<Parameters<typeof canvasSnapshotText>[0][number]> = {}) => ({
+    id: "itm_1", title: "Checkout screen", kind: "image",
+    x: 100, y: 200, width: 320, height: 240, ...over,
+  });
+
+  it("writes the snapshot in the one wording — ids, kind, size and corner", () => {
+    const text = canvasSnapshotText([acme()], [{ id: "thr_1", comments: [{}, {}] }]);
     expect(text).toBe(
-      "Current canvas state (ids are authoritative — echo them in tool calls):\n" +
-        "- items: Checkout screen [itm_1]\n" +
-        "- threads: thr_1 (2 comments)",
+      "Current canvas state (ids are authoritative — echo them in tool calls).\n" +
+        "Geometry is world pixels: x grows right, y grows down, and (x,y) is an item's top-left corner.\n" +
+        "Items (1, in reading order):\n" +
+        '- "Checkout screen" [itm_1] image 320x240 at (100,200)\n' +
+        "Threads: thr_1 (2 comments)",
     );
+  });
+
+  /** #337: the geometry is the point. A session told only titles and ids
+   *  cannot be asked to move one thing next to another, because `move_item`
+   *  takes pixels and nothing it was shown says where anything is. */
+  it("says where every item is, so 'next to' is arithmetic the model can do", () => {
+    const text = canvasSnapshotText(
+      [acme(), acme({ id: "itm_2", title: "Settings", kind: "text", x: 460, y: 200, width: 200, height: 120 })],
+      [],
+    );
+    expect(text).toContain('"Checkout screen" [itm_1] image 320x240 at (100,200)');
+    expect(text).toContain('"Settings" [itm_2] text 200x120 at (460,200)');
+    expect(text).toContain("x grows right, y grows down");
+  });
+
+  it("names the group an item sits in, and says nothing when it sits in none", () => {
+    expect(canvasSnapshotText([acme({ containerId: "itm_grp" })], [])).toContain("inside [itm_grp]");
+    expect(canvasSnapshotText([acme()], [])).not.toContain("inside");
+  });
+
+  it("orders by reading order and breaks ties by id, so nothing reshuffles itself", () => {
+    const rows = canvasSnapshotText(
+      [
+        acme({ id: "itm_c", title: "C", y: 400, x: 0 }),
+        acme({ id: "itm_b", title: "B", y: 0, x: 50 }),
+        acme({ id: "itm_a", title: "A", y: 0, x: 50 }),
+      ],
+      [],
+    ).split("\n").filter((l) => l.startsWith("- "));
+    expect(rows.map((l) => l.match(/\[(itm_\w+)\]/)![1])).toEqual(["itm_a", "itm_b", "itm_c"]);
+  });
+
+  /** A bounded list that admits its bound can be asked about; one that does
+   *  not is a model talking confidently about a canvas it saw a third of. */
+  it("caps the list and discloses what it left out", () => {
+    const many = Array.from({ length: 5 }, (_, n) => acme({ id: `itm_${n}`, title: `Acme ${n}`, y: n }));
+    const text = canvasSnapshotText(many, [], 2);
+    expect(text).toContain("Items (2 of 5, in reading order):");
+    expect(text).toContain("- 3 more not listed — ask for one by title if what you want is not here.");
+    expect(text).not.toContain("[itm_4]");
+  });
+
+  it("says so plainly when the canvas is empty", () => {
+    const text = canvasSnapshotText([], []);
+    expect(text).toContain("Items: none.");
+    expect(text).toContain("Threads: none");
+  });
+
+  /** A title with a bracket or a newline in it would otherwise run into the
+   *  id beside it and make the row unparseable. */
+  it("quotes a title so punctuation cannot forge the shape of a row", () => {
+    const text = canvasSnapshotText([acme({ title: "Acme [itm_9] fake" })], []);
+    expect(text).toContain('"Acme [itm_9] fake" [itm_1] image');
+  });
+});
+
+describe("the browser's half of the snapshot row", () => {
+  /** #337: the shell hands this module ordinary `Item`s, and the standing
+   *  harness lists `ListedItem`s that already carry a kind. Both must arrive
+   *  at the same row, so the browser's mapping is spelled once and proved. */
+  it("carries geometry and a derived kind for every item on the canvas", () => {
+    const rows = snapshotItemsFor(canvas as never);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      id: "itm_1", title: "Checkout screen", x: 10, y: 20, width: 320, height: 240,
+    });
+    expect(typeof rows[0]!.kind).toBe("string");
+    expect(rows[0]!.kind).not.toBe("");
+  });
+
+  it("omits the group rather than naming an absent one", () => {
+    expect(snapshotItemsFor(canvas as never)[0]).not.toHaveProperty("containerId");
+    const nested = { ...canvas, items: { itm_1: { ...canvas.items.itm_1, containerId: "itm_grp" } } };
+    expect(snapshotItemsFor(nested as never)[0]).toMatchObject({ containerId: "itm_grp" });
+  });
+
+  it("feeds the shared wording, so what the browser sends has the geometry in it", () => {
+    const text = canvasSnapshotText(snapshotItemsFor(canvas as never), []);
+    expect(text).toContain("at (10,20)");
+    expect(text).toContain("320x240");
+    expect(text).toContain("x grows right, y grows down");
   });
 });
 

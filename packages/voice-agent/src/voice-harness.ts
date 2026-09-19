@@ -34,6 +34,7 @@ import {
 
 import {
   canvasSnapshotText,
+  type SnapshotItem,
   describeMintedOp,
   LIVE_MODEL,
   LIVE_TOOLS,
@@ -149,11 +150,15 @@ export async function writeVoicePrompt(home: string, text: string | null): Promi
 }
 
 
-/** What a canvas has to answer for the snapshot: two reads, nothing else. */
+/** What a canvas has to answer for the snapshot: two reads, nothing else.
+ *
+ *  The items carry geometry and kind since #337, because a title and an id
+ *  cannot answer "move the red one next to the blue one" — `ListedItem`
+ *  already has both, so the handle satisfies this without doing more work. */
 export interface SnapshotCanvas {
   canvasId: string;
   canvas: {
-    items(): Promise<{ id: string; title?: string }[]>;
+    items(): Promise<SnapshotItem[]>;
     threads(): Promise<{ id: string; comments: unknown[] }[]>;
   };
 }

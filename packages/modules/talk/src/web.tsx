@@ -6,6 +6,7 @@ import {
   newThreadId,
   newVersionId,
   defaultSize,
+  itemKind,
   type CanvasContents,
   type DialogFacts,
   type Operation,
@@ -14,7 +15,7 @@ import {
   type WebModule,
 } from "@isocan/core";
 import { LevelMeter, Playback, capture, fromBytes, type Capture } from "./audio.ts";
-import { LIVE_MODEL, canvasSnapshotText, liveSetup, liveUrl, planForCall } from "./live.ts";
+import { LIVE_MODEL, canvasSnapshotText, liveSetup, liveUrl, planForCall, type SnapshotItem } from "./live.ts";
 import { voiceCore } from "./core.ts";
 
 /**
@@ -59,6 +60,31 @@ interface Line {
  *  Blob or ArrayBuffer, and every one of them is JSON on this wire. The
  *  provider's audio comes back as Blob frames, which is how the first build
  *  of this dialog spent a day parsing "[object Blob]". */
+/**
+ * **The canvas, as the facts a live session is handed** (#337).
+ *
+ * Geometry and kind travel with every item, because a session told only
+ * titles and ids cannot be asked to move one thing next to another: the tool
+ * takes pixels, and nothing it was shown says where anything is.
+ *
+ * `itemKind` is called here for the reason the standing harness does not have
+ * to — the harness lists `ListedItem`, which carries the kind already, while
+ * the shell hands this module ordinary `Item`s. Both surfaces must arrive at
+ * the same row, so this is the one place the browser's half is spelled.
+ */
+export function snapshotItemsFor(canvas: CanvasContents): SnapshotItem[] {
+  return Object.values(canvas.items ?? {}).map((i) => ({
+    id: i.id,
+    title: i.title,
+    kind: itemKind(i),
+    x: i.x,
+    y: i.y,
+    width: i.width,
+    height: i.height,
+    ...(i.containerId ? { containerId: i.containerId } : {}),
+  }));
+}
+
 export async function decodeMessage(data: unknown): Promise<Record<string, unknown> | null> {
   let text: string;
   if (typeof data === "string") text = data;
@@ -392,7 +418,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       // titles are what a person reads. The shell handed the module these
       // facts, so no store and no route were needed to know them.
       const snapshot = canvasSnapshotText(
-        Object.values(factsRef.current.canvas.items ?? {}).map((i) => ({ id: i.id, title: i.title })),
+        snapshotItemsFor(factsRef.current.canvas),
         Object.values(factsRef.current.canvas.threads ?? {}).map((t) => ({ id: t.id, comments: t.comments })),
       );
       socket.send(JSON.stringify(liveSetup(model.trim(), { source: "canvas", text: snapshot })));
