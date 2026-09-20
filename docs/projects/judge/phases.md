@@ -10,6 +10,25 @@ only phase that needs a person, and it needs two things: an early-access key,
 and a machine that can reach `typesafe.ai` (the build container's egress proxy
 blocks it, which is why every figure in the research note is second-hand).
 
+**Which machine does what, recorded 20 Sep 2026 because it is not obvious and
+costs a session to rediscover.** The cloud container cannot reach TypeSafe at
+all — `api.typesafe.ai` resolves and the proxy refuses the tunnel
+(`CONNECT tunnel failed, 403`), so a key alone would not help it. Everything
+that touches the vendor therefore belongs on a machine with ordinary network,
+and that is a LEG rather than a phase:
+
+| | Where | Why there |
+| --- | --- | --- |
+| judge phase 0 | local | the only place the reference and the endpoint are reachable |
+| judge phase 1 | local | the corpus is a personal MCP server no CI holds a credential for |
+| judge phase 2 | local | needs the judge phase 0 measured |
+| [voice](../../research/2026-09-19-move-the-red-one.md) phases 4–5 | local | the resolver needs a working judge |
+
+Everything in the voice work that needs NO vendor is already done — the
+projection carries geometry and colour, and `besideBox` gives the movement
+tool its second referent. So the local leg is the whole of what is left, and
+phase 0 is its first step rather than a detour before the real work.
+
 Two rules govern every phase here, both inherited and neither negotiable in
 this document:
 
