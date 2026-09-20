@@ -223,6 +223,44 @@ describe("colour on a row, and the absence that must not read as a negative", ()
     expect(text).toContain("at (100,200) blue");
   });
 
+  /**
+   * **The row the header promised and nothing delivered.**
+   *
+   * The header has always named "a drawing's ink" as a colour source, and
+   * until this was fixed no drawing could ever carry one: `Item` has no colour
+   * field, a drawing's strokes live inside its SVG blob, and both production
+   * callers of `itemColour` hand it `properties` alone. `itemColour` had a
+   * stroke branch and `colour.test.ts` exercised it directly, so the unit was
+   * green while the seam was dead — which is the shape of bug this file exists
+   * to catch, and did not.
+   *
+   * It matters more than the other two sources because **red is not a paper**:
+   * `PAPERS` is yellow, pink, blue, green, grey, and an area's tint reuses it.
+   * So ink is the ONLY route by which a canvas can know something is red, and
+   * "move the red one" — the sentence the whole voice demo is named for — was
+   * unresolvable on every canvas.
+   */
+  it("carries a drawing's recorded ink colour, which is the only route to red", () => {
+    const text = canvasSnapshotText(
+      [acme({ id: "itm_d", title: "Sketch", kind: "drawing", properties: { kind: "drawing", ink: "red" } })],
+      [],
+    );
+    expect(text).toContain('"Sketch" [itm_d] drawing 320x240 at (100,200) red');
+  });
+
+  it("would notice if ink stopped reaching the row", () => {
+    // Falsification: the assertion above is only worth having if dropping the
+    // property takes the word away again.
+    const text = canvasSnapshotText([acme({ id: "itm_d", kind: "drawing", properties: { kind: "drawing" } })], []);
+    expect(text).not.toContain("red");
+  });
+
+  it("does not believe an ink property that is not a spoken colour", () => {
+    expect(
+      canvasSnapshotText([acme({ kind: "drawing", properties: { ink: "#e02424" } })], []),
+    ).toContain("at (100,200)\n");
+  });
+
   it("says nothing at all when it does not know", () => {
     // A screenshot that is obviously red in the room is silent in the data,
     // and a guessed colour is worse than none.

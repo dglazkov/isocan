@@ -14,6 +14,7 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
 import {
   DEFAULT_VOICE_PORT,
   LIVE_MODEL,
+  LIVE_TOOLS,
   describeMintedOp,
   liveSetup,
   liveUrl,
@@ -552,6 +553,66 @@ describe("what a sentence means", () => {
    * arithmetic with core's `besideBox` — the same function the browser dialog
    * calls, because two spellings of "beside" would be two canvases.
    */
+  describe("a drawing writes down the colour it was drawn in", () => {
+    /**
+     * The cheap half of the mechanism the voice note called for. The strokes
+     * are about to become an SVG blob and an `Item` has no colour field, so
+     * unless the word is recorded HERE nothing downstream can ever answer
+     * "which one is red" — see `INK_PROP`.
+     */
+    it("records the dominant ink as a property the projection can read", () => {
+      const { plans } = planForCall("drawing_add", {
+        title: "Sketch",
+        color: "#e02424",
+        points: [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+      });
+      expect(plans[0]!.op.properties).toMatchObject({ kind: "drawing", ink: "red" });
+    });
+
+    it("says nothing rather than guessing when the ink is not a spoken colour", () => {
+      const { plans } = planForCall("drawing_add", {
+        title: "Sketch",
+        color: "currentColor",
+        points: [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+      });
+      expect(plans[0]!.op.properties).not.toHaveProperty("ink");
+    });
+  });
+
+  describe("undo, which retracts rather than compensates", () => {
+    /**
+     * **The clause the demo throws away and most canvas tools get wrong.**
+     *
+     * Undo here is per-actor, so a live session undoing its own last operation
+     * cannot reach what the person did by hand — an advantage the research
+     * note called free. It was not free: there was no `undo` among the tools,
+     * so asked to "undo that" the model improvised an inverse `move_item` back
+     * to the old coordinates. That LOOKS like success and is not: it records a
+     * second change instead of retracting the first, so the log claims both
+     * were meant, and it only works for operations invertible from memory. A
+     * delete or a rename is not.
+     */
+    it("is a tool the model can actually reach", () => {
+      const undo = LIVE_TOOLS.find((t) => t.name === "undo");
+      expect(undo, "no undo tool means the model can only improvise an inverse").toBeDefined();
+      expect(undo!.description).toContain("RETRACTS");
+      expect(undo!.description).toContain("NEVER improvise");
+    });
+
+    it("plans no operation, because undo is not one", () => {
+      const { plans, what } = planForCall("undo", {});
+      expect(plans).toEqual([]);
+      // The daemon owns WHICH operation is retracted, because it owns whose
+      // turn it is. A plan here would be this side guessing.
+      expect(what).toBe("__undo__");
+    });
+
+    it("no longer falls through to the unknown-tool refusal", () => {
+      // Falsification: before the tool existed this is what "undo" hit.
+      expect(planForCall("undo", {}).what).not.toContain("does not have");
+    });
+  });
+
   describe("next to, as a second referent on the movement tool", () => {
     const boxed = (title: string, id: string, x: number, y: number, width = 100, height = 100) =>
       ({ ...item(title, id, x, y), width, height }) as ListedItem;

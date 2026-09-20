@@ -35,6 +35,7 @@ import { parseHex } from "./contrast.ts";
 import type { InkStroke } from "./drawing.ts";
 import { PAPER_PROP, isPaper } from "./textnode.ts";
 import { AREA_TINT_PROP } from "./area.ts";
+import { INK_PROP } from "./drawing.ts";
 
 /**
  * **The whole vocabulary.** Every colour word this canvas will ever put in
@@ -261,6 +262,21 @@ export function itemColour(item: ColouredItem): SpokenColour | null {
     if (inked) return inked;
   }
   const properties = item.properties ?? {};
+  /**
+   * The ink colour a drawing recorded when it was made. It is read BEFORE the
+   * papers because it means the same thing as the strokes above and is the
+   * only route by which a caller holding an ordinary `Item` can reach it —
+   * strokes live in the SVG blob, so the branch above is reachable only by
+   * something that has already decoded one.
+   *
+   * Its guard is the spoken vocabulary rather than `isPaper`, because ink is
+   * not paper: red is the whole reason this field exists and is not a paper
+   * colour.
+   */
+  const ink = properties[INK_PROP];
+  if (ink !== undefined && (SPOKEN_COLOURS as readonly string[]).includes(ink)) {
+    return ink as SpokenColour;
+  }
   for (const key of [PAPER_PROP, AREA_TINT_PROP]) {
     const raw = properties[key];
     // `isPaper` is the palette's own guard, so a hand-written property that

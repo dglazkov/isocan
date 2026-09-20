@@ -27,6 +27,29 @@ export const DRAWING_TITLE = "Sketch";
 export const DRAWING_KIND = "drawing";
 export const DRAWING_PROPERTIES: Record<string, string> = { kind: DRAWING_KIND };
 
+/**
+ * **The drawing's colour, recorded as a fact when the ink is laid down.**
+ *
+ * `Item` has no colour field and a drawing's strokes live inside its SVG blob,
+ * so nothing that holds only an `Item` — which is everything downstream of the
+ * canvas, including the projection a live session is handed — can tell what
+ * colour a drawing is. `itemColour` had a branch for strokes and no production
+ * caller could ever reach it: "move the red one" was unresolvable because red
+ * is not a paper and ink was never read.
+ *
+ * Writing the word at creation is the cheap half of the mechanism the voice
+ * research note called for. It costs one property, needs no decoder, and is
+ * read by the browser and the standing harness through the same field, which
+ * is what stops them disagreeing about what "red" means. The expensive half —
+ * deriving the colour of drawings made BEFORE this, and of a picture's face —
+ * still needs a decoder, and this deliberately does not pretend to it.
+ *
+ * Unlike `paper` and `tint`, which are restricted to the five paper colours,
+ * this holds any word in the spoken vocabulary: a pen draws in red, and red is
+ * the case this exists for.
+ */
+export const INK_PROP = "ink";
+
 /** Breathing room around the ink, in world units, so a stroke's round cap
  * never touches the item's edge. */
 export const INK_PADDING = 8;

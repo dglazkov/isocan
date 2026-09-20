@@ -161,6 +161,24 @@ export async function runTool(
       answer: threads.map((t) => `${t.id} (${t.comments.length} comments)`).join("; ") || "no threads",
     };
   }
+  if (what === "__undo__") {
+    /**
+     * The standing harness undoes through the daemon client; `WebHost` has
+     * `send`, `putBlob`, `enrol` and `viewer` and no retract, so this dialog
+     * cannot honour it without widening the module API — a versioned decision
+     * with its own PROPOSED list, not something to slip into a bug fix.
+     *
+     * Declining in words is still strictly better than what happened before
+     * the tool existed, which was the model inventing an inverse operation and
+     * the log claiming both changes were meant. Same shape as presence below.
+     */
+    return {
+      ok: false,
+      error:
+        "undo is not carried by the browser voice dialog yet — say so, and do NOT move, re-add or rename " +
+        "anything to compensate; the collaborator can undo with the keyboard.",
+    };
+  }
   if (what === "__read_presence__") {
     return { ok: false, error: "presence is not carried by the browser voice dialog yet" };
   }

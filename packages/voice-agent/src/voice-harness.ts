@@ -4437,6 +4437,44 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
                 answer,
               };
             }
+            if (name === "undo") {
+              /**
+               * Undo is not an operation, so it does not go through
+               * `applyPlan`: it retracts the last one THIS ACTOR made, and
+               * the daemon decides which that is. Per-actor is the whole
+               * point — a live session can never undo the collaborator's own
+               * work, which is why "actually, undo that" is safe to honour
+               * without asking.
+               */
+              try {
+                const entry = await target.canvas.ctx.client.undo(target.canvas.id, target.canvas.ctx.actor);
+                const what = entry?.envelope?.op?.type ? `undid ${entry.envelope.op.type}` : "undid my last change";
+                say({ text: what });
+                recordToolLog({
+                  type: "tool_call",
+                  source: "live",
+                  name,
+                  args: args as Record<string, unknown>,
+                  result: { ok: true, answer: what },
+                });
+                return { ok: true, answer: what };
+              } catch (err) {
+                /** Nothing of mine left to undo is the ordinary case, not a
+                 *  fault: say so rather than letting the model improvise an
+                 *  inverse operation, which is the behaviour this tool exists
+                 *  to replace. */
+                const error = `nothing of mine left to undo on this canvas — ${(err as Error).message}`;
+                say({ text: error });
+                recordToolLog({
+                  type: "tool_call",
+                  source: "live",
+                  name,
+                  args: args as Record<string, unknown>,
+                  result: { ok: false, error },
+                });
+                return { ok: false, error };
+              }
+            }
             if (name === "read_canvas") {
               const summary = items.map((i) => ({
                 id: i.id,

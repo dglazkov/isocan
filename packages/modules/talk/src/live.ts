@@ -3,7 +3,6 @@
  * talk module carries no dependency on the harness package. The harness
  * file remains the owner; when either changes, reconcile the two by hand.
  */
-
 /**
  * **The Live API's provider face, browser-safe** — the one spelling of the
  * model setup, the tool surface and the call planner.
@@ -25,7 +24,9 @@ import {
   DRAWING_MIME,
   DRAWING_PROPERTIES,
   drawingSvg,
+  INK_PROP,
   inkBounds,
+  inkColour,
   isBesideSide,
   itemColour,
   normalizeSiteUrl,
@@ -202,6 +203,31 @@ export const LIVE_TOOLS = [
       properties: { item_ref: { type: "STRING", description: "The item to restore." } },
       required: ["item_ref"],
     },
+  },
+  {
+    /**
+     * **"Actually, undo that."**
+     *
+     * The throwaway clause in the demo and the one isocan is unusually ready
+     * for: undo here is PER ACTOR, so a live session undoing its own last
+     * operation cannot reach what the person did by hand a moment earlier.
+     * That property is worth nothing while the model has no way to ask for it
+     * — without this tool it improvises an inverse operation instead, which
+     * writes a second op rather than retracting one, leaves the log claiming
+     * both happened, and only works at all for operations it can invert from
+     * memory. A move can be inverted; a delete or a rename cannot.
+     *
+     * So the description below is emphatic about retracting rather than
+     * compensating: the failure this replaces looked like success.
+     */
+    name: "undo",
+    description:
+      "Undo YOUR OWN last operation on this canvas — use this whenever the collaborator says 'undo that', " +
+      "'actually, undo', 'take that back', or 'never mind'. It RETRACTS the operation you last made, and " +
+      "undo is per-actor, so it can never reach something the collaborator did themselves. " +
+      "NEVER improvise an inverse operation instead (moving something back, re-adding what you deleted, " +
+      "renaming to the old title): that records a second change rather than undoing the first.",
+    parameters: { type: "OBJECT", properties: {} },
   },
   {
     name: "move_item",
@@ -1176,6 +1202,10 @@ export function planForCall(name: string, args: Record<string, unknown>): { plan
       const strokes: InkStroke[] = [{ color, width: strokeWidth, points: rawPoints }];
       const box = inkBounds(strokes) ?? { minX: 100, minY: 100, maxX: 300, maxY: 300 };
       const svg = drawingSvg(strokes, box);
+      /** The word for this ink, recorded now for the reason `INK_PROP` gives:
+       *  the strokes are about to become an SVG blob and an `Item` has no
+       *  colour field, so a later "move the red one" has nothing else to read. */
+      const inked = inkColour(strokes);
       const width = Math.max(80, box.maxX - box.minX + 16);
       const height = Math.max(80, box.maxY - box.minY + 16);
       return {
@@ -1186,7 +1216,7 @@ export function planForCall(name: string, args: Record<string, unknown>): { plan
               title: String(args.title ?? "Sketch"),
               content: svg,
               mime: DRAWING_MIME,
-              properties: DRAWING_PROPERTIES,
+              properties: inked ? { ...DRAWING_PROPERTIES, [INK_PROP]: inked } : DRAWING_PROPERTIES,
               width,
               height,
               x: box.minX - 8,
@@ -1259,6 +1289,11 @@ export function planForCall(name: string, args: Record<string, unknown>): { plan
       return { plans: [], what: `__${name}__` };
     case "find_items":
       return { plans: [], what: "__find_items__" };
+    case "undo":
+      /** Not a `PlannedOp`: undo is not an operation, it RETRACTS one, and the
+       *  daemon owns which one because undo is per-actor. Both dispatchers
+       *  answer this sentinel by calling the client's `undo`. */
+      return { plans: [], what: "__undo__" };
     case "read_canvas":
       return { plans: [], what: "__read_canvas__" };
     case "read_item":
