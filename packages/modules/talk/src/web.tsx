@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  besideBox,
+  isBesideSide,
   mainThread,
   newCommentId,
   newItemId,
@@ -81,6 +83,10 @@ export function snapshotItemsFor(canvas: CanvasContents): SnapshotItem[] {
     y: i.y,
     width: i.width,
     height: i.height,
+    // The colour word is derived from these by `canvasSnapshotText`, not
+    // here: both surfaces hand over the same bag, so deriving it once is what
+    // keeps "red" meaning one thing on both.
+    properties: i.properties,
     ...(i.containerId ? { containerId: i.containerId } : {}),
   }));
 }
@@ -198,6 +204,25 @@ export async function runTool(
         op.x = item.x + Number(op.x ?? 0);
         op.y = item.y + Number(op.y ?? 0);
         delete op.by;
+      }
+      // "Move it next to the checkout screen": a second referent, resolved
+      // against this canvas and then handed to core's `besideBox` — the same
+      // function the standing harness calls, because two spellings of "next
+      // to" would put the item in two different places depending on which
+      // surface heard the sentence.
+      if (op.type === "item.move" && typeof op.besideRef === "string") {
+        const anchorRef = op.besideRef;
+        const anchor = resolve(anchorRef, items);
+        if (!anchor) return { ok: false, error: `no item matches "${anchorRef}"` };
+        const spot = besideBox(
+          { width: item.width, height: item.height },
+          { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height },
+          isBesideSide(op.side) ? op.side : "right",
+        );
+        op.x = spot.x;
+        op.y = spot.y;
+        delete op.besideRef;
+        delete op.side;
       }
       // "switch to the first/last/filename" resolves against the item's real
       // version stack — the wire wants a version id, never a ref.

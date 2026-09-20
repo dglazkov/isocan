@@ -210,7 +210,28 @@ core already has.
 > deliberate byte-copy of the harness's file — reconciled *by hand*, per its
 > own header, with nothing checking — so this change, the first to touch both,
 > left `test/live-copy.test.ts` behind to make that a bound rather than a
-> comment. Colour and the relational tool are still owed. That is most of the video, in isocan's own code, testable
+> comment.
+
+> **Built 20 Sep 2026 — colour, and "next to".** `core/colour.ts` holds a
+> closed spoken vocabulary (eleven words: CSS's 148 include "darkslategrey",
+> which nobody says out loud) and `itemColour`, which answers only from data
+> that actually means colour — a drawing's dominant ink by total stroke
+> LENGTH, a note's paper, an area's tint — and **never from a title**, because
+> "Red team retro" is not a red item. A row carries its colour when known and
+> the header says that an absent word means *unknown*, never *not that
+> colour*: without that sentence a model infers a negative from silence, which
+> is the failure this phase could most easily have shipped. `besideBox` in
+> `core/placement.ts` computes "next to" over the existing `PLACEMENT_GAP`,
+> centring the cross axis and deliberately NOT dodging an occupied spot —
+> landing somewhere else because the place was busy is how a spoken command
+> stops being trusted.
+>
+> **A picture's face is still not covered, and that is the honest gap.** `Item`
+> has no colour field; a stroke's is hex and computable, a card's is pixels
+> only, and a colour derived in the browser but not in the standing harness
+> would fork the one wording the projection exists to keep. Deriving it where
+> the canvas renders needs a decoder the harness does not have, and remains
+> the one genuinely new mechanism the video's sentence would need. That is most of the video, in isocan's own code, testable
 without a key and valuable even if no judge ever lands — a live session that
 knows where things are is better at everything.
 

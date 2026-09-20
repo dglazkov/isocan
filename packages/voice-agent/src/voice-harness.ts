@@ -11,6 +11,7 @@ import { readRcAgents, upsertRcAgent } from "./rc-rows.ts";
 import { statSync } from "node:fs";
 import { ApiError, connect, matchRef, type CanvasHandle, type ListedItem } from "@isocan/api";
 import {
+  besideBox,
   BROWSER_MIME,
   CANVAS_GROUPS_REQUIRED,
   canvasUrlWithPass,
@@ -18,6 +19,7 @@ import {
   drawingViewBox,
   inkBounds,
   inScope,
+  isBesideSide,
   itemKind,
   sortCanvases,
   DRAWING_MIME,
@@ -1564,6 +1566,40 @@ export function resolveLivePlans(
         if (op.type === "item.move" && op.by === true) {
           op.x = Number(item.x ?? 0) + Number(op.x ?? 0);
           op.y = Number(item.y ?? 0) + Number(op.y ?? 0);
+        }
+        /* **"Next to the blue one" is resolved HERE**, because this is the
+           side that has the geometry: `planForCall` carries the anchor and
+           the side on the minted op and has no canvas to measure against.
+           The anchor is resolved by the same `resolveSpokenRef` as the
+           target, so "the second screen" names an anchor exactly as well as
+           it names a subject, and an anchor nobody can resolve is REFUSED in
+           the same words rather than the item being left where it was while
+           the model is told it moved. The arithmetic itself is core's
+           `besideBox`, which the browser dialog calls too — two spellings of
+           "beside" would be two canvases. */
+        if (op.type === "item.move" && typeof op.besideRef === "string") {
+          const anchorRef = op.besideRef;
+          const anchor = resolveSpokenRef(anchorRef, candidateList);
+          if (!anchor) {
+            const said = `could not resolve “${anchorRef}”`;
+            refused.push({ type: op.type, said, message: `${op.type} failed — ${said}` });
+            continue;
+          }
+          const side = isBesideSide(op.side) ? op.side : "right";
+          const spot = besideBox(
+            { width: Number(item.width ?? 0), height: Number(item.height ?? 0) },
+            {
+              x: Number(anchor.x ?? 0),
+              y: Number(anchor.y ?? 0),
+              width: Number(anchor.width ?? 0),
+              height: Number(anchor.height ?? 0),
+            },
+            side,
+          );
+          op.x = spot.x;
+          op.y = spot.y;
+          delete op.besideRef;
+          delete op.side;
         }
         delete op.by;
         if (op.type === "item.setCurrentVersion") {

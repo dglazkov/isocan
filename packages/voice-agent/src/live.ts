@@ -19,8 +19,11 @@ import {
   DRAWING_PROPERTIES,
   drawingSvg,
   inkBounds,
+  isBesideSide,
+  itemColour,
   normalizeSiteUrl,
   siteLabel,
+  type BesideSide,
   type InkStroke,
 } from "@isocan/core";
 
@@ -185,7 +188,11 @@ export const LIVE_TOOLS = [
   },
   {
     name: "move_item",
-    description: "Move an item across the canvas (e.g. 'move Checkout screen right 50', 'move the note up 100'). Supports by_x/by_y or to_x/to_y.",
+    description:
+      "Move an item across the canvas. Three ways to say where: relative (by_x/by_y — 'move Checkout right 50'), " +
+      "absolute (to_x/to_y), or RELATIVE TO ANOTHER ITEM (beside_ref plus side — 'move the note next to the Checkout screen'). " +
+      "Prefer beside_ref whenever the person names a second item: the canvas does the arithmetic and lines the two up, " +
+      "which pixels guessed from the snapshot will not.",
     parameters: {
       type: "OBJECT",
       properties: {
@@ -194,6 +201,16 @@ export const LIVE_TOOLS = [
         by_y: { type: "NUMBER", description: "Relative vertical shift in pixels." },
         to_x: { type: "NUMBER", description: "Absolute target x coordinate." },
         to_y: { type: "NUMBER", description: "Absolute target y coordinate." },
+        beside_ref: {
+          type: "STRING",
+          description:
+            "Put the item next to THIS item — its title, prefix, or id. The canvas works out the coordinates, " +
+            "leaves the standard gap and lines the two up across the other axis. Do not also send by_x/to_x.",
+        },
+        side: {
+          type: "STRING",
+          description: "Which side of beside_ref to land on: left, right, above, or below. Defaults to right.",
+        },
       },
       required: ["item_ref"],
     },
@@ -733,6 +750,15 @@ export interface SnapshotItem {
   height: number;
   /** The group this sits in, when it sits in one. */
   containerId?: string;
+  /**
+   * The item's own property bag, from which a COLOUR is derived here rather
+   * than by the caller — the opposite choice to `kind` a few lines up, and
+   * for the opposite reason. The two callers reach `kind` by different routes
+   * and so must each say it; they reach `properties` by the same route (both
+   * hold an `Item`), so deriving the word once in `itemColour` is what stops
+   * the browser and the harness quietly disagreeing about what "red" means.
+   */
+  properties?: Record<string, string>;
 }
 
 /**
@@ -770,9 +796,20 @@ export const SNAPSHOT_ITEM_CAP = 60;
  * convention, because a model that assumes y grows upward will place things
  * below when it meant above and no test of ours would catch it.
  *
- * Colour is deliberately NOT here yet: `Item` has no colour field, a stroke's
- * is hex and a card's face is only pixels, and half of "red" is worse than
- * none. That is its own piece of work.
+ * ## Colour, and the sentence that has to go with it (#337)
+ *
+ * A row carries a colour WHEN THE CANVAS KNOWS ONE and says nothing when it
+ * does not. `Item` has no colour field, so "knows one" means a note's paper,
+ * an area's tint, or a drawing's ink — `itemColour` in core is the whole of
+ * it, and it answers `null` rather than guessing from a title.
+ *
+ * Which makes the header sentence load-bearing rather than decoration. A
+ * model shown `red` on one row and nothing on the others will conclude the
+ * others are NOT red — an absence reads as a negative unless something says
+ * otherwise, and here the absence means *unknown*, which is the common case:
+ * a screenshot that is obviously red to the person in the room is silent to
+ * the data model. So the header says so, in one sentence, and a test holds
+ * that sentence there.
  *
  * ## The order, and why it is not the viewport
  *
@@ -792,10 +829,15 @@ export function canvasSnapshotText(
   );
   const shown = ordered.slice(0, Math.max(0, cap));
   const rest = ordered.length - shown.length;
-  const row = (i: SnapshotItem) =>
-    `- ${JSON.stringify(i.title ?? "untitled")} [${i.id}] ${i.kind} ` +
-    `${Math.round(i.width)}x${Math.round(i.height)} at (${Math.round(i.x)},${Math.round(i.y)})` +
-    (i.containerId ? ` inside [${i.containerId}]` : "");
+  const row = (i: SnapshotItem) => {
+    const colour = itemColour({ properties: i.properties });
+    return (
+      `- ${JSON.stringify(i.title ?? "untitled")} [${i.id}] ${i.kind} ` +
+      `${Math.round(i.width)}x${Math.round(i.height)} at (${Math.round(i.x)},${Math.round(i.y)})` +
+      (colour ? ` ${colour}` : "") +
+      (i.containerId ? ` inside [${i.containerId}]` : "")
+    );
+  };
   const heading = ordered.length === 0
     ? "Items: none."
     : rest > 0
@@ -804,6 +846,9 @@ export function canvasSnapshotText(
   return [
     "Current canvas state (ids are authoritative — echo them in tool calls).",
     "Geometry is world pixels: x grows right, y grows down, and (x,y) is an item's top-left corner.",
+    "A colour word appears on a row only where the canvas KNOWS the colour (a note's paper, an area's tint, a drawing's ink); " +
+      "no colour word means the colour is UNKNOWN to the canvas, never that the item is not that colour — most items look like " +
+      "something the data does not record, so ask rather than ruling them out.",
     heading,
     ...shown.map(row),
     ...(rest > 0
@@ -919,6 +964,47 @@ export function planForCall(name: string, args: Record<string, unknown>): { plan
         ],
       };
     case "move_item": {
+      /* **"Next to the blue one" is a second REFERENT, carried but not
+         computed here.** This function has no canvas state by design — it is
+         the one spelling of what a tool call means, shared by a browser that
+         holds the items and a harness that holds a listing — so it passes the
+         anchor and the side through on the minted op and lets whichever
+         resolver has the geometry do the arithmetic (`besideBox`, in core, so
+         both reach the same pixel). Trying to guess coordinates here is how
+         the two surfaces would come to disagree about where "beside" is. */
+      const besideRef = typeof args.beside_ref === "string" ? args.beside_ref.trim() : "";
+      if (besideRef !== "") {
+        const raw = typeof args.side === "string" ? args.side.trim().toLowerCase() : "";
+        /* No side said is "next to", and next to something means to its right
+           — a canvas is read like a page, so the thing put beside another is
+           read after it. `under`/`over`/`beneath` are what people actually
+           say, so they are heard rather than refused. */
+        const spoken: Record<string, BesideSide> = {
+          "": "right",
+          "next to": "right",
+          beside: "right",
+          under: "below",
+          underneath: "below",
+          beneath: "below",
+          over: "above",
+          "on top of": "above",
+        };
+        const side: BesideSide | undefined = isBesideSide(raw) ? raw : spoken[raw];
+        if (side === undefined) {
+          return {
+            plans: [],
+            what: `"${raw}" is not a side — say left, right, above or below`,
+          };
+        }
+        return {
+          plans: [
+            {
+              op: { type: "item.move", ref, besideRef, side },
+              said: `moved ${ref}`,
+            },
+          ],
+        };
+      }
       const by = args.by_x !== undefined || args.by_y !== undefined;
       return {
         plans: [

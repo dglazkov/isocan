@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
 import type { Operation, Placement } from "../src/ops.ts";
 import {
+  besideBox,
+  isBesideSide,
   nearestFreeSpot,
   PLACEMENT_CLEARANCE,
   PLACEMENT_GAP,
@@ -283,3 +285,72 @@ describe("where a displaced item goes", () => {
     expect(nearestFreeSpot(want, occupied)).toEqual({ x: right + PLACEMENT_GAP, y: want.y });
   });
 });
+
+/**
+ * **"Move the red one next to the blue one"** — the arithmetic half of the
+ * sentence `docs/research/2026-09-19-move-the-red-one.md` is named for.
+ *
+ * It lives in core because the browser's voice dialog and the standing
+ * harness both resolve that tool call and must reach the same pixel; these
+ * assertions are what "the same pixel" means.
+ */
+describe("next to", () => {
+  // Deliberately unequal: a square anchor and a wide, short mover, so
+  // "centred" is a different number from "top-aligned" on every side.
+  const anchor = { x: 100, y: 200, width: 300, height: 100 };
+  const mover = { width: 80, height: 40 };
+
+  it("leaves the standard gap on whichever side was asked for", () => {
+    expect(besideBox(mover, anchor, "right").x).toBe(anchor.x + anchor.width + PLACEMENT_GAP);
+    expect(besideBox(mover, anchor, "left").x).toBe(anchor.x - PLACEMENT_GAP - mover.width);
+    expect(besideBox(mover, anchor, "below").y).toBe(anchor.y + anchor.height + PLACEMENT_GAP);
+    expect(besideBox(mover, anchor, "above").y).toBe(anchor.y - PLACEMENT_GAP - mover.height);
+  });
+
+  it("centres the other axis, so a pair reads as a pair", () => {
+    const middleY = anchor.y + anchor.height / 2 - mover.height / 2;
+    const middleX = anchor.x + anchor.width / 2 - mover.width / 2;
+    expect(besideBox(mover, anchor, "right")).toEqual({ x: 440, y: middleY });
+    expect(besideBox(mover, anchor, "left")).toEqual({ x: -20, y: middleY });
+    expect(besideBox(mover, anchor, "below")).toEqual({ x: middleX, y: 340 });
+    expect(besideBox(mover, anchor, "above")).toEqual({ x: middleX, y: 120 });
+    // Not the near edge: the whole point of the centring is that these differ.
+    expect(middleY).not.toBe(anchor.y);
+    expect(middleX).not.toBe(anchor.x);
+  });
+
+  it("puts the two boxes exactly the gap apart and never overlapping", () => {
+    for (const side of ["left", "right", "above", "below"] as const) {
+      const spot = besideBox(mover, anchor, side);
+      const box = { ...spot, ...mover };
+      expect(overlapsBox(box, anchor)).toBe(false);
+      const clearance =
+        side === "right"
+          ? box.x - (anchor.x + anchor.width)
+          : side === "left"
+            ? anchor.x - (box.x + box.width)
+            : side === "below"
+              ? box.y - (anchor.y + anchor.height)
+              : anchor.y - (box.y + box.height);
+      expect(clearance).toBe(PLACEMENT_GAP);
+    }
+  });
+
+  it("takes a gap of its own when a caller has a reason to differ", () => {
+    expect(besideBox(mover, anchor, "right", 0).x).toBe(anchor.x + anchor.width);
+  });
+
+  it("is the guard a free-text argument has to pass", () => {
+    expect(isBesideSide("left")).toBe(true);
+    expect(isBesideSide("below")).toBe(true);
+    expect(isBesideSide("next to")).toBe(false);
+    expect(isBesideSide(undefined)).toBe(false);
+    expect(isBesideSide("LEFT")).toBe(false);
+  });
+});
+
+const overlapsBox = (
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
