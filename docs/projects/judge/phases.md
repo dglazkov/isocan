@@ -4,11 +4,15 @@
 ends with **Trajectory**: only what the phase discovered that changes the
 project's course. A phase that went as planned leaves it empty.
 
-**Where we are: nothing is built. Phase 0 is next — read the API from its
-reference rather than from coverage, and make one call by hand.** It is the
-only phase that needs a person, and it needs two things: an early-access key,
-and a machine that can reach `typesafe.ai` (the build container's egress proxy
-blocks it, which is why every figure in the research note is second-hand).
+**Where we are: nothing is built. Phase 0 is CLOSED — the reference has been
+read and one classification run by hand, on a local machine with the key.
+Phase 1 is next, and it is also local.** Phase 0 found the `Judgment`/`Judged`
+sketch wrong in three places, all now corrected in [design.md](design.md): a
+Choice returns the **whole probability distribution** rather than one `p`, the
+request is one `state` plus a map of named questions rather than a flat field
+map, and `spent` has to split input from output tokens because only input is
+billed. It also found the judge **wrong on the one card it was asked about**,
+in the exact parent-versus-child way this project exists to study.
 
 **Which machine does what, recorded 20 Sep 2026 because it is not obvious and
 costs a session to rediscover.** The cloud container cannot reach TypeSafe at
@@ -19,7 +23,7 @@ and that is a LEG rather than a phase:
 
 | | Where | Why there |
 | --- | --- | --- |
-| judge phase 0 | local | the only place the reference and the endpoint are reachable |
+| ~~judge phase 0~~ | local | **done 19 Sep 2026** — reference read, one call made |
 | judge phase 1 | local | the corpus is a personal MCP server no CI holds a credential for |
 | judge phase 2 | local | needs the judge phase 0 measured |
 | [voice](../../research/2026-09-19-move-the-red-one.md) phases 4–5 | local | the resolver needs a working judge |
@@ -41,31 +45,154 @@ this document:
 
 ## Phase 0 — The instrument, read rather than assumed
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 19 September 2026.** Read from
+[the HTTP API reference](https://docs.typesafe.ai/api) and
+[Models](https://docs.typesafe.ai/models) on 19 Sep 2026, and exercised with
+six calls from a local machine. Measured spend: **$0.0005** against a budget of
+one dollar.
 
-**Outcome:** the research note's figures table is replaced by one read from
-TypeSafe's own reference: the exact request and response shape, how an answer's
-allowed values are declared, whether a runner-up is returned, what the error
-and rate-limit behaviour is, and the real latency and price. One classification
-is run by hand against an answer already known, and its output is pasted into
-the phase record verbatim.
+### What the reference says that the coverage did not
 
-Nothing is integrated. No `Judgment` interface yet, no module, no canvas. The
-deliverable is knowing what we are building against, because everything
-downstream was designed from secondary coverage and at least one detail will be
-wrong.
+The figures table in
+[the research note](../../research/2026-09-19-system-one-and-the-ledger.md) has
+been replaced with one read first-hand. The price survived — $0.042 per Mtok on
+input, output free. Four things did not, and two of them change the design.
 
-⚑ **Needs a person, and this is the project's only such step.** An early-access
-API key from TypeSafe, and a machine outside this container's egress proxy.
-Expected spend for the whole phase: **under one dollar** — a few dozen calls at
-$0.042 per million input tokens with free output. No cloud resource, no
-subscription, no commitment beyond the key.
+**A Choice returns the whole distribution.** Not a chosen value and a
+probability; every option mapped to its probability, summing to 1, plus a
+separate `confidence`. The design's open question *"what happens to a tie"* is
+answered by the API rather than by us: two folders at 0.45 is directly
+representable and always was.
 
-**Proof:** the phase record carries the request and response shapes copied from
-the reference with the URL and the date read, one real call's exact output, and
-a measured latency and cost for it. Any place where the shape differs from
-[design.md](design.md)'s `Judgment`/`Judged` sketch is named, and the design is
-corrected before phase 1 begins.
+**`confidence` is not the probability, and the two must not be confused.** The
+reference is explicit that `confidence` is a statistic over the *shape* of the
+distribution, not an estimate of being right. Their own worked example returns
+`choice: "returns"` at probability **0.60** with `confidence` **0.39**, because
+the runner-up holds 0.38. Only `probabilities[choice]` is the calibrated
+quantity, so only it can carry a reliability curve. Phase 2 inherits an
+explicit choice here and phase 3's band boundary depends on which axis it picks.
+
+**The input is text only.** Verbatim from Models: *"Text only. String, JSON
+object, or array of text values. No image, audio, or video input."* This
+settles the colour question the voice work left open — see Trajectory.
+
+**The published latency is not published.** The 70–500ms in every piece of
+coverage appears nowhere in the reference. Measured below instead.
+
+Two limits nobody had. A Choice takes **up to 255 options**, which clears the
+ledger's 131-folder tree, so filing against the entire taxonomy in one question
+is allowed rather than assumed. And context is 64k per request, 32k for `state`
+plus the longest single question.
+
+### The call, verbatim
+
+One card whose folder is already known, asked against the real 131-folder enum.
+The card is
+*"What causes a new stacking context to be created?"*, filed by a person in
+`technology/engineering/web/css/css-for-js-developers-josh-comeau`.
+
+Request, with the 131 `criteria` keys elided after the first three — every value
+is `null`, because a full slash-separated path describes itself:
+
+```json
+{
+  "state": {
+    "front": "What causes a new stacking context to be created?",
+    "back": "The most common cause is a `position` that isn't `static` and a `z-index`, but also: Setting `opacity` to a value less than 1; Setting `position` to `fixed` or `sticky` (No `z-index` needed for these values!); Applying a `mix-blend-mode` other than normal; Adding a `z-index` to a child inside a `display: flex` or `display: grid` container; Using `transform`, `filter`, `clip-path`, or `perspective`; Explicitly creating a context with `isolation: isolate`."
+  },
+  "model": "jev-latest",
+  "questions": {
+    "folder": {
+      "type": "choice",
+      "instructions": "This is a flashcard from a personal knowledge base. Which folder of the folder tree was it filed in? Each option is a full folder path, slash-separated, from the root. Choose the single folder the card is filed directly in, not a parent or a child of it.",
+      "criteria": {
+        "companies": null,
+        "companies/augment": null,
+        "companies/google": null
+        // … 128 more, one per folder, all null
+      }
+    }
+  }
+}
+```
+
+Response, `200 OK`, with the 127 options that came back at exactly `0` elided:
+
+```json
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "folder": {
+      "type": "choice",
+      "choice": "technology/engineering/web/css",
+      "probabilities": {
+        "technology/engineering/web/css": 0.72,
+        "technology/engineering/web/css/css-for-js-developers-josh-comeau": 0.23,
+        "technology/engineering/web": 0.04,
+        "technology/rise-and-fall-of-the-pc-steven-sinofsky": 0.01
+        // … 127 more, all exactly 0
+      },
+      "confidence": 0.71
+    }
+  },
+  "usage": { "input_tokens": 2365, "output_tokens": 2042 }
+}
+```
+
+**The judge got it wrong.** The person filed the card in the Josh Comeau
+subfolder; the judge chose its parent at 0.72 and gave the true answer 0.23. It
+is one card and proves nothing about accuracy — that is phase 2's job — but the
+*shape* of the error is the thing this project was started to look at. The
+distribution puts 0.99 on the CSS/Web branch and splits it across three depths.
+The judge knows the region and not the depth, which is the parent-as-junk-drawer
+pathology the research note counted at 1,366 cards, seen from the model's side.
+
+### Measured
+
+| | Measured 19 Sep 2026, 5 calls | Coverage claimed |
+| --- | --- | --- |
+| Latency | 193, 195, 289, 306, 351 ms | 70–500ms |
+| Input tokens | 2,365 for a 131-option question | — |
+| Output tokens | 2,042, billed at zero | free |
+| Cost per call | **$0.0000993** | $0.042/Mtok input |
+| Model behind `jev-latest` | `jev-1.13.0` | — |
+
+Latency lands inside the claimed range but never near its floor; 70ms is not
+what a 2,365-token, 131-option question costs. Filing all 3,643 cards at this
+size is **$0.36**, about triple the research note's twelve-cent estimate,
+because the note assumed 800 tokens a call and the real schema is 2,365.
+
+**Repeated calls are not identical, and phase 2 has to budget for it.** The same
+request five times returned `probabilities[choice]` of 0.72, 0.75, 0.72, 0.79,
+0.77 and `confidence` of 0.71, 0.74, 0.71, 0.78, 0.75. A spread of ±0.035 on a
+single card means reliability buckets finer than about 0.1 would be reporting
+sampling noise, and it means a card sitting near a band boundary can cross it
+between runs. The jaggedness page's *"extremely consistent"* is a claim about
+semantically similar inputs, not about repeating one.
+
+### Errors, first-hand
+
+The documented codes are right, but the body has **two different shapes** and
+the reference does not say so. A `401` carries an object:
+
+```json
+{"detail":{"error_type":"authentication_error","message":"Cannot authenticate with the server. Please check your API key and try again."}}
+```
+
+A `422` carries an array, one entry per offending field:
+
+```json
+{"detail":[{"type":"missing","loc":["body","questions","q","choice","criteria"],"msg":"Field required","input":{"type":"choice","instructions":"Pick one."}}]}
+```
+
+Anything parsing `detail` has to handle both. `429` and `529` were not provoked
+— doing so deliberately against an early-access endpoint under load is not
+worth the goodwill, and the documented advice is the ordinary one, back off and
+retry.
+
+**Proof:** this record. The request and response above are the real ones; the
+figures table is measured rather than quoted; the three places the shape differs
+from the sketch are named and [design.md](design.md) is corrected.
 
 ## Phase 1 — The labels that already exist
 
@@ -180,10 +307,49 @@ first. `npm test` and `npm run typecheck` whole.
 
 ## Trajectory
 
-- **2026-09-19** — Open: every figure about the vendor in this project came
-  from secondary coverage, because `typesafe.ai` and `docs.typesafe.ai` are
-  blocked by the build container's egress proxy. Phase 0 exists to replace
-  them. Waits on a key and a machine outside the proxy.
+- **2026-09-19** — Closed by phase 0: every figure about the vendor was
+  second-hand. The reference has now been read from a local machine with the
+  key, and the research note's table is measured. The price held; the input
+  modality, the answer shape and the latency figure did not.
+- **2026-09-19** — Phase 0: **the `Judgment` sketch loses the thing the API is
+  built to give.** A Choice returns the full probability distribution and a
+  separate `confidence`; the sketch carried one `p` per field. design.md is
+  corrected. The design's open question about ties needed no design work — the
+  vendor already answers it.
+- **2026-09-19** — Phase 0, for phase 2 to decide and phase 3 to inherit:
+  **`confidence` is not `probabilities[choice]`.** The vendor's `confidence` is
+  a shape statistic over the distribution, and their own example pairs a 0.60
+  probability with a 0.39 confidence. Only the probability can carry a
+  reliability curve; the band in phase 3 could reasonably be drawn on either.
+  Phase 2 must state which axis it measured and phase 3 must use the same one.
+- **2026-09-19** — Phase 0, and it changes what phase 2 can resolve: **the same
+  request five times moved `probabilities[choice]` by ±0.035.** Reliability
+  buckets finer than ~0.1 would report sampling noise, and a card near a band
+  boundary can cross it between runs. Phase 2's reading should either bucket no
+  finer than that or measure the variance and say so.
+- **2026-09-19** — Phase 0, a cost correction rather than a course change:
+  filing all 3,643 cards is **$0.36**, not the twelve cents the research note
+  estimated, because the real 131-option schema is 2,365 input tokens rather
+  than the assumed 800. Still trivially affordable; still worth not being
+  surprised by.
+- **2026-09-19** — Phase 0, resolving the voice work's open colour question
+  **without reopening anything**: Jev's input is text only — "No image, audio,
+  or video input" — so a card's pixel face cannot be judged directly, and the
+  question phases 2–3 closed as "not faked" stays closed. The reference adds a
+  sharper point than the modality: Jev is explicitly bad at hex, "questions
+  about colors using hex values will underperform compared to those using the
+  English names", and the prescribed fix is to name the colour in code before
+  asking. So a stroke's computable hex is judgeable only after a code-side
+  conversion to a named bucket. Recorded, not acted on.
 - **2026-09-19** — Open: the calibration corpus lives in a personal MCP server
   a CI workflow cannot hold a credential for, so phase 1 likely exports once
   and commits a synthetic-text fixture. Waits on phase 1 deciding the shape.
+  Phase 0 read the tree first-hand and it is **131 folders**, well inside the
+  255-option ceiling on a Choice, so the whole taxonomy fits in one question
+  and phase 1 need not design a hierarchy of narrower ones.
+- **2026-09-19** — Open, raised by phase 0's single call and **not** settled by
+  it: the one error observed was parent-versus-child within the right subtree,
+  which is the shape a one-question-per-card design handles worst. Asking
+  branch and depth as two questions, or letting the parent win only when it
+  beats the sum of its children, are both cheap to test. Phase 2 measures
+  before anybody builds either — one card is an anecdote.

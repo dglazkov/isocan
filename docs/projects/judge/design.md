@@ -3,7 +3,7 @@ status: designed
 since: 2026-09-19
 issue: 334
 see: judge, evals, personas, memory, modules
-note: designed 19 Sep 2026 from the System One research note. A typed judge returns a decision and a calibrated probability and cannot cite, so it may triage and may never rule — the evals bar forbids it. The seam is `Judgment` in core, one interface with a declared cost, so the vendor is replaceable and a stub is a first-class implementation. Calibration comes before use: a personal knowledge base of 3,643 human-filed cards is the labelled corpus isocan's own twelve preference pairs cannot be. Phase 0, reading the API from its reference rather than from coverage, is next and needs a key.
+note: designed 19 Sep 2026 from the System One research note. A typed judge returns a decision and a calibrated probability and cannot cite, so it may triage and may never rule — the evals bar forbids it. The seam is `Judgment` in core, one interface with a declared cost, so the vendor is replaceable and a stub is a first-class implementation. Calibration comes before use: a personal knowledge base of 3,643 human-filed cards is the labelled corpus isocan's own twelve preference pairs cannot be. Phase 0 closed 19 Sep 2026: the reference was read first-hand and one call made, correcting the sketch in three places — the vendor returns the full probability distribution plus a separate confidence, takes one state with many named questions, and bills input tokens only. Phase 1 is next.
 ---
 
 # Judge: a decision, a probability, and no argument
@@ -50,19 +50,59 @@ answer only where it changes something.
 `Judgment` is one interface in `@isocan/core`, and the vendor sits behind it:
 
 ```ts
-interface Judgment<F extends string, V extends string> {
-  /** What was asked, and what answers were allowed. */
-  question: string;
-  fields: Record<F, readonly V[]>;
+/** One typed question. Choice is the only type this project needs today. */
+interface Choice<V extends string> {
+  type: "choice";
+  instructions: string;
+  /** Option → rubric description; `null` where the name speaks for itself. */
+  criteria: Record<V, string | null>;
 }
 
-interface Judged<F extends string, V extends string> {
-  /** The chosen value per field, with the probability it carries. */
-  answer: Record<F, { value: V; p: number }>;
+/** What was asked: one state, and questions under keys the caller chooses. */
+interface Judgment<Q extends string, V extends string> {
+  state: unknown;
+  questions: Record<Q, Choice<V>>;
+}
+
+interface Chosen<V extends string> {
+  /** The highest-probability option. */
+  value: V;
+  /** Every option's probability, summing to 1. The runner-up is in here. */
+  probabilities: Record<V, number>;
+  /** A statistic over the shape of `probabilities`. NOT p(correct). */
+  confidence: number;
+}
+
+interface Judged<Q extends string, V extends string> {
+  answers: Record<Q, Chosen<V>>;
   /** What this cost and what answered, so "cheap" is a fact. */
-  spent: { tokens: number; ms: number; model: string };
+  spent: {
+    inputTokens: number;
+    /** Returned, and billed at zero. Kept because it is reported. */
+    outputTokens: number;
+    /** Measured by the caller; the vendor does not report it. */
+    ms: number;
+    /** The versioned id that answered, e.g. `jev-1.13.0`. */
+    model: string;
+  };
 }
 ```
+
+**This sketch was corrected by [phase 0](phases.md#phase-0--the-instrument-read-rather-than-assumed)
+on 19 Sep 2026**, which read the reference and made a real call. The first
+version carried a single `p` per field, a flat `fields` map, and one `tokens`
+number. All three were wrong: the vendor returns the entire distribution, takes
+one `state` with many named questions against it, and bills input only.
+
+Two consequences beyond the shape, both of which land on later phases rather
+than here. **Many questions ride one `state` in a single call**, which is the
+vendor's own cost lever and something a one-question-per-call wrapper would
+throw away — phase 5's triage pass is where it pays. And **`confidence` and
+`probabilities[value]` are different numbers**: only the probability is the
+calibrated quantity, so only it can carry a reliability curve, while
+`confidence` is the better read of *"none of these options is a clear winner"*.
+Phase 2 must say which one it measured and phase 3's band must be drawn on the
+same axis.
 
 Three consequences, and each is a rule rather than a nicety.
 
@@ -162,6 +202,18 @@ because both surfaces must not be able to disagree about what a judgment is.
   personal MCP server is not a thing a workflow can hold a credential for, so
   the calibration set likely has to be exported once, synthetically renamed and
   committed — which the repo's fixtures rule requires anyway.
-- **What happens to a tie.** Two folders at 0.45 is not the same as one at 0.9,
-  and a single `p` on a chosen value loses that. The interface may need the
-  runner-up.
+- ~~**What happens to a tie.**~~ Closed by phase 0, and by the vendor rather
+  than by us: a Choice answer carries `probabilities` over *every* option, so
+  two folders at 0.45 is directly representable. The sketch above now keeps it.
+- **Which axis the band is drawn on.** New in phase 0. `confidence` and
+  `probabilities[value]` are different numbers and the vendor returns both —
+  0.60 probability against 0.39 confidence in their own example. Only the
+  probability can carry a reliability curve; `confidence` is the better reading
+  of *"nothing here is a clear winner"*. Phase 2 states which it measured,
+  phase 3 uses the same one, and this document should not guess first.
+- **Whether one question per card is the right unit.** New in phase 0, on one
+  card, so barely more than a hunch. The single error observed was the parent
+  folder beating its own subfolder inside the right subtree. Asking branch and
+  depth separately would address exactly that, and would also spend the
+  vendor's multi-question call properly. Phase 2 measures whether the error is
+  systematic before anyone builds a second question.

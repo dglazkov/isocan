@@ -3,7 +3,7 @@ status: designed
 since: 2026-09-19
 issue: 334
 see: judge, evals, personas, memory, context
-note: a System One model (TypeSafe's Jev — typed answers with calibrated probabilities, no prose, $0.042/M input and free output at 70–500ms) is the cheap tier the personas project found missing and the autorater triage the evals project cannot afford. The finding that makes it actionable is a corpus: a personal knowledge base of 3,643 cards, 1,366 of them (37%) sitting in a parent folder that also has subfolders, is 3,643 free human labels — where isocan's own preference harvest has 12 pairs. Jev structurally cannot cite, so it can never be the judge of record under the evals bar; it triages and routes its doubt. Became the judge project the same day. API shape is from secondary coverage: typesafe.ai is egress-blocked from the build container and was not read first-hand.
+note: a System One model (TypeSafe's Jev — typed answers with calibrated probabilities, no prose, $0.042/M input and free output) is the cheap tier the personas project found missing and the autorater triage the evals project cannot afford. The finding that makes it actionable is a corpus: a personal knowledge base of 3,643 cards, 1,366 of them (37%) sitting in a parent folder that also has subfolders, is 3,643 free human labels — where isocan's own preference harvest has 12 pairs. Jev structurally cannot cite, so it can never be the judge of record under the evals bar; it triages and routes its doubt. Became the judge project the same day. The API shape and figures table were read first-hand from the reference on 19 Sep 2026 by judge phase 0, from a machine outside the build container's egress proxy; a Choice returns the full probability distribution, and the input is text only.
 ---
 
 # A judgment that cannot explain itself
@@ -24,29 +24,43 @@ led by DCVC, founded by Diogo Almeida (ex-OpenAI, co-inventor of RLHF), Erik
 Gafni and Sasha Sheng. Its first model, **Jev**, is not an LLM and the
 difference is the point.
 
-You declare the shape of the answer before you ask: which fields you want, and
-which values each field may take. The model returns those fields filled in,
-each with a **probability attached**. It does not write prose, cannot reason
-out loud, and cannot explain itself. TypeSafe calls the class *System One*, and
-trains for calibration explicitly — *reinforcement learning for calibrated
-decisions* — so a 0.7 is meant to be right about seventy per cent of the time
-rather than merely larger than a 0.6.
+You send one **state** — the thing to be judged — and a map of named
+**questions**, each of one of three types: a `choice` over options you define, a
+`score` over ordered levels, or a `noul`, a yes/no returned as a probability.
+The answers come back under the keys you chose. It does not write prose, cannot
+reason out loud, and cannot explain itself. TypeSafe calls the class *System
+One*, and trains for calibration explicitly — *reinforcement learning for
+calibrated decisions* — so a 0.7 is meant to be right about seventy per cent of
+the time rather than merely larger than a 0.6.
 
-| | Reported |
+| | Read from the reference, 19 Sep 2026 |
 | --- | --- |
-| Latency | 70–500ms |
-| Input | $0.042 per million tokens |
-| Output | free |
-| Endpoint | `POST https://api.typesafe.ai/v1/systemone`, model `jev-latest` |
-| Access | early access |
+| Endpoint | `POST https://api.typesafe.ai/v1/systemone`, `Authorization: Bearer <API_KEY>` |
+| Model | `jev-latest` and `jev-preview`, both resolving to `jev-1.13.0` today |
+| Input price | $0.042 per Mtok — charged on input tokens only |
+| Output price | free |
+| Rate limits | 250,000 tokens/sec and 1,200 requests/min, `429` over either; "adjusting dynamically… can change without notice" |
+| Context | 64k tokens per request; 32k for `state` plus the single longest question |
+| Input modality | **text only** — string, JSON object, or array of text values. "No image, audio, or video input." |
+| Choice width | up to **255 options** per question |
+| Errors | `401`, `422`, `429`, `529 Overloaded`; retry the last two with backoff |
+| Latency | **not published.** The 70–500ms figure appears nowhere in the reference |
 
-**Every number in that table is second-hand and this note will not pretend
-otherwise.** `typesafe.ai` and `docs.typesafe.ai` are both blocked by the build
-container's egress proxy; the figures come from TypeSafe's announcement and
-from coverage by LangChain, DataCamp and The Register. Phase 0 of the
-[judge project](../projects/judge/phases.md) exists to replace this table with
-one read from the reference, and nothing should be built against it until that
-happens.
+**The figures above were read from [the HTTP API reference](https://docs.typesafe.ai/api)
+and [Models](https://docs.typesafe.ai/models) on 19 September 2026**, replacing
+a table that was entirely second-hand. The price and the free output survived
+the check. Three things did not: the input is text only, a Choice returns the
+**whole probability distribution** rather than one number, and the published
+latency figure is not published — it has to be measured, and
+[judge phase 0](../projects/judge/phases.md#phase-0--the-instrument-read-rather-than-assumed)
+measures it.
+
+Two limits that were not in the coverage at all matter to what gets built here.
+The 255-option ceiling on a Choice comfortably clears the ledger's 131-folder
+tree, so filing against the whole taxonomy in one question is allowed. And the
+reference is explicit that non-text input must be pre-processed into text by the
+caller, which closes rather than opens the question of whether a picture can be
+judged directly.
 
 ## Where isocan already asked for this, twice
 
@@ -214,8 +228,10 @@ tier is what #197 described and #205 found absent.
 
 - **Not a replacement for the autorater.** The citation bar forbids it. Triage
   only, with the expensive judge downstream.
-- **Not measured.** Every figure about Jev here is from secondary coverage. The
-  API was not reached from this container.
+- **Not measured beyond one call.** The figures table is now read from the
+  reference and one classification was run by hand, but no accuracy or
+  reliability figure exists yet. Judge phase 2 is what produces one, and it is
+  allowed to end the project.
 - **Not a verdict on the ledger's taxonomy.** 1,366 loose cards is a signal of
   where decisions got expensive, not a list of mistakes. Some of them are filed
   correctly and a good classifier will say so.
