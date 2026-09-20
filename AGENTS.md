@@ -154,6 +154,22 @@ in August measured, and writes its findings back there as a dated page.
 failure modes this codebase has actually produced, each with the guard that
 now catches it. Add to it when a bug turns out to have a shape.
 
+## What needs a person
+
+[`docs/verify/`](docs/verify/README.md) is the third lane, and the shortest.
+`npm test` proves the code does what it says; the `journeys` persona proves a
+screen renders and a walk completes; **neither can hold a microphone, a phone,
+or an opinion.** A thing lands in that queue when it is built, shipped, and
+never once exercised by a human being — the voice agent talked to out loud,
+a colour agreed with by eyes, a pause judged to feel like a conversation.
+
+Each entry is a dated page with numbered steps, written by whoever built the
+thing for somebody who knows nothing about it. There is deliberately **no
+gate**: answering a review finding costs a word, and running a walk costs
+twenty minutes and a microphone, so a hard stop would be switched off by the
+first person shipping at midnight. It is a list that can be read, not a bound
+that can be missed.
+
 ## Where a document goes
 
 **A project is a directory.** `docs/projects/<name>/` holds everything about
