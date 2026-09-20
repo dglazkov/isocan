@@ -14,7 +14,7 @@ Run by `scripts/persona-run.mjs` at `9631383`. **Nothing was changed.**
 | Finding | Outcome |
 | --- | --- |
 | runtime dependencies of @isocan/core is 9, past 1 | accepted — same question as 2026-09-12, answered there: the entry's runtime closure reaches 1 of the 9, so what the bound protects is held and the instrument is measuring the package. The bound stays at 1. |
-| lines in the files every feature must edit is 25054, past 24058 | unanswered |
+| lines in the files every feature must edit is 25054, past 24058 | accepted — Dion, 20 Sep 2026. The bound is a ratchet that stands where the number stands, so it moves to 25267. The growth is the extensions, voice and memory work landing on 20 September rather than one crowded commit, and paying it down is a command family moving out of `main.ts` — its own work, not this answer. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

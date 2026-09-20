@@ -13,8 +13,8 @@ Run by `scripts/persona-run.mjs` at `fba4b87`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| runtime dependencies of @isocan/core is 9, past 1 | unanswered |
-| lines in the files every feature must edit is 25242, past 24058 | unanswered |
+| runtime dependencies of @isocan/core is 9, past 1 | accepted — Dion, 20 Sep 2026. The bound goes to 9. It was 1 so the reducer would stay portable; nine says that is now a claim rather than a measurement, and recording it is more honest than a nightly failure nobody acts on. The portability argument is not withdrawn — it needs its own work to be true again. |
+| lines in the files every feature must edit is 25242, past 24058 | accepted — Dion, 20 Sep 2026. The bound is a ratchet that stands where the number stands, so it moves to 25267. The growth is the extensions, voice and memory work landing on 20 September rather than one crowded commit, and paying it down is a command family moving out of `main.ts` — its own work, not this answer. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

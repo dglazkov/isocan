@@ -11,7 +11,7 @@ Run by `scripts/persona-run.mjs` at `9631383`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| the entry chunk a first visit downloads is 740427, past 640000 | unanswered |
+| the entry chunk a first visit downloads is 740427, past 640000 | accepted — Dion, 20 Sep 2026. The goal moves 640000 → 747000 to meet the agreed ceiling in `scripts/bundle-ceiling.mjs`. The cost is stated in the persona file: the entry chunk leaves this queue until it passes 747000, and CEILING's own raises are what keep creep legible in the meantime. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report
