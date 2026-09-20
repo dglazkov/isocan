@@ -542,6 +542,100 @@ describe("what a sentence means", () => {
     expect(resolveSpokenRef("the first thing", items)?.id).toBe("itm_1");
     expect(resolveSpokenRef("screen", items)).toBeNull();
   });
+
+  /**
+   * **"Move the red one NEXT TO the blue one"** (#337, phase 3).
+   *
+   * `move_item` took pixels and nothing else, so a second referent was not a
+   * hard sentence but an inexpressible one. `planForCall` has no canvas and
+   * carries the anchor through; this side has the listing and does the
+   * arithmetic with core's `besideBox` — the same function the browser dialog
+   * calls, because two spellings of "beside" would be two canvases.
+   */
+  describe("next to, as a second referent on the movement tool", () => {
+    const boxed = (title: string, id: string, x: number, y: number, width = 100, height = 100) =>
+      ({ ...item(title, id, x, y), width, height }) as ListedItem;
+    // Synthetic and unequal, so centring is visibly not edge-alignment.
+    const items = [boxed("Acme note", "itm_note", 0, 0, 80, 40), boxed("Acme board", "itm_board", 500, 300, 300, 100)];
+
+    it("carries the anchor and the side on the plan, without pretending to know where anything is", () => {
+      const { plans } = planForCall("move_item", { item_ref: "Acme note", beside_ref: "Acme board", side: "left" });
+      expect(plans[0]!.op).toMatchObject({ type: "item.move", ref: "Acme note", besideRef: "Acme board", side: "left" });
+      // No coordinates: this side has no canvas to measure against, and a
+      // guess here is how the two surfaces would come to disagree.
+      expect(plans[0]!.op.x).toBeUndefined();
+      expect(plans[0]!.op.y).toBeUndefined();
+    });
+
+    it("resolves to the computed coordinates, gap left and middles lined up", () => {
+      const { plans } = planForCall("move_item", { item_ref: "Acme note", beside_ref: "Acme board", side: "right" });
+      const { ready, refused } = resolveLivePlans(plans, items);
+      expect(refused).toEqual([]);
+      // anchor 300x100 at (500,300); mover 80x40. Right edge 800, + the
+      // standard gap of 40 → 840; middle 350 − half of 40 → 330.
+      expect(ready[0]!.op).toMatchObject({ type: "item.move", itemId: "itm_note", x: 840, y: 330 });
+      expect(ready[0]!.op.besideRef).toBeUndefined();
+      expect(ready[0]!.op.side).toBeUndefined();
+      // The label is read off the minted operation, so it says where it went.
+      expect(ready[0]!.said).toBe('move "Acme note" to 840, 330');
+    });
+
+    it("takes all four sides, and no side said means the right", () => {
+      const spot = (side?: string) => {
+        const { plans } = planForCall("move_item", {
+          item_ref: "Acme note", beside_ref: "Acme board", ...(side ? { side } : {}),
+        });
+        const op = resolveLivePlans(plans, items).ready[0]!.op;
+        return { x: op.x, y: op.y };
+      };
+      expect(spot("right")).toEqual({ x: 840, y: 330 });
+      expect(spot("left")).toEqual({ x: 380, y: 330 });
+      expect(spot("above")).toEqual({ x: 610, y: 220 });
+      expect(spot("below")).toEqual({ x: 610, y: 440 });
+      expect(spot()).toEqual(spot("right"));
+      // The words people actually use for above and below.
+      expect(spot("under")).toEqual(spot("below"));
+      expect(spot("on top of")).toEqual(spot("above"));
+    });
+
+    it("resolves the anchor with the same grammar as the subject", () => {
+      // An ordinal names an anchor exactly as well as it names a subject.
+      const { plans } = planForCall("move_item", { item_ref: "Acme note", beside_ref: "the last thing" });
+      expect(resolveLivePlans(plans, items).ready[0]!.op).toMatchObject({ itemId: "itm_note", x: 840, y: 330 });
+    });
+
+    it("refuses an anchor nobody can resolve, naming it, and moves nothing", () => {
+      const { plans } = planForCall("move_item", { item_ref: "Acme note", beside_ref: "the mauve one" });
+      const { ready, refused } = resolveLivePlans(plans, items);
+      expect(ready).toEqual([]);
+      expect(refused).toEqual([
+        {
+          type: "item.move",
+          said: "could not resolve “the mauve one”",
+          message: "item.move failed — could not resolve “the mauve one”",
+        },
+      ]);
+    });
+
+    it("refuses a side that is not one of the four rather than picking one", () => {
+      const { plans, what } = planForCall("move_item", {
+        item_ref: "Acme note", beside_ref: "Acme board", side: "diagonally",
+      });
+      expect(plans).toEqual([]);
+      expect(what).toContain("not a side");
+    });
+
+    it("leaves the pixel forms exactly as they were", () => {
+      const { plans } = planForCall("move_item", { item_ref: "Acme note", by_x: 50, by_y: -10 });
+      const op = resolveLivePlans(plans, items).ready[0]!.op;
+      expect(op).toMatchObject({ type: "item.move", itemId: "itm_note", x: 50, y: -10 });
+      const absolute = resolveLivePlans(
+        planForCall("move_item", { item_ref: "Acme note", to_x: 7, to_y: 9 }).plans,
+        items,
+      ).ready[0]!.op;
+      expect(absolute).toMatchObject({ x: 7, y: 9 });
+    });
+  });
 });
 
 describe("the key belongs to the harness", () => {

@@ -207,3 +207,61 @@ export function positionIsMeaningful(op: Extract<Operation, { type: "item.add" }
   if (!("x" in op.placement)) return false;
   return op.placement.chosen === true || op.properties?.kind === TEXT_KIND;
 }
+
+/** The four sides a thing can be put on, in the words a person says. */
+export type BesideSide = "left" | "right" | "above" | "below";
+
+/**
+ * **"Next to", as arithmetic** — where a box goes so that it sits beside
+ * another one, clear of it by the gap, with the other axis centred.
+ *
+ * In core because BOTH clients have to reach the same spot. The browser's
+ * voice dialog resolves a tool call against the canvas it is showing
+ * (`runTool` in the talk module) and the standing harness resolves the same
+ * call against a listing (`resolveLivePlans` in the voice harness); two
+ * implementations of "next to" is two canvases, which is the house rule this
+ * function exists to obey.
+ * It is also what lets a spoken *"put the note next to the checkout screen"*
+ * and any future typed form land on the same pixel.
+ *
+ * `PLACEMENT_GAP` is the default and is the gap everything else already
+ * leaves — a second, differently sized "next to" would look like a bug to
+ * anybody who arranged two items by hand.
+ *
+ * **The cross axis is CENTRED, not aligned to the near edge.** Side by side,
+ * two items of different heights read as a pair when their middles line up
+ * and as a mistake when their tops do — which is why `isocan align` offers
+ * `hcenter`/`vcenter` at all. Top-alignment is what `resolvePlacement` does for a
+ * brand-new item, and that is a different question — nothing is being related
+ * to anything there, the anchor is just where the person came from.
+ *
+ * Returns raw coordinates and does NOT dodge whatever is already there:
+ * "next to that one" names a place, and quietly landing somewhere else
+ * because the spot was busy is how a voice command stops being trustworthy.
+ * A caller that wants tidying has `nearestFreeSpot` and can say so.
+ */
+export function besideBox(
+  moving: { width: number; height: number },
+  anchor: Box,
+  side: BesideSide,
+  gap: number = PLACEMENT_GAP,
+): { x: number; y: number } {
+  const middleY = anchor.y + anchor.height / 2 - moving.height / 2;
+  const middleX = anchor.x + anchor.width / 2 - moving.width / 2;
+  switch (side) {
+    case "left":
+      return { x: anchor.x - gap - moving.width, y: middleY };
+    case "right":
+      return { x: anchor.x + anchor.width + gap, y: middleY };
+    case "above":
+      return { x: middleX, y: anchor.y - gap - moving.height };
+    case "below":
+      return { x: middleX, y: anchor.y + anchor.height + gap };
+  }
+}
+
+/** Is this one of the four sides, said out loud? The guard a tool call's
+ *  free-text argument has to pass before it means anything. */
+export function isBesideSide(value: unknown): value is BesideSide {
+  return value === "left" || value === "right" || value === "above" || value === "below";
+}

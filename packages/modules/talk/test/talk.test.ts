@@ -132,6 +132,9 @@ describe("the session is handed the canvas it is standing on", () => {
     expect(text).toBe(
       "Current canvas state (ids are authoritative — echo them in tool calls).\n" +
         "Geometry is world pixels: x grows right, y grows down, and (x,y) is an item's top-left corner.\n" +
+        "A colour word appears on a row only where the canvas KNOWS the colour (a note's paper, an area's tint, " +
+        "a drawing's ink); no colour word means the colour is UNKNOWN to the canvas, never that the item is not " +
+        "that colour — most items look like something the data does not record, so ask rather than ruling them out.\n" +
         "Items (1, in reading order):\n" +
         '- "Checkout screen" [itm_1] image 320x240 at (100,200)\n' +
         "Threads: thr_1 (2 comments)",
@@ -192,6 +195,66 @@ describe("the session is handed the canvas it is standing on", () => {
   });
 });
 
+/**
+ * **Colour, and the sentence that keeps an absence honest** (#337, phase 2).
+ *
+ * `Item` has no colour field, so a row can only say "red" where the data
+ * actually does: a note's paper, an area's tint, a drawing's ink. Which makes
+ * the missing rows the dangerous ones — a model shown one colour and eleven
+ * blanks will conclude the eleven are not that colour, unless it is told
+ * otherwise. So the header tells it, and this holds the header there.
+ */
+describe("colour on a row, and the absence that must not read as a negative", () => {
+  const acme = (over: Partial<Parameters<typeof canvasSnapshotText>[0][number]> = {}) => ({
+    id: "itm_1", title: "Checkout screen", kind: "image",
+    x: 100, y: 200, width: 320, height: 240, ...over,
+  });
+
+  it("carries the colour when the canvas knows one", () => {
+    const text = canvasSnapshotText(
+      [acme({ id: "itm_n", title: "Standup notes", kind: "text", properties: { paper: "yellow" } })],
+      [],
+    );
+    expect(text).toContain('"Standup notes" [itm_n] text 320x240 at (100,200) yellow');
+  });
+
+  it("reads an area's tint by the same route, because it is the same palette", () => {
+    const text = canvasSnapshotText([acme({ kind: "area", properties: { tint: "blue" } })], []);
+    expect(text).toContain("at (100,200) blue");
+  });
+
+  it("says nothing at all when it does not know", () => {
+    // A screenshot that is obviously red in the room is silent in the data,
+    // and a guessed colour is worse than none.
+    const row = canvasSnapshotText([acme()], [])
+      .split("\n")
+      .find((l) => l.startsWith("- "))!;
+    expect(row).toBe('- "Checkout screen" [itm_1] image 320x240 at (100,200)');
+  });
+
+  it("does not believe a property that is not a paper", () => {
+    expect(canvasSnapshotText([acme({ properties: { paper: "chartreuse" } })], [])).toContain(
+      "at (100,200)\n",
+    );
+  });
+
+  it("keeps the colour ahead of the group, so a row reads left to right", () => {
+    expect(
+      canvasSnapshotText([acme({ properties: { paper: "pink" }, containerId: "itm_grp" })], []),
+    ).toContain("at (100,200) pink inside [itm_grp]");
+  });
+
+  /** The load-bearing sentence: without it the blanks are read as negatives. */
+  it("states in the header that a missing colour means unknown, not 'not that colour'", () => {
+    const header = canvasSnapshotText([acme()], []);
+    expect(header).toContain("A colour word appears on a row only where the canvas KNOWS the colour");
+    expect(header).toContain("means the colour is UNKNOWN to the canvas, never that the item is not that colour");
+    // And it is there even for an empty canvas, because the rules are the
+    // rules before there is anything to apply them to.
+    expect(canvasSnapshotText([], [])).toContain("never that the item is not that colour");
+  });
+});
+
 describe("the browser's half of the snapshot row", () => {
   /** #337: the shell hands this module ordinary `Item`s, and the standing
    *  harness lists `ListedItem`s that already carry a kind. Both must arrive
@@ -217,6 +280,20 @@ describe("the browser's half of the snapshot row", () => {
     expect(text).toContain("at (10,20)");
     expect(text).toContain("320x240");
     expect(text).toContain("x grows right, y grows down");
+  });
+
+  /** The colour word is derived inside `canvasSnapshotText` from the property
+   *  bag, not computed on either side — this is the browser's end of that,
+   *  and the proof that the bag actually travels. */
+  it("hands the property bag over, so a note's paper becomes a colour in the wording", () => {
+    const papered = {
+      ...canvas,
+      items: { itm_1: { ...canvas.items.itm_1, properties: { kind: "text", paper: "green" } } },
+    };
+    expect(snapshotItemsFor(papered as never)[0]!.properties).toMatchObject({ paper: "green" });
+    expect(canvasSnapshotText(snapshotItemsFor(papered as never), [])).toContain("at (10,20) green");
+    // And the untinted canvas says nothing, on the same code path.
+    expect(canvasSnapshotText(snapshotItemsFor(canvas as never), [])).not.toContain("green");
   });
 });
 
@@ -277,6 +354,59 @@ describe("a spoken request becomes the same operations a click sends", () => {
     const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
     expect(op).toMatchObject({ type: "item.move", itemId: "itm_1", x: 60, y: 10 });
     expect(op.by).toBeUndefined();
+  });
+
+  /**
+   * **"Move the checkout screen next to the launch plan"** (#337, phase 3).
+   *
+   * The browser resolves this against the canvas it is showing and the
+   * standing harness resolves it against a listing, and both call core's
+   * `besideBox` — the fixture's numbers are the ones `placement.test.ts`
+   * asserts, which is what "the same pixel on both surfaces" means in
+   * practice.
+   */
+  it("puts one item beside another, with the standard gap and the middles lined up", async () => {
+    // itm_1 is 320x240 at (10,20); itm_2 ("Launch plan") is 320x240 at (400,100).
+    const result = await runTool(
+      "move_item",
+      { item_ref: "checkout", beside_ref: "launch", side: "right" },
+      facts,
+    );
+    expect(result.ok).toBe(true);
+    const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
+    expect(op).toMatchObject({ type: "item.move", itemId: "itm_1", x: 760, y: 100 });
+    // The planner's referent fields are spent here; the wire never sees them.
+    expect(op.besideRef).toBeUndefined();
+    expect(op.side).toBeUndefined();
+  });
+
+  it("takes the other three sides, and 'next to' with no side said means the right", async () => {
+    const at = async (side?: string) => {
+      await runTool(
+        "move_item",
+        { item_ref: "checkout", beside_ref: "launch", ...(side ? { side } : {}) },
+        facts,
+      );
+      const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
+      return { x: op.x, y: op.y };
+    };
+    expect(await at("left")).toEqual({ x: 40, y: 100 });
+    expect(await at("above")).toEqual({ x: 400, y: -180 });
+    expect(await at("below")).toEqual({ x: 400, y: 380 });
+    expect(await at()).toEqual(await at("right"));
+  });
+
+  it("refuses an anchor nobody can resolve, and moves nothing", async () => {
+    const before = sent.length;
+    const result = await runTool(
+      "move_item",
+      { item_ref: "checkout", beside_ref: "the mauve one" },
+      facts,
+    );
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain("no item matches");
+    expect(String(result.error)).toContain("the mauve one");
+    expect(sent.length).toBe(before);
   });
 
   it("restores an item from the trash, where the live list no longer holds it", async () => {

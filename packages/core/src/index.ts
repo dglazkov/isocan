@@ -74,6 +74,7 @@ export * from "./media.ts";
 export { DESIGN_SECTIONS, canonicalSection, parseFrontMatter, parseDesign, referencesIn, unresolvedReferences, resolveToken, serializeDesign } from "./designmd.ts";
 export type { DesignTypography, DesignTokens, DesignDoc } from "./designmd.ts";
 export * from "./contrast.ts";
+export * from "./colour.ts";
 export * from "./designcheck.ts";
 export * from "./tokens.ts";
 export * from "./fit.ts";
