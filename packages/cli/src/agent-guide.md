@@ -3127,7 +3127,7 @@ on the thread before putting one on somebody else's canvas,
 `design receipt [request] [--publish <file>]`,
 `design compare [request] [--publish <file>|--target <item>] [--option <id> --out <file>]`,
 `design respond <file> [--thread <id>] [--retry]`, `design decide <file> [--thread <id>] [--retry]`,
-`add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by]`, `align`, `distribute`,
+`add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by] [--beside <item> --side left|right|above|below]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,

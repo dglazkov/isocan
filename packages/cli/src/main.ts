@@ -66,8 +66,10 @@ import {
   DEFAULT_PORT,
   DRAWING_FILENAME,
   DRAWING_MIME,
+  besideBox,
   drawingProperties,
   inkFromSvg,
+  isBesideSide,
   DRAWING_TITLE,
   COMMAND_NAME,
   IDENTITY_COLORS,
@@ -7979,8 +7981,10 @@ program
 
 program
   .command("mv <item> [x] [y]")
-  .description("Move an item — to x y, or by a delta with --by")
+  .description("Move an item — to x y, by a delta with --by, or next to another with --beside")
   .option("--by <dx,dy>", "move relative to where it is now, e.g. --by 0,-40")
+  .option("--beside <item>", "put it next to this item, clear of it by the standard gap")
+  .option("--side <side>", "with --beside: left | right | above | below (default: right)")
   .option("--in <group>", "move into a canvas group atomically, or into an area on a legacy canvas")
   .option("--dry-run", "with group --in: report resolved membership and placement without writing")
   .option("--cell <row,col>", "with --in: into one cell of the sheet's grid, counted from 1")
@@ -7991,11 +7995,50 @@ program
         ref: string,
         x: string | undefined,
         y: string | undefined,
-        opts: { by?: string; in?: string; cell?: string; dryRun?: boolean },
+        opts: { by?: string; in?: string; cell?: string; dryRun?: boolean; beside?: string; side?: string },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        /**
+         * **"Next to", from the terminal** — the same second referent the
+         * voice tool got in #337, resolved here the same way.
+         *
+         * `besideBox` is core's, so both surfaces compute the identical spot,
+         * and the OPERATION is an ordinary `item.move` with coordinates — a
+         * voice session resolves "next to" and deletes its own `besideRef`
+         * before sending for exactly this reason. Nothing here grows the
+         * vocabulary; "beside" is a way of SAYING where, not a new kind of
+         * where.
+         *
+         * Deliberately not dodging an occupied spot, which `--in` does and
+         * this must not: landing somewhere else because the place was busy is
+         * how "put it next to that" stops being trustworthy. If the answer is
+         * covered, that is visible and one more `mv` away.
+         */
+        const beside = opts.beside === undefined ? null : (() => {
+          // Two answers to one question. Saying both is a mistake worth
+          // naming rather than a precedence rule worth remembering.
+          if (x !== undefined || y !== undefined || opts.by !== undefined || opts.in !== undefined) {
+            throw new Error("--beside chooses where; omit x y, --by and --in");
+          }
+          const side = opts.side === undefined ? "right" : opts.side.trim().toLowerCase();
+          if (!isBesideSide(side)) {
+            throw new Error(`--side wants left, right, above or below — got: ${opts.side}`);
+          }
+          const moving = resolveItem(snapshot, ref);
+          const anchor = resolveItem(snapshot, opts.beside!);
+          if (anchor.id === moving.id) {
+            throw new Error("--beside wants a different item: nothing can be put next to itself");
+          }
+          return besideBox({ width: moving.width, height: moving.height }, anchor, side);
+        })();
+        if (beside && snapshot.project.groupMode === "groups") {
+          return reportCanvasGroup(
+            ctx,
+            await new CanvasGroups(ctx.client, p.id, () => ctx.actor).move(ref, { at: beside }, opts),
+          );
+        }
         if (opts.in !== undefined && snapshot.project.groupMode === "groups") {
           if (opts.by !== undefined || x !== undefined || y !== undefined) throw new Error("--in chooses placement; omit coordinates and --by");
           return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).add(opts.in, [ref], { place: true, dryRun: !!opts.dryRun, ...(opts.cell ? { cell: parseGroupCell(opts.cell) } : {}) }));
@@ -8026,7 +8069,9 @@ program
         }
         if (cell && !into) throw new Error("--cell needs --in <area>: a cell is a cell of a sheet's grid");
         const target =
-          into !== null
+          beside !== null
+            ? beside
+            : into !== null
             ? cell
               ? cellSpot(without, into, cell[0]!, cell[1]!, item.width, item.height)
               : freeSpotIn(without, into, item.width, item.height)
