@@ -84,6 +84,8 @@ export * from "./modules.ts";
 export * from "./moduleassets.ts";
 export * from "./designimport.ts";
 export * from "./context.ts";
+export * from "./context-source.ts";
+export * from "./context-copy.ts";
 export * from "./memory.ts";
 export * from "./converge.ts";
 export * from "./itemthread.ts";

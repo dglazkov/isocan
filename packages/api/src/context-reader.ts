@@ -5,6 +5,7 @@ import {
   type ContextLayer, type LinkedCanvas, type PersonalReadResponse,
   type RecapHeadResponse,
   type SourceClassificationRequest, type SourceClassificationResponse,
+  contextCopySources,
 } from "@isocan/core";
 
 /** A browser and a Node client inject transport; this module owns the shared read order. */
@@ -143,6 +144,9 @@ export async function readLayeredContext(io: ContextReadPort, options: LayeredCo
     }
   }
   const layers = contextLayers(canvas, inherited, { ...options.extras, ...(designProblems === undefined ? {} : { designProblems }) });
+  const copies = contextCopySources(canvas);
+  const pinned = layers[0]?.pieces.find((piece) => piece.name === "Pinned items");
+  if (pinned && copies.length) pinned.copies = copies;
   if (unavailable) {
     const piece = layers[0]?.pieces.find((one) => one.name === "Design system");
     if (piece) piece.stale = unavailable;

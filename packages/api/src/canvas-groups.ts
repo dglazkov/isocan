@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Actor, CanvasContents, CanvasGroupMigrationPreview, CanvasSnapshotResponse, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupCreation, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "@isocan/core";
-import { atLeast, captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupCopyAction, groupCopySource, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation, visualFaceOf } from "@isocan/core";
+import { atLeast, captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupCopyAction, groupCopySource, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation } from "@isocan/core";
 import type { DaemonRoutes } from "./routes.ts";
+import { transferCopyFaces } from "./copy-transfer.ts";
 
 type PublicAction = Exclude<GroupAction, { kind: "apply" | "migrate" }>;
 type GroupClient = Pick<DaemonRoutes, "snapshot" | "uploadBlob" | "downloadBlob" | "changeGroup" | "groupMigrationPreview">;
@@ -228,22 +229,11 @@ export class CanvasGroups {
     // Perform's first pass validates geometry and metadata without writing bytes.
     await this.perform(state, action, true);
     if (!options.dryRun) {
-      const faces = new Map<string, { blobHash: string; mimeType: string; filename: string }>();
-      for (const item of source.items) {
-        const version = item.versions.find((entry) => entry.id === item.currentVersionId)!;
-        faces.set(version.blobHash, version);
-        const visual = visualFaceOf(version);
-        faces.set(visual.blobHash, visual);
-      }
-      // Same-canvas copy also checks every byte: a missing face refuses the whole paste.
-      for (const face of faces.values()) {
-        const bytes = await this.client.downloadBlob(sourceCanvasId, face.blobHash);
-        if (createHash("sha256").update(bytes).digest("hex") !== face.blobHash) throw new Error(`copy could not verify saved bytes ${face.blobHash}`);
-        if (sourceCanvasId !== this.canvasId) {
-          const uploaded = await this.client.uploadBlob(this.canvasId, bytes, face.mimeType, face.filename);
-          if (uploaded.blobHash !== face.blobHash) throw new Error("copied blob upload hash disagreed with its bytes");
-        }
-      }
+      // Same-canvas copy still verifies every face; both copy flows use one transfer path.
+      await transferCopyFaces(source.items, {
+        read: (hash) => this.client.downloadBlob(sourceCanvasId, hash),
+        ...(sourceCanvasId !== this.canvasId ? { upload: (bytes: Uint8Array, mime: string, filename: string) => this.client.uploadBlob(this.canvasId, Buffer.from(bytes), mime, filename) } : {}),
+      });
     }
     return this.perform(state, action, !!options.dryRun);
   }

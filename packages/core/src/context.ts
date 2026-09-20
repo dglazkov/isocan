@@ -5,6 +5,7 @@ import { moduleContextPieces } from "./modules.ts";
 import { excludedItems } from "./contextmark.ts";
 import { ambientContextItems } from "./canvas-group-context.ts";
 import type { RecapHeadResponse } from "./recap-head.ts";
+import type { ContextSource } from "./context-source.ts";
 
 // Preserve direct imports while keeping terminal formatting outside Context assembly.
 export { contextReport } from "./context-report.ts";
@@ -39,6 +40,8 @@ export interface ContextPiece {
   from?: { canvasId: string; title: string };
   /** A bounded authoritative history head, distinct from source content or frozen context. */
   recap?: RecapHeadResponse;
+  /** Durable provenance of local pinned copies; never followed as inherited authority. */
+  copies?: Array<{ itemId: string; title: string; source: ContextSource }>;
   /** Present but beaten by this canvas's own — "this canvas's wins" — so
    *  the view shows it struck rather than hiding what a link would have
    *  contributed. */
