@@ -1,6 +1,10 @@
 import type { Actor, CanvasContents, CanvasGroupMigrationPreview, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "../../core/src/index.js";
 import { groupArrangeAction } from "../../core/src/index.js";
 import type { DaemonRoutes } from "./routes.js";
+import { type CopyBytesPort } from "./copy-bytes.js";
+/** Node's digest and the daemon's blob routes, bound to one source and one
+ *  destination — the browser binds its own fetches to the same port. */
+export declare function nodeCopyBytes(client: Pick<DaemonRoutes, "downloadBlob" | "uploadBlob">, sourceCanvasId: string, destinationCanvasId: string): CopyBytesPort;
 type PublicAction = Exclude<GroupAction, {
     kind: "apply" | "migrate";
 }>;

@@ -1,1 +1,0 @@
-{"compilerOptions":{"jsx":"react-jsx","baseUrl":".","paths":{"@/*":["src/*"],"@acme/design/controls":["../../packages/design/controls/index.ts"],"@acme/design/controls/*":["../../packages/design/controls/*"]}}}

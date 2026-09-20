@@ -21,7 +21,7 @@ export declare class DaemonClient extends DaemonRoutes {
      */
     protected fetcher: typeof fetch;
     /**
-     * **A blob, as the bytes Node code reads** (collie phase 1). The route
+     * **A blob, as the bytes Node code reads.** The route
      * surface answers a `Uint8Array`, because `isocan/rc` hands that surface to
      * hosts that have no `Buffer`; the CLI and the modules read what this
      * returns with `.toString("utf8")`, so the Node half wraps the same memory

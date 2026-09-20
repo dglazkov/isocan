@@ -1,6 +1,6 @@
 import type { Actor, ActorBindingRecord, ActorClaimOp, Canvas, CanvasSnapshotResponse, CreateSessionResponse, LogEntry, Operation, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, PostOpResponse, RcAsk, RcHoldRequest, RcHoldResponse, UpdateSessionRequest, WatchLogRequest, WatchLogResponse } from "../../core/src/index.js";
 import { type GuardLimits } from "./guards.js";
-import type { RcAgentRow, SheepPlace } from "./rows.js";
+import type { RcAgentRow } from "./rows.js";
 /**
  * **The rc's room, over what a host hands it** (docs/projects/room/design.md,
  * "`runRoom(deps): Room`").
@@ -74,10 +74,9 @@ export interface RoomRows {
      * wrote. */
     adopt(row: RcAgentRow): Promise<boolean>;
     remove(canvasId: string, actorId: string): Promise<void>;
-    /** Record the session a turn ran in — with, for a session that outlives the
-     * process, where it lives and the pass its birth minted. Whether the row was
-     * still there to write. */
-    setSessionId(canvasId: string, actorId: string, sessionId: string, place?: SheepPlace, cellPass?: RcAgentRow["cellPass"]): Promise<boolean>;
+    /** Record the session a turn ran in. Whether the row was still there to
+     * write. */
+    setSessionId(canvasId: string, actorId: string, sessionId: string): Promise<boolean>;
 }
 /** One beat of a running turn, as the adapter streams it. */
 export interface RoomTurnEvent {
@@ -85,7 +84,7 @@ export interface RoomTurnEvent {
     text?: string;
     detail?: string;
 }
-/** What runs one turn: the shape `AcpAgentProcess` and `SheepAgent` share. */
+/** What runs one turn: the shape `AcpAgentProcess` has. */
 export interface RoomAdapter {
     ensureSession(cwd: string, stored: string | null): Promise<{
         sessionId: string;
@@ -96,14 +95,6 @@ export interface RoomAdapter {
     }>;
     /** The turn is over, whichever way; awaited before the face comes off. */
     close(): void | Promise<void>;
-    /** For a session that outlives this process (a sheep): where it lives. Read
-     * after `ensureSession`. Absent for an adapter that lives and dies with the
-     * turn. */
-    readonly place?: SheepPlace | undefined;
-    /** How the place is said in `session started at …`; `in <cwd>` without it. */
-    readonly where?: string | undefined;
-    /** The id of the pass a birth minted in `ensureSession`, if one did. */
-    readonly bornPass?: string | null | undefined;
 }
 /** A row's harness, resolved: the name the face carries, and how to start it. */
 export interface RoomHarness {
@@ -112,12 +103,36 @@ export interface RoomHarness {
     open(turn: RoomTurn): Promise<RoomAdapter>;
 }
 export interface RoomTurn {
+    /** Who this turn is for, by id (#333): the canvas, the agent summoned, and
+     * the person the room answers to. The laptop reads these from `cwd`, the
+     * environment and `isocan whoami`; a host that serves many people has none
+     * of the three, and files its records and counts its quota by these. */
+    canvasId: string;
+    agent: Actor;
+    owner: Actor;
     /** The face this turn's presence runs under, or null when none was made. */
     face: string | null;
     /** The thread the summons came from, when it came from one. */
     threadId: string | null;
     /** A line of this agent's narration: the room prefixes the agent's name. */
     narrate(line: string): void;
+}
+/**
+ * **A turn the host holds, in the host's own words** (#333). Thrown from
+ * `adapterFor` or `open` when the turn is not to start yet and nothing is
+ * broken: an allowance spent, a quota reached. The room says `line` in the
+ * thread in the system voice, as it says the guard's ceiling, keeps the
+ * summons pending and asks again at `retryAfter` (the host's clock, ms).
+ * Anything else thrown is a failed turn: "couldn't answer", and a retry in a
+ * minute.
+ */
+export declare class RoomHold extends Error {
+    /** The whole sentence the person reads; the room adds nothing to it. */
+    readonly line: string;
+    readonly retryAfter: number;
+    constructor(
+    /** The whole sentence the person reads; the room adds nothing to it. */
+    line: string, retryAfter: number);
 }
 /** A key-value for what the room would like to survive a restart. String
  * keys, JSON values. A host that persists it gets a room that does not repeat
@@ -143,12 +158,6 @@ export interface RoomDeps {
     /** The harness a row runs on. Throws, in the words of what is missing, when
      * there is none. The row carries the name the roster gives the agent now. */
     adapterFor(row: RcAgentRow): Promise<RoomHarness>;
-    /** Withdrawal's half for a session that outlives the process. Nothing, for
-     * an adapter that does not. */
-    endSession(row: RcAgentRow, narrate: (line: string) => void): Promise<void>;
-    /** Where a row's sessions run, said once at start — or null when there is
-     * nothing to say, as for an adapter that runs beside the room. */
-    whereOf(row: RcAgentRow): Promise<string | null>;
     /** The last hop of the web's "add an agent", on this machine: prepare the
      * directory an ask names, claim the actor, write its row, enroll it. */
     enrol(ask: RcAsk): Promise<void>;

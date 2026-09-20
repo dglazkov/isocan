@@ -19,6 +19,10 @@ export declare function groupCopyAction(source: GroupCopySource, destinationCanv
     };
     cell?: GroupCell;
     groupPlacement?: GroupPlacementPolicy;
+    /** A deliberate copy may re-decorate each copied item AFTER remapping — the
+     *  pin-from-source act rides this rather than a second write, so one undo
+     *  takes back the copy and everything the copy decided about itself. */
+    decorate?: (properties: Record<string, string>, source: Item, isRoot: boolean) => Record<string, string>;
 }): Extract<GroupAction, {
     kind: "copy";
 }>;

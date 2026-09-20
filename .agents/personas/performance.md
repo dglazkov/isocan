@@ -19,8 +19,17 @@ goal:
   # (~6%), and tighter than the old one, because a max-over-chunks bound could
   # be satisfied by splitting an eager chunk in two and downloading exactly the
   # same bytes. This one cannot.
+  # 640000 → 747000 on 2026-09-20, accepted by Dion after the finding stood
+  # twice (15 and 16 Sep) at 740427 and 746413. This matches the goal to the
+  # agreed ceiling in `scripts/bundle-ceiling.mjs`, and the cost is named
+  # rather than discovered: the entry chunk now leaves the nightly queue
+  # entirely until it passes 747000, so the signal that took 757,948 → 600,420
+  # off a first visit in early September is quiet for the next ~100 KB. The
+  # soft half still moves — every raise of CEILING is its own decision with its
+  # own reason, which is the thing that keeps creep legible now that this
+  # number no longer asks.
   - name: the entry chunk a first visit downloads
-    at most: 640000
+    at most: 747000
     measured by: node scripts/measure.mjs bundle-bytes
     baseline: 600420, 2026-09-02, 6bb8994
   # **The soft half of the size gate** (7 Sep 2026).

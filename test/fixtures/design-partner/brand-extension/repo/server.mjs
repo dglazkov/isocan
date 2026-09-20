@@ -1,5 +1,0 @@
-import http from "node:http";
-import { readFile } from "node:fs/promises";
-const stock=[{sku:"BTL-20",name:"Insulated bottle 500 ml",available:24,shelf:"B-4"},{sku:"KIT-10",name:"Repair kit",available:8,shelf:"C-2"}];
-const routes={"/":"index.html","/components.mjs":"components.mjs","/tokens.css":"tokens.css"};
-const server=http.createServer(async(req,res)=>{const url=new URL(req.url,"http://127.0.0.1");if(url.pathname==="/api/stock"){res.setHeader("Content-Type","application/json");res.end(JSON.stringify(stock.filter(row=>!url.searchParams.get("q")||row.sku.toLowerCase().includes(url.searchParams.get("q").toLowerCase()))));return}const file=routes[url.pathname];if(!file){res.writeHead(404);res.end("Not found");return}try{res.setHeader("Content-Type",file.endsWith("css")?"text/css":file.endsWith("mjs")?"text/javascript":"text/html");res.end(await readFile(new URL("./public/"+file,import.meta.url)))}catch{res.writeHead(500);res.end("Unavailable")}});server.listen(Number(process.env.PORT??0),"127.0.0.1",()=>console.log(JSON.stringify({url:`http://127.0.0.1:${server.address().port}`})));

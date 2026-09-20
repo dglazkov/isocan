@@ -522,6 +522,11 @@ export interface OverlayFacts {
     canvasId: string;
     canvas: CanvasContents;
     host: WebHost;
+    /** The saved canvas mode — the same fact the dialog slot has carried since
+     *  dialogs landed, so an overlay can shape structural writes (a groups
+     *  canvas requires named insertion; a legacy canvas refuses group fields).
+     *  Added with the talk module, the first overlay that writes items. */
+    groupMode: "groups" | "legacy";
 }
 /**
  * **A drag a module claims** (#156).

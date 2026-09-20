@@ -1,4 +1,0 @@
-{
-  "ignoreFiles": ["../css/bad.css"],
-  "rules": {"property-no-unknown": true}
-}

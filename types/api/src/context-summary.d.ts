@@ -1,5 +1,6 @@
 import type { CanvasSnapshotResponse, ContextExtras, ContextLayer, LinkedCanvas } from "../../core/src/index.js";
 import type { Ctx } from "./ctx.js";
+import type { ContextPinPort } from "./context-pin.js";
 import { DaemonClient } from "./client.js";
 /** Personal inclusion is deliberate; ambient resources retain the existing shared-only default. */
 export interface ContextSummaryOptions {
@@ -16,3 +17,14 @@ export declare function automaticSourceClient(ctx: Ctx, expectedHome: string, si
 export declare function linkedCanvasesOf(ctx: Ctx, canvasId: string, snapshot: Pick<CanvasSnapshotResponse, "canvas">): Promise<LinkedCanvas[]>;
 /** Node adapts transport and bytes; the browser-safe reader owns the layered Context assembly. */
 export declare function readContextSummary(ctx: Ctx, canvasId: string, extras?: ContextExtras, options?: ContextSummaryOptions): Promise<ContextLayer[]>;
+/**
+ * Node transport for the deliberate pin-from-source copy (memory phase 6).
+ *
+ * Two authorities, deliberately kept apart. The DESTINATION is read and
+ * written with this caller's ordinary authority. Every SOURCE read — the
+ * classification, the snapshot and each blob request — goes through
+ * `automaticSourceClient`, so the immutable automatic-exclusion policy and the
+ * expected home ride the actual request rather than only a preflight. A badge
+ * that recovers mid-copy recovers into the same restriction.
+ */
+export declare function contextPinPort(ctx: Ctx): ContextPinPort;

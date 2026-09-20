@@ -1,4 +1,19 @@
-export { startDaemon, runDaemon, stopDaemons } from "./daemon.js";
+/**
+ * **The daemon is NOT here, and that is the point** (phase 3 of
+ * `docs/projects/first-minute`).
+ *
+ * This index used to re-export `startDaemon`, `runDaemon`, `stopDaemons` and
+ * one constant from `http.ts`. Sixteen files in the CLI and the API import
+ * this module for `paths`, `readConfigFile` or `readBadge` — and every one of
+ * them was therefore importing fastify. Measured in the bundle: `isocan
+ * --version` loaded a 2.1 MB chunk of fastify and its plugins to print a
+ * version string, 1.3 MB of the 5.8 MB it read at startup.
+ *
+ * So the daemon has its own entry, `@isocan/server/daemon`, and the CLI's
+ * `serve` reaches it with `await import()`. Its TYPES stay below, because a
+ * type import is erased and costs nothing. The constant went with no
+ * replacement: nothing outside `http.ts` ever used it.
+ */
 export type { Daemon, DaemonOptions, RunDaemonOptions } from "./daemon.js";
 export { Engine, CanvasNotFoundError, NothingToUndoError } from "./engine.js";
 export type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, PurgeReport, Store, } from "./store.js";
@@ -25,7 +40,6 @@ export { HomeLinks } from "./home-links.js";
 export type { HomeLinksOptions } from "./home-links.js";
 export { homesRecorded, readHomes, writeHomes } from "./homes.js";
 export type { HomeAssignments } from "./homes.js";
-export { HOME_HEADER } from "./http.js";
 export { buildStamp, describeBuild, plausibleSha, stalenessOf, upgradeVerdict } from "./build.js";
 export type { BuildStamp, HomeBuild } from "./build.js";
 export * as paths from "./paths.js";

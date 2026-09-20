@@ -189,7 +189,7 @@ export interface HomeConnection {
      */
     mintPass(canvasId: string, actor?: Actor): Promise<MintPassResponse>;
     /** One pass read back by its minter — which, for a pass this daemon minted
-     * at the home, is this daemon's badge there (sheep-harness phase 2). */
+     * at the home, is this daemon's badge there. */
     pass(canvasId: string, passId: string): Promise<PassResponse>;
     redeemPass(token: string): Promise<RedeemPassResponse>;
     /**

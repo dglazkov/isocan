@@ -1,6 +1,7 @@
 import { type CanvasContents, type Item } from "./model.js";
+import { type ContextSource } from "./context-source.js";
 import type { RecapHeadResponse } from "./recap-head.js";
-export { contextReport } from "./context-report.js";
+export { contextReport, formatContextSource } from "./context-report.js";
 /**
  * **What an agent will actually read when it starts work here.**
  *
@@ -48,6 +49,17 @@ export interface ContextPiece {
     stale?: string;
     /** What to do about it, when there is something. */
     fix?: string;
+    /** Local items copied from a source, each with where it came from
+     *  (`context-pin.ts`). A copy does not follow its source, so the source is
+     *  a durable fact about these bytes rather than a link to fetch — and it is
+     *  shown BESIDE the piece, because a pin whose origin is invisible is how
+     *  somebody ends up editing "the team's checklist" believing the team will
+     *  see it. */
+    copied?: Array<{
+        itemId: string;
+        title: string;
+        source: ContextSource;
+    }>;
 }
 /** Facts only the machine running the CLI can know. The web has none of them,
  *  which is why they are passed in rather than read. */

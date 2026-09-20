@@ -5,7 +5,7 @@
   "type": "module",
   "description": "An isomorphic canvas: one 2.5D surface, driven from a web app and a terminal",
   "bin": {
-    "isocan": "packages/cli/bin/isocan.js"
+    "isocan": "./packages/cli/dist/isocan.mjs"
   },
   "exports": {
     ".": {
@@ -19,26 +19,9 @@
     },
     "./package.json": "./package.json"
   },
-  "//": "GENERATED BRANCH — `npm run release` builds it from 2fd1e9a on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
+  "//": "GENERATED BRANCH — `npm run release` builds it from f0c565e on main; develop there, not here. No `workspaces` and no scripts, deliberately: npm's git installer treats either as \"needs preparation\", and then installs this package into an empty directory (#47). The built web app is committed here for the same reason — there is no install-time build to make it.",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "@types/node": "^22.13.1",
-    "commander": "^13.1.0",
-    "fastify": "^5.2.1",
-    "nanoid": "^5.0.9",
-    "tsx": "^4.19.2",
-    "undici": "^7.29.0",
-    "ws": "^8.18.0",
-    "zod": "^4.5.1",
-    "unified": "^11.0.5",
-    "remark-parse": "^11.0.0",
-    "remark-gfm": "^4.0.1",
-    "remark-breaks": "^4.0.0",
-    "remark-rehype": "^11.1.2",
-    "css-tree": "^3.2.1",
-    "parse5": "^8.0.1",
-    "entities": "^8.1.0",
-    "@types/css-tree": "^3.2.0"
+    "@types/node": "^22.13.1"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
@@ -51,7 +34,7 @@
     "vitest": "^3.0.5"
   },
   "isocan": {
-    "commit": "2fd1e9a",
-    "builtAt": "2026-09-16T21:50:31Z"
+    "commit": "f0c565e",
+    "builtAt": "2026-09-19T22:17:57-06:00"
   }
 }

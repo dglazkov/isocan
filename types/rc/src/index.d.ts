@@ -8,9 +8,8 @@
  * browser platform. A host with `fetch`, a key-value store and a timer is the
  * audience; the laptop's `isocan rc` is one host of it.
  *
- * **And the client a host speaks to the daemon with** (sheep's collie, phase
- * 1): `DaemonRoutes`, the typed route surface the CLI's `DaemonClient`
- * extends, re-exported from `@isocan/api/routes` rather than written again.
+ * **And the client a host speaks to the daemon with**: `DaemonRoutes`, the
+ * typed route surface the CLI's `DaemonClient` extends, re-exported from `@isocan/api/routes` rather than written again.
  * It satisfies `RoomRoutes`, and it carries the calls a host makes around the
  * room — `redeemPass`, `mintPass`, `killBadge`, `badges`, `snapshot`. A host
  * constructs it over a base URL and a `BadgeStore` of its own; requests go
@@ -20,16 +19,14 @@
 export { ApiError, DaemonRoutes } from "../../api/src/routes.js";
 export type { BadgeStore, StoredBadge } from "../../core/src/index.js";
 /**
- * **The address helpers a host composes and refuses with** (sheep's collie,
- * phase 2). A Worker that parses a pass address and builds one, and a command
- * that refuses a loopback home before minting, would otherwise write core's
+ * **The address helpers a host composes and refuses with.** A Worker that
+ * parses a pass address and builds one, and a command that refuses a loopback home before minting, would otherwise write core's
  * spelling again — the drift `@isocan/core`'s address module exists to end. Core is
  * already what this entry reaches, so the boundary does not move.
  */
 export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "../../core/src/index.js";
 export { gateTurn, type GuardLimits, type GuardState, type GuardVerdict } from "./guards.js";
-export type { RcAgentRow, SheepPlace } from "./rows.js";
+export type { RcAgentRow } from "./rows.js";
 export { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.js";
-export { mapState, runRoom, type Room, type RoomAdapter, type RoomDeps, type RoomHarness, type RoomRoutes, type RoomRows, type RoomState, type RoomTurn, type RoomTurnEvent, } from "./room.js";
-export { SHEEP_HARNESS, SheepAgent, assistantText, endSheep, toolCalls, toolTitle, type RmAnswer, type SheepBirth, type SheepCommands, type SheepEntry, type SheepReply, type SheepRow, } from "./sheep.js";
+export { mapState, RoomHold, runRoom, type Room, type RoomAdapter, type RoomDeps, type RoomHarness, type RoomRoutes, type RoomRows, type RoomState, type RoomTurn, type RoomTurnEvent, } from "./room.js";
 export { COLLAB_SKILL } from "./skill.js";

@@ -156,14 +156,13 @@ export declare function parsePassToken(raw: string | undefined | null): PassToke
 /** `/api/projects/` is a deliberate holdout (phase 13.5) — see `grantsRoute`. */
 export declare const passesRoute: (canvasId: string) => string;
 /**
- * Read one back: `GET /api/projects/:id/passes/:passId` (sheep-harness
- * phase 2).
+ * Read one back: `GET /api/projects/:id/passes/:passId`.
  *
  * **Only for the badge that minted it**, and the row without its secret. What
  * the minter learns is what it already half knows: that the pass it handed
  * over was spent, when, and by which badge — `redeemedBy`. That last field is
- * the exact name of the surface the pass made, which is what an rc needs to
- * end the badge a sheep's cell redeemed when the agent is withdrawn, without
+ * the exact name of the surface the pass made, which is what a minter needs to
+ * end the badge its pass made, without
  * guessing it from a list of surfaces that share an actor.
  *
  * Canvas-scoped for the mint route's reasons: the door has already run, and

@@ -1,1 +1,0 @@
-../../.agents/personas/design-auditor.md

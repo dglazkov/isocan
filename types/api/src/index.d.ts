@@ -18,6 +18,7 @@
  */
 export * from "./connect.js";
 export * from "./context-summary.js";
+export * from "./context-pin.js";
 export * from "./design-audit.js";
 export * from "./design-audit-reader.js";
 export * from "./questionnaire-reader.js";

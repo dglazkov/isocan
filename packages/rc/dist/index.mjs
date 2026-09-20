@@ -161,7 +161,6 @@ function normalizeHomeUrl(raw) {
     return trimmed.replace(/\/+$/, "");
   }
 }
-var INSTALL_SPEC = "github:dglazkov/isocan#release";
 
 // packages/core/src/canvas-groups.ts
 var GROUP_KIND = "group";
@@ -2541,270 +2540,17 @@ var summonsPrompt = (canvasTitle, agentName, payload) => `You are ${agentName}, 
 The payload (the same shape \`isocan wait --json\` returns):
 ` + JSON.stringify(payload, null, 2);
 
-// packages/rc/src/skill.ts
-var COLLAB_SKILL = '---\nname: isocan-collab\ndescription: Collaborate on an isocan canvas as a visible agent \u2014 address comments, build/edit items, and run the wait-driven feedback loop via the isocan CLI. Use when asked to work on a canvas, address canvas comments, "park" and wait for feedback, or run a canvas session. Triggers on "isocan", "canvas comments", "park on the canvas", "address my comments".\n---\n\n# Collaborating on an isocan canvas\n\nisocan is an infinite shared canvas. A local daemon owns the state; the web\napp (which the human watches) and the `isocan` CLI (you) are equal clients \u2014\nevery operation you run appears on their screen live, and your presence\nrenders as a named cursor.\n\n**The instructions live in the tool.** Run this first, once per session, and\nfollow what it says:\n\n```sh\nisocan --agent-help     # the whole protocol: your name, presence, the lap,\n                        # parking on `wait`, the practices that earn trust\n```\n\nIt ships inside the CLI, so it describes the build you are actually running \u2014\nthis file cannot fall behind it. `isocan --help` is the command-by-command\nreference alongside it, and is also written for you.\n\n## If `isocan` isn\'t there\n\nThis skill can arrive without the tool (`npx skills add dglazkov/isocan`\ninstalls this file alone). If `isocan --version` fails, one command installs\nit and sets up the directory you are in \u2014 the repo is the package, no registry\ninvolved:\n\n```sh\nnpx github:dglazkov/isocan#release setup   # CLI on PATH, skill, daemon, app\n```\n\nIt is idempotent \u2014 run it whenever you land somewhere new \u2014 and it puts\n`isocan` on your PATH itself, so `isocan --agent-help` works right after.\n\nKeep the `#release` on the spec \u2014 without it npm installs nothing usable.\nSetup\'s report says where the CLI landed, and if your shell cannot see it (a\nnon-login subshell often can\'t see nvm\'s or asdf\'s directories) that line\ncarries the `export PATH=\u2026` that reaches it. Prefixing every command with\n`npx github:dglazkov/isocan#release` also works, with no install at all.\n\n## The one rule to carry in\n\n**The canvas is the channel that keeps.** The human is watching the web app,\nand so is everyone else here \u2014 what you put on the canvas is the record, and\nanything you say only in your own conversation is invisible to all of them.\nSo every lap of work ends parked on `isocan wait`, never on a summary typed\nat a person, however attentive that person is.\n\nIf somebody IS reading your terminal \u2014 you are in an IDE or an agent manager,\nand your conversation is a window they have open \u2014 then you have two channels\nand they are a team room and a DM, not two chats to keep in sync. The guide\'s\n"Who is at your terminal" says which belongs where, and how to tell which\nmode you are in. `isocan --agent-help` is how you do all of this properly; go\nread it.\n';
-
-// packages/rc/src/sheep.ts
-var SHEEP_HARNESS = "sheep";
-var PASS_SECRET = "ISOCAN_PASS";
-function pastureFor(name) {
-  return `isocan-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-}
-var SETUP_SCRIPT = `#!/bin/sh
-set -e
-# The badge lands in ~/.isocan. A sheep home keeps ~ (/home/sheep) with the
-# sheep across containers; a home from before that keeps ~ for one container
-# only, and a sheep born before it has its badge in the synced workspace
-# already. In either of those cases ~/.isocan is a link into the workspace.
-H="\${HOME:-/root}"
-if [ "$H" != /home/sheep ] || [ -d /workspace/.isocan-home ]; then
-  mkdir -p /workspace/.isocan-home
-  rm -rf "$H/.isocan"
-  ln -s /workspace/.isocan-home "$H/.isocan"
-fi
-if ! command -v isocan >/dev/null 2>&1; then
-  echo "setup: installing isocan" >&2
-  npm install -g ${INSTALL_SPEC} --no-audit --no-fund >/tmp/isocan-install.log 2>&1 || { tail -20 /tmp/isocan-install.log >&2; exit 1; }
-fi
-if [ ! -f /workspace/.isocan/project.json ]; then
-  if [ -z "$ISOCAN_PASS" ]; then echo "setup: no ISOCAN_PASS and no binding" >&2; exit 1; fi
-  echo "setup: redeeming the pass" >&2
-  cd /workspace && isocan setup --direct --no-open --no-install "$ISOCAN_PASS" >&2
-fi
-isocan whoami >&2 || true
-`;
-var BRIEF = (name, canvasTitle) => `# ${name}
-
-You are ${name}, an agent enrolled on the isocan canvas "${canvasTitle}".
-You run in a cell; your workspace is /workspace and the \`isocan\` command
-in your shell speaks to the canvas's home directly. You are already
-identified: \`isocan whoami\` says who you are, and every op you run
-appears on the canvas live.
-
-Each prompt you receive is a summons: activity addressed to you. Address it
-through the CLI (\`isocan --agent-help\` is the protocol; \`isocan comment
-reply <threadId> "\u2026"\` answers a comment), and then stop. Never run
-\`isocan wait\`: your session rests when your turn ends, and the next
-summons wakes you.
-
-For a designed screen, HTML node or connected app, run
-\`isocan design workflow\` for the shared procedure, canvas policy and existing
-work. Precise edits and archive imports do not start a new interview.
-
-The first command after a quiet spell can take a couple of minutes: the
-cell's container was released, and a fresh one runs setup (installing
-isocan) before your command runs. Wait for it. If a command fails because
-the container could not start, do not sleep and retry: if \`isocan\` still
-answers, say on the thread that the cell could not start its container,
-and end your turn.
-`;
-function toolTitle(name, args) {
-  const first = args && typeof args === "object" ? Object.values(args).find((v) => typeof v === "string" && v.trim() !== "") : void 0;
-  return first ? `${name} ${first.split("\n")[0].trim()}` : name;
-}
-function assistantText(entry) {
-  if (entry.type !== "message" || entry.message?.role !== "assistant" || !Array.isArray(entry.message.content)) return "";
-  return entry.message.content.filter((part) => part.type === "text" && typeof part.text === "string").map((part) => part.text).join("");
-}
-function toolCalls(entries) {
-  const titles = [];
-  for (const entry of entries) {
-    if (entry.type !== "message" || entry.message?.role !== "assistant" || !Array.isArray(entry.message.content)) continue;
-    for (const part of entry.message.content) {
-      if (part.type === "toolCall" && part.name) titles.push(toolTitle(part.name, part.arguments));
-    }
-  }
-  return titles;
-}
-var SheepAgent = class {
-  /** The id of the pass minted for the sheep this agent just birthed, or
-   * null when `ensureSession` resumed one. The room writes it to the row. */
-  bornPass = null;
-  /** Where this agent's sheep live, as the row keeps it; the room writes it
-   * back. */
-  place;
-  /** The place, said: the address, or which local home. */
-  where;
-  commands;
-  name;
-  narrate;
-  birth;
-  constructor(opts) {
-    this.commands = opts.commands;
-    this.name = opts.name;
-    this.place = opts.place;
-    this.where = opts.where;
-    this.narrate = opts.narrate ?? (() => {
-    });
-    this.birth = opts.birth;
-  }
-  get pasture() {
-    return pastureFor(this.name);
-  }
-  /** A pasture per agent, made once; a second birth of the same name finds
-   * it. The pass is not here: it is the sheep's own secret, given at the
-   * mint. */
-  async ensurePasture() {
-    const name = this.pasture;
-    const exists = (await this.commands.pastures()).includes(name);
-    if (!exists) {
-      this.narrate(`making pasture ${name}`);
-      await this.commands.pastureNew(name);
-    } else {
-      this.narrate(`pasture ${name} already exists; the sheep born into it is new and does not remember an earlier one`);
-    }
-    this.narrate(`putting setup.sh, BRIEF.md and the collab skill in pasture ${name}`);
-    await this.putTree(name);
-    return name;
-  }
-  /** The pasture's tree: the setup script, the brief and the skill. Put at
-   * every turn and not only at the birth — three calls, under a second — so
-   * a sheep born under an earlier script or brief runs the current one in
-   * its next container, which is how a sheep from before the home kept `~`
-   * keeps its badge once the home does. */
-  async putTree(name) {
-    await this.commands.pasturePut(name, "setup.sh", SETUP_SCRIPT);
-    await this.commands.pasturePut(name, "BRIEF.md", BRIEF(this.name, this.birth.canvasTitle));
-    await this.commands.pasturePut(name, "skills/isocan/SKILL.md", COLLAB_SKILL);
-  }
-  /** The tree, refreshed for a resumed sheep. A refusal is said, not thrown:
-   * the sheep has a tree, and the turn is worth more than a current one. */
-  async refreshTree() {
-    try {
-      await this.putTree(this.pasture);
-    } catch (err) {
-      this.narrate(`pasture ${this.pasture} keeps its earlier setup.sh and brief: ${err.message}`);
-    }
-  }
-  /**
-   * The stored sheep if it still exists at the home; else one already in the
-   * agent's pasture, which a row can forget (a row reaped, a machine
-   * re-imaged) while the home remembers; else a fresh one, minted idle into
-   * the pasture with no prompt, so no model turn is spent. A pass is minted
-   * only on that last path, so a sheep that exists is never handed a second
-   * one.
-   */
-  async ensureSession(_cwd, previous) {
-    const sessions = await this.commands.sessions();
-    if (previous && sessions.some((s) => s.id === previous)) {
-      await this.refreshTree();
-      return { sessionId: previous, resumed: true };
-    }
-    const herd = sessions.filter((s) => s.pasture === this.pasture);
-    const found = herd.find((s) => s.name === this.name) ?? herd[0];
-    if (found) {
-      this.narrate(
-        `sheep ${found.id} is already in pasture ${this.pasture}${previous ? ` (the row named ${previous}, which the home no longer has)` : ""} \u2014 resuming it rather than birthing a second`
-      );
-      if (found.setup === null) {
-        this.narrate(
-          `sheep ${found.id} has never run setup, so its first container runs it before this summons (installing isocan, about two minutes)`
-        );
-      }
-      await this.refreshTree();
-      return { sessionId: found.id, resumed: true };
-    }
-    if (previous) this.narrate(`sheep ${previous} is gone from ${this.where} \u2014 a new one is born`);
-    this.narrate(`birthing a sheep for ${this.name} at ${this.where}`);
-    const pasture = await this.ensurePasture();
-    this.narrate(`minting a pass for ${this.name} \u2014 single-use, fifteen minutes, the sheep's own secret, redeemed by its setup`);
-    const { address, passId } = await this.birth.pass();
-    const id = await this.commands.mint({ name: this.name, pasture }, { [PASS_SECRET]: address });
-    this.bornPass = passId;
-    await this.passKept(id, pasture, address);
-    this.narrate(
-      `sheep ${id} minted \u2014 no turn spent; its first container runs setup before this summons (installing isocan, about two minutes)`
-    );
-    return { sessionId: id, resumed: false };
-  }
-  /**
-   * Makes sure the new sheep's setup will find the pass. Whether the sheep
-   * took it as its own secret is read from the home's listing, not from the
-   * mint's answer: a `sheep` from before `--secret` takes the flag as a stray
-   * word, a home from before per-sheep secrets drops the field, and both mint
-   * the sheep and exit 0. Such a sheep is used, not ended: it is idle and
-   * nothing of it has run, so the pass goes to the pasture's secret of the
-   * same name, which setup reads when the sheep's first container starts.
-   * That is the phase 1 birth's credential, and it stays in the pasture after
-   * it is spent.
-   */
-  async passKept(id, pasture, address) {
-    const row = await this.commands.session(id);
-    if (row?.secrets?.includes(PASS_SECRET)) return;
-    try {
-      await this.commands.pastureSecret(pasture, PASS_SECRET, address);
-    } catch (err) {
-      await this.commands.rm(id).catch(() => null);
-      throw new Error(`sheep ${id} did not keep its pass, and ${err.message}`);
-    }
-    this.narrate(
-      `${this.where} cannot keep a secret for one sheep (this \`sheep\` or its home predates it), so the pass is pasture ${pasture}'s ${PASS_SECRET} secret instead, and stays there once spent`
-    );
-  }
-  /**
-   * One turn: the summons goes to the sheep, and how the attach ends is the
-   * stop. The attach queues behind a turn already running at the cell, and
-   * streams the turn's entries as they land (sheep#7): each assistant entry's
-   * tool calls become "tool" events, the beat the ACP path produces, and its
-   * text a "chunk", so the reply is the assistant's text in the order it was
-   * said. Every entry is taken at most once by id; the last assistant entry
-   * is written again at the end by a `sheep` from before the stream, and by
-   * no other.
-   */
-  async prompt(sessionId, text2, onEvent) {
-    const seen = /* @__PURE__ */ new Set();
-    const said = [];
-    const reply = await this.commands.attach(sessionId, text2, (entry) => {
-      if (typeof entry?.id !== "string" || seen.has(entry.id)) return;
-      seen.add(entry.id);
-      for (const title of toolCalls([entry])) onEvent?.({ kind: "tool", detail: title });
-      const spoken = assistantText(entry);
-      if (spoken) {
-        onEvent?.({ kind: "chunk", text: said.length === 0 ? spoken : `
-${spoken}` });
-        said.push(spoken);
-      }
-    });
-    return { stopReason: reply.ended ? "end_turn" : reply.why, text: said.join("\n") };
-  }
-  close() {
-  }
-};
-async function endSheep(commands, target, narrate) {
-  const { name, sessionId: id, where } = target;
-  const kept = () => narrate(`pasture ${pastureFor(name)} stays \u2014 it is yours`);
-  narrate(`ending sheep ${id} at ${where}`);
-  let rm;
-  try {
-    rm = await commands.rm(id);
-  } catch (err) {
-    narrate(`sheep ${id} is still at ${where}: ${err.message}`);
-    return;
-  }
-  if (rm.ended) {
-    if (rm.aborted) narrate("the running turn was aborted first");
-    narrate(`sheep ${id} ended \u2014 its container and workspace are gone`);
-    kept();
-    return;
-  }
-  let listed = null;
-  try {
-    listed = (await commands.sessions()).some((s) => s.id === id);
-  } catch {
-  }
-  if (listed === false) {
-    narrate(`sheep ${id} was already ended \u2014 ${where} no longer lists it`);
-    kept();
-    return;
-  }
-  if (await commands.abort(id).catch(() => false)) narrate("its running turn was aborted");
-  narrate(
-    listed ? `sheep ${id} is still at ${where}: this home cannot end a sheep (sheep rm: ${rm.refusal}); \`sheep ls\` lists it` : `sheep ${id} may still be at ${where}: sheep rm refused (${rm.refusal}) and \`sheep ls\` did not answer`
-  );
-  kept();
-}
-
 // packages/rc/src/room.ts
+var RoomHold = class extends Error {
+  constructor(line, retryAfter) {
+    super(line);
+    this.line = line;
+    this.retryAfter = retryAfter;
+    this.name = "RoomHold";
+  }
+  line;
+  retryAfter;
+};
 function mapState(map = /* @__PURE__ */ new Map()) {
   return {
     get: async (key) => map.get(key),
@@ -2857,15 +2603,9 @@ async function room(deps, life, announce) {
     return snapshot.canvas.agents ?? {};
   };
   const rcCwd = deps.cwd;
-  const reap = async (roster2, when) => {
+  const reap = async (roster2) => {
     for (const row of await rows.list()) {
-      if (row.canvasId === p.id && !roster2[row.actorId]) {
-        await rows.remove(p.id, row.actorId);
-        if (row.harness === SHEEP_HARNESS && row.sessionId) {
-          narrate(`${row.name} was withdrawn ${when} \u2014 ending what it left`);
-          await deps.endSession(row, (line) => narrate(`${row.name} \xB7 ${line}`));
-        }
-      }
+      if (row.canvasId === p.id && !roster2[row.actorId]) await rows.remove(p.id, row.actorId);
     }
   };
   const reconcile = async (roster2) => {
@@ -2880,7 +2620,7 @@ async function room(deps, life, announce) {
         sessionId: null
       });
     }
-    await reap(roster2, "while no rc ran here");
+    await reap(roster2);
   };
   const known = /* @__PURE__ */ new Map();
   const opening = await rosterOf();
@@ -3019,11 +2759,6 @@ async function room(deps, life, announce) {
         `${names.join(", ")} ${names.length === 1 ? words : words.replace(/^listens/, "listen")}` + (narrowed2 ? " \u2014 `isocan rc listen <name> --to <names|everyone>` widens one" : "")
       );
     }
-  }
-  for (const row of await rows.list()) {
-    if (row.canvasId !== p.id || !opening[row.actorId]) continue;
-    const where = await deps.whereOf(row);
-    if (where !== null) narrate(where);
   }
   for (const say of openingSays) await say();
   const guardOf = async (actorId) => await state.get(keys.guard(actorId)) ?? { turnTimes: [], agentChain: 0, held: null };
@@ -3216,32 +2951,21 @@ async function room(deps, life, announce) {
         beat({});
       }
     })();
-    const agent = await harness.open({ face: face?.sessionId ?? null, threadId, narrate: say });
+    let agent = null;
     try {
+      agent = await harness.open({
+        canvasId: p.id,
+        agent: record.actor,
+        owner,
+        face: face?.sessionId ?? null,
+        threadId,
+        narrate: say
+      });
       const storedSession = await state.get(keys.session(record.actor.id));
       const session = await agent.ensureSession(row.cwd, row.sessionId ?? storedSession ?? null);
       await state.set(keys.session(record.actor.id), session.sessionId);
-      const bornPass = agent.bornPass ? { canvasId: p.id, passId: agent.bornPass } : void 0;
-      const recorded = await rows.setSessionId(p.id, record.actor.id, session.sessionId, agent.place, bornPass);
-      if (!recorded && agent.place && await withdrawnHere(record.actor.id)) {
-        await state.delete(keys.session(record.actor.id));
-        say("withdrawn before its turn \u2014 no turn runs");
-        if (session.sessionId !== row.sessionId) {
-          const { cellPass: _stale, ...rest } = row;
-          await deps.endSession(
-            {
-              ...rest,
-              harness: harness.harness,
-              sessionId: session.sessionId,
-              sheep: agent.place,
-              ...bornPass ? { cellPass: bornPass } : {}
-            },
-            say
-          );
-        }
-        return;
-      }
-      say(`session ${session.resumed ? "resumed" : "started"} ${agent.where ?? `in ${row.cwd}`}`);
+      await rows.setSessionId(p.id, record.actor.id, session.sessionId);
+      say(`session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`);
       let lastToolBeat = 0;
       const turn = await agent.prompt(
         session.sessionId,
@@ -3271,7 +2995,7 @@ async function room(deps, life, announce) {
     } finally {
       endHeartbeat();
       life.removeEventListener("abort", endHeartbeat);
-      await agent.close();
+      if (agent) await agent.close();
       if (face) await routes.endSession(p.id, face.sessionId).catch(() => {
       });
     }
@@ -3307,7 +3031,7 @@ async function room(deps, life, announce) {
   const settled = await rosterOf();
   policyState.roster = settled;
   for (const [id, row] of Object.entries(settled)) known.set(id, row.actor.name);
-  await reap(settled, "as this rc started");
+  await reap(settled);
   for (const actorId of [...dispatches.keys()]) if (!settled[actorId]) dispatches.delete(actorId);
   for (const actorId of [...notHeld]) if (!settled[actorId]) notHeld.delete(actorId);
   await takeUp(settled);
@@ -3390,11 +3114,9 @@ async function room(deps, life, announce) {
       if (op.type === "agent.withdraw" && entry.seq > startTip) {
         const name = known.get(op.actorId) ?? op.actorId;
         narrate(`${by.name} dismissed ${name} \u2014 no longer answering here`);
-        const row = (await rows.list()).find((r) => r.canvasId === p.id && r.actorId === op.actorId);
         await rows.remove(p.id, op.actorId);
         dispatches.delete(op.actorId);
         await state.delete(keys.session(op.actorId));
-        if (row) await deps.endSession(row, (line) => narrate(`${name} \xB7 ${line}`));
         continue;
       }
       for (const record of Object.values(roster2)) {
@@ -3486,6 +3208,12 @@ async function room(deps, life, announce) {
           narrate(`${record.actor.name} \xB7 turn stopped \u2014 ${record.actor.name} was withdrawn`);
           return;
         }
+        if (err instanceof RoomHold) {
+          narrate(`${record.actor.name} \xB7 turn held \u2014 ${err.line}`);
+          await sayInThread(failedThread, err.line);
+          dispatch.retryAfter = err.retryAfter;
+          return;
+        }
         const why = err.message;
         narrate(`${record.actor.name} \xB7 turn FAILED \u2014 ${why} (retrying in 60s)`);
         await sayInThread(
@@ -3499,16 +3227,16 @@ async function room(deps, life, announce) {
     }
   }
 }
+
+// packages/rc/src/skill.ts
+var COLLAB_SKILL = '---\nname: isocan-collab\ndescription: Collaborate on an isocan canvas as a visible agent \u2014 address comments, build/edit items, and run the wait-driven feedback loop via the isocan CLI. Use when asked to work on a canvas, address canvas comments, "park" and wait for feedback, or run a canvas session. Triggers on "isocan", "canvas comments", "park on the canvas", "address my comments".\n---\n\n# Collaborating on an isocan canvas\n\nisocan is an infinite shared canvas. A local daemon owns the state; the web\napp (which the human watches) and the `isocan` CLI (you) are equal clients \u2014\nevery operation you run appears on their screen live, and your presence\nrenders as a named cursor.\n\n**The instructions live in the tool.** Run this first, once per session, and\nfollow what it says:\n\n```sh\nisocan --agent-help     # the whole protocol: your name, presence, the lap,\n                        # parking on `wait`, the practices that earn trust\n```\n\nIt ships inside the CLI, so it describes the build you are actually running \u2014\nthis file cannot fall behind it. `isocan --help` is the command-by-command\nreference alongside it, and is also written for you.\n\n## If `isocan` isn\'t there\n\nThis skill can arrive without the tool (`npx skills add dglazkov/isocan`\ninstalls this file alone). If `isocan --version` fails, one command installs\nit and sets up the directory you are in \u2014 the repo is the package, no registry\ninvolved:\n\n```sh\nnpx github:dglazkov/isocan#release setup   # CLI on PATH, skill, daemon, app\n```\n\nIt is idempotent \u2014 run it whenever you land somewhere new \u2014 and it puts\n`isocan` on your PATH itself, so `isocan --agent-help` works right after.\n\nKeep the `#release` on the spec \u2014 without it npm installs nothing usable.\nSetup\'s report says where the CLI landed, and if your shell cannot see it (a\nnon-login subshell often can\'t see nvm\'s or asdf\'s directories) that line\ncarries the `export PATH=\u2026` that reaches it. Prefixing every command with\n`npx github:dglazkov/isocan#release` also works, with no install at all.\n\n## The one rule to carry in\n\n**The canvas is the channel that keeps.** The human is watching the web app,\nand so is everyone else here \u2014 what you put on the canvas is the record, and\nanything you say only in your own conversation is invisible to all of them.\nSo every lap of work ends parked on `isocan wait`, never on a summary typed\nat a person, however attentive that person is.\n\nIf somebody IS reading your terminal \u2014 you are in an IDE or an agent manager,\nand your conversation is a window they have open \u2014 then you have two channels\nand they are a team room and a DM, not two chats to keep in sync. The guide\'s\n"Who is at your terminal" says which belongs where, and how to tell which\nmode you are in. `isocan --agent-help` is how you do all of this properly; go\nread it.\n';
 export {
   ApiError,
   COLLAB_SKILL,
   DaemonRoutes,
-  SHEEP_HARNESS,
-  SheepAgent,
+  RoomHold,
   actorNamesOn,
-  assistantText,
   canvasUrlWithPass,
-  endSheep,
   gateTurn,
   isLoopbackBase,
   itemCenter,
@@ -3517,7 +3245,5 @@ export {
   parseCanvasAddress,
   runRoom,
   summonsPrompt,
-  threadLocus,
-  toolCalls,
-  toolTitle
+  threadLocus
 };

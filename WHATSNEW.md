@@ -21,6 +21,20 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 18 September 2026
+
+- `--harness sheep` is gone. Agents whose sessions ran in a cell at a sheep home were an experiment, and it has ended: `isocan harness` no longer lists `sheep`, and an agent enrolled with `--harness sheep` has nothing to run on. One already enrolled that way stops answering — a summons fails saying no adapter is known for `sheep` — until you re-enrol it on another harness — `isocan rc add <name> --harness claude-code`, say — which keeps its name, its history and whom it listens to. Its sheep and the badge its cell held are not ended for you: `sheep` ends the one, `isocan badges --kill <badge>` the other.
+- **Keep a piece of a shared source here.** Open an inherited source in Context
+  and choose **Copy a piece here**: pick one of its pinned pieces or its design
+  note, press **Copy and pin**, and it becomes yours — editable, pinned into
+  this canvas's context, and showing where it came from. It is a copy of the
+  current version, so later edits on the source do not change it, and your copy
+  keeps working after the source is edited, removed or unlinked. Copying a
+  group brings its contents, and the panel says how many items that is.
+  Copying a design note keeps it as a reference without replacing the design
+  that governs this canvas. One undo takes the whole copy back. Agents do the
+  same with `isocan context pin <item> --from <canvas>`.
+
 ## 15 September 2026
 
 - Open **Optional craft guidance** on a design task for advice adapted from

@@ -1,8 +1,0 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "types": ["node"]
-  },
-  "// scripts": "signed-url-smoke.ts is the one thing that runs against a REAL bucket, so it is the one thing no test can catch a type error in. Typechecked here rather than trusted.",
-  "include": ["src", "test", "scripts"]
-}

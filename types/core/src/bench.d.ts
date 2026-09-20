@@ -192,7 +192,7 @@ export declare function benchRows(agents: readonly BenchAgent[], canvases: reado
  * Said plainly rather than left for a reader to infer from a missing ring:
  * journey 1's complaint is that today a summons into silence is
  * indistinguishable from an agent that is thinking. `runsAt` rides the ready
- * line because "ready (sheep-2)" is the answer to the question a person
+ * line because "ready (cell-2)" is the answer to the question a person
  * actually has next, and it says nothing about a machine being *yours*.
  */
 export declare function benchWords(row: BenchRow): string;

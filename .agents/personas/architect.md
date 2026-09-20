@@ -6,8 +6,13 @@ effort: xhigh
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash
 goal:
+  # 1 → 9 on 2026-09-20, accepted by Dion. The bound was 1 so the reducer would
+  # stay portable, and nine says that is now an intention rather than a
+  # measurement. Raising it records the truth instead of failing nightly about
+  # it — but the portability argument is NOT withdrawn, and the honest way back
+  # is work that removes dependencies, not a number that stops asking.
   - name: runtime dependencies of @isocan/core
-    at most: 1
+    at most: 9
     measured by: node scripts/measure.mjs core-runtime-deps
     baseline: 1, 2026-08-29, 6b1afaf
   # The product's central claim, as a number that can fail: every shared fact
@@ -35,10 +40,16 @@ goal:
   # Not a gate: a missed bound here is news in the nightly queue, because a
   # hard stop on this would be switched off by the first person who needed one
   # more line at midnight. `--names` says which door is worst.
+  # 24058 → 25267 on 2026-09-20, accepted by Dion in the nightly queue after the
+  # finding stood twice (15 and 16 Sep). The growth is extensions phase 3, voice
+  # phases 2–3 and memory phase 6 landing together rather than one crowded
+  # commit. The ratchet is unchanged in kind: it stands where the number stands,
+  # so this can still only be paid down, and `--names` says `main.ts` is the
+  # door — 14847 of the 25267. Paying it down is a command family moving out.
   - name: lines in the files every feature must edit
-    at most: 24058
+    at most: 25267
     measured by: node scripts/measure.mjs registry-lines
-    baseline: 24058, 2026-09-13, b1644894
+    baseline: 25267, 2026-09-20, ba75c0fb
   - name: operations a person can send and an agent cannot
     at most: 0
     measured by: node scripts/measure.mjs web-only-ops

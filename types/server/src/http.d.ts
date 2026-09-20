@@ -193,8 +193,4 @@ interface RouteOptions {
     refusals?: Refusals;
 }
 export declare function registerRoutes(app: FastifyInstance, engine: Engine, store: Store, desk: Desk, presence: PresenceHub, options?: RouteOptions): void;
-/** The header a replica names its home in — a machine-readable copy of what
- * the body says, for a `curl` or a script that would rather not scrape prose.
- * Deliberately NOT `Location`, and deliberately not a 3xx: see below. */
-export declare const HOME_HEADER = "X-Isocan-Home";
 export {};

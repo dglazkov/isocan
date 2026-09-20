@@ -531,12 +531,9 @@ conversation per agent that carries on wherever it is summoned, and
 
 Which harness a summoned agent runs in is the enrolment's `--harness`
 (claude-code, pi, codex and antigravity are known; `~/.isocan/config.json`'s `acpAdapters`
-declares others; `sheep` runs the agent in a cell at a sheep home instead of on
-this machine, and `isocan harness` says which home), and an agent enrolled with none named runs on the
+declares others), and an agent enrolled with none named runs on the
 machine's default: the only runnable harness, or the one picked with
-`isocan rc --default-harness <name>`. Withdrawing an agent on the sheep
-harness also ends its sheep (a running turn is aborted first) and the badge
-its cell holds, and says each; its pasture stays. `isocan harness` lists what this
+`isocan rc --default-harness <name>`. `isocan harness` lists what this
 machine can run and which is the default (`--json` adds a `runnable`
 field) — the thing to read before presenting the choice to a person, and
 the thing to tell them when a summons fails for want of one.
@@ -889,6 +886,27 @@ Both are `item.update` with a property, so they replicate, undo and are visible
 to everybody like any other fact. The same two verbs are on an item's menu in
 the app.
 
+**Keeping a piece of a source here.** Inheritance keeps following a source. To
+stop following and keep one piece instead, `isocan context pin <item> --from
+<canvas> [--canvas <target>]` copies that piece's **current version** out of a
+visible inherited source and pins the copy here. `--from` resolves only among
+this canvas's visible ordinary inheritance links, by exact canvas or card ID or
+unambiguous title/ID prefix; `<item>` is an exact ID or unambiguous prefix among
+the pieces that source **offers**, which are its current design system and its
+ambient pinned items — not its whole item list. A refusal names the candidates.
+
+The copy is an ordinary local item from then on: edit it, and the source does
+not change; the source team edits, removes or you unlink the card, and your copy
+and its saved bytes stay. It is not a live reference. Copying a group brings its
+actual children and their current faces together; one `isocan undo` removes the
+whole copy and its pin, and redo restores it. A copied design note is kept as a
+reference — its governing role is stripped, so it does not become the design
+this canvas is checked against. Each copied item carries a `contextSource`
+property naming where it came from, which `isocan context` prints under
+*Copied from a source*. Canvas links are not copied by this act: place and
+inherit that canvas instead. Without `--from`, `context pin` keeps its
+ordinary meaning.
+
 **Context comes in layers.** `isocan context` prints *This canvas* first, then
 one heading per canvas this one **inherits from** — a canvas card (see *A
 canvas on a canvas*) wearing `memory=inherit`. A linked canvas contributes its
@@ -1059,6 +1077,35 @@ ships.
 If you are asked for a button that does something new, the answer is usually a
 **slash command** first (`isocan command add`) and then a tool that names it —
 a tool asking for a command nobody wrote is refused when it is read.
+
+## Panels: a canvas that carries its own page
+
+A **panel** is a page this canvas brought with it, headed for the dock beside
+the Chat and the Files. Same shape as a tool: an ordinary item, this one with
+`role=panel`, whose bytes are a small JSON manifest.
+
+```json
+{ "kind": "panel", "title": "Acme Review", "side": "left", "src": "review.html" }
+```
+
+`src` names an item **on this canvas** — the page itself, added the ordinary
+way — because an extension may not read past the canvas it is on. So the order
+is: `isocan add review.html`, then the manifest that names it. A panel whose
+`src` is a URL, or a name nothing here answers to, is refused when the manifest
+is read. Its bytes are that item's current version, so editing the page changes
+the panel and a bad one rolls back with the item's own history.
+
+**Nothing renders a panel yet** — the frame and the door it talks through are
+later phases — and `panel list` says so rather than implying otherwise. What
+exists today is the manifest, read and refused before anything is on screen.
+
+- `isocan panel list` — every panel on this canvas, where it sits, which item
+  it shows, and what that means it may do. One whose page is gone is listed as
+  **unavailable** with the reason, rather than quietly dropped.
+- `isocan panel add <file>` — prints the manifest and everything the panel may
+  do, and adds nothing until you run it again with `--yes`.
+- It is an item, so `isocan rm <item>` removes one — no verb of its own — and
+  the trash gives it back.
 
 ## Saying where a document stands
 
@@ -1864,10 +1911,6 @@ one — an agent has no inbox and no browser, so signing in is a person's
 gesture — but reading which of these surfaces has proved what is often the
 answer to "why does that machine get into this canvas".
 
-A row whose `what` is `cell (<agent>'s sheep)` is the badge an agent on the
-sheep harness holds in its cell, named on the machine whose rc made it.
-Withdrawing that agent ends it; it needs no `--kill` of its own.
-
 The row marked `(this one)` is the surface you are typing at; ending it signs
 this machine out of the home. On a machine with a home configured the list is
 the HOME's, which is the one that matters — a laptop that was lost is stopped
@@ -1893,7 +1936,7 @@ this canvas. It is not the address, and the difference is the whole point:
 
 - `isocan pass --agent <name>` prints an **address carrying a credential for an
   agent** this machine's `isocan rc` answers for — its badge holds the claim.
-  Whoever redeems it (a hosted rc: `collie new --pass`) arrives as that agent,
+  Whoever redeems it (a hosted rc, say) arrives as that agent,
   not as the person, and this machine's rc stands down for it. An agent this
   badge does not hold is refused with `not-your-actor`. Handing an agent over
   is the person's decision, like every pass.
@@ -2966,6 +3009,10 @@ Standalone personal/status defaults to this daemon; `--home <url>` chooses a hom
 Destination commands accept the global `--canvas <canvas>` and all support `--json`.
 MCP uses `read_personal_context` with required claimed `session` and link `item`,
 plus optional `canvas`, `cursor` and `limit` (pieces); ambient resources omit this layer.
+
+**Copy a source piece:** `context pin <item> --from <canvas> [--canvas <target>]`
+copies one current design or pinned piece out of a visible inherited source and
+pins the copy here, in one undoable act, with `contextSource` provenance.
 
 **Group context:** `context --in <group> [--include-excluded]` reads the complete
 current hierarchy. `context request <thread> <comment>` reads the complete
