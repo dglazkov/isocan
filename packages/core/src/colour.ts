@@ -247,10 +247,9 @@ export interface ColouredItem {
  * about — and the spelling that matters is a rule ("only a word in the spoken
  * vocabulary, never a hex"), not a constant.
  *
- * The CLI's two drawing paths deliberately do NOT call this: they are handed
- * an SVG rather than strokes, and reading a colour back out of one needs a
- * decoder that does not exist. They keep `DRAWING_PROPERTIES` and their
- * drawings stay colourless, which is honest.
+ * The CLI's two drawing paths reach it the long way round, through
+ * `inkFromSvg`: they are handed an SVG rather than strokes, so the strokes are
+ * read back out of the markup first. Same function, same rule, one spelling.
  */
 export function drawingProperties(strokes: readonly InkStroke[]): Record<string, string> {
   const inked = inkColour(strokes);

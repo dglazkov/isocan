@@ -66,7 +66,8 @@ import {
   DEFAULT_PORT,
   DRAWING_FILENAME,
   DRAWING_MIME,
-  DRAWING_PROPERTIES,
+  drawingProperties,
+  inkFromSvg,
   DRAWING_TITLE,
   COMMAND_NAME,
   IDENTITY_COLORS,
@@ -6600,7 +6601,11 @@ program
           ...opts.prop,
           ...(fileProp && !opts.prop[FILE_PROP] ? { [FILE_PROP]: fileProp } : {}),
           ...(visualFileProp ? { [VISUAL_FILE_PROP]: visualFileProp } : {}),
-          ...(opts.drawing ? DRAWING_PROPERTIES : {}),
+          /** A drawing added from the terminal is handed an SVG rather than
+           *  strokes, so the colour is read back out of the markup — see
+           *  `inkFromSvg`. Ink this canvas did not draw reads as nothing and
+           *  the drawing stays colourless, which is the honest answer. */
+          ...(opts.drawing ? drawingProperties(inkFromSvg(rawSource.toString("utf8"))) : {}),
         };
 
         // Ink knows where it goes. A drawing's viewBox IS its world box — that
@@ -8313,7 +8318,11 @@ program
         // (`positionIsMeaningful`), so it needs no flag to stay put.
         placement: { x, y },
         title: opts.title ?? DRAWING_TITLE,
-        properties: DRAWING_PROPERTIES,
+        /** The merged ink is the only thing that knows what the merge is
+         *  made of: the parts' own recorded colours would have to be weighed
+         *  by length to combine, and that weighing is exactly what
+         *  `inkColour` does once the strokes are back. */
+        properties: drawingProperties(inkFromSvg(svg)),
       });
       // Two ops, so two undos — said out loud rather than discovered. The
       // originals go to the TRASH, not the void: a merge you disagree with is

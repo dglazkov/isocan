@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { drawingViewBox,
   DRAWING_KIND,
+  inkColour,
+  inkFromSvg,
   INK_PADDING,
   drawingSvg,
   inkBounds,
@@ -130,5 +132,66 @@ describe("reading a drawing's world box back", () => {
     for (const svg of ['<svg/>', '<svg viewBox="0 0 100"/>', '<svg viewBox="a b c d"/>', '<svg viewBox="0 0 0 50"/>']) {
       expect(drawingViewBox(svg), svg).toBeNull();
     }
+  });
+});
+
+/**
+ * **The inverse, held to being an inverse.**
+ *
+ * `inkFromSvg` exists so the CLI's drawing paths — handed an SVG rather than
+ * strokes — can still record what colour the ink is. Its only real obligation
+ * is that it agrees with the writer, so the test is the round trip: whatever
+ * `inkColour` said about the strokes it must still say after they have been
+ * through `drawingSvg` and back.
+ */
+describe("ink read back out of the SVG it was written into", () => {
+  const run = (color: string, length: number, y = 0): InkStroke => ({
+    color,
+    width: 6,
+    points: [{ x: 0, y }, { x: length / 2, y }, { x: length, y }],
+  });
+  const roundTrip = (strokes: InkStroke[]) =>
+    inkFromSvg(drawingSvg(strokes, inkBounds(strokes)!));
+
+  it("agrees with the writer about the colour, which is the whole job", () => {
+    for (const hex of ["#e02424", "#1d4ed8", "#16a34a", "#000000"]) {
+      const strokes = [run(hex, 200)];
+      expect(inkColour(roundTrip(strokes))).toBe(inkColour(strokes));
+    }
+  });
+
+  it("keeps which colour covered the most ground, not merely which colours appear", () => {
+    // The ordering is the part an approximation could break: on-curve points
+    // make the polyline a little short, and it must shorten every stroke the
+    // same way or the winner could change.
+    const strokes = [run("#1d4ed8", 40), run("#e02424", 400, 50)];
+    expect(inkColour(strokes)).toBe("red");
+    expect(inkColour(roundTrip(strokes))).toBe("red");
+  });
+
+  it("reads a dot as a dot, so a canvas of dots is not silent", () => {
+    const dot: InkStroke = { color: "#e02424", width: 8, points: [{ x: 5, y: 5 }] };
+    const back = roundTrip([dot]);
+    expect(back[0]!.points).toHaveLength(1);
+    expect(inkColour(back)).toBe("red");
+  });
+
+  it("carries the stroke width back, because a dot is measured by it", () => {
+    expect(roundTrip([run("#e02424", 200)])[0]!.width).toBe(6);
+  });
+
+  it("says nothing about an SVG this canvas did not draw", () => {
+    // A guessed colour is worse than none: an <svg> of rects and text is not
+    // ink, and must not come back as a confident word.
+    expect(inkFromSvg('<svg><rect width="10" height="10" fill="#e02424"/></svg>')).toEqual([]);
+    expect(inkFromSvg("not markup at all")).toEqual([]);
+    expect(inkColour(inkFromSvg('<svg><path d="M 0 0 L 9 9"/></svg>'))).toBeNull();
+  });
+
+  it("stops where understanding stops rather than reading past a command it does not know", () => {
+    // An arc's numbers are flags and radii, not coordinates; reading them as
+    // points would invent a stroke that covers the canvas.
+    const read = inkFromSvg('<svg><path d="M 0 0 L 10 0 A 5 5 0 0 1 90 90" stroke="#e02424" stroke-width="2"/></svg>');
+    expect(read[0]!.points).toEqual([{ x: 0, y: 0 }, { x: 10, y: 0 }]);
   });
 });

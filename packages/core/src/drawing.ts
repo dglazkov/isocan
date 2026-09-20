@@ -37,12 +37,16 @@ export const DRAWING_PROPERTIES: Record<string, string> = { kind: DRAWING_KIND }
  * caller could ever reach it: "move the red one" was unresolvable because red
  * is not a paper and ink was never read.
  *
- * Writing the word at creation is the cheap half of the mechanism the voice
- * research note called for. It costs one property, needs no decoder, and is
- * read by the browser and the standing harness through the same field, which
- * is what stops them disagreeing about what "red" means. The expensive half —
- * deriving the colour of drawings made BEFORE this, and of a picture's face —
- * still needs a decoder, and this deliberately does not pretend to it.
+ * Writing the word at creation is the mechanism the voice research note asked
+ * for. Every path that makes a drawing fills it: the Pen and `drawing_add`
+ * from the strokes in hand, the CLI's add and merge by reading them back with
+ * `inkFromSvg`. One field, read by the browser and the standing harness alike,
+ * which is what stops them disagreeing about what "red" means.
+ *
+ * Two gaps remain and neither is pretended away. Drawings made BEFORE this
+ * carry no word, because nothing rewrites old items. And **a picture's face**
+ * — a photograph, a screenshot, a card — is pixels rather than paths, so it
+ * needs a raster decoder this does not have and stays colourless.
  *
  * Unlike `paper` and `tint`, which are restricted to the five paper colours,
  * this holds any word in the spoken vocabulary: a pen draws in red, and red is
@@ -161,6 +165,76 @@ export function inkPath(points: InkPoint[]): string {
   }
   const last = points[points.length - 1]!;
   return `${d} L ${r(last.x)} ${r(last.y)}`;
+}
+
+/**
+ * **Ink read back out of the SVG it was written into** — the inverse of
+ * `drawingSvg`, and deliberately only that.
+ *
+ * A drawing's strokes stop existing the moment it is made: they become an SVG
+ * blob, and `Item` has no colour field. `drawingProperties` closes that for
+ * the two callers that still HAVE the strokes — the Pen and `drawing_add` —
+ * but the CLI's drawing paths are handed an SVG and had nothing to record, so
+ * every drawing added or merged from the terminal came out colourless.
+ *
+ * This is not an SVG renderer and must not become one. It round-trips the
+ * closed format `drawingSvg` writes: `<path>` elements with a literal hex
+ * `stroke`, a `stroke-width`, and a `d` of `M`/`L`/`Q` in world coordinates.
+ * Anything else yields the strokes it could read and no more — a drawing
+ * somebody else's tool made stays colourless, which is the honest answer
+ * rather than a guess.
+ *
+ * **On-curve points only.** A `Q` contributes its endpoint and not its
+ * control, so the polyline here is a little shorter than the curve it stands
+ * for. That is fine for the only thing this feeds: `inkColour` compares
+ * per-colour totals to pick a winner, and the approximation is monotonic, so
+ * it changes no comparison it could decide.
+ */
+export function inkFromSvg(svg: string): InkStroke[] {
+  const strokes: InkStroke[] = [];
+  for (const [element] of svg.matchAll(/<path\b[^>]*\/>/g)) {
+    // `stroke="` cannot match `stroke-width="`, which is why neither needs a
+    // negative lookahead.
+    const colour = /\bstroke="([^"]*)"/.exec(element)?.[1];
+    if (colour === undefined) continue;
+    const width = Number(/\bstroke-width="([^"]*)"/.exec(element)?.[1] ?? "1");
+    const d = /\bd="([^"]*)"/.exec(element)?.[1];
+    if (d === undefined) continue;
+    const points = inkPoints(d);
+    if (points.length === 0) continue;
+    strokes.push({ points, color: colour, width: Number.isFinite(width) ? width : 1 });
+  }
+  return strokes;
+}
+
+/** The anchor points of one `d`, or none if it is not a shape this wrote.
+ *  The single-point form `M x y l 0.01 0` is a DOT and comes back as one
+ *  point, because `inkColour` measures a dot by its width rather than by a
+ *  length of nearly zero. */
+function inkPoints(d: string): InkPoint[] {
+  if (/^\s*M\s+(-?[\d.]+)\s+(-?[\d.]+)\s+l\s+[\d.]+\s+[\d.]+\s*$/.test(d)) {
+    const dot = /^\s*M\s+(-?[\d.]+)\s+(-?[\d.]+)/.exec(d)!;
+    return [{ x: Number(dot[1]), y: Number(dot[2]) }];
+  }
+  const points: InkPoint[] = [];
+  const tokens = d.match(/[A-Za-z]|-?\d*\.?\d+/g) ?? [];
+  let i = 0;
+  const take = (): InkPoint | null => {
+    const x = Number(tokens[i++]);
+    const y = Number(tokens[i++]);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  };
+  while (i < tokens.length) {
+    const command = tokens[i++]!;
+    // Unknown command: stop where understanding stopped rather than read the
+    // numbers after it as coordinates they are not.
+    if (command === "Q") i += 2;
+    else if (command !== "M" && command !== "L") return points;
+    const point = take();
+    if (!point) return points;
+    points.push(point);
+  }
+  return points;
 }
 
 /** Only a literal hex color reaches the markup — the one value in this file
