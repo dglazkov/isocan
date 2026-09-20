@@ -799,9 +799,11 @@ export const SNAPSHOT_ITEM_CAP = 60;
  * ## Colour, and the sentence that has to go with it (#337)
  *
  * A row carries a colour WHEN THE CANVAS KNOWS ONE and says nothing when it
- * does not. `Item` has no colour field, so "knows one" means a note's paper,
- * an area's tint, or a drawing's ink — `itemColour` in core is the whole of
- * it, and it answers `null` rather than guessing from a title.
+ * does not. `Item` has no colour field, so "knows one" means a note's paper or
+ * an area's tint — `itemColour` in core is the whole of it, and it answers
+ * `null` rather than guessing from a title. (It can also read a drawing's ink,
+ * and nothing here supplies any: see the note at the row builder for why, and
+ * do not add the claim back to the header without adding the data.)
  *
  * Which makes the header sentence load-bearing rather than decoration. A
  * model shown `red` on one row and nothing on the others will conclude the
@@ -830,6 +832,14 @@ export function canvasSnapshotText(
   const shown = ordered.slice(0, Math.max(0, cap));
   const rest = ordered.length - shown.length;
   const row = (i: SnapshotItem) => {
+    // `ink` is deliberately NOT supplied, and the header does not claim it.
+    // `inkColour` is real and tested, but a drawing's strokes live in a blob
+    // behind a hash that neither surface holds when this is built: fetching
+    // them would make the browser's builder async where the harness's already
+    // is, and a projection that is one shape here and another there is the
+    // fork this function exists to prevent — the same argument that stopped
+    // phase 1 ordering by viewport. So today only a note's paper and an
+    // area's tint produce a word, and the model is told exactly that.
     const colour = itemColour({ properties: i.properties });
     return (
       `- ${JSON.stringify(i.title ?? "untitled")} [${i.id}] ${i.kind} ` +
@@ -846,7 +856,7 @@ export function canvasSnapshotText(
   return [
     "Current canvas state (ids are authoritative — echo them in tool calls).",
     "Geometry is world pixels: x grows right, y grows down, and (x,y) is an item's top-left corner.",
-    "A colour word appears on a row only where the canvas KNOWS the colour (a note's paper, an area's tint, a drawing's ink); " +
+    "A colour word appears on a row only where the canvas KNOWS the colour (a note's paper, an area's tint); " +
       "no colour word means the colour is UNKNOWN to the canvas, never that the item is not that colour — most items look like " +
       "something the data does not record, so ask rather than ruling them out.",
     heading,

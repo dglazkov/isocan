@@ -215,8 +215,8 @@ core already has.
 > **Built 20 Sep 2026 — colour, and "next to".** `core/colour.ts` holds a
 > closed spoken vocabulary (eleven words: CSS's 148 include "darkslategrey",
 > which nobody says out loud) and `itemColour`, which answers only from data
-> that actually means colour — a drawing's dominant ink by total stroke
-> LENGTH, a note's paper, an area's tint — and **never from a title**, because
+> that actually means colour — a note's paper, an area's tint — and **never
+> from a title**, because
 > "Red team retro" is not a red item. A row carries its colour when known and
 > the header says that an absent word means *unknown*, never *not that
 > colour*: without that sentence a model infers a negative from silence, which
@@ -225,6 +225,17 @@ core already has.
 > centring the cross axis and deliberately NOT dodging an occupied spot —
 > landing somewhere else because the place was busy is how a spoken command
 > stops being trusted.
+>
+> **Corrected 20 Sep, having first claimed more than shipped.** The line above
+> originally listed *a drawing's dominant ink* as a third source, and the
+> model-facing header said so too. It does not ship: `inkColour` is real and
+> tested, but no caller supplies `ink`, because a drawing's strokes live in a
+> blob behind a hash that neither surface holds when the projection is built —
+> fetching them would make the browser's builder async where the harness's
+> already is, which is the same fork that stopped phase 1 ordering by viewport.
+> The header now names only what it reads. **Telling a model a source was
+> consulted when it was not is the worst place to overstate**, and this was
+> caught by the build reporting it rather than by any test.
 >
 > **A picture's face is still not covered, and that is the honest gap.** `Item`
 > has no colour field; a stroke's is hex and computable, a card's is pixels

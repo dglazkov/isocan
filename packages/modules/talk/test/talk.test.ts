@@ -109,8 +109,8 @@ describe("the session is handed the canvas it is standing on", () => {
     expect(text).toBe(
       "Current canvas state (ids are authoritative — echo them in tool calls).\n" +
         "Geometry is world pixels: x grows right, y grows down, and (x,y) is an item's top-left corner.\n" +
-        "A colour word appears on a row only where the canvas KNOWS the colour (a note's paper, an area's tint, " +
-        "a drawing's ink); no colour word means the colour is UNKNOWN to the canvas, never that the item is not " +
+        "A colour word appears on a row only where the canvas KNOWS the colour (a note's paper, an area's tint); " +
+        "no colour word means the colour is UNKNOWN to the canvas, never that the item is not " +
         "that colour — most items look like something the data does not record, so ask rather than ruling them out.\n" +
         "Items (1, in reading order):\n" +
         '- "Checkout screen" [itm_1] image 320x240 at (100,200)\n' +
@@ -176,7 +176,7 @@ describe("the session is handed the canvas it is standing on", () => {
  * **Colour, and the sentence that keeps an absence honest** (#337, phase 2).
  *
  * `Item` has no colour field, so a row can only say "red" where the data
- * actually does: a note's paper, an area's tint, a drawing's ink. Which makes
+ * actually does: a note's paper, an area's tint. Which makes
  * the missing rows the dangerous ones — a model shown one colour and eleven
  * blanks will conclude the eleven are not that colour, unless it is told
  * otherwise. So the header tells it, and this holds the header there.
