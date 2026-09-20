@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { startDaemon, type Daemon } from "@isocan/server/daemon";
 import { harnessVars } from "@isocan/api";
 
 /**

@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readPanelExtension, type CanvasContents } from "@isocan/core";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { startDaemon, type Daemon } from "@isocan/server/daemon";
 import { harnessVars } from "@isocan/api";
 
 /**
