@@ -22,11 +22,9 @@ import {
   BROWSER_MIME,
   DEFAULT_COMMAND_CATALOGUE,
   DRAWING_MIME,
-  DRAWING_PROPERTIES,
+  drawingProperties,
   drawingSvg,
-  INK_PROP,
   inkBounds,
-  inkColour,
   isBesideSide,
   itemColour,
   normalizeSiteUrl,
@@ -1202,10 +1200,10 @@ export function planForCall(name: string, args: Record<string, unknown>): { plan
       const strokes: InkStroke[] = [{ color, width: strokeWidth, points: rawPoints }];
       const box = inkBounds(strokes) ?? { minX: 100, minY: 100, maxX: 300, maxY: 300 };
       const svg = drawingSvg(strokes, box);
-      /** The word for this ink, recorded now for the reason `INK_PROP` gives:
+      /** The colour is recorded now for the reason `drawingProperties` gives:
        *  the strokes are about to become an SVG blob and an `Item` has no
        *  colour field, so a later "move the red one" has nothing else to read. */
-      const inked = inkColour(strokes);
+      const born = drawingProperties(strokes);
       const width = Math.max(80, box.maxX - box.minX + 16);
       const height = Math.max(80, box.maxY - box.minY + 16);
       return {
@@ -1216,7 +1214,7 @@ export function planForCall(name: string, args: Record<string, unknown>): { plan
               title: String(args.title ?? "Sketch"),
               content: svg,
               mime: DRAWING_MIME,
-              properties: inked ? { ...DRAWING_PROPERTIES, [INK_PROP]: inked } : DRAWING_PROPERTIES,
+              properties: born,
               width,
               height,
               x: box.minX - 8,

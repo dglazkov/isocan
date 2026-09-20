@@ -3,13 +3,11 @@ import {
   BROWSER_MIME,
   DRAWING_FILENAME,
   DRAWING_MIME,
-  DRAWING_PROPERTIES,
   DRAWING_TITLE,
-  INK_PROP,
   annotationProperties,
   drawingSvg,
+  drawingProperties,
   inkBounds,
-  inkColour,
   newGroupId,
   newItemId,
   newVersionId,
@@ -383,13 +381,10 @@ export async function addDrawing(
     maxY: Math.ceil(exact.maxY),
   };
   const svg = drawingSvg(strokes, bounds);
-  /** The word for this ink, written down now because nothing downstream can
-   *  work it out: the strokes are about to become an SVG blob, and an `Item`
-   *  has no colour field. See `INK_PROP`. */
-  const inked = inkColour(strokes);
-  const drawingProperties = inked
-    ? { ...DRAWING_PROPERTIES, [INK_PROP]: inked }
-    : DRAWING_PROPERTIES;
+  /** The colour goes in now because nothing downstream can work it out: the
+   *  strokes are about to become an SVG blob and an `Item` has no colour
+   *  field. One spelling, shared with the live session's `drawing_add`. */
+  const born = drawingProperties(strokes);
   const blob = new Blob([svg], { type: DRAWING_MIME });
   const upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);
   const itemId = newItemId();
@@ -413,7 +408,7 @@ export async function addDrawing(
     title: DRAWING_TITLE,
     properties: target
       ? {
-          ...drawingProperties,
+          ...born,
           ...annotationProperties(
             target.id,
             regionOf(
@@ -422,7 +417,7 @@ export async function addDrawing(
             ),
           ),
         }
-      : drawingProperties,
+      : born,
   });
   return itemId;
 }

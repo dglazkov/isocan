@@ -35,7 +35,7 @@ import { parseHex } from "./contrast.ts";
 import type { InkStroke } from "./drawing.ts";
 import { PAPER_PROP, isPaper } from "./textnode.ts";
 import { AREA_TINT_PROP } from "./area.ts";
-import { INK_PROP } from "./drawing.ts";
+import { DRAWING_PROPERTIES, INK_PROP } from "./drawing.ts";
 
 /**
  * **The whole vocabulary.** Every colour word this canvas will ever put in
@@ -236,18 +236,45 @@ export interface ColouredItem {
 }
 
 /**
+ * **The properties a new drawing is born with, including the colour it was
+ * drawn in** — the writing half of `INK_PROP`, kept beside the reading half
+ * on purpose.
+ *
+ * `itemColour` below can only answer "red" because something wrote the word
+ * down while it still had the strokes. Two callers do: the browser's Pen and
+ * the live session's `drawing_add`. They had the same three lines each, which
+ * is the one-string-two-spellings bug the live provider's own header warns
+ * about — and the spelling that matters is a rule ("only a word in the spoken
+ * vocabulary, never a hex"), not a constant.
+ *
+ * The CLI's two drawing paths deliberately do NOT call this: they are handed
+ * an SVG rather than strokes, and reading a colour back out of one needs a
+ * decoder that does not exist. They keep `DRAWING_PROPERTIES` and their
+ * drawings stay colourless, which is honest.
+ */
+export function drawingProperties(strokes: readonly InkStroke[]): Record<string, string> {
+  const inked = inkColour(strokes);
+  return inked ? { ...DRAWING_PROPERTIES, [INK_PROP]: inked } : { ...DRAWING_PROPERTIES };
+}
+
+/**
  * **An item's colour, ONLY when the data says so.**
  *
- * Three sources, in the order of how directly they mean "this item is that
+ * Four sources, in the order of how directly they mean "this item is that
  * colour":
  *
- * 1. **Ink**, when the caller has it — a drawing's dominant stroke colour is
- *    a computable fact about the picture itself.
- * 2. **A note's paper** (`textnode.ts`) — `PAPERS` is already a closed set of
+ * 1. **Ink strokes**, when the caller has them — a drawing's dominant stroke
+ *    colour is a computable fact about the picture itself. Reachable only by
+ *    something that has already decoded an SVG, which is why 2 exists.
+ * 2. **The ink colour a drawing recorded when it was made** (`INK_PROP`,
+ *    written by `drawingProperties` above) — the same fact, put somewhere an
+ *    ordinary `Item` can carry it. This is the ONLY route to "red": red is
+ *    not a paper.
+ * 3. **A note's paper** (`textnode.ts`) — `PAPERS` is already a closed set of
  *    spoken words, and it is deliberately a background that *means nothing*,
  *    which is exactly what makes it safe to read as a colour rather than as a
  *    status.
- * 3. **An area's tint** (`area.ts`) — the same paper palette, reused there on
+ * 4. **An area's tint** (`area.ts`) — the same paper palette, reused there on
  *    purpose, so it costs nothing to honour here too.
  *
  * And otherwise **`null`. Never from the title** — "Red team retro" is not a
