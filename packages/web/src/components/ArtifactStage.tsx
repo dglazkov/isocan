@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import type { Backing } from "@isocan/core";
-import { automaticCanvasTarget, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, sourceFaceOf, visualFaceOf } from "@isocan/core";
+import { automaticCanvasTarget, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, sourceFaceOf, visualFaceOf, shortcut } from "@isocan/core";
 import { homeAnswered, writeItem } from "../lib/api.ts";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
@@ -420,7 +420,7 @@ function OrdinaryArtifactStage({
                     {showDraft ? "Draft" : "Saved"}
                     <i>
                       {showDraft
-                        ? " — renders as you type; ⌘S makes it a version"
+                        ? ` — renders as you type; ${shortcut("S")} makes it a version`
                         : ` — v${item.versions.length}`}
                     </i>
                   </span>

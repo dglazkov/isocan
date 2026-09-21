@@ -127,7 +127,10 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
     file: "components/ZoomControls.tsx",
     // The inner `!undoHidden` is chrome you can turn off — a person's own
     // hiding, inside the reader's gate, never instead of it.
-    gate: "{canEdit && (\n        <>\n          {!undoHidden && (\n            <button\n              className=\"btn icon\"\n              title=\"Undo (⌘Z)\"",
+    // The anchor deliberately stops before the label. This gate is about
+    // `canEdit`, and pinning it to a tooltip's wording made a capability
+    // check fail the day the modifier key learned to say Ctrl on Windows.
+    gate: "{canEdit && (\n        <>\n          {!undoHidden && (\n            <button\n              className=\"btn icon\"",
   },
   {
     what: "the keyboard's writes — delete, paste, undo, nudge, the tool letters, ⇧C, ⇧F, F2",

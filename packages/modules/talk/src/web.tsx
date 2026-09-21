@@ -15,6 +15,7 @@ import {
   type Operation,
   type OverlayFacts,
   type WebHost,
+  modifierClick,
   type WebModule,
 } from "@isocan/core";
 import { VoiceBeam } from "voice-glow";
@@ -54,6 +55,26 @@ const METER_COUNT = 5;
 const METER_INTERVAL_MS = 60;
 
 type SessionState = "idle" | "live" | "refused";
+
+/**
+ * **The meter's own rules, shared by every surface that draws one.**
+ *
+ * They lived inside the config dialog's `<style>` block, so the composer's
+ * meters were unstyled spans with no width or height — invisible, which is
+ * why the level appeared not to move at all while a session ran. Third time
+ * today that a rule was scoped to a component that was not the one rendering
+ * it; a stylesheet a component owns is only present while that component is.
+ */
+const METER_CSS = `
+  .talk-meter { display: flex; align-items: center; gap: 3px; height: 24px; }
+  .talk-meter span {
+    width: 4px; border-radius: 2px; background: var(--line);
+    height: 4px; transition: height 80ms linear;
+  }
+  /* Taller and brighter the louder it is — five bars, so a voice reads as a
+     shape rather than as on/off. */
+  .talk-meter[data-live="1"] span[data-on="1"] { background: var(--accent); height: 20px; }
+`;
 
 /** One line of the conversation, for the caption the person reads. */
 interface Line {
@@ -884,12 +905,7 @@ function ConfigDialog(facts: DialogFacts) {
           70% { box-shadow: 0 0 0 16px rgba(60, 140, 255, 0); }
           100% { box-shadow: 0 0 0 0 rgba(60, 140, 255, 0); }
         }
-        .talk-meter { display: flex; align-items: center; gap: 3px; height: 24px; }
-        .talk-meter span {
-          width: 4px; border-radius: 2px; background: var(--line);
-          height: 4px; transition: height 80ms linear;
-        }
-        .talk-meter[data-live="1"] span[data-on="1"] { background: #3c8cff; height: 20px; }
+        ${METER_CSS}
         .talk-field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
         .talk-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px;
           max-height: 40vh; overflow: auto; font-size: 13px; }
@@ -907,6 +923,7 @@ function ConfigDialog(facts: DialogFacts) {
  * no width so a 294px row carried a 32px glow.
  */
 const COMPOSER_CSS = `
+  ${METER_CSS}
       .talk-composer-anchor { position: relative; display: flex; align-items: center; }
       /* **The key panel IS the row**, not a popover over it. As a popover it
          was 300px inside a 250px Chat panel and clipped whichever edge it was
@@ -932,8 +949,19 @@ const COMPOSER_CSS = `
          submits. Sized to sit with the composer's own buttons rather than to
          be noticed: a mic that outshouts Send is a mic people press by
          mistake. */
-      .talk-composer-mic {
-        width: 28px; height: 28px; border-radius: 50%;
+      /* A tag-qualified selector, so this ties with the shell's own
+         .phone-face button on specificity and wins on source order — the
+         module's stylesheet is injected after the app's. That leaves the
+         44px touch target the phone rule is right to enforce, while keeping
+         the shape a CIRCLE there too instead of a rounded square.
+
+         Zero padding is the fix for the icon sitting off-centre: a rule
+         further up gives panel buttons 1px 6px, which on a 28px border-box
+         leaves a 16px content box for an 18px glyph — it overflows, and grid
+         centring resolves the overflow to one side. Measured: 7px left, 3px
+         right. */
+      button.talk-composer-mic {
+        width: 28px; height: 28px; border-radius: 50%; padding: 0;
         display: grid; place-items: center;
         border: 1px solid var(--line); background: var(--card);
         color: var(--ink); cursor: pointer; flex: none;
@@ -1163,12 +1191,19 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
            from the composer's own bottom edge — which is the effect this is,
            rather than a decoration sitting near it.
 
-           `pill` rather than `default`: the preset names are about SHAPE, and
-           default is tuned for a ~350px chat input while this bar is ~294x32.
-           Looked at both — default drew a wash too faint to read at this
-           height; pill pulls the glow in and shallows the bend, which is what
-           a short row needs. */
-        type="pill"
+           default rather than pill. It was pill while the wrapped thing was a
+           ~294x32 bar and that was right then — but pill carries scale 0.45,
+           so the whole effect ran at 45% size, which is why it read as a
+           faint wash once the transcript made the block tall. default is
+           tuned for a chat input or card, which is now what this is. */
+        type="default"
+        /* Rise and spread up, resting presence DOWN. The ask was for it to
+           bump around more, and what reads as movement is the CONTRAST
+           between quiet and loud rather than the absolute size — a glow that
+           idles bright has nowhere to go when a voice arrives. */
+        reach={2.2}
+        spread={1.4}
+        idle={0.1}
         /* A getter, not a number: the level changes many times a second and
            the package samples this once per frame, so the glow is smooth
            without React re-rendering the row 60 times a second. */
@@ -1268,7 +1303,7 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
           }
           void session.start();
         }}
-        title="Talk · ctrl-click to configure"
+        title={`Talk · ${modifierClick()} to configure`}
         aria-label="Talk to the canvas"
       >
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">

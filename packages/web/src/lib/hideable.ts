@@ -1,4 +1,5 @@
 import { useUiStore } from "../stores/uiStore.ts";
+import { shortcut } from "@isocan/core";
 
 /**
  * **Chrome you can turn off** (`docs/research/2026-09-02-chrome-you-can-turn-off.md`).
@@ -39,14 +40,14 @@ export const HIDEABLE: readonly HideableEntry[] = [
     name: "Undo and redo",
     where: "the zoom cluster",
     shortcut: "Undo and redo",
-    stillReachable: "⌘Z still undoes; Settings brings the buttons back",
+    stillReachable: `${shortcut("Z")} still undoes; Settings brings the buttons back`,
   },
   {
     id: "rail.history",
     name: "History",
     where: "the rail",
     command: "open-history",
-    stillReachable: "⌘K “Open History” still opens it; Settings brings the button back",
+    stillReachable: `${shortcut("K")} “Open History” still opens it; Settings brings the button back`,
   },
   /**
    * **The top fade**: a wash of the page's ground under the top controls, so
@@ -61,7 +62,7 @@ export const HIDEABLE: readonly HideableEntry[] = [
     name: "Top fade",
     where: "the top edge",
     command: "top-fade",
-    stillReachable: "⌘K “Top fade” brings it back, and so does Settings",
+    stillReachable: `${shortcut("K")} “Top fade” brings it back, and so does Settings`,
   },
 ];
 
@@ -108,7 +109,7 @@ export const DISPLAY_SWITCHES: readonly DisplaySwitch[] = [
      */
     id: "canvas.minimap",
     name: "Minimap",
-    what: "the small map of the canvas, bottom right · yours only, and ⌘K still toggles it",
+    what: `the small map of the canvas, bottom right · yours only, and ${shortcut("K")} still toggles it`,
   },
 ];
 

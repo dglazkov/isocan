@@ -11,7 +11,7 @@ import {
   extractMentions,
   newCommentId,
   newThreadId,
-  workedFor, itemThread, atCorner, faceMark} from "@isocan/core";
+  workedFor, itemThread, atCorner, faceMark, shortcut } from "@isocan/core";
 
 import { sendEchoed, sendEchoedResult, useCanvasStore } from "../stores/canvasStore.ts";
 import { type PendingComment, useUiStore } from "../stores/uiStore.ts";
@@ -473,7 +473,7 @@ export function ThreadPopover({
             colours rather than two shades of the same one. */}
         <MessageContextPreview context={context} />
         {sending.error && <p role="alert">{sending.error}</p>}
-        <button className="btn primary" type="submit" title="Reply (⌘⏎)" disabled={!reply.trim() || sending.disabled}>
+        <button className="btn primary" type="submit" title={`Reply (${shortcut("⏎")})`} disabled={!reply.trim() || sending.disabled}>
           ↑
         </button>
       </form>
@@ -599,7 +599,7 @@ export function ComposePopover({
           >
             Cancel
           </button>
-          <button className="btn primary" type="submit" title="Comment (⌘⏎)" disabled={!body.trim() || sending.disabled}>
+          <button className="btn primary" type="submit" title={`Comment (${shortcut("⏎")})`} disabled={!body.trim() || sending.disabled}>
             Comment
           </button>
         </div>

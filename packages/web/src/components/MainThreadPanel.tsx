@@ -17,7 +17,7 @@ const ModuleComposerControls = lazy(() =>
 const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
 const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
-import { benchJoinAsk, commentReferencedItemIds, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
+import { benchJoinAsk, commentReferencedItemIds, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor, shortcut } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -776,7 +776,7 @@ function Panel({
             />
           </Suspense>
         )}
-        {composerHolder === null && <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim() || sending.disabled}>
+        {composerHolder === null && <button className="btn primary" type="submit" title={`Send (${shortcut("⏎")})`} disabled={!draft.trim() || sending.disabled}>
           ↑
         </button>}
       </form>}

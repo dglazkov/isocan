@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { itemPath } from "@isocan/core";
+import { itemPath, shortcut } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { countToward, findNextItem, type Direction } from "../lib/spatialnav.ts";
@@ -58,10 +58,10 @@ import { ArrowGlyph } from "./Glyphs.tsx";
  * canvas around them.
  */
 const LAYOUT: Array<{ dir: Direction; cell: string; key: string; where: string }> = [
-  { dir: "ArrowLeft", cell: "left", key: "⌘←", where: "to the left" },
-  { dir: "ArrowUp", cell: "up", key: "⌘↑", where: "up there" },
-  { dir: "ArrowDown", cell: "down", key: "⌘↓", where: "down here" },
-  { dir: "ArrowRight", cell: "right", key: "⌘→", where: "to the right" },
+  { dir: "ArrowLeft", cell: "left", key: shortcut("←"), where: "to the left" },
+  { dir: "ArrowUp", cell: "up", key: shortcut("↑"), where: "up there" },
+  { dir: "ArrowDown", cell: "down", key: shortcut("↓"), where: "down here" },
+  { dir: "ArrowRight", cell: "right", key: shortcut("→"), where: "to the right" },
 ];
 
 /**

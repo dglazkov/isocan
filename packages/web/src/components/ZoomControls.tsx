@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cmdKey, shortcut } from "@isocan/core";
 import type { Actor } from "@isocan/core";
 import { OfflineError, redo, undo } from "../lib/api.ts";
 import { setNotice } from "../stores/canvasStore.ts";
@@ -37,8 +38,8 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
   const menuRef = useDismissOnOutside<HTMLDivElement>(menuOpen, () => setMenuOpen(false));
 
   const rows: { label: string; keys: string; run: () => void; disabled?: boolean }[] = [
-    { label: "Zoom in", keys: "⌘ +", run: () => zoomBy(1.25) },
-    { label: "Zoom out", keys: "⌘ −", run: () => zoomBy(1 / 1.25) },
+    { label: "Zoom in", keys: `${cmdKey()} +`, run: () => zoomBy(1.25) },
+    { label: "Zoom out", keys: `${cmdKey()} −`, run: () => zoomBy(1 / 1.25) },
     { label: "Zoom to 100%", keys: "⇧ 0", run: zoomTo100 },
     { label: "Zoom to Fit", keys: "⇧ 1", run: zoomToFit },
     { label: "Zoom to Selection", keys: "⇧ 2", run: zoomToSelection, disabled: !hasSelection },
@@ -61,7 +62,7 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
           {!undoHidden && (
             <button
               className="btn icon"
-              title="Undo (⌘Z)"
+              title={`Undo (${shortcut("Z")})`}
               onClick={() => void undo(canvasId, actor).catch(sayWhy)}
               onContextMenu={(e) => hideMenu(e, "zoom.undo")}
             >
@@ -71,7 +72,7 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
           {!undoHidden && (
             <button
               className="btn icon"
-              title="Redo (⇧⌘Z)"
+              title={`Redo (${shortcut("Z", { shift: true })})`}
               onClick={() => void redo(canvasId, actor).catch(sayWhy)}
               onContextMenu={(e) => hideMenu(e, "zoom.undo")}
             >

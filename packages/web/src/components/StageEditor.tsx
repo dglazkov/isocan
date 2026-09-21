@@ -1,7 +1,7 @@
 import { creationDestination } from "../lib/groupplacement.ts";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor, AuditRange, CanvasSnapshotResponse, Item, NewVersion } from "@isocan/core";
-import { newVersionId, sourceFaceOf } from "@isocan/core";
+import { newVersionId, sourceFaceOf, shortcut } from "@isocan/core";
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
@@ -368,7 +368,7 @@ export function StageEditor({
               className="stage-editor-btn primary"
               onClick={() => void save()}
               disabled={saving || repairing || !loaded}
-              title="Save as a new version (⌘S) — it stacks; S fans the history"
+              title={`Save as a new version (${shortcut("S")}) — it stacks; S fans the history`}
             >
               {pendingSave ? "Awaiting confirmation…" : saving ? "Saving…" : "Save version"}
             </button>
