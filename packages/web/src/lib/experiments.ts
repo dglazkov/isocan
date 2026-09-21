@@ -52,8 +52,8 @@ export const EXPERIMENTS: readonly Experiment[] = [
   },
   {
     id: "modules.talk",
-    name: "Talk to the canvas",
-    what: "A voice dialog on the canvas: a Gemini Live session from this browser with your own key. The dialogs slot is proposed and the tool wiring covers the fast set — say what it cannot do.",
+    name: "Voice",
+    what: "A mic in the Chat composer that flips it into a live conversation, and a floating one for when the Chat is closed — a Gemini Live session from this browser with your own key. The composer and dialogs slots are proposed, undo is not carried here, and the tool wiring covers the fast set.",
   },
   {
     id: "design.partner",

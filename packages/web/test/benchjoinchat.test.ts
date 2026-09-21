@@ -161,7 +161,10 @@ describe("the composer is wired to it", () => {
   it("carries the line out instead of posting it, and shows the refusal to the asker", () => {
     expect(panel).toContain("benchJoinAsk(body, bench.mentions)");
     expect(panel).toContain("joinFromChat(canvasId, actor, ask, bench)");
-    expect(panel).toContain("{refused && <p role=\"alert\">{refused}</p>}");
+    // Conditioned on the composer being the shell's own since the composer
+    // slot landed (20 Sep): while a module holds the row there is no composer
+    // to show a refusal under, and `refused` is still set when it comes back.
+    expect(panel).toContain("refused && <p role=\"alert\">{refused}</p>");
   });
 
   it("adds no op — joining from a sentence is joining", () => {

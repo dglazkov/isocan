@@ -3,6 +3,7 @@ import {
   moduleSlug,
   registerModule,
   unregisterModule,
+  type ComposerFacts,
   type DialogFacts,
   type InspectorFacts,
   type ModuleInspector,
@@ -51,7 +52,8 @@ export type ShellModule = WebModule<
   ComponentType<PageFacts>,
   ComponentType<OverlayFacts>,
   ComponentType<DialogFacts>,
-  ComponentType<WorkspaceFacts<ReactNode>>
+  ComponentType<WorkspaceFacts<ReactNode>>,
+  ComponentType<ComposerFacts>
 >;
 
 const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb];

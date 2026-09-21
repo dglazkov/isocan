@@ -10,6 +10,7 @@ import {
   defaultSize,
   itemKind,
   type CanvasContents,
+  type ComposerFacts,
   type DialogFacts,
   type Operation,
   type OverlayFacts,
@@ -653,6 +654,64 @@ function CaptionToast({ lines }: { lines: Line[] }) {
   );
 }
 
+/**
+ * **The key panel, in one spelling.** Both doors open it — the floating mic
+ * and the composer's — and a second copy would be the one-string-two-spellings
+ * bug wearing a dialog. It closes itself by calling back rather than owning
+ * the flag, because which door opened it is the caller's business.
+ */
+function ConfigPop({
+  session,
+  onClose,
+  placement = "float",
+}: {
+  session: ReturnType<typeof useTalkSession>;
+  onClose: () => void;
+  /** **Where it is being opened from**, because the two doors are in opposite
+   *  corners. The floating mic's panel is pinned to the viewport; the
+   *  composer's must sit above the composer, and a `fixed` panel does not
+   *  even land there — the Chat panel's transform makes it the containing
+   *  block, which is how the first draft of this ended up half off-screen. */
+  placement?: "float" | "composer";
+}) {
+  return (
+      <div className={`talk-pop talk-pop-${placement}`} role="dialog" aria-label="Configure voice">
+        <button type="button" className="talk-pop-close" onClick={() => onClose()} aria-label="Close">
+          ×
+        </button>
+        <label className="talk-field">
+          Gemini API key
+          <input
+            type="password"
+            value={session.key}
+            onChange={(e) => session.setKey(e.target.value)}
+            placeholder="stored in this browser only"
+            autoComplete="off"
+          />
+        </label>
+        <label className="talk-field">
+          Model
+          <input value={session.model} onChange={(e) => session.setModel(e.target.value)} autoComplete="off" />
+        </label>
+        <p className="talk-note">Saved in this browser only — never on the canvas, never in the daemon.</p>
+        <button
+          type="button"
+          className="talk-save"
+          onClick={() => {
+            localStorage.setItem(KEY_SHELF, session.key.trim());
+            localStorage.setItem(MODEL_SHELF, session.model.trim());
+            onClose();
+            // Saving is the gesture: the session starts on the same press.
+            void session.start();
+          }}
+          disabled={!session.key.trim()}
+        >
+          Save and start
+        </button>
+      </div>
+  );
+}
+
 /** The floating mic: one press starts (or stops), and the feedback — the
  *  pulse, the bars, the last words — floats with it and is gone when the
  *  turn is. The config panel only opens when there is no key yet; with a
@@ -708,42 +767,7 @@ function MicOverlay({ canvasId, canvas, host, groupMode }: OverlayFacts) {
           />
         </svg>
       </button>
-      {configOpen && (
-        <div className="talk-pop" role="dialog" aria-label="Configure voice">
-          <button type="button" className="talk-pop-close" onClick={() => setConfigOpen(false)} aria-label="Close">
-            ×
-          </button>
-          <label className="talk-field">
-            Gemini API key
-            <input
-              type="password"
-              value={session.key}
-              onChange={(e) => session.setKey(e.target.value)}
-              placeholder="stored in this browser only"
-              autoComplete="off"
-            />
-          </label>
-          <label className="talk-field">
-            Model
-            <input value={session.model} onChange={(e) => session.setModel(e.target.value)} autoComplete="off" />
-          </label>
-          <p className="talk-note">Saved in this browser only — never on the canvas, never in the daemon.</p>
-          <button
-            type="button"
-            className="talk-save"
-            onClick={() => {
-              localStorage.setItem(KEY_SHELF, session.key.trim());
-              localStorage.setItem(MODEL_SHELF, session.model.trim());
-              setConfigOpen(false);
-              // Saving is the gesture: the session starts on the same press.
-              void session.start();
-            }}
-            disabled={!session.key.trim()}
-          >
-            Save and start
-          </button>
-        </div>
-      )}
+      {configOpen && <ConfigPop session={session} onClose={() => setConfigOpen(false)} />}
       <style>{`
         .talk-float {
           position: fixed; right: 20px; bottom: 20px; z-index: 9999;
@@ -779,7 +803,13 @@ function MicOverlay({ canvasId, canvas, host, groupMode }: OverlayFacts) {
         }
         .talk-meter[data-live="1"] span[data-on="1"] { background: #3c8cff; height: 20px; }
         .talk-pop {
-          position: fixed; right: 20px; bottom: 84px; z-index: 9999;
+          z-index: 9999;
+          background: var(--card); border: 1px solid var(--line);
+          border-radius: 16px; box-shadow: var(--shadow-pop);
+          padding: 14px; display: grid; gap: 8px;
+        }
+        .talk-pop-float {
+          position: fixed; right: 20px; bottom: 84px;
           width: min(360px, calc(100vw - 40px));
           background: var(--card); border: 1px solid var(--line);
           border-radius: 16px; box-shadow: var(--shadow-pop);
@@ -876,9 +906,132 @@ function ConfigDialog(facts: DialogFacts) {
   );
 }
 
+/**
+ * **The mic in the message composer, and the bar it becomes** (proposed:
+ * `composer`).
+ *
+ * The floating mic below is the module's original door and stays: it works
+ * with the Chat closed, which this cannot. But the gesture people arrive
+ * expecting — every voice product they have used puts it here — is a mic
+ * among the composer's own buttons that FLIPS the box into a conversation.
+ *
+ * The flip is the shell's to perform. This asks with `takeOver` when a
+ * session goes live and gives the row back the moment it ends, including
+ * when it ends by failing: a bar that stays after the socket drops is a
+ * composer somebody has to reload to escape.
+ *
+ * It shares `useTalkSession` with the floating mic rather than opening a
+ * second one, so the two doors are two ways into ONE conversation.
+ */
+function ComposerMic({ canvasId, canvas, host, groupMode, active, takeOver }: ComposerFacts) {
+  const session = useTalkSession({ canvasId, canvas, canEdit: true, groupMode, host });
+  const [configOpen, setConfigOpen] = useState(false);
+  const live = session.state === "live";
+
+  /**
+   * **Both states that are not "a button" want the row**, and asking for it
+   * is what makes the key panel possible at all: as a popover it was 300px
+   * inside a 250px panel and clipped whichever edge it was anchored to.
+   * Flipping the composer is the same gesture the live bar makes, so there
+   * is one mechanism here rather than a bar and a pop with different bugs.
+   *
+   * The shell is told what IS, never what was asked for: a start that fails
+   * never reaches "live", so the row is never held for a session that is not
+   * happening.
+   */
+  const wantsRow = live || configOpen;
+  useEffect(() => {
+    if (wantsRow !== active) takeOver(wantsRow);
+  }, [wantsRow, active, takeOver]);
+
+  if (configOpen && !live) {
+    return <ConfigPop session={session} onClose={() => setConfigOpen(false)} placement="composer" />;
+  }
+
+  if (live) {
+    return (
+      <div className="talk-bar" role="group" aria-label="Voice conversation">
+        <div className="talk-bar-meters">
+          <Meter label="You" live onReady={session.registerInMeter} />
+          <Meter label="Voice" live onReady={session.registerOutMeter} />
+        </div>
+        <CaptionToast lines={session.lines} />
+        <button
+          type="button"
+          className="talk-bar-stop"
+          onClick={() => session.stop()}
+          aria-label="End the conversation"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <span className="talk-composer-anchor">
+      <button
+        type="button"
+        className="talk-composer-mic"
+        onClick={(event) => {
+          if (event.ctrlKey || event.metaKey || !session.key.trim()) {
+            setConfigOpen((v) => !v);
+            return;
+          }
+          void session.start();
+        }}
+        title="Talk · ctrl-click to configure"
+        aria-label="Talk to the canvas"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
+          />
+        </svg>
+      </button>
+      <style>{`
+        /* The composer's panel is anchored to the control rather than to a
+           corner of the viewport, so it opens where the press happened. */
+        .talk-composer-anchor { position: relative; display: flex; align-items: center; }
+        /* In the composer the panel IS the row — no popover, so nothing to
+           clip. The floating mic's copy is still pinned to its corner. */
+        .talk-pop-composer { position: static; width: 100%; box-shadow: none; }
+        /* Sized to sit with the composer's own buttons rather than to be
+           noticed: a mic that outshouts Send is a mic people press by
+           mistake. */
+        .talk-composer-mic {
+          width: 32px; height: 32px; border-radius: 8px;
+          display: grid; place-items: center;
+          border: 1px solid var(--line); background: var(--card);
+          color: var(--ink); cursor: pointer; flex: none;
+        }
+        .talk-composer-mic:hover { background: var(--chip-hover); }
+        .talk-composer-mic:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+        /* The bar stands where the message box was, so it takes the row's
+           full width and the accent says a live session is the reason. */
+        .talk-bar {
+          display: flex; align-items: center; gap: 10px; width: 100%;
+          padding: 6px 8px; border-radius: 10px;
+          border: 1px solid var(--accent); background: var(--accent-wash);
+        }
+        .talk-bar-meters { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+        .talk-bar-stop {
+          width: 28px; height: 28px; border-radius: 50%; flex: none;
+          display: grid; place-items: center; border: none;
+          background: var(--accent); color: var(--accent-ink); cursor: pointer;
+        }
+        .talk-bar-stop:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+      `}</style>
+    </span>
+  );
+}
+
 /** The module's shell record: the floating mic, the config dialog, the
  *  palette door. */
-export const talkWeb: WebModule<never, never, never, never, typeof MicOverlay, typeof ConfigDialog> = {
+export const talkWeb: WebModule<never, never, never, never, typeof MicOverlay, typeof ConfigDialog, never, typeof ComposerMic> = {
   core: voiceCore,
   actions: [
     {
@@ -890,6 +1043,7 @@ export const talkWeb: WebModule<never, never, never, never, typeof MicOverlay, t
   ],
   dialogs: [{ id: "voice", title: "Voice settings", component: ConfigDialog }],
   overlays: [{ region: "right", label: "Voice", component: MicOverlay }],
+  composer: [{ label: "Talk to the canvas", component: ComposerMic }],
 };
 
 /** The runtime loader reads `mod.default`; a named export alone builds and

@@ -76,12 +76,14 @@ describe("a module behind an experiment", () => {
 describe("how early the API says it is", () => {
   it("names the slots it intends to change", () => {
     /* The three that landed on 9 Sep with one caller each, the five the design
-       competition asked for on 11 Sep, and `workspaces`, which anatomy asked
-       for on 12 Sep and is the only caller of. Shipping is not stability, and
-       calling it stable because it shipped is how an API gets frozen by
-       accident. */
+       competition asked for on 11 Sep, `workspaces`, which anatomy asked
+       for on 12 Sep and is the only caller of, and `composer`, which the talk
+       module asked for on 20 Sep so voice could reach the Chat's own row.
+       Shipping is not stability, and calling it stable because it shipped is
+       how an API gets frozen by accident. */
     expect([...PROPOSED].sort()).toEqual([
       "assets",
+      "composer",
       "dialogs",
       "drops",
       "host",
@@ -98,5 +100,42 @@ describe("how early the API says it is", () => {
        loaded without the thing it needed and left to fail somewhere else. */
     expect(unknownProposals(["overlays"])).toEqual([]);
     expect(unknownProposals(["overlays", "telepathy"])).toEqual(["telepathy"]);
+  });
+});
+
+/**
+ * **The composer slot** (proposed: `composer`, 20 Sep 2026).
+ *
+ * The overlay slot next door names an EDGE and may never cover the middle,
+ * which left voice nowhere to go: the gesture people arrive expecting is a
+ * mic among the composer's own buttons. So a module may contribute one
+ * control there and ask for the row while it is running.
+ *
+ * What is held here is the shell's half of that bargain — that the row is
+ * OFFERED and not seized, and that it comes back.
+ */
+describe("a module's control in the composer", () => {
+  it("is a proposal, so a module naming it has said so", () => {
+    // The whole point of the proposed list: a slot we are still shaping must
+    // be asked for by name rather than arrived at by accident.
+    expect(PROPOSED).toContain("composer");
+    expect(unknownProposals(["composer"])).toEqual([]);
+  });
+
+  it("offers at most one control per module, because the row is small", () => {
+    // Two controls from one module is a row nobody laid out; the slot reader
+    // takes the first and the guard says so rather than the layout saying it.
+    for (const module of modules()) {
+      expect((module.composer ?? []).length, module.core.name).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("names the control, so it can be labelled and turned off like other chrome", () => {
+    for (const module of modules()) {
+      for (const control of module.composer ?? []) {
+        expect(control.label.trim().length, module.core.name).toBeGreaterThan(0);
+        expect(control.component, module.core.name).toBeTruthy();
+      }
+    }
   });
 });

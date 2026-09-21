@@ -692,6 +692,48 @@ export interface ModuleDrop {
   run: (facts: DropFacts) => Promise<readonly Operation[] | void>;
 }
 
+/**
+ * **What a composer control draws with, and how it asks for the row**
+ * (proposed: `composer`).
+ *
+ * An overlay names an EDGE and may never cover the middle. That rule is right
+ * and it is why voice had nowhere to go: the gesture people expect is a mic
+ * among the composer's own buttons, which is neither an edge nor the middle —
+ * it is inside a piece of the shell's chrome.
+ *
+ * So the shell offers the row and keeps owning it. A module contributes ONE
+ * control, which sits with the send button. When the control wants the whole
+ * row — a live voice session replacing the message box, the way the reference
+ * app flips — it calls `takeOver(true)` and the shell puts its own input and
+ * send button away until it hears otherwise.
+ *
+ * **The module reports; it does not seize.** The shell decides what yielding
+ * the row means and can refuse, and a module that forgets to give it back is
+ * a bug the person can see rather than a composer nobody can type in: the
+ * shell drops a takeover when the module unloads.
+ */
+export interface ComposerFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+  host: WebHost;
+  /** The saved canvas mode, for the same reason the overlay slot carries it. */
+  groupMode: "groups" | "legacy";
+  /** Ask for the composer's row, or hand it back. */
+  takeOver: (active: boolean) => void;
+  /** Whether this control currently has it — the shell's answer, not the
+   *  module's memory of what it asked for. */
+  active: boolean;
+}
+
+/** One control a module puts in the message composer's row. Not exported for
+ *  the same reason `ModuleOverlay` is not: a module names it through
+ *  `WebModule`. */
+interface ModuleComposer<X> {
+  /** For the chrome registry, and for the control's accessible name. */
+  label: string;
+  component: X;
+}
+
 /** A tray or dock a module hangs against one edge of the canvas. Not
  *  exported: a module names its overlays through `WebModule`, the way it
  *  names its renderers, and nothing outside core has needed the type itself. */
@@ -704,7 +746,7 @@ interface ModuleOverlay<O> {
   component: O;
 }
 
-export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never> {
+export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never, X = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
@@ -721,6 +763,10 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
   workspaces?: readonly ModuleWorkspace<W>[];
   /** Screen-space chrome above the viewport, against a named edge. */
   overlays?: readonly ModuleOverlay<O>[];
+  /** **Controls in the message composer's row** (proposed: `composer`).
+   *  At most one per module: the row is small, and two modules quietly
+   *  competing for it is the bug the overlay regions exist to prevent. */
+  composer?: readonly ModuleComposer<X>[];
   /** Drags this module catches on the canvas, by mime. */
   drops?: readonly ModuleDrop[];
   /** Popups a person opens by a command or a palette entry. */
@@ -833,6 +879,7 @@ export const PROPOSED = [
   "templates",
   "rounds",
   "workspaces",
+  "composer",
 ] as const;
 
 /** Which of a manifest's proposals this build does not recognise. A module

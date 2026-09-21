@@ -1,6 +1,7 @@
 import { useChatDraft } from "../lib/chatdraft.ts";
 import "./command-chip.css";
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { ModuleComposerControls, composerControlModules } from "./ModuleComposer.tsx";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
 const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
@@ -394,6 +395,26 @@ function Panel({
   const [draft, setDraft] = useChatDraft(canvasId, actor.id);
   const context = useMessageContext(canvasId, messageContextRoots(canvas, draft, selected));
   const sending = useMessageSend(canvasId, context, draft);
+  /**
+   * **Which module is standing where the message box is** (proposed:
+   * `composer`), or null when the composer is the shell's own.
+   *
+   * State here rather than in the slot because the SHELL owns the row: a
+   * module reports that it wants it and the shell decides what yielding
+   * means. That also makes the recovery obvious — an experiment switched off
+   * mid-session takes its control away, and a holder with no control left
+   * would be a composer nobody can type in and nothing on screen to give it
+   * back, which no reload-free gesture fixes.
+   */
+  const [composerHolder, setComposerHolder] = useState<string | null>(null);
+  const takeComposer = useCallback(
+    (moduleName: string, active: boolean) => setComposerHolder(active ? moduleName : null),
+    [],
+  );
+  const composerOffered = composerControlModules();
+  useEffect(() => {
+    if (composerHolder !== null && !composerOffered.includes(composerHolder)) setComposerHolder(null);
+  }, [composerHolder, composerOffered]);
   /** What a `@Name join` was answered with, when it was not carried out. Its
    *  own state rather than `sending.error`: nothing was sent, so nothing was
    *  refused by a home, and saying "the message was refused" would be wrong
@@ -695,10 +716,16 @@ function Panel({
           await sending.submit(() => postToMain(canvasId, actor, body, attached, context.request), () => setDraft(""));
         }}
       >
-        {context.enabled ? <MessageContextPreview context={context} /> : <Attached canvasId={canvasId} />}
-        {sending.error && <p role="alert">{sending.error}</p>}
-        {refused && <p role="alert">{refused}</p>}
-        <MentionField
+        {/* **A module may stand where the message box is** (proposed:
+            `composer`). While one holds the row — a live voice session, say —
+            the shell puts its own input, chips and send button away rather
+            than drawing two ways to say something at once. It keeps the form,
+            so ⌘⏎ and the submit handler are untouched and giving the row back
+            restores a composer that never went anywhere. */}
+        {composerHolder === null && (context.enabled ? <MessageContextPreview context={context} /> : <Attached canvasId={canvasId} />)}
+        {composerHolder === null && sending.error && <p role="alert">{sending.error}</p>}
+        {composerHolder === null && refused && <p role="alert">{refused}</p>}
+        {composerHolder === null && <MentionField
           // One placeholder, both states: what the CHANNEL is beats what the
           // moment is. Everything typed here reaches every agent listening
           // unless a name is called, and that is the thing worth knowing
@@ -721,10 +748,20 @@ function Panel({
           bench={bench.mentions}
           itemCandidates={itemRoster.candidates}
           items={itemRoster.entries}
+        />}
+        {/* **One render site, always mounted.** Drawn in two places — one for
+            the idle row and one for the taken-over row — React unmounts and
+            remounts the control on takeover, which drops its state and flips
+            it straight back. The shell hides its OWN parts instead. */}
+        <ModuleComposerControls
+          canvasId={canvasId}
+          actor={actor}
+          takenOverBy={composerHolder}
+          onTakeOver={takeComposer}
         />
-        <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim() || sending.disabled}>
+        {composerHolder === null && <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim() || sending.disabled}>
           ↑
-        </button>
+        </button>}
       </form>}
     </div>
   );

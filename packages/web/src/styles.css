@@ -7166,3 +7166,9 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* The rare question author loads after this explicit action or an actual question arrives. */
 .main-design-ask { margin: 4px 12px; padding: 5px 0; border: 0; background: transparent; color: var(--ink-muted); font: inherit; font-size: 11px; text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* A module's control in the Chat composer (proposed: `composer`). The shell
+   owns the row; this says where the control sits in it and how much room it
+   gets when a module has asked for the whole thing. */
+.module-composer-control { display: flex; align-items: center; flex: none; }
+.module-composer-wide { flex: 1 1 100%; min-width: 0; }
