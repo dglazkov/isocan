@@ -12,7 +12,7 @@ Run by `scripts/persona-run.mjs` at `7e15edc`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| runtime dependencies of @isocan/core is 6, past 1 | unanswered |
+| runtime dependencies of @isocan/core is 6, past 1 | accepted — Dion, 20 Sep 2026. The bound moved to 9; the portability argument is not withdrawn, and the way back is work that removes dependencies. Same decision as the 15 and 16 September pages, applied to this night so the queue stops asking a question already settled. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

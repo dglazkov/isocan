@@ -45,7 +45,8 @@ it" into either `works` or an issue.
 
 | Walk | What has never been exercised | Why a machine cannot | Status |
 | --- | --- | --- | --- |
-| [Voice, out loud](2026-09-20-voice.md) | the whole live session with an actual microphone and actual speakers | needs a microphone, ears, and a judgement about whether the pause feels like a conversation | `unverified` |
+| [Talking to the canvas itself](2026-09-20-talk-on-canvas.md) | the mic ON the canvas — the surface a stranger meets first | needs a microphone, ears, and a judgement about whether the pause feels like a conversation | `unverified` |
+| [Voice, out loud](2026-09-20-voice.md) | the STANDALONE voice agent on its own port, the one `@mention` can summon | needs a microphone, ears, and a judgement about whether the pause feels like a conversation | `unverified` |
 | [A drawing's colour](2026-09-20-drawing-colour.md) | the Pen recording the ink colour it was drawn in | needs a hand drawing with a pointer, and eyes to agree the stroke is the colour the data now claims | `unverified` |
 | [Undo, in both doorways](2026-09-20-undo.md) | the harness retracting through the daemon, and the browser dialog's refusal | the harness branch has never executed against a live daemon; the browser refusal has never rendered | `unverified` |
 

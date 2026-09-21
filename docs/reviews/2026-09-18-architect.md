@@ -13,8 +13,8 @@ Run by `scripts/persona-run.mjs` at `da81ea1`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| runtime dependencies of @isocan/core is 9, past 1 | unanswered |
-| lines in the files every feature must edit is 25300, past 24058 | unanswered |
+| runtime dependencies of @isocan/core is 9, past 1 | accepted — Dion, 20 Sep 2026. The bound moved to 9; the portability argument is not withdrawn, and the way back is work that removes dependencies. Same decision as the 15 and 16 September pages, applied to this night so the queue stops asking a question already settled. |
+| lines in the files every feature must edit is 25300, past 24058 | accepted — Dion, 20 Sep 2026. The bound moved to 25267, a ratchet that stands where the number stands. Same decision as the 15 and 16 September pages, applied to this night so the queue stops asking a question already settled. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

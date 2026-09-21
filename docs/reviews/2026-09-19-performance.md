@@ -11,7 +11,7 @@ Run by `scripts/persona-run.mjs` at `9df802c`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| the entry chunk a first visit downloads is 745817, past 640000 | unanswered |
+| the entry chunk a first visit downloads is 745817, past 640000 | accepted — Dion, 20 Sep 2026. The goal moved 640000 → 747000 to meet the agreed ceiling, and every night above is under it. Same decision as the 15 and 16 September pages, applied to this night so the queue stops asking a question already settled. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

@@ -11,8 +11,8 @@ Run by `scripts/persona-run.mjs` at `f0c565e`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| the entry chunk a first visit downloads is 750401, past 747000 | unanswered |
-| bytes past the last size somebody agreed to is 3401, past 0 of 747000 | unanswered |
+| the entry chunk a first visit downloads is 750401, past 747000 | accepted — Dion, 20 Sep 2026. The goal moved 640000 → 747000 to meet the agreed ceiling, and every night above is under it. Same decision as the 15 and 16 September pages, applied to this night so the queue stops asking a question already settled. |
+| bytes past the last size somebody agreed to is 3401, past 0 of 747000 | accepted — Dion, 20 Sep 2026. Inside the ceiling as since raised. Same decision as the 15 and 16 September pages, applied to this night so the queue stops asking a question already settled. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report
