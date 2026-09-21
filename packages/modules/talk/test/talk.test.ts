@@ -64,7 +64,7 @@ const facts = {
   },
 } as unknown as DialogFacts;
 
-describe("the talk module declares the door, the dialog and the floating mic", () => {
+describe("the talk module declares the door, the dialog and the composer's control", () => {
   it("is a palette action that opens the config dialog", () => {
     expect(talkWeb.actions?.map((a) => [a.id, a.name, a.opens])).toEqual([
       ["talk", "Configure voice", "voice"],
@@ -72,8 +72,27 @@ describe("the talk module declares the door, the dialog and the floating mic", (
     expect(talkWeb.dialogs?.map((d) => [d.id, d.title])).toEqual([["voice", "Voice settings"]]);
   });
 
-  it("floats a mic overlay on the right edge", () => {
-    expect(talkWeb.overlays?.map((o) => [o.region, o.label])).toEqual([["right", "Voice"]]);
+  it("puts its control in the composer, and floats nothing", () => {
+    /**
+     * **The floating mic is gone, and its absence is the assertion.**
+     *
+     * It was the module's first door and the composer's control outgrew it:
+     * the composer has the transcript, the names, the voice picker and a full
+     * row for the glow to rise from, while the floating one could only show
+     * two unattributed fragments over the canvas — and looked, on screen,
+     * like a button hanging beside the tool rail with captions colliding
+     * with it.
+     *
+     * The rail was the other candidate and is not open to a module: the rail
+     * and the dock keep FIXED lists exactly so two modules cannot fight over
+     * them. It is also the wrong shape, since a voice bar wants horizontal
+     * room and a rail is a narrow vertical strip.
+     *
+     * Nothing became unreachable — ⌘K's "Configure voice" carries its own
+     * test listen for when the Chat is closed.
+     */
+    expect(talkWeb.composer?.map((c) => c.label)).toEqual(["Talk to the canvas"]);
+    expect(talkWeb.overlays ?? [], "a second door is a second thing to keep true").toEqual([]);
   });
 
   it("imports nothing from the shell's stores — facts in, ops out", () => {

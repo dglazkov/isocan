@@ -660,22 +660,6 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   };
 }
 
-/** The two line-fragments that float by the mic while a turn is on — the
- *  person's last words and the model's. */
-function CaptionToast({ lines }: { lines: Line[] }) {
-  const said = lines.filter((l) => l.who !== "system").slice(-2);
-  if (said.length === 0) return null;
-  return (
-    <div className="talk-toast" aria-live="polite">
-      {said.map((line, i) => (
-        <div key={i} className={line.who === "you" ? "talk-toast-you" : "talk-toast-model"}>
-          {line.text}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /**
  * **What was said, with who said it** — the conversation's own record, in the
  * composer where there is room for one.
@@ -793,19 +777,12 @@ function Transcript({
 function ConfigPop({
   session,
   onClose,
-  placement = "float",
 }: {
   session: ReturnType<typeof useTalkSession>;
   onClose: () => void;
-  /** **Where it is being opened from**, because the two doors are in opposite
-   *  corners. The floating mic's panel is pinned to the viewport; the
-   *  composer's must sit above the composer, and a `fixed` panel does not
-   *  even land there — the Chat panel's transform makes it the containing
-   *  block, which is how the first draft of this ended up half off-screen. */
-  placement?: "float" | "composer";
 }) {
   return (
-      <div className={`talk-pop talk-pop-${placement}`} role="dialog" aria-label="Configure voice">
+      <div className="talk-pop" role="dialog" aria-label="Configure voice">
         <button type="button" className="talk-pop-close" onClick={() => onClose()} aria-label="Close">
           ×
         </button>
@@ -839,121 +816,6 @@ function ConfigPop({
           Save and start
         </button>
       </div>
-  );
-}
-
-/** The floating mic: one press starts (or stops), and the feedback — the
- *  pulse, the bars, the last words — floats with it and is gone when the
- *  turn is. The config panel only opens when there is no key yet; with a
- *  key, a press is the whole gesture. */
-function MicOverlay({ canvasId, canvas, host, groupMode }: OverlayFacts) {
-  const session = useTalkSession({
-    canvasId,
-    canvas,
-    canEdit: true,
-    groupMode,
-    host,
-  });
-  const [configOpen, setConfigOpen] = useState(false);
-
-  const onMic = (event: { ctrlKey?: boolean; metaKey?: boolean }) => {
-    // Ctrl/⌘-click is the configuration door even when a key is stored —
-    // changing the model must not require losing the key first.
-    if (event.ctrlKey || event.metaKey) {
-      setConfigOpen((v) => !v);
-      return;
-    }
-    if (!session.key.trim()) {
-      setConfigOpen((v) => !v);
-      return;
-    }
-    if (session.state === "live") session.stop();
-    else void session.start();
-  };
-
-  return (
-    <>
-      {session.state === "live" && (
-        <div className="talk-live">
-          <CaptionToast lines={session.lines} />
-          <div className="talk-live-meters">
-            <Meter label="You" live onReady={session.registerInMeter} />
-            <Meter label="Voice" live onReady={session.registerOutMeter} />
-          </div>
-        </div>
-      )}
-      <button
-        type="button"
-        className={`talk-float ${session.state === "live" ? "talk-float-live" : ""}`}
-        onClick={onMic}
-        title="Talk · ctrl-click to configure"
-        aria-label={session.state === "live" ? "End the conversation" : "Talk to the canvas"}
-        aria-pressed={session.state === "live"}
-      >
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
-          />
-        </svg>
-      </button>
-      {configOpen && <ConfigPop session={session} onClose={() => setConfigOpen(false)} />}
-      <style>{`
-        .talk-float {
-          position: fixed; right: 20px; bottom: 20px; z-index: 9999;
-          width: 48px; height: 48px; border-radius: 50%;
-          display: grid; place-items: center; border: 1px solid var(--line);
-          background: var(--card); color: var(--ink);
-          box-shadow: var(--shadow-pop); cursor: pointer;
-        }
-        .talk-float-live { background: var(--ink); color: var(--card);
-          animation: talk-pulse 1.6s ease-out infinite; }
-        @keyframes talk-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(60, 140, 255, .45); }
-          70% { box-shadow: 0 0 0 16px rgba(60, 140, 255, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(60, 140, 255, 0); }
-        }
-        .talk-live {
-          position: fixed; right: 20px; bottom: 80px; z-index: 9999;
-          display: grid; gap: 6px; justify-items: end; pointer-events: none;
-        }
-        .talk-live-meters { display: flex; gap: 10px; padding: 6px 10px;
-          background: var(--card); border: 1px solid var(--line);
-          border-radius: 12px; box-shadow: var(--shadow-pop); }
-        .talk-toast { display: grid; gap: 4px; max-width: min(320px, calc(100vw - 40px)); }
-        .talk-toast div { padding: 6px 10px; border-radius: 10px; font-size: 13px;
-          background: var(--card); border: 1px solid var(--line);
-          box-shadow: var(--shadow-pop); }
-        .talk-toast-model { color: var(--ink); }
-        .talk-toast-you { color: var(--ink-muted); }
-        .talk-meter { display: flex; align-items: center; gap: 3px; height: 24px; }
-        .talk-meter span {
-          width: 4px; border-radius: 2px; background: var(--line);
-          height: 4px; transition: height 80ms linear;
-        }
-        .talk-meter[data-live="1"] span[data-on="1"] { background: #3c8cff; height: 20px; }
-        .talk-pop {
-          z-index: 9999;
-          background: var(--card); border: 1px solid var(--line);
-          border-radius: 16px; box-shadow: var(--shadow-pop);
-          padding: 14px; display: grid; gap: 8px;
-        }
-        .talk-pop-float {
-          position: fixed; right: 20px; bottom: 84px;
-          width: min(360px, calc(100vw - 40px));
-          background: var(--card); border: 1px solid var(--line);
-          border-radius: 16px; box-shadow: var(--shadow-pop);
-          padding: 14px; display: grid; gap: 8px;
-        }
-        .talk-pop-close {
-          position: absolute; top: 8px; right: 8px; border: none; background: none;
-          color: var(--ink-muted); font-size: 18px; cursor: pointer;
-        }
-        .talk-field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
-        .talk-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
-        .talk-save { justify-self: start; }
-      `}</style>
-    </>
   );
 }
 
@@ -1046,14 +908,32 @@ function ConfigDialog(facts: DialogFacts) {
  */
 const COMPOSER_CSS = `
       .talk-composer-anchor { position: relative; display: flex; align-items: center; }
-      /* In the composer the panel IS the row — no popover, so nothing to
-         clip. The floating mic's copy is still pinned to its corner. */
-      .talk-pop-composer { position: static; width: 100%; box-shadow: none; }
-      /* Sized to sit with the composer's own buttons rather than to be
-         noticed: a mic that outshouts Send is a mic people press by
+      /* **The key panel IS the row**, not a popover over it. As a popover it
+         was 300px inside a 250px Chat panel and clipped whichever edge it was
+         anchored to, and position:fixed did not even reach the corner it
+         named, because the Chat panel's transform is the containing block. */
+      .talk-pop {
+        position: relative; width: 100%;
+        background: var(--card); border: 1px solid var(--line);
+        border-radius: 10px; padding: 14px; display: grid; gap: 8px;
+      }
+      .talk-pop-close {
+        position: absolute; top: 8px; right: 8px; border: none; background: none;
+        color: var(--ink-muted); font-size: 18px; cursor: pointer;
+      }
+      .talk-field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
+      .talk-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
+      .talk-save { justify-self: start; }
+      /* **28px and round.** The send button beside it measures 28 high and the
+         form aligns its children to flex-END, so a 32px mic bottom-aligned
+         with a 28px button and stood 4px proud of it — which is what looked
+         crooked. Round rather than a rounded square because the mic starts a
+         MODE and the square beside it submits; two squares read as two
+         submits. Sized to sit with the composer's own buttons rather than to
+         be noticed: a mic that outshouts Send is a mic people press by
          mistake. */
       .talk-composer-mic {
-        width: 32px; height: 32px; border-radius: 8px;
+        width: 28px; height: 28px; border-radius: 50%;
         display: grid; place-items: center;
         border: 1px solid var(--line); background: var(--card);
         color: var(--ink); cursor: pointer; flex: none;
@@ -1268,7 +1148,7 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
   if (configOpen && !live) {
     return (
       <>
-        <ConfigPop session={session} onClose={() => setConfigOpen(false)} placement="composer" />
+        <ConfigPop session={session} onClose={() => setConfigOpen(false)} />
         <style>{COMPOSER_CSS}</style>
       </>
     );
@@ -1403,9 +1283,27 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
   );
 }
 
-/** The module's shell record: the floating mic, the config dialog, the
- *  palette door. */
-export const talkWeb: WebModule<never, never, never, never, typeof MicOverlay, typeof ConfigDialog, never, typeof ComposerMic> = {
+/**
+ * **The module's shell record: the composer's control, and the palette door.**
+ *
+ * There used to be a floating mic against the canvas's right edge as well,
+ * and it is gone. It was the module's first door and the composer's control
+ * outgrew it: the composer has the transcript, the names, the voice picker
+ * and a full row for the glow to rise from, while the floating one could only
+ * show two unattributed fragments over the canvas — which is what it looked
+ * like, a button hanging next to the tool rail with captions colliding with
+ * it.
+ *
+ * **The rail was the other candidate and is not available**: the rail and the
+ * dock keep FIXED lists precisely so two modules cannot fight over them
+ * (`ModuleOverlays`), so a mic there would be the shell's, not a module's.
+ * It would also be the wrong shape — a voice bar wants horizontal room for
+ * the transcript and the glow, and a rail is a narrow vertical strip.
+ *
+ * Nothing is unreachable with the Chat closed: ⌘K → "Configure voice" carries
+ * its own test listen.
+ */
+export const talkWeb: WebModule<never, never, never, never, never, typeof ConfigDialog, never, typeof ComposerMic> = {
   core: voiceCore,
   actions: [
     {
@@ -1416,7 +1314,6 @@ export const talkWeb: WebModule<never, never, never, never, typeof MicOverlay, t
     },
   ],
   dialogs: [{ id: "voice", title: "Voice settings", component: ConfigDialog }],
-  overlays: [{ region: "right", label: "Voice", component: MicOverlay }],
   composer: [{ label: "Talk to the canvas", component: ComposerMic }],
 };
 
