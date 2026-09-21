@@ -735,12 +735,50 @@ export const LIVE_TOOLS = [
   },
 ];
 
+/* ---- LIVE_VOICES ---- */
+/**
+ * **The voices the provider offers**, spelled exactly as `voiceName` wants
+ * them — read from Google's speech-generation reference on 21 Sep 2026, not
+ * invented. Thirty of them, named after stars and moons.
+ *
+ * There is deliberately NO language or accent setting beside this: the docs
+ * are explicit that these models "detect the input language automatically"
+ * across ninety-odd languages, so speaking French gets French back. A picker
+ * that appeared to set an accent and did nothing would be worse than its
+ * absence.
+ */
+export const LIVE_VOICES = [
+  "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
+  "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
+  "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar",
+  "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
+  "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat",
+] as const;
+
+export type LiveVoice = (typeof LIVE_VOICES)[number];
+
+/** Is this one of the provider's voices? The guard a stored preference has to
+ *  pass — a name left in a browser from an older build must not be sent. */
+export function isLiveVoice(value: unknown): value is LiveVoice {
+  return typeof value === "string" && (LIVE_VOICES as readonly string[]).includes(value);
+}
+
 /* ---- liveSetup ---- */
 /** What the setup message is: the whole contract with the API in one object. */
 export function liveSetup(
   model: string = LIVE_MODEL,
   instructions?: { source: string; text: string } | null,
   rules: string = VOICE_RULES,
+  /**
+   * Which of `LIVE_VOICES` answers. Unset leaves the provider's default.
+   *
+   * **This is setup-time, which is why changing it reconnects.** The Live API
+   * takes `speechConfig` in the setup frame and its guide documents no way to
+   * change one mid-session, so a picker that appeared to switch voices on a
+   * running socket would be lying. The caller stops and starts; the
+   * transcript is React state and survives that untouched.
+   */
+  voice?: string | null,
 ): object {
   /**
    * The extended-thinking model needs its thinking depth named at setup
@@ -757,6 +795,9 @@ export function liveSetup(
       model,
       generationConfig: {
         responseModalities: ["AUDIO"],
+        ...(isLiveVoice(voice)
+          ? { speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } }
+          : {}),
         ...thinkingConfig,
       },
       systemInstruction: {

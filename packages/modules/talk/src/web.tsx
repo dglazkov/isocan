@@ -19,7 +19,7 @@ import {
 } from "@isocan/core";
 import { VoiceBeam } from "voice-glow";
 import { LevelMeter, Playback, capture, fromBytes, type Capture } from "./audio.ts";
-import { LIVE_MODEL, canvasSnapshotText, commandsBrief, liveSetup, liveUrl, planForCall, type SnapshotItem } from "./live.ts";
+import { LIVE_MODEL, LIVE_VOICES, canvasSnapshotText, commandsBrief, isLiveVoice, liveSetup, liveUrl, planForCall, type SnapshotItem } from "./live.ts";
 import { voiceCore } from "./core.ts";
 
 /**
@@ -44,6 +44,7 @@ import { voiceCore } from "./core.ts";
  *  canvas's — the one scope a module may hold without a server route. */
 const KEY_SHELF = "isocan:voice:key";
 const MODEL_SHELF = "isocan:voice:model";
+const VOICE_SHELF = "isocan:voice:voice";
 
 /** How many bars each meter shows; the shared paint divides the level into
  *  this many buckets. */
@@ -393,6 +394,15 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   const [model, setModel] = useState(() => localStorage.getItem(MODEL_SHELF) ?? LIVE_MODEL);
   const [state, setState] = useState<SessionState>("idle");
   const [lines, setLines] = useState<Line[]>([]);
+  /** Which voice answers. A ref as well as state because `start` reads it
+   *  while building the setup frame, and a stale closure there would open the
+   *  session on the voice you just changed away from. */
+  const [voice, setVoiceState] = useState<string>(() => {
+    const stored = localStorage.getItem(VOICE_SHELF);
+    return isLiveVoice(stored) ? stored : "";
+  });
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
   const socketRef = useRef<WebSocket | null>(null);
   const captureRef = useRef<Capture | null>(null);
   const playbackRef = useRef<Playback | null>(null);
@@ -480,7 +490,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         Object.values(factsRef.current.canvas.threads ?? {}).map((t) => ({ id: t.id, comments: t.comments })),
       );
       const instructions = { source: "canvas", text: [commandsBrief(), snapshot].join("\n\n") };
-      socket.send(JSON.stringify(liveSetup(model.trim(), instructions)));
+      socket.send(JSON.stringify(liveSetup(model.trim(), instructions, undefined, voiceRef.current)));
     };
     socket.onclose = (event: CloseEvent) => {
       captureRef.current?.stop();
@@ -634,6 +644,17 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     setModel,
     start,
     stop,
+    voice,
+    /** Changing a voice RECONNECTS: `speechConfig` is a setup-time field and
+     *  the provider documents no way to change one on a running socket. The
+     *  transcript is React state and is untouched by the round trip, so the
+     *  conversation reads as continuous even though the socket is not. */
+    setVoice: (next: string) => {
+      if (!isLiveVoice(next)) return;
+      localStorage.setItem(VOICE_SHELF, next);
+      setVoiceState(next);
+      voiceRef.current = next;
+    },
     registerInMeter: useCallback((paint: (level: number) => void) => (inPaintRef.current = paint), []),
     registerOutMeter: useCallback((paint: (level: number) => void) => (outPaintRef.current = paint), []),
   };
@@ -652,6 +673,114 @@ function CaptionToast({ lines }: { lines: Line[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * **What was said, with who said it** — the conversation's own record, in the
+ * composer where there is room for one.
+ *
+ * The session has kept forty turns since it was written; until now two of
+ * them were shown, as floating fragments with no attribution, so a glance
+ * could not tell your words from the reply's and anything older was gone. The
+ * history was there and the UI threw it away.
+ *
+ * ## Why it is not posted to the Chat
+ *
+ * The obvious idea is to put these in the thread above — it is right there,
+ * it already scrolls, it already attributes. It is wrong: the Chat is the
+ * CANVAS's conversation and reaches every collaborator and every agent
+ * listening. Speech is ephemeral, half of it is partial ("read", "read the",
+ * "read the canvas"), and a voice session would fill everybody else's thread
+ * with a monologue nobody asked to hear. What a voice turn CAUSES lands as an
+ * operation; what it said stays with the session and dies with it.
+ *
+ * ## The shape
+ *
+ * A name column and a line, oldest at the top, newest pinned at the bottom.
+ * Names rather than colours because a person reading this is deciding "did it
+ * hear me right", which is a question about WHOSE words those are. A run by
+ * the same speaker drops the repeated name, so a back-and-forth reads as a
+ * conversation rather than a form.
+ *
+ * System lines — the socket closing, a refusal — are neither speaker's and
+ * are set apart rather than attributed to one.
+ */
+function Transcript({
+  lines,
+  you,
+  expanded,
+  onExpand,
+}: {
+  lines: Line[];
+  you: string;
+  expanded: boolean;
+  onExpand: () => void;
+}) {
+  const foot = useRef<HTMLDivElement | null>(null);
+  /* Follow the newest line. A transcript that has to be scrolled to see the
+     thing that just arrived is a transcript nobody reads while talking. */
+  useEffect(() => {
+    foot.current?.scrollIntoView({ block: "end" });
+  }, [lines]);
+
+  if (lines.length === 0) return null;
+  /* A first name in the column, the whole one to a screen reader and on
+     hover. "Glow Tester" clipped to "Glow T…" at every turn, and a column of
+     ellipses says less than a column of first names. */
+  const shortYou = you.trim().split(/\s+/)[0] || you;
+  return (
+    <>
+      <div className="talk-log-bar">
+        {/* **Where this is going, said before it goes.** The session lands in
+            the Chat as one block when it ends, and the Chat reaches every
+            collaborator — so the person talking should know that while they
+            are talking, not discover it afterwards. */}
+        <span className="talk-log-dest">lands in Chat when you stop</span>
+        <button
+          type="button"
+          className="talk-log-act"
+          onClick={onExpand}
+          aria-expanded={expanded}
+          title={expanded ? "Show fewer lines" : "Show more of the conversation"}
+        >
+          {expanded ? "Shrink" : "Expand"}
+        </button>
+      </div>
+      <div
+        className={`talk-log${expanded ? " talk-log-tall" : ""}`}
+        aria-live="polite"
+        aria-label="What has been said"
+      >
+      {lines.map((line, i) => {
+        if (line.who === "system") {
+          return (
+            <p key={i} className="talk-log-note">
+              {line.text}
+            </p>
+          );
+        }
+        const name = line.who === "you" ? shortYou : "Voice";
+        const full = line.who === "you" ? you : "Voice";
+        /* A run of one speaker says the name once: the second line of a
+           sentence is not a new turn, and repeating the name makes it look
+           like one. */
+        const repeat = i > 0 && lines[i - 1]!.who === line.who;
+        return (
+          <p key={i} className={`talk-log-line talk-log-${line.who}`}>
+            <span className="talk-log-who" aria-hidden={repeat || undefined} title={repeat ? undefined : full}>
+              {repeat ? "" : name}
+            </span>
+            <span className="talk-log-text">
+              {repeat ? "" : <span className="talk-log-sr">{full}: </span>}
+              {line.text}
+            </span>
+          </p>
+        );
+      })}
+        <div ref={foot} />
+      </div>
+    </>
   );
 }
 
@@ -939,7 +1068,17 @@ const COMPOSER_CSS = `
         border: 1px solid var(--accent); background: var(--accent-wash);
       }
       .talk-bar-meters { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-      .talk-bar-stop {
+      /* Sized down to sit with the meters: the picker is a setting you touch
+     once, not the thing the bar is for. */
+  .talk-voice select {
+    max-width: 96px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--card); color: var(--ink); font-size: 11px;
+    padding: 2px 4px; cursor: pointer;
+  }
+  .talk-voice select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .talk-log-dest { flex: 1; font-size: 10px; color: var(--muted); font-style: italic; }
+  .talk-log-bar { align-items: center; }
+  .talk-bar-stop {
         width: 28px; height: 28px; border-radius: 50%; flex: none;
         display: grid; place-items: center; border: none;
         background: var(--accent); color: var(--accent-ink); cursor: pointer;
@@ -949,6 +1088,56 @@ const COMPOSER_CSS = `
      stretched — so it has to take the row it was given or the glow is drawn
      at the width of a button. */
   .talk-beam { flex: 1 1 100%; width: 100%; min-width: 0; display: block; }
+
+  /* The transcript and the bar are one block, so the glow rises from under
+     the whole conversation rather than from a strip inside it. */
+  .talk-live-block {
+    display: flex; flex-direction: column; gap: 6px; width: 100%;
+    padding: 8px; border-radius: 10px;
+    border: 1px solid var(--accent); background: var(--accent-wash);
+  }
+  /* Capped and scrolled: a conversation can run long and the composer is not
+     allowed to eat the thread above it. dvh rather than a fixed height so a
+     short window gives it less. */
+  /* A row of actions above the words rather than beside them: the bar below
+     is the LIVE controls (am I heard, stop), and mixing "keep this" in with
+     "end this" is how a stop gets pressed by mistake. */
+  .talk-log-bar { display: flex; justify-content: flex-end; gap: 4px; }
+  .talk-log-act {
+    border: none; background: none; cursor: pointer; padding: 2px 6px;
+    border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--muted);
+  }
+  .talk-log-act:hover { background: var(--chip-hover); color: var(--ink); }
+  .talk-log-act:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .talk-log {
+    max-height: min(180px, 28dvh); overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 3px;
+    font-size: 12px; line-height: 1.45;
+  }
+  /* Expanded takes most of the panel — the thread above is still there when
+     you shrink it, and reading a long conversation is worth the room while
+     you are in one. */
+  .talk-log-tall { max-height: min(460px, 58dvh); }
+  .talk-log-line { display: flex; gap: 8px; margin: 0; }
+  /* One column, so names line up and the words start at the same place —
+     which is what makes a run of turns scannable. */
+  .talk-log-who {
+    flex: none; width: 52px; text-align: right;
+    color: var(--muted); font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .talk-log-text { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
+  .talk-log-you .talk-log-text { color: var(--muted); }
+  .talk-log-note {
+    margin: 2px 0; text-align: center; color: var(--muted);
+    font-size: 11px; font-style: italic;
+  }
+  /* The name is dropped from a repeated speaker's row for the eye, and kept
+     for a screen reader, which has no column to see. */
+  .talk-log-sr {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+  }
 `;
 
 /**
@@ -991,6 +1180,51 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
   const quietSince = useRef<number>(0);
   const [thinking, setThinking] = useState(false);
   const readLevel = useCallback(() => Math.max(inLevel.current, outLevel.current), []);
+  const [expanded, setExpanded] = useState(false);
+
+  /**
+   * **A finished session lands in the Chat as one block.**
+   *
+   * Not an item, and not a message per utterance. Per utterance would fill
+   * everybody's thread with partials — speech arrives as "read", "read the",
+   * "read the canvas" — and the Chat is the CANVAS's conversation, which
+   * reaches every collaborator and every agent listening. One block per
+   * session is the unit a person would actually want to scroll back to.
+   *
+   * It goes through the module's own `say` tool rather than a second
+   * spelling: that path already births the main thread when there is none,
+   * mints the comment id, and rides `host.send`, so the block is an ordinary
+   * `thread.reply` with one undo and the speaker's name on it.
+   *
+   * Markdown carries the styling. A comment renderer of its own would need a
+   * typed marker on `Comment`, and those are writer-owned by design — growing
+   * core's comment vocabulary for one module is the thing the module rules
+   * exist to stop. The heading says what this is in every surface that reads
+   * markdown, including the CLI and an export.
+   */
+  const posted = useRef(false);
+  const postSession = useCallback(async (lines: Line[]) => {
+    const said = lines.filter((l) => l.who !== "system");
+    if (said.length === 0) return;
+    const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+    const body =
+      `### 🎙 Voice session · ${stamp}\n\n` +
+      said.map((l) => `**${l.who === "you" ? host.viewer.name : "Voice"}:** ${l.text}`).join("\n\n");
+    await runTool("say", { text: body }, { canvasId, canvas, host, canEdit: true, groupMode });
+  }, [host, canvasId, canvas, groupMode]);
+
+  /* Fires on the EDGE out of live, and once: a session that ends by failing
+     posts what was said just as one ended by pressing stop, and a re-render
+     while live must not post a second copy. */
+  useEffect(() => {
+    if (live) {
+      posted.current = false;
+      return;
+    }
+    if (posted.current) return;
+    posted.current = true;
+    void postSession(session.lines);
+  }, [live, postSession, session.lines]);
 
   useEffect(() => {
     if (!live) {
@@ -1065,7 +1299,14 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
         theme={theme}
         active
       >
-        <div className="talk-bar" role="group" aria-label="Voice conversation">
+        <div className="talk-live-block" role="group" aria-label="Voice conversation">
+        <Transcript
+          lines={session.lines}
+          you={host.viewer.name}
+          expanded={expanded}
+          onExpand={() => setExpanded((v) => !v)}
+        />
+        <div className="talk-bar">
           <div className="talk-bar-meters">
             <Meter
               label="You"
@@ -1088,7 +1329,35 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
               }
             />
           </div>
-          <CaptionToast lines={session.lines} />
+          {/* No toast here: the transcript above says the same thing with a
+              name on it, and two copies of the last line is the one-string-
+              two-spellings bug in pixels. The floating mic keeps its toast —
+              it has no panel to hold a transcript. */}
+          {/* **Who answers.** A native select, so it is one tap on a phone and
+              arrow keys on a desktop, and thirty names do not need chrome of
+              our own. Changing it reconnects — said in the label rather than
+              discovered when the reply stops mid-word. */}
+          <label className="talk-voice">
+            <span className="talk-log-sr">Voice</span>
+            <select
+              value={session.voice}
+              onChange={(e) => {
+                session.setVoice(e.target.value);
+                /* Reconnect on the new voice, keeping the transcript: the
+                   provider takes speechConfig at setup and nowhere else. */
+                session.stop();
+                void session.start();
+              }}
+              title="Who answers — changing this reconnects the session"
+            >
+              {!isLiveVoice(session.voice) && <option value="">Default voice</option>}
+              {LIVE_VOICES.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="talk-bar-stop"
@@ -1099,6 +1368,7 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
               <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
             </svg>
           </button>
+        </div>
         </div>
         </VoiceBeam>
         <style>{COMPOSER_CSS}</style>
