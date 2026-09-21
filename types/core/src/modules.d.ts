@@ -596,6 +596,17 @@ export interface ComposerFacts {
     host: WebHost;
     /** The saved canvas mode, for the same reason the overlay slot carries it. */
     groupMode: "groups" | "legacy";
+    /**
+     * **Light or dark, already resolved** — the person's choice when they made
+     * one, the system's when they did not.
+     *
+     * Handed over rather than sniffed because the app's theme is a CHOICE and
+     * `prefers-color-scheme` is not: a canvas whose owner picked Light under a
+     * dark system would otherwise get a control that disagreed with everything
+     * around it. It is here for the same reason `groupMode` is — a module
+     * cannot read the shell's stores without becoming unremovable.
+     */
+    theme: "light" | "dark";
     /** Ask for the composer's row, or hand it back. */
     takeOver: (active: boolean) => void;
     /** Whether this control currently has it — the shell's answer, not the
