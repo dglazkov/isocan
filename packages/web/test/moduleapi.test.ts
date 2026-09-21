@@ -60,6 +60,11 @@ describe("a module behind an experiment", () => {
     expect(first.includes("vnd.isocan.sticker"), "the sticker mime is in the first download").toBe(false);
     expect(first.includes("Thumbs up"), "the tray is in the first download").toBe(false);
     expect(first.includes("vnd.isocan.anatomy"), "the anatomy mime is in the first download").toBe(false);
+    /* Voice's glow is a DEPENDENCY rather than our own code — 95KB of it —
+       which is the shape most likely to be hoisted into the entry chunk by a
+       bundler doing its best. Measured when it landed: 22 bytes in the entry,
+       the rest in the experiment's own lazy chunk. */
+    expect(first.includes("voice-beam"), "the voice glow is in the first download").toBe(false);
   });
 
   it("names itself in Settings, in words rather than an id", () => {

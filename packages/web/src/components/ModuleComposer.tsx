@@ -3,6 +3,7 @@ import { modules } from "../modules.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useWebHost } from "../lib/modulehost.ts";
+import { useTheme } from "../lib/theme.ts";
 
 /**
  * **A module's control in the message composer's row** (proposed: `composer`).
@@ -51,6 +52,7 @@ export function ModuleComposerControls({
   useUiStore((s) => s.modulesGeneration);
   useUiStore((s) => s.experiments);
   const host = useWebHost(canvasId, actor);
+  const theme = useTheme((s) => s.resolved);
   if (!canvas) return null;
 
   const here = modules().flatMap((m) =>
@@ -78,6 +80,7 @@ export function ModuleComposerControls({
               canvas={canvas}
               host={host}
               groupMode={project?.groupMode ?? "legacy"}
+              theme={theme}
               active={active}
               takeOver={(on: boolean) => onTakeOver(module, on)}
             />

@@ -1,8 +1,19 @@
 import { useChatDraft } from "../lib/chatdraft.ts";
 import "./command-chip.css";
-import { ModuleComposerControls, composerControlModules } from "./ModuleComposer.tsx";
+import { modules } from "../modules.ts";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Markdown } from "../lib/markdown.tsx";
+/**
+ * **Loaded only when a module actually offers a control** (proposed:
+ * `composer`). The slot's renderer reaches the module host and the theme
+ * store, which measured 6KB in the entry chunk when it was a plain import —
+ * paid by every first visit for a slot that is empty unless an experiment is
+ * on. Same argument as `EXPERIMENT_HALVES`: merged but off has to mean off.
+ */
+const ModuleComposerControls = lazy(() =>
+  import("./ModuleComposer.tsx").then((module) => ({ default: module.ModuleComposerControls })),
+);
+
 const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
 const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
@@ -411,7 +422,9 @@ function Panel({
     (moduleName: string, active: boolean) => setComposerHolder(active ? moduleName : null),
     [],
   );
-  const composerOffered = composerControlModules();
+  const composerOffered = modules()
+    .filter((m) => (m.composer ?? []).length > 0)
+    .map((m) => m.core.name);
   useEffect(() => {
     if (composerHolder !== null && !composerOffered.includes(composerHolder)) setComposerHolder(null);
   }, [composerHolder, composerOffered]);
@@ -753,12 +766,16 @@ function Panel({
             the idle row and one for the taken-over row — React unmounts and
             remounts the control on takeover, which drops its state and flips
             it straight back. The shell hides its OWN parts instead. */}
-        <ModuleComposerControls
-          canvasId={canvasId}
-          actor={actor}
-          takenOverBy={composerHolder}
-          onTakeOver={takeComposer}
-        />
+        {composerOffered.length > 0 && (
+          <Suspense fallback={null}>
+            <ModuleComposerControls
+              canvasId={canvasId}
+              actor={actor}
+              takenOverBy={composerHolder}
+              onTakeOver={takeComposer}
+            />
+          </Suspense>
+        )}
         {composerHolder === null && <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim() || sending.disabled}>
           ↑
         </button>}

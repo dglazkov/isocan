@@ -17,6 +17,7 @@ import {
   type WebHost,
   type WebModule,
 } from "@isocan/core";
+import { VoiceBeam } from "voice-glow";
 import { LevelMeter, Playback, capture, fromBytes, type Capture } from "./audio.ts";
 import { LIVE_MODEL, canvasSnapshotText, commandsBrief, liveSetup, liveUrl, planForCall, type SnapshotItem } from "./live.ts";
 import { voiceCore } from "./core.ts";
@@ -907,6 +908,50 @@ function ConfigDialog(facts: DialogFacts) {
 }
 
 /**
+ * **One stylesheet for every state this control has.**
+ *
+ * It used to live inside the idle branch's JSX, which meant none of it
+ * rendered once a session started: the bar, its meters and its stop button
+ * were unstyled exactly when they were on screen, and the beam's wrapper had
+ * no width so a 294px row carried a 32px glow.
+ */
+const COMPOSER_CSS = `
+      .talk-composer-anchor { position: relative; display: flex; align-items: center; }
+      /* In the composer the panel IS the row — no popover, so nothing to
+         clip. The floating mic's copy is still pinned to its corner. */
+      .talk-pop-composer { position: static; width: 100%; box-shadow: none; }
+      /* Sized to sit with the composer's own buttons rather than to be
+         noticed: a mic that outshouts Send is a mic people press by
+         mistake. */
+      .talk-composer-mic {
+        width: 32px; height: 32px; border-radius: 8px;
+        display: grid; place-items: center;
+        border: 1px solid var(--line); background: var(--card);
+        color: var(--ink); cursor: pointer; flex: none;
+      }
+      .talk-composer-mic:hover { background: var(--chip-hover); }
+      .talk-composer-mic:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+      /* The bar stands where the message box was, so it takes the row's
+         full width and the accent says a live session is the reason. */
+      .talk-bar {
+        display: flex; align-items: center; gap: 10px; width: 100%;
+        padding: 6px 8px; border-radius: 10px;
+        border: 1px solid var(--accent); background: var(--accent-wash);
+      }
+      .talk-bar-meters { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+      .talk-bar-stop {
+        width: 28px; height: 28px; border-radius: 50%; flex: none;
+        display: grid; place-items: center; border: none;
+        background: var(--accent); color: var(--accent-ink); cursor: pointer;
+      }
+      .talk-bar-stop:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* VoiceBeam wraps the bar in its own element, which is the thing the shell
+     stretched — so it has to take the row it was given or the glow is drawn
+     at the width of a button. */
+  .talk-beam { flex: 1 1 100%; width: 100%; min-width: 0; display: block; }
+`;
+
+/**
  * **The mic in the message composer, and the bar it becomes** (proposed:
  * `composer`).
  *
@@ -923,10 +968,52 @@ function ConfigDialog(facts: DialogFacts) {
  * It shares `useTalkSession` with the floating mic rather than opening a
  * second one, so the two doors are two ways into ONE conversation.
  */
-function ComposerMic({ canvasId, canvas, host, groupMode, active, takeOver }: ComposerFacts) {
+function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOver }: ComposerFacts) {
   const session = useTalkSession({ canvasId, canvas, canEdit: true, groupMode, host });
   const [configOpen, setConfigOpen] = useState(false);
   const live = session.state === "live";
+
+  /**
+   * **The level the glow reads, kept out of React.**
+   *
+   * The meters already paint many times a second; this taps the same
+   * callbacks into refs and hands the beam a getter it samples once per
+   * frame. Setting state here instead would re-render the composer at the
+   * frame rate, which is the mistake the package's own `level` docs warn
+   * about.
+   *
+   * Whoever is talking drives it — your voice on the way in, the reply on
+   * the way out — so the glow belongs to the conversation rather than to
+   * the microphone.
+   */
+  const inLevel = useRef(0);
+  const outLevel = useRef(0);
+  const quietSince = useRef<number>(0);
+  const [thinking, setThinking] = useState(false);
+  const readLevel = useCallback(() => Math.max(inLevel.current, outLevel.current), []);
+
+  useEffect(() => {
+    if (!live) {
+      setThinking(false);
+      return;
+    }
+    /* Silence between the two of you is the reply being thought about. A
+       short hold keeps the beam from gathering in the gaps inside a
+       sentence, which is the difference between "thinking" and "breathing". */
+    const id = window.setInterval(() => {
+      const quiet = Math.max(inLevel.current, outLevel.current) < 0.02;
+      if (!quiet) {
+        quietSince.current = 0;
+        setThinking(false);
+        return;
+      }
+      const now = performance.now();
+      if (quietSince.current === 0) quietSince.current = now;
+      else if (now - quietSince.current > 600) setThinking(true);
+    }, 120);
+    return () => window.clearInterval(id);
+  }, [live]);
+
 
   /**
    * **Both states that are not "a button" want the row**, and asking for it
@@ -945,28 +1032,77 @@ function ComposerMic({ canvasId, canvas, host, groupMode, active, takeOver }: Co
   }, [wantsRow, active, takeOver]);
 
   if (configOpen && !live) {
-    return <ConfigPop session={session} onClose={() => setConfigOpen(false)} placement="composer" />;
+    return (
+      <>
+        <ConfigPop session={session} onClose={() => setConfigOpen(false)} placement="composer" />
+        <style>{COMPOSER_CSS}</style>
+      </>
+    );
   }
 
   if (live) {
     return (
-      <div className="talk-bar" role="group" aria-label="Voice conversation">
-        <div className="talk-bar-meters">
-          <Meter label="You" live onReady={session.registerInMeter} />
-          <Meter label="Voice" live onReady={session.registerOutMeter} />
+      <>
+        <VoiceBeam
+        className="talk-beam"
+        /* The bar IS the composer while a session runs, so the glow rises
+           from the composer's own bottom edge — which is the effect this is,
+           rather than a decoration sitting near it.
+
+           `pill` rather than `default`: the preset names are about SHAPE, and
+           default is tuned for a ~350px chat input while this bar is ~294x32.
+           Looked at both — default drew a wash too faint to read at this
+           height; pill pulls the glow in and shallows the bend, which is what
+           a short row needs. */
+        type="pill"
+        /* A getter, not a number: the level changes many times a second and
+           the package samples this once per frame, so the glow is smooth
+           without React re-rendering the row 60 times a second. */
+        level={readLevel}
+        /* Silence in a live session is the reply being thought about, which
+           is exactly what the travelling beam is for. */
+        processing={thinking}
+        theme={theme}
+        active
+      >
+        <div className="talk-bar" role="group" aria-label="Voice conversation">
+          <div className="talk-bar-meters">
+            <Meter
+              label="You"
+              live
+              onReady={(paint) =>
+                session.registerInMeter((level) => {
+                  inLevel.current = level;
+                  paint(level);
+                })
+              }
+            />
+            <Meter
+              label="Voice"
+              live
+              onReady={(paint) =>
+                session.registerOutMeter((level) => {
+                  outLevel.current = level;
+                  paint(level);
+                })
+              }
+            />
+          </div>
+          <CaptionToast lines={session.lines} />
+          <button
+            type="button"
+            className="talk-bar-stop"
+            onClick={() => session.stop()}
+            aria-label="End the conversation"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+            </svg>
+          </button>
         </div>
-        <CaptionToast lines={session.lines} />
-        <button
-          type="button"
-          className="talk-bar-stop"
-          onClick={() => session.stop()}
-          aria-label="End the conversation"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-            <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-          </svg>
-        </button>
-      </div>
+        </VoiceBeam>
+        <style>{COMPOSER_CSS}</style>
+      </>
     );
   }
 
@@ -992,39 +1128,7 @@ function ComposerMic({ canvasId, canvas, host, groupMode, active, takeOver }: Co
           />
         </svg>
       </button>
-      <style>{`
-        /* The composer's panel is anchored to the control rather than to a
-           corner of the viewport, so it opens where the press happened. */
-        .talk-composer-anchor { position: relative; display: flex; align-items: center; }
-        /* In the composer the panel IS the row — no popover, so nothing to
-           clip. The floating mic's copy is still pinned to its corner. */
-        .talk-pop-composer { position: static; width: 100%; box-shadow: none; }
-        /* Sized to sit with the composer's own buttons rather than to be
-           noticed: a mic that outshouts Send is a mic people press by
-           mistake. */
-        .talk-composer-mic {
-          width: 32px; height: 32px; border-radius: 8px;
-          display: grid; place-items: center;
-          border: 1px solid var(--line); background: var(--card);
-          color: var(--ink); cursor: pointer; flex: none;
-        }
-        .talk-composer-mic:hover { background: var(--chip-hover); }
-        .talk-composer-mic:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-        /* The bar stands where the message box was, so it takes the row's
-           full width and the accent says a live session is the reason. */
-        .talk-bar {
-          display: flex; align-items: center; gap: 10px; width: 100%;
-          padding: 6px 8px; border-radius: 10px;
-          border: 1px solid var(--accent); background: var(--accent-wash);
-        }
-        .talk-bar-meters { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-        .talk-bar-stop {
-          width: 28px; height: 28px; border-radius: 50%; flex: none;
-          display: grid; place-items: center; border: none;
-          background: var(--accent); color: var(--accent-ink); cursor: pointer;
-        }
-        .talk-bar-stop:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-      `}</style>
+      <style>{COMPOSER_CSS}</style>
     </span>
   );
 }
