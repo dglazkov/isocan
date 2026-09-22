@@ -789,6 +789,88 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   };
 }
 
+/** How many bars the wave draws. Odd, so there is a middle one for the arch
+ *  to peak on. */
+const WAVE_BARS = 11;
+
+/**
+ * **One wave for the conversation, coloured by whoever is talking.**
+ *
+ * It replaces two five-bar meters standing side by side. Two were a VU meter
+ * each and answered a question nobody had — the levels are never both high,
+ * because the two of you take turns. One wave that CHANGES COLOUR answers the
+ * question people actually have, which is whether it is hearing you or
+ * answering you, and says it at a glance rather than by comparing two
+ * columns.
+ *
+ * `--accent` is the app's own "this is yours" (it is the send button), and
+ * `--away` is its PRESENCE colour — the other party who is here. So the
+ * pairing is the app's vocabulary rather than two colours picked to look
+ * different.
+ *
+ * ## Why it reads as a voice
+ *
+ * The bars are not a bar chart of the level. Each takes the level through an
+ * arch — tall in the middle, short at the ends — and a slow per-bar wobble,
+ * so a steady tone still moves and a loud one blooms from the centre. A
+ * column of equal bars reads as a meter; this reads as a voice.
+ *
+ * It runs its own frame loop off the two refs rather than re-rendering: the
+ * level changes many times a second and React has no business seeing it.
+ */
+function Wave({
+  inLevel,
+  outLevel,
+}: {
+  inLevel: { current: number };
+  outLevel: { current: number };
+}) {
+  const bars = useRef<(HTMLSpanElement | null)[]>([]);
+  const root = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let frame = 0;
+    const tick = () => {
+      const heard = inLevel.current;
+      const spoken = outLevel.current;
+      const level = Math.max(heard, spoken);
+      /* A small margin so a breath while it is answering does not flip the
+         colour back and forth mid-sentence. */
+      root.current?.setAttribute(
+        "data-who",
+        spoken > heard + 0.04 ? "voice" : heard > 0.02 ? "you" : "idle",
+      );
+      const t = performance.now() / 240;
+      for (let i = 0; i < bars.current.length; i++) {
+        const bar = bars.current[i];
+        if (!bar) continue;
+        const arch = Math.sin(((i + 1) / (WAVE_BARS + 1)) * Math.PI);
+        const wobble = 0.7 + 0.3 * Math.sin(t + i * 0.8);
+        bar.style.height = `${(3 + level * arch * wobble * 19).toFixed(1)}px`;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [inLevel, outLevel]);
+
+  return (
+    /* Decorative: whether it heard you is carried by the transcript, which a
+       screen reader can actually read. A live region that fired on every
+       frame would be unusable. */
+    <div className="talk-wave" data-who="idle" ref={root} aria-hidden="true">
+      {Array.from({ length: WAVE_BARS }, (_, i) => (
+        <span
+          key={i}
+          ref={(el) => {
+            bars.current[i] = el;
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /**
  * **What was said, with who said it** — the conversation's own record, in the
  * composer where there is room for one.
@@ -822,11 +904,15 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
 function Transcript({
   lines,
   you,
+  them,
   expanded,
   onExpand,
 }: {
   lines: Line[];
   you: string;
+  /** What to call the other side — the voice they picked, so a transcript
+   *  reads as a conversation with someone rather than with "Voice". */
+  them: string;
   expanded: boolean;
   onExpand: () => void;
 }) {
@@ -873,8 +959,8 @@ function Transcript({
             </p>
           );
         }
-        const name = line.who === "you" ? shortYou : "Voice";
-        const full = line.who === "you" ? you : "Voice";
+        const name = line.who === "you" ? shortYou : them;
+        const full = line.who === "you" ? you : them;
         /* A run of one speaker says the name once: the second line of a
            sentence is not a new turn, and repeating the name makes it look
            like one. */
@@ -1083,7 +1169,21 @@ const COMPOSER_CSS = `
         padding: 6px 8px; border-radius: 10px;
         border: 1px solid var(--accent); background: var(--accent-wash);
       }
-      .talk-bar-meters { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+      /* The wave takes the room the two meters had, which is the point: one
+         thing that says who is talking, rather than two that say how loud. */
+      .talk-wave {
+        display: flex; align-items: center; gap: 3px;
+        flex: 1; min-width: 0; height: 24px;
+      }
+      .talk-wave span {
+        width: 3px; height: 3px; border-radius: 2px;
+        background: var(--line);
+        /* No height transition: the frame loop already moves it, and a
+           transition on top of that lags the voice by its own duration. */
+        transition: background-color 180ms ease;
+      }
+      .talk-wave[data-who="you"] span { background: var(--accent); }
+      .talk-wave[data-who="voice"] span { background: var(--away); }
       /* Sized down to sit with the meters: the picker is a setting you touch
      once, not the thing the bar is for. */
   .talk-voice select {
@@ -1196,7 +1296,18 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
   const quietSince = useRef<number>(0);
   const [thinking, setThinking] = useState(false);
   const readLevel = useCallback(() => Math.max(inLevel.current, outLevel.current), []);
+
+  /* The levels are tapped once, here, rather than by whatever happens to be
+     drawing them — so the wave and the glow read the same numbers and a
+     component can be swapped without the level going quiet. */
+  useEffect(() => {
+    session.registerInMeter((level) => (inLevel.current = level));
+    session.registerOutMeter((level) => (outLevel.current = level));
+  }, [session]);
   const [expanded, setExpanded] = useState(false);
+  /* The picked voice's own name, or "Voice" when the provider's default is
+     answering and there is no name to use. */
+  const voiceName = isLiveVoice(session.voice) ? session.voice : "Voice";
 
   /**
    * **A finished session lands in the Chat as one block.**
@@ -1225,9 +1336,9 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
     const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
     const body =
       `### 🎙 Voice session · ${stamp}\n\n` +
-      said.map((l) => `**${l.who === "you" ? host.viewer.name : "Voice"}:** ${l.text}`).join("\n\n");
+      said.map((l) => `**${l.who === "you" ? host.viewer.name : voiceName}:** ${l.text}`).join("\n\n");
     await runTool("say", { text: body }, { canvasId, canvas, host, canEdit: true, groupMode, selection });
-  }, [host, canvasId, canvas, groupMode, selection]);
+  }, [host, canvasId, canvas, groupMode, selection, voiceName]);
 
   /* Fires on the EDGE out of live, and once: a session that ends by failing
      posts what was said just as one ended by pressing stop, and a re-render
@@ -1326,32 +1437,12 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
         <Transcript
           lines={session.lines}
           you={host.viewer.name}
+          them={voiceName}
           expanded={expanded}
           onExpand={() => setExpanded((v) => !v)}
         />
         <div className="talk-bar">
-          <div className="talk-bar-meters">
-            <Meter
-              label="You"
-              live
-              onReady={(paint) =>
-                session.registerInMeter((level) => {
-                  inLevel.current = level;
-                  paint(level);
-                })
-              }
-            />
-            <Meter
-              label="Voice"
-              live
-              onReady={(paint) =>
-                session.registerOutMeter((level) => {
-                  outLevel.current = level;
-                  paint(level);
-                })
-              }
-            />
-          </div>
+          <Wave inLevel={inLevel} outLevel={outLevel} />
           {/* No toast here: the transcript above says the same thing with a
               name on it, and two copies of the last line is the one-string-
               two-spellings bug in pixels. The floating mic keeps its toast —
